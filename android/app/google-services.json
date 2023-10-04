@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "516426305461",
+    "project_id": "circum-2797c",
+    "storage_bucket": "circum-2797c.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:516426305461:android:83c448f60ba4f4b7e813fc",
+        "android_client_info": {
+          "package_name": "com.circum.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "516426305461-599lbubcg4j016jsm7dbou7isuolq0ve.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.app",
+            "certificate_hash": "90af78bd7fb1c47cb8b62b8d827d3e6207bd495d"
+          }
+        },
+        {
+          "client_id": "516426305461-7n9fg5bvmmrvio68n4aiism70gd8sba5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAX5XrRbb81udAi-DnxtV_JyOoeOZ1Q1vk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "516426305461-7n9fg5bvmmrvio68n4aiism70gd8sba5.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "516426305461-rck17vp8e2bpmui7e1ro0p9de9t6p6vi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.circum.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

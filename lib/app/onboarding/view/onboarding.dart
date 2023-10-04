@@ -1,0 +1,132 @@
+// import 'package:flutter/cupertino.dart';
+import 'dart:ui';
+
+import 'package:circum/app/authentication/view/signup.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/svg.dart';
+
+import '../../../utils/theme/theme.dart';
+import '../../authentication/bloc/auth_bloc.dart';
+import 'onboarding_slider.dart';
+
+class OnboardingView extends StatelessWidget {
+  // final BuildContext authBlocContext;
+  const OnboardingView({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        backgroundColor: AppColors.secondary,
+        body: SafeArea(
+            child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 10),
+            const Expanded(child: OnboardingSlider()),
+            Container(
+                // margin: const EdgeInsets.only(bottom: 30),
+                width: MediaQuery.of(context).size.width * 0.9,
+                padding: const EdgeInsets.only(
+                    top: 20, bottom: 30, left: 10, right: 10),
+                child: Column(
+                  children: [
+                    actionButton(),
+                    const SizedBox(height: 14),
+                    orSignUpWith(),
+                    const SizedBox(height: 14),
+                    oAuthButtons()
+                    // termsOfService()
+                  ],
+                )),
+          ],
+        )));
+  }
+
+  Widget actionButton() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return AppButton.button(
+        onPressed: () {
+          // context
+          //     .read<AuthBloc>()
+          // print('pressing');
+          // context
+          //     .read<AuthBloc>()
+          //     .add(ChangeSelectedPage(page: SelectedPage.cta));
+          Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const SignupView()));
+        },
+        widget: Center(
+            child: AppText.text(
+          'Get Started',
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        )),
+        borderRadius: BorderRadius.circular(100),
+        // minimumSize: const Size(70, 70)
+      );
+    });
+  }
+
+  Widget orSignUpWith() {
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: Colors.grey)),
+        const SizedBox(width: 10),
+        AppText.text('or sign up with', fontSize: 16),
+        const SizedBox(width: 10),
+        const Expanded(child: Divider(color: Colors.grey)),
+      ],
+    );
+  }
+
+  Widget oAuthButtons() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return Row(
+        children: [
+          Expanded(
+              child: TextButton(
+                  onPressed: () {},
+                  style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.zero,
+                          side: BorderSide(
+                              color: Colors.white.withOpacity(0.4)))),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SvgPicture.asset('assets/svg/google_logo.svg'),
+                        const SizedBox(width: 12),
+                        AppText.text('Google',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16)
+                      ]))),
+          const SizedBox(width: 15),
+          Expanded(
+              child: TextButton(
+                  onPressed: () {},
+                  style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.zero,
+                          side: BorderSide(
+                              color: Colors.white.withOpacity(0.4)))),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SvgPicture.asset('assets/svg/apple_logo.svg'),
+                        const SizedBox(width: 12),
+                        AppText.text('Apple',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16)
+                      ]))),
+        ],
+      );
+    });
+  }
+}
