@@ -1,3 +1,4 @@
+import 'package:circum/app/authentication/view/enable_location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,22 +12,23 @@ class AddDetailsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state.status == Status.success) {
-            context.read<AuthBloc>().add(ResetStatus());
+    return Scaffold(
+        backgroundColor: AppColors.secondary,
+        body: BlocListener<AuthBloc, AuthState>(
+            listener: (context, state) {
+              print('Add details listener');
+              if (state.status == Status.success) {
+                context.read<AuthBloc>().add(ResetStatus());
 
-            Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => AppNavView()),
-                (route) => false);
-          }
-        },
-        child: WillPopScope(
-            onWillPop: () async => false,
-            child: Scaffold(
-                backgroundColor: AppColors.secondary,
-                body: Padding(
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => EnableLocation()),
+                );
+              }
+            },
+            child: WillPopScope(
+                onWillPop: () async => false,
+                child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 30),
                     child: SizedBox(
                         width: MediaQuery.of(context).size.width,

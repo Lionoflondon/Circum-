@@ -1,7 +1,7 @@
 import 'package:bot_toast/bot_toast.dart';
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
-import 'package:circum/app/ride_bloc/bloc/parcel_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
+import 'package:circum/app/send_package/models/contact_info.dart';
 import 'package:circum/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -449,19 +449,35 @@ class _DeliveryReviewExpandedViewState
   }
 
   Widget confirmDeliveryButton() {
-    final ParcelBloc parcelBloc = context.read<ParcelBloc>();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32)
-          .copyWith(top: 16),
-      child: AppButton.button(
-          widget: Center(
-              child: AppText.text('Confirm delivery',
-                  fontSize: 16, fontWeight: FontWeight.bold)),
-          onPressed: () {
-            parcelBloc.add(SetParcelStatus(status: ParcelStatus.connecting));
-            context.read<SendPackageBloc>().add(SendAPackage());
-          }),
-    );
+    return BlocBuilder<SendPackageBloc, SendPackageState>(
+        builder: (context, state) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32)
+            .copyWith(top: 16),
+        child: AppButton.button(
+            widget: Center(
+                child: AppText.text('Confirm delivery',
+                    fontSize: 16, fontWeight: FontWeight.bold)),
+            onPressed: () {
+              // context.read<SendPackageBloc>().add(const SetDeliveryStatus(
+              //     deliveryStatus: DeliveryStatus.deliveryConfirmed));
+              context.read<SendPackageBloc>().add(SendDeliveryRequest(
+                  pickupDetails: ContactInfo.fromJson(
+                      fullname: username,
+                      address: state.pickupCoordinate!,
+                      phoneNumber: phoneNumber,
+                      moreInformation: additonalPickupInformation,
+                      locality: state.pickupLocality),
+                  dropoffDetails: ContactInfo.fromJson(
+                      fullname: dropoffContactName,
+                      phoneNumber: dropoffContactPhoneNumber,
+                      address: state.desinationCoordinate!,
+                      moreInformation: dropoffAdditionalInformation,
+                      locality: state.destinationLocality)));
+              Navigator.pop(context);
+            }),
+      );
+    });
   }
 
   additioalDetailsBottomSheet({required String title, String? initialText}) {

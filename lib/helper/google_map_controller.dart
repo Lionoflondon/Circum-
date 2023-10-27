@@ -1,21 +1,21 @@
-// import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-// class MapControllerSingleton {
-//   static final MapControllerSingleton _singleton =
-//       MapControllerSingleton._internal();
-//   GoogleMapController? _controller;
+class MapControllerSingleton {
+  static final MapControllerSingleton _singleton =
+      MapControllerSingleton._internal();
+  GoogleMapController? _controller;
 
-//   factory MapControllerSingleton() {
-//     return _singleton;
-//   }
+  factory MapControllerSingleton() {
+    return _singleton;
+  }
 
-//   MapControllerSingleton._internal();
+  MapControllerSingleton._internal();
 
-//   void setController(GoogleMapController controller) {
-//     _controller = controller;
-//   }
+  void setController(GoogleMapController controller) {
+    _controller = controller;
+  }
 
-//   GoogleMapController? getController() {
-//     return _controller;
-//   }
-// }
+  GoogleMapController? getController() {
+    return _controller;
+  }
+}

@@ -1,45 +1,68 @@
 import 'dart:async';
 
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
-import 'package:circum/app/home/bloc/home_bloc.dart';
+import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/helper/google_map_controller.dart';
+import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:google_maps_widget/google_maps_widget.dart';
+
 // import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../send_package/view/delivery_review_expanded.dart';
 import '../../send_package/view/index.dart';
+
+part './parts/delivery_review.dart';
+part './parts/connecting.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({Key? key}) : super(key: key);
-
   @override
-  State<HomeView> createState() => _HomeViewState();
+  HomeViewState createState() => HomeViewState();
 }
 
-class _HomeViewState extends State<HomeView> {
+class HomeViewState extends State<HomeView> {
+  @override
+  void initState() {
+    context.read<SendPackageBloc>().add(CheckForPushToken());
+    super.initState();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-        color: AppColors.secondary,
-        child: Column(
-          children: [
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.only(left: 24, right: 24),
-              child: whereToButton(),
-            ),
-            const SizedBox(height: 36),
-            onGoingRequests(),
-            const SizedBox(height: 24),
-          ],
-        ));
+    return BlocBuilder<SendPackageBloc, SendPackageState>(
+        builder: (context, state) {
+      return AnimatedContainer(
+          duration: const Duration(milliseconds: 500),
+          color: AppColors.secondary,
+          child: Column(children: [
+            if (state.deliveryStatus == DeliveryStatus.inital)
+              Column(
+                children: [
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 24, right: 24),
+                    child: whereToButton(),
+                  ),
+                  const SizedBox(height: 36),
+                  onGoingRequests(),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            if (state.deliveryStatus == DeliveryStatus.addressesSelected)
+              deliveryReview(),
+            if (state.deliveryStatus == DeliveryStatus.deliveryConfirmed)
+              const ConnectingToCourier(),
+          ]));
+    });
   }
 
   Widget whereToButton() {
-    return BlocBuilder<HomeBloc, HomeState>(builder: (context, state) {
+    return BlocBuilder<SendPackageBloc, SendPackageState>(
+        builder: (context, state) {
       return AppButton.button(
           backgroundColor: AppColors.input,
           widget: Row(
@@ -50,15 +73,17 @@ class _HomeViewState extends State<HomeView> {
               AppText.text('Where to?', color: Colors.white.withOpacity(0.3))
             ],
           ),
-          onPressed: () {
-            Navigator.push(context,
+          onPressed: () async {
+            await Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const ChooseAddressView()));
+            // setState(() {});
           });
     });
   }
 
   Widget onGoingRequests() {
-    return BlocBuilder<HomeBloc, HomeState>(builder: (context, state) {
+    return BlocBuilder<SendPackageBloc, SendPackageState>(
+        builder: (context, state) {
       if (state.ongoingRequests.length > 0) {
         return SizedBox(
             width: double.maxFinite,

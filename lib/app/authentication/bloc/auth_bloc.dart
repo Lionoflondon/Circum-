@@ -8,8 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum/utils/app_state/app_state.dart';
+import 'package:geoflutterfire2/geoflutterfire2.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart'
+    as permission_handler;
 
+import '../../../helper/location_helper.dart';
 import '../../../utils/validator/validator.dart';
 import '../repo/auth_repo.dart';
 // import '../../onboarding/view/onboarding.dart';
@@ -22,27 +27,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   AuthBloc() : super(AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     FirebaseFirestore db = FirebaseFirestore.instance;
+    // Init firestore and geoFlutterFire
+    final geo = GeoFlutterFire();
+    LocationHelper locationHelper = LocationHelper();
+
+    void listenForPermissionStatus() async {
+      final permission = await permission_handler.Permission.location.status;
+      print(permission);
+    }
+
+    listenForPermissionStatus();
+
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {
-        const storage = FlutterSecureStorage();
-        // await storage.write(key: "token", value: null);
-        var token = await storage.read(key: "token");
-        var pin = await storage.read(key: "pin");
-        var phone = await storage.read(key: "phoneNumber");
-        if (token != null) {
-          print('not null.......');
-          // Navigator.pushAndRemoveUntil(
-          //     event.context,
-          //     MaterialPageRoute(builder: (_) => AppNavView()),
-          //     (route) => false);
+        FirebaseAuth auth = FirebaseAuth.instance;
+        User? user = auth.currentUser;
+
+        if (user != null) {
+          print("User is signed in: ${user.uid}");
+          // You can also access user information like user.displayName, user.email, etc.
           emit(state.copyWith(currentState: AppState.authenticated));
         } else {
-          print('unauthennticated');
+          print('User not signed in');
           emit(state.copyWith(currentState: AppState.unauthenticated));
-          // Navigator.pushAndRemoveUntil(
-          //     event.context,9831
-          //     MaterialPageRoute(builder: (_) => OnboardingView()),
-          //     (route) => false);
         }
       }
 
@@ -185,19 +192,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
       }
 
-      if (event is UpdateUserProfile) {
-        try {
-          final User? user = auth.currentUser;
-          print(event.username);
-
-          print(user);
-          await user?.updateDisplayName(event.username);
-          emit(
-              state.copyWith(status: Status.success, username: event.username));
-        } catch (e) {
-          print(e);
-        }
-      }
       if (event is SubmitOTP) {
         emit(state.copyWith(isLoading: true, status: Status.success));
       }
@@ -256,6 +250,112 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (event is ValidatePhoneNumber) {
         emit(state.copyWith(isPhoneNumberValid: event.val));
+      }
+
+      if (event is RequestLocationData) {
+        try {
+          final User? user = auth.currentUser;
+          Position locationData = await locationHelper.enableLocation();
+
+          GeoFirePoint myLocation = geo.point(
+              latitude: locationData.latitude,
+              longitude: locationData.longitude);
+          print('Latitude: ${locationData.latitude}');
+          print('Longitude: ${locationData.longitude}');
+          emit(state.copyWith(
+              locationData: locationData,
+              hasLocationPermission: true,
+              isLocationEnabled: true,
+              status: Status.locationRequested));
+          await db
+              .collection("users")
+              .doc(user?.uid)
+              .update({'position': myLocation.data}).then(
+                  (value) => print("DocumentSnapshot successfully updated!"),
+                  onError: (e) => print("Error updating document $e"));
+        } catch (e) {
+          print(e);
+          if (e == 'Location permissions are permanently denied') {
+            emit(state.copyWith(
+                hasLocationPermission: false,
+                status: Status.locationRequested));
+          }
+        }
+      }
+
+      if (event is UpdateUserProfile) {
+        try {
+          final User? user = auth.currentUser;
+          await user?.updateDisplayName(event.username);
+          print(event.username);
+
+          final documentReference = db.collection('users').doc(user?.uid);
+
+          // Get the document snapshot
+          final documentSnapshot = await documentReference.get();
+
+          if (documentSnapshot.exists) {
+            // Document exists
+            // print('Document exists');
+            await db.collection("users").doc(user?.uid).update({
+              'name': event.username,
+              'role': 'user',
+              'phone': user?.phoneNumber,
+            }).then((value) => print("DocumentSnapshot successfully updated!"),
+                onError: (e) => print("Error updating document $e"));
+          } else {
+            // Document does not exist
+            // print('Document does not exist');
+            await db.collection("users").doc(user?.uid).set({
+              'name': event.username,
+              "role": 'user',
+              'phone': user?.phoneNumber,
+            }).then((value) => print("DocumentSnapshot successfully created!"),
+                onError: (e) => print("Error updating document $e"));
+          }
+
+          // print(user);
+
+          emit(
+              state.copyWith(status: Status.success, username: event.username));
+        } catch (e) {
+          print(e);
+        }
+      }
+
+      if (event is OpenSettingsApp) {
+        try {
+          final User? user = auth.currentUser;
+          Position locationData = await locationHelper.enableLocation();
+
+          GeoFirePoint myLocation = geo.point(
+              latitude: locationData.latitude,
+              longitude: locationData.longitude);
+          print('Latitude: ${locationData.latitude}');
+          print('Longitude: ${locationData.longitude}');
+          emit(state.copyWith(
+              locationData: locationData,
+              hasLocationPermission: true,
+              isLocationEnabled: true,
+              status: Status.locationRequested));
+          await db
+              .collection("users")
+              .doc(user?.uid)
+              .update({'position': myLocation.data}).then(
+                  (value) => print("DocumentSnapshot successfully updated!"),
+                  onError: (e) => print("Error updating document $e"));
+        } catch (e) {
+          print(e);
+          if (e == 'Location permissions are permanently denied') {
+            final _openLocationSettings =
+                await Geolocator.openLocationSettings();
+          }
+
+          if (e == 'Location services are disabled') {
+            final _openLocationSettings = await Geolocator.openAppSettings();
+            print(_openLocationSettings);
+          }
+        }
       }
     });
   }

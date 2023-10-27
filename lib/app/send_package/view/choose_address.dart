@@ -213,8 +213,12 @@ class ChooseAddressViewState extends State<ChooseAddressView> {
 
               if (state.pickupLocation != null &&
                   state.pickupLocation!.isNotEmpty) {
-                Navigator.pushReplacement(context,
-                    MaterialPageRoute(builder: (_) => DeliveryReviewView()));
+                context.read<SendPackageBloc>().add(const SetDeliveryStatus(
+                    deliveryStatus: DeliveryStatus.addressesSelected));
+
+                Navigator.pop(context);
+                // Navigator.pushReplacement(context,
+                //     MaterialPageRoute(builder: (_) => DeliveryReviewView()));
               }
             }
           },

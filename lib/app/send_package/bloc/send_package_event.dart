@@ -40,3 +40,29 @@ class ClearSuggestions extends SendPackageEvent {}
 class CalculateDistance extends SendPackageEvent {}
 
 class SendAPackage extends SendPackageEvent {}
+
+class SetDeliveryStatus extends SendPackageEvent {
+  final DeliveryStatus deliveryStatus;
+  const SetDeliveryStatus({required this.deliveryStatus});
+}
+
+class SendDeliveryRequest extends SendPackageEvent {
+  final ContactInfo pickupDetails;
+  final ContactInfo dropoffDetails;
+  const SendDeliveryRequest(
+      {required this.pickupDetails, required this.dropoffDetails});
+}
+
+class SetDistance extends SendPackageEvent {
+  final double value;
+  const SetDistance({required this.value});
+}
+
+class SetPrice extends SendPackageEvent {}
+
+class CheckForPushToken extends SendPackageEvent {}
+
+class DeliveryAccepted extends SendPackageEvent {
+  final Map data;
+  DeliveryAccepted({required this.data});
+}

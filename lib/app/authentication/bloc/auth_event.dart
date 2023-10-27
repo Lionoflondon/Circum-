@@ -121,3 +121,7 @@ class UpdateUserProfile extends AuthEvent {
   final String username;
   const UpdateUserProfile({required this.username});
 }
+
+class RequestLocationData extends AuthEvent {}
+
+class OpenSettingsApp extends AuthEvent {}

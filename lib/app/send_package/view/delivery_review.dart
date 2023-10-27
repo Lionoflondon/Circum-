@@ -18,20 +18,6 @@ class DeliveryReviewView extends StatefulWidget {
 }
 
 class _DeliveryReviewViewState extends State<DeliveryReviewView> {
-  // final Completer<GoogleMapController> _controller =
-  //     Completer<GoogleMapController>();
-
-  // static const CameraPosition _kGooglePlex = CameraPosition(
-  //   target: LatLng(55.838175, -4.272892),
-  //   zoom: 14.4746,
-  // );
-
-  // static const CameraPosition _kLake = CameraPosition(
-  //     bearing: 192.8334901395799,
-  //     target: LatLng(37.43296265331129, -122.08832357078792),
-  //     tilt: 59.440717697143555,
-  //     zoom: 19.151926040649414);
-
   @override
   void initState() {
     super.initState();
@@ -39,51 +25,20 @@ class _DeliveryReviewViewState extends State<DeliveryReviewView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        backgroundColor: AppColors.secondary,
-        body: SafeArea(
-            child: Stack(
-          children: [
-            Column(
-              children: [
-                // Expanded(
-                //     child: GoogleMap(
-                //   mapType: MapType.normal,
-                //   initialCameraPosition: _kLake,
-                //   onMapCreated: (GoogleMapController controller) {
-                //     _controller.complete(controller);
-                //   },
-                // )),
-                Container(
-                  color: AppColors.secondary,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 44),
-                      selectedAddresses(),
-                      const SizedBox(height: 38),
-                      deliveryCost(),
-                      const SizedBox(height: 66),
-                      reviewButton(),
-                      const SizedBox(height: 32),
-                    ],
-                  ),
-                )
-              ],
-            ),
-            Padding(
-              padding: EdgeInsets.only(),
-              child: IconButton(
-                icon: Icon(
-                  Icons.arrow_back,
-                  color: Color(0xFF1F292E),
-                ),
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-              ),
-            )
-          ],
-        )));
+    return Container(
+      color: AppColors.secondary,
+      child: Column(
+        children: [
+          const SizedBox(height: 44),
+          selectedAddresses(),
+          const SizedBox(height: 38),
+          deliveryCost(),
+          const SizedBox(height: 66),
+          reviewButton(),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
   }
 
   Widget selectedAddresses() {

@@ -1,6 +1,13 @@
 part of 'auth_bloc.dart';
 
-enum Status { initial, loading, success, failure, incompleteData }
+enum Status {
+  initial,
+  loading,
+  locationRequested,
+  success,
+  failure,
+  incompleteData
+}
 
 abstract class AuthInitial extends Equatable {
   const AuthInitial();
@@ -40,6 +47,9 @@ class AuthState extends AuthInitial {
   final bool isPhoneNumberValid;
   final String? verificationId;
   final int? resendToken;
+  final Position? locationData;
+  final bool? isLocationEnabled;
+  final bool? hasLocationPermission;
 
   final Status status;
 
@@ -74,7 +84,10 @@ class AuthState extends AuthInitial {
         showPassword,
         isPhoneNumberValid,
         verificationId,
-        resendToken
+        resendToken,
+        locationData,
+        isLocationEnabled,
+        hasLocationPermission
       ];
 
   const AuthState(
@@ -105,7 +118,10 @@ class AuthState extends AuthInitial {
       this.showPassword = false,
       this.isPhoneNumberValid = false,
       this.verificationId,
-      this.resendToken});
+      this.resendToken,
+      this.locationData,
+      this.isLocationEnabled,
+      this.hasLocationPermission});
 
   AuthState copyWith(
       {bool? unknownSessionState,
@@ -135,7 +151,10 @@ class AuthState extends AuthInitial {
       bool? showPassword,
       bool? isPhoneNumberValid,
       String? verificationId,
-      int? resendToken}) {
+      int? resendToken,
+      Position? locationData,
+      bool? isLocationEnabled,
+      bool? hasLocationPermission}) {
     return AuthState(
         unknownSessionState: unknownSessionState ?? this.unknownSessionState,
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -164,6 +183,10 @@ class AuthState extends AuthInitial {
         showPassword: showPassword ?? this.showPassword,
         isPhoneNumberValid: isPhoneNumberValid ?? this.isPhoneNumberValid,
         verificationId: verificationId ?? this.verificationId,
-        resendToken: resendToken ?? this.resendToken);
+        resendToken: resendToken ?? this.resendToken,
+        locationData: locationData ?? this.locationData,
+        isLocationEnabled: isLocationEnabled ?? this.isLocationEnabled,
+        hasLocationPermission:
+            hasLocationPermission ?? this.hasLocationPermission);
   }
 }

@@ -34,9 +34,9 @@ class PlaceApiProvider {
 
   final sessionToken;
 
-  static String androidKey = 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI';
+  static String mapKey = 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI';
   // static final String iosKey = 'YOUR_API_KEY_HERE';
-  final apiKey = androidKey;
+  final apiKey = mapKey;
 
   Future<List<Suggestion>> fetchSuggestions(String input, String lang) async {
     final response = await dio.get(

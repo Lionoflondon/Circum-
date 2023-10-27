@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:circum/app/account/bloc/account_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,17 +11,111 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'app.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
-import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
-import 'app/ride_bloc/bloc/parcel_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:bot_toast/bot_toast.dart';
 
+final sendPackageBloc = SendPackageBloc();
+
+foregoundMessage() {
+  // chatBloc.add(event);
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    print('Got a message whilst in the foreground!');
+    // print('Message data: ${message.data}');
+
+    if (message.data['type'] == 'connection') {
+      if (message.data['status'] == 'accepted') {
+        print('accepted');
+
+        // Remove leading and trailing whitespace
+        String jsonString = message.data['data'].trim();
+
+        // Replace single quotes with double quotes to make it valid JSON
+        jsonString = jsonString.replaceAll("'", '"');
+
+        // Parse the modified string into a map
+        Map<String, dynamic> mapData = jsonDecode(jsonString);
+
+        sendPackageBloc.add(DeliveryAccepted(data: mapData));
+      }
+    }
+    // final msg = jsonDecode(message.data['data']);
+
+    // homeBloc.add(IncomingMessage(data: msg));
+
+    // final directory = await getApplicationDocumentsDirectory();
+    // final chats = File('${directory.path}/${msg['conversationId']}.json');
+    // List jsonData = [];
+    // if (await chats.exists()) {
+    //   final contents = await chats.readAsString();
+    //   final parsingData = await jsonDecode(contents) as List;
+    //   jsonData = [...parsingData];
+    // }
+    // jsonData.add(msg);
+    // // final jsonDataa = jsonData.map((message) => message.toJson()).toList();
+    // final jsonString = jsonEncode(jsonData);
+
+    // await chats.writeAsString(jsonString);
+  });
+}
+
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+
+  print('Got a message whilst in the background!');
+  // print('Message data: ${message.data}');
+
+  if (message.data['type'] == 'connection') {
+    if (message.data['status'] == 'accepted') {
+      print('accepted');
+      // Remove leading and trailing whitespace
+      String jsonString = message.data['data'].trim();
+
+      // Replace single quotes with double quotes to make it valid JSON
+      jsonString = jsonString.replaceAll("'", '"');
+
+      // Parse the modified string into a map
+      Map<String, dynamic> mapData = jsonDecode(jsonString);
+      sendPackageBloc.add(DeliveryAccepted(data: mapData));
+    }
+  }
+
+  // final messageJson = jsonDecode(message.data['data']);
+
+  // final directory = await getApplicationDocumentsDirectory();
+  // final chats = File('${directory.path}/${messageJson['conversationId']}.json');
+  // List jsonData = [];
+  // if (await chats.exists()) {
+  //   final contents = await chats.readAsString();
+  //   final parsingData = await jsonDecode(contents) as List;
+  //   jsonData = [...parsingData];
+  // }
+  // jsonData.add(messageJson);
+  // // final jsonDataa = jsonData.map((message) => message.toJson()).toList();
+  // final jsonString = jsonEncode(jsonData);
+
+  // await chats.writeAsString(jsonString);
+
+  // print('Handling a background message ${message.messageId}');
+  // print('New message');
+  // print(messageJson['conversationId']);
+  return Future<void>.value();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true, // Required to display a heads up notification
+    badge: true,
+    sound: true,
+  );
+
+  foregoundMessage();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // Lock app in portrait mode
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -73,13 +170,8 @@ class Circum extends StatelessWidget {
                   BlocProvider(
                     create: (context) => NavbarBloc(),
                   ),
-                  BlocProvider<ParcelBloc>(
-                      create: (BuildContext context) => ParcelBloc()),
-                  BlocProvider<HomeBloc>(
-                    create: (BuildContext context) => HomeBloc(),
-                  ),
                   BlocProvider<SendPackageBloc>(
-                    create: (BuildContext context) => SendPackageBloc(),
+                    create: (BuildContext context) => sendPackageBloc,
                   ),
                   BlocProvider<HistoryBloc>(
                     create: (BuildContext context) => HistoryBloc(),

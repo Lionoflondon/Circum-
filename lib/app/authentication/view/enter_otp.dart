@@ -8,7 +8,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:pinput/pinput.dart';
 
 import '../../../utils/theme/theme.dart';
-import '../../home/view/index.dart';
 import '../bloc/auth_bloc.dart';
 import 'add_details.dart';
 
@@ -71,7 +70,7 @@ class EnterOTPViewState extends State<EnterOTPView> {
           if (state.status == Status.incompleteData) {
             context.read<AuthBloc>().add(ResetStatus());
             // context.read<AuthBloc>().add(StartCountDown());
-            Navigator.push(context,
+            Navigator.pushReplacement(context,
                 MaterialPageRoute(builder: (_) => const AddDetailsView()));
           }
         },
