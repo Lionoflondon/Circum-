@@ -266,7 +266,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               locationData: locationData,
               hasLocationPermission: true,
               isLocationEnabled: true,
-              status: Status.locationRequested));
+              status: Status.locationRequested,
+              appLocationStatus: AppLocationStatus.available));
           await db
               .collection("users")
               .doc(user?.uid)
@@ -278,7 +279,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           if (e == 'Location permissions are permanently denied') {
             emit(state.copyWith(
                 hasLocationPermission: false,
-                status: Status.locationRequested));
+                status: Status.locationRequested,
+                appLocationStatus: AppLocationStatus.denied));
           }
         }
       }

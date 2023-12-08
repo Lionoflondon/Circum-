@@ -1,18 +1,23 @@
 import 'dart:convert';
 
+import 'package:circum/app/send_package/models/place_coordinates.m.dart';
+import 'package:circum/utils/theme/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../../helper/messaging_server.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
+import '../models/suggestions.m.dart';
 import '../repo/place_api.dart';
 
 part 'send_package_event.dart';
@@ -109,7 +114,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             .fetchPlaceDetails(event.placeId, event.lang);
 
         print('Destination coordinate: $coordinate');
-
         var address =
             await placemarkFromCoordinates(coordinate.lat, coordinate.lng);
 
@@ -118,6 +122,61 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             destinationLocality: address[0].locality));
 
         if (state.pickupCoordinate != null) {
+          List<LatLng> latLngList = [];
+
+          PolylinePoints points = PolylinePoints();
+
+          PolylineResult polylineResult =
+              await points.getRouteBetweenCoordinates(
+            'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+            PointLatLng(
+                state.pickupCoordinate!.lat, state.pickupCoordinate!.lng),
+            PointLatLng(state.desinationCoordinate!.lat,
+                state.desinationCoordinate!.lng),
+            travelMode: TravelMode.driving,
+          );
+
+          if (polylineResult.points.isNotEmpty) {
+            polylineResult.points.forEach((ele) {
+              latLngList.add(LatLng(ele.latitude, ele.longitude));
+            });
+
+            List<Polyline> polyLines = [];
+            polyLines.add(Polyline(
+                polylineId: const PolylineId('PolylineId'),
+                points: latLngList,
+                width: 3,
+                color: AppColors.primary));
+
+            final Marker sourceMarker = Marker(
+              markerId: const MarkerId('source_marker'),
+              position: LatLng(state.pickupCoordinate!.lat,
+                  state.pickupCoordinate!.lng), // Source address location
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueAzure,
+              ),
+            );
+
+            final Marker destinationMarker = Marker(
+              markerId: const MarkerId('destination_marker'),
+              position: LatLng(
+                  state.desinationCoordinate!.lat,
+                  state.desinationCoordinate!
+                      .lng), // Destination address location
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueRed,
+              ),
+            );
+
+            Map<MarkerId, Marker> markers = {
+              const MarkerId('source_marker'): sourceMarker,
+              const MarkerId('destination_marker'): destinationMarker
+            };
+
+            emit(state.copyWith(polylines: polyLines, markers: markers));
+            add(SetSourceAndDestinationStatus(
+                status: SourceAndDestinationStatus.selected));
+          }
           // add(CalculateDistance());
         }
       } catch (e) {
@@ -269,6 +328,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               deliveryStatus: DeliveryStatus.deliveryOnGoing,
               deliveryData: deliveryData));
         }
+      },
+    );
+
+    on<SetSourceAndDestinationStatus>(
+      (event, emit) {
+        emit(state.copyWith(sourceAndDestinationStatus: event.status));
+      },
+    );
+
+    on<SetMapCameraStatus>(
+      (event, emit) {
+        emit(state.copyWith(mapCameraStatus: event.status));
       },
     );
 

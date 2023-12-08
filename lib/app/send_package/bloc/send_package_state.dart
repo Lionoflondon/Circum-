@@ -10,6 +10,15 @@ enum DeliveryStatus {
 
 enum ParcelStatus { requested, accepted, outForDelivery, delivered }
 
+// default MapCameraStatus is initial, lat 0, lng 0
+enum MapCameraStatus {
+  initialized,
+  showingDeviceLocation,
+  showingSourceAndDestinationLocations
+}
+
+enum SourceAndDestinationStatus { unselected, selected }
+
 class SendPackageState {
   List<Suggestion> suggestions;
   List ongoingRequests;
@@ -27,7 +36,11 @@ class SendPackageState {
   String? destinationLocality;
   double? price;
   DeliveryData? deliveryData;
-
+  Map<MarkerId, Marker> markers;
+  List<Polyline> polylines;
+  List<LatLng> polylineCoordinates;
+  SourceAndDestinationStatus sourceAndDestinationStatus;
+  MapCameraStatus mapCameraStatus;
   SendPackageState(
       {this.suggestions = const [],
       this.ongoingRequests = const [],
@@ -44,7 +57,12 @@ class SendPackageState {
       this.pickupLocality,
       this.destinationLocality,
       this.price,
-      this.deliveryData});
+      this.deliveryData,
+      this.markers = const {},
+      this.polylines = const [],
+      this.polylineCoordinates = const [],
+      this.sourceAndDestinationStatus = SourceAndDestinationStatus.unselected,
+      this.mapCameraStatus = MapCameraStatus.initialized});
 
   SendPackageState copyWith(
       {List<Suggestion>? suggestions,
@@ -62,7 +80,12 @@ class SendPackageState {
       String? pickupLocality,
       String? destinationLocality,
       double? price,
-      DeliveryData? deliveryData}) {
+      DeliveryData? deliveryData,
+      Map<MarkerId, Marker>? markers,
+      List<Polyline>? polylines,
+      List<LatLng>? polylineCoordinates,
+      SourceAndDestinationStatus? sourceAndDestinationStatus,
+      MapCameraStatus? mapCameraStatus}) {
     return SendPackageState(
         suggestions: suggestions ?? this.suggestions,
         pickupLocation: pickupLocation ?? this.pickupLocation,
@@ -81,6 +104,12 @@ class SendPackageState {
         pickupLocality: pickupLocality ?? this.pickupLocality,
         destinationLocality: destinationLocality ?? this.destinationLocality,
         price: price ?? this.price,
-        deliveryData: deliveryData ?? this.deliveryData);
+        deliveryData: deliveryData ?? this.deliveryData,
+        markers: markers ?? this.markers,
+        polylines: polylines ?? this.polylines,
+        polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
+        sourceAndDestinationStatus:
+            sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
+        mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus);
   }
 }

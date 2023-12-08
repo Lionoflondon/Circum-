@@ -1,4 +1,4 @@
-import '../repo/place_api.dart';
+import 'place_coordinates.m.dart';
 
 class ContactInfo {
   final String? fullname;

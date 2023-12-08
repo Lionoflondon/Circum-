@@ -9,6 +9,12 @@ enum Status {
   incompleteData
 }
 
+enum AppLocationStatus {
+  denied,
+  unavailalbe,
+  available,
+}
+
 abstract class AuthInitial extends Equatable {
   const AuthInitial();
 
@@ -52,6 +58,7 @@ class AuthState extends AuthInitial {
   final bool? hasLocationPermission;
 
   final Status status;
+  final AppLocationStatus appLocationStatus;
 
   final int countdown;
 
@@ -87,7 +94,8 @@ class AuthState extends AuthInitial {
         resendToken,
         locationData,
         isLocationEnabled,
-        hasLocationPermission
+        hasLocationPermission,
+        appLocationStatus
       ];
 
   const AuthState(
@@ -121,7 +129,8 @@ class AuthState extends AuthInitial {
       this.resendToken,
       this.locationData,
       this.isLocationEnabled,
-      this.hasLocationPermission});
+      this.hasLocationPermission,
+      this.appLocationStatus = AppLocationStatus.unavailalbe});
 
   AuthState copyWith(
       {bool? unknownSessionState,
@@ -154,7 +163,8 @@ class AuthState extends AuthInitial {
       int? resendToken,
       Position? locationData,
       bool? isLocationEnabled,
-      bool? hasLocationPermission}) {
+      bool? hasLocationPermission,
+      AppLocationStatus? appLocationStatus}) {
     return AuthState(
         unknownSessionState: unknownSessionState ?? this.unknownSessionState,
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -187,6 +197,7 @@ class AuthState extends AuthInitial {
         locationData: locationData ?? this.locationData,
         isLocationEnabled: isLocationEnabled ?? this.isLocationEnabled,
         hasLocationPermission:
-            hasLocationPermission ?? this.hasLocationPermission);
+            hasLocationPermission ?? this.hasLocationPermission,
+        appLocationStatus: appLocationStatus ?? this.appLocationStatus);
   }
 }
