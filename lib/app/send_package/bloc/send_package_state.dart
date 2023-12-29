@@ -10,11 +10,15 @@ enum DeliveryStatus {
 
 enum ParcelStatus { requested, accepted, outForDelivery, delivered }
 
+enum PanelControlStatus { initialized, isOpened, isClosed }
+
 // default MapCameraStatus is initial, lat 0, lng 0
 enum MapCameraStatus {
   initialized,
   showingDeviceLocation,
-  showingSourceAndDestinationLocations
+  showingSourceAndDestinationLocations,
+  showRiderLocation,
+  showingRiderLocation
 }
 
 enum SourceAndDestinationStatus { unselected, selected }
@@ -28,8 +32,10 @@ class SendPackageState {
   String? destinationLocationSubAddress;
   PlaceCoordinate? pickupCoordinate;
   PlaceCoordinate? desinationCoordinate;
+  PlaceCoordinate? riderLocation;
   double? distance;
   final DeliveryStatus deliveryStatus;
+  PanelControlStatus panelControlStatus;
   ContactInfo? pickupDetails;
   ContactInfo? dropoffDetails;
   String? pickupLocality;
@@ -41,6 +47,7 @@ class SendPackageState {
   List<LatLng> polylineCoordinates;
   SourceAndDestinationStatus sourceAndDestinationStatus;
   MapCameraStatus mapCameraStatus;
+  String currency;
   SendPackageState(
       {this.suggestions = const [],
       this.ongoingRequests = const [],
@@ -52,6 +59,7 @@ class SendPackageState {
       this.desinationCoordinate,
       this.distance,
       this.deliveryStatus = DeliveryStatus.inital,
+      this.panelControlStatus = PanelControlStatus.isClosed,
       this.pickupDetails,
       this.dropoffDetails,
       this.pickupLocality,
@@ -62,7 +70,9 @@ class SendPackageState {
       this.polylines = const [],
       this.polylineCoordinates = const [],
       this.sourceAndDestinationStatus = SourceAndDestinationStatus.unselected,
-      this.mapCameraStatus = MapCameraStatus.initialized});
+      this.mapCameraStatus = MapCameraStatus.initialized,
+      this.riderLocation,
+      this.currency = 'GBP'});
 
   SendPackageState copyWith(
       {List<Suggestion>? suggestions,
@@ -72,8 +82,10 @@ class SendPackageState {
       String? destinationLocationSubAddress,
       PlaceCoordinate? pickupCoordinate,
       PlaceCoordinate? desinationCoordinate,
+      PlaceCoordinate? riderLocation,
       double? distance,
       DeliveryStatus? deliveryStatus,
+      PanelControlStatus? panelControlStatus,
       List? ongoingRequests,
       ContactInfo? pickupDetails,
       ContactInfo? dropoffDetails,
@@ -85,7 +97,8 @@ class SendPackageState {
       List<Polyline>? polylines,
       List<LatLng>? polylineCoordinates,
       SourceAndDestinationStatus? sourceAndDestinationStatus,
-      MapCameraStatus? mapCameraStatus}) {
+      MapCameraStatus? mapCameraStatus,
+      String? currency}) {
     return SendPackageState(
         suggestions: suggestions ?? this.suggestions,
         pickupLocation: pickupLocation ?? this.pickupLocation,
@@ -96,8 +109,10 @@ class SendPackageState {
             destinationLocationSubAddress ?? this.destinationLocationSubAddress,
         pickupCoordinate: pickupCoordinate ?? this.pickupCoordinate,
         desinationCoordinate: desinationCoordinate ?? this.desinationCoordinate,
+        riderLocation: riderLocation ?? this.riderLocation,
         distance: distance ?? this.distance,
         deliveryStatus: deliveryStatus ?? this.deliveryStatus,
+        panelControlStatus: panelControlStatus ?? this.panelControlStatus,
         ongoingRequests: ongoingRequests ?? this.ongoingRequests,
         pickupDetails: pickupDetails ?? this.pickupDetails,
         dropoffDetails: dropoffDetails ?? this.dropoffDetails,
@@ -110,6 +125,7 @@ class SendPackageState {
         polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
         sourceAndDestinationStatus:
             sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
-        mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus);
+        mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
+        currency: currency ?? this.currency);
   }
 }

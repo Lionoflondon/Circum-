@@ -12,6 +12,7 @@ class AppColors {
   static const Color textDarkMode = Color(0xffFFFFFF);
   static const Color sheetBackground = Color(0xFF1C1C1D);
   static const Color textGrey = Color(0xFFC9D2D7);
+  static const Color borderColor = Color.fromARGB(255, 47, 59, 66);
 
   static const Color input = Color(0xFF1F292E);
 

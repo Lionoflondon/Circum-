@@ -11,9 +11,11 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/messaging_server.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
@@ -35,7 +37,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
     on<CheckForPushToken>(
       (event, emit) async {
-        final fcmToken = await FirebaseMessaging.instance.getToken();
+        final fcmToken = await firebaseMessaging.getToken();
         if (fcmToken != null) {
           try {
             final User? user = auth.currentUser;
@@ -137,6 +139,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           );
 
           if (polylineResult.points.isNotEmpty) {
+            double tripDistance;
+            tripDistance =
+                double.parse(polylineResult.distance!.split(' ').first.trim());
+            // print(polylineResult.distance);
+            // print(polylineResult.distanceText);
+            // print(polylineResult.distanceValue);
             polylineResult.points.forEach((ele) {
               latLngList.add(LatLng(ele.latitude, ele.longitude));
             });
@@ -173,7 +181,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               const MarkerId('destination_marker'): destinationMarker
             };
 
-            emit(state.copyWith(polylines: polyLines, markers: markers));
+            emit(state.copyWith(
+                polylines: polyLines,
+                markers: markers,
+                distance: tripDistance));
+            add(SetPrice());
             add(SetSourceAndDestinationStatus(
                 status: SourceAndDestinationStatus.selected));
           }
@@ -252,7 +264,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final uuid3 = uuid.v4();
       final uuidStrong = "$uuid2-$uuid3";
 
-      print(uuidStrong);
+      // print(uuidStrong);
 
       try {
         final User? user = auth.currentUser;
@@ -265,7 +277,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             latitude: event.dropoffDetails.address.lat,
             longitude: event.pickupDetails.address.lng);
 
-        final fcmToken = await FirebaseMessaging.instance.getToken();
+        final apnsToken = await firebaseMessaging.getAPNSToken();
+        print('apnsToken: $apnsToken');
+
+        final fcmToken = await firebaseMessaging.getToken();
 
         // Document does not exist
         // print('Document does not exist');
@@ -293,7 +308,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           'pickupLocality': event.pickupDetails.locality,
           'requestId': uuidStrong,
           'code': fcmToken,
-          'status': 'requested'
+          'price': state.price,
+          'currency': 'GBP',
+          'status': 'requested',
+          'createdAt': DateTime.now()
         }).then((value) => print("DocumentSnapshot successfully created!"),
             onError: (e) => print("Error updating document $e"));
 
@@ -312,6 +330,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<DeliveryAccepted>(
       (event, emit) async {
         final User? user = auth.currentUser;
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
 
         final activeDelivery = db.collection("deliveryRequests").doc(user?.uid);
 
@@ -319,15 +338,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
         if (activeDeliveryData.exists &&
             activeDeliveryData.data()!['status'] == 'requested') {
+          print('Requested');
           final DeliveryData deliveryData = DeliveryData.fromJson(event.data);
 
-          await activeDelivery
-              .update({'status': 'accepted', 'riderId': deliveryData.riderId});
+          await activeDelivery.update({
+            'status': 'accepted',
+            'riderId': deliveryData.riderId,
+            'updatedAt': DateTime.now()
+          });
+
+          await prefs.setString(
+              'activeRequest', activeDeliveryData.data()!['requestId']);
 
           emit(state.copyWith(
               deliveryStatus: DeliveryStatus.deliveryOnGoing,
               deliveryData: deliveryData));
         }
+      },
+    );
+
+    on<DeliveryCompleted>(
+      (event, emit) {
+        emit(state.copyWith(deliveryStatus: DeliveryStatus.deliveryCompleted));
       },
     );
 
@@ -341,6 +373,114 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       (event, emit) {
         emit(state.copyWith(mapCameraStatus: event.status));
       },
+    );
+
+    on<SetRiderLocation>((event, emit) async {
+      final User? user = auth.currentUser;
+      try {
+        // print('In Bloc');
+        double? lat = double.parse(event.data['latitude']);
+        double? lng = double.parse(event.data['longitude']);
+        PlaceCoordinate riderLocation = PlaceCoordinate(lat: lat, lng: lng);
+
+        final icon =
+            await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+                "assets/svg/motorcycle.svg");
+        final Marker riderLocationMarker = Marker(
+            markerId: MarkerId('rider_location_marker'),
+            position: LatLng(lat, lng), // Destination address location
+            icon: icon);
+
+        Map<MarkerId, Marker> markers = {};
+
+        markers[MarkerId('rider_location_marker')] = riderLocationMarker;
+
+        emit(state.copyWith(
+            riderLocation: riderLocation, markers: markers, polylines: []));
+        add(SetMapCameraStatus(status: MapCameraStatus.showRiderLocation));
+
+        if (state.deliveryData == null) {
+          final documentReference =
+              db.collection('deliveryRequests').doc(user!.uid);
+
+          final docResponse = await documentReference.get();
+
+          if (docResponse.exists) {
+            final data = docResponse.data();
+
+            // print(data);
+
+            final deliveryData = DeliveryData.fromJson(event.data);
+            emit(state.copyWith(deliveryData: deliveryData));
+          }
+        }
+      } catch (e) {
+        print(e);
+      }
+    });
+
+    on<CheckForActiveRequest>(
+      (event, emit) async {
+        final User? user = auth.currentUser;
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        final String? activeRequest = prefs.getString('activeRequest');
+
+        if (activeRequest != null) {
+          final documentReference =
+              db.collection('deliveryRequests').doc(user!.uid);
+
+          final docResponse = await documentReference.get();
+
+          if (docResponse.exists) {
+            print('There is an active ride');
+            final data = docResponse.data();
+            String? pickupAddress = data!['pickupDetails']['address'];
+            String? dropoffAddress = data!['dropoffDetails']['address'];
+            double? price = data!['price'];
+            String? currency = data!['currency'];
+
+            GeoPoint pickUpGeoPoint =
+                data!['pickupDetails']['position']['geopoint'];
+            GeoPoint dropoffGeoPoint =
+                data['pickupDetails']['position']['geopoint'];
+
+            PlaceCoordinate pickUpCoordinates = PlaceCoordinate(
+                lat: pickUpGeoPoint.latitude, lng: pickUpGeoPoint.longitude);
+            PlaceCoordinate dropoffCoordinates = PlaceCoordinate(
+                lat: dropoffGeoPoint.latitude, lng: dropoffGeoPoint.longitude);
+
+            final ContactInfo pickupDetails = ContactInfo.fromJson(
+                address: pickUpCoordinates,
+                moreInformation: data['pickupDetails']['moreInformation']);
+
+            final ContactInfo dropoffDetails = ContactInfo.fromJson(
+                address: dropoffCoordinates,
+                moreInformation: data['dropoffDetails']['moreInformation']);
+
+            DeliveryStatus? status;
+            if (data['status'] == 'accepted' ||
+                data['status'] == 'outForDelivery') {
+              status = DeliveryStatus.deliveryOnGoing;
+              emit(state.copyWith(
+                  deliveryStatus: status,
+                  pickupDetails: pickupDetails,
+                  dropoffDetails: dropoffDetails,
+                  pickupLocation: pickupAddress,
+                  destinationLocation: dropoffAddress,
+                  price: price,
+                  currency: currency));
+            }
+
+            // emit(state.copyWith());
+          }
+        } else {
+          print('There is no active ride 🏍️');
+        }
+      },
+    );
+
+    on<SetPanelControlStatus>(
+      (event, emit) => emit(state.copyWith(panelControlStatus: event.status)),
     );
 
     // Function to send a notification message

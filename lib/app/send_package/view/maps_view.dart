@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
+import 'package:circum/app/send_package/view/ratings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -58,6 +59,12 @@ class _MapsViewState extends State<MapsView> {
   Widget build(BuildContext context) {
     return BlocBuilder<SendPackageBloc, SendPackageState>(
         builder: (context, state) {
+      if (state.deliveryStatus == DeliveryStatus.deliveryCompleted) {
+        context.read<SendPackageBloc>().add(
+            const SetDeliveryStatus(deliveryStatus: DeliveryStatus.inital));
+        Navigator.push(
+            context, MaterialPageRoute(builder: (_) => RatingsView()));
+      }
       if (state.mapCameraStatus == MapCameraStatus.initialized &&
           context.read<AuthBloc>().state.locationData != null &&
           _controller.isCompleted == true) {
@@ -70,6 +77,19 @@ class _MapsViewState extends State<MapsView> {
         context.read<SendPackageBloc>().add(
             SetMapCameraStatus(status: MapCameraStatus.showingDeviceLocation));
       }
+
+      // Show Rider Location On The Map
+      if (state.mapCameraStatus == MapCameraStatus.showRiderLocation &&
+          state.riderLocation != null) {
+        changeCameraPositio(CameraPosition(
+          target: LatLng(state.riderLocation!.lat, state.riderLocation!.lng),
+          zoom: 15,
+        ));
+
+        context.read<SendPackageBloc>().add(
+            SetMapCameraStatus(status: MapCameraStatus.showingRiderLocation));
+      }
+
       if (state.sourceAndDestinationStatus ==
               SourceAndDestinationStatus.selected &&
           state.mapCameraStatus !=
@@ -80,7 +100,7 @@ class _MapsViewState extends State<MapsView> {
       }
       if (context.read<AuthBloc>().state.appLocationStatus ==
           AppLocationStatus.available) {
-        print('here');
+        // print('here');
       }
 
       return Expanded(

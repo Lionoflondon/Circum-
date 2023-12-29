@@ -67,6 +67,11 @@ class DeliveryAccepted extends SendPackageEvent {
   DeliveryAccepted({required this.data});
 }
 
+class DeliveryCompleted extends SendPackageEvent {
+  final Map data;
+  DeliveryCompleted({required this.data});
+}
+
 class SetSourceAndDestinationStatus extends SendPackageEvent {
   final SourceAndDestinationStatus status;
   SetSourceAndDestinationStatus({required this.status});
@@ -75,4 +80,16 @@ class SetSourceAndDestinationStatus extends SendPackageEvent {
 class SetMapCameraStatus extends SendPackageEvent {
   final MapCameraStatus status;
   SetMapCameraStatus({required this.status});
+}
+
+class SetRiderLocation extends SendPackageEvent {
+  final Map data;
+  SetRiderLocation({required this.data});
+}
+
+class CheckForActiveRequest extends SendPackageEvent {}
+
+class SetPanelControlStatus extends SendPackageEvent {
+  final PanelControlStatus status;
+  SetPanelControlStatus({required this.status});
 }

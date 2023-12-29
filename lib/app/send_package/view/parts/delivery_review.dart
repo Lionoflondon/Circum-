@@ -92,10 +92,39 @@ Widget deliveryCost() {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                AppText.text(state.price != null ? '£${state.price}' : '',
-                    fontSize: 24, fontWeight: FontWeight.w600),
-                AppText.text('Delivery price',
-                    fontSize: 12, color: const Color(0xFFC9D2D7)),
+                state.price == null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Shimmer.fromColors(
+                            baseColor: Color.fromARGB(255, 121, 121, 121),
+                            highlightColor: Color.fromARGB(255, 176, 176, 176),
+                            child: Container(
+                              height: 10,
+                              width: 50,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Shimmer.fromColors(
+                              baseColor: Color.fromARGB(255, 121, 121, 121),
+                              highlightColor:
+                                  Color.fromARGB(255, 176, 176, 176),
+                              child: Container(
+                                height: 10,
+                                width: 70,
+                                color: Colors.white,
+                              ))
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          AppText.text('£${state.price}',
+                              fontSize: 24, fontWeight: FontWeight.w600),
+                          AppText.text('Delivery price',
+                              fontSize: 12, color: const Color(0xFFC9D2D7)),
+                        ],
+                      )
               ],
             )
           ],

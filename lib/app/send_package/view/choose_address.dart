@@ -7,7 +7,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
-import 'delivery_review.dart';
 
 class ChooseAddressView extends StatefulWidget {
   const ChooseAddressView({Key? key}) : super(key: key);

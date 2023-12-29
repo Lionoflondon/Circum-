@@ -7,12 +7,14 @@ import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:shimmer/shimmer.dart';
 
 // import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../../send_package/view/delivery_review_expanded.dart';
 import '../../send_package/view/index.dart';
+import 'parts/active_delivery_details.dart';
 
 part './parts/delivery_review.dart';
 part './parts/connecting.dart';
@@ -27,6 +29,7 @@ class HomeViewState extends State<HomeView> {
   @override
   void initState() {
     context.read<SendPackageBloc>().add(CheckForPushToken());
+    context.read<SendPackageBloc>().add(CheckForActiveRequest());
     super.initState();
   }
 
@@ -55,6 +58,9 @@ class HomeViewState extends State<HomeView> {
               deliveryReview(),
             if (state.deliveryStatus == DeliveryStatus.deliveryConfirmed)
               const ConnectingToCourier(),
+            if (state.deliveryStatus == DeliveryStatus.deliveryOnGoing &&
+                state.deliveryData != null)
+              const ActiveDeliveryDetails()
           ]));
     });
   }
