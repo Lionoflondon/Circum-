@@ -5,7 +5,8 @@ enum DeliveryStatus {
   addressesSelected,
   deliveryConfirmed,
   deliveryOnGoing,
-  deliveryCompleted
+  deliveryCompleted,
+  reconnectingWithRider
 }
 
 enum ParcelStatus { requested, accepted, outForDelivery, delivered }
@@ -22,6 +23,8 @@ enum MapCameraStatus {
 }
 
 enum SourceAndDestinationStatus { unselected, selected }
+
+enum ChatStatus { initial, newMessage }
 
 class SendPackageState {
   List<Suggestion> suggestions;
@@ -40,6 +43,8 @@ class SendPackageState {
   ContactInfo? dropoffDetails;
   String? pickupLocality;
   String? destinationLocality;
+  double minDrawerHeight;
+  double maxDrawerHeight;
   double? price;
   DeliveryData? deliveryData;
   Map<MarkerId, Marker> markers;
@@ -48,6 +53,9 @@ class SendPackageState {
   SourceAndDestinationStatus sourceAndDestinationStatus;
   MapCameraStatus mapCameraStatus;
   String currency;
+  List<Message> chatMessages;
+  ChatStatus chatStatus;
+  String? message;
   SendPackageState(
       {this.suggestions = const [],
       this.ongoingRequests = const [],
@@ -64,6 +72,8 @@ class SendPackageState {
       this.dropoffDetails,
       this.pickupLocality,
       this.destinationLocality,
+      this.minDrawerHeight = 180,
+      this.maxDrawerHeight = 180,
       this.price,
       this.deliveryData,
       this.markers = const {},
@@ -72,7 +82,10 @@ class SendPackageState {
       this.sourceAndDestinationStatus = SourceAndDestinationStatus.unselected,
       this.mapCameraStatus = MapCameraStatus.initialized,
       this.riderLocation,
-      this.currency = 'GBP'});
+      this.currency = 'GBP',
+      this.chatMessages = const [],
+      this.chatStatus = ChatStatus.initial,
+      this.message});
 
   SendPackageState copyWith(
       {List<Suggestion>? suggestions,
@@ -94,11 +107,16 @@ class SendPackageState {
       double? price,
       DeliveryData? deliveryData,
       Map<MarkerId, Marker>? markers,
+      double? minDrawerHeight,
+      double? maxDrawerHeight,
       List<Polyline>? polylines,
       List<LatLng>? polylineCoordinates,
       SourceAndDestinationStatus? sourceAndDestinationStatus,
       MapCameraStatus? mapCameraStatus,
-      String? currency}) {
+      String? currency,
+      List<Message>? chatMessages,
+      ChatStatus? chatStatus,
+      String? message}) {
     return SendPackageState(
         suggestions: suggestions ?? this.suggestions,
         pickupLocation: pickupLocation ?? this.pickupLocation,
@@ -126,6 +144,11 @@ class SendPackageState {
         sourceAndDestinationStatus:
             sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
         mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
-        currency: currency ?? this.currency);
+        currency: currency ?? this.currency,
+        chatMessages: chatMessages ?? this.chatMessages,
+        chatStatus: chatStatus ?? this.chatStatus,
+        minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
+        maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
+        message: message ?? this.message);
   }
 }

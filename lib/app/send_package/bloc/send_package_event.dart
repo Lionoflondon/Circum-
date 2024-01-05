@@ -93,3 +93,28 @@ class SetPanelControlStatus extends SendPackageEvent {
   final PanelControlStatus status;
   SetPanelControlStatus({required this.status});
 }
+
+class SetDrawerHeight extends SendPackageEvent {
+  final double minDrawerHeight;
+  final double maxDrawerHeight;
+  SetDrawerHeight(
+      {required this.minDrawerHeight, required this.maxDrawerHeight});
+}
+
+class SetNewMessage extends SendPackageEvent {
+  final String value;
+  SetNewMessage({required this.value});
+}
+
+class IncomingMessage extends SendPackageEvent {
+  final dynamic data;
+
+  IncomingMessage({required this.data});
+}
+
+class LoadChatMessages extends SendPackageEvent {}
+
+class MessageRider extends SendPackageEvent {
+  final String message;
+  MessageRider({required this.message});
+}

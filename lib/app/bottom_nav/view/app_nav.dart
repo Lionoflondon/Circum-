@@ -39,10 +39,17 @@ class AppNavState extends State<AppNavView> {
           children: [
             Column(
               children: [
-                MapsView(),
-                if (state.currentNavIndex >= 0) userScreens(context, 0),
+                Expanded(child: MapsView()),
+                const SizedBox(height: 180),
               ],
             ),
+            if (state.currentNavIndex >= 0) userScreens(context, 0),
+            // Column(
+            //   mainAxisAlignment: MainAxisAlignment.end,
+            //   children: [
+            //     if (state.currentNavIndex >= 0) userScreens(context, 0),
+            //   ],
+            // ),
             if (state.currentNavIndex > 0)
               Column(
                 children: [

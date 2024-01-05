@@ -3,7 +3,7 @@ part of '../home.dart';
 Widget deliveryReview() {
   return Column(
     children: [
-      const SizedBox(height: 44),
+      const SizedBox(height: 20),
       selectedAddresses(),
       const SizedBox(height: 38),
       deliveryCost(),

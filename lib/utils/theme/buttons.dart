@@ -14,9 +14,12 @@ class AppButton {
       BorderRadiusGeometry? borderRadius,
       EdgeInsetsGeometry? padding}) {
     return Container(
-        decoration: const BoxDecoration(
-            gradient:
-                LinearGradient(colors: [Color(0xFF2D89D4), Color(0xFF235CA1)])),
+        decoration: BoxDecoration(
+            color: backgroundColor,
+            gradient: backgroundColor == null
+                ? const LinearGradient(
+                    colors: [Color(0xFF2D89D4), Color(0xFF235CA1)])
+                : null),
         child: TextButton(
             style: TextButton.styleFrom(
                 backgroundColor: backgroundColor ?? Colors.transparent,

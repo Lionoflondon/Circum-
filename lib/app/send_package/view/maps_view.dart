@@ -59,12 +59,6 @@ class _MapsViewState extends State<MapsView> {
   Widget build(BuildContext context) {
     return BlocBuilder<SendPackageBloc, SendPackageState>(
         builder: (context, state) {
-      if (state.deliveryStatus == DeliveryStatus.deliveryCompleted) {
-        context.read<SendPackageBloc>().add(
-            const SetDeliveryStatus(deliveryStatus: DeliveryStatus.inital));
-        Navigator.push(
-            context, MaterialPageRoute(builder: (_) => RatingsView()));
-      }
       if (state.mapCameraStatus == MapCameraStatus.initialized &&
           context.read<AuthBloc>().state.locationData != null &&
           _controller.isCompleted == true) {
@@ -103,9 +97,8 @@ class _MapsViewState extends State<MapsView> {
         // print('here');
       }
 
-      return Expanded(
-          child: GoogleMap(
-        key: mapKey,
+      return GoogleMap(
+        // key: mapKey,
         mapType: MapType.normal,
         initialCameraPosition: _initialCameraPosition,
         cameraTargetBounds: CameraTargetBounds.unbounded,
@@ -116,7 +109,7 @@ class _MapsViewState extends State<MapsView> {
         },
         markers: Set<Marker>.of(state.markers.values),
         polylines: Set<Polyline>.of(state.polylines),
-      ));
+      );
     });
   }
 }

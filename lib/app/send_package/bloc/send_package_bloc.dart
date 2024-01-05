@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/utils/theme/colors.dart';
@@ -8,17 +9,21 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
+import '../../../helper/chats_help.dart';
 import '../../../helper/messaging_server.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
+import '../models/message.m.dart';
 import '../models/suggestions.m.dart';
 import '../repo/place_api.dart';
 
@@ -76,6 +81,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       },
     );
 
+    on<SetDrawerHeight>((event, emit) {
+      emit(state.copyWith(
+          minDrawerHeight: event.minDrawerHeight,
+          maxDrawerHeight: event.maxDrawerHeight,
+          panelControlStatus: PanelControlStatus.isOpened));
+    });
+
     on<ClearSuggestions>((event, emit) {
       emit(state.copyWith(suggestions: []));
     });
@@ -124,6 +136,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             destinationLocality: address[0].locality));
 
         if (state.pickupCoordinate != null) {
+          add(SetDrawerHeight(
+              minDrawerHeight: state.minDrawerHeight,
+              maxDrawerHeight: 0.55.sh));
           List<LatLng> latLngList = [];
 
           PolylinePoints points = PolylinePoints();
@@ -186,6 +201,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
                 markers: markers,
                 distance: tripDistance));
             add(SetPrice());
+
             add(SetSourceAndDestinationStatus(
                 status: SourceAndDestinationStatus.selected));
           }
@@ -315,6 +331,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         }).then((value) => print("DocumentSnapshot successfully created!"),
             onError: (e) => print("Error updating document $e"));
 
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('activeRequest', uuidStrong);
+
         // await firebaseMessaging
         //     .subscribeToTopic(uuidStrong)
         //     .then((value) => print(uuidStrong)); // Replace with your topic name
@@ -322,6 +341,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         // print(user);
 
         emit(state.copyWith(deliveryStatus: DeliveryStatus.deliveryConfirmed));
+        add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
       } catch (e) {
         print(e);
       }
@@ -353,13 +373,21 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           emit(state.copyWith(
               deliveryStatus: DeliveryStatus.deliveryOnGoing,
               deliveryData: deliveryData));
+          add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
         }
       },
     );
 
     on<DeliveryCompleted>(
       (event, emit) {
-        emit(state.copyWith(deliveryStatus: DeliveryStatus.deliveryCompleted));
+        add(SetDrawerHeight(
+            minDrawerHeight: state.minDrawerHeight,
+            maxDrawerHeight: state.minDrawerHeight));
+        emit(state.copyWith(
+            polylines: [],
+            polylineCoordinates: [],
+            markers: {},
+            deliveryStatus: DeliveryStatus.deliveryCompleted));
       },
     );
 
@@ -413,6 +441,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             final deliveryData = DeliveryData.fromJson(event.data);
             emit(state.copyWith(deliveryData: deliveryData));
           }
+
+          if (state.deliveryStatus != DeliveryStatus.deliveryOnGoing) {
+            emit(
+                state.copyWith(deliveryStatus: DeliveryStatus.deliveryOnGoing));
+
+            add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
+          }
         }
       } catch (e) {
         print(e);
@@ -435,9 +470,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             print('There is an active ride');
             final data = docResponse.data();
             String? pickupAddress = data!['pickupDetails']['address'];
-            String? dropoffAddress = data!['dropoffDetails']['address'];
-            double? price = data!['price'];
-            String? currency = data!['currency'];
+            String? dropoffAddress = data['dropoffDetails']['address'];
+            double? price = data['price'];
+            String? currency = data['currency'];
 
             GeoPoint pickUpGeoPoint =
                 data!['pickupDetails']['position']['geopoint'];
@@ -460,7 +495,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             DeliveryStatus? status;
             if (data['status'] == 'accepted' ||
                 data['status'] == 'outForDelivery') {
-              status = DeliveryStatus.deliveryOnGoing;
+              status = DeliveryStatus.reconnectingWithRider;
               emit(state.copyWith(
                   deliveryStatus: status,
                   pickupDetails: pickupDetails,
@@ -483,12 +518,81 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       (event, emit) => emit(state.copyWith(panelControlStatus: event.status)),
     );
 
-    // Function to send a notification message
-    void sendNotification() async {
-      await MessagingServer().sendMessage(data: {
-        'type': 'connection',
-        'status': 'accepted',
-      }, topic: 'your_topic_name');
-    }
+    on<SetNewMessage>(
+      (event, emit) {
+        emit(state.copyWith(message: event.value));
+      },
+    );
+
+    on<IncomingMessage>(
+      (event, emit) async {
+        final chatMessages = [...state.chatMessages];
+
+        final newMessage = Message.fromJson(event.data);
+        chatMessages.add(newMessage);
+
+        emit(state.copyWith(
+            chatMessages: chatMessages, chatStatus: ChatStatus.newMessage));
+      },
+    );
+
+    on<MessageRider>((event, emit) async {
+      try {
+        final User? user = auth.currentUser;
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        final String? activeRequest = prefs.getString('activeRequest');
+
+        // print('${state.deliveryData!.code}');
+
+        final messageData = {
+          'requestId': activeRequest,
+          'senderId': user!.uid,
+          'message': event.message,
+          'timeStamp': '${DateTime.now()}'
+        };
+
+        await MessagingServer().sendMessage(
+            data: {
+              "type": "message",
+              "data": """{
+                "requestId": "$activeRequest'",
+                "senderId": "${user.uid}",
+                "message": "${event.message}",
+                "timeStamp": "${DateTime.now()}"
+              }"""
+            },
+            code: state.deliveryData!.code,
+            message: event.message,
+            title: user.displayName!.split(' ').first.trim());
+
+        add(IncomingMessage(data: messageData));
+
+        ChatsHelper().storeChat(messageData);
+      } catch (e) {
+        print('Sending messsage failed');
+        print(e);
+      }
+    });
+
+    on<LoadChatMessages>(
+      (event, emit) async {
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        final String? activeRequest = prefs.getString('activeRequest');
+        final directory = await getApplicationDocumentsDirectory();
+        final chats = File('${directory.path}/$activeRequest.json');
+
+        if (await chats.exists()) {
+          print('Loading chats');
+          final contents = await chats.readAsString();
+          // print(contents);
+          final jsonData = await jsonDecode(contents) as List;
+
+          final messagesList =
+              jsonData.map((e) => Message.fromJson(e)).toList();
+          emit(state.copyWith(
+              chatMessages: messagesList, chatStatus: ChatStatus.newMessage));
+        }
+      },
+    );
   }
 }

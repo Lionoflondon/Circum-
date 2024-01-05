@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:circum/app/account/bloc/account_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
+import 'package:circum/helper/chats_help.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -63,7 +64,22 @@ foregoundMessage() {
       }
     }
 
-    if (message.data['type'] == 'completed') {
+    if (message.data['type'] == 'message') {
+      // Remove leading and trailing whitespace
+      // String jsonString = message.data['data'].trim();
+
+      // // Replace single quotes with double quotes to make it valid JSON
+      // jsonString = jsonString.replaceAll("'", '"');
+      // // print(jsonString);
+
+      // Parse the modified string into a map
+      Map<String, dynamic> msg = jsonDecode(message.data['data']);
+      sendPackageBloc.add(IncomingMessage(data: msg));
+
+      await ChatsHelper().storeChat(msg);
+    }
+
+    if (message.data['type'] == 'delivery-completed') {
       print('Delivery completed');
       try {
         // Remove leading and trailing whitespace
@@ -81,23 +97,6 @@ foregoundMessage() {
         print(e);
       }
     }
-    // final msg = jsonDecode(message.data['data']);
-
-    // homeBloc.add(IncomingMessage(data: msg));
-
-    // final directory = await getApplicationDocumentsDirectory();
-    // final chats = File('${directory.path}/${msg['conversationId']}.json');
-    // List jsonData = [];
-    // if (await chats.exists()) {
-    //   final contents = await chats.readAsString();
-    //   final parsingData = await jsonDecode(contents) as List;
-    //   jsonData = [...parsingData];
-    // }
-    // jsonData.add(msg);
-    // // final jsonDataa = jsonData.map((message) => message.toJson()).toList();
-    // final jsonString = jsonEncode(jsonData);
-
-    // await chats.writeAsString(jsonString);
   });
 }
 
@@ -107,45 +106,48 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('Got a message whilst in the background!');
   // print('Message data: ${message.data}');
 
-  if (message.data['type'] == 'connection') {
-    if (message.data['status'] == 'accepted') {
-      print('accepted');
-      try {
-        // Remove leading and trailing whitespace
-        String jsonString = message.data['data'].trim();
+  if (message.data['type'] == 'message') {
+    // Remove leading and trailing whitespace
+    String jsonString = message.data['data'].trim();
 
-        // Replace single quotes with double quotes to make it valid JSON
-        jsonString = jsonString.replaceAll("'", '"');
-        print(jsonString);
+    // Replace single quotes with double quotes to make it valid JSON
+    jsonString = jsonString.replaceAll("'", '"');
+    // print(jsonString);
 
-        // Parse the modified string into a map
-        Map<String, dynamic> mapData = jsonDecode(jsonString);
+    // Parse the modified string into a map
+    Map<String, dynamic> msg = jsonDecode(jsonString);
+    sendPackageBloc.add(IncomingMessage(data: msg));
 
-        sendPackageBloc.add(DeliveryAccepted(data: mapData));
-      } catch (e) {
-        print(e);
-      }
-    }
+    await ChatsHelper().storeChat(msg);
   }
-  // final messageJson = jsonDecode(message.data['data']);
 
-  // final directory = await getApplicationDocumentsDirectory();
-  // final chats = File('${directory.path}/${messageJson['conversationId']}.json');
-  // List jsonData = [];
-  // if (await chats.exists()) {
-  //   final contents = await chats.readAsString();
-  //   final parsingData = await jsonDecode(contents) as List;
-  //   jsonData = [...parsingData];
+  // if (message.data['type'] == 'connection') {
+  //   if (message.data['status'] == 'accepted') {
+  //     print('accepted');
+  //     try {
+  //       // Remove leading and trailing whitespace
+  //       String jsonString = message.data['data'].trim();
+
+  //       // Replace single quotes with double quotes to make it valid JSON
+  //       jsonString = jsonString.replaceAll("'", '"');
+  //       print(jsonString);
+
+  //       // Parse the modified string into a map
+  //       Map<String, dynamic> mapData = jsonDecode(jsonString);
+
+  //       sendPackageBloc.add(DeliveryAccepted(data: mapData));
+  //     } catch (e) {
+  //       print(e);
+  //     }
+  //   }
   // }
-  // jsonData.add(messageJson);
-  // // final jsonDataa = jsonData.map((message) => message.toJson()).toList();
-  // final jsonString = jsonEncode(jsonData);
+  if (message.data['type'] == 'message') {
+    final msg = jsonDecode(message.data['data']);
+    sendPackageBloc.add(IncomingMessage(data: msg));
 
-  // await chats.writeAsString(jsonString);
+    await ChatsHelper().storeChat(msg);
+  }
 
-  // print('Handling a background message ${message.messageId}');
-  // print('New message');
-  // print(messageJson['conversationId']);
   return Future<void>.value();
 }
 
