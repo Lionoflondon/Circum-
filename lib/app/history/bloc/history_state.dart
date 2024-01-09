@@ -1,10 +1,10 @@
 part of 'history_bloc.dart';
 
-abstract class HistoryState extends Equatable {
-  const HistoryState();
-  
-  @override
-  List<Object> get props => [];
-}
+class HistoryState {
+  List<DispatchRequest> ridesHistory;
+  HistoryState({this.ridesHistory = const []});
 
-class HistoryInitial extends HistoryState {}
+  HistoryState copyWith({List<DispatchRequest>? ridesHistory}) {
+    return HistoryState(ridesHistory: ridesHistory ?? this.ridesHistory);
+  }
+}

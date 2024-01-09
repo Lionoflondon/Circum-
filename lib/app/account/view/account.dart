@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../bloc/account_bloc.dart';
@@ -133,7 +135,11 @@ class AccountView extends StatelessWidget {
                       )
                     ],
                   ),
-                  onPressed: () {}),
+                  onPressed: () async {
+                    await Share.share(
+                        'Get anything to anyone, instantly. https://circumuk.com',
+                        subject: 'Take a look at Circum');
+                  }),
               Divider(
                   height: 1,
                   thickness: 1,
@@ -163,7 +169,9 @@ class AccountView extends StatelessWidget {
                       )
                     ],
                   ),
-                  onPressed: () {}),
+                  onPressed: () async {
+                    await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                  }),
             ],
           ));
     });

@@ -393,56 +393,56 @@ class _DeliveryReviewExpandedViewState
                   )
                 ],
               )),
-          const SizedBox(height: 20),
-          ListTile(
-              onTap: () async {
-                _textFieldController.text = additonalDeliveryInformation ?? '';
-                final String? info = await additioalDetailsBottomSheet(
-                    title: 'More information');
+          // const SizedBox(height: 20),
+          // ListTile(
+          //     onTap: () async {
+          //       _textFieldController.text = additonalDeliveryInformation ?? '';
+          //       final String? info = await additioalDetailsBottomSheet(
+          //           title: 'More information');
 
-                if (info != null) {
-                  setState(() {
-                    additonalDeliveryInformation = info;
-                  });
-                }
-              },
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/legal.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                          child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('More information',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(
-                              additonalDeliveryInformation ??
-                                  'Add an additional information',
-                              fontSize: 16,
-                              color: additonalDeliveryInformation != null
-                                  ? Colors.white
-                                  : const Color(0xFFC9D2D7))
-                        ],
-                      ))
-                    ],
-                  )),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
+          //       if (info != null) {
+          //         setState(() {
+          //           additonalDeliveryInformation = info;
+          //         });
+          //       }
+          //     },
+          //     dense: true,
+          //     contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          //     title: Row(
+          //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //       children: [
+          //         Expanded(
+          //             child: Row(
+          //           children: [
+          //             SvgPicture.asset(
+          //               'assets/svg/legal.svg',
+          //               height: 32,
+          //               width: 32,
+          //             ),
+          //             const SizedBox(width: 18),
+          //             Expanded(
+          //                 child: Column(
+          //               crossAxisAlignment: CrossAxisAlignment.start,
+          //               children: [
+          //                 AppText.text('More information',
+          //                     color: const Color(0xFFC9D2D7), fontSize: 12),
+          //                 AppText.text(
+          //                     additonalDeliveryInformation ??
+          //                         'Add an additional information',
+          //                     fontSize: 16,
+          //                     color: additonalDeliveryInformation != null
+          //                         ? Colors.white
+          //                         : const Color(0xFFC9D2D7))
+          //               ],
+          //             ))
+          //           ],
+          //         )),
+          //         const Icon(
+          //           Icons.arrow_forward_ios,
+          //           color: Color(0xFF415058),
+          //         )
+          //       ],
+          //     )),
         ],
       );
     });
