@@ -45,6 +45,8 @@ class HomeViewState extends State<HomeView> {
         builder: (context, state) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (state.deliveryStatus == DeliveryStatus.deliveryCompleted) {
+          context.read<SendPackageBloc>().add(DeleteCompletedDelivery());
+
           context.read<SendPackageBloc>().add(
               const SetDeliveryStatus(deliveryStatus: DeliveryStatus.inital));
           Navigator.push(

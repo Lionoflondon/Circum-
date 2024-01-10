@@ -44,6 +44,7 @@ class _RatingsViewState extends State<RatingsView> {
               ),
               itemPadding: const EdgeInsets.symmetric(horizontal: 4.0),
               onRatingUpdate: (rating) {
+                context.read<SendPackageBloc>().add(RateRider(rating: rating));
                 Navigator.pop(context);
                 // print(rating);
               },

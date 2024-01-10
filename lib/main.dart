@@ -65,13 +65,6 @@ foregoundMessage() {
     }
 
     if (message.data['type'] == 'message') {
-      // Remove leading and trailing whitespace
-      // String jsonString = message.data['data'].trim();
-
-      // // Replace single quotes with double quotes to make it valid JSON
-      // jsonString = jsonString.replaceAll("'", '"');
-      // // print(jsonString);
-
       // Parse the modified string into a map
       Map<String, dynamic> msg = jsonDecode(message.data['data']);
       sendPackageBloc.add(IncomingMessage(data: msg));

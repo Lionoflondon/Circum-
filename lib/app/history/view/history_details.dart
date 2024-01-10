@@ -130,7 +130,7 @@ class _HistoryDetailsViewState extends State<HistoryDetailsView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AppText.text('Sender Rating',
+                  AppText.text('Rider Rating',
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w600),
@@ -142,27 +142,29 @@ class _HistoryDetailsViewState extends State<HistoryDetailsView> {
                         height: 32,
                       ),
                       const SizedBox(width: 14),
-                      AppText.text('Mauris blandit'),
+                      AppText.text(widget.data.riderName ?? ''),
                       const Spacer(),
-                      RatingBar(
-                        initialRating: 4,
-                        itemSize: 16,
-                        direction: Axis.horizontal,
-                        allowHalfRating: true,
-                        ignoreGestures: true,
-                        itemCount: 5,
-                        ratingWidget: RatingWidget(
-                          full: SvgPicture.asset('assets/svg/star_full.svg'),
-                          half: SvgPicture.asset('assets/svg/star_half.svg'),
-                          empty: SvgPicture.asset('assets/svg/star_empty.svg'),
+                      if (widget.data.userRating != null)
+                        RatingBar(
+                          initialRating: widget.data.userRating!,
+                          itemSize: 16,
+                          direction: Axis.horizontal,
+                          allowHalfRating: true,
+                          ignoreGestures: true,
+                          itemCount: 5,
+                          ratingWidget: RatingWidget(
+                            full: SvgPicture.asset('assets/svg/star_full.svg'),
+                            half: SvgPicture.asset('assets/svg/star_half.svg'),
+                            empty:
+                                SvgPicture.asset('assets/svg/star_empty.svg'),
+                          ),
+                          itemPadding:
+                              const EdgeInsets.symmetric(horizontal: 4.0),
+                          onRatingUpdate: (rating) {
+                            // Navigator.pop(context);
+                            // print(rating);
+                          },
                         ),
-                        itemPadding:
-                            const EdgeInsets.symmetric(horizontal: 4.0),
-                        onRatingUpdate: (rating) {
-                          // Navigator.pop(context);
-                          // print(rating);
-                        },
-                      ),
                     ],
                   ),
                 ],

@@ -10,6 +10,9 @@ class DispatchRequest extends Equatable {
   final double price;
   final String currency;
   final Timestamp? createdAt;
+  final String? riderName;
+  final double? userRating;
+  final double? riderRating;
   const DispatchRequest(
       {required this.pickupData,
       required this.dropoffData,
@@ -17,7 +20,10 @@ class DispatchRequest extends Equatable {
       required this.code,
       required this.price,
       required this.currency,
-      this.createdAt});
+      this.createdAt,
+      this.riderName,
+      this.userRating,
+      this.riderRating});
 
   @override
   List<Object> get props => [
@@ -26,18 +32,25 @@ class DispatchRequest extends Equatable {
         {requestId},
         {code},
         {price},
-        {createdAt}
+        {createdAt},
+        {riderName},
+        {userRating},
+        {riderRating},
       ];
 
   static DispatchRequest fromJson(dynamic json) {
     return DispatchRequest(
-        pickupData: RideContactInfo.fromJson(json['pickupDetails']),
-        dropoffData: RideContactInfo.fromJson(json['dropoffDetails']),
-        requestId: json['requestId'],
-        code: json['code'],
-        price: json['price'],
-        currency: json['currency'],
-        createdAt: json['createdAt']);
+      pickupData: RideContactInfo.fromJson(json['pickupDetails']),
+      dropoffData: RideContactInfo.fromJson(json['dropoffDetails']),
+      requestId: json['requestId'],
+      code: json['code'],
+      price: json['price'],
+      currency: json['currency'],
+      createdAt: json['createdAt'],
+      riderName: json['riderName'],
+      userRating: json['userRating'],
+      riderRating: json['riderRating'],
+    );
   }
 
   @override

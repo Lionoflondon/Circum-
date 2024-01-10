@@ -380,6 +380,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
     on<DeliveryCompleted>(
       (event, emit) {
+        print(event.data['historyId']);
         add(SetDrawerHeight(
             minDrawerHeight: state.minDrawerHeight,
             maxDrawerHeight: state.minDrawerHeight));
@@ -387,7 +388,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             polylines: [],
             polylineCoordinates: [],
             markers: {},
-            deliveryStatus: DeliveryStatus.deliveryCompleted));
+            deliveryStatus: DeliveryStatus.deliveryCompleted,
+            lastHistoryId: event.data['historyId']));
       },
     );
 
@@ -506,6 +508,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
                   currency: currency));
             }
 
+            if (data['status'] == 'completed') {
+              status = DeliveryStatus.deliveryCompleted;
+              emit(state.copyWith(
+                lastHistoryId: data['historyId'],
+                deliveryStatus: status,
+              ));
+            }
+
             // emit(state.copyWith());
           }
         } else {
@@ -591,6 +601,32 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               jsonData.map((e) => Message.fromJson(e)).toList();
           emit(state.copyWith(
               chatMessages: messagesList, chatStatus: ChatStatus.newMessage));
+        }
+      },
+    );
+
+    on<RateRider>(
+      (event, emit) async {
+        try {
+          if (state.lastHistoryId != null) {
+            await db.collection('history').doc(state.lastHistoryId).update(
+                {'riderRating': event.rating, 'updatedAt': DateTime.now()});
+          }
+        } catch (e) {
+          print(e);
+        }
+      },
+    );
+    on<DeleteCompletedDelivery>(
+      (event, emit) async {
+        try {
+          User user = auth.currentUser!;
+          final documentReference =
+              db.collection('deliveryRequests').doc(user.uid);
+
+          await documentReference.delete();
+        } catch (e) {
+          print(e);
         }
       },
     );

@@ -56,6 +56,7 @@ class SendPackageState {
   List<Message> chatMessages;
   ChatStatus chatStatus;
   String? message;
+  String? lastHistoryId;
   SendPackageState(
       {this.suggestions = const [],
       this.ongoingRequests = const [],
@@ -85,7 +86,8 @@ class SendPackageState {
       this.currency = 'GBP',
       this.chatMessages = const [],
       this.chatStatus = ChatStatus.initial,
-      this.message});
+      this.message,
+      this.lastHistoryId});
 
   SendPackageState copyWith(
       {List<Suggestion>? suggestions,
@@ -116,7 +118,8 @@ class SendPackageState {
       String? currency,
       List<Message>? chatMessages,
       ChatStatus? chatStatus,
-      String? message}) {
+      String? message,
+      String? lastHistoryId}) {
     return SendPackageState(
         suggestions: suggestions ?? this.suggestions,
         pickupLocation: pickupLocation ?? this.pickupLocation,
@@ -149,6 +152,7 @@ class SendPackageState {
         chatStatus: chatStatus ?? this.chatStatus,
         minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
         maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
-        message: message ?? this.message);
+        message: message ?? this.message,
+        lastHistoryId: lastHistoryId ?? this.lastHistoryId);
   }
 }
