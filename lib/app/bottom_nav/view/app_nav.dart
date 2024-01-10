@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
@@ -115,9 +116,37 @@ class AppNavState extends State<AppNavView> {
                 )),
             BottomNavigationBarItem(
               label: 'Account',
-              icon: SvgPicture.asset(
-                'assets/svg/account.svg',
+              icon: Container(
                 height: 22,
+                width: 22,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100),
+                  color: AppColors.input,
+                ),
+                child: authBloc != null &&
+                        authBloc!.state.profilePhoto != null &&
+                        authBloc!.state.profilePhoto != ''
+                    ? CachedNetworkImage(
+                        imageUrl: authBloc!.state.profilePhoto!,
+                        imageBuilder: (context, imageProvider) => Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(100),
+                            image: DecorationImage(
+                              image: imageProvider,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        placeholder: (context, url) => Container(),
+                        //     CircularProgressIndicator(
+                        //   color: Colors.grey,
+                        // ),
+                        errorWidget: (context, url, error) => Icon(Icons.error),
+                      )
+                    : SvgPicture.asset(
+                        'assets/svg/account.svg',
+                        height: 32,
+                      ),
               ),
             ),
           ],

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -14,6 +16,7 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
 
+import '../../../helper/image_to_base64.dart';
 import '../../../helper/location_helper.dart';
 import '../../../utils/validator/validator.dart';
 import '../repo/auth_repo.dart';
@@ -51,6 +54,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             username: user.displayName,
             phoneNumber: user.phoneNumber,
             email: user.email,
+            profilePhoto: user.photoURL,
           ));
         } else {
           print('User not signed in');
@@ -185,7 +189,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             print(_userCredential.user);
             emit(state.copyWith(
                 status: Status.success,
-                username: _userCredential.user?.displayName));
+                username: _userCredential.user?.displayName,
+                profilePhoto: _userCredential.user?.photoURL,
+                email: _userCredential.user?.email,
+                phoneNumber: _userCredential.user?.phoneNumber));
           }
         } on FirebaseException catch (e) {
           print(e.code);
@@ -403,5 +410,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         print(e);
       }
     }));
+
+    on<UpdateUserProfilePhoto>(
+      (event, emit) async {
+        // print('uploading image');
+        try {
+          User? user = auth.currentUser;
+          final fileName = user!.uid;
+          File imageFile = File(event.imagePath);
+
+          final storageRef = FirebaseStorage.instance;
+          await storageRef.ref('profile-photos/$fileName').putFile(imageFile);
+          final downloadUrl =
+              await storageRef.ref('profile-photos/$fileName').getDownloadURL();
+
+          print(downloadUrl);
+
+          await user.updatePhotoURL(downloadUrl);
+          emit(state.copyWith(profilePhoto: downloadUrl));
+        } catch (e) {
+          print(e);
+        }
+      },
+    );
   }
 }

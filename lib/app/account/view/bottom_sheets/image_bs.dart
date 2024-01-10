@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../utils/theme/text_field.dart';
 import '../../../../utils/theme/theme.dart';
 
-showEditBottomSheet(context, {String? val, required String title}) {
+showImageBottomSheet(context) {
   return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -12,29 +12,21 @@ showEditBottomSheet(context, {String? val, required String title}) {
       ),
       backgroundColor: AppColors.secondary,
       builder: (context) {
-        return ButtSheet(
-          title: title,
-          val: val,
-        );
+        return ImageButtSheet();
       });
 }
 
-class ButtSheet extends StatefulWidget {
-  final String? val;
-  final String title;
-  const ButtSheet({super.key, this.val, required this.title});
+class ImageButtSheet extends StatefulWidget {
+  const ImageButtSheet({super.key});
   @override
-  ButtSheetState createState() => ButtSheetState();
+  ImageButtSheetState createState() => ImageButtSheetState();
 }
 
-class ButtSheetState extends State<ButtSheet> {
-  final TextEditingController _textFieldController = TextEditingController();
-
+class ImageButtSheetState extends State<ImageButtSheet> {
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    _textFieldController.text = widget.val ?? '';
   }
 
   @override
@@ -61,22 +53,30 @@ class ButtSheetState extends State<ButtSheet> {
                   ],
                 ),
                 Row(children: [
-                  AppText.text(widget.title,
+                  AppText.text('Upate profile photo from',
                       fontWeight: FontWeight.w600, fontSize: 16)
                 ]),
                 const SizedBox(height: 12),
-                AppTextInput.input(controller: _textFieldController),
-                const SizedBox(height: 80),
                 AppButton.button(
+                    backgroundColor: AppColors.input,
                     widget: Center(
-                        child: AppText.text('Update details',
+                        child: AppText.text('Camera',
                             fontSize: 16, fontWeight: FontWeight.w600)),
                     onPressed: () {
-                      if (_textFieldController.text.trim() != '') {
-                        Navigator.pop(context, _textFieldController.text);
-                      }
+                      Navigator.pop(context, 'camera');
                       // print(_textFieldController.text);
-                    })
+                    }),
+                const SizedBox(height: 12),
+                AppButton.button(
+                    backgroundColor: AppColors.input,
+                    widget: Center(
+                        child: AppText.text('Photo library',
+                            fontSize: 16, fontWeight: FontWeight.w600)),
+                    onPressed: () {
+                      Navigator.pop(context, 'library');
+                      // print(_textFieldController.text);
+                    }),
+                const SizedBox(height: 20),
               ],
             )));
   }

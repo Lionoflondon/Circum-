@@ -1,3 +1,5 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -22,21 +24,62 @@ class AccountView extends StatelessWidget {
   }
 
   Widget appBar(context) {
-    return Container(
-        margin: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 20, left: 24),
-        width: double.maxFinite,
-        child: Row(
-          children: [
-            SvgPicture.asset(
-              'assets/svg/account.svg',
-              height: 32,
-            ),
-            const SizedBox(width: 16),
-            AppText.text('Moses',
-                color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-          ],
-        ));
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return Container(
+          margin: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 20, left: 24),
+          width: double.maxFinite,
+          child: Row(
+            children: [
+              Container(
+                  height: 32,
+                  width: 32,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(100),
+                    color: AppColors.input,
+                  ),
+                  child: state.profilePhoto != null && state.profilePhoto != ''
+                      ? CachedNetworkImage(
+                          imageUrl: state.profilePhoto!,
+                          imageBuilder: (context, imageProvider) => Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(100),
+                              image: DecorationImage(
+                                image: imageProvider,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          placeholder: (context, url) => Container(),
+                          //     CircularProgressIndicator(
+                          //   color: Colors.grey,
+                          // ),
+                          errorWidget: (context, url, error) =>
+                              Icon(Icons.error),
+                        )
+                      : Stack(
+                          children: [
+                            SvgPicture.asset(
+                              'assets/svg/account.svg',
+                              height: 32,
+                            ),
+                            Align(
+                              alignment: Alignment.center,
+                              child: SvgPicture.asset('assets/svg/user.svg'),
+                            )
+                          ],
+                        )),
+              const SizedBox(width: 16),
+              AppText.text(
+                  state.username != null
+                      ? '${state.username}'.trim().split(' ').first
+                      : '',
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold),
+            ],
+          ));
+    });
   }
 
   Widget options() {

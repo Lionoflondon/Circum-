@@ -135,3 +135,8 @@ class UpdateLastName extends AuthEvent {
   final String value;
   const UpdateLastName({required this.value});
 }
+
+class UpdateUserProfilePhoto extends AuthEvent {
+  final String imagePath;
+  const UpdateUserProfilePhoto({required this.imagePath});
+}

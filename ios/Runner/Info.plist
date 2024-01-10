@@ -50,6 +50,12 @@
 	<string>Circum needs to use your location for app functionality</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Circum needs to use your location for app functionality</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Circum needs to access your photo library to select an image</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Circum needs to access your camera</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Circum needs to access your microphone</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
