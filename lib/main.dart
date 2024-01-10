@@ -106,6 +106,27 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('Got a message whilst in the background!');
   // print('Message data: ${message.data}');
 
+  if (message.data['type'] == 'connection') {
+    if (message.data['status'] == 'accepted') {
+      print('accepted');
+      try {
+        // Remove leading and trailing whitespace
+        String jsonString = message.data['data'].trim();
+
+        // Replace single quotes with double quotes to make it valid JSON
+        jsonString = jsonString.replaceAll("'", '"');
+        print(jsonString);
+
+        // Parse the modified string into a map
+        Map<String, dynamic> mapData = jsonDecode(jsonString);
+
+        sendPackageBloc.add(DeliveryAccepted(data: mapData));
+      } catch (e) {
+        print(e);
+      }
+    }
+  }
+
   if (message.data['type'] == 'message') {
     // Remove leading and trailing whitespace
     String jsonString = message.data['data'].trim();
