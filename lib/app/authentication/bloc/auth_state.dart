@@ -6,7 +6,8 @@ enum Status {
   locationRequested,
   success,
   failure,
-  incompleteData
+  incompleteData,
+  signedInWithOAuth
 }
 
 enum AppLocationStatus {

@@ -32,7 +32,7 @@ class SignupView extends StatelessWidget {
                       left: 30,
                       top: 40 + MediaQuery.of(context).padding.top,
                     ),
-                    child: AppText.text("Create Account",
+                    child: AppText.text("Sign in",
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 28)),

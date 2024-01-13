@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -15,6 +16,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../helper/image_to_base64.dart';
 import '../../../helper/location_helper.dart';
@@ -177,28 +179,54 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           PhoneAuthCredential credential = PhoneAuthProvider.credential(
               verificationId: state.verificationId!, smsCode: '${state.otp}');
 
-          // Sign the user in (or link) with the credential
-          final UserCredential _userCredential =
-              await auth.signInWithCredential(credential);
+          // if user is already signed in by other means, link the credentials
+          // else, sign user in
 
-          if (_userCredential.user?.displayName == null) {
-            emit(state.copyWith(status: Status.incompleteData));
+          if (auth.currentUser != null) {
+            await auth.currentUser?.linkWithCredential(credential);
           } else {
-            print(_userCredential.additionalUserInfo);
-            print(_userCredential.credential);
-            print(_userCredential.user);
-            emit(state.copyWith(
-                status: Status.success,
-                username: _userCredential.user?.displayName,
-                profilePhoto: _userCredential.user?.photoURL,
-                email: _userCredential.user?.email,
-                phoneNumber: _userCredential.user?.phoneNumber));
+            final UserCredential _userCredential =
+                await auth.signInWithCredential(credential);
+
+            if (_userCredential.user?.displayName == null) {
+              emit(state.copyWith(status: Status.incompleteData));
+            } else {
+              print(_userCredential.additionalUserInfo);
+              print(_userCredential.credential);
+              print(_userCredential.user);
+              emit(state.copyWith(
+                  status: Status.success,
+                  username: _userCredential.user?.displayName,
+                  profilePhoto: _userCredential.user?.photoURL,
+                  email: _userCredential.user?.email,
+                  phoneNumber: _userCredential.user?.phoneNumber));
+            }
           }
+
+          // Sign the user in (or link) with the credential
         } on FirebaseException catch (e) {
           print(e.code);
           if (e.code == 'invalid-verification-code') {
             emit(state.copyWith(errorMessage: 'Invalid verification code'));
           }
+        } catch (e) {
+          print(e);
+        }
+      }
+
+      if (event is SignInWithAppleAuth) {
+        try {
+          final credential = await SignInWithApple.getAppleIDCredential(
+            scopes: [
+              AppleIDAuthorizationScopes.email,
+              AppleIDAuthorizationScopes.fullName,
+            ],
+          );
+
+          print(credential.email);
+          print(credential.familyName);
+          print(credential.givenName);
+          emit(state.copyWith(status: Status.signedInWithOAuth));
         } catch (e) {
           print(e);
         }
@@ -431,6 +459,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         } catch (e) {
           print(e);
         }
+      },
+    );
+
+    on<SignOut>(
+      (event, emit) async {
+        await auth.signOut();
+        emit(state.copyWith(currentState: AppState.unauthenticated));
       },
     );
   }

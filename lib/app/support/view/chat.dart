@@ -142,7 +142,7 @@ class _ChatPageViewState extends State<ChatPageView> {
           separatorBuilder: (_, i) => const SizedBox(
                 height: 10,
               ),
-          itemCount: 15);
+          itemCount: 0);
     });
   }
 
@@ -163,7 +163,8 @@ class _ChatPageViewState extends State<ChatPageView> {
               controller: textInputController,
               minLines: 1,
               maxLines: 4,
-              style: const TextStyle(fontFamily: 'OpenSans'),
+              style:
+                  const TextStyle(fontFamily: 'OpenSans', color: Colors.white),
               decoration: InputDecoration(
                   filled: true,
                   fillColor: AppColors.input,

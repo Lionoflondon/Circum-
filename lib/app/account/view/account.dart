@@ -32,43 +32,35 @@ class AccountView extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                  height: 32,
-                  width: 32,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(100),
-                    color: AppColors.input,
-                  ),
-                  child: state.profilePhoto != null && state.profilePhoto != ''
-                      ? CachedNetworkImage(
-                          imageUrl: state.profilePhoto!,
-                          imageBuilder: (context, imageProvider) => Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(100),
-                              image: DecorationImage(
-                                image: imageProvider,
-                                fit: BoxFit.cover,
-                              ),
+                height: 32,
+                width: 32,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100),
+                  color: AppColors.input,
+                ),
+                child: state.profilePhoto != null && state.profilePhoto != ''
+                    ? CachedNetworkImage(
+                        imageUrl: state.profilePhoto!,
+                        imageBuilder: (context, imageProvider) => Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(100),
+                            image: DecorationImage(
+                              image: imageProvider,
+                              fit: BoxFit.cover,
                             ),
                           ),
-                          placeholder: (context, url) => Container(),
-                          //     CircularProgressIndicator(
-                          //   color: Colors.grey,
-                          // ),
-                          errorWidget: (context, url, error) =>
-                              Icon(Icons.error),
-                        )
-                      : Stack(
-                          children: [
-                            SvgPicture.asset(
-                              'assets/svg/account.svg',
-                              height: 32,
-                            ),
-                            Align(
-                              alignment: Alignment.center,
-                              child: SvgPicture.asset('assets/svg/user.svg'),
-                            )
-                          ],
-                        )),
+                        ),
+                        placeholder: (context, url) => Container(),
+                        //     CircularProgressIndicator(
+                        //   color: Colors.grey,
+                        // ),
+                        errorWidget: (context, url, error) => Icon(Icons.error),
+                      )
+                    : SvgPicture.asset(
+                        'assets/svg/account.svg',
+                        height: 32,
+                      ),
+              ),
               const SizedBox(width: 16),
               AppText.text(
                   state.username != null

@@ -364,6 +364,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           await activeDelivery.update({
             'status': 'accepted',
             'riderId': deliveryData.riderId,
+            'estimatedDeliveryTime': deliveryData.estimatedDeliveryTime,
             'updatedAt': DateTime.now()
           });
 

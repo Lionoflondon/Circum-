@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/view/ride_chats.dart';
 import 'package:currency_symbols/currency_symbols.dart';
@@ -41,10 +42,39 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                 child: Row(
                   children: [
-                    Image.asset(
-                      'assets/images/red_profile_icon.png',
+                    Container(
                       height: 36,
                       width: 36,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(100),
+                        color: AppColors.input,
+                      ),
+                      child: state.deliveryData?.photoURL != null &&
+                              state.deliveryData?.photoURL != 'null'
+                          ? CachedNetworkImage(
+                              imageUrl: state.deliveryData!.photoURL!,
+                              imageBuilder: (context, imageProvider) =>
+                                  Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(100),
+                                  image: DecorationImage(
+                                    image: imageProvider,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              placeholder: (context, url) => Container(),
+                              //     CircularProgressIndicator(
+                              //   color: Colors.grey,
+                              // ),
+                              errorWidget: (context, url, error) =>
+                                  Icon(Icons.error),
+                            )
+                          : Image.asset(
+                              'assets/images/red_profile_icon.png',
+                              height: 36,
+                              width: 36,
+                            ),
                     ),
                     const SizedBox(width: 14),
                     Column(
@@ -79,7 +109,12 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
                   children: [
                     AppText.text('Estimated delivery time',
                         fontSize: 10, color: AppColors.textGrey),
-                    AppText.text('12:54 PM', fontSize: 16)
+                    AppText.text(
+                        state.deliveryData!.estimatedDeliveryTime.trim() !=
+                                'null'
+                            ? state.deliveryData!.estimatedDeliveryTime
+                            : '',
+                        fontSize: 16)
                   ],
                 )),
                 Expanded(

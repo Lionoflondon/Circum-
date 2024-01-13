@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../utils/app_state/app_state.dart';
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
 import 'bottom_sheets/bottom_sheets.dart';
@@ -31,19 +32,30 @@ class _AccountDetailsState extends State<AccountDetails> {
           centerTitle: true,
         ),
         backgroundColor: AppColors.secondary,
-        body: Column(children: [
-          header(),
-          firstName(),
-          Divider(
-              height: 10, thickness: 1, color: Colors.white.withOpacity(0.15)),
-          surname(),
-          Divider(
-              height: 10, thickness: 1, color: Colors.white.withOpacity(0.15)),
-          email(),
-          phone(),
-          const Spacer(),
-          logout()
-        ]));
+        body: BlocListener<AuthBloc, AuthState>(
+            listener: (context, state) {
+              if (state.currentState == AppState.unauthenticated) {
+                print('signing out');
+                Navigator.popUntil(context, (route) => route.isFirst);
+              }
+            },
+            child: Column(children: [
+              header(),
+              firstName(),
+              Divider(
+                  height: 10,
+                  thickness: 1,
+                  color: Colors.white.withOpacity(0.15)),
+              surname(),
+              Divider(
+                  height: 10,
+                  thickness: 1,
+                  color: Colors.white.withOpacity(0.15)),
+              email(),
+              phone(),
+              const Spacer(),
+              logout()
+            ])));
   }
 
   Widget header() {
@@ -311,7 +323,9 @@ class _AccountDetailsState extends State<AccountDetails> {
           child: TextButton(
             style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 20)),
-            onPressed: () {},
+            onPressed: () {
+              context.read<AuthBloc>().add(SignOut());
+            },
             child:
                 Center(child: AppText.text('Logout', color: AppColors.danger)),
           ));

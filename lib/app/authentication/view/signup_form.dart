@@ -45,7 +45,7 @@ class SignupForm extends StatelessWidget {
                 const SizedBox(height: 20),
                 _signupButton(),
                 const SizedBox(height: 20),
-                _alreadyHaveAnAccount()
+                // _alreadyHaveAnAccount()
               ],
             )
           ],

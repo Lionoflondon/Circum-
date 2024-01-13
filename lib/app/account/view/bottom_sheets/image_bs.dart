@@ -53,7 +53,7 @@ class ImageButtSheetState extends State<ImageButtSheet> {
                   ],
                 ),
                 Row(children: [
-                  AppText.text('Upate profile photo from',
+                  AppText.text('Update profile photo from',
                       fontWeight: FontWeight.w600, fontSize: 16)
                 ]),
                 const SizedBox(height: 12),

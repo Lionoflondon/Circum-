@@ -8,6 +8,7 @@ class DeliveryData {
   final String code;
   final String rating;
   final String riderId;
+  final String? photoURL;
 
   DeliveryData(
       {required this.courierName,
@@ -18,7 +19,8 @@ class DeliveryData {
       required this.plateNumber,
       required this.code,
       required this.rating,
-      required this.riderId});
+      required this.riderId,
+      this.photoURL});
 
   factory DeliveryData.fromJson(data) {
     return DeliveryData(
@@ -30,7 +32,8 @@ class DeliveryData {
         code: data['code'],
         rating: data['rating'],
         plateNumber: data['plateNumber'],
-        riderId: data['riderId']);
+        riderId: data['riderId'],
+        photoURL: data['photoURL'] != 'null' ? data['photoURL'] : null);
   }
 
   Map<String, dynamic> toJson() {

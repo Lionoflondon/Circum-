@@ -145,7 +145,7 @@ class AppNavState extends State<AppNavView> {
                       )
                     : SvgPicture.asset(
                         'assets/svg/account.svg',
-                        height: 32,
+                        height: 22,
                       ),
               ),
             ),

@@ -82,7 +82,7 @@ class HomeViewState extends State<HomeView> {
                     Container(
                       height: 5,
                       width: 50,
-                      margin: const EdgeInsets.only(top: 10, bottom: 20),
+                      margin: const EdgeInsets.only(top: 10, bottom: 0),
                       decoration: BoxDecoration(
                           color: const Color(0xFF415058),
                           borderRadius: BorderRadius.circular(5)),
