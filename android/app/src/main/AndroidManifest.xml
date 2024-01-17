@@ -10,7 +10,7 @@
    <application
         android:label="circum"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
 
         <meta-data android:name="com.google.android.geo.API_KEY"
                android:value="AIzaSyBk1kErI_wl_Hfvy6cVcUanamYNxF31_Dk"/>

@@ -1,9 +1,8 @@
-// import 'package:flutter/cupertino.dart';
-import 'dart:ui';
+import 'dart:io' show Platform;
 
 import 'package:circum/app/authentication/view/signup.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+// import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 
@@ -97,7 +96,9 @@ class OnboardingView extends StatelessWidget {
         children: [
           Expanded(
               child: TextButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    context.read<AuthBloc>().add(SignInWithGoogle());
+                  },
                   style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(
@@ -114,28 +115,29 @@ class OnboardingView extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             fontSize: 16)
                       ]))),
-          const SizedBox(width: 15),
-          Expanded(
-              child: TextButton(
-                  onPressed: () {
-                    context.read<AuthBloc>().add(SignInWithAppleAuth());
-                  },
-                  style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                          side: BorderSide(
-                              color: Colors.white.withOpacity(0.4)))),
-                  child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SvgPicture.asset('assets/svg/apple_logo.svg'),
-                        const SizedBox(width: 12),
-                        AppText.text('Apple',
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16)
-                      ]))),
+          if (Platform.isIOS) const SizedBox(width: 15),
+          if (Platform.isIOS)
+            Expanded(
+                child: TextButton(
+                    onPressed: () {
+                      context.read<AuthBloc>().add(SignInWithAppleAuth());
+                    },
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.zero,
+                            side: BorderSide(
+                                color: Colors.white.withOpacity(0.4)))),
+                    child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SvgPicture.asset('assets/svg/apple_logo.svg'),
+                          const SizedBox(width: 12),
+                          AppText.text('Apple',
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16)
+                        ]))),
         ],
       );
     });

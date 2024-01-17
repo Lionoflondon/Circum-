@@ -13,6 +13,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum/utils/app_state/app_state.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
@@ -130,6 +131,52 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(pin: event.pin));
         add(SubmitOTP());
       }
+      if (event is SignInWithAppleAuth) {
+        try {
+          final credential = await SignInWithApple.getAppleIDCredential(
+            scopes: [
+              AppleIDAuthorizationScopes.email,
+              AppleIDAuthorizationScopes.fullName,
+            ],
+          );
+
+          print(credential.email);
+          print(credential.familyName);
+          print(credential.givenName);
+          print(credential.identityToken);
+          emit(state.copyWith(status: Status.signedInWithOAuth));
+        } catch (e) {
+          print(e);
+        }
+      }
+      if (event is SignInWithGoogle) {
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        final GoogleSignInAccount? googleSignInAccount =
+            await googleSignIn.signIn();
+        final GoogleSignInAuthentication googleSignInAuthentication =
+            await googleSignInAccount!.authentication;
+
+        googleSignInAccount.displayName;
+        googleSignInAccount.email;
+        googleSignInAccount.photoUrl;
+        print('>>>>>>>>>>>>>>>>>>');
+        print('>>>>>>>>>>>>>>>>>>');
+        print(googleSignInAccount.displayName);
+        print(googleSignInAccount.email);
+        print(googleSignInAccount.photoUrl);
+        print('>>>>>>>>>>>>>>>>>>');
+        print('>>>>>>>>>>>>>>>>>>');
+
+        emit(state.copyWith(
+            oAuthFirstName:
+                googleSignInAccount.displayName!.trim().split(' ').first,
+            oAuthLastName:
+                googleSignInAccount.displayName!.trim().split(' ').last,
+            oAuthEmail: googleSignInAccount.email,
+            oAuthPhotoURL: googleSignInAccount.photoUrl,
+            status: Status.signedInWithOAuth));
+        await googleSignIn.signOut();
+      }
 
       if (event is RequestForOTP) {
         print({'phoneNumber': state.phoneNumber, 'password': state.password});
@@ -189,7 +236,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 await auth.signInWithCredential(credential);
 
             if (_userCredential.user?.displayName == null) {
-              emit(state.copyWith(status: Status.incompleteData));
+              if (state.oAuthFirstName == null) {
+                emit(state.copyWith(status: Status.incompleteData));
+              } else {
+                add(UpdateUserProfile(
+                    username:
+                        "${state.oAuthFirstName} ${state.oAuthLastName}"));
+                emit(state.copyWith(
+                    status: Status.success,
+                    username: "${state.oAuthFirstName} ${state.oAuthLastName}",
+                    profilePhoto: state.oAuthPhotoURL,
+                    email: state.oAuthEmail,
+                    phoneNumber: _userCredential.user?.phoneNumber));
+              }
             } else {
               print(_userCredential.additionalUserInfo);
               print(_userCredential.credential);
@@ -209,24 +268,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           if (e.code == 'invalid-verification-code') {
             emit(state.copyWith(errorMessage: 'Invalid verification code'));
           }
-        } catch (e) {
-          print(e);
-        }
-      }
-
-      if (event is SignInWithAppleAuth) {
-        try {
-          final credential = await SignInWithApple.getAppleIDCredential(
-            scopes: [
-              AppleIDAuthorizationScopes.email,
-              AppleIDAuthorizationScopes.fullName,
-            ],
-          );
-
-          print(credential.email);
-          print(credential.familyName);
-          print(credential.givenName);
-          emit(state.copyWith(status: Status.signedInWithOAuth));
         } catch (e) {
           print(e);
         }

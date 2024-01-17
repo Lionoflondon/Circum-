@@ -60,7 +60,7 @@ dependencies:
   geolocator: ^10.1.0
   geoflutterfire2: ^2.3.15
   google_maps_flutter: ^2.5.0
-  # google_maps_widget: ^1.0.5+1
+  google_sign_in: ^6.1.6
   json_annotation: ^4.8.1
   json_serializable: ^6.7.1
   latlong2: ^0.9.0
@@ -89,6 +89,8 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^2.0.0
   build_runner: ^2.4.6
+  flutter_launcher_icons: "^0.13.1"
+  flutter_native_splash: ^2.3.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -141,3 +143,23 @@ flutter:
 
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+flutter_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path_android: "assets/images/icon_android.png"
+  image_path_ios: "assets/images/icon.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "assets/images/icon_bg.png"
+  adaptive_icon_foreground: "assets/images/icon_android.png"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#131313"
+  #background_image: "assets/background.png"
+
+  image: assets/images/splash_image.png
+
+  # color_dark: "#690571"
+  #background_image_dark: "assets/dark-background.png"
+  # image_dark: assets/image/new_splash.png
+  fullscreen: false
