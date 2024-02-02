@@ -10,6 +10,7 @@ import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/text_field.dart';
+import '../../account/view/payment.dart';
 
 class DeliveryReviewExpandedView extends StatefulWidget {
   DeliveryReviewExpandedView({Key? key}) : super(key: key);
@@ -458,23 +459,29 @@ class _DeliveryReviewExpandedViewState
             widget: Center(
                 child: AppText.text('Confirm delivery',
                     fontSize: 16, fontWeight: FontWeight.bold)),
-            onPressed: () {
+            onPressed: () async {
               // context.read<SendPackageBloc>().add(const SetDeliveryStatus(
               //     deliveryStatus: DeliveryStatus.deliveryConfirmed));
-              context.read<SendPackageBloc>().add(SendDeliveryRequest(
-                  pickupDetails: ContactInfo.fromJson(
-                      fullname: username,
-                      address: state.pickupCoordinate!,
-                      phoneNumber: phoneNumber,
-                      moreInformation: additonalPickupInformation,
-                      locality: state.pickupLocality),
-                  dropoffDetails: ContactInfo.fromJson(
-                      fullname: dropoffContactName,
-                      phoneNumber: dropoffContactPhoneNumber,
-                      address: state.desinationCoordinate!,
-                      moreInformation: dropoffAdditionalInformation,
-                      locality: state.destinationLocality)));
-              Navigator.pop(context);
+
+              final payForDelivery =
+                  await showPaymentBottomSheet(context, amount: 1000);
+              if (payForDelivery == 'success') {
+                // ignore: use_build_context_synchronously
+                context.read<SendPackageBloc>().add(SendDeliveryRequest(
+                    pickupDetails: ContactInfo.fromJson(
+                        fullname: username,
+                        address: state.pickupCoordinate!,
+                        phoneNumber: phoneNumber,
+                        moreInformation: additonalPickupInformation,
+                        locality: state.pickupLocality),
+                    dropoffDetails: ContactInfo.fromJson(
+                        fullname: dropoffContactName,
+                        phoneNumber: dropoffContactPhoneNumber,
+                        address: state.desinationCoordinate!,
+                        moreInformation: dropoffAdditionalInformation,
+                        locality: state.destinationLocality)));
+                Navigator.pop(context);
+              }
             }),
       );
     });

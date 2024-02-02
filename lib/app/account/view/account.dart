@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/account_bloc.dart';
 import 'account_details.dart';
+import 'payment.dart';
 
 class AccountView extends StatelessWidget {
   const AccountView({Key? key}) : super(key: key);
@@ -207,6 +208,46 @@ class AccountView extends StatelessWidget {
                   onPressed: () async {
                     await launchUrl(Uri.parse('https://circumuk.com/terms'));
                   }),
+
+              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+              // STRIPE TEST
+              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+              // Divider(
+              //     height: 1,
+              //     thickness: 1,
+              //     color: Colors.white.withOpacity(0.15)),
+              // TextButton(
+              //     // borderSide: BorderSide.none,
+              //     // backgroundColor: AppColors.secondary,
+              //     style: TextButton.styleFrom(
+              //       padding: const EdgeInsets.symmetric(
+              //           horizontal: 24, vertical: 16),
+              //     ),
+              //     child: Row(
+              //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              //       children: [
+              //         Row(
+              //           children: [
+              //             SvgPicture.asset('assets/svg/legal.svg'),
+              //             const SizedBox(width: 16),
+              //             AppText.text(
+              //               'STRIPE',
+              //             )
+              //           ],
+              //         ),
+              //         Icon(
+              //           Icons.keyboard_arrow_right_rounded,
+              //           color: Colors.white.withOpacity(0.15),
+              //         )
+              //       ],
+              //     ),
+              //     onPressed: () async {
+              //       showPaymentBottomSheet(context, amount: 1000);
+              //     }),
             ],
           ));
     });

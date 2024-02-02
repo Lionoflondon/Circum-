@@ -126,3 +126,5 @@ class RateRider extends SendPackageEvent {
 }
 
 class DeleteCompletedDelivery extends SendPackageEvent {}
+
+class CancelRequest extends SendPackageEvent {}

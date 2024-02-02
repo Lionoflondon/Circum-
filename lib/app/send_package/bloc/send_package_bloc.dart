@@ -496,6 +496,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
                 moreInformation: data['dropoffDetails']['moreInformation']);
 
             DeliveryStatus? status;
+
+            if (data['status'] == 'requested') {
+              await documentReference.delete();
+            }
+
             if (data['status'] == 'accepted' ||
                 data['status'] == 'outForDelivery') {
               status = DeliveryStatus.reconnectingWithRider;
@@ -629,6 +634,29 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         } catch (e) {
           print(e);
         }
+      },
+    );
+
+    on<CancelRequest>(
+      (event, emit) async {
+        final User? user = auth.currentUser;
+        final collection = db.collection("deliveryRequests").doc(user?.uid);
+
+        final docResponse = await collection.get();
+        final data = docResponse.data();
+
+        if (data?['status'] == 'requested') {
+          await collection.delete();
+        }
+        add(SetDrawerHeight(
+            minDrawerHeight: state.minDrawerHeight,
+            maxDrawerHeight: state.minDrawerHeight));
+        emit(state.copyWith(
+          polylines: [],
+          polylineCoordinates: [],
+          markers: {},
+          deliveryStatus: DeliveryStatus.inital,
+        ));
       },
     );
   }

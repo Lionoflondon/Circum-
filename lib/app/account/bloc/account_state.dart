@@ -1,10 +1,27 @@
 part of 'account_bloc.dart';
 
-abstract class AccountState extends Equatable {
-  const AccountState();
-  
-  @override
-  List<Object> get props => [];
-}
+enum PaymentStatus { initial, loading, success, failure }
 
-class AccountInitial extends AccountState {}
+class AccountState extends Equatable {
+  final PaymentStatus status;
+  final CardFieldInputDetails cardFieldInputDetails;
+
+  const AccountState({
+    this.status = PaymentStatus.initial,
+    this.cardFieldInputDetails = const CardFieldInputDetails(complete: false),
+  });
+
+  AccountState copyWith({
+    PaymentStatus? status,
+    CardFieldInputDetails? cardFieldInputDetails,
+  }) {
+    return AccountState(
+      status: status ?? this.status,
+      cardFieldInputDetails:
+          cardFieldInputDetails ?? this.cardFieldInputDetails,
+    );
+  }
+
+  @override
+  List<Object> get props => [status, cardFieldInputDetails];
+}

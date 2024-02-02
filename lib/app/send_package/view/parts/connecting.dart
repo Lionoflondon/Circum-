@@ -47,7 +47,9 @@ class ConnectingToCourierState extends State<ConnectingToCourier> {
                 child: AppText.text('Cancel request',
                     fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              onPressed: () {})
+              onPressed: () {
+                context.read<SendPackageBloc>().add(CancelRequest());
+              })
         ],
       ),
     );

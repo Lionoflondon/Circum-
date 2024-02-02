@@ -52,9 +52,10 @@ class _ChatPageViewState extends State<ChatPageView> {
       child: Scaffold(
           backgroundColor: AppColors.secondary,
           // resizeToAvoidBottomInset: false,
-          body: Column(
+          body: SafeArea(
+              child: Column(
             children: [chatHeader(), Expanded(child: messages()), chatFooter()],
-          )),
+          ))),
     );
   }
 
@@ -75,7 +76,7 @@ class _ChatPageViewState extends State<ChatPageView> {
             const SizedBox(width: 10),
             Column(
               children: [
-                AppText.text('Live Chat',
+                AppText.text('Support Live Chat',
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.white)
@@ -149,10 +150,6 @@ class _ChatPageViewState extends State<ChatPageView> {
   Widget chatFooter() {
     return BlocBuilder<SupportBloc, SupportState>(builder: (context, state) {
       return Container(
-        // color: Colors,
-        decoration: const BoxDecoration(
-            // color: Colors.white,
-            ),
         padding:
             const EdgeInsets.only(top: 10, bottom: 10, left: 24, right: 24),
         child: Row(

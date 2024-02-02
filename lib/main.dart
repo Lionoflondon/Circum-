@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import 'app.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
@@ -17,6 +18,7 @@ import 'app/support/bloc/support_bloc.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:bot_toast/bot_toast.dart';
+import 'env/env.dart';
 
 final sendPackageBloc = SendPackageBloc();
 
@@ -168,6 +170,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  Stripe.publishableKey = Env.publishableKey;
+  // Stripe.merchantIdentifier = 'merchant.flutter.stripe.test';
+  // Stripe.urlScheme = 'flutterstripe';
+  Stripe.instance.applySettings();
   await Firebase.initializeApp();
 
   await FirebaseAppCheck.instance.activate(

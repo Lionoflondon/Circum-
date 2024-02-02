@@ -144,7 +144,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           print(credential.familyName);
           print(credential.givenName);
           print(credential.identityToken);
-          emit(state.copyWith(status: Status.signedInWithOAuth));
+          emit(state.copyWith(
+              oAuthFirstName: credential.givenName,
+              oAuthLastName: credential.familyName,
+              oAuthEmail: credential.email,
+              status: Status.signedInWithOAuth));
         } catch (e) {
           print(e);
         }
@@ -156,16 +160,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final GoogleSignInAuthentication googleSignInAuthentication =
             await googleSignInAccount!.authentication;
 
-        googleSignInAccount.displayName;
-        googleSignInAccount.email;
-        googleSignInAccount.photoUrl;
-        print('>>>>>>>>>>>>>>>>>>');
-        print('>>>>>>>>>>>>>>>>>>');
-        print(googleSignInAccount.displayName);
-        print(googleSignInAccount.email);
-        print(googleSignInAccount.photoUrl);
-        print('>>>>>>>>>>>>>>>>>>');
-        print('>>>>>>>>>>>>>>>>>>');
+        // googleSignInAccount.displayName;
+        // googleSignInAccount.email;
+        // googleSignInAccount.photoUrl;
+        // print('>>>>>>>>>>>>>>>>>>');
+        // print('>>>>>>>>>>>>>>>>>>');
+        // print(googleSignInAccount.displayName);
+        // print(googleSignInAccount.email);
+        // print(googleSignInAccount.photoUrl);
+        // print('>>>>>>>>>>>>>>>>>>');
+        // print('>>>>>>>>>>>>>>>>>>');
 
         emit(state.copyWith(
             oAuthFirstName:

@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
+import 'circum_select.dart';
 
 class ChooseAddressView extends StatefulWidget {
   const ChooseAddressView({Key? key}) : super(key: key);
@@ -113,49 +114,64 @@ class ChooseAddressViewState extends State<ChooseAddressView> {
   Widget findOut() {
     return BlocBuilder<SendPackageBloc, SendPackageState>(
         builder: (context, state) {
-      return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24).copyWith(top: 60),
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          decoration: BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [Color(0xFFEE6352), Color(0xFF2D89D4)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight)),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppText.text('Want to send your package overseas?',
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                      const SizedBox(height: 10),
-                      AppText.text(
-                          'Compare courier service prices to find out which works for you. '),
-                      const SizedBox(height: 40),
-                      TextButton(
-                        onPressed: () {},
-                        child: Row(
+      return Expanded(
+          child: SingleChildScrollView(
+        child: Column(
+          children: [
+            Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24)
+                    .copyWith(top: 60),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                        colors: [Color(0xFFEE6352), Color(0xFF2D89D4)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            AppText.text('Find out more',
-                                fontSize: 12, fontWeight: FontWeight.w600),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.arrow_forward,
-                              color: Colors.white,
+                            AppText.text('Want to send your package overseas?',
+                                fontSize: 16, fontWeight: FontWeight.bold),
+                            const SizedBox(height: 10),
+                            AppText.text(
+                                'Compare courier service prices to find out which works for you. '),
+                            const SizedBox(height: 40),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const CirccumSelectView()));
+                              },
+                              child: Row(
+                                children: [
+                                  AppText.text('Find out more',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600),
+                                  const SizedBox(width: 8),
+                                  const Icon(
+                                    Icons.arrow_forward,
+                                    color: Colors.white,
+                                  )
+                                ],
+                              ),
                             )
-                          ],
-                        ),
-                      )
-                    ]),
-              ),
-              Image(
-                image: AssetImage('assets/images/drone_image.png'),
-                width: 100,
-              )
-            ],
-          ));
+                          ]),
+                    ),
+                    Image(
+                      image: AssetImage('assets/images/drone_image.png'),
+                      width: 100,
+                    )
+                  ],
+                ))
+          ],
+        ),
+      ));
     });
   }
 
