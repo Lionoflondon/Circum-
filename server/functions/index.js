@@ -113,9 +113,9 @@ exports.StripePayEndpointIntentId = functions.https.onRequest(async (req, res) =
 });
 
 
-exports.calculateTotalEarned = functions.https.onRequest(async (request, response) => {
+exports.calculateTotalEarned = functions.https.onRequest(async (req, res) => {
   try {
-    const riderId = request.query.riderId;
+    const {riderId} = req.body;
 
     // Retrieve the 'history' database reference
     const historyRef = getFirestore().collection("history");
@@ -131,9 +131,11 @@ exports.calculateTotalEarned = functions.https.onRequest(async (request, respons
       totalAmountEarned += historyEntry.price || 0; // Assuming there's an 'amountEarned' field in each history entry
     });
 
-    response.status(200).send({totalAmountEarned});
+    res.status(200).send({totalAmountEarned: totalAmountEarned});
   } catch (error) {
     console.error("Error calculating total amount earned:", error);
-    response.status(500).send("Internal Server Error");
+    res.status(500).send({
+      error: error,
+    });
   }
 });
