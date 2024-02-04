@@ -105,8 +105,10 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
     const paymentRef = await getFirestore().collection("payments").doc(riderId).get();
 
     let accountBalance = 0;
-    const paymentData = paymentRef.data();
-    accountBalance = paymentData.accountBalance || 0;
+    if (paymentRef.exists) {
+      const paymentData = paymentRef.data();
+      accountBalance = paymentData.accountBalance || 0;
+    }
 
     // Retrieve the 'history' database reference
     const historyRef = getFirestore().collection("history");
@@ -119,10 +121,14 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
     // Loop through the history records and calculate the total amount earned
     snapshot.forEach((childSnapshot) => {
       const historyEntry = childSnapshot.data();
-      totalAmountEarned += historyEntry.price || 0; // Assuming there's an 'amountEarned' field in each history entry
+      totalAmountEarned += historyEntry.price || 0;
     });
 
-    res.status(200).send({accountBalance: accountBalance, totalAmountEarned: totalAmountEarned});
+    res.status(200).send({
+      accountBalance: accountBalance,
+      totalAmountEarned: totalAmountEarned,
+      totalTrips: snapshot.size,
+    });
   } catch (error) {
     console.error("Error calculating total amount earned:", error);
     res.status(500).send({
@@ -151,11 +157,17 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
     const ride = await getFirestore().collection("deliveryRequests").where("requestId", "==", requestId).get();
     const rideData = ride.docs[0];
     const rideDataRes = rideData.data();
-    const rideCost = rideDataRes.price;
 
-    if (!rideCost) {
+    if (!rideData.exists) {
       return res.status(404).send({msg: "Trip already completed"});
     }
+
+    if (rideDataRes.riderId != riderId) {
+      return res.status(400).send({msg: "riderId does not match"});
+    }
+
+    const rideCost = rideDataRes.price;
+
 
     const uuid1 = uuidv4();
     const uuid2 = uuidv4();
