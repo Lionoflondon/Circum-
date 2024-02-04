@@ -113,7 +113,7 @@ exports.StripePayEndpointIntentId = functions.https.onRequest(async (req, res) =
 });
 
 
-exports.calculateTotalEarned = functions.https.onRequest(async (req, res) => {
+exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
   try {
     const {riderId} = req.body;
 
