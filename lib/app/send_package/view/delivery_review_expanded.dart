@@ -460,11 +460,9 @@ class _DeliveryReviewExpandedViewState
                 child: AppText.text('Confirm delivery',
                     fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () async {
-              // context.read<SendPackageBloc>().add(const SetDeliveryStatus(
-              //     deliveryStatus: DeliveryStatus.deliveryConfirmed));
+              final payForDelivery = await showPaymentBottomSheet(context,
+                  amount: state.price!, phone: phoneNumber);
 
-              final payForDelivery =
-                  await showPaymentBottomSheet(context, amount: 1000);
               if (payForDelivery == 'success') {
                 // ignore: use_build_context_synchronously
                 context.read<SendPackageBloc>().add(SendDeliveryRequest(
@@ -480,6 +478,7 @@ class _DeliveryReviewExpandedViewState
                         address: state.desinationCoordinate!,
                         moreInformation: dropoffAdditionalInformation,
                         locality: state.destinationLocality)));
+                // ignore: use_build_context_synchronously
                 Navigator.pop(context);
               }
             }),

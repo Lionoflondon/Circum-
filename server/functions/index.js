@@ -1,6 +1,12 @@
 /* eslint-disable max-len */
+const {initializeApp} = require("firebase-admin/app");
+const {getFirestore} = require("firebase-admin/firestore");
 const functions = require("firebase-functions");
 const stripe = require("stripe")(functions.config().stripe.testkey);
+
+
+initializeApp();
+
 
 // const calculateOrderAmount = (items) => {
 //   const prices = [];
@@ -103,5 +109,31 @@ exports.StripePayEndpointIntentId = functions.https.onRequest(async (req, res) =
     // Handle "hard declines" e.g. insufficient funds, expired card, etc
     // See https://stripe.com/docs/declines/codes for more.
     return res.send({error: e.message});
+  }
+});
+
+
+exports.calculateTotalEarned = functions.https.onRequest(async (request, response) => {
+  try {
+    const riderId = request.query.riderId;
+
+    // Retrieve the 'history' database reference
+    const historyRef = getFirestore().collection("history");
+
+    // Query the history for the riderId
+    const snapshot = await historyRef.where("riderId", "==", riderId).get();
+
+    let totalAmountEarned = 0;
+
+    // Loop through the history records and calculate the total amount earned
+    snapshot.forEach((childSnapshot) => {
+      const historyEntry = childSnapshot.data();
+      totalAmountEarned += historyEntry.price || 0; // Assuming there's an 'amountEarned' field in each history entry
+    });
+
+    response.status(200).send({totalAmountEarned});
+  } catch (error) {
+    console.error("Error calculating total amount earned:", error);
+    response.status(500).send("Internal Server Error");
   }
 });

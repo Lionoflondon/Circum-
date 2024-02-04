@@ -6,7 +6,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../bloc/account_bloc.dart';
 
-showPaymentBottomSheet(context, {required int amount}) {
+showPaymentBottomSheet(context, {required double amount, String? phone}) {
   return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -17,13 +17,16 @@ showPaymentBottomSheet(context, {required int amount}) {
       builder: (context) {
         return PaymentScreen(
           amount: amount,
+          phone: phone,
         );
       });
 }
 
 class PaymentScreen extends StatelessWidget {
-  final int amount;
-  const PaymentScreen({Key? key, required this.amount}) : super(key: key);
+  final double amount;
+  final String? phone;
+  const PaymentScreen({Key? key, required this.amount, this.phone})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -69,13 +72,12 @@ class PaymentScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.start,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      AppText.text('Payment',
+                      AppText.text('Pay £$amount',
                           fontWeight: FontWeight.w600, fontSize: 20),
                       const SizedBox(height: 20),
                       CardFormField(
                           controller: controller,
                           autofocus: true,
-                          countryCode: "NG",
                           style: CardFormStyle(
                             backgroundColor: AppColors.secondary,
                             textColor: Colors.white,
@@ -86,10 +88,10 @@ class PaymentScreen extends StatelessWidget {
                             (controller.details.complete)
                                 ? context.read<AccountBloc>().add(
                                       PaymentCreateIntent(
-                                          billingDetails: const BillingDetails(
-                                            email: 'alejimoses@gmail.com',
+                                          billingDetails: BillingDetails(
+                                            phone: phone,
                                           ),
-                                          amount: amount),
+                                          amount: (amount * 100).round()),
                                     )
                                 : ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
