@@ -4,27 +4,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const functions = require("firebase-functions");
 const stripe = require("stripe")(functions.config().stripe.testkey);
 
-
 initializeApp();
-
-
-// const calculateOrderAmount = (items) => {
-//   const prices = [];
-//   const catalog = [
-//     {"id": "0", "price": 2.99},
-//     {"id": "1", "price": 3.99},
-//     {"id": "2", "price": 4.99},
-//     {"id": "3", "price": 5.99},
-//     {"id": "4", "price": 6.99},
-//   ];
-
-//   items.forEach((item) => {
-//     const price = catalog.find((x) => x.id == item.id).price;
-//     prices.push(price);
-//   });
-
-//   return parseInt(prices.reduce((a, b) => a + b) * 100);
-// };
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
