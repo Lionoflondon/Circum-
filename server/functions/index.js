@@ -97,6 +97,10 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
   try {
     const {riderId} = req.body;
 
+    if (!riderId) {
+      return res.status(404).send({msg: "riderId is required"});
+    }
+
     // Retrieve the 'history' database reference
     const historyRef = getFirestore().collection("history");
 
