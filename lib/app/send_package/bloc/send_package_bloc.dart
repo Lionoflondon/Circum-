@@ -270,11 +270,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }));
 
     on<SendDeliveryRequest>((event, emit) async {
-      print('Pickup Details');
-      print(event.pickupDetails);
-      print('Delivery Details');
-      print(event.dropoffDetails);
-
       const uuid = Uuid();
       final uuid2 = uuid.v4();
       final uuid3 = uuid.v4();

@@ -172,11 +172,16 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
     const uuid1 = uuidv4();
     const uuid2 = uuidv4();
     const uuiduuid = `${uuid1}${uuid2}`;
+    let riderBalance = 0;
 
     const paymentRef = getFirestore().collection("payments").doc(riderId);
 
-    const paymentData = (await paymentRef.get()).data();
-    const riderBalance = paymentData.accountBalance || 0;
+    const getPaymentData = await paymentRef.get();
+    const paymentData = getPaymentData.data();
+
+    if (getPaymentData.exists) {
+      riderBalance = paymentData.accountBalance || 0;
+    }
 
     await paymentRef.set({
       accountBalance: riderBalance+ rideCost,

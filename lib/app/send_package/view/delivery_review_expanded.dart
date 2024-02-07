@@ -478,6 +478,8 @@ class _DeliveryReviewExpandedViewState
                         address: state.desinationCoordinate!,
                         moreInformation: dropoffAdditionalInformation,
                         locality: state.destinationLocality)));
+                // The wait is required to avoid a glitch effect
+                await Future.delayed(const Duration(milliseconds: 300));
                 // ignore: use_build_context_synchronously
                 Navigator.pop(context);
               }

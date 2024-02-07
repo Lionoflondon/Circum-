@@ -31,7 +31,7 @@ class PaymentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AccountBloc, AccountState>(
-        listener: ((context, state) {
+        listener: ((context, state) async {
           if (state.status == PaymentStatus.success) {
             context.read<AccountBloc>().add(PaymentStart());
             BotToast.showCustomNotification(

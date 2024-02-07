@@ -11,6 +11,7 @@ class FAQView extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.secondary,
       appBar: AppBar(
+        foregroundColor: Colors.white,
         backgroundColor: AppColors.secondary,
         elevation: 0,
         title: AppText.text('FAQ', fontWeight: FontWeight.w600, fontSize: 16),
