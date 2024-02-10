@@ -49,8 +49,27 @@ class CirccumSelectViewState extends State<CirccumSelectView> {
       ),
       body: SafeArea(
           child: Column(
-        children: [addresses()],
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [comingSoon()],
       )),
+    );
+  }
+
+  Widget comingSoon() {
+    return Column(
+      children: [
+        SvgPicture.asset('assets/svg/global_plane.svg'),
+        const SizedBox(height: 10),
+        AppText.text('Comming soon', fontSize: 20),
+        const SizedBox(height: 6),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: AppText.text(
+                'Circum Select helps you send parcel to locations in other countries.',
+                textAlign: TextAlign.center,
+                color: Colors.white.withOpacity(0.7)))
+      ],
     );
   }
 
