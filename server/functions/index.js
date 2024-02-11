@@ -140,11 +140,11 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
 
     // Calculate the start date of the week (assuming Sunday is the start of the week)
     const startDate = new Date(currentDate);
-    startDate.setDate(startDate.getDate() - startDate.getDay());
+    startDate.setDate(startDate.getDate() - 7);
 
     // Calculate the end date of the week (assuming Saturday is the end of the week)
     const endDate = new Date(currentDate);
-    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
+    // endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
 
     // Query Firestore for earnings within the current week for the given user
     const earningsSnapshot = await getFirestore().collection("history")
@@ -156,10 +156,12 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
     // Aggregate earnings by day
     earningsSnapshot.forEach((doc) => {
       const earningData = doc.data();
-      const earningDate = earningData.createdAt.toDate();
-      const dayOfWeek = earningDate.toLocaleDateString("en-US", {weekday: "long"});
 
-      weeklyEarnings[dayOfWeek] += earningData.amount;
+      // console.log(earningData);
+      const earningDate = earningData.createdAt.toDate();
+      const dayOfWeek = earningDate.toLocaleDateString("en-US", {weekday: "short"});
+
+      weeklyEarnings[dayOfWeek] += earningData.price || 0;
     });
 
     // response.json(weeklyEarnings);
