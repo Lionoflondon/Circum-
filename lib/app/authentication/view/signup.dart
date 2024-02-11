@@ -11,18 +11,18 @@ class SignupView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state.status == Status.success) {
-            context.read<AuthBloc>().add(ResetStatus());
-            // context.read<AuthBloc>().add(StartCountDown());
-            Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const EnterOTPView()));
-          }
-        },
-        child: Scaffold(
-            backgroundColor: AppColors.secondary,
-            body: Column(
+    return Scaffold(
+        backgroundColor: AppColors.secondary,
+        body: BlocListener<AuthBloc, AuthState>(
+            listener: (context, state) {
+              if (state.status == Status.success) {
+                context.read<AuthBloc>().add(ResetStatus());
+                // context.read<AuthBloc>().add(StartCountDown());
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const EnterOTPView()));
+              }
+            },
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [

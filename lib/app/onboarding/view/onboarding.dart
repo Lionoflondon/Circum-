@@ -16,18 +16,18 @@ class OnboardingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state.status == Status.signedInWithOAuth) {
-            context.read<AuthBloc>().add(ResetStatus());
-            // context.read<AuthBloc>().add(StartCountDown());
-            Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const SignupView()));
-          }
-        },
-        child: Scaffold(
-            backgroundColor: AppColors.secondary,
-            body: SafeArea(
+    return Scaffold(
+        backgroundColor: AppColors.secondary,
+        body: BlocListener<AuthBloc, AuthState>(
+            listener: (context, state) {
+              if (state.status == Status.signedInWithOAuth) {
+                context.read<AuthBloc>().add(ResetStatus());
+                // context.read<AuthBloc>().add(StartCountDown());
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const SignupView()));
+              }
+            },
+            child: SafeArea(
                 child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.center,

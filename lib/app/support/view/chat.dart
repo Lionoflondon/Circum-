@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -16,9 +17,11 @@ class ChatPageView extends StatefulWidget {
 class _ChatPageViewState extends State<ChatPageView> {
   TextEditingController textInputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  FirebaseAuth auth = FirebaseAuth.instance;
 
   @override
   void initState() {
+    context.read<SupportBloc>().add(LoadSupportChatMessages());
     // Scroll to the bottom initially
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
@@ -29,6 +32,7 @@ class _ChatPageViewState extends State<ChatPageView> {
   @override
   void dispose() {
     _scrollController.dispose();
+    textInputController.dispose();
     super.dispose();
   }
 
@@ -42,17 +46,17 @@ class _ChatPageViewState extends State<ChatPageView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<SupportBloc, SupportState>(
-      listener: (context, state) {
-        // Scroll to the bottom when a new message is received
-        // if (state.status == ChatStatus.newMessage) {
-        //   _scrollToBottom();
-        // }
-      },
-      child: Scaffold(
-          backgroundColor: AppColors.secondary,
-          // resizeToAvoidBottomInset: false,
-          body: SafeArea(
+    return Scaffold(
+      backgroundColor: AppColors.secondary,
+      // resizeToAvoidBottomInset: false,
+      body: BlocListener<SupportBloc, SupportState>(
+          listener: (context, state) {
+            // Scroll to the bottom when a new message is received
+            if (state.chatStatus == ChatStatus.newMessage) {
+              _scrollToBottom();
+            }
+          },
+          child: SafeArea(
               child: Column(
             children: [chatHeader(), Expanded(child: messages()), chatFooter()],
           ))),
@@ -97,7 +101,7 @@ class _ChatPageViewState extends State<ChatPageView> {
               .copyWith(bottom: 40),
           itemBuilder: (_, i) {
             // print(state.chatRoomMessages[i]);
-            if (i % 2 == 0) {
+            if (auth.currentUser?.uid != state.chatMessages[i].senderId) {
               return Container(
                   child: Align(
                       alignment: Alignment.topLeft,
@@ -112,12 +116,11 @@ class _ChatPageViewState extends State<ChatPageView> {
                                 topRight: Radius.circular(10),
                                 bottomRight: Radius.circular(10))),
                         padding: const EdgeInsets.all(14),
-                        child: const Text(
-                            'Hi bvcgfdz kjhbfgdxzfgcvh hvftesdrtfy iugyftdr',
-                            style: TextStyle(color: Colors.white)),
+                        child: AppText.text(state.chatMessages[i].message,
+                            color: Colors.white),
                       )));
             }
-            if (i % 2 != 0) {
+            if (auth.currentUser?.uid == state.chatMessages[i].senderId) {
               return Container(
                   child: Align(
                       alignment: Alignment.topRight,
@@ -133,9 +136,8 @@ class _ChatPageViewState extends State<ChatPageView> {
                                 topRight: Radius.circular(10),
                                 bottomLeft: Radius.circular(10))),
                         padding: const EdgeInsets.all(14),
-                        child: const Text('Hello',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white)),
+                        child: AppText.text(state.chatMessages[i].message,
+                            color: Colors.white),
                       )));
             }
             return Container();
@@ -143,7 +145,7 @@ class _ChatPageViewState extends State<ChatPageView> {
           separatorBuilder: (_, i) => const SizedBox(
                 height: 10,
               ),
-          itemCount: 0);
+          itemCount: state.chatMessages.length);
     });
   }
 
@@ -171,12 +173,21 @@ class _ChatPageViewState extends State<ChatPageView> {
                   focusedBorder: InputBorder.none,
                   enabledBorder: InputBorder.none),
               onChanged: (value) {
-                // context.read<SupportBloc>().add(SetNewMessage(value: value));
+                context
+                    .read<SupportBloc>()
+                    .add(SetNewSupportMessage(value: value));
               },
             )),
             const SizedBox(width: 10),
             AppButton.button(
-                onPressed: () {},
+                onPressed: () {
+                  if (state.message != null && state.message!.trim() != '') {
+                    textInputController.text = '';
+                    context
+                        .read<SupportBloc>()
+                        .add(MessageSupport(message: state.message!));
+                  }
+                },
                 widget: SvgPicture.asset('assets/svg/send.svg'))
           ],
         ),

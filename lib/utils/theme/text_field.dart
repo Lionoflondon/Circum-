@@ -44,7 +44,6 @@ class AppTextInput {
       maxLines: maxLines,
       minLines: minLines,
       enabled: enabled,
-
       maxLength: maxLength,
       style: TextStyle(
         color: Colors.white,
@@ -56,8 +55,10 @@ class AppTextInput {
         fillColor: fillColor ?? AppColors.input,
         filled: true,
         prefixIcon: prefix,
+
         // suffix: surfix,
         suffixIcon: surfix,
+
         counterStyle:
             const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
 

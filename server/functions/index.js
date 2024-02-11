@@ -2,7 +2,8 @@
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const functions = require("firebase-functions");
-const stripe = require("stripe")(functions.config().stripe.testkey);
+// const stripe = require("stripe")(functions.config().stripe.testkey);
+const stripe = require("stripe")(functions.config().stripe.livekey);
 const {v4: uuidv4} = require("uuid");
 
 initializeApp();
@@ -124,10 +125,50 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
       totalAmountEarned += historyEntry.price || 0;
     });
 
+    const currentDate = new Date();
+
+    // Initialize an object to store daily earnings
+    const weeklyEarnings = {
+      Sun: 0,
+      Mon: 0,
+      Tue: 0,
+      Wed: 0,
+      Thu: 0,
+      Fri: 0,
+      Sat: 0,
+    };
+
+    // Calculate the start date of the week (assuming Sunday is the start of the week)
+    const startDate = new Date(currentDate);
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+
+    // Calculate the end date of the week (assuming Saturday is the end of the week)
+    const endDate = new Date(currentDate);
+    endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
+
+    // Query Firestore for earnings within the current week for the given user
+    const earningsSnapshot = await getFirestore().collection("history")
+        .where("riderId", "==", riderId)
+        .where("createdAt", ">=", startDate)
+        .where("createdAt", "<=", endDate)
+        .get();
+
+    // Aggregate earnings by day
+    earningsSnapshot.forEach((doc) => {
+      const earningData = doc.data();
+      const earningDate = earningData.createdAt.toDate();
+      const dayOfWeek = earningDate.toLocaleDateString("en-US", {weekday: "long"});
+
+      weeklyEarnings[dayOfWeek] += earningData.amount;
+    });
+
+    // response.json(weeklyEarnings);
+
     res.status(200).send({
       accountBalance: accountBalance,
       totalAmountEarned: totalAmountEarned,
       totalTrips: snapshot.size,
+      weeklyEarnings: weeklyEarnings,
     });
   } catch (error) {
     console.error("Error calculating total amount earned:", error);

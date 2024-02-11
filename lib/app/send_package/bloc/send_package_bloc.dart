@@ -123,22 +123,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           destinationLocation: event.val,
           destinationLocationSubAddress: event.destinationLocationSubAddress));
 
+      add(SetDrawerHeight(
+          minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.55.sh));
       try {
         PlaceCoordinate coordinate = await PlaceApiProvider(uuid)
             .fetchPlaceDetails(event.placeId, event.lang);
 
         print('Destination coordinate: $coordinate');
-        var address =
-            await placemarkFromCoordinates(coordinate.lat, coordinate.lng);
+        // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
+        var address = await placemarkFromCoordinates(
+            coordinate.lat, coordinate.lng,
+            localeIdentifier: "en_US");
 
         emit(state.copyWith(
             desinationCoordinate: coordinate,
             destinationLocality: address[0].locality));
 
         if (state.pickupCoordinate != null) {
-          add(SetDrawerHeight(
-              minDrawerHeight: state.minDrawerHeight,
-              maxDrawerHeight: 0.55.sh));
           List<LatLng> latLngList = [];
 
           PolylinePoints points = PolylinePoints();
@@ -553,12 +554,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         final SharedPreferences prefs = await SharedPreferences.getInstance();
         final String? activeRequest = prefs.getString('activeRequest');
 
+        String msg = event.message;
+
+        emit(state.copyWith(message: ''));
+
         // print('${state.deliveryData!.code}');
 
         final messageData = {
           'requestId': activeRequest,
           'senderId': user!.uid,
-          'message': event.message,
+          'message': msg,
           'timeStamp': '${DateTime.now()}'
         };
 
@@ -566,7 +571,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             data: {
               "type": "message",
               "data": """{
-                "requestId": "$activeRequest'",
+                "requestId": "$activeRequest",
                 "senderId": "${user.uid}",
                 "message": "${event.message}",
                 "timeStamp": "${DateTime.now()}"

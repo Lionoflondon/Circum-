@@ -121,7 +121,7 @@ Widget deliveryCost() {
                         children: [
                           AppText.text('£${state.price}',
                               fontSize: 24, fontWeight: FontWeight.w600),
-                          AppText.text('Delivery price',
+                          AppText.text('Trip price',
                               fontSize: 12, color: const Color(0xFFC9D2D7)),
                         ],
                       )
@@ -139,7 +139,7 @@ Widget reviewButton() {
       padding: EdgeInsets.symmetric(horizontal: 24),
       child: AppButton.button(
           widget: Center(
-              child: AppText.text('Review delivery',
+              child: AppText.text('Review trip',
                   fontSize: 16, fontWeight: FontWeight.bold)),
           onPressed: () {
             Navigator.push(

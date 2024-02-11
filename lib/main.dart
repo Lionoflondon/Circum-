@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:circum/app/account/bloc/account_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/helper/chats_help.dart';
+import 'package:circum/utils/theme/theme.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -169,10 +170,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  Stripe.publishableKey = Env.publishableKey;
+  Stripe.publishableKey = Env.publishableLiveKey;
   // Stripe.merchantIdentifier = 'merchant.flutter.stripe.test';
   // Stripe.urlScheme = 'flutterstripe';
-  Stripe.instance.applySettings();
+  await Stripe.instance.applySettings();
   await Firebase.initializeApp();
 
   await FirebaseAppCheck.instance.activate(
@@ -233,7 +234,13 @@ class Circum extends StatelessWidget {
                   child: child,
                 );
               },
-              theme: ThemeData.light(),
+              theme: ThemeData.light().copyWith(
+                textSelectionTheme: const TextSelectionThemeData(
+                  cursorColor: AppColors.primary,
+                  selectionColor: AppColors.primary,
+                  selectionHandleColor: AppColors.primary,
+                ),
+              ),
               darkTheme: ThemeData.dark(),
               navigatorObservers: [BotToastNavigatorObserver()],
               home: WillPopScope(

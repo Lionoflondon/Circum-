@@ -56,34 +56,34 @@ class EnterOTPViewState extends State<EnterOTPView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state.status == Status.success) {
-            context.read<AuthBloc>().add(ResetStatus());
-            // context.read<AuthBloc>().add(StartCountDown());
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => AppNavView()),
-            );
-          }
+    return Scaffold(
+        backgroundColor: AppColors.secondary,
+        appBar: AppBar(
+          foregroundColor: Colors.white,
+          backgroundColor: AppColors.secondary,
+          centerTitle: true,
+          title: AppText.text('Enter 4 Digit Code',
+              fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        body: BlocListener<AuthBloc, AuthState>(
+            listener: (context, state) {
+              if (state.status == Status.success) {
+                context.read<AuthBloc>().add(ResetStatus());
+                // context.read<AuthBloc>().add(StartCountDown());
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => AppNavView()),
+                );
+              }
 
-          if (state.status == Status.incompleteData) {
-            context.read<AuthBloc>().add(ResetStatus());
-            // context.read<AuthBloc>().add(StartCountDown());
-            Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (_) => const AddDetailsView()));
-          }
-        },
-        child: Scaffold(
-            backgroundColor: AppColors.secondary,
-            appBar: AppBar(
-              foregroundColor: Colors.white,
-              backgroundColor: AppColors.secondary,
-              centerTitle: true,
-              title: AppText.text('Enter 4 Digit Code',
-                  fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            body: SizedBox(
+              if (state.status == Status.incompleteData) {
+                context.read<AuthBloc>().add(ResetStatus());
+                // context.read<AuthBloc>().add(StartCountDown());
+                Navigator.pushReplacement(context,
+                    MaterialPageRoute(builder: (_) => const AddDetailsView()));
+              }
+            },
+            child: SizedBox(
                 width: MediaQuery.of(context).size.width,
                 height: MediaQuery.of(context).size.height,
                 child: Column(

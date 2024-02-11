@@ -46,17 +46,17 @@ class _RideChatPageViewState extends State<RideChatPageView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<SendPackageBloc, SendPackageState>(
-      listener: (context, state) {
-        // Scroll to the bottom when a new message is received
-        if (state.chatStatus == ChatStatus.newMessage) {
-          _scrollToBottom();
-        }
-      },
-      child: Scaffold(
-          backgroundColor: AppColors.secondary,
-          // resizeToAvoidBottomInset: false,
-          body: SafeArea(
+    return Scaffold(
+      backgroundColor: AppColors.secondary,
+      // resizeToAvoidBottomInset: false,
+      body: BlocListener<SendPackageBloc, SendPackageState>(
+          listener: (context, state) {
+            // Scroll to the bottom when a new message is received
+            if (state.chatStatus == ChatStatus.newMessage) {
+              _scrollToBottom();
+            }
+          },
+          child: SafeArea(
               child: Column(
             children: [chatHeader(), Expanded(child: messages()), chatFooter()],
           ))),
@@ -68,7 +68,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
         builder: (context, state) {
       return Container(
         color: AppColors.secondary,
-        padding: EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

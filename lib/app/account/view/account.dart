@@ -81,14 +81,12 @@ class AccountView extends StatelessWidget {
           width: double.maxFinite,
           child: Column(
             children: [
-              TextButton(
+              AppButton.button(
                   // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                  ),
-                  child: Row(
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
@@ -146,14 +144,12 @@ class AccountView extends StatelessWidget {
                   height: 1,
                   thickness: 1,
                   color: Colors.white.withOpacity(0.15)),
-              TextButton(
+              AppButton.button(
                   // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                  ),
-                  child: Row(
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
@@ -180,14 +176,12 @@ class AccountView extends StatelessWidget {
                   height: 1,
                   thickness: 1,
                   color: Colors.white.withOpacity(0.15)),
-              TextButton(
+              AppButton.button(
                   // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                  ),
-                  child: Row(
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
@@ -208,46 +202,6 @@ class AccountView extends StatelessWidget {
                   onPressed: () async {
                     await launchUrl(Uri.parse('https://circumuk.com/terms'));
                   }),
-
-              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-              // STRIPE TEST
-              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-              // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-              // Divider(
-              //     height: 1,
-              //     thickness: 1,
-              //     color: Colors.white.withOpacity(0.15)),
-              // TextButton(
-              //     // borderSide: BorderSide.none,
-              //     // backgroundColor: AppColors.secondary,
-              //     style: TextButton.styleFrom(
-              //       padding: const EdgeInsets.symmetric(
-              //           horizontal: 24, vertical: 16),
-              //     ),
-              //     child: Row(
-              //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              //       children: [
-              //         Row(
-              //           children: [
-              //             SvgPicture.asset('assets/svg/legal.svg'),
-              //             const SizedBox(width: 16),
-              //             AppText.text(
-              //               'STRIPE',
-              //             )
-              //           ],
-              //         ),
-              //         Icon(
-              //           Icons.keyboard_arrow_right_rounded,
-              //           color: Colors.white.withOpacity(0.15),
-              //         )
-              //       ],
-              //     ),
-              //     onPressed: () async {
-              //       showPaymentBottomSheet(context, amount: 1000);
-              //     }),
             ],
           ));
     });

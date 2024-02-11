@@ -28,38 +28,44 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   ) async {
     emit(state.copyWith(status: PaymentStatus.loading));
 
-    final paymentMethod = await Stripe.instance.createPaymentMethod(
-      params: PaymentMethodParams.card(
-        paymentMethodData: PaymentMethodData(
-          billingDetails: event.billingDetails,
+    try {
+      final paymentMethod = await Stripe.instance.createPaymentMethod(
+        params: PaymentMethodParams.card(
+          paymentMethodData: PaymentMethodData(
+            billingDetails: event.billingDetails,
+          ),
         ),
-      ),
-    );
+      );
 
-    final paymentIntentResult = await _callPayEndpointMethodId(
-      useStripeSdk: true,
-      paymentMethodId: paymentMethod.id,
-      currency: 'gbp',
-      amount: event.amount,
-    );
+      final paymentIntentResult = await _callPayEndpointMethodId(
+        useStripeSdk: true,
+        paymentMethodId: paymentMethod.id,
+        currency: 'gbp',
+        amount: event.amount,
+      );
 
-    if (paymentIntentResult['error'] != null) {
-      // Error creating or confirming the payment intent.
-      // print(paymentIntentResult['error']);
+      if (paymentIntentResult['error'] != null) {
+        // Error creating or confirming the payment intent.
+        // print(paymentIntentResult['error']);
+        emit(state.copyWith(status: PaymentStatus.failure));
+      }
+
+      if (paymentIntentResult['clientSecret'] != null &&
+          paymentIntentResult['requiresAction'] == null) {
+        // The payment succedeed / went through.
+        emit(state.copyWith(status: PaymentStatus.success));
+      }
+
+      if (paymentIntentResult['clientSecret'] != null &&
+          paymentIntentResult['requiresAction'] == true) {
+        final String clientSecret = paymentIntentResult['clientSecret'];
+        add(PaymentConfirmIntent(clientSecret: clientSecret));
+      } else {}
+    } catch (e) {
+      print('_onPaymentCreateIntent');
+      print(e);
       emit(state.copyWith(status: PaymentStatus.failure));
     }
-
-    if (paymentIntentResult['clientSecret'] != null &&
-        paymentIntentResult['requiresAction'] == null) {
-      // The payment succedeed / went through.
-      emit(state.copyWith(status: PaymentStatus.success));
-    }
-
-    if (paymentIntentResult['clientSecret'] != null &&
-        paymentIntentResult['requiresAction'] == true) {
-      final String clientSecret = paymentIntentResult['clientSecret'];
-      add(PaymentConfirmIntent(clientSecret: clientSecret));
-    } else {}
   }
 
   void _onPaymentConfirmIntent(
