@@ -31,7 +31,6 @@ class ChooseAddressViewState extends State<ChooseAddressView> {
 
   @override
   void dispose() {
-    // TODO: implement dispose
     super.dispose();
     sourceFocusNode.dispose();
     destinationFocusNode.dispose();

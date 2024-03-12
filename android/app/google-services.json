@@ -14,11 +14,103 @@
       },
       "oauth_client": [
         {
+          "client_id": "516426305461-0ej7uonl0m6c6oou7tgvlo5q9g80u2c6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.app",
+            "certificate_hash": "82c6d5b0c0e657b7a22e1b50e1d2424106b27abb"
+          }
+        },
+        {
           "client_id": "516426305461-599lbubcg4j016jsm7dbou7isuolq0ve.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.circum.app",
             "certificate_hash": "90af78bd7fb1c47cb8b62b8d827d3e6207bd495d"
+          }
+        },
+        {
+          "client_id": "516426305461-nelva6ok4f351b5pecf7gj2h933i1tau.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.app",
+            "certificate_hash": "d28e340e1ff55699d81c098aaabc6071a7a89274"
+          }
+        },
+        {
+          "client_id": "516426305461-rce5pl98ehr9gl1ppsd4ncs7bkvcbpoc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.app",
+            "certificate_hash": "a1669de57f37f2cfa6360ae425568314bac68881"
+          }
+        },
+        {
+          "client_id": "516426305461-v7rb89q0qjenig217u19s7b13ppluote.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.app",
+            "certificate_hash": "80269a500bd95726c34d20a916f813175013b514"
+          }
+        },
+        {
+          "client_id": "516426305461-7n9fg5bvmmrvio68n4aiism70gd8sba5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAX5XrRbb81udAi-DnxtV_JyOoeOZ1Q1vk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "516426305461-7n9fg5bvmmrvio68n4aiism70gd8sba5.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "516426305461-rck17vp8e2bpmui7e1ro0p9de9t6p6vi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.circum.app"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:516426305461:android:71c13843740cb0eae813fc",
+        "android_client_info": {
+          "package_name": "com.circum.rider"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "516426305461-au81sshv8p5f7sgn1b1ccchpkfo54puj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.rider",
+            "certificate_hash": "90af78bd7fb1c47cb8b62b8d827d3e6207bd495d"
+          }
+        },
+        {
+          "client_id": "516426305461-klv93k1g5et3s0n93ts3kl69kfnpjr3q.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.rider",
+            "certificate_hash": "80269a500bd95726c34d20a916f813175013b514"
+          }
+        },
+        {
+          "client_id": "516426305461-s2knbhm96ltekss6uv0kmmf40hfgpi5e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.rider",
+            "certificate_hash": "82c6d5b0c0e657b7a22e1b50e1d2424106b27abb"
           }
         },
         {

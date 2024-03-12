@@ -121,6 +121,28 @@ class PaymentScreen extends StatelessWidget {
                             textColor: Colors.white,
                             placeholderColor: Colors.white,
                           )),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Checkbox(
+                              value: state.saveCard,
+                              activeColor: AppColors.primary,
+                              onChanged: (val) {
+                                context
+                                    .read<AccountBloc>()
+                                    .add(SaveCard(val: !state.saveCard));
+                              }),
+                          Expanded(
+                              child: GestureDetector(
+                                  onTap: () {
+                                    context
+                                        .read<AccountBloc>()
+                                        .add(SaveCard(val: !state.saveCard));
+                                  },
+                                  child: AppText.text(
+                                      'Save this card for later use.')))
+                        ],
+                      ),
                       const SizedBox(height: 10),
                       AppButton.button(
                           onPressed: () {
@@ -130,7 +152,8 @@ class PaymentScreen extends StatelessWidget {
                                           billingDetails: BillingDetails(
                                             phone: phone,
                                           ),
-                                          amount: (amount * 100).round()),
+                                          amount: (amount * 100).round(),
+                                          saveCard: state.saveCard),
                                     )
                                 : ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(

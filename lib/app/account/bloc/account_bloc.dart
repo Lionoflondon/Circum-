@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:equatable/equatable.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
@@ -9,10 +10,19 @@ part 'account_event.dart';
 part 'account_state.dart';
 
 class AccountBloc extends Bloc<AccountEvent, AccountState> {
+  FirebaseAuth auth = FirebaseAuth.instance;
   AccountBloc() : super(const AccountState()) {
     on<PaymentStart>(_onPaymentStart);
     on<PaymentCreateIntent>(_onPaymentCreateIntent);
     on<PaymentConfirmIntent>(_onPaymentConfirmIntent);
+    on<SaveCard>(_onSaveCard);
+  }
+
+  void _onSaveCard(
+    SaveCard event,
+    Emitter<AccountState> emit,
+  ) {
+    emit(state.copyWith(saveCard: event.val));
   }
 
   void _onPaymentStart(
@@ -28,6 +38,8 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   ) async {
     emit(state.copyWith(status: PaymentStatus.loading));
 
+    User? user = auth.currentUser;
+
     try {
       final paymentMethod = await Stripe.instance.createPaymentMethod(
         params: PaymentMethodParams.card(
@@ -38,11 +50,16 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       );
 
       final paymentIntentResult = await _callPayEndpointMethodId(
-        useStripeSdk: true,
-        paymentMethodId: paymentMethod.id,
-        currency: 'gbp',
-        amount: event.amount,
-      );
+          useStripeSdk: true,
+          paymentMethodId: paymentMethod.id,
+          currency: 'gbp',
+          amount: event.amount,
+          userId: user!.uid,
+          name: user.displayName,
+          phone: user.phoneNumber,
+          saveCard: event.saveCard);
+
+      print(paymentIntentResult);
 
       if (paymentIntentResult['error'] != null) {
         // Error creating or confirming the payment intent.
@@ -98,20 +115,34 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     required bool useStripeSdk,
     required String paymentMethodId,
     required String currency,
+    required bool saveCard,
+    String? name,
+    String? phone,
+    String? userId,
     int? amount,
   }) async {
     final url = Uri.parse(
       'https://us-central1-circum-2797c.cloudfunctions.net/StripePayEndpointMethodId',
     );
+
+    final data = {
+      'useStripeSdk': useStripeSdk,
+      'paymentMethodId': paymentMethodId,
+      'currency': currency,
+      'amount': amount
+    };
+
+    if (saveCard == true) {
+      data['name'] = name;
+      data['phone'] = phone;
+      data['userId'] = userId;
+      data['saveCard'] = saveCard;
+    }
+
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'useStripeSdk': useStripeSdk,
-        'paymentMethodId': paymentMethodId,
-        'currency': currency,
-        'amount': amount
-      }),
+      body: json.encode(data),
     );
     return json.decode(response.body);
   }

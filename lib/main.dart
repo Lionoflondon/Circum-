@@ -171,6 +171,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Stripe.publishableKey = Env.publishableLiveKey;
+  // Stripe.publishableKey = Env.publishableTestKey;
   // Stripe.merchantIdentifier = 'merchant.flutter.stripe.test';
   // Stripe.urlScheme = 'flutterstripe';
   await Stripe.instance.applySettings();

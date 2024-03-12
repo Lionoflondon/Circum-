@@ -27,6 +27,7 @@ const generateResponse = function(intent) {
       // Payment is complete, authentication not required
       // To cancel the payment after capture you will need to issue a Refund (https://stripe.com/docs/api/refunds).
       console.log("💰 Payment received!");
+      console.log(intent.status);
       return {clientSecret: intent.client_secret, status: intent.status};
   }
   return {
@@ -41,6 +42,10 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
     amount,
     currency,
     useStripeSdk,
+    name,
+    phone,
+    userId,
+    saveCard,
   } = req.body;
 
   //   const orderAmount = calculateOrderAmount(items);
@@ -50,6 +55,15 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
     if (paymentMethodId) {
       // Create new PaymentIntent with a PaymentMethod ID from the client.
       // confirmation_method: "manual",
+      let customerId;
+
+      const userRef = await getFirestore().collection("users").doc(userId).get();
+
+      if (userRef.exists) {
+        const userData = userRef.data();
+        customerId = userData.customerId || undefined;
+      }
+
       const params = {
         amount: orderAmount,
         confirm: true,
@@ -61,13 +75,65 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
         payment_method: paymentMethodId,
         use_stripe_sdk: useStripeSdk,
       };
+
+      // Set customerId if it exists
+      if (customerId && saveCard == true) {
+        params.customer = customerId;
+      }
+
+      // create customerId if it doesnt exist
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          name: name,
+          phone: phone,
+        });
+
+        customerId = customer.id;
+
+        if (saveCard == true) {
+          params.customer = customerId;
+        }
+
+        await getFirestore().collection("users").doc(userId).update({
+          customerId: customer.id,
+        });
+      }
+
       const intent = await stripe.paymentIntents.create(params);
       // After create, if the PaymentIntent's status is succeeded, fulfill the order.
+
+      // if (saveCard == true) {
+
+
+      //   // Customer id in the db
+      // }
+
+      const response = generateResponse(intent);
+      response.customerId = customerId;
+
+      // const session =
+      // await stripe.checkout.sessions.create({
+      //   payment_intent_data: {
+      //     setup_future_usage: "off_session",
+      //   },
+      //   customer_creation: "always",
+      //   line_items: [
+      //     {
+      //       price: amount,
+      //       quantity: 1,
+      //     },
+      //   ],
+      //   mode: "payment",
+      //   success_url: "https://example.com/success.html",
+      //   cancel_url: "https://example.com/cancel.html",
+      // });
+
       console.log(`Intent: ${intent}`);
-      return res.send(generateResponse(intent));
+      return res.send(response);
     }
     return res.sendStatus(400);
   } catch (e) {
+    console.log(e);
     // Handle "hard declines" e.g. insufficient funds, expired card, etc
     // See https://stripe.com/docs/declines/codes for more.
     return res.send({error: e.message});
@@ -91,6 +157,27 @@ exports.StripePayEndpointIntentId = functions.https.onRequest(async (req, res) =
     // Handle "hard declines" e.g. insufficient funds, expired card, etc
     // See https://stripe.com/docs/declines/codes for more.
     return res.send({error: e.message});
+  }
+});
+
+exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
+  try {
+    const {
+      customerId,
+    } = req.body;
+    // const customer = await stripe.customers.retrieve(customerId);
+
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: customerId,
+      type: "card",
+    });
+
+    res.json(paymentMethods);
+    // const cards = customer.sources.data.filter((source) => source.object === "card");
+    // res.json(cards);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({error: "Unable to retrieve cards"});
   }
 });
 
