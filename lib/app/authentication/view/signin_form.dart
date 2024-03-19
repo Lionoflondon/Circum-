@@ -6,7 +6,6 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
-import 'reset_password.dart';
 import 'signup.dart';
 
 class SigninForm extends StatelessWidget {

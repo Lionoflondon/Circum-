@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'package:circum/app.dart';
+import 'package:circum/app/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../utils/app_state/app_state.dart';
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
+import '../../authentication/view/enter_otp.dart';
 import 'bottom_sheets/bottom_sheets.dart';
 import 'bottom_sheets/image_bs.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -32,30 +36,58 @@ class _AccountDetailsState extends State<AccountDetails> {
           centerTitle: true,
         ),
         backgroundColor: AppColors.secondary,
-        body: BlocListener<AuthBloc, AuthState>(
-            listener: (context, state) {
-              if (state.currentState == AppState.unauthenticated) {
-                print('signing out');
-                Navigator.popUntil(context, (route) => route.isFirst);
-              }
-            },
-            child: Column(children: [
-              header(),
-              firstName(),
-              Divider(
-                  height: 10,
-                  thickness: 1,
-                  color: Colors.white.withOpacity(0.15)),
-              surname(),
-              Divider(
-                  height: 10,
-                  thickness: 1,
-                  color: Colors.white.withOpacity(0.15)),
-              email(),
-              phone(),
-              const Spacer(),
-              logout()
-            ])));
+        body: SafeArea(
+            child: BlocListener<AuthBloc, AuthState>(
+                listener: (context, state) async {
+                  if (state.currentState == AppState.unauthenticated) {
+                    print('signing out');
+                    // Navigator.pushAndRemoveUntil(
+                    //   context,
+                    //   MaterialPageRoute(builder: (context) => OnboardingView()),
+                    //   (route) => false, // Remove all existing routes
+                    // );
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                    // await Future.delayed(const Duration(milliseconds: 500));
+                    // // ignore: use_build_context_synchronously
+                    // Navigator.of(context).pushReplacement(
+                    //     MaterialPageRoute(builder: (_) => App()));
+                  }
+                },
+                child: Column(children: [
+                  _loader(),
+                  Expanded(
+                      child: Column(
+                    children: [
+                      header(),
+                      firstName(),
+                      Divider(
+                          height: 10,
+                          thickness: 1,
+                          color: Colors.white.withOpacity(0.15)),
+                      surname(),
+                      Divider(
+                          height: 10,
+                          thickness: 1,
+                          color: Colors.white.withOpacity(0.15)),
+                      email(),
+                      phone(),
+                      const Spacer(),
+                      logout(),
+                      deleteAccount(),
+                    ],
+                  ))
+                ]))));
+  }
+
+  Widget _loader() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return state.status == Status.loading
+          ? LinearProgressIndicator(
+              color: Colors.white,
+              backgroundColor: Colors.white.withOpacity(0.7),
+            )
+          : Container();
+    });
   }
 
   Widget header() {
@@ -319,16 +351,110 @@ class _AccountDetailsState extends State<AccountDetails> {
   Widget logout() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return Padding(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.only(bottom: 0),
           child: TextButton(
             style: TextButton.styleFrom(
+                backgroundColor: AppColors.danger.withOpacity(0.5),
+                shape: RoundedRectangleBorder(),
                 padding: const EdgeInsets.symmetric(vertical: 20)),
             onPressed: () {
               context.read<AuthBloc>().add(SignOut());
             },
-            child:
-                Center(child: AppText.text('Logout', color: AppColors.danger)),
+            child: Center(
+                child: AppText.text('Logout',
+                    color: Colors.white, fontWeight: FontWeight.w500)),
           ));
     });
+  }
+
+  Widget deleteAccount() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      if (state.status == Status.success) {
+        context.read<AuthBloc>().add(ResetStatus());
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => EnterOTPView(
+                        deleteAccount: true,
+                      )));
+        });
+      }
+      return Padding(
+          padding: const EdgeInsets.only(bottom: 0),
+          child: TextButton(
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 20)),
+            onPressed: () async {
+              final deleteAccount = await deleteAccountBottomSheet(context);
+
+              if (deleteAccount == true) {
+                // ignore: use_build_context_synchronously
+                context.read<AuthBloc>().add(RequestForOTP());
+              }
+            },
+            child: Center(
+                child: AppText.text('Delete Account', color: AppColors.danger)),
+          ));
+    });
+  }
+
+  deleteAccountBottomSheet(context) {
+    return showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (_) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppColors.secondary,
+            ),
+            height: 260,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AppText.text('You cannot reverse this action!',
+                      fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 24),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton(
+                        onPressed: () async {
+                          Navigator.pop(context, true);
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(Icons.delete_forever, color: Colors.red),
+                            SizedBox(width: 12),
+                            Text('Delete account',
+                                style: TextStyle(color: Colors.red))
+                          ],
+                        )),
+                    const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Divider()),
+                    TextButton(
+                        onPressed: () async {
+                          Navigator.pop(context, false);
+                        },
+                        child: const Row(children: [
+                          Icon(
+                            Icons.close,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 6),
+                          Text('Cancel', style: TextStyle(color: Colors.white))
+                        ])),
+                    SizedBox(height: MediaQuery.of(context).padding.bottom + 20)
+                  ],
+                ),
+              ],
+            ),
+          );
+        });
   }
 }

@@ -64,9 +64,9 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Circum needs to access your microphone for audio calls</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Circum needs to access your camera to upload profile photos and parcels</string>
+	<string>Circum needs to access your camera to upload profile photos or parcels</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Circum needs to access your photo library to select an image for upload</string>
+	<string>Circum needs to access your photo library to upload profile photos or parcels</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

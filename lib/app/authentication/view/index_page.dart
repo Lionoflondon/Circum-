@@ -6,6 +6,8 @@ import '../../../utils/theme/colors.dart';
 class IndexPage extends StatelessWidget {
   const IndexPage({Key? key}) : super(key: key);
 
+  static Page<void> page() => const MaterialPage<void>(child: IndexPage());
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

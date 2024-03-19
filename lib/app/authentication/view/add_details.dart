@@ -20,10 +20,12 @@ class AddDetailsView extends StatelessWidget {
               if (state.status == Status.success) {
                 context.read<AuthBloc>().add(ResetStatus());
 
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => EnableLocation()),
-                );
+                Navigator.popUntil(context, (route) => route.isFirst);
+
+                // Navigator.pushReplacement(
+                //   context,
+                //   MaterialPageRoute(builder: (_) => EnableLocation()),
+                // );
               }
             },
             child: WillPopScope(

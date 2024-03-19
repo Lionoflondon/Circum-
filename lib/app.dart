@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../app/authentication/bloc/auth_bloc.dart';
 import '../app/onboarding/onboarding.dart';
+import 'app/authentication/view/add_details.dart';
 import 'utils/nav/nav_key.dart';
 
 import '../app/authentication/view/index.dart';
@@ -21,15 +22,19 @@ class App extends StatelessWidget {
             const MaterialPage(child: IndexPage()),
 
           // Unauthenticated app state
-          if (state.currentState == AppState.unauthenticated) ...[
+          if (state.currentState == AppState.unauthenticated)
             const MaterialPage(
               child: OnboardingView(),
             ),
-          ],
 
           // Authenticated app state
-          if (state.currentState == AppState.authenticated)
+          if (state.currentState == AppState.authenticated &&
+              state.status != Status.incompleteData)
             MaterialPage(child: AppNavView()),
+
+          if (state.currentState == AppState.authenticated &&
+              state.status == Status.incompleteData)
+            const MaterialPage(child: AddDetailsView()),
         ],
         onPopPage: (route, result) {
           // route.didPop(result);

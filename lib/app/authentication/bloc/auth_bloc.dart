@@ -140,10 +140,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             ],
           );
 
-          print(credential.email);
-          print(credential.familyName);
-          print(credential.givenName);
-          print(credential.identityToken);
+          // print(credential.email);
+          // print(credential.familyName);
+          // print(credential.givenName);
+          // print(credential.identityToken);
           emit(state.copyWith(
               oAuthFirstName: credential.givenName,
               oAuthLastName: credential.familyName,
@@ -183,7 +183,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is RequestForOTP) {
-        print({'phoneNumber': state.phoneNumber, 'password': state.password});
+        // print({'phoneNumber': state.phoneNumber, 'password': state.password});
         // emit(state.copyWith(isLoading: true, status: Status.loading));
 
         var completer = Completer<bool>();
@@ -191,32 +191,44 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         String? _verificationId;
         int? _resendToken;
 
+        print('>>>>>>>>>> Trying to get code');
+
         try {
+          emit(state.copyWith(status: Status.loading));
           await auth.verifyPhoneNumber(
             phoneNumber: state.phoneNumber,
             verificationCompleted: (_) {},
             verificationFailed: (_) {
               print('Verification failed');
-              print(_);
+              print(_.message);
+              print(_.code);
+              print(_.stackTrace);
+              throw 'Verification failed';
             },
             codeSent: (String verificationId, int? resendToken) async {
               _verificationId = verificationId;
               _resendToken = resendToken;
+              print('code sent');
               completer.complete(true);
             },
             codeAutoRetrievalTimeout: (_) {
               print('Code timed out');
               print(_);
+              throw 'Code timed out';
             },
           );
-          emit(state.copyWith(status: Status.success));
           await completer.future;
+
           emit(state.copyWith(
-              verificationId: _verificationId, resendToken: _resendToken));
-          // print(_verificationId);
-          // print(_resendToken);
+              verificationId: _verificationId,
+              resendToken: _resendToken,
+              status: Status.success));
+          print('Gotten Verification ID');
+          print(_verificationId);
+          print(_resendToken);
         } catch (e) {
-          // print(e);
+          print('Error sending code');
+          print(e);
           emit(state.copyWith(
               errorMessage: e.toString().split(':').last.trim(),
               isLoading: false,
@@ -241,7 +253,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             if (_userCredential.user?.displayName == null) {
               if (state.oAuthFirstName == null) {
-                emit(state.copyWith(status: Status.incompleteData));
+                emit(state.copyWith(
+                    status: Status.incompleteData,
+                    currentState: AppState.authenticated));
               } else {
                 add(UpdateUserProfile(
                     username:
@@ -251,21 +265,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     username: "${state.oAuthFirstName} ${state.oAuthLastName}",
                     profilePhoto: state.oAuthPhotoURL,
                     email: state.oAuthEmail,
-                    phoneNumber: _userCredential.user?.phoneNumber));
+                    verificationId: '',
+                    otp: '',
+                    phoneNumber: _userCredential.user?.phoneNumber,
+                    currentState: AppState.authenticated));
               }
             } else {
               print(_userCredential.additionalUserInfo);
-              print(_userCredential.credential);
+              print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+              print(_userCredential);
+              print(_userCredential.credential?.accessToken);
+              print(_userCredential.credential?.providerId);
+              print(_userCredential.credential?.signInMethod);
+              print(_userCredential.credential?.token);
+              print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
               print(_userCredential.user);
               emit(state.copyWith(
                   status: Status.success,
                   username: _userCredential.user?.displayName,
                   profilePhoto: _userCredential.user?.photoURL,
                   email: _userCredential.user?.email,
-                  phoneNumber: _userCredential.user?.phoneNumber));
+                  verificationId: '',
+                  otp: '',
+                  phoneNumber: _userCredential.user?.phoneNumber,
+                  currentState: AppState.authenticated));
             }
           }
-
           // Sign the user in (or link) with the credential
         } on FirebaseException catch (e) {
           print(e.code);
@@ -513,5 +538,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(currentState: AppState.unauthenticated));
       },
     );
+
+    on<DeleteAccount>((event, emit) async {
+      final user = auth.currentUser!;
+
+      try {
+        final AuthCredential credential = PhoneAuthProvider.credential(
+            verificationId: state.verificationId!, smsCode: '${state.otp}');
+
+        // Reauthenticate user with phone credential
+        await user.reauthenticateWithCredential(credential);
+
+        await db.collection('users').doc(user.uid).update({'deleted': true});
+        // Reauthentication successful, proceed with account deletion
+        await user.delete();
+        // Account deleted successfully
+        print("Account deleted successfully.");
+        emit(state.copyWith(currentState: AppState.unauthenticated));
+      } on FirebaseException catch (e) {
+        print(e.code);
+        if (e.code == 'invalid-verification-code') {
+          emit(state.copyWith(errorMessage: 'Invalid verification code'));
+        }
+      } catch (error) {
+        // An error occurred during reauthentication or account deletion
+        print("Error deleting account: $error");
+        // Handle error (e.g., display error message)
+      }
+
+      // Navigator.pushNamedAndRemoveUntil(
+      //     context, '/onboarding', (Route<dynamic> route) => false);
+    });
   }
 }

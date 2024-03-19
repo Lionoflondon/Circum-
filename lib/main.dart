@@ -185,7 +185,7 @@ void main() async {
       // 3. play integrity provider
       // webRecaptchaSiteKey: 'recaptcha-v3-site-key',
       androidProvider: AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.deviceCheck);
+      appleProvider: AppleProvider.appAttest);
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true, // Required to display a heads up notification

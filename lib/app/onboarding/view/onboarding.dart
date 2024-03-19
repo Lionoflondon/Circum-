@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
@@ -13,6 +14,8 @@ import 'onboarding_slider.dart';
 class OnboardingView extends StatelessWidget {
   // final BuildContext authBlocContext;
   const OnboardingView({Key? key}) : super(key: key);
+
+  static Page<void> page() => const MaterialPage<void>(child: OnboardingView());
 
   @override
   Widget build(BuildContext context) {
@@ -27,30 +30,30 @@ class OnboardingView extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => const SignupView()));
               }
             },
-            child: SafeArea(
-                child: Column(
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 10),
                 const Expanded(child: OnboardingSlider()),
                 Container(
                     // margin: const EdgeInsets.only(bottom: 30),
                     width: MediaQuery.of(context).size.width * 0.9,
                     padding: const EdgeInsets.only(
-                        top: 20, bottom: 30, left: 10, right: 10),
+                        top: 20, bottom: 5, left: 10, right: 10),
                     child: Column(
                       children: [
                         actionButton(),
                         const SizedBox(height: 14),
                         orSignUpWith(),
                         const SizedBox(height: 14),
-                        oAuthButtons()
-                        // termsOfService()
+                        oAuthButtons(),
+                        const SizedBox(height: 10),
+                        termsOfService()
                       ],
                     )),
+                const SizedBox(height: 10),
               ],
-            ))));
+            )));
   }
 
   Widget actionButton() {
@@ -141,5 +144,28 @@ class OnboardingView extends StatelessWidget {
         ],
       );
     });
+  }
+
+  Widget termsOfService() {
+    return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: [
+            GestureDetector(
+                onTap: () async {
+                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                },
+                child: AppText.text('By signing up, you are agreeing to our',
+                    fontSize: 12)),
+            GestureDetector(
+                onTap: () async {
+                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                },
+                child: AppText.text('Terms of Service',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: Color.fromARGB(255, 203, 232, 255))),
+          ],
+        ));
   }
 }
