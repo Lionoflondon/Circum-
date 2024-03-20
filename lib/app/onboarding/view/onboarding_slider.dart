@@ -199,7 +199,7 @@ class OnboardingSliderState extends State<OnboardingSlider>
                   color: AppColors.textDarkMode),
               const SizedBox(height: 16),
               AppText.text(
-                "With Circum's intuitive user interface, you can quickly request courier services, track your packages, and communicate with your delivery person - all in one place.",
+                "Request courier services, track your packages, and communicate with your delivery person.",
               )
             ],
           )),
@@ -208,13 +208,13 @@ class OnboardingSliderState extends State<OnboardingSlider>
           child: Column(
             children: [
               const SizedBox(height: 30),
-              AppText.text("Effortlessly send and receive packages.",
+              AppText.text("Track your deliveries in real-time.",
                   fontSize: 26,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textDarkMode),
               const SizedBox(height: 16),
               AppText.text(
-                "With Circum's intuitive user interface, you can quickly request courier services, track your packages, and communicate with your delivery person - all in one place.",
+                "Stay informed every step of the way with live updates on your package's journey.",
               )
             ],
           )),
@@ -223,13 +223,13 @@ class OnboardingSliderState extends State<OnboardingSlider>
           child: Column(
             children: [
               const SizedBox(height: 30),
-              AppText.text("Effortlessly send and receive packages.",
+              AppText.text("Enjoy secure and efficient deliveries.",
                   fontSize: 26,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textDarkMode),
               const SizedBox(height: 16),
               AppText.text(
-                "With Circum's intuitive user interface, you can quickly request courier services, track your packages, and communicate with your delivery person - all in one place.",
+                "Our dedicated team ensures that your packages are handled with care and delivered safely.",
               )
             ],
           )),
