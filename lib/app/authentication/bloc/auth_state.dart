@@ -6,9 +6,12 @@ enum Status {
   locationRequested,
   success,
   failure,
-  incompleteData,
-  signedInWithOAuth
+  unverifiedEmail,
+  signedInWithOAuth,
+  passwordResetEmailSent,
 }
+
+enum AuthenticatedStatus { initial, incompleteData, authenticated }
 
 enum AppLocationStatus {
   denied,
@@ -52,6 +55,7 @@ class AuthState extends AuthInitial {
   final String? verificationType;
   final bool showPassword;
   final bool isPhoneNumberValid;
+  final bool isEmailValid;
   final String? verificationId;
   final int? resendToken;
   final Position? locationData;
@@ -67,6 +71,7 @@ class AuthState extends AuthInitial {
 
   final Status status;
   final AppLocationStatus appLocationStatus;
+  final AuthenticatedStatus authenticatedStatus;
 
   final int countdown;
 
@@ -98,12 +103,14 @@ class AuthState extends AuthInitial {
         countdown,
         showPassword,
         isPhoneNumberValid,
+        isEmailValid,
         verificationId,
         resendToken,
         locationData,
         isLocationEnabled,
         hasLocationPermission,
         appLocationStatus,
+        authenticatedStatus,
         profilePhoto,
         oAuthFirstName,
         oAuthLastName,
@@ -138,12 +145,14 @@ class AuthState extends AuthInitial {
     this.countdown = 30,
     this.showPassword = false,
     this.isPhoneNumberValid = false,
+    this.isEmailValid = false,
     this.verificationId,
     this.resendToken,
     this.locationData,
     this.isLocationEnabled,
     this.hasLocationPermission,
     this.appLocationStatus = AppLocationStatus.unavailalbe,
+    this.authenticatedStatus = AuthenticatedStatus.initial,
     this.profilePhoto,
     this.oAuthFirstName,
     this.oAuthLastName,
@@ -178,12 +187,14 @@ class AuthState extends AuthInitial {
       int? countdown,
       bool? showPassword,
       bool? isPhoneNumberValid,
+      bool? isEmailValid,
       String? verificationId,
       int? resendToken,
       Position? locationData,
       bool? isLocationEnabled,
       bool? hasLocationPermission,
       AppLocationStatus? appLocationStatus,
+      AuthenticatedStatus? authenticatedStatus,
       String? profilePhoto,
       String? oAuthFirstName,
       String? oAuthLastName,
@@ -216,6 +227,7 @@ class AuthState extends AuthInitial {
         countdown: countdown ?? this.countdown,
         showPassword: showPassword ?? this.showPassword,
         isPhoneNumberValid: isPhoneNumberValid ?? this.isPhoneNumberValid,
+        isEmailValid: isEmailValid ?? this.isEmailValid,
         verificationId: verificationId ?? this.verificationId,
         resendToken: resendToken ?? this.resendToken,
         locationData: locationData ?? this.locationData,
@@ -223,6 +235,7 @@ class AuthState extends AuthInitial {
         hasLocationPermission:
             hasLocationPermission ?? this.hasLocationPermission,
         appLocationStatus: appLocationStatus ?? this.appLocationStatus,
+        authenticatedStatus: authenticatedStatus ?? this.authenticatedStatus,
         profilePhoto: profilePhoto ?? this.profilePhoto,
         oAuthFirstName: oAuthFirstName ?? this.oAuthFirstName,
         oAuthLastName: oAuthLastName ?? this.oAuthLastName,

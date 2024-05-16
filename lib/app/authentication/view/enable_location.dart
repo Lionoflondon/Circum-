@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
@@ -9,6 +10,12 @@ import '../bloc/auth_bloc.dart';
 class EnableLocation extends StatelessWidget {
   const EnableLocation({Key? key}) : super(key: key);
 
+  final FlutterSecureStorage storage = const FlutterSecureStorage();
+
+  locationAllowed() async {
+    await storage.write(key: 'location', value: 'allowed');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -16,13 +23,15 @@ class EnableLocation extends StatelessWidget {
         body: BlocListener<AuthBloc, AuthState>(
             listener: (context, state) {
               if (state.status == Status.locationRequested) {
-                print('EnableLocationlistener');
+                // print('EnableLocationlistener');
                 context.read<AuthBloc>().add(ResetStatus());
+                locationAllowed();
+                Navigator.popUntil(context, (route) => route.isFirst);
                 // context.read<AuthBloc>().add(StartCountDown());
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => AppNavView()),
-                );
+                // Navigator.pushReplacement(
+                //   context,
+                //   MaterialPageRoute(builder: (_) => AppNavView()),
+                // );
               }
             },
             child: WillPopScope(
@@ -61,10 +70,12 @@ class EnableLocation extends StatelessWidget {
                                 fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           onPressed: () {
-                            Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => AppNavView()));
+                            Navigator.popUntil(
+                                context, (route) => route.isFirst);
+                            // Navigator.pushReplacement(
+                            //     context,
+                            //     MaterialPageRoute(
+                            //         builder: (_) => AppNavView()));
                           }))
                 ],
               ),

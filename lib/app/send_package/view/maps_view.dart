@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum/app/send_package/view/ratings.dart';
+import 'package:circum/utils/theme/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -97,18 +98,45 @@ class _MapsViewState extends State<MapsView> {
         // print('here');
       }
 
-      return GoogleMap(
-        // key: mapKey,
-        mapType: MapType.normal,
-        initialCameraPosition: _initialCameraPosition,
-        cameraTargetBounds: CameraTargetBounds.unbounded,
-        onMapCreated: (GoogleMapController controller) async {
-          print('initializing map');
-          print('controller completed: ${_controller.isCompleted}');
-          _controller.complete(controller);
-        },
-        markers: Set<Marker>.of(state.markers.values),
-        polylines: Set<Polyline>.of(state.polylines),
+      return Stack(
+        children: [
+          GoogleMap(
+            // key: mapKey,
+            mapType: MapType.normal,
+            initialCameraPosition: _initialCameraPosition,
+            cameraTargetBounds: CameraTargetBounds.unbounded,
+            onMapCreated: (GoogleMapController controller) async {
+              print('initializing map');
+              print('controller completed: ${_controller.isCompleted}');
+              _controller.complete(controller);
+            },
+            markers: Set<Marker>.of(state.markers.values),
+            polylines: Set<Polyline>.of(state.polylines),
+          ),
+          if (state.deliveryStatus != DeliveryStatus.inital &&
+              state.deliveryStatus != DeliveryStatus.deliveryConfirmed &&
+              state.deliveryStatus != DeliveryStatus.deliveryOnGoing)
+            Padding(
+                padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top, left: 24),
+                child: TextButton(
+                    style: TextButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        fixedSize: const Size(60, 60),
+                        minimumSize: const Size(60, 60),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                            side: const BorderSide(
+                                color: AppColors.primary, width: 2),
+                            borderRadius: BorderRadius.circular(100))),
+                    onPressed: () {
+                      context.read<SendPackageBloc>().add(BackButtonPressed());
+                    },
+                    child: const Icon(
+                      Icons.arrow_back_ios_rounded,
+                      color: AppColors.primary,
+                    )))
+        ],
       );
     });
   }

@@ -1,3 +1,4 @@
+import 'package:bot_toast/bot_toast.dart';
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/utils/theme/text_field.dart';
@@ -61,7 +62,7 @@ class ChooseAddressViewState extends State<ChooseAddressView> {
           children: [
             Container(
                 height: 85,
-                child: Column(
+                child: const Column(
                   children: [
                     Icon(
                       Icons.circle,
@@ -227,12 +228,32 @@ class ChooseAddressViewState extends State<ChooseAddressView> {
 
               if (state.pickupLocation != null &&
                   state.pickupLocation!.isNotEmpty) {
-                context.read<SendPackageBloc>().add(const SetDeliveryStatus(
-                    deliveryStatus: DeliveryStatus.addressesSelected));
+                if (state.pickupLocationSubAddress!.split(',').last ==
+                    state.suggestions[index].subText.split(',').last) {
+                  context.read<SendPackageBloc>().add(const SetDeliveryStatus(
+                      deliveryStatus: DeliveryStatus.addressesSelected));
 
-                Navigator.pop(context);
-                // Navigator.pushReplacement(context,
-                //     MaterialPageRoute(builder: (_) => DeliveryReviewView()));
+                  Navigator.pop(context);
+                  // Navigator.pushReplacement(context,
+                  //     MaterialPageRoute(builder: (_) => DeliveryReviewView()));
+                } else {
+                  var cancel =
+                      BotToast.showCustomNotification(toastBuilder: (_) {
+                    return Container(
+                      padding: const EdgeInsets.all(20),
+                      color: Colors.red,
+                      child: Row(
+                        // mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AppText.text(
+                              'Please choose locations in the same country',
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600),
+                        ],
+                      ),
+                    );
+                  });
+                }
               }
             }
           },

@@ -33,7 +33,7 @@ target 'Runner' do
   use_modular_headers!
 
   pod 'FirebaseFirestore', :git => 'https://github.com/invertase/firestore-ios-sdk-frameworks.git', :tag => '10.22.0'
-  pod 'GoogleMaps', '7.4.0' #'5.1.0'
+  pod 'GoogleMaps', '8.4.0' #'5.1.0'
   pod 'FirebaseAppCheck'
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do

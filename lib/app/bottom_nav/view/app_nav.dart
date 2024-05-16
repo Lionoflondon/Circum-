@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:circum/app/authentication/view/enable_location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
@@ -21,14 +23,27 @@ class AppNavView extends StatefulWidget {
 
 class AppNavState extends State<AppNavView> {
   AuthBloc? authBloc;
+  FlutterSecureStorage storage = const FlutterSecureStorage();
 
   @override
   void initState() {
     super.initState();
     authBloc = context.read<AuthBloc>();
-    authBloc?.add(RequestLocationData());
+    checkForLocationData();
+
     // Timer.periodic(const Duration(seconds: 20),
     //     (timer) => authBloc?.add(RequestLocationData()));
+  }
+
+  checkForLocationData() async {
+    final location = (await storage.readAll())["location"];
+    if (location == null) {
+      // ignore: use_build_context_synchronously
+      Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const EnableLocation()));
+    } else {
+      authBloc?.add(RequestLocationData());
+    }
   }
 
   @override

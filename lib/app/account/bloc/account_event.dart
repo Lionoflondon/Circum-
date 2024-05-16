@@ -13,14 +13,20 @@ class PaymentCreateIntent extends AccountEvent {
   final BillingDetails billingDetails;
   final int amount;
   final bool saveCard;
-
+  final String email;
   const PaymentCreateIntent(
       {required this.billingDetails,
       required this.amount,
+      required this.email,
       this.saveCard = false});
 
   @override
   List<Object?> get props => [billingDetails, amount];
+}
+
+class UpdatePaymentStatus extends AccountEvent {
+  final Map<String, dynamic> data;
+  const UpdatePaymentStatus({required this.data});
 }
 
 class PaymentConfirmIntent extends AccountEvent {

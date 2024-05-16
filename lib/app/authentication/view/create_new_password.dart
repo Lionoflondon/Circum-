@@ -74,7 +74,7 @@ Widget _resetPasswordButton() {
         width: MediaQuery.of(context).size.width * 0.8,
         child: AppButton.button(
             onPressed: () {
-              context.read<AuthBloc>().add(ResetPassword());
+              context.read<AuthBloc>().add(ResetPassword(email: state.email!));
             },
             widget: Row(
               mainAxisAlignment: MainAxisAlignment.center,

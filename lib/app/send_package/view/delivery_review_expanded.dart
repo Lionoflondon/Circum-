@@ -8,6 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_keyboard_size/flutter_keyboard_size.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:intl_phone_field/countries.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../account/view/payment.dart';
@@ -23,6 +25,10 @@ class DeliveryReviewExpandedView extends StatefulWidget {
 class _DeliveryReviewExpandedViewState
     extends State<DeliveryReviewExpandedView> {
   final TextEditingController _textFieldController = TextEditingController();
+  final TextEditingController _phoneNumberController = TextEditingController();
+
+  bool isPhoneValid = false;
+  String completeNumber = '';
 
   String? username;
   String? phoneNumber;
@@ -166,7 +172,17 @@ class _DeliveryReviewExpandedViewState
               )),
           const SizedBox(height: 20),
           ListTile(
-              onTap: () {},
+              onTap: () async {
+                _textFieldController.text = phoneNumber ?? '';
+                final String? newPhone =
+                    await additioalDetailsBottomSheet(title: 'Phone number');
+
+                if (newPhone != null) {
+                  setState(() {
+                    phoneNumber = newPhone;
+                  });
+                }
+              },
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 24),
               title: Row(
@@ -501,7 +517,7 @@ class _DeliveryReviewExpandedViewState
             children: [
               Container(
                   constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height * 0.7,
+                    minHeight: MediaQuery.of(context).size.height * 0.8,
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.secondary,
@@ -518,15 +534,17 @@ class _DeliveryReviewExpandedViewState
                       Container(
                           margin: const EdgeInsets.symmetric(horizontal: 24),
                           // height: 600,
-                          child: AppTextInput.input(
-                              initialValue: initialText,
-                              minLines: title == 'More information' ? 4 : 1,
-                              maxLines: title == 'More information' ? 4 : 1,
-                              keyboardType: title == 'Phone number'
-                                  ? TextInputType.phone
-                                  : TextInputType.text,
-                              autofocus: true,
-                              controller: _textFieldController)),
+                          child: title == 'Phone number'
+                              ? phoneInput()
+                              : AppTextInput.input(
+                                  initialValue: initialText,
+                                  minLines: title == 'More information' ? 4 : 1,
+                                  maxLines: title == 'More information' ? 4 : 1,
+                                  keyboardType: title == 'Phone number'
+                                      ? TextInputType.phone
+                                      : TextInputType.text,
+                                  autofocus: true,
+                                  controller: _textFieldController)),
                       SizedBox(height: 20),
                       Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -548,34 +566,40 @@ class _DeliveryReviewExpandedViewState
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600),
                                       onPressed: () async {
-                                        // print(_textFieldController.text);
-                                        // print(state.selectedEmoji);
-                                        if (_textFieldController.text.length >
-                                            2) {
-                                          Navigator.pop(context,
-                                              _textFieldController.text);
-                                          _textFieldController.text = "";
+                                        if (title == 'Phone number') {
+                                          if (isPhoneValid == true) {
+                                            Navigator.pop(
+                                                context, completeNumber);
+                                          }
                                         } else {
-                                          var cancel =
-                                              BotToast.showCustomNotification(
-                                                  toastBuilder: (_) {
-                                            return Container(
-                                              padding: const EdgeInsets.all(20),
-                                              color: Colors.red,
-                                              child: Row(
-                                                // mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  AppText.text(
-                                                      'Name is too short',
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.w600),
-                                                ],
-                                              ),
-                                            );
-                                          });
+                                          if (_textFieldController.text.length >
+                                              2) {
+                                            Navigator.pop(context,
+                                                _textFieldController.text);
+                                            _textFieldController.text = "";
+                                          } else {
+                                            var cancel =
+                                                BotToast.showCustomNotification(
+                                                    toastBuilder: (_) {
+                                              return Container(
+                                                padding:
+                                                    const EdgeInsets.all(20),
+                                                color: Colors.red,
+                                                child: Row(
+                                                  // mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    AppText.text(
+                                                        'Name is too short',
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w600),
+                                                  ],
+                                                ),
+                                              );
+                                            });
 
-                                          // cancel();
+                                            // cancel();
+                                          }
                                         }
                                       })),
                             ],
@@ -588,5 +612,92 @@ class _DeliveryReviewExpandedViewState
             ],
           );
         });
+  }
+
+  Widget phoneInput() {
+    const _initialCountryCode = 'GB';
+    var _country =
+        countries.firstWhere((element) => element.code == _initialCountryCode);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // AppText.text('Mobile Number', color: Colors.white),
+        // const SizedBox(height: 12),
+        IntlPhoneField(
+          style: const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+          dropdownTextStyle:
+              const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+          decoration: InputDecoration(
+            fillColor: AppColors.input,
+            filled: true,
+            labelStyle: const TextStyle(
+                fontFamily: 'OpenSans',
+                fontSize: 14.0,
+                fontWeight: FontWeight.w500,
+                color: AppColors.grey),
+            // hintText: '9020020222',
+            hintStyle: TextStyle(
+                color: const Color(0xFF050529).withOpacity(0.25),
+                fontFamily: 'OpenSans'),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(0)),
+              borderSide: BorderSide(width: 1, color: AppColors.primary),
+            ),
+            enabledBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(0)),
+              borderSide: BorderSide(color: Color(0xFF050529)),
+            ),
+          ),
+          initialCountryCode: _initialCountryCode,
+          // controller: phoneCo,
+          onCountryChanged: (country) {
+            print(country.name);
+            print('Phone Number: ${_phoneNumberController.text}');
+            _country = country;
+            if (_phoneNumberController.text.isNotEmpty) {
+              if (_phoneNumberController.text.length -
+                          country.dialCode.length -
+                          1 >=
+                      country.minLength &&
+                  _phoneNumberController.text.length -
+                          country.dialCode.length -
+                          1 <=
+                      country.maxLength) {
+                setState(() {
+                  isPhoneValid = true;
+                });
+
+                print('valid');
+              } else {
+                setState(() {
+                  isPhoneValid = false;
+                });
+                print('invalid');
+              }
+            }
+          },
+          onChanged: (val) {
+            // print('Changed');
+            if (val.number.length >= _country.minLength &&
+                val.number.length <= _country.maxLength) {
+              setState(() {
+                isPhoneValid = true;
+              });
+            } else {
+              setState(() {
+                isPhoneValid = false;
+              });
+            }
+
+            setState(() {
+              completeNumber = val.completeNumber;
+            });
+            // context
+            //     .read<AuthBloc>()
+            //     .add(PhoneNumberChanged(phoneNumber: val.completeNumber));
+          },
+        )
+      ],
+    );
   }
 }

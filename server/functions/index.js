@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
+const {getMessaging} = require("firebase-admin/messaging");
 const functions = require("firebase-functions");
 // const stripe = require("stripe")(functions.config().stripe.testkey);
 const stripe = require("stripe")(functions.config().stripe.livekey);
@@ -42,8 +43,10 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
     amount,
     currency,
     useStripeSdk,
+    pushToken,
     name,
-    phone,
+    // phone,
+    email,
     userId,
     saveCard,
   } = req.body;
@@ -74,6 +77,11 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
         },
         payment_method: paymentMethodId,
         use_stripe_sdk: useStripeSdk,
+        metadata: {
+          name: name,
+          email: email,
+          pushToken: pushToken,
+        },
       };
 
       // Set customerId if it exists
@@ -85,8 +93,9 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
       if (!customerId) {
         const customer = await stripe.customers.create({
           name: name,
-          phone: phone,
+          email: email,
         });
+        // phone: phone,
 
         customerId = customer.id;
 
@@ -157,6 +166,60 @@ exports.StripePayEndpointIntentId = functions.https.onRequest(async (req, res) =
     // Handle "hard declines" e.g. insufficient funds, expired card, etc
     // See https://stripe.com/docs/declines/codes for more.
     return res.send({error: e.message});
+  }
+});
+
+exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  // console.log(sig);
+
+  // const stripeTestSigningSecret = "whsec_ykXoJuSjCMiik7Omm3JVOCpkNMw12eij";
+  const stripeLiveSigningSecret = "whsec_n6InSrUIx4GbsJtdWL4758QOzGdEvpAM";
+  const event = stripe.webhooks.constructEvent(req.rawBody, sig, stripeLiveSigningSecret);
+
+  console.log("💰 Webhook working!");
+  console.log(`Event: ${event.type}`);
+
+  if (event.type === "charge.succeeded") {
+    console.log("💰 Payment completed!");
+    const sessionData = event.data.object;
+    const metadata = sessionData.metadata;
+
+    const messageObj = JSON.stringify({
+      // sessionData,
+      metadata,
+      success: true,
+    });
+
+
+    const message = {
+      apns: {
+        payload: {
+          aps: {
+            "content-available": 1,
+          },
+        },
+      },
+      data: {
+        "type": "payment",
+        "data": messageObj,
+      },
+      // notification: {
+      //   title: `${req.user.firstName}`,
+      //   body: text,
+      // },
+      token: metadata.pushToken,
+
+    };
+
+    getMessaging().send(message).then(
+        (response)=> {
+          console.log(`Successfully sent message: ${response}`);
+        },
+    ).catch((err)=>{
+      //   console.log(err)
+      // console.log('new error')
+    });
   }
 });
 

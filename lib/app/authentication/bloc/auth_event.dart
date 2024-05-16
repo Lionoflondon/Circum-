@@ -136,10 +136,29 @@ class UpdateLastName extends AuthEvent {
   const UpdateLastName({required this.value});
 }
 
+class UpdatePhoneNumber extends AuthEvent {
+  final String value;
+  const UpdatePhoneNumber({required this.value});
+}
+
 class UpdateUserProfilePhoto extends AuthEvent {
   final String imagePath;
   const UpdateUserProfilePhoto({required this.imagePath});
 }
+
+class SignInWithEmail extends AuthEvent {
+  final String email;
+  final String password;
+  const SignInWithEmail({required this.email, required this.password});
+}
+
+class SignUpWithEmail extends AuthEvent {
+  final String email;
+  final String password;
+  const SignUpWithEmail({required this.email, required this.password});
+}
+
+class ConfirmEmailVerification extends AuthEvent {}
 
 class SignInWithGoogle extends AuthEvent {}
 
@@ -147,6 +166,16 @@ class SignInWithAppleAuth extends AuthEvent {}
 
 class SignInWithGoogleAuth extends AuthEvent {}
 
+class SetErrorMessage extends AuthEvent {
+  final String errorMessage;
+  const SetErrorMessage({required this.errorMessage});
+}
+
 class SignOut extends AuthEvent {}
 
 class DeleteAccount extends AuthEvent {}
+
+class ResetPassword extends AuthEvent {
+  final String email;
+  const ResetPassword({required this.email});
+}

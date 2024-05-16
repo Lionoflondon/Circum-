@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+// import 'package:circum/app/authentication/view/add_details.dart';
 import 'package:circum/app/authentication/view/signup.dart';
 import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
+import '../../authentication/view/enable_location.dart';
 import 'onboarding_slider.dart';
 
 class OnboardingView extends StatelessWidget {
@@ -23,12 +25,22 @@ class OnboardingView extends StatelessWidget {
         backgroundColor: AppColors.secondary,
         body: BlocListener<AuthBloc, AuthState>(
             listener: (context, state) {
-              if (state.status == Status.signedInWithOAuth) {
-                context.read<AuthBloc>().add(ResetStatus());
-                // context.read<AuthBloc>().add(StartCountDown());
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const SignupView()));
-              }
+              // if (state.status == Status.signedInWithOAuth) {
+              //   context.read<AuthBloc>().add(ResetStatus());
+
+              //   Navigator.push(
+              //     context,
+              //     MaterialPageRoute(builder: (_) => const EnableLocation()),
+              //   );
+              // }
+
+              // if (state.authenticatedStatus ==
+              //     AuthenticatedStatus.incompleteData) {
+              //   context.read<AuthBloc>().add(ResetStatus());
+              //   // context.read<AuthBloc>().add(StartCountDown());
+              //   Navigator.push(context,
+              //       MaterialPageRoute(builder: (_) => const AddDetailsView()));
+              // }
             },
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -71,7 +83,7 @@ class OnboardingView extends StatelessWidget {
         },
         widget: Center(
             child: AppText.text(
-          'Get Started',
+          'Continue',
           fontSize: 16,
           fontWeight: FontWeight.w700,
         )),
@@ -86,7 +98,7 @@ class OnboardingView extends StatelessWidget {
       children: [
         const Expanded(child: Divider(color: Colors.grey)),
         const SizedBox(width: 10),
-        AppText.text('or sign up with', fontSize: 16),
+        AppText.text('or continue with', fontSize: 16),
         const SizedBox(width: 10),
         const Expanded(child: Divider(color: Colors.grey)),
       ],

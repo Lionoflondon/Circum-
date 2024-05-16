@@ -61,5 +61,3 @@ class SignupUser extends AuthEvent {}
 class CreateAPin extends AuthEvent {}
 
 class ForgotPassword extends AuthEvent {}
-
-class ResetPassword extends AuthEvent {}

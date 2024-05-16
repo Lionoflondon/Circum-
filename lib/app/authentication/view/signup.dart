@@ -1,3 +1,4 @@
+import 'package:circum/app/authentication/view/verify_email.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,8 +19,14 @@ class SignupView extends StatelessWidget {
               if (state.status == Status.success) {
                 context.read<AuthBloc>().add(ResetStatus());
                 // context.read<AuthBloc>().add(StartCountDown());
+                // Navigator.push(context,
+                //     MaterialPageRoute(builder: (_) => const EnterOTPView()));
+              }
+
+              if (state.status == Status.unverifiedEmail) {
+                context.read<AuthBloc>().add(ResetStatus());
                 Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const EnterOTPView()));
+                    MaterialPageRoute(builder: (_) => const VerifyEmailView()));
               }
             },
             child: Column(
@@ -33,11 +40,11 @@ class SignupView extends StatelessWidget {
                 Container(
                     width: MediaQuery.of(context).size.width,
                     margin: const EdgeInsets.only(left: 30, top: 40),
-                    child: AppText.text("Sign in",
+                    child: AppText.text("Create Account",
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 28)),
-                const Expanded(
+                Expanded(
                   child: SignupForm(),
                 ),
                 const SizedBox(height: 40),

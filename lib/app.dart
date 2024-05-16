@@ -27,14 +27,14 @@ class App extends StatelessWidget {
               child: OnboardingView(),
             ),
 
+          if (state.currentState == AppState.authenticated &&
+              state.authenticatedStatus == AuthenticatedStatus.incompleteData)
+            const MaterialPage(child: AddDetailsView()),
+
           // Authenticated app state
           if (state.currentState == AppState.authenticated &&
-              state.status != Status.incompleteData)
+              state.authenticatedStatus == AuthenticatedStatus.authenticated)
             MaterialPage(child: AppNavView()),
-
-          if (state.currentState == AppState.authenticated &&
-              state.status == Status.incompleteData)
-            const MaterialPage(child: AddDetailsView()),
         ],
         onPopPage: (route, result) {
           // route.didPop(result);

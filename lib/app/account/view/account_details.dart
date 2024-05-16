@@ -70,6 +70,10 @@ class _AccountDetailsState extends State<AccountDetails> {
                           thickness: 1,
                           color: Colors.white.withOpacity(0.15)),
                       email(),
+                      Divider(
+                          height: 10,
+                          thickness: 1,
+                          color: Colors.white.withOpacity(0.15)),
                       phone(),
                       const Spacer(),
                       logout(),
@@ -317,34 +321,39 @@ class _AccountDetailsState extends State<AccountDetails> {
 
   Widget phone() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return state.phoneNumber != null
-          ? TextButton(
-              // borderSide: BorderSide.none,
-              // backgroundColor: AppColors.secondary,
-              style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      return TextButton(
+          // borderSide: BorderSide.none,
+          // backgroundColor: AppColors.secondary,
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppText.text('Phone number',
-                          color: AppColors.textGrey, fontSize: 12),
-                      AppText.text('${state.phoneNumber}',
-                          fontSize: 16, color: AppColors.textGrey)
-                    ],
-                  ),
-                  Icon(
-                    Icons.keyboard_arrow_right_rounded,
-                    color: Colors.white.withOpacity(0.15),
-                  )
+                  AppText.text('Phone number',
+                      color: AppColors.textGrey, fontSize: 12),
+                  AppText.text(state.phoneNumber ?? '+ Add a phone number',
+                      fontSize: 16, color: AppColors.textGrey)
                 ],
               ),
-              onPressed: () {})
-          : Container();
+              Icon(
+                Icons.keyboard_arrow_right_rounded,
+                color: Colors.white.withOpacity(0.15),
+              )
+            ],
+          ),
+          onPressed: () async {
+            String? newPhone = await showEditBottomSheet(context,
+                title: 'Phone number', val: state.phoneNumber ?? '');
+
+            if (newPhone != null) {
+              // ignore: use_build_context_synchronously
+              context.read<AuthBloc>().add(UpdatePhoneNumber(value: newPhone));
+            }
+          });
     });
   }
 
@@ -369,17 +378,17 @@ class _AccountDetailsState extends State<AccountDetails> {
 
   Widget deleteAccount() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      if (state.status == Status.success) {
-        context.read<AuthBloc>().add(ResetStatus());
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => EnterOTPView(
-                        deleteAccount: true,
-                      )));
-        });
-      }
+      // if (state.status == Status.success) {
+      //   context.read<AuthBloc>().add(ResetStatus());
+      //   SchedulerBinding.instance.addPostFrameCallback((_) {
+      //     Navigator.push(
+      //         context,
+      //         MaterialPageRoute(
+      //             builder: (_) => EnterOTPView(
+      //                   deleteAccount: true,
+      //                 )));
+      //   });
+      // }
       return Padding(
           padding: const EdgeInsets.only(bottom: 0),
           child: TextButton(
@@ -390,7 +399,7 @@ class _AccountDetailsState extends State<AccountDetails> {
 
               if (deleteAccount == true) {
                 // ignore: use_build_context_synchronously
-                context.read<AuthBloc>().add(RequestForOTP());
+                context.read<AuthBloc>().add(DeleteAccount());
               }
             },
             child: Center(

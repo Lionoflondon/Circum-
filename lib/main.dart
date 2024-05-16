@@ -3,7 +3,7 @@ import 'package:circum/app/account/bloc/account_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/helper/chats_help.dart';
 import 'package:circum/utils/theme/theme.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
+// import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +22,8 @@ import 'package:bot_toast/bot_toast.dart';
 import 'env/env.dart';
 
 final sendPackageBloc = SendPackageBloc();
+
+final accountBloc = AccountBloc();
 
 foregoundMessage() {
   // chatBloc.add(event);
@@ -66,6 +68,12 @@ foregoundMessage() {
       } catch (e) {
         print(e);
       }
+    }
+
+    if (message.data['type'] == 'payment') {
+      // print(message.data['data']);
+      Map<String, dynamic> data = jsonDecode(message.data['data']);
+      accountBloc.add(UpdatePaymentStatus(data: data));
     }
 
     if (message.data['type'] == 'message') {
@@ -139,12 +147,18 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await ChatsHelper().storeChat(msg);
   }
 
-  if (message.data['type'] == 'message') {
-    final msg = jsonDecode(message.data['data']);
-    sendPackageBloc.add(IncomingMessage(data: msg));
-
-    await ChatsHelper().storeChat(msg);
+  if (message.data['type'] == 'payment') {
+    // print(message.data['data']);
+    Map<String, dynamic> data = jsonDecode(message.data['data']);
+    accountBloc.add(UpdatePaymentStatus(data: data));
   }
+
+  // if (message.data['type'] == 'message') {
+  //   final msg = jsonDecode(message.data['data']);
+  //   sendPackageBloc.add(IncomingMessage(data: msg));
+
+  //   await ChatsHelper().storeChat(msg);
+  // }
 
   if (message.data['type'] == 'delivery-completed') {
     print('Delivery completed');
@@ -175,17 +189,18 @@ void main() async {
   // Stripe.merchantIdentifier = 'merchant.flutter.stripe.test';
   // Stripe.urlScheme = 'flutterstripe';
   await Stripe.instance.applySettings();
+
   await Firebase.initializeApp();
 
-  await FirebaseAppCheck.instance.activate(
-      // Default provider for Android is the Play Integrity provider. You can use the "AndroidProvider" enum to choose
-      // your preferred provider. Choose from:
-      // 1. debug provider
-      // 2. safety net provider
-      // 3. play integrity provider
-      // webRecaptchaSiteKey: 'recaptcha-v3-site-key',
-      androidProvider: AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.appAttest);
+  // await FirebaseAppCheck.instance.activate(
+  //     // Default provider for Android is the Play Integrity provider. You can use the "AndroidProvider" enum to choose
+  //     // your preferred provider. Choose from:
+  //     // 1. debug provider
+  //     // 2. safety net provider
+  //     // 3. play integrity provider
+  //     // webRecaptchaSiteKey: 'recaptcha-v3-site-key',
+  //     androidProvider: AndroidProvider.playIntegrity,
+  //     appleProvider: AppleProvider.appAttest);
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true, // Required to display a heads up notification
@@ -265,7 +280,7 @@ class Circum extends StatelessWidget {
                     create: (BuildContext context) => SupportBloc(),
                   ),
                   BlocProvider<AccountBloc>(
-                    create: (BuildContext context) => AccountBloc(),
+                    create: (BuildContext context) => accountBloc,
                   ),
                 ], child: const App()),
               ));

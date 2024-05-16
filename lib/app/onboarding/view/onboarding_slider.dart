@@ -22,7 +22,7 @@ class OnboardingSliderState extends State<OnboardingSlider>
   int currentTabIndex = 0;
   // double
 
-  late Timer timer;
+  // Timer? timer;
 
   @override
   initState() {
@@ -37,7 +37,7 @@ class OnboardingSliderState extends State<OnboardingSlider>
 
   @override
   void dispose() {
-    timer.cancel();
+    // timer?.cancel();
     onBoardingTab.dispose();
     super.dispose();
   }

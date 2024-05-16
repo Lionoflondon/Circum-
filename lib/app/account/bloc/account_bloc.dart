@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
 
@@ -15,6 +16,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     on<PaymentStart>(_onPaymentStart);
     on<PaymentCreateIntent>(_onPaymentCreateIntent);
     on<PaymentConfirmIntent>(_onPaymentConfirmIntent);
+    on<UpdatePaymentStatus>(_updatePaymentStatus);
     on<SaveCard>(_onSaveCard);
   }
 
@@ -38,6 +40,9 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   ) async {
     emit(state.copyWith(status: PaymentStatus.loading));
 
+    final storage = FlutterSecureStorage();
+    final pushToken = (await storage.readAll())["pushToken"];
+
     User? user = auth.currentUser;
 
     try {
@@ -56,6 +61,8 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           amount: event.amount,
           userId: user!.uid,
           name: user.displayName,
+          email: event.email,
+          pushToken: pushToken!,
           phone: user.phoneNumber,
           saveCard: event.saveCard);
 
@@ -70,7 +77,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       if (paymentIntentResult['clientSecret'] != null &&
           paymentIntentResult['requiresAction'] == null) {
         // The payment succedeed / went through.
-        emit(state.copyWith(status: PaymentStatus.success));
+        // emit(state.copyWith(status: PaymentStatus.success));
       }
 
       if (paymentIntentResult['clientSecret'] != null &&
@@ -99,10 +106,12 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
         Map<String, dynamic> results =
             await _callPayEndpointIntentId(paymentIntentId: paymentIntent.id);
 
+        print(results);
+
         if (results['error'] != null) {
           emit(state.copyWith(status: PaymentStatus.failure));
         } else {
-          emit(state.copyWith(status: PaymentStatus.success));
+          // emit(state.copyWith(status: PaymentStatus.success));
         }
       }
     } catch (err) {
@@ -111,14 +120,24 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     }
   }
 
+  void _updatePaymentStatus(
+      UpdatePaymentStatus event, Emitter<AccountState> emit) {
+    print(event.data);
+    if (event.data['success'] == true) {
+      emit(state.copyWith(status: PaymentStatus.success));
+    }
+  }
+
   Future<Map<String, dynamic>> _callPayEndpointMethodId({
     required bool useStripeSdk,
     required String paymentMethodId,
     required String currency,
     required bool saveCard,
+    required String pushToken,
+    required String userId,
     String? name,
     String? phone,
-    String? userId,
+    String? email,
     int? amount,
   }) async {
     final url = Uri.parse(
@@ -129,13 +148,15 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       'useStripeSdk': useStripeSdk,
       'paymentMethodId': paymentMethodId,
       'currency': currency,
-      'amount': amount
+      'amount': amount,
+      'pushToken': pushToken,
+      'email': email,
+      'name': name,
+      'phone': phone,
+      'userId': userId
     };
 
     if (saveCard == true) {
-      data['name'] = name;
-      data['phone'] = phone;
-      data['userId'] = userId;
       data['saveCard'] = saveCard;
     }
 

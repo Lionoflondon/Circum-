@@ -10,6 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -42,9 +43,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
     on<CheckForPushToken>(
       (event, emit) async {
+        final storage = FlutterSecureStorage();
         final fcmToken = await firebaseMessaging.getToken();
         if (fcmToken != null) {
           try {
+            print('saved token');
+            await storage.write(key: "pushToken", value: fcmToken);
             final User? user = auth.currentUser;
 
             final documentReference = db.collection('users').doc(user?.uid);
@@ -123,8 +127,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           destinationLocation: event.val,
           destinationLocationSubAddress: event.destinationLocationSubAddress));
 
-      add(SetDrawerHeight(
-          minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.55.sh));
+      if (state.pickupLocationSubAddress?.split(',').last ==
+          event.destinationLocationSubAddress.split(',').last) {
+        add(SetDrawerHeight(
+            minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.55.sh));
+      }
       try {
         PlaceCoordinate coordinate = await PlaceApiProvider(uuid)
             .fetchPlaceDetails(event.placeId, event.lang);
@@ -139,7 +146,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             desinationCoordinate: coordinate,
             destinationLocality: address[0].locality));
 
-        if (state.pickupCoordinate != null) {
+        if (state.pickupCoordinate != null &&
+            state.pickupLocationSubAddress?.split(',').last ==
+                event.destinationLocationSubAddress.split(',').last) {
           List<LatLng> latLngList = [];
 
           PolylinePoints points = PolylinePoints();
@@ -648,6 +657,20 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (data?['status'] == 'requested') {
           await collection.delete();
         }
+        add(SetDrawerHeight(
+            minDrawerHeight: state.minDrawerHeight,
+            maxDrawerHeight: state.minDrawerHeight));
+        emit(state.copyWith(
+          polylines: [],
+          polylineCoordinates: [],
+          markers: {},
+          deliveryStatus: DeliveryStatus.inital,
+        ));
+      },
+    );
+
+    on<BackButtonPressed>(
+      (event, emit) {
         add(SetDrawerHeight(
             minDrawerHeight: state.minDrawerHeight,
             maxDrawerHeight: state.minDrawerHeight));

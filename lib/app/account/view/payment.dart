@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import '../../authentication/bloc/auth_bloc.dart';
 import '../bloc/account_bloc.dart';
 
 showPaymentBottomSheet(context, {required double amount, String? phone}) {
@@ -27,19 +28,32 @@ showPaymentBottomSheet(context, {required double amount, String? phone}) {
       });
 }
 
-class PaymentScreen extends StatelessWidget {
+class PaymentScreen extends StatefulWidget {
   final double amount;
   final String? phone;
   const PaymentScreen({Key? key, required this.amount, this.phone})
       : super(key: key);
 
   @override
+  PaymentScreenState createState() => PaymentScreenState();
+}
+
+class PaymentScreenState extends State<PaymentScreen> {
+  String? email;
+  @override
+  void initState() {
+    final AuthBloc authBloc = context.read<AuthBloc>();
+    email = authBloc.state.email;
+    super.initState();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: Platform.isIOS &&
-                MediaQuery.of(context).platformBrightness == Brightness.light
-            ? Color.fromARGB(255, 237, 239, 243)
-            : AppColors.secondary,
+        backgroundColor:
+            MediaQuery.of(context).platformBrightness == Brightness.light
+                ? Color.fromARGB(255, 237, 239, 243)
+                : AppColors.secondary,
         body: BlocListener<AccountBloc, AccountState>(
           listener: ((context, state) async {
             if (state.status == PaymentStatus.loading) {
@@ -78,10 +92,9 @@ class PaymentScreen extends StatelessWidget {
           }),
           child: BlocBuilder<AccountBloc, AccountState>(
             builder: (context, state) {
-              CardFormEditController controller = CardFormEditController(
+              CardEditController controller = CardEditController(
                 initialDetails: state.cardFieldInputDetails,
               );
-
               if (state.status == PaymentStatus.initial) {
                 return SingleChildScrollView(
                   padding: const EdgeInsets.all(20).copyWith(top: 16),
@@ -92,35 +105,49 @@ class PaymentScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          AppText.text('Pay £$amount',
+                          AppText.text('Pay £${widget.amount}',
                               fontWeight: FontWeight.w600,
                               fontSize: 20,
-                              color: Platform.isIOS &&
-                                      MediaQuery.of(context)
-                                              .platformBrightness ==
+                              color:
+                                  MediaQuery.of(context).platformBrightness ==
                                           Brightness.light
-                                  ? Colors.black
-                                  : Colors.white),
+                                      ? Colors.black
+                                      : Colors.white),
                           IconButton(
                               onPressed: () {
                                 Navigator.pop(context);
                               },
-                              icon: Icon(
+                              icon: const Icon(
                                 Icons.close,
                                 color: AppColors.primary,
                               ))
                         ],
                       ),
                       const SizedBox(height: 20),
-                      CardFormField(
-                          controller: controller,
-                          autofocus: true,
-                          style: CardFormStyle(
-                            cursorColor: AppColors.primary,
-                            // backgroundColor: AppColors.secondary,
-                            textColor: Colors.white,
-                            placeholderColor: Colors.white,
-                          )),
+                      CardField(
+                        cursorColor: Colors.white,
+                        onCardChanged: (details) {
+                          // context
+                          // .read<AddPaymentMethodCubit>()
+                          // .onDetailsChanged(details),
+                          // print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+                          // print(details);
+                        },
+                        decoration: const InputDecoration(
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide:
+                                BorderSide(color: AppColors.primary, width: 2),
+                          ),
+                        ),
+                        controller: controller,
+                        autofocus: true,
+                        // style: CardFormStyle(
+                        //   cursorColor: AppColors.primary,
+                        //   // backgroundColor: AppColors.secondary,
+                        //   textColor: Colors.white,
+                        //   placeholderColor: Colors.white,
+                        // )
+                      ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -140,20 +167,28 @@ class PaymentScreen extends StatelessWidget {
                                         .add(SaveCard(val: !state.saveCard));
                                   },
                                   child: AppText.text(
-                                      'Save this card for later use.')))
+                                      'Save this card for later use.',
+                                      color: MediaQuery.of(context)
+                                                  .platformBrightness ==
+                                              Brightness.light
+                                          ? Colors.black
+                                          : Colors.white)))
                         ],
                       ),
                       const SizedBox(height: 10),
                       AppButton.button(
                           onPressed: () {
+                            print(controller.details.complete);
                             (controller.details.complete)
                                 ? context.read<AccountBloc>().add(
                                       PaymentCreateIntent(
-                                          billingDetails: BillingDetails(
-                                            phone: phone,
-                                          ),
-                                          amount: (amount * 100).round(),
-                                          saveCard: state.saveCard),
+                                        billingDetails: BillingDetails(
+                                          phone: widget.phone,
+                                        ),
+                                        amount: (widget.amount * 100).round(),
+                                        email: email!,
+                                        saveCard: state.saveCard,
+                                      ),
                                     )
                                 : ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -175,9 +210,8 @@ class PaymentScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         AppText.text('The payment is successful.',
-                            color: Platform.isIOS &&
-                                    MediaQuery.of(context).platformBrightness ==
-                                        Brightness.light
+                            color: MediaQuery.of(context).platformBrightness ==
+                                    Brightness.light
                                 ? Colors.black
                                 : Colors.white,
                             fontWeight: FontWeight.w600),
@@ -199,9 +233,8 @@ class PaymentScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     AppText.text('The payment failed.',
-                        color: Platform.isIOS &&
-                                MediaQuery.of(context).platformBrightness ==
-                                    Brightness.light
+                        color: MediaQuery.of(context).platformBrightness ==
+                                Brightness.light
                             ? Colors.black
                             : Colors.white,
                         fontWeight: FontWeight.w600),
@@ -226,9 +259,8 @@ class PaymentScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     AppText.text('Procressing payment',
-                        color: Platform.isIOS &&
-                                MediaQuery.of(context).platformBrightness ==
-                                    Brightness.light
+                        color: MediaQuery.of(context).platformBrightness ==
+                                Brightness.light
                             ? Colors.black
                             : Colors.white,
                         fontWeight: FontWeight.w600),

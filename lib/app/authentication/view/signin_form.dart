@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
@@ -6,12 +7,21 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
+import 'forgot_password.dart';
 import 'signup.dart';
 
-class SigninForm extends StatelessWidget {
-  static final _formKey = GlobalKey<FormState>();
-
+class SigninForm extends StatefulWidget {
   const SigninForm({Key? key}) : super(key: key);
+
+  @override
+  SigninFormState createState() => SigninFormState();
+}
+
+class SigninFormState extends State<SigninForm> {
+  static final _formKey = GlobalKey<FormState>();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
   @override
   Widget build(BuildContext context) {
     return _signupForm();
@@ -31,7 +41,8 @@ class SigninForm extends StatelessWidget {
                     child: Column(
                       children: [
                         const SizedBox(height: 30),
-                        phoneInput(),
+                        // phoneInput(),
+                        _emailField(),
                         const SizedBox(height: 20),
                         _passwordField(),
                       ],
@@ -39,7 +50,7 @@ class SigninForm extends StatelessWidget {
             Column(
               children: [
                 _errorMessage(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
                 _signinButton(),
                 const SizedBox(height: 20),
                 _dontHaveAnAccount()
@@ -100,13 +111,29 @@ class SigninForm extends StatelessWidget {
   Widget _emailField() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        AppText.text('Email', color: Colors.white, fontWeight: FontWeight.bold),
-        const SizedBox(height: 4),
+        AppText.text('Email', color: Colors.white),
+        const SizedBox(height: 12),
         AppTextInput.input(
-            hintText: 'eg. example@gmail.com',
-            initialValue: state.email,
+            hintText: '',
+            // initialValue: state.email,
+            controller: emailController,
             onChanged: (value) =>
-                context.read<AuthBloc>().add(SignupEmailChanged(email: value))
+                context.read<AuthBloc>().add(SignupEmailChanged(email: value)),
+            surfix: Container(
+                padding: const EdgeInsets.only(right: 10),
+                width: 60,
+                child: Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: () => context
+                          .read<AuthBloc>()
+                          .add(SetShowPassword(val: !state.showPassword)),
+                      child: state.isEmailValid == true
+                          ? const Icon(CupertinoIcons.check_mark_circled,
+                              color: AppColors.primary)
+                          : const Icon(CupertinoIcons.check_mark_circled,
+                              color: Colors.transparent),
+                    )))
             //  context.read<AuthBloc>().add(
             //       SignupEmailChanged(email: value),
             //     ),
@@ -120,22 +147,19 @@ class SigninForm extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppText.text('Password',
-              color: Colors.white, fontWeight: FontWeight.bold),
-          const SizedBox(
-            height: 4,
-          ),
-          const SizedBox(height: 10),
+          AppText.text('Password', color: Colors.white),
+          const SizedBox(height: 12),
           AppTextInput.input(
               obscureText: !state.showPassword,
-              hintText: '(8+ characters)',
+              hintText: '',
               maxLines: 1,
               minLines: 1,
+              controller: passwordController,
               onChanged: (value) => context
                   .read<AuthBloc>()
                   .add(SignupPasswordChanged(password: value)),
               surfix: Container(
-                  padding: EdgeInsets.only(right: 10),
+                  padding: const EdgeInsets.only(right: 10),
                   width: 80,
                   child: Align(
                       alignment: Alignment.centerRight,
@@ -143,11 +167,28 @@ class SigninForm extends StatelessWidget {
                         onTap: () => context
                             .read<AuthBloc>()
                             .add(SetShowPassword(val: !state.showPassword)),
-                        child: AppText.text(
-                            state.showPassword == true ? 'Hide' : 'Show',
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold),
-                      ))))
+                        child: state.showPassword == true
+                            ? const Icon(CupertinoIcons.eye,
+                                color: AppColors.primary)
+                            : const Icon(CupertinoIcons.eye_slash,
+                                color: Color(0xFF415058)),
+                      )))),
+          const SizedBox(height: 20),
+          GestureDetector(
+              onTap: () {
+                emailController.text = '';
+                passwordController.text = '';
+                context.read<AuthBloc>().add(SignupEmailChanged(email: ''));
+                context
+                    .read<AuthBloc>()
+                    .add(SignupPasswordChanged(password: ''));
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => ForgotPasswordView()));
+              },
+              child: AppText.text('Forgot password?',
+                  color: AppColors.primary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold))
         ],
       );
     });
@@ -197,6 +238,11 @@ class SigninForm extends StatelessWidget {
           height: 50,
           width: MediaQuery.of(context).size.width,
           child: AppButton.button(
+              backgroundColor: state.isEmailValid == true &&
+                      state.password != null &&
+                      state.password!.length >= 8
+                  ? null
+                  : Colors.white.withOpacity(0.3),
               onPressed: () async {
                 // Navigator.push(
                 //     context,
@@ -204,7 +250,18 @@ class SigninForm extends StatelessWidget {
                 //         builder: (_) =>
                 //             EnterOTPView(authBlocContext: authBlocContext)));
                 // context.read<AuthBloc>().add(RequestForOTP());
-                context.read<AuthBloc>().add(RequestForOTP());
+                // context.read<AuthBloc>().add(RequestForOTP());
+                if (state.isEmailValid == false) {
+                  print('Email error');
+                  // print(state.isEmailValid);
+                  context.read<AuthBloc>().add(const SetErrorMessage(
+                      errorMessage: 'Invalid email address'));
+                  return;
+                }
+                if (state.password != null && state.password!.length >= 8) {
+                  context.read<AuthBloc>().add(SignInWithEmail(
+                      email: state.email!, password: state.password!));
+                }
               },
               widget: AppText.text('Sign In',
                   fontWeight: FontWeight.w700, color: Colors.white),
@@ -216,6 +273,10 @@ class SigninForm extends StatelessWidget {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return GestureDetector(
           onTap: () {
+            emailController.text = '';
+            passwordController.text = '';
+            context.read<AuthBloc>().add(SignupEmailChanged(email: ''));
+            context.read<AuthBloc>().add(SignupPasswordChanged(password: ''));
             Navigator.pop(context);
           },
           child: SizedBox(

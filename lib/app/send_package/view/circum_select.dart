@@ -61,7 +61,7 @@ class CirccumSelectViewState extends State<CirccumSelectView> {
       children: [
         SvgPicture.asset('assets/svg/global_plane.svg'),
         const SizedBox(height: 10),
-        AppText.text('Comming soon', fontSize: 20),
+        AppText.text('Coming soon', fontSize: 20),
         const SizedBox(height: 6),
         Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
