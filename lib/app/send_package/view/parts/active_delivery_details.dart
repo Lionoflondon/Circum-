@@ -4,6 +4,7 @@ import 'package:circum/app/send_package/view/ride_chats.dart';
 import 'package:currency_symbols/currency_symbols.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -82,7 +83,31 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
                       children: [
                         AppText.text(state.deliveryData!.courierName,
                             fontWeight: FontWeight.w600),
-                        AppText.text('Rating', color: AppColors.textGrey)
+                        AppText.text('Rating', color: AppColors.textGrey),
+                        if (state.deliveryData?.rating != null)
+                          RatingBar(
+                            initialRating:
+                                double.parse(state.deliveryData!.rating),
+                            itemSize: 16,
+                            direction: Axis.horizontal,
+                            allowHalfRating: true,
+                            ignoreGestures: true,
+                            itemCount: 5,
+                            ratingWidget: RatingWidget(
+                              full:
+                                  SvgPicture.asset('assets/svg/star_full.svg'),
+                              half:
+                                  SvgPicture.asset('assets/svg/star_half.svg'),
+                              empty:
+                                  SvgPicture.asset('assets/svg/star_empty.svg'),
+                            ),
+                            itemPadding:
+                                const EdgeInsets.symmetric(horizontal: 4.0),
+                            onRatingUpdate: (rating) {
+                              // Navigator.pop(context);
+                              // print(rating);
+                            },
+                          ),
                       ],
                     ),
                     const Spacer(),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/utils/theme/colors.dart';
@@ -20,6 +21,7 @@ import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
+import '../../../helper/calculate_bearing.dart';
 import '../../../helper/chats_help.dart';
 import '../../../helper/messaging_server.dart';
 import '../models/contact_info.dart';
@@ -262,11 +264,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
       // Set the base price and additional charge per mile
       double basePrice = 6.0;
-      double additionalChargePerMile = 3.0;
+      double additionalChargePerMile = 1;
 
       // Calculate the total price
       double totalPrice =
-          basePrice + (distanceKmToMiles - 1) * additionalChargePerMile;
+          basePrice + (max(0, distanceKmToMiles - 1) * additionalChargePerMile);
+      // basePrice + (distanceKmToMiles - 1) * additionalChargePerMile;
 
       // Make sure the additional charge only applies for distances greater than 1 mile
       if (distanceKmToMiles < 1.6) {
@@ -421,15 +424,20 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
         final icon =
             await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-                "assets/svg/motorcycle.svg");
+                "assets/svg/bike_top.svg");
         final Marker riderLocationMarker = Marker(
-            markerId: MarkerId('rider_location_marker'),
+            markerId: const MarkerId('rider_location_marker'),
             position: LatLng(lat, lng), // Destination address location
+            rotation: state.riderLocation == null
+                ? 0.0
+                : calculateBearing(
+                    LatLng(state.riderLocation!.lat, state.riderLocation!.lng),
+                    LatLng(riderLocation.lat, riderLocation.lng)),
             icon: icon);
 
         Map<MarkerId, Marker> markers = {};
 
-        markers[MarkerId('rider_location_marker')] = riderLocationMarker;
+        markers[const MarkerId('rider_location_marker')] = riderLocationMarker;
 
         emit(state.copyWith(
             riderLocation: riderLocation, markers: markers, polylines: []));

@@ -44,7 +44,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {
-        FirebaseAuth auth = FirebaseAuth.instance;
+        // FirebaseAuth auth = FirebaseAuth.instance;
         final storage = FlutterSecureStorage();
 
         User? user = auth.currentUser;
@@ -150,8 +150,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         add(SubmitOTP());
       }
       if (event is SignInWithAppleAuth) {
-        final rawNonce = generateNonce();
-        final nonce = sha256ofString(rawNonce);
         try {
           final appleCredential = await SignInWithApple.getAppleIDCredential(
             scopes: [
@@ -765,7 +763,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             print('Email is invalid');
             emit(state.copyWith(errorMessage: 'Email is invalid'));
           }
-          if (e.code == 'email-already-in-user') {
+          if (e.code == 'email-already-in-use') {
             print('User already exists');
             emit(state.copyWith(errorMessage: 'User already exists'));
           }
@@ -860,8 +858,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<SignOut>(
       (event, emit) async {
-        await auth.signOut();
         FlutterSecureStorage storage = const FlutterSecureStorage();
+        await auth.signOut();
         emit(const AuthState());
         emit(state.copyWith(currentState: AppState.unauthenticated));
         await storage.deleteAll();
@@ -933,21 +931,4 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
     });
   }
-}
-
-/// Generates a cryptographically secure random nonce, to be included in a
-/// credential request.
-String generateNonce([int length = 32]) {
-  final charset =
-      '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
-  final random = Random.secure();
-  return List.generate(length, (_) => charset[random.nextInt(charset.length)])
-      .join();
-}
-
-/// Returns the sha256 hash of [input] in hex notation.
-String sha256ofString(String input) {
-  final bytes = utf8.encode(input);
-  final digest = sha256.convert(bytes);
-  return digest.toString();
 }

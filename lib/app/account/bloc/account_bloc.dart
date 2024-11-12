@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -46,17 +47,17 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     User? user = auth.currentUser;
 
     try {
-      final paymentMethod = await Stripe.instance.createPaymentMethod(
-        params: PaymentMethodParams.card(
-          paymentMethodData: PaymentMethodData(
-            billingDetails: event.billingDetails,
-          ),
-        ),
-      );
+      // final paymentMethod = await Stripe.instance.createPaymentMethod(
+      //   params: PaymentMethodParams.card(
+      //     paymentMethodData: PaymentMethodData(
+      //       billingDetails: event.billingDetails,
+      //     ),
+      //   ),
+      // );
 
       final paymentIntentResult = await _callPayEndpointMethodId(
-          useStripeSdk: true,
-          paymentMethodId: paymentMethod.id,
+          // useStripeSdk: true,
+          // paymentMethodId: paymentMethod.id,
           currency: 'gbp',
           amount: event.amount,
           userId: user!.uid,
@@ -74,6 +75,16 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
         emit(state.copyWith(status: PaymentStatus.failure));
       }
 
+      if (paymentIntentResult['clientSecret'] != null) {
+        await processPayment(
+            clientIntentSecret: paymentIntentResult['clientSecret'],
+            ephemeralKeySecret: paymentIntentResult['ephemeralKey'],
+            customerId: paymentIntentResult['customerId'],
+            saveCard: event.saveCard);
+
+        emit(state.copyWith(status: PaymentStatus.success));
+      }
+
       if (paymentIntentResult['clientSecret'] != null &&
           paymentIntentResult['requiresAction'] == null) {
         // The payment succedeed / went through.
@@ -82,8 +93,8 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
       if (paymentIntentResult['clientSecret'] != null &&
           paymentIntentResult['requiresAction'] == true) {
-        final String clientSecret = paymentIntentResult['clientSecret'];
-        add(PaymentConfirmIntent(clientSecret: clientSecret));
+        // final String clientSecret = paymentIntentResult['clientSecret'];
+        // add(PaymentConfirmIntent(clientSecret: clientSecret));
       } else {}
     } catch (e) {
       print('_onPaymentCreateIntent');
@@ -122,6 +133,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
   void _updatePaymentStatus(
       UpdatePaymentStatus event, Emitter<AccountState> emit) {
+    print('Confirmation from backend');
     print(event.data);
     if (event.data['success'] == true) {
       emit(state.copyWith(status: PaymentStatus.success));
@@ -129,8 +141,8 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   }
 
   Future<Map<String, dynamic>> _callPayEndpointMethodId({
-    required bool useStripeSdk,
-    required String paymentMethodId,
+    // required bool useStripeSdk,
+    // required String paymentMethodId,
     required String currency,
     required bool saveCard,
     required String pushToken,
@@ -145,8 +157,8 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     );
 
     final data = {
-      'useStripeSdk': useStripeSdk,
-      'paymentMethodId': paymentMethodId,
+      // 'useStripeSdk': useStripeSdk,
+      // 'paymentMethodId': paymentMethodId,
       'currency': currency,
       'amount': amount,
       'pushToken': pushToken,
@@ -182,5 +194,33 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       }),
     );
     return json.decode(response.body);
+  }
+
+  static Future<void> processPayment({
+    required String clientIntentSecret,
+    required String customerId,
+    required String ephemeralKeySecret,
+    required bool saveCard,
+  }) async {
+    try {
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: clientIntentSecret,
+          customerId: customerId,
+          customerEphemeralKeySecret: ephemeralKeySecret,
+          style: ThemeMode.dark,
+          merchantDisplayName: 'Circum',
+
+          // savePaymentMethodOptions: PaymentSheetSavePaymentMethodOptions(
+          //   backgroundColor: Colors.grey[800],
+          //   textColor: Colors.white,
+          // ),
+        ),
+      );
+
+      await Stripe.instance.presentPaymentSheet();
+    } catch (e) {
+      throw Exception(e.toString());
+    }
   }
 }

@@ -10,12 +10,12 @@ abstract class AccountEvent extends Equatable {
 class PaymentStart extends AccountEvent {}
 
 class PaymentCreateIntent extends AccountEvent {
-  final BillingDetails billingDetails;
+  final BillingDetails? billingDetails;
   final int amount;
   final bool saveCard;
   final String email;
   const PaymentCreateIntent(
-      {required this.billingDetails,
+      {this.billingDetails,
       required this.amount,
       required this.email,
       this.saveCard = false});

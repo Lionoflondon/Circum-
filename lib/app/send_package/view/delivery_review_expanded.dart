@@ -2,6 +2,7 @@ import 'package:bot_toast/bot_toast.dart';
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/contact_info.dart';
+import 'package:circum/helper/toast_helper.dart';
 import 'package:circum/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +13,7 @@ import 'package:intl_phone_field/countries.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/text_field.dart';
+import '../../account/bloc/account_bloc.dart';
 import '../../account/view/payment.dart';
 
 class DeliveryReviewExpandedView extends StatefulWidget {
@@ -38,11 +40,15 @@ class _DeliveryReviewExpandedViewState
   String? dropoffContactName;
   String? dropoffContactPhoneNumber;
   String? dropoffAdditionalInformation;
+
+  String? email;
+
   @override
   void initState() {
     final AuthBloc authBloc = context.read<AuthBloc>();
     username = authBloc.state.username;
     phoneNumber = authBloc.state.phoneNumber;
+    email = authBloc.state.email;
     print('phoneNumber is ${authBloc.state.phoneNumber}');
     super.initState();
   }
@@ -181,6 +187,10 @@ class _DeliveryReviewExpandedViewState
                   setState(() {
                     phoneNumber = newPhone;
                   });
+                  // ignore: use_build_context_synchronously
+                  context
+                      .read<AuthBloc>()
+                      .add(UpdatePhoneNumber(value: newPhone));
                 }
               },
               dense: true,
@@ -203,7 +213,8 @@ class _DeliveryReviewExpandedViewState
                         children: [
                           AppText.text('Phone number',
                               color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(phoneNumber ?? '', fontSize: 16)
+                          AppText.text(phoneNumber ?? 'Phone number',
+                              fontSize: 16)
                         ],
                       ))
                     ],
@@ -476,6 +487,17 @@ class _DeliveryReviewExpandedViewState
                 child: AppText.text('Confirm delivery',
                     fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () async {
+              if (phoneNumber == null) {
+                return ShowToast()
+                    .errorToast(title: 'Please add a pick up phone number');
+              }
+              context.read<AccountBloc>().add(
+                    PaymentCreateIntent(
+                      amount: (state.price! * 100).round(),
+                      email: email!,
+                    ),
+                  );
+
               final payForDelivery = await showPaymentBottomSheet(context,
                   amount: state.price!, phone: phoneNumber);
 
@@ -578,25 +600,8 @@ class _DeliveryReviewExpandedViewState
                                                 _textFieldController.text);
                                             _textFieldController.text = "";
                                           } else {
-                                            var cancel =
-                                                BotToast.showCustomNotification(
-                                                    toastBuilder: (_) {
-                                              return Container(
-                                                padding:
-                                                    const EdgeInsets.all(20),
-                                                color: Colors.red,
-                                                child: Row(
-                                                  // mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    AppText.text(
-                                                        'Name is too short',
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w600),
-                                                  ],
-                                                ),
-                                              );
-                                            });
+                                            await ShowToast().errorToast(
+                                                title: 'Name is too short');
 
                                             // cancel();
                                           }

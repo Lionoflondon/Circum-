@@ -78,7 +78,7 @@ class _MapsViewState extends State<MapsView> {
           state.riderLocation != null) {
         changeCameraPositio(CameraPosition(
           target: LatLng(state.riderLocation!.lat, state.riderLocation!.lng),
-          zoom: 15,
+          zoom: 16,
         ));
 
         context.read<SendPackageBloc>().add(

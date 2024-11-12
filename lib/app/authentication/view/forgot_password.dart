@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../helper/toast_helper.dart';
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
@@ -29,30 +30,10 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
                 context.read<AuthBloc>().add(ResetStatus());
                 context.read<AuthBloc>().add(SignupEmailChanged(email: ''));
                 Navigator.pop(context);
-                BotToast.showCustomNotification(
-                    duration: const Duration(seconds: 20),
-                    toastBuilder: (_) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 10),
-                        margin: const EdgeInsets.all(20),
-                        decoration: const BoxDecoration(
-                          color: Color.fromARGB(255, 50, 152, 53),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.check, color: Colors.white),
-                            const SizedBox(width: 6),
-                            Expanded(
-                                child: AppText.text(
-                                    'Password reset instructions have been sent to your email.',
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      );
-                    });
+                ShowToast().successToast(
+                    title: 'Password reset',
+                    description:
+                        'Password reset instructions have been sent to your email.');
               }
             },
             child: Column(

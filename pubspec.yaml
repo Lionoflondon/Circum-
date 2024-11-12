@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.2+13
+version: 1.0.3+25
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -57,8 +57,6 @@ dependencies:
   flutter_rating_bar: ^4.0.1
   flutter_screenutil: ^5.7.0
   flutter_secure_storage: ^9.0.0
-  flutter_stripe: ^10.1.1
-  # flutter_stripe: ^9.5.0+1
   flutter_svg: ^2.0.7
   geocoding: ^2.1.1
   geolocator: ^10.1.0
@@ -81,8 +79,15 @@ dependencies:
   shimmer: ^3.0.0
   sign_in_with_apple: ^5.0.0
   sliding_up_panel: ^2.0.0+1
-  # stripe_android: "9.5.0+1"
-  stripe_android: "10.1.1"
+  # Version 9.5.0+1 is used for android
+  # While 10.1.1 is used for ios
+  # Reasons: Build errors and compartability issues
+  # flutter_stripe: ^10.1.1
+  flutter_stripe: ^9.5.0+1
+  # stripe_android: "10.1.1"
+  stripe_android: "9.5.0+1"
+
+  flutter_native_splash: ^2.3.7
   url_launcher: ^6.2.2
   uuid: ^4.3.3
 
@@ -98,7 +103,6 @@ dev_dependencies:
   flutter_lints: ^3.0.1
   build_runner: ^2.4.6
   flutter_launcher_icons: "^0.13.1"
-  flutter_native_splash: ^2.3.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -171,3 +175,9 @@ flutter_native_splash:
   #background_image_dark: "assets/dark-background.png"
   # image_dark: assets/image/new_splash.png
   fullscreen: false
+  # for android 12 and above
+  android_12:
+    icon_background_color: "#131313"
+    image: assets/images/splash_image.png
+    icon_background_color_dark: "#131313"
+    image_dark: assets/images/splash_image.png

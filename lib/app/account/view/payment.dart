@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:bot_toast/bot_toast.dart';
+import 'package:circum/helper/toast_helper.dart';
 import 'package:circum/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,7 +17,7 @@ showPaymentBottomSheet(context, {required double amount, String? phone}) {
       isScrollControlled: true,
       enableDrag: false,
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.75,
+        maxHeight: 300,
         minWidth: MediaQuery.of(context).size.width,
       ),
       backgroundColor: Colors.transparent,
@@ -50,10 +51,7 @@ class PaymentScreenState extends State<PaymentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor:
-            MediaQuery.of(context).platformBrightness == Brightness.light
-                ? Color.fromARGB(255, 237, 239, 243)
-                : AppColors.secondary,
+        backgroundColor: AppColors.secondary,
         body: BlocListener<AccountBloc, AccountState>(
           listener: ((context, state) async {
             if (state.status == PaymentStatus.loading) {
@@ -67,26 +65,9 @@ class PaymentScreenState extends State<PaymentScreen> {
             if (state.status == PaymentStatus.success) {
               // isDismissible = true;
               context.read<AccountBloc>().add(PaymentStart());
-              BotToast.showCustomNotification(
-                  duration: const Duration(seconds: 8),
-                  toastBuilder: (_) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      margin: const EdgeInsets.all(20),
-                      decoration: const BoxDecoration(
-                        color: Color.fromARGB(255, 50, 152, 53),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.check_circle, color: Colors.white),
-                          const SizedBox(width: 4),
-                          AppText.text('Payment Successful',
-                              color: Colors.white, fontWeight: FontWeight.w600),
-                        ],
-                      ),
-                    );
-                  });
+
+              ShowToast().successToast(title: 'Payment successful');
+
               return Navigator.pop(context, 'success');
             }
           }),
@@ -108,11 +89,7 @@ class PaymentScreenState extends State<PaymentScreen> {
                           AppText.text('Pay £${widget.amount}',
                               fontWeight: FontWeight.w600,
                               fontSize: 20,
-                              color:
-                                  MediaQuery.of(context).platformBrightness ==
-                                          Brightness.light
-                                      ? Colors.black
-                                      : Colors.white),
+                              color: Colors.white),
                           IconButton(
                               onPressed: () {
                                 Navigator.pop(context);
@@ -124,78 +101,88 @@ class PaymentScreenState extends State<PaymentScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      CardField(
-                        cursorColor: Colors.white,
-                        onCardChanged: (details) {
-                          // context
-                          // .read<AddPaymentMethodCubit>()
-                          // .onDetailsChanged(details),
-                          // print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-                          // print(details);
-                        },
-                        decoration: const InputDecoration(
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide:
-                                BorderSide(color: AppColors.primary, width: 2),
-                          ),
-                        ),
-                        controller: controller,
-                        autofocus: true,
-                        // style: CardFormStyle(
-                        //   cursorColor: AppColors.primary,
-                        //   // backgroundColor: AppColors.secondary,
-                        //   textColor: Colors.white,
-                        //   placeholderColor: Colors.white,
-                        // )
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Checkbox(
-                              value: state.saveCard,
-                              activeColor: AppColors.primary,
-                              onChanged: (val) {
-                                context
-                                    .read<AccountBloc>()
-                                    .add(SaveCard(val: !state.saveCard));
-                              }),
-                          Expanded(
-                              child: GestureDetector(
-                                  onTap: () {
-                                    context
-                                        .read<AccountBloc>()
-                                        .add(SaveCard(val: !state.saveCard));
-                                  },
-                                  child: AppText.text(
-                                      'Save this card for later use.',
-                                      color: MediaQuery.of(context)
-                                                  .platformBrightness ==
-                                              Brightness.light
-                                          ? Colors.black
-                                          : Colors.white)))
-                        ],
-                      ),
-                      const SizedBox(height: 10),
+                      // CardField(
+                      //   cursorColor: Colors.white,
+                      //   onCardChanged: (details) {
+                      //     // context
+                      //     // .read<AddPaymentMethodCubit>()
+                      //     // .onDetailsChanged(details),
+                      //     // print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+                      //     // print(details);
+                      //   },
+                      //   decoration: const InputDecoration(
+                      //     focusedBorder: UnderlineInputBorder(
+                      //       borderSide:
+                      //           BorderSide(color: AppColors.primary, width: 2),
+                      //     ),
+                      //   ),
+                      //   controller: controller,
+                      //   autofocus: true,
+                      //   // style: CardFormStyle(
+                      //   //   cursorColor: AppColors.primary,
+                      //   //   // backgroundColor: AppColors.secondary,
+                      //   //   textColor: Colors.white,
+                      //   //   placeholderColor: Colors.white,
+                      //   // )
+                      // ),
+                      // const SizedBox(height: 4),
+                      // Row(
+                      //   children: [
+                      //     Checkbox(
+                      //         value: state.saveCard,
+                      //         activeColor: AppColors.primary,
+                      //         onChanged: (val) {
+                      //           context
+                      //               .read<AccountBloc>()
+                      //               .add(SaveCard(val: !state.saveCard));
+                      //         }),
+                      //     Expanded(
+                      //         child: GestureDetector(
+                      //             onTap: () {
+                      //               context
+                      //                   .read<AccountBloc>()
+                      //                   .add(SaveCard(val: !state.saveCard));
+                      //             },
+                      //             child: AppText.text(
+                      //                 'Save this card for later use.',
+                      //                 color: MediaQuery.of(context)
+                      //                             .platformBrightness ==
+                      //                         Brightness.light
+                      //                     ? Colors.black
+                      //                     : Colors.white)))
+                      //   ],
+                      // ),
+                      // const SizedBox(height: 10),
                       AppButton.button(
                           onPressed: () {
-                            print(controller.details.complete);
-                            (controller.details.complete)
-                                ? context.read<AccountBloc>().add(
-                                      PaymentCreateIntent(
-                                        billingDetails: BillingDetails(
-                                          phone: widget.phone,
-                                        ),
-                                        amount: (widget.amount * 100).round(),
-                                        email: email!,
-                                        saveCard: state.saveCard,
-                                      ),
-                                    )
-                                : ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content:
-                                          Text('The form is not complete.'),
-                                    ),
-                                  );
+                            context.read<AccountBloc>().add(
+                                  PaymentCreateIntent(
+                                    // billingDetails: BillingDetails(
+                                    //   phone: widget.phone,
+                                    // ),
+                                    amount: (widget.amount * 100).round(),
+                                    email: email!,
+                                    saveCard: state.saveCard,
+                                  ),
+                                );
+                            // print(controller.details.complete);
+                            // (controller.details.complete)
+                            //     ? context.read<AccountBloc>().add(
+                            //           PaymentCreateIntent(
+                            //             billingDetails: BillingDetails(
+                            //               phone: widget.phone,
+                            //             ),
+                            //             amount: (widget.amount * 100).round(),
+                            //             email: email!,
+                            //             saveCard: state.saveCard,
+                            //           ),
+                            //         )
+                            //     : ScaffoldMessenger.of(context).showSnackBar(
+                            //         const SnackBar(
+                            //           content:
+                            //               Text('The form is not complete.'),
+                            //         ),
+                            //       );
                           },
                           widget: AppText.text('Pay',
                               fontWeight: FontWeight.w600, fontSize: 16))
@@ -210,11 +197,7 @@ class PaymentScreenState extends State<PaymentScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         AppText.text('The payment is successful.',
-                            color: MediaQuery.of(context).platformBrightness ==
-                                    Brightness.light
-                                ? Colors.black
-                                : Colors.white,
-                            fontWeight: FontWeight.w600),
+                            color: Colors.white, fontWeight: FontWeight.w600),
                         const SizedBox(
                           height: 10,
                           width: double.infinity,
@@ -230,26 +213,65 @@ class PaymentScreenState extends State<PaymentScreen> {
               }
               if (state.status == PaymentStatus.failure) {
                 return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  // mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AppText.text('The payment failed.',
-                        color: MediaQuery.of(context).platformBrightness ==
-                                Brightness.light
-                            ? Colors.black
-                            : Colors.white,
-                        fontWeight: FontWeight.w600),
-                    const SizedBox(
-                      height: 10,
-                      width: double.infinity,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        AppText.text('Pay £${widget.amount}',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 20,
+                            color: MediaQuery.of(context).platformBrightness ==
+                                    Brightness.light
+                                ? Colors.black
+                                : Colors.white),
+                        IconButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                            icon: const Icon(
+                              Icons.close,
+                              color: AppColors.primary,
+                            ))
+                      ],
                     ),
-                    ElevatedButton(
-                      style: TextButton.styleFrom(
-                          backgroundColor: AppColors.primary),
-                      onPressed: () {
-                        context.read<AccountBloc>().add(PaymentStart());
-                      },
-                      child: AppText.text('Try again'),
-                    ),
+                    Expanded(
+                        child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                          AppText.text('The payment failed.',
+                              color: Colors.white, fontWeight: FontWeight.w600),
+                          const SizedBox(
+                            height: 16,
+                            width: double.infinity,
+                          ),
+                          Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 24),
+                              child: AppButton.button(
+                                  onPressed: () {
+                                    context.read<AccountBloc>().add(
+                                          PaymentCreateIntent(
+                                            amount:
+                                                (widget.amount * 100).round(),
+                                            email: email!,
+                                            saveCard: state.saveCard,
+                                          ),
+                                        );
+                                  },
+                                  widget: Center(
+                                      child: AppText.text('Try again',
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16))))
+                          // ElevatedButton(
+                          //   style: TextButton.styleFrom(
+                          //       backgroundColor: AppColors.primary),
+                          //   onPressed: () {
+                          //     context.read<AccountBloc>().add(PaymentStart());
+                          //   },
+                          //   child: AppText.text('Try again'),
+                          // ),
+                        ]))
                   ],
                 );
               }
@@ -258,12 +280,8 @@ class PaymentScreenState extends State<PaymentScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    AppText.text('Procressing payment',
-                        color: MediaQuery.of(context).platformBrightness ==
-                                Brightness.light
-                            ? Colors.black
-                            : Colors.white,
-                        fontWeight: FontWeight.w600),
+                    AppText.text('Processing...',
+                        color: Colors.white, fontWeight: FontWeight.w600),
                     const SizedBox(height: 12),
                     const Center(
                         child: CircularProgressIndicator(

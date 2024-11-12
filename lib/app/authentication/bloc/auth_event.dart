@@ -164,7 +164,7 @@ class SignInWithGoogle extends AuthEvent {}
 
 class SignInWithAppleAuth extends AuthEvent {}
 
-class SignInWithGoogleAuth extends AuthEvent {}
+// class SignInWithGoogleAuth extends AuthEvent {}
 
 class SetErrorMessage extends AuthEvent {
   final String errorMessage;

@@ -1,6 +1,7 @@
 import 'package:currency_symbols/currency_symbols.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../helper/format_date.dart';
 import '../../../utils/theme/theme.dart';
@@ -43,60 +44,83 @@ class HistoryViewState extends State<HistoryView> {
   }
 
   Widget filter() {
-    return Container(
-        width: 160,
-        margin: const EdgeInsets.only(left: 24, top: 20),
-        child: DropdownButtonFormField(
-            elevation: 0,
-            iconSize: 0.0,
-            dropdownColor: AppColors.input,
-            style: const TextStyle(
-                color: Colors.white,
-                fontFamily: 'OpenSans',
-                fontWeight: FontWeight.w500,
-                // fontSize: 15,
-                decoration: TextDecoration.none),
-            decoration: const InputDecoration(
-              // isCollapsed: true,
-              alignLabelWithHint: true,
-              // icon:
-              //     Visibility(visible: false, child: Icon(Icons.arrow_downward)),
-              hintMaxLines: 1,
-              suffixIcon: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: Colors.white,
-              ),
+    return BlocBuilder<HistoryBloc, HistoryState>(builder: (context, state) {
+      if (state.ridesHistory.isEmpty) {
+        return Container();
+      }
+      return Container(
+          width: 160,
+          margin: const EdgeInsets.only(left: 24, top: 20),
+          child: DropdownButtonFormField(
+              elevation: 0,
+              iconSize: 0.0,
+              dropdownColor: AppColors.input,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'OpenSans',
+                  fontWeight: FontWeight.w500,
+                  // fontSize: 15,
+                  decoration: TextDecoration.none),
+              decoration: const InputDecoration(
+                // isCollapsed: true,
+                alignLabelWithHint: true,
+                // icon:
+                //     Visibility(visible: false, child: Icon(Icons.arrow_downward)),
+                hintMaxLines: 1,
+                suffixIcon: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white,
+                ),
 
-              constraints: BoxConstraints(
-                  maxHeight: 40, minHeight: 40, minWidth: 80, maxWidth: 120),
-              filled: true,
-              fillColor: AppColors.input,
-              contentPadding: EdgeInsets.only(left: 16, top: 0),
+                constraints: BoxConstraints(
+                    maxHeight: 40, minHeight: 40, minWidth: 80, maxWidth: 120),
+                filled: true,
+                fillColor: AppColors.input,
+                contentPadding: EdgeInsets.only(left: 16, top: 0),
 
-              hintText: 'Filter',
-              hintStyle: TextStyle(
-                  fontFamily: 'OpenSans', color: Colors.white, fontSize: 16),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(0)),
-                borderSide: BorderSide(color: Colors.transparent),
+                hintText: 'Filter',
+                hintStyle: TextStyle(
+                    fontFamily: 'OpenSans', color: Colors.white, fontSize: 16),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(0)),
+                  borderSide: BorderSide(color: Colors.transparent),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(0)),
+                  borderSide: BorderSide(color: Colors.black),
+                ),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(0)),
-                borderSide: BorderSide(color: Colors.black),
-              ),
-            ),
-            items: ['Ascending', 'Descending']
-                .map((e) => DropdownMenuItem(
-                    value: e, child: AppText.text(e, fontSize: 16)))
-                .toList(),
-            onChanged: (data) {
-              context.read<HistoryBloc>().add(FetchHistory(
-                  descending: data == 'Descending' ? true : false));
-            }));
+              items: ['Ascending', 'Descending']
+                  .map((e) => DropdownMenuItem(
+                      value: e, child: AppText.text(e, fontSize: 16)))
+                  .toList(),
+              onChanged: (data) {
+                context.read<HistoryBloc>().add(FetchHistory(
+                    descending: data == 'Descending' ? true : false));
+              }));
+    });
   }
 
   Widget history() {
     return BlocBuilder<HistoryBloc, HistoryState>(builder: (context, state) {
+      if (state.ridesHistory.isEmpty) {
+        return Expanded(
+            child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: MediaQuery.of(context).size.width,
+            ),
+            SvgPicture.asset(
+              'assets/svg/delivery_history.svg',
+              color: const Color.fromARGB(255, 171, 171, 171),
+              width: 60,
+            ),
+            AppText.text('Your delivery history will appear here.',
+                color: const Color(0xFFBFBFBF))
+          ],
+        ));
+      }
       return Expanded(
           child: SizedBox(
               width: double.maxFinite,

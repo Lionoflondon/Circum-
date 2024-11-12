@@ -22,7 +22,9 @@ const generateResponse = function(intent) {
     case "requires_payment_method":
       // Card was not properly authenticated, suggest a new payment method
       return {
-        error: "Your card was denied, please provide a new payment method",
+        // error: "Your card was denied, please provide a new payment method",
+        clientSecret: intent.client_secret,
+        status: intent.status,
       };
     case "succeeded":
       // Payment is complete, authentication not required
@@ -39,10 +41,10 @@ const generateResponse = function(intent) {
 
 exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) => {
   const {
-    paymentMethodId,
+    // paymentMethodId,
     amount,
     currency,
-    useStripeSdk,
+    // useStripeSdk,
     pushToken,
     name,
     // phone,
@@ -55,92 +57,72 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
   const orderAmount = amount;
 
   try {
-    if (paymentMethodId) {
-      // Create new PaymentIntent with a PaymentMethod ID from the client.
-      // confirmation_method: "manual",
-      let customerId;
+    let customerId;
 
-      const userRef = await getFirestore().collection("users").doc(userId).get();
+    const userRef = await getFirestore().collection("users").doc(userId).get();
 
-      if (userRef.exists) {
-        const userData = userRef.data();
-        customerId = userData.customerId || undefined;
-      }
+    if (userRef.exists) {
+      const userData = userRef.data();
+      customerId = userData.customerId || undefined;
+    }
 
-      const params = {
-        amount: orderAmount,
-        confirm: true,
-        currency,
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: "never",
-        },
-        payment_method: paymentMethodId,
-        use_stripe_sdk: useStripeSdk,
-        metadata: {
-          name: name,
-          email: email,
-          pushToken: pushToken,
-        },
-      };
+    const params = {
+      amount: orderAmount,
+      // confirm: true,
+      currency,
+      // automatic_payment_methods: {
+      //   enabled: true,
+      //   allow_redirects: "never",
+      // },
+      // payment_method: paymentMethodId,
+      // use_stripe_sdk: useStripeSdk,
+      metadata: {
+        name: name,
+        email: email,
+        pushToken: pushToken,
+      },
+      payment_method_types: ["card"],
+      setup_future_usage: saveCard ? "off_session" : undefined,
+    };
 
-      // Set customerId if it exists
-      if (customerId && saveCard == true) {
+    // Set customerId if it exists
+    if (customerId && saveCard == true) {
+      params.customer = customerId;
+    }
+
+    // create customerId if it doesnt exist
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        name: name,
+        email: email,
+      });
+        // phone: phone,
+
+      customerId = customer.id;
+
+      if (saveCard == true) {
         params.customer = customerId;
       }
 
-      // create customerId if it doesnt exist
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          name: name,
-          email: email,
-        });
-        // phone: phone,
-
-        customerId = customer.id;
-
-        if (saveCard == true) {
-          params.customer = customerId;
-        }
-
-        await getFirestore().collection("users").doc(userId).update({
-          customerId: customer.id,
-        });
-      }
-
-      const intent = await stripe.paymentIntents.create(params);
-      // After create, if the PaymentIntent's status is succeeded, fulfill the order.
-
-      // if (saveCard == true) {
-
-
-      //   // Customer id in the db
-      // }
-
-      const response = generateResponse(intent);
-      response.customerId = customerId;
-
-      // const session =
-      // await stripe.checkout.sessions.create({
-      //   payment_intent_data: {
-      //     setup_future_usage: "off_session",
-      //   },
-      //   customer_creation: "always",
-      //   line_items: [
-      //     {
-      //       price: amount,
-      //       quantity: 1,
-      //     },
-      //   ],
-      //   mode: "payment",
-      //   success_url: "https://example.com/success.html",
-      //   cancel_url: "https://example.com/cancel.html",
-      // });
-
-      console.log(`Intent: ${intent}`);
-      return res.send(response);
+      await getFirestore().collection("users").doc(userId).update({
+        customerId: customer.id,
+      });
     }
-    return res.sendStatus(400);
+
+    const ephemeralKey = await stripe.ephemeralKeys.create(
+        {customer: customerId},
+        {apiVersion: "2020-08-27"},
+    );
+
+
+    const intent = await stripe.paymentIntents.create(params);
+
+    const response = generateResponse(intent);
+    response.customerId = customerId;
+    response.ephemeralKey = ephemeralKey.secret,
+
+    console.log(`Intent: ${intent}`);
+    return res.send(response);
   } catch (e) {
     console.log(e);
     // Handle "hard declines" e.g. insufficient funds, expired card, etc
@@ -215,12 +197,57 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     getMessaging().send(message).then(
         (response)=> {
           console.log(`Successfully sent message: ${response}`);
+          // console.log(`token: ${metadata.pushToken}`);
         },
     ).catch((err)=>{
       //   console.log(err)
       // console.log('new error')
     });
   }
+
+  if (event.type == "checkout.session.completed") {
+    console.log("💰 Payment completed!");
+    const sessionData = event.data.object;
+    const metadata = sessionData.metadata;
+
+    const messageObj = JSON.stringify({
+      // sessionData,
+      metadata,
+      success: true,
+    });
+
+
+    const message = {
+      apns: {
+        payload: {
+          aps: {
+            "content-available": 1,
+          },
+        },
+      },
+      data: {
+        "type": "payment",
+        "data": messageObj,
+      },
+      // notification: {
+      //   title: `${req.user.firstName}`,
+      //   body: text,
+      // },
+      token: metadata.pushToken,
+
+    };
+
+    getMessaging().send(message).then(
+        (response)=> {
+          console.log(`Successfully sent message: ${response}`);
+        },
+    ).catch((err)=>{
+      //   console.log(err)
+      // console.log('new error')
+    });
+  }
+
+  res.send({success: true});
 });
 
 exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
@@ -402,4 +429,3 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
     });
   }
 });
-

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 
+import '../../../helper/toast_helper.dart';
 import '../../../utils/theme/theme.dart';
 import 'circum_select.dart';
 
@@ -237,22 +238,8 @@ class ChooseAddressViewState extends State<ChooseAddressView> {
                   // Navigator.pushReplacement(context,
                   //     MaterialPageRoute(builder: (_) => DeliveryReviewView()));
                 } else {
-                  var cancel =
-                      BotToast.showCustomNotification(toastBuilder: (_) {
-                    return Container(
-                      padding: const EdgeInsets.all(20),
-                      color: Colors.red,
-                      child: Row(
-                        // mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AppText.text(
-                              'Please choose locations in the same country',
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600),
-                        ],
-                      ),
-                    );
-                  });
+                  ShowToast().errorToast(
+                      title: 'Please choose locations in the same country');
                 }
               }
             }
