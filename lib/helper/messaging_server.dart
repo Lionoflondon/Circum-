@@ -47,20 +47,20 @@ class MessagingServer {
                 code, // only required If you want to send message to specific user.
             data: data,
             // topic: topic,
-            notification: FirebaseNotification(
-              title: title,
-              body: message,
-            ),
-            android: FirebaseAndroidConfig(
-              // ttl: '3s',
-              /// Add Delay in String. If you want to add 1 minute delat then add it like "60s"
-              notification: FirebaseAndroidNotification(
-                title: title,
-                body: message,
-                // icon: 'ic_notification',
-                // color: '#009999',
-              ),
-            ),
+            // notification: FirebaseNotification(
+            //   title: title,
+            //   body: message,
+            // ),
+            // android: FirebaseAndroidConfig(
+            //   // ttl: '3s',
+            //   /// Add Delay in String. If you want to add 1 minute delat then add it like "60s"
+            //   notification: FirebaseAndroidNotification(
+            //     title: title,
+            //     body: message,
+            //     // icon: 'ic_notification',
+            //     // color: '#009999',
+            //   ),
+            // ),
           ),
         ),
       );
