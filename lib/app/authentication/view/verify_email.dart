@@ -96,7 +96,8 @@ class VerifyEmailViewState extends State<VerifyEmailView> {
                 Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 30),
                     child: AppButton.button(
-                        widget: Center(child: AppText.text('Continue')),
+                        widget: Center(
+                            child: AppText.text("I've verified my email")),
                         onPressed: () {
                           context
                               .read<AuthBloc>()

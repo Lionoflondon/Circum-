@@ -28,6 +28,10 @@ class _MapsViewState extends State<MapsView> {
   );
 
   Future<void> setMapFitToTour(Set<Polyline> p) async {
+    if (p.isEmpty) {
+      // Early return if there are no polylines.
+      return;
+    }
     double minLat = p.first.points.first.latitude;
     double minLong = p.first.points.first.longitude;
     double maxLat = p.first.points.first.latitude;
@@ -121,7 +125,7 @@ class _MapsViewState extends State<MapsView> {
                     top: MediaQuery.of(context).padding.top, left: 24),
                 child: TextButton(
                     style: TextButton.styleFrom(
-                        backgroundColor: Colors.white,
+                        backgroundColor: AppColors.secondary,
                         fixedSize: const Size(60, 60),
                         minimumSize: const Size(60, 60),
                         padding: EdgeInsets.zero,

@@ -21,6 +21,11 @@ foregoundMessage() {
           Map<String, dynamic> mapData = jsonDecode(jsonString);
 
           sendPackageBloc.add(DeliveryAccepted(data: mapData));
+
+          notifyUser(
+              title: 'Rider on the way!',
+              body:
+                  '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
         } catch (e) {
           print(e);
         }
@@ -57,6 +62,7 @@ foregoundMessage() {
       sendPackageBloc.add(IncomingMessage(data: msg));
 
       await ChatsHelper().storeChat(msg);
+      notifyUser(title: 'New message', body: msg['message']);
     }
 
     if (message.data['type'] == 'delivery-completed') {
@@ -73,6 +79,7 @@ foregoundMessage() {
         Map<String, dynamic> mapData = jsonDecode(jsonString);
 
         sendPackageBloc.add(DeliveryCompleted(data: mapData));
+        notifyUser(title: 'Delivery completed!', body: '');
       } catch (e) {
         print(e);
       }
@@ -101,6 +108,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         Map<String, dynamic> mapData = jsonDecode(jsonString);
 
         sendPackageBloc.add(DeliveryAccepted(data: mapData));
+
+        notifyUser(
+            title: 'Rider on the way!',
+            body:
+                '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
       } catch (e) {
         print(e);
       }
@@ -120,6 +132,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     sendPackageBloc.add(IncomingMessage(data: msg));
 
     await ChatsHelper().storeChat(msg);
+
+    notifyUser(title: 'New message', body: msg['message']);
   }
 
   if (message.data['type'] == 'payment') {
@@ -149,10 +163,20 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       Map<String, dynamic> mapData = jsonDecode(jsonString);
 
       sendPackageBloc.add(DeliveryCompleted(data: mapData));
+
+      notifyUser(title: 'Delivery completed!', body: '');
     } catch (e) {
       print(e);
     }
   }
 
   return Future<void>.value();
+}
+
+void notifyUser({required String title, required String body}) {
+  _notificationService.showNotification(
+    title: title,
+    body: body,
+  );
+  return;
 }

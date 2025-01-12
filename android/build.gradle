@@ -1,3 +1,7 @@
+plugins {
+  id 'com.google.gms.google-services' version '4.3.8' apply false
+}
+
 // buildscript {
 //     ext.kotlin_version = '1.9.22'
 //     repositories {

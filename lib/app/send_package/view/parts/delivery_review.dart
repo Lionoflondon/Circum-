@@ -118,6 +118,7 @@ Widget deliveryCost() {
                         ],
                       )
                     : Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           AppText.text('£${state.price}',
                               fontSize: 24, fontWeight: FontWeight.w600),

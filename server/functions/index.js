@@ -7,7 +7,11 @@ const functions = require("firebase-functions");
 const stripe = require("stripe")(functions.config().stripe.livekey);
 const {v4: uuidv4} = require("uuid");
 
+const sendPackage = require("./send-package");
+
 initializeApp();
+
+exports.sendPackage = sendPackage;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

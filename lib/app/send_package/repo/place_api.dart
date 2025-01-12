@@ -17,7 +17,7 @@ class PlaceApiProvider {
 
   Future<List<Suggestion>> fetchSuggestions(String input, String lang) async {
     final response = await dio.get(
-        'https://maps.googleapis.com/maps/api/place/queryautocomplete/json?input=$input&types=address&language=$lang&components=country:ng&key=$apiKey&sessiontoken=$sessionToken');
+        'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$input&language=$lang&components=country:uk&key=$apiKey&sessiontoken=$sessionToken');
 
     // print("Recieving Data");
 
