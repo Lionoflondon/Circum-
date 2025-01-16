@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.4+26
+version: 1.0.5+27
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -85,10 +85,10 @@ dependencies:
   # Version 9.5.0+1 is used for android
   # While 10.1.1 is used for ios
   # Reasons: Build errors and compartability issues
-  flutter_stripe: ^10.1.1
-  # flutter_stripe: ^9.5.0+1
-  stripe_android: "10.1.1"
-  # stripe_android: 9.5.0+1
+  # flutter_stripe: ^10.1.1
+  flutter_stripe: ^9.5.0+1
+  # stripe_android: "10.1.1"
+  stripe_android: 9.5.0+1
 
   flutter_native_splash: ^2.3.7
   url_launcher: ^6.2.2

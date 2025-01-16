@@ -194,7 +194,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
         if (polylineResult.points.isNotEmpty) {
           double tripDistance;
-          tripDistance = polylineResult.totalDistanceValue!.toDouble();
+          tripDistance = polylineResult.totalDistanceValue!.toDouble() / 1000;
           // print(polylineResult.distance);
           // print(polylineResult.distanceText);
           // print(polylineResult.distanceValue);
@@ -285,6 +285,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetPrice(SetPrice event, Emitter<SendPackageState> emit) {
+    print(state.distance);
     double distanceKmToMiles = state.distance! / 1.6093;
     int roundedMiles = distanceKmToMiles.ceil();
 
