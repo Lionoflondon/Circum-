@@ -34,6 +34,7 @@ class MessagingServer {
       /// Get Firebase  Messagin Token [Optional, If you want to send message to specific user]
       /// Don't pass token if you want to send message to all registered users
       // String? token = await FirebaseMessaging.instance.geToken();
+      print(code);
 
       /// Send a Message
       var result = await server.send(
@@ -66,7 +67,7 @@ class MessagingServer {
       );
 
       /// Print Request response
-      print(result.toString());
+      // print(result.toString());
     } catch (err) {
       print(err);
     }

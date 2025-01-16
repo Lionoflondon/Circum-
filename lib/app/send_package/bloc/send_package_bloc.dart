@@ -533,13 +533,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             moreInformation: data['dropoffDetails']['moreInformation']);
 
         DeliveryStatus? status;
-
-        if (data['status'] == 'requested') {
-          await documentReference.delete();
-        }
+        // print(data['status']);
+        // if (data['status'] == 'requested') {
+        //   await documentReference.delete();
+        // }
 
         if (data['status'] == 'accepted' ||
-            data['status'] == 'outForDelivery') {
+            data['status'] == 'outForDelivery' ||
+            data['status'] == 'requested') {
           status = DeliveryStatus.reconnectingWithRider;
           emit(state.copyWith(
               deliveryStatus: status,

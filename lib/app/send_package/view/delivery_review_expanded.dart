@@ -487,40 +487,40 @@ class _DeliveryReviewExpandedViewState
                 child: AppText.text('Confirm delivery',
                     fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () async {
-              if (phoneNumber == null) {
+              if (phoneNumber == null || phoneNumber!.isEmpty) {
                 return ShowToast()
                     .errorToast(title: 'Please add a pick up phone number');
               }
-              // context.read<AccountBloc>().add(
-              //       PaymentCreateIntent(
-              //         amount: (state.price! * 100).round(),
-              //         email: email!,
-              //       ),
-              //     );
+              context.read<AccountBloc>().add(
+                    PaymentCreateIntent(
+                      amount: (state.price! * 100).round(),
+                      email: email!,
+                    ),
+                  );
 
-              // final payForDelivery = await showPaymentBottomSheet(context,
-              //     amount: state.price!, phone: phoneNumber);
+              final payForDelivery = await showPaymentBottomSheet(context,
+                  amount: state.price!, phone: phoneNumber);
 
-              // if (payForDelivery == 'success') {
-              // ignore: use_build_context_synchronously
-              context.read<SendPackageBloc>().add(SendDeliveryRequest(
-                  pickupDetails: ContactInfo.fromJson(
-                      fullname: username,
-                      address: state.pickupCoordinate!,
-                      phoneNumber: phoneNumber,
-                      moreInformation: additonalPickupInformation,
-                      locality: state.pickupLocality),
-                  dropoffDetails: ContactInfo.fromJson(
-                      fullname: dropoffContactName,
-                      phoneNumber: dropoffContactPhoneNumber,
-                      address: state.desinationCoordinate!,
-                      moreInformation: dropoffAdditionalInformation,
-                      locality: state.destinationLocality)));
-              // The wait is required to avoid a glitch effect
-              await Future.delayed(const Duration(milliseconds: 300));
-              // ignore: use_build_context_synchronously
-              Navigator.pop(context);
-              // }
+              if (payForDelivery == 'success') {
+                // ignore: use_build_context_synchronously
+                context.read<SendPackageBloc>().add(SendDeliveryRequest(
+                    pickupDetails: ContactInfo.fromJson(
+                        fullname: username,
+                        address: state.pickupCoordinate!,
+                        phoneNumber: phoneNumber,
+                        moreInformation: additonalPickupInformation,
+                        locality: state.pickupLocality),
+                    dropoffDetails: ContactInfo.fromJson(
+                        fullname: dropoffContactName,
+                        phoneNumber: dropoffContactPhoneNumber,
+                        address: state.desinationCoordinate!,
+                        moreInformation: dropoffAdditionalInformation,
+                        locality: state.destinationLocality)));
+                // The wait is required to avoid a glitch effect
+                await Future.delayed(const Duration(milliseconds: 300));
+                // ignore: use_build_context_synchronously
+                Navigator.pop(context);
+              }
             }),
       );
     });

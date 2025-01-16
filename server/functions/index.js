@@ -8,10 +8,14 @@ const stripe = require("stripe")(functions.config().stripe.livekey);
 const {v4: uuidv4} = require("uuid");
 
 const sendPackage = require("./send-package");
+const getAvaliableRequests = require("./get-avaliable-requests");
+const sendMessage = require("./send-message");
 
 initializeApp();
 
 exports.sendPackage = sendPackage;
+exports.getAvaliableRequests = getAvaliableRequests;
+exports.sendMessage = sendMessage;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

@@ -22,9 +22,9 @@ class _MapsViewState extends State<MapsView> {
   final Completer<GoogleMapController> _controller =
       Completer<GoogleMapController>();
 
-  CameraPosition _initialCameraPosition = const CameraPosition(
-    target: LatLng(0, 0),
-    zoom: 0,
+  final CameraPosition _initialCameraPosition = CameraPosition(
+    target: LatLng(51.498186, -0.114651),
+    zoom: 8,
   );
 
   Future<void> setMapFitToTour(Set<Polyline> p) async {
