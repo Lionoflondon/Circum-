@@ -68,7 +68,7 @@ class _DeliveryReviewExpandedViewState
         backgroundColor: AppColors.secondary,
         elevation: 0,
         centerTitle: true,
-        title: AppText.text('Review trip',
+        title: AppText.text('Review delivery',
             fontSize: 16, fontWeight: FontWeight.bold),
       ),
       body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
