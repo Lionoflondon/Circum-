@@ -28,6 +28,9 @@ enum AdminPermission {
   editDeliveries,
   duplicateDeliveries,
   viewFinance,
+  viewHealthPlus,
+  manageHealthPlus,
+  viewSupport,
   manageIssues,
   viewAudit,
 }
@@ -43,6 +46,9 @@ class AdminAccessPolicy {
       AdminPermission.viewDeliveries,
       AdminPermission.editDeliveries,
       AdminPermission.duplicateDeliveries,
+      AdminPermission.viewHealthPlus,
+      AdminPermission.manageHealthPlus,
+      AdminPermission.viewSupport,
       AdminPermission.manageIssues,
       AdminPermission.viewAudit,
     ],
@@ -52,6 +58,7 @@ class AdminAccessPolicy {
       AdminPermission.editCustomers,
       AdminPermission.viewDrivers,
       AdminPermission.viewDeliveries,
+      AdminPermission.viewSupport,
       AdminPermission.manageIssues,
       AdminPermission.viewAudit,
     ],
@@ -61,6 +68,7 @@ class AdminAccessPolicy {
       AdminPermission.viewDrivers,
       AdminPermission.viewDeliveries,
       AdminPermission.viewFinance,
+      AdminPermission.viewHealthPlus,
       AdminPermission.viewAudit,
     ],
     AdminRole.driverManager: [
@@ -69,6 +77,8 @@ class AdminAccessPolicy {
       AdminPermission.editDrivers,
       AdminPermission.approveDrivers,
       AdminPermission.viewDeliveries,
+      AdminPermission.viewHealthPlus,
+      AdminPermission.viewSupport,
       AdminPermission.manageIssues,
       AdminPermission.viewAudit,
     ],
@@ -329,6 +339,40 @@ class AdminDeliveryTools {
       if (pickupTime != null) 'pickupTime': pickupTime,
       if (senderPhone != null) 'senderPhone': senderPhone,
       if (recipientPhone != null) 'recipientPhone': recipientPhone,
+    };
+  }
+}
+
+class AdminSupportTools {
+  static Map<String, dynamic> statusPatch({
+    required String status,
+    String? assignedTo,
+    String? resolutionNote,
+    required Object updatedAt,
+  }) {
+    return {
+      'status': status,
+      if (assignedTo != null && assignedTo.trim().isNotEmpty)
+        'assignedTo': assignedTo.trim(),
+      if (resolutionNote != null && resolutionNote.trim().isNotEmpty)
+        'resolutionNote': resolutionNote.trim(),
+      'updatedAt': updatedAt,
+    };
+  }
+}
+
+class AdminHealthPlusTools {
+  static Map<String, dynamic> statusPatch({
+    required String status,
+    String? assignedDriverId,
+    required Object updatedAt,
+  }) {
+    return {
+      'status': status,
+      if (assignedDriverId != null && assignedDriverId.trim().isNotEmpty)
+        'assignedDriverId': assignedDriverId.trim(),
+      'adminUpdatedAt': updatedAt,
+      'updatedAt': updatedAt,
     };
   }
 }

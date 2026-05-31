@@ -18,6 +18,20 @@ void main() {
         AdminAccessPolicy.can(['super_admin'], AdminPermission.viewFinance),
         isTrue,
       );
+      expect(
+        AdminAccessPolicy.can(
+            ['operations_admin'], AdminPermission.manageHealthPlus),
+        isTrue,
+      );
+      expect(
+        AdminAccessPolicy.can(['support_agent'], AdminPermission.viewSupport),
+        isTrue,
+      );
+      expect(
+        AdminAccessPolicy.can(
+            ['finance_admin'], AdminPermission.approveDrivers),
+        isFalse,
+      );
     });
 
     test('loads meaningful Firebase-style metrics', () {
@@ -138,6 +152,31 @@ void main() {
       expect(audit['adminUserId'], 'admin-1');
       expect(audit['actionType'], 'delivery_duplicate');
       expect(audit['reason'], 'Customer asked to send again');
+    });
+
+    test('creates support ticket status patches for admin queue', () {
+      final patch = AdminSupportTools.statusPatch(
+        status: 'resolved',
+        assignedTo: 'ops@circumuk.com',
+        resolutionNote: 'Customer was contacted.',
+        updatedAt: DateTime(2026, 5, 31),
+      );
+
+      expect(patch['status'], 'resolved');
+      expect(patch['assignedTo'], 'ops@circumuk.com');
+      expect(patch['resolutionNote'], 'Customer was contacted.');
+    });
+
+    test('creates Health+ pickup status patches', () {
+      final patch = AdminHealthPlusTools.statusPatch(
+        status: 'collected',
+        assignedDriverId: 'rider-1',
+        updatedAt: DateTime(2026, 5, 31),
+      );
+
+      expect(patch['status'], 'collected');
+      expect(patch['assignedDriverId'], 'rider-1');
+      expect(patch['adminUpdatedAt'], isA<DateTime>());
     });
   });
 }

@@ -289,6 +289,9 @@ enum _AdminSection {
   senders,
   drivers,
   deliveries,
+  finance,
+  healthPlus,
+  support,
   issues,
   analytics,
   audit,
@@ -330,6 +333,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _ratings = const [];
   List<Map<String, dynamic>> _supportTickets = const [];
   List<Map<String, dynamic>> _healthPlusPayments = const [];
+  List<Map<String, dynamic>> _healthPlusPickups = const [];
+  List<Map<String, dynamic>> _recurringPickupSchedules = const [];
+  List<Map<String, dynamic>> _payoutRequests = const [];
   List<Map<String, dynamic>> _auditLogs = const [];
 
   @override
@@ -439,10 +445,26 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _readCollection(db.collection('deliveryRequests').limit(80)),
       _readCollection(db.collection('users').limit(80)),
       _readCollection(db.collection('riderProfiles').limit(80)),
-      _readCollection(db.collection('payments').limit(80)),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(db.collection('payments').limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
       _readCollection(db.collection('driverRatings').limit(80)),
-      _readCollection(db.collection('supportTickets').limit(80)),
-      _readCollection(db.collection('healthPlusPayments').limit(80)),
+      _can(AdminPermission.viewSupport)
+          ? _readCollection(db.collection('supportTickets').limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
+      (_can(AdminPermission.viewFinance) ||
+              _roles.contains(AdminRole.operationsAdmin.value))
+          ? _readCollection(db.collection('healthPlusPayments').limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewHealthPlus)
+          ? _readCollection(db.collection('prescriptionPickups').limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewHealthPlus)
+          ? _readCollection(db.collection('recurringPickupSchedules').limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(db.collection('payoutRequests').limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
       _readCollection(
         db
             .collection('adminAuditLogs')
@@ -457,6 +479,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final ratings = results[4];
     final tickets = results[5];
     final healthPayments = results[6];
+    final healthPickups = results[7];
+    final schedules = results[8];
+    final payouts = results[9];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -465,7 +490,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _ratings = ratings;
       _supportTickets = tickets;
       _healthPlusPayments = healthPayments;
-      _auditLogs = results[7];
+      _healthPlusPickups = healthPickups;
+      _recurringPickupSchedules = schedules;
+      _payoutRequests = payouts;
+      _auditLogs = results[10];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -549,6 +577,82 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       reason: 'Updated from admin operations panel',
     ));
     setState(() => _message = 'Updated $id to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _updateSupportTicket(
+    Map<String, dynamic> ticket,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot update support tickets.');
+      return;
+    }
+    final id = '${ticket['id'] ?? ''}';
+    if (id.isEmpty) return;
+    final oldStatus = '${ticket['status'] ?? ''}';
+    final patch = AdminSupportTools.statusPatch(
+      status: status,
+      assignedTo: status == 'assigned' ? _adminUser?.email : null,
+      resolutionNote: status == 'resolved'
+          ? 'Resolved from the admin operations panel'
+          : null,
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await FirebaseFirestore.instance
+        .collection('supportTickets')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: 'support_ticket_$status',
+      recordType: 'supportTickets',
+      recordId: id,
+      oldValue: {'status': oldStatus},
+      newValue: {'status': status},
+      reason: 'Updated from admin operations panel',
+    ));
+    setState(() => _message = 'Support ticket $id updated to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _updateHealthPlusPickup(
+    Map<String, dynamic> pickup,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageHealthPlus)) {
+      setState(() => _message = 'Your role cannot update Health+ pickups.');
+      return;
+    }
+    final id = '${pickup['id'] ?? ''}';
+    if (id.isEmpty) return;
+    final oldStatus = '${pickup['status'] ?? ''}';
+    final patch = AdminHealthPlusTools.statusPatch(
+      status: status,
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await FirebaseFirestore.instance
+        .collection('prescriptionPickups')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
+      'type': 'admin_status_updated',
+      'pickupId': id,
+      'status': status,
+      'source': 'circum-admin',
+      'adminUserId': _adminUser?.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: 'health_plus_status_update',
+      recordType: 'prescriptionPickups',
+      recordId: id,
+      oldValue: {'status': oldStatus},
+      newValue: {'status': status},
+      reason: 'Updated from admin operations panel',
+    ));
+    setState(() => _message = 'Health+ pickup $id updated to $status.');
     await _loadAdminData();
   }
 
@@ -711,6 +815,51 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rowBuilder: _deliveryRow,
           emptyText: 'No delivery records yet.',
         ),
+      _AdminSection.finance => _AdminDataSection(
+          colors: colors,
+          title: 'Finance',
+          subtitle:
+              'Payments, refunds, driver payouts, commission checks, and revenue follow-up.',
+          records: adminSearch(_financeRows(), query,
+              ['id', 'senderId', 'riderId', 'status', 'type']),
+          columns: const ['Type', 'Record', 'Status', 'Amount', 'Notes'],
+          rowBuilder: _financeRow,
+          emptyText: 'No finance records yet.',
+        ),
+      _AdminSection.healthPlus => _AdminDataSection(
+          colors: colors,
+          title: 'Health+',
+          subtitle:
+              'Prescription pickups, recurring schedules, payment status, and customer notes.',
+          records: adminSearch(_healthPlusRows(), query, [
+            'id',
+            'fullName',
+            'pharmacyAddress',
+            'deliveryAddress',
+            'status',
+            'frequency'
+          ]),
+          columns: const [
+            'Pickup',
+            'Customer',
+            'Schedule',
+            'Status',
+            'Actions'
+          ],
+          rowBuilder: _healthPlusRow,
+          emptyText: 'No Health+ records yet.',
+        ),
+      _AdminSection.support => _AdminDataSection(
+          colors: colors,
+          title: 'Support',
+          subtitle:
+              'Live chat tickets, refund requests, customer messages, admin assignment, and resolution notes.',
+          records: adminSearch(_supportTickets, query,
+              ['id', 'name', 'email', 'message', 'status', 'type']),
+          columns: const ['Ticket', 'Customer', 'Status', 'Message', 'Actions'],
+          rowBuilder: _supportRow,
+          emptyText: 'No support tickets yet.',
+        ),
       _AdminSection.issues => _AdminDataSection(
           colors: colors,
           title: 'Troubleshooting',
@@ -827,6 +976,80 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     ];
   }
 
+  List<Widget> _financeRow(Map<String, dynamic> item) {
+    return [
+      _AdminCell.primary('${item['type'] ?? 'payment'}'),
+      _AdminCell(
+          '${item['id'] ?? item['paymentId'] ?? item['payoutId'] ?? ''}'),
+      _AdminStatusCell(
+          colors: widget.colors, status: '${item['status'] ?? 'pending'}'),
+      _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
+      _AdminCell(
+        '${item['senderId'] ?? item['riderId'] ?? item['userId'] ?? ''}',
+      ),
+    ];
+  }
+
+  List<Widget> _healthPlusRow(Map<String, dynamic> item) {
+    final id = '${item['id'] ?? ''}';
+    final isPickup = item['recordType'] == 'prescriptionPickups';
+    return [
+      _AdminCell.primary(id),
+      _AdminCell(
+        '${item['fullName'] ?? item['senderName'] ?? 'Health+ customer'}\n${item['phoneNumber'] ?? ''}',
+      ),
+      _AdminCell(
+          '${item['frequency'] ?? 'one-off'}\n${item['preferredPickupTime'] ?? item['nextPickupAt'] ?? ''}'),
+      _AdminStatusCell(
+          colors: widget.colors, status: '${item['status'] ?? 'scheduled'}'),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Collected',
+            enabled: isPickup && _can(AdminPermission.manageHealthPlus),
+            onTap: () => _updateHealthPlusPickup(item, 'collected'),
+          ),
+          _AdminAction(
+            label: 'Delivered',
+            enabled: isPickup && _can(AdminPermission.manageHealthPlus),
+            onTap: () => _updateHealthPlusPickup(item, 'delivered'),
+          ),
+          _AdminAction(
+            label: 'Failed',
+            enabled: isPickup && _can(AdminPermission.manageHealthPlus),
+            onTap: () => _updateHealthPlusPickup(item, 'failed'),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  List<Widget> _supportRow(Map<String, dynamic> item) {
+    return [
+      _AdminCell.primary('${item['id'] ?? 'ticket'}'),
+      _AdminCell('${item['name'] ?? 'Customer'}\n${item['email'] ?? ''}'),
+      _AdminStatusCell(
+          colors: widget.colors, status: '${item['status'] ?? 'open'}'),
+      _AdminCell('${item['message'] ?? item['type'] ?? ''}'),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Assign',
+            enabled: _can(AdminPermission.manageIssues),
+            onTap: () => _updateSupportTicket(item, 'assigned'),
+          ),
+          _AdminAction(
+            label: 'Resolve',
+            enabled: _can(AdminPermission.manageIssues),
+            onTap: () => _updateSupportTicket(item, 'resolved'),
+          ),
+        ],
+      ),
+    ];
+  }
+
   List<Widget> _issueRow(Map<String, dynamic> item) {
     return [
       _AdminCell.primary('${item['title']}'),
@@ -839,20 +1062,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           _AdminAction(
             label: 'Assign',
             enabled: _can(AdminPermission.manageIssues),
-            onTap: () => _addAdminNote(
-              '${item['recordType']}',
-              '${item['recordId']}',
-              'Issue assigned from operations panel',
-            ),
+            onTap: () => _resolveIssueAction(item, 'assigned'),
           ),
           _AdminAction(
             label: 'Resolve',
             enabled: _can(AdminPermission.manageIssues),
-            onTap: () => _addAdminNote(
-              '${item['recordType']}',
-              '${item['recordId']}',
-              'Issue marked resolved from operations panel',
-            ),
+            onTap: () => _resolveIssueAction(item, 'resolved'),
           ),
         ],
       ),
@@ -916,6 +1131,46 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       });
     }
     return issues;
+  }
+
+  List<Map<String, dynamic>> _financeRows() {
+    return [
+      ..._payments.map((item) => {'type': 'payment', ...item}),
+      ..._healthPlusPayments
+          .map((item) => {'type': 'health_plus_payment', ...item}),
+      ..._payoutRequests.map((item) => {'type': 'driver_payout', ...item}),
+      ..._supportTickets
+          .where((ticket) => '${ticket['type']}'.contains('refund'))
+          .map((item) => {'type': 'refund_request', ...item}),
+    ];
+  }
+
+  List<Map<String, dynamic>> _healthPlusRows() {
+    return [
+      ..._healthPlusPickups
+          .map((item) => {'recordType': 'prescriptionPickups', ...item}),
+      ..._recurringPickupSchedules
+          .map((item) => {'recordType': 'recurringPickupSchedules', ...item}),
+    ];
+  }
+
+  Future<void> _resolveIssueAction(
+    Map<String, dynamic> issue,
+    String status,
+  ) async {
+    if (issue['recordType'] == 'supportTickets') {
+      final ticket = _supportTickets.firstWhere(
+        (item) => '${item['id']}' == '${issue['recordId']}',
+        orElse: () => {'id': issue['recordId']},
+      );
+      await _updateSupportTicket(ticket, status);
+      return;
+    }
+    await _addAdminNote(
+      '${issue['recordType']}',
+      '${issue['recordId']}',
+      'Issue marked $status from operations panel',
+    );
   }
 
   double _adminMoney(Map<String, dynamic> item) {
@@ -1833,6 +2088,9 @@ String _adminSectionLabel(_AdminSection section) {
     _AdminSection.senders => 'Senders',
     _AdminSection.drivers => 'Drivers',
     _AdminSection.deliveries => 'Deliveries',
+    _AdminSection.finance => 'Finance',
+    _AdminSection.healthPlus => 'Health+',
+    _AdminSection.support => 'Support',
     _AdminSection.issues => 'Troubleshooting',
     _AdminSection.analytics => 'Analytics',
     _AdminSection.audit => 'Audit',
@@ -1845,6 +2103,9 @@ IconData _adminSectionIcon(_AdminSection section) {
     _AdminSection.senders => Icons.people,
     _AdminSection.drivers => Icons.two_wheeler,
     _AdminSection.deliveries => Icons.local_shipping,
+    _AdminSection.finance => Icons.payments,
+    _AdminSection.healthPlus => Icons.health_and_safety,
+    _AdminSection.support => Icons.support_agent,
     _AdminSection.issues => Icons.report_problem,
     _AdminSection.analytics => Icons.query_stats,
     _AdminSection.audit => Icons.history,
