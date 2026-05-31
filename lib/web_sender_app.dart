@@ -2134,9 +2134,9 @@ class _FeatureBand extends StatelessWidget {
                     colors: colors,
                     icon: Icons.tune,
                     tint: const Color(0xffdbeafe),
-                    title: 'Hermes matching',
+                    title: 'Iris matching',
                     body:
-                        'Tell Hermes what you are sending and it helps choose the right rider, vehicle, route, and price.',
+                        'Tell Iris what you are sending and it helps choose the right rider, vehicle, route, and price.',
                   ),
                   _FeatureCard(
                     colors: colors,
@@ -4127,7 +4127,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final List<_ChatMessage> _supportMessages = [
     _ChatMessage(
       fromMe: false,
-      text: "Hi, this is Hermes. How can we help?",
+      text: "Hi, this is Iris. How can we help?",
       time: 'Now',
     ),
   ];
@@ -4213,8 +4213,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         if (_chatOpen)
           _ChatSheet(
             colors: colors,
-            title: _supportChat ? 'Hermes Support' : 'Marcus A.',
-            recipient: _supportChat ? 'Hermes' : 'Rider',
+            title: _supportChat ? 'Iris Support' : 'Marcus A.',
+            recipient: _supportChat ? 'Iris' : 'Rider',
             messages: _supportChat ? _supportMessages : _driverMessages,
             input: _chatInput,
             onClose: () => setState(() => _chatOpen = false),
@@ -4718,7 +4718,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'requestId': id,
             'participants': [senderId, 'circum-support'],
             'lastMessage':
-                'Your request is live. Hermes is checking nearby riders now.',
+                'Your request is live. Iris is checking nearby riders now.',
             'lastMessageTimestamp': FieldValue.serverTimestamp(),
             'source': 'circum-web',
           },
@@ -4729,8 +4729,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'senderType': 'support',
         'recipientId': senderId,
         'recipientType': 'user',
-        'message':
-            'Your request is live. Hermes is checking nearby riders now.',
+        'message': 'Your request is live. Iris is checking nearby riders now.',
         'status': 'sent',
         'createdAt': FieldValue.serverTimestamp(),
         'timeStamp': DateTime.now().toIso8601String(),
@@ -5450,7 +5449,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               ? [
                   const _ChatMessage(
                     fromMe: false,
-                    text: "Hi, this is Hermes. How can we help?",
+                    text: "Hi, this is Iris. How can we help?",
                     time: 'Now',
                   )
                 ]
@@ -6756,7 +6755,7 @@ class _DetailsStep extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Add the pickup, drop-off, item details, and weight. Hermes will show the best option before you pay.',
+          'Add the pickup, drop-off, item details, and weight. Iris will show the best option before you pay.',
           style: TextStyle(
             color: colors.mutedText,
             fontSize: 15,
@@ -6802,7 +6801,7 @@ class _DetailsStep extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  _HermesTag(colors: colors),
+                  _IrisTag(colors: colors),
                 ],
               ),
               const SizedBox(height: 12),
@@ -7906,7 +7905,7 @@ class _TrackingStep extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: onChatSupport,
             icon: const Icon(Icons.support_agent),
-            label: const Text('Chat with Hermes'),
+            label: const Text('Chat with Iris'),
             style: OutlinedButton.styleFrom(
               foregroundColor: colors.text,
               side: BorderSide(color: colors.border),
@@ -8358,10 +8357,10 @@ class _PhotoButton extends StatelessWidget {
   }
 }
 
-class _HermesTag extends StatelessWidget {
+class _IrisTag extends StatelessWidget {
   final _CircumColors colors;
 
-  const _HermesTag({required this.colors});
+  const _IrisTag({required this.colors});
 
   @override
   Widget build(BuildContext context) {
@@ -8372,7 +8371,7 @@ class _HermesTag extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: const Text(
-        'Hermes check',
+        'Iris check',
         style: TextStyle(
           color: Color(0xff2563eb),
           fontSize: 11,
@@ -8781,7 +8780,7 @@ class _BroadcastCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Hermes is checking nearby riders for this delivery.',
+            'Iris is checking nearby riders for this delivery.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: colors.mutedText,
@@ -9250,7 +9249,7 @@ class _PoweredByTag extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            'Live with Hermes',
+            'Live with Iris',
             style: TextStyle(
               color: colors.mutedText,
               fontSize: 12,
@@ -9734,7 +9733,7 @@ const _vehicles = [
 const _trackingStatuses = [
   _TrackingStatus(
     'Finding a rider',
-    'Hermes is checking nearby riders for this delivery.',
+    'Iris is checking nearby riders for this delivery.',
   ),
   _TrackingStatus(
     'Rider accepted',
