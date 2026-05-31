@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "circum-2797c"
+  },
+  "targets": {
+    "circum-2797c": {
+      "hosting": {
+        "main": [
+          "circum-app-2797c"
+        ],
+        "admin": [
+          "circum-admin-2797c"
+        ]
+      }
+    }
+  }
+}

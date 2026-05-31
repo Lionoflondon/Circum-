@@ -1,0 +1,309 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn() && (
+        request.auth.token.adminRole == role ||
+        request.auth.token.role == role ||
+        (request.auth.token.roles is list && role in request.auth.token.roles)
+      );
+    }
+
+    function isAdmin() {
+      return hasRole('super_admin') ||
+        hasRole('operations_admin') ||
+        hasRole('support_agent') ||
+        hasRole('finance_admin') ||
+        hasRole('driver_manager');
+    }
+
+    function isFinanceAdmin() {
+      return hasRole('super_admin') || hasRole('finance_admin');
+    }
+
+    function isDriverManager() {
+      return hasRole('super_admin') || hasRole('driver_manager');
+    }
+
+    function ownsSenderRecord(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isRiderAccount() {
+      return signedIn() && exists(/databases/$(database)/documents/riderProfiles/$(request.auth.uid));
+    }
+
+    function isOwnDelivery(deliveryId) {
+      return signedIn() && (
+        deliveryId == request.auth.uid ||
+        resource.data.senderId == request.auth.uid ||
+        resource.data.userId == request.auth.uid
+      );
+    }
+
+    function isAssignedRider() {
+      return signedIn() && (
+        resource.data.riderId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        resource.data.assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isAvailableRiderJob() {
+      return isRiderAccount() && (
+        resource.data.status == 'requested' ||
+        resource.data.dispatchStatus == 'requested' ||
+        resource.data.matchingStatus == 'available'
+      );
+    }
+
+    function isCreatingOwnDelivery() {
+      return signedIn() && (
+        request.resource.data.senderId == request.auth.uid ||
+        request.resource.data.userId == request.auth.uid
+      );
+    }
+
+    function isParticipant() {
+      return signedIn() &&
+        resource.data.participants is list &&
+        request.auth.uid in resource.data.participants;
+    }
+
+    function isCreatingAsParticipant() {
+      return signedIn() &&
+        request.resource.data.participants is list &&
+        request.auth.uid in request.resource.data.participants;
+    }
+
+    match /adminUsers/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if hasRole('super_admin');
+    }
+
+    match /adminAuditLogs/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /adminNotes/{noteId} {
+      allow read, create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read, write: if isAdmin();
+      allow create: if request.resource.data.channel == 'web_live_chat' &&
+        request.resource.data.keys().hasOnly([
+          'channel',
+          'status',
+          'priority',
+          'name',
+          'email',
+          'message',
+          'pageUrl',
+          'createdAt',
+          'updatedAt'
+        ]);
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isFinanceAdmin();
+      allow write: if isFinanceAdmin();
+    }
+
+    match /healthPlusPayments/{paymentId} {
+      allow read: if isFinanceAdmin() ||
+        hasRole('operations_admin') ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isFinanceAdmin();
+    }
+
+    match /riderProfiles/{driverId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
+      allow create, update: if isDriverManager() ||
+        (signedIn() && request.auth.uid == driverId);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riders/{driverId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
+      allow create, update: if isDriverManager() ||
+        (signedIn() && request.auth.uid == driverId);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /driverRatings/{ratingId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.customerId == request.auth.uid) ||
+        (signedIn() && resource.data.driverId == request.auth.uid);
+      allow create: if signedIn() &&
+        request.resource.data.customerId == request.auth.uid;
+      allow update: if isAdmin() &&
+        !request.resource.data.diff(resource.data).changedKeys().hasAny(['starRating']);
+      allow delete: if false;
+    }
+
+    match /driverPerformanceMetrics/{metricId} {
+      allow read: if isAdmin() || (signedIn() && metricId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /deliveryRequests/{deliveryId} {
+      allow read: if isAdmin() ||
+        isOwnDelivery(deliveryId) ||
+        isAssignedRider() ||
+        isAvailableRiderJob();
+      allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow update: if isAdmin() ||
+        isOwnDelivery(deliveryId) ||
+        isAssignedRider();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /webSenderRequests/{requestId} {
+      allow read, update: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid);
+      allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /chats/{chatId} {
+      allow read, update: if isAdmin() || isParticipant();
+      allow create: if isAdmin() || isCreatingAsParticipant();
+      allow delete: if hasRole('super_admin');
+
+      match /messages/{messageId} {
+        allow read: if isAdmin() ||
+          (signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if isAdmin() ||
+          (signedIn() &&
+            request.resource.data.senderId == request.auth.uid &&
+            request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow update, delete: if false;
+      }
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || ownsSenderRecord(userId);
+      allow create, update: if isAdmin() || ownsSenderRecord(userId);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /senders/{senderId} {
+      allow read: if isAdmin() || ownsSenderRecord(senderId);
+      allow create, update: if isAdmin() || ownsSenderRecord(senderId);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /history/{historyId} {
+      allow read: if isAdmin() || isOwnDelivery(historyId) || isAssignedRider();
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /prescriptionPickups/{pickupId} {
+      allow read, update, delete: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid) ||
+        isAssignedRider();
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
+        (signedIn() && request.resource.data.userId == request.auth.uid);
+    }
+
+    match /healthPlusProfiles/{profileId} {
+      allow read, update: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
+        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /recurringPickupSchedules/{scheduleId} {
+      allow read, update: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
+        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    match /healthPlusNotifications/{notificationId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
+        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /healthPlusUsageEvents/{eventId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
+        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow update, delete: if false;
+    }
+
+    match /riderApplications/{applicationId} {
+      allow read, update: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderOnboardingEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || isRiderAccount();
+      allow update, delete: if false;
+    }
+
+    match /riderEarnings/{riderId} {
+      allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow create, update: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /payoutRequests/{requestId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderBankAccounts/{riderId} {
+      allow read, create, update: if isAdmin() ||
+        (signedIn() && riderId == request.auth.uid);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderDocuments/{documentId} {
+      allow read, update: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
