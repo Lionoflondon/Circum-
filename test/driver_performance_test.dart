@@ -40,9 +40,31 @@ void main() {
     test('uses delivery and customer ids to prevent duplicate ratings', () {
       const deliveryId = 'CIR-123';
       const customerId = 'customer-1';
-      final ratingDocumentId = '${deliveryId}_$customerId';
+      final ratingDocumentId = DriverRating.documentId(
+        deliveryId: deliveryId,
+        customerId: customerId,
+      );
 
       expect(ratingDocumentId, 'CIR-123_customer-1');
+    });
+
+    test('sanitizes rating document ids and identifies complaint tags', () {
+      final rating = DriverRating(
+        driverId: 'driver-1',
+        customerId: 'sender/1',
+        deliveryId: 'CIR/123',
+        starRating: 4,
+        feedbackTags: const ['poor_communication'],
+      );
+
+      expect(
+        DriverRating.documentId(
+          deliveryId: rating.deliveryId,
+          customerId: rating.customerId,
+        ),
+        'CIR-123_sender-1',
+      );
+      expect(rating.isComplaint, isTrue);
     });
 
     test('calculates average rating and distribution', () {

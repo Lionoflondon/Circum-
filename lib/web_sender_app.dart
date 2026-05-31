@@ -4116,6 +4116,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _driverProfileSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _driverPerformanceSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _assignedDriverRatingsSub;
 
   final List<_ChatMessage> _driverMessages = [
     _ChatMessage(
@@ -4165,6 +4167,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _senderSub?.cancel();
     _driverProfileSub?.cancel();
     _driverPerformanceSub?.cancel();
+    _assignedDriverRatingsSub?.cancel();
     super.dispose();
   }
 
@@ -5172,6 +5175,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   ) {
     _driverProfileSub?.cancel();
     _driverPerformanceSub?.cancel();
+    _assignedDriverRatingsSub?.cancel();
     final fallback = _driverProfileFromDelivery(driverId, deliveryData);
     setState(() => _assignedDriver = fallback);
     _driverProfileSub = FirebaseFirestore.instance
@@ -5230,6 +5234,36 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         }
       });
     });
+    _assignedDriverRatingsSub = FirebaseFirestore.instance
+        .collection('driverRatings')
+        .where('driverId', isEqualTo: driverId)
+        .limit(6)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      final ratings = snapshot.docs
+          .map((doc) => DriverRating.fromMap(doc.data()))
+          .where((rating) => !rating.hiddenByAdmin)
+          .take(3)
+          .toList();
+      final profile = _assignedDriver;
+      if (profile == null) return;
+      setState(() {
+        _assignedDriver = DriverProfile.fromMap(
+          profile.driverId,
+          {
+            'fullName': profile.fullName,
+            'photoUrl': profile.photoUrl,
+            'phoneNumber': profile.phoneNumber,
+            'verificationStatus': profile.verificationStatus,
+            'driverStatus': profile.status,
+            'vehicle': profile.vehicle.toJson(),
+          },
+          performance: _assignedDriverMetric,
+          recentRatings: ratings,
+        );
+      });
+    });
   }
 
   DriverProfile _driverProfileFromDelivery(
@@ -5253,10 +5287,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<void> _checkExistingDriverRating() async {
     final requestId = _activeRequestDocId;
-    if (requestId == null) return;
+    final customerId = _senderUser?.uid;
+    if (requestId == null || customerId == null) return;
     final ratingDoc = await FirebaseFirestore.instance
         .collection('driverRatings')
-        .doc('${requestId}_web-sender')
+        .doc(DriverRating.documentId(
+          deliveryId: requestId,
+          customerId: customerId,
+        ))
         .get();
     if (!mounted || !ratingDoc.exists) return;
     final rating = DriverRating.fromMap(ratingDoc.data()!);
@@ -5284,8 +5322,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _submitDriverRating() async {
     final requestId = _activeRequestDocId;
     final driverId = _assignedDriverId ?? _assignedDriver?.driverId;
+    final customerId = _senderUser?.uid;
     if (_ratingSubmitting || _ratingSubmitted) return;
-    if (requestId == null || driverId == null || _statusIndex < 3) {
+    if (requestId == null ||
+        driverId == null ||
+        customerId == null ||
+        _statusIndex < 3) {
       setState(() => _ratingMessage =
           'You can rate the rider after delivery is complete.');
       return;
@@ -5301,7 +5343,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
     try {
       final db = FirebaseFirestore.instance;
-      final ratingId = '${requestId}_web-sender';
+      final ratingId = DriverRating.documentId(
+        deliveryId: requestId,
+        customerId: customerId,
+      );
       final ratingRef = db.collection('driverRatings').doc(ratingId);
       await db.runTransaction((transaction) async {
         final existing = await transaction.get(ratingRef);
@@ -5311,7 +5356,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         transaction.set(ratingRef, {
           'ratingId': ratingId,
           'driverId': driverId,
-          'customerId': 'web-sender',
+          'customerId': customerId,
           'deliveryId': requestId,
           'tripId': requestId,
           'starRating': _selectedRating,
@@ -5362,22 +5407,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final ratings = ratingsSnapshot.docs
         .map((doc) => DriverRating.fromMap(doc.data()))
         .toList();
-    final completedSnapshot = await db
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: driverId)
-        .where('status', isEqualTo: 'completed')
-        .get();
-    final completedTrips = completedSnapshot.docs.length;
-    final complaints = ratings
-        .where((rating) =>
-            rating.feedbackTags.contains('issue_with_delivery') ||
-            rating.feedbackTags.contains('damaged_item_concern'))
-        .length;
+    final completedIds = <String>{};
+    for (final driverField in ['riderId', 'driverId', 'assignedDriverId']) {
+      final completedSnapshot = await db
+          .collection('deliveryRequests')
+          .where(driverField, isEqualTo: driverId)
+          .where('status', isEqualTo: 'completed')
+          .get();
+      completedIds.addAll(completedSnapshot.docs.map((doc) => doc.id));
+    }
+    final complaints = ratings.where((rating) => rating.isComplaint).length;
     final metric = DriverPerformanceService.calculate(
       DriverPerformanceInput(
         driverId: driverId,
         ratings: ratings,
-        completedTrips: completedTrips == 0 ? ratings.length : completedTrips,
+        completedTrips:
+            completedIds.isEmpty ? ratings.length : completedIds.length,
         complaints: complaints,
       ),
     );
@@ -5529,6 +5574,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _chatSub?.cancel();
     _driverProfileSub?.cancel();
     _driverPerformanceSub?.cancel();
+    _assignedDriverRatingsSub?.cancel();
     setState(() {
       _step = _SenderStep.dashboard;
       _activeOrderId = null;
@@ -8939,6 +8985,48 @@ class _DriverCard extends StatelessWidget {
               ],
             ),
           ),
+          if (profile.recentRatings.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Recent reviews',
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...profile.recentRatings.map(
+              (rating) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '★ ${rating.starRating}',
+                      style: const TextStyle(
+                        color: Color(0xffffb000),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        rating.feedbackText.trim().isNotEmpty
+                            ? rating.feedbackText.trim()
+                            : rating.feedbackTags
+                                .map(_DriverRatingPrompt.labelForTag)
+                                .join(', '),
+                        style: TextStyle(
+                          color: colors.mutedText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -8948,13 +9036,19 @@ class _DriverCard extends StatelessWidget {
 class _DriverRatingPrompt extends StatelessWidget {
   static const _tags = [
     ('on_time', 'On time'),
-    ('polite', 'Polite'),
-    ('handled_item_carefully', 'Handled item carefully'),
+    ('friendly', 'Friendly'),
+    ('careful_handling', 'Careful handling'),
     ('good_communication', 'Good communication'),
-    ('issue_with_delivery', 'Issue with delivery'),
     ('late', 'Late'),
-    ('damaged_item_concern', 'Damaged item concern'),
+    ('poor_communication', 'Poor communication'),
   ];
+
+  static String labelForTag(String key) {
+    for (final tag in _tags) {
+      if (tag.$1 == key) return tag.$2;
+    }
+    return key.replaceAll('_', ' ');
+  }
 
   final _CircumColors colors;
   final DriverProfile? driver;

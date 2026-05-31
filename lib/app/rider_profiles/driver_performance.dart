@@ -87,6 +87,11 @@ class DriverProfile {
 }
 
 class DriverRating {
+  static const complaintTags = {
+    'late',
+    'poor_communication',
+  };
+
   final String driverId;
   final String customerId;
   final String deliveryId;
@@ -130,6 +135,16 @@ class DriverRating {
         'feedbackTags': feedbackTags,
         'hiddenByAdmin': hiddenByAdmin,
       };
+
+  static String documentId({
+    required String deliveryId,
+    required String customerId,
+  }) {
+    return '${_safeDocumentPart(deliveryId)}_${_safeDocumentPart(customerId)}';
+  }
+
+  bool get isComplaint =>
+      starRating <= 2 || feedbackTags.any(complaintTags.contains);
 }
 
 class DriverPerformanceMetric {
@@ -347,6 +362,12 @@ class DriverPerformanceService {
   }
 
   static double _round2(double value) => (value * 100).roundToDouble() / 100;
+}
+
+String _safeDocumentPart(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return 'unknown';
+  return trimmed.replaceAll(RegExp(r'[/#?\[\]]'), '-');
 }
 
 String _readString(
