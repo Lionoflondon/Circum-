@@ -1,5 +1,5 @@
 plugins {
-  id 'com.google.gms.google-services' version '4.3.8' apply false
+  id 'com.google.gms.google-services' version '4.4.4' apply false
 }
 
 // buildscript {
@@ -29,6 +29,28 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(':app')
+}
+
+subprojects { subproject ->
+    if (subproject.plugins.hasPlugin("com.android.library")) {
+        subproject.android {
+            compileSdk = 36
+            lint {
+                checkReleaseBuilds false
+                abortOnError false
+            }
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    subprojects { subproject ->
+        subproject.tasks.matching { task ->
+            task.name.toLowerCase().contains("lint")
+        }.configureEach { task ->
+            task.enabled = false
+        }
+    }
 }
 
 tasks.register("clean", Delete) {

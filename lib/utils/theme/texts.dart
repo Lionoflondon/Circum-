@@ -20,7 +20,7 @@ class AppText {
         fontSize: fontSize ?? 14,
         fontWeight: fontWeight ?? FontWeight.normal,
         decoration: decoration ?? TextDecoration.none,
-        fontFamily: fontFamily ?? 'OpenSans',
+        fontFamily: fontFamily ?? 'Helvetica',
       ),
     );
   }
@@ -42,7 +42,7 @@ class AppText {
         fontSize: fontSize ?? 14,
         fontWeight: fontWeight ?? FontWeight.normal,
         decoration: decoration ?? TextDecoration.none,
-        fontFamily: fontFamily ?? 'OpenSans',
+        fontFamily: fontFamily ?? 'Helvetica',
       ),
     );
   }

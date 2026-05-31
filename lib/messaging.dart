@@ -88,7 +88,9 @@ foregoundMessage() {
 }
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp();
+  }
 
   print('Got a message whilst in the background!');
   // print('Message data: ${message.data}');

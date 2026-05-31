@@ -1,16 +1,31 @@
-# circum
+# SwiftLogistics Prototype
 
-A new Flutter project.
+Flutter implementation of the AI Studio logistics iteration. The current app is
+a self-contained prototype with mock shipment data and three main views:
 
-## Getting Started
+- Home landing page with tracking input
+- Customer Portal for booking shipments and viewing statuses
+- Driver Portal for accepting jobs and marking deliveries complete
 
-This project is a starting point for a Flutter application.
+The original Circum Firebase, Stripe, map, and delivery modules are still in the
+repository for reference, but the active app entry point is the simplified
+prototype in `lib/main.dart` and `lib/app.dart`.
 
-A few resources to get you started if this is your first Flutter project:
+## Run Locally
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```sh
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Test
+
+```sh
+flutter test
+```
+
+## Production Notes
+
+Before re-enabling the original Firebase/Stripe backend flows, rotate any
+service account keys or webhook secrets that were previously committed, and keep
+server credentials out of the Flutter client.

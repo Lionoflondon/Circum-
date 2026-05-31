@@ -16,23 +16,39 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Book, track, and manage Circum deliveries.">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="circum">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-title" content="Circum">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=circum-20260528">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon.png?v=circum-20260528">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=circum-20260528">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png?v=circum-20260528">
 
-  <title>circum</title>
-  <link rel="manifest" href="manifest.json">
+  <title>Circum</title>
+  <link rel="manifest" href="manifest.json?v=circum-20260528">
 
   <script>
     // The value below is injected by flutter build, do not touch.
     const serviceWorkerVersion = null;
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(keys) {
+        for (const key of keys) {
+          caches.delete(key);
+        }
+      });
+    }
   </script>
   <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer=""></script>
@@ -119,12 +135,11 @@
     window.addEventListener('load', function(ev) {
       // Download main.dart.js
       _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
+        entrypointUrl: 'main.dart.js?v=firebase-dynamic-20260529',
         onEntrypointLoaded: function(engineInitializer) {
           engineInitializer.initializeEngine().then(function(appRunner) {
             appRunner.runApp();
+            setTimeout(removeSplashFromWeb, 200);
           });
         }
       });

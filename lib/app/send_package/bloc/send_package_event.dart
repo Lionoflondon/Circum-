@@ -60,6 +60,11 @@ class SetDistance extends SendPackageEvent {
 
 class SetPrice extends SendPackageEvent {}
 
+class SetParcelWeight extends SendPackageEvent {
+  final double weightKg;
+  const SetParcelWeight({required this.weightKg});
+}
+
 class CheckForPushToken extends SendPackageEvent {}
 
 class DeliveryAccepted extends SendPackageEvent {

@@ -153,7 +153,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     int? amount,
   }) async {
     final url = Uri.parse(
-      'https://us-central1-circum-2797c.cloudfunctions.net/StripePayEndpointMethodId',
+      'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
     );
 
     final data = {
@@ -184,7 +184,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     required String paymentIntentId,
   }) async {
     final url = Uri.parse(
-      'https://us-central1-circum-2797c.cloudfunctions.net/StripePayEndpointIntentId',
+      'https://us-central1-circum-2797c.cloudfunctions.net/confirmPaymentIntent',
     );
     final response = await http.post(
       url,

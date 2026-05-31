@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:math';
-
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
+import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/utils/theme/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -17,7 +15,6 @@ import 'package:geocoding/geocoding.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
@@ -25,7 +22,6 @@ import 'package:geolocator/geolocator.dart';
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/calculate_bearing.dart';
 import '../../../helper/chats_help.dart';
-import '../../../helper/messaging_server.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
 import '../models/message.m.dart';
@@ -50,6 +46,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<CalculateDistance>(_handleCalculateDistance);
     on<SetDistance>(_handleSetDistance);
     on<SetPrice>(_handleSetPrice);
+    on<SetParcelWeight>(_handleSetParcelWeight);
     on<SendDeliveryRequest>(_handleSendDeliveryRequestEvent);
     on<DeliveryAccepted>(_handleDeliveryAcceptedEvent);
     on<DeliveryCompleted>(_handleDeliveryCompleted);
@@ -285,28 +282,21 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetPrice(SetPrice event, Emitter<SendPackageState> emit) {
-    print(state.distance);
-    double distanceKmToMiles = state.distance! / 1.6093;
-    int roundedMiles = distanceKmToMiles.ceil();
+    final distanceKm = state.distance ?? 0;
+    final quote = DeliveryPricing.calculate(
+      DeliveryPricingInput(
+        distanceMiles: DeliveryPricing.kilometresToMiles(distanceKm),
+        weightKg: state.parcelWeightKg,
+      ),
+    );
 
-    // Set the base price and additional charge per mile
-    double basePrice = 6.0;
-    double additionalChargePerMile = 1;
+    emit(state.copyWith(price: quote.total));
+  }
 
-    // Calculate the total price
-    double totalPrice =
-        basePrice + (max(0, distanceKmToMiles - 1) * additionalChargePerMile);
-    // basePrice + (distanceKmToMiles - 1) * additionalChargePerMile;
-
-    // Make sure the additional charge only applies for distances greater than 1 mile
-    if (distanceKmToMiles < 1.6) {
-      totalPrice = basePrice;
-    }
-
-    String inString = totalPrice.toStringAsFixed(2);
-    double totalPriceInTwoDecimalPlaces = double.parse(inString);
-
-    emit(state.copyWith(price: totalPriceInTwoDecimalPlaces));
+  void _handleSetParcelWeight(
+      SetParcelWeight event, Emitter<SendPackageState> emit) {
+    emit(state.copyWith(parcelWeightKg: event.weightKg));
+    add(SetPrice());
   }
 
   void _handleSendDeliveryRequestEvent(
@@ -354,11 +344,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           'subAddress': state.destinationLocationSubAddress
         },
         "role": 'user',
+        'userId': user?.uid,
+        'senderId': user?.uid,
+        'senderName': user?.displayName,
+        'senderEmail': user?.email,
         'pickupPosition': pickupLocation.data,
         'pickupLocality': event.pickupDetails.locality,
         'requestId': uuidStrong,
         'code': fcmToken,
         'price': state.price,
+        'weightKg': state.parcelWeightKg,
+        'pricingBreakdown': DeliveryPricing.calculate(
+          DeliveryPricingInput(
+            distanceMiles:
+                DeliveryPricing.kilometresToMiles(state.distance ?? 0),
+            weightKg: state.parcelWeightKg,
+          ),
+        ).toJson(),
         'currency': 'GBP',
         'status': 'requested',
         'createdAt': DateTime.now()
@@ -594,6 +596,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final String? activeRequest = prefs.getString('activeRequest');
 
       String msg = event.message;
+      final riderId = state.deliveryData?.riderId;
+
+      if (user == null || activeRequest == null || riderId == null) {
+        throw Exception('Cannot send message without an active delivery.');
+      }
 
       emit(state.copyWith(message: ''));
 
@@ -601,24 +608,17 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
       final messageData = {
         'requestId': activeRequest,
-        'senderId': user!.uid,
+        'senderId': user.uid,
         'message': msg,
         'timeStamp': '${DateTime.now()}'
       };
 
-      await MessagingServer().sendMessage(
-          data: {
-            "type": "message",
-            "data": """{
-                "requestId": "$activeRequest",
-                "senderId": "${user.uid}",
-                "message": "${event.message}",
-                "timeStamp": "${DateTime.now()}"
-              }"""
-          },
-          code: state.deliveryData!.code,
-          message: event.message,
-          title: user.displayName!.split(' ').first.trim());
+      final callable = FirebaseFunctions.instance.httpsCallable('sendMessage');
+      await callable.call({
+        'recipientId': riderId,
+        'requestId': activeRequest,
+        'message': event.message,
+      });
 
       add(IncomingMessage(data: messageData));
 
@@ -633,14 +633,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       LoadChatMessages event, Emitter emit) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? activeRequest = prefs.getString('activeRequest');
-    final directory = await getApplicationDocumentsDirectory();
-    final chats = File('${directory.path}/$activeRequest.json');
 
-    if (await chats.exists()) {
+    if (activeRequest != null) {
+      final jsonData = await ChatsHelper().loadChat(activeRequest);
+      if (jsonData.isEmpty) return;
       print('Loading chats');
-      final contents = await chats.readAsString();
-      // print(contents);
-      final jsonData = await jsonDecode(contents) as List;
 
       final messagesList = jsonData.map((e) => Message.fromJson(e)).toList();
       emit(state.copyWith(

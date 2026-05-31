@@ -2,20 +2,25 @@
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const functions = require("firebase-functions");
-// const stripe = require("stripe")(functions.config().stripe.testkey);
-const stripe = require("stripe")(functions.config().stripe.livekey);
+const functions = require("firebase-functions/v1");
+const stripeConfig = functions.config().stripe || {};
+const stripe = require("stripe")(stripeConfig.livekey);
 const {v4: uuidv4} = require("uuid");
 
 const sendPackage = require("./send-package");
 const getAvaliableRequests = require("./get-avaliable-requests");
 const sendMessage = require("./send-message");
+const sendRiderUpdate = require("./send-rider-update");
+const healthPlus = require("./health-plus");
 
 initializeApp();
 
 exports.sendPackage = sendPackage;
 exports.getAvaliableRequests = getAvaliableRequests;
 exports.sendMessage = sendMessage;
+exports.sendRiderUpdate = sendRiderUpdate;
+exports.createHealthPlusCheckoutSession = healthPlus.createHealthPlusCheckoutSession;
+exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
@@ -47,7 +52,7 @@ const generateResponse = function(intent) {
 };
 
 
-exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) => {
+const createPaymentIntentHandler = async (req, res) => {
   const {
     // paymentMethodId,
     amount,
@@ -137,9 +142,12 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(async (req, res) =
     // See https://stripe.com/docs/declines/codes for more.
     return res.send({error: e.message});
   }
-});
+};
 
-exports.StripePayEndpointIntentId = functions.https.onRequest(async (req, res) => {
+exports.StripePayEndpointMethodId = functions.https.onRequest(createPaymentIntentHandler);
+exports.createPaymentIntent = functions.https.onRequest(createPaymentIntentHandler);
+
+const confirmPaymentIntentHandler = async (req, res) => {
   const {
     paymentIntentId,
   } = req.body;
@@ -157,15 +165,27 @@ exports.StripePayEndpointIntentId = functions.https.onRequest(async (req, res) =
     // See https://stripe.com/docs/declines/codes for more.
     return res.send({error: e.message});
   }
-});
+};
+
+exports.StripePayEndpointIntentId = functions.https.onRequest(confirmPaymentIntentHandler);
+exports.confirmPaymentIntent = functions.https.onRequest(confirmPaymentIntentHandler);
 
 exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];
   // console.log(sig);
 
-  // const stripeTestSigningSecret = "whsec_ykXoJuSjCMiik7Omm3JVOCpkNMw12eij";
-  const stripeLiveSigningSecret = "whsec_n6InSrUIx4GbsJtdWL4758QOzGdEvpAM";
-  const event = stripe.webhooks.constructEvent(req.rawBody, sig, stripeLiveSigningSecret);
+  const stripeWebhookSigningSecret = stripeConfig.webhooksecret;
+  if (!stripeWebhookSigningSecret) {
+    return res.status(500).send({error: "Stripe webhook secret is not configured"});
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.rawBody, sig, stripeWebhookSigningSecret);
+  } catch (err) {
+    console.error("Stripe webhook signature verification failed:", err.message);
+    return res.status(400).send({error: "Invalid Stripe webhook signature"});
+  }
 
   console.log("💰 Webhook working!");
   console.log(`Event: ${event.type}`);

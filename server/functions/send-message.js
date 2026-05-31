@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 
@@ -50,7 +50,7 @@ const sendMessage = functions.https.onCall(async (data, context) => {
       recipientType,
       message,
       requestId,
-      timestamp,
+      timeStamp: timestamp.toISOString(),
       status: "sent",
     };
 
@@ -60,7 +60,7 @@ const sendMessage = functions.https.onCall(async (data, context) => {
         .doc(requestId)
         .collection("messages");
 
-    await chatRef.add(messageData);
+    const messageRef = await chatRef.add(messageData);
 
     // Update last message in chat document
     await getFirestore().collection("chats").doc(requestId).set({
@@ -72,31 +72,31 @@ const sendMessage = functions.https.onCall(async (data, context) => {
 
     // Send push notification if FCM token exists
     if (fcmToken) {
-      const senderName = senderType === "rider" ?
-        riderDoc.data().name.split(" ")[0] :
-        userDoc.data().name.split(" ")[0];
+      const senderData = senderType === "rider" ? riderDoc.data() : userDoc.data();
+      const senderName = (senderData.name || senderData.username || "Circum")
+          .split(" ")[0];
 
       const notificationMessage = {
         data: {
           type: "message",
-          data:
-         {requestId: requestId,
-           senderName: senderName,
-           senderId: senderId,
-           senderType: senderType,
-           message: message,
-           timestamp: timestamp,
-         },
+          data: JSON.stringify({
+            requestId,
+            senderName,
+            senderId,
+            senderType,
+            message,
+            timeStamp: timestamp.toISOString(),
+          }),
         },
         android: {
           priority: "high",
         },
         apns: {
+          headers: {
+            "apns-priority": "10",
+            "apns-push-type": "background",
+          },
           payload: {
-            headers: {
-              "apns-priority": "10", // High priority
-              "apns-push-type": "background", // Background notification
-            },
             aps: {
               sound: "default",
               contentAvailable: true,
@@ -115,8 +115,8 @@ const sendMessage = functions.https.onCall(async (data, context) => {
 
     return {
       success: true,
-      messageId: chatRef.id,
-      timestamp: timestamp,
+      messageId: messageRef.id,
+      timestamp: timestamp.toISOString(),
     };
   } catch (error) {
     console.error("Error in sendMessage:", error);

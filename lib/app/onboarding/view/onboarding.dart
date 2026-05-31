@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 // import 'package:circum/app/authentication/view/add_details.dart';
 import 'package:circum/app/authentication/view/signup.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -130,8 +131,8 @@ class OnboardingView extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             fontSize: 16)
                       ]))),
-          if (Platform.isIOS) const SizedBox(width: 15),
-          if (Platform.isIOS)
+          if (!kIsWeb && Platform.isIOS) const SizedBox(width: 15),
+          if (!kIsWeb && Platform.isIOS)
             Expanded(
                 child: TextButton(
                     onPressed: () {

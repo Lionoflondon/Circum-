@@ -47,7 +47,7 @@ class AppTextInput {
       maxLength: maxLength,
       style: TextStyle(
         color: Colors.white,
-        fontFamily: 'OpenSans',
+        fontFamily: 'Helvetica',
         decoration: TextDecoration.none,
         // fontSize: obscureText != null && obscureText == true ? 14 : 16
       ),
@@ -60,7 +60,7 @@ class AppTextInput {
         suffixIcon: surfix,
 
         counterStyle:
-            const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+            const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
 
         // prefix: prefix,
         labelText: labelText,

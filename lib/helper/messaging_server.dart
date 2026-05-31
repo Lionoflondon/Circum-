@@ -1,11 +1,12 @@
 import 'package:firebase_cloud_messaging_flutter/firebase_cloud_messaging_flutter.dart';
 
 class MessagingServer {
-  sendMessage(
-      {required Map<String, String> data,
-      required String code,
-      required String message,
-      String? title}) async {
+  sendMessage({
+    required Map<String, String> data,
+    required String code,
+    required String message,
+    String? title,
+  }) async {
     try {
       /// My Service Account Json File Content
       final serviceAccountFileContent = <String, String>{
@@ -23,13 +24,11 @@ class MessagingServer {
             "https://www.googleapis.com/oauth2/v1/certs",
         "client_x509_cert_url":
             "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-ged9l%40circum-2797c.iam.gserviceaccount.com",
-        "universe_domain": "googleapis.com"
+        "universe_domain": "googleapis.com",
       };
 
       /// Add Your Service Account File Content as Map
-      var server = FirebaseCloudMessagingServer(
-        serviceAccountFileContent,
-      );
+      var server = FirebaseCloudMessagingServer(serviceAccountFileContent);
 
       /// Get Firebase  Messagin Token [Optional, If you want to send message to specific user]
       /// Don't pass token if you want to send message to all registered users
@@ -41,9 +40,11 @@ class MessagingServer {
         FirebaseSend(
           validateOnly: false,
           message: FirebaseMessage(
-            apns: const FirebaseApnsConfig(payload: {
-              'aps': {'content-available': 1}
-            }),
+            apns: const FirebaseApnsConfig(
+              payload: {
+                'aps': {'content-available': 1},
+              },
+            ),
             token:
                 code, // only required If you want to send message to specific user.
             data: data,

@@ -8,6 +8,7 @@ import 'package:flutter_svg/svg.dart';
 import '../../../utils/theme/theme.dart';
 import '../../account/view/account.dart';
 import '../../authentication/bloc/auth_bloc.dart';
+import '../../health_plus/view/index.dart';
 import '../../history/view/index.dart';
 import '../../send_package/view/index.dart';
 import '../../send_package/view/maps_view.dart';
@@ -89,8 +90,8 @@ class AppNavState extends State<AppNavView> {
           unselectedFontSize: 10,
           selectedItemColor: AppColors.primary,
           unselectedItemColor: AppColors.grey,
-          selectedLabelStyle: const TextStyle(fontFamily: 'OpenSans'),
-          unselectedLabelStyle: const TextStyle(fontFamily: 'OpenSans'),
+          selectedLabelStyle: const TextStyle(fontFamily: 'Helvetica'),
+          unselectedLabelStyle: const TextStyle(fontFamily: 'Helvetica'),
           type: BottomNavigationBarType.fixed,
           onTap: (index) =>
               context.read<NavbarBloc>().add(ChangeTabIndex(index: index)),
@@ -128,6 +129,18 @@ class AppNavState extends State<AppNavView> {
                 icon: SvgPicture.asset(
                   'assets/svg/chat.svg',
                   height: 22,
+                )),
+            BottomNavigationBarItem(
+                label: 'Health+',
+                activeIcon: Icon(
+                  Icons.health_and_safety,
+                  color: AppColors.primary,
+                  size: 23,
+                ),
+                icon: Icon(
+                  Icons.health_and_safety_outlined,
+                  color: AppColors.grey,
+                  size: 23,
                 )),
             BottomNavigationBarItem(
               label: 'Account',
@@ -173,6 +186,7 @@ class AppNavState extends State<AppNavView> {
       const HomeView(),
       const HistoryView(),
       const SupportView(),
+      const HealthPlusView(),
       const AccountView(),
     ];
     return children[index];

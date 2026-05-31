@@ -57,7 +57,7 @@ class HistoryViewState extends State<HistoryView> {
               dropdownColor: AppColors.input,
               style: const TextStyle(
                   color: Colors.white,
-                  fontFamily: 'OpenSans',
+                  fontFamily: 'Helvetica',
                   fontWeight: FontWeight.w500,
                   // fontSize: 15,
                   decoration: TextDecoration.none),
@@ -80,7 +80,7 @@ class HistoryViewState extends State<HistoryView> {
 
                 hintText: 'Filter',
                 hintStyle: TextStyle(
-                    fontFamily: 'OpenSans', color: Colors.white, fontSize: 16),
+                    fontFamily: 'Helvetica', color: Colors.white, fontSize: 16),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(0)),
                   borderSide: BorderSide(color: Colors.transparent),

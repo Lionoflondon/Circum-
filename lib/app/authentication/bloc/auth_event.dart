@@ -142,8 +142,8 @@ class UpdatePhoneNumber extends AuthEvent {
 }
 
 class UpdateUserProfilePhoto extends AuthEvent {
-  final String imagePath;
-  const UpdateUserProfilePhoto({required this.imagePath});
+  final Uint8List imageBytes;
+  const UpdateUserProfilePhoto({required this.imageBytes});
 }
 
 class SignInWithEmail extends AuthEvent {

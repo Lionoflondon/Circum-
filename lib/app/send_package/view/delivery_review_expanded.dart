@@ -629,21 +629,21 @@ class _DeliveryReviewExpandedViewState
         // AppText.text('Mobile Number', color: Colors.white),
         // const SizedBox(height: 12),
         IntlPhoneField(
-          style: const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+          style: const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
           dropdownTextStyle:
-              const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+              const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
           decoration: InputDecoration(
             fillColor: AppColors.input,
             filled: true,
             labelStyle: const TextStyle(
-                fontFamily: 'OpenSans',
+                fontFamily: 'Helvetica',
                 fontSize: 14.0,
                 fontWeight: FontWeight.w500,
                 color: AppColors.grey),
             // hintText: '9020020222',
             hintStyle: TextStyle(
                 color: const Color(0xFF050529).withOpacity(0.25),
-                fontFamily: 'OpenSans'),
+                fontFamily: 'Helvetica'),
             focusedBorder: const OutlineInputBorder(
               borderRadius: BorderRadius.all(Radius.circular(0)),
               borderSide: BorderSide(width: 1, color: AppColors.primary),

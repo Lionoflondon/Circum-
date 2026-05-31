@@ -1,5 +1,5 @@
 /* eslint-disable max-len */
-const functions = require("firebase-functions");
+const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 

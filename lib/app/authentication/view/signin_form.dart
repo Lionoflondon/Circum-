@@ -71,21 +71,22 @@ class SigninFormState extends State<SigninForm> {
               color: Colors.white, fontWeight: FontWeight.bold),
           const SizedBox(height: 4),
           IntlPhoneField(
-            style: const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+            style:
+                const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
             dropdownTextStyle:
-                const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+                const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
             decoration: InputDecoration(
               fillColor: AppColors.input,
               filled: true,
               labelStyle: const TextStyle(
-                  fontFamily: 'OpenSans',
+                  fontFamily: 'Helvetica',
                   fontSize: 14.0,
                   fontWeight: FontWeight.w500,
                   color: AppColors.grey),
               // hintText: '9020020222',
               hintStyle: TextStyle(
                   color: const Color(0xFF050529).withOpacity(0.25),
-                  fontFamily: 'OpenSans'),
+                  fontFamily: 'Helvetica'),
               focusedBorder: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(0)),
                 borderSide: BorderSide(width: 1, color: AppColors.primary),
@@ -288,7 +289,7 @@ class SigninFormState extends State<SigninForm> {
                         text: 'New to Circum? ',
                         style: TextStyle(
                             color: Colors.white,
-                            fontFamily: 'OpenSans',
+                            fontFamily: 'Helvetica',
                             fontSize: 16)),
                     TextSpan(
                       text: 'Create Account',

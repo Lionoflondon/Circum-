@@ -239,7 +239,7 @@ class EnterOTPViewState extends State<EnterOTPView> {
               textStyle: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'OpenSans'),
+                  fontFamily: 'Helvetica'),
               height: 48,
               width: 48,
               decoration: BoxDecoration(

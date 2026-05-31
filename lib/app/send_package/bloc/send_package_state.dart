@@ -46,6 +46,7 @@ class SendPackageState {
   double minDrawerHeight;
   double maxDrawerHeight;
   double? price;
+  double parcelWeightKg;
   DeliveryData? deliveryData;
   Map<MarkerId, Marker> markers;
   List<Polyline> polylines;
@@ -76,6 +77,7 @@ class SendPackageState {
       this.minDrawerHeight = 180,
       this.maxDrawerHeight = 180,
       this.price,
+      this.parcelWeightKg = 0,
       this.deliveryData,
       this.markers = const {},
       this.polylines = const [],
@@ -107,6 +109,7 @@ class SendPackageState {
       String? pickupLocality,
       String? destinationLocality,
       double? price,
+      double? parcelWeightKg,
       DeliveryData? deliveryData,
       Map<MarkerId, Marker>? markers,
       double? minDrawerHeight,
@@ -140,6 +143,7 @@ class SendPackageState {
         pickupLocality: pickupLocality ?? this.pickupLocality,
         destinationLocality: destinationLocality ?? this.destinationLocality,
         price: price ?? this.price,
+        parcelWeightKg: parcelWeightKg ?? this.parcelWeightKg,
         deliveryData: deliveryData ?? this.deliveryData,
         markers: markers ?? this.markers,
         polylines: polylines ?? this.polylines,

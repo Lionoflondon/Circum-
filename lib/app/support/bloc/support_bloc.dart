@@ -1,11 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:bloc/bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../helper/chats_help.dart';
 import '../../send_package/models/message.m.dart';
@@ -67,15 +65,9 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
 
     on<LoadSupportChatMessages>(
       (event, emit) async {
-        final directory = await getApplicationDocumentsDirectory();
-        final chats = File('${directory.path}/support.json');
-
-        if (await chats.exists()) {
+        final jsonData = await ChatsHelper().loadChat('support');
+        if (jsonData.isNotEmpty) {
           print('Loading chats');
-          final contents = await chats.readAsString();
-          // print(contents);
-          final jsonData = await jsonDecode(contents) as List;
-
           final messagesList =
               jsonData.map((e) => Message.fromJson(e)).toList();
           emit(state.copyWith(

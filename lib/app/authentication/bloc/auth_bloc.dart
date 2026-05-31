@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
@@ -608,10 +608,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       User? user = auth.currentUser;
       final fileName = user!.uid;
-      File imageFile = File(event.imagePath);
 
       final storageRef = FirebaseStorage.instance;
-      await storageRef.ref('profile-photos/$fileName').putFile(imageFile);
+      await storageRef.ref('profile-photos/$fileName').putData(
+            event.imageBytes,
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
       final downloadUrl =
           await storageRef.ref('profile-photos/$fileName').getDownloadURL();
 

@@ -117,20 +117,20 @@ class _AccountDetailsState extends State<AccountDetails> {
                       XFile? image = await picker.pickImage(
                           source: ImageSource.gallery, imageQuality: 1);
                       if (image != null) {
+                        final imageBytes = await image.readAsBytes();
                         // ignore: use_build_context_synchronously
-                        context
-                            .read<AuthBloc>()
-                            .add(UpdateUserProfilePhoto(imagePath: image.path));
+                        context.read<AuthBloc>().add(
+                            UpdateUserProfilePhoto(imageBytes: imageBytes));
                       }
                     }
                     if (imageSource == 'camera') {
                       XFile? image = await picker.pickImage(
                           source: ImageSource.camera, imageQuality: 1);
                       if (image != null) {
+                        final imageBytes = await image.readAsBytes();
                         // ignore: use_build_context_synchronously
-                        context
-                            .read<AuthBloc>()
-                            .add(UpdateUserProfilePhoto(imagePath: image.path));
+                        context.read<AuthBloc>().add(
+                            UpdateUserProfilePhoto(imageBytes: imageBytes));
                       }
                     }
                   },
