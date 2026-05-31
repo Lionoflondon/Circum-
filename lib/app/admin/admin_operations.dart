@@ -19,6 +19,7 @@ enum AdminRole {
 
 enum AdminPermission {
   viewDashboard,
+  manageAdmins,
   viewCustomers,
   editCustomers,
   viewDrivers,
@@ -97,6 +98,49 @@ class AdminAccessPolicy {
       }
     }
     return false;
+  }
+}
+
+class AdminUserAccess {
+  static List<String> activeRolesFromRecord(Map<String, dynamic>? record) {
+    if (record == null || !isActive(record)) return const [];
+    final roles = record['roles'];
+    if (roles is List) return roles.map((role) => '$role').toList();
+    final role = record['role'];
+    return role == null ? const [] : ['$role'];
+  }
+
+  static bool isActive(Map<String, dynamic>? record) {
+    return '${record?['status'] ?? 'inactive'}'.toLowerCase() == 'active';
+  }
+
+  static bool hasInactiveAdminRecord(Iterable<Map<String, dynamic>?> records) {
+    return records
+        .where((record) => record != null)
+        .any((record) => !isActive(record));
+  }
+
+  static String emailDocumentId(String email) => email.trim().toLowerCase();
+
+  static Map<String, dynamic> adminUserPatch({
+    required String email,
+    required String role,
+    required String status,
+    required String invitedBy,
+    Object? createdAt,
+    required Object updatedAt,
+    Object? lastLoginAt,
+  }) {
+    return {
+      'email': email.trim().toLowerCase(),
+      'role': role,
+      'roles': [role],
+      'status': status,
+      'invitedBy': invitedBy,
+      if (createdAt != null) 'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      if (lastLoginAt != null) 'lastLoginAt': lastLoginAt,
+    };
   }
 }
 

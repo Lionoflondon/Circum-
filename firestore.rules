@@ -10,8 +10,27 @@ service cloud.firestore {
       return signedIn() && (
         request.auth.token.adminRole == role ||
         request.auth.token.role == role ||
-        (request.auth.token.roles is list && role in request.auth.token.roles)
+        (request.auth.token.roles is list && role in request.auth.token.roles) ||
+        adminUserUidHasRole(role) ||
+        adminUserEmailHasRole(role)
       );
+    }
+
+    function adminUserUidHasRole(role) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.status == 'active' &&
+        get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.roles is list &&
+        role in get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.roles;
+    }
+
+    function adminUserEmailHasRole(role) {
+      return signedIn() &&
+        request.auth.token.email is string &&
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)) &&
+        get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.status == 'active' &&
+        get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.roles is list &&
+        role in get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.roles;
     }
 
     function isAdmin() {
@@ -82,8 +101,20 @@ service cloud.firestore {
     }
 
     match /adminUsers/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow write: if hasRole('super_admin');
+      allow read: if signedIn() && (
+        request.auth.uid == userId ||
+        request.auth.token.email == userId ||
+        isAdmin()
+      );
+      allow create, update: if hasRole('super_admin') &&
+        userId != request.auth.uid &&
+        userId != request.auth.token.email;
+      allow update: if signedIn() &&
+        (userId == request.auth.uid || userId == request.auth.token.email) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['lastLoginAt']);
+      allow delete: if hasRole('super_admin') &&
+        userId != request.auth.uid &&
+        userId != request.auth.token.email;
     }
 
     match /adminAuditLogs/{logId} {

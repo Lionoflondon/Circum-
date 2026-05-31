@@ -32,6 +32,41 @@ void main() {
             ['finance_admin'], AdminPermission.approveDrivers),
         isFalse,
       );
+      expect(
+        AdminAccessPolicy.can(['super_admin'], AdminPermission.manageAdmins),
+        isTrue,
+      );
+      expect(
+        AdminAccessPolicy.can(
+            ['operations_admin'], AdminPermission.manageAdmins),
+        isFalse,
+      );
+    });
+
+    test('inactive admin records do not grant roles', () {
+      expect(
+        AdminUserAccess.activeRolesFromRecord({
+          'roles': ['support_agent'],
+          'status': 'active',
+        }),
+        ['support_agent'],
+      );
+      expect(
+        AdminUserAccess.activeRolesFromRecord({
+          'roles': ['support_agent'],
+          'status': 'inactive',
+        }),
+        isEmpty,
+      );
+      expect(
+        AdminUserAccess.hasInactiveAdminRecord([
+          {
+            'roles': ['support_agent'],
+            'status': 'inactive'
+          }
+        ]),
+        isTrue,
+      );
     });
 
     test('loads meaningful Firebase-style metrics', () {
@@ -177,6 +212,23 @@ void main() {
       expect(patch['status'], 'collected');
       expect(patch['assignedDriverId'], 'rider-1');
       expect(patch['adminUpdatedAt'], isA<DateTime>());
+    });
+
+    test('creates admin user access patches without passwords', () {
+      final patch = AdminUserAccess.adminUserPatch(
+        email: 'Ops@CircumUK.com',
+        role: 'operations_admin',
+        status: 'active',
+        invitedBy: 'owner@circumuk.com',
+        createdAt: DateTime(2026, 5, 31),
+        updatedAt: DateTime(2026, 5, 31),
+      );
+
+      expect(patch['email'], 'ops@circumuk.com');
+      expect(patch['role'], 'operations_admin');
+      expect(patch['roles'], ['operations_admin']);
+      expect(patch['status'], 'active');
+      expect(patch.containsKey('password'), isFalse);
     });
   });
 }

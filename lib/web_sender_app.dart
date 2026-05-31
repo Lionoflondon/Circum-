@@ -286,6 +286,7 @@ class _LandingPage extends StatelessWidget {
 
 enum _AdminSection {
   overview,
+  adminUsers,
   senders,
   drivers,
   deliveries,
@@ -319,7 +320,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _search = TextEditingController();
+  final _adminInviteEmail = TextEditingController();
+  final _adminInviteNote = TextEditingController();
   _AdminSection _section = _AdminSection.overview;
+  AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   User? _adminUser;
   List<String> _roles = const [];
   bool _loading = true;
@@ -336,6 +340,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _healthPlusPickups = const [];
   List<Map<String, dynamic>> _recurringPickupSchedules = const [];
   List<Map<String, dynamic>> _payoutRequests = const [];
+  List<Map<String, dynamic>> _adminUsers = const [];
   List<Map<String, dynamic>> _auditLogs = const [];
 
   @override
@@ -349,6 +354,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     _email.dispose();
     _password.dispose();
     _search.dispose();
+    _adminInviteEmail.dispose();
+    _adminInviteNote.dispose();
     super.dispose();
   }
 
@@ -390,17 +397,46 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .collection('adminUsers')
         .doc(user.uid)
         .get();
-    final docRoles = adminDoc.exists
-        ? (adminDoc.data()?['roles'] as List<dynamic>? ?? const [])
-            .map((role) => '$role')
-            .toList()
-        : <String>[];
+    final email = user.email?.trim().toLowerCase();
+    final emailDoc = email == null || email.isEmpty
+        ? null
+        : await FirebaseFirestore.instance
+            .collection('adminUsers')
+            .doc(email)
+            .get();
+    final adminRecords = [
+      if (adminDoc.exists) adminDoc.data(),
+      if (emailDoc?.exists == true) emailDoc?.data(),
+    ];
+    final inactiveAdmin = AdminUserAccess.hasInactiveAdminRecord(adminRecords);
+    final docRoles = inactiveAdmin
+        ? <String>[]
+        : adminRecords
+            .expand((record) => AdminUserAccess.activeRolesFromRecord(record))
+            .toList();
     final nextRoles = {...claimRoles, ...docRoles}.toList();
+    if (inactiveAdmin) nextRoles.clear();
     setState(() {
       _adminUser = user;
       _email.text = user.email ?? _email.text;
       _roles = nextRoles;
     });
+    if (nextRoles.isNotEmpty) {
+      final db = FirebaseFirestore.instance;
+      final patch = {'lastLoginAt': FieldValue.serverTimestamp()};
+      if (adminDoc.exists) {
+        await db.collection('adminUsers').doc(user.uid).set(
+              patch,
+              SetOptions(merge: true),
+            );
+      }
+      if (emailDoc?.exists == true && email != null) {
+        await db.collection('adminUsers').doc(email).set(
+              patch,
+              SetOptions(merge: true),
+            );
+      }
+    }
   }
 
   Future<void> _signIn() async {
@@ -418,7 +454,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       await _loadAdminAccess(credential.user!);
       if (!AdminAccessPolicy.hasAnyAdminRole(_roles)) {
         setState(() => _message =
-            'This account is signed in but has no Circum admin role.');
+            'This account is signed in but has no active Circum admin role.');
         return;
       }
       await _loadAdminData();
@@ -445,6 +481,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _readCollection(db.collection('deliveryRequests').limit(80)),
       _readCollection(db.collection('users').limit(80)),
       _readCollection(db.collection('riderProfiles').limit(80)),
+      _can(AdminPermission.manageAdmins)
+          ? _readCollection(db.collection('adminUsers').limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
       _can(AdminPermission.viewFinance)
           ? _readCollection(db.collection('payments').limit(80))
           : Future.value(<Map<String, dynamic>>[]),
@@ -475,17 +514,19 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final deliveries = results[0];
     final senders = results[1];
     final drivers = results[2];
-    final payments = results[3];
-    final ratings = results[4];
-    final tickets = results[5];
-    final healthPayments = results[6];
-    final healthPickups = results[7];
-    final schedules = results[8];
-    final payouts = results[9];
+    final adminUsers = results[3];
+    final payments = results[4];
+    final ratings = results[5];
+    final tickets = results[6];
+    final healthPayments = results[7];
+    final healthPickups = results[8];
+    final schedules = results[9];
+    final payouts = results[10];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
       _drivers = drivers;
+      _adminUsers = adminUsers;
       _payments = payments;
       _ratings = ratings;
       _supportTickets = tickets;
@@ -493,7 +534,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _healthPlusPickups = healthPickups;
       _recurringPickupSchedules = schedules;
       _payoutRequests = payouts;
-      _auditLogs = results[10];
+      _auditLogs = results[11];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -520,6 +561,96 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       ...entry.toJson(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<void> _saveAdminUser({
+    Map<String, dynamic>? existing,
+    String? status,
+  }) async {
+    if (!_can(AdminPermission.manageAdmins)) {
+      setState(() => _message = 'Only super admins can manage admin users.');
+      return;
+    }
+    final email = (existing?['email'] ?? _adminInviteEmail.text)
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _message = 'Enter a valid employee email address.');
+      return;
+    }
+    if (email == _adminUser?.email?.trim().toLowerCase()) {
+      setState(
+          () => _message = 'You cannot change your own admin access here.');
+      return;
+    }
+    final role = existing == null
+        ? _adminInviteRole.value
+        : '${existing['role'] ?? (existing['roles'] is List && (existing['roles'] as List).isNotEmpty ? (existing['roles'] as List).first : AdminRole.operationsAdmin.value)}';
+    final nextStatus = status ?? '${existing?['status'] ?? 'active'}';
+    final id = '${existing?['id'] ?? AdminUserAccess.emailDocumentId(email)}';
+    final patch = AdminUserAccess.adminUserPatch(
+      email: email,
+      role: role,
+      status: nextStatus,
+      invitedBy: _adminUser?.email ?? _adminUser?.uid ?? 'super_admin',
+      createdAt: existing == null ? FieldValue.serverTimestamp() : null,
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await FirebaseFirestore.instance
+        .collection('adminUsers')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: existing == null ? 'admin_user_added' : 'admin_user_updated',
+      recordType: 'adminUsers',
+      recordId: id,
+      oldValue: existing == null
+          ? const {}
+          : {
+              'role': existing['role'] ?? existing['roles'],
+              'status': existing['status'],
+            },
+      newValue: {'role': role, 'status': nextStatus, 'email': email},
+      reason: _adminInviteNote.text.trim().isEmpty
+          ? 'Admin access managed from admin panel'
+          : _adminInviteNote.text.trim(),
+    ));
+    _adminInviteEmail.clear();
+    _adminInviteNote.clear();
+    setState(() => _message = 'Admin access saved for $email.');
+    await _loadAdminData();
+  }
+
+  Future<void> _changeAdminRole(
+    Map<String, dynamic> adminUser,
+    AdminRole role,
+  ) async {
+    if (!_can(AdminPermission.manageAdmins)) return;
+    final email = '${adminUser['email'] ?? ''}'.trim().toLowerCase();
+    if (email == _adminUser?.email?.trim().toLowerCase()) {
+      setState(() => _message = 'You cannot change your own admin role.');
+      return;
+    }
+    final id = '${adminUser['id'] ?? AdminUserAccess.emailDocumentId(email)}';
+    final oldRole = adminUser['role'] ?? adminUser['roles'];
+    await FirebaseFirestore.instance.collection('adminUsers').doc(id).set({
+      'role': role.value,
+      'roles': [role.value],
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: 'admin_user_role_changed',
+      recordType: 'adminUsers',
+      recordId: id,
+      oldValue: {'role': oldRole},
+      newValue: {'role': role.value},
+      reason: 'Role changed from admin users page',
+    ));
+    setState(() => _message = 'Updated $email to ${role.value}.');
+    await _loadAdminData();
   }
 
   Future<void> _duplicateDelivery(Map<String, dynamic> delivery) async {
@@ -771,6 +902,20 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           colors: colors,
           metrics: _metrics,
           issues: _issueRows(),
+        ),
+      _AdminSection.adminUsers => _AdminUsersSection(
+          colors: colors,
+          records: adminSearch(_adminUsers, query, ['email', 'role', 'status']),
+          inviteEmail: _adminInviteEmail,
+          inviteNote: _adminInviteNote,
+          selectedRole: _adminInviteRole,
+          canManage: _can(AdminPermission.manageAdmins),
+          currentEmail: _adminUser?.email,
+          onRoleChanged: (role) => setState(() => _adminInviteRole = role),
+          onAdd: () => _saveAdminUser(),
+          onChangeRole: _changeAdminRole,
+          onStatus: (record, status) =>
+              _confirmAdminAccessChange(record, status),
         ),
       _AdminSection.senders => _AdminDataSection(
           colors: colors,
@@ -1083,6 +1228,43 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     ];
   }
 
+  Future<void> _confirmAdminAccessChange(
+    Map<String, dynamic> adminUser,
+    String status,
+  ) async {
+    final email = '${adminUser['email'] ?? ''}'.trim().toLowerCase();
+    if (email == _adminUser?.email?.trim().toLowerCase()) {
+      setState(() => _message = 'You cannot change your own admin access.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(status == 'active'
+            ? 'Activate admin access?'
+            : 'Deactivate admin access?'),
+        content: Text(
+          status == 'active'
+              ? 'This will let $email access the admin panel with their Firebase Auth login.'
+              : 'This will block $email from the admin panel.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _saveAdminUser(existing: adminUser, status: status);
+    }
+  }
+
   List<Map<String, dynamic>> _issueRows() {
     final issues = <Map<String, dynamic>>[];
     for (final delivery in _deliveries) {
@@ -1311,6 +1493,243 @@ class _AdminLoginView extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AdminUsersSection extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> records;
+  final TextEditingController inviteEmail;
+  final TextEditingController inviteNote;
+  final AdminRole selectedRole;
+  final bool canManage;
+  final String? currentEmail;
+  final ValueChanged<AdminRole> onRoleChanged;
+  final VoidCallback onAdd;
+  final void Function(Map<String, dynamic>, AdminRole) onChangeRole;
+  final void Function(Map<String, dynamic>, String) onStatus;
+
+  const _AdminUsersSection({
+    required this.colors,
+    required this.records,
+    required this.inviteEmail,
+    required this.inviteNote,
+    required this.selectedRole,
+    required this.canManage,
+    required this.currentEmail,
+    required this.onRoleChanged,
+    required this.onAdd,
+    required this.onChangeRole,
+    required this.onStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Admin users',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Give trusted employees admin access. They must sign in with their own Firebase Auth account.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (canManage)
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 260,
+                      child: TextField(
+                        controller: inviteEmail,
+                        keyboardType: TextInputType.emailAddress,
+                        style: TextStyle(
+                            color: colors.text, fontWeight: FontWeight.w800),
+                        decoration: InputDecoration(
+                          labelText: 'Employee email',
+                          labelStyle: TextStyle(color: colors.mutedText),
+                          filled: true,
+                          fillColor: colors.field,
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide.none,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.field,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<AdminRole>(
+                            value: selectedRole,
+                            dropdownColor: colors.field,
+                            style: TextStyle(
+                              color: colors.text,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            items: AdminRole.values
+                                .map(
+                                  (role) => DropdownMenuItem(
+                                    value: role,
+                                    child: Text(role.value),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (role) {
+                              if (role != null) onRoleChanged(role);
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 260,
+                      child: TextField(
+                        controller: inviteNote,
+                        style: TextStyle(
+                            color: colors.text, fontWeight: FontWeight.w800),
+                        decoration: InputDecoration(
+                          labelText: 'Reason or note',
+                          labelStyle: TextStyle(color: colors.mutedText),
+                          filled: true,
+                          fillColor: colors.field,
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide.none,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: onAdd,
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Add admin'),
+                    ),
+                  ],
+                )
+              else
+                Text(
+                  'Only super admins can add or change admin users.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              const SizedBox(height: 18),
+              if (records.isEmpty)
+                Text(
+                  'No admin users found.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              else
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingTextStyle: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                    dataTextStyle: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    columns: const [
+                      DataColumn(label: Text('Email')),
+                      DataColumn(label: Text('Role')),
+                      DataColumn(label: Text('Status')),
+                      DataColumn(label: Text('Last login')),
+                      DataColumn(label: Text('Actions')),
+                    ],
+                    rows: records.map(_row).toList(),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  DataRow _row(Map<String, dynamic> item) {
+    final email = '${item['email'] ?? item['id'] ?? ''}'.trim().toLowerCase();
+    final self = email == currentEmail?.trim().toLowerCase();
+    final role = AdminRole.fromString(
+          '${item['role'] ?? (item['roles'] is List && (item['roles'] as List).isNotEmpty ? (item['roles'] as List).first : '')}',
+        ) ??
+        AdminRole.operationsAdmin;
+    final status = '${item['status'] ?? 'inactive'}';
+    return DataRow(
+      cells: [
+        DataCell(_AdminCell.primary(email)),
+        DataCell(
+          canManage && !self
+              ? DropdownButtonHideUnderline(
+                  child: DropdownButton<AdminRole>(
+                    value: role,
+                    dropdownColor: colors.field,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    items: AdminRole.values
+                        .map(
+                          (nextRole) => DropdownMenuItem(
+                            value: nextRole,
+                            child: Text(nextRole.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (nextRole) {
+                      if (nextRole != null) onChangeRole(item, nextRole);
+                    },
+                  ),
+                )
+              : _AdminCell(role.value),
+        ),
+        DataCell(_AdminStatusCell(colors: colors, status: status)),
+        DataCell(_AdminCell(_adminDateText(item['lastLoginAt']))),
+        DataCell(
+          _AdminActions(
+            colors: colors,
+            actions: [
+              _AdminAction(
+                label: status == 'active' ? 'Deactivate' : 'Activate',
+                enabled: canManage && !self,
+                onTap: () =>
+                    onStatus(item, status == 'active' ? 'inactive' : 'active'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2085,6 +2504,7 @@ class _AdminNotice extends StatelessWidget {
 String _adminSectionLabel(_AdminSection section) {
   return switch (section) {
     _AdminSection.overview => 'Overview',
+    _AdminSection.adminUsers => 'Admin users',
     _AdminSection.senders => 'Senders',
     _AdminSection.drivers => 'Drivers',
     _AdminSection.deliveries => 'Deliveries',
@@ -2100,6 +2520,7 @@ String _adminSectionLabel(_AdminSection section) {
 IconData _adminSectionIcon(_AdminSection section) {
   return switch (section) {
     _AdminSection.overview => Icons.dashboard,
+    _AdminSection.adminUsers => Icons.admin_panel_settings,
     _AdminSection.senders => Icons.people,
     _AdminSection.drivers => Icons.two_wheeler,
     _AdminSection.deliveries => Icons.local_shipping,
@@ -2113,6 +2534,15 @@ IconData _adminSectionIcon(_AdminSection section) {
 }
 
 String _adminMoneyText(double value) => '£${value.toStringAsFixed(2)}';
+
+String _adminDateText(dynamic value) {
+  DateTime? date;
+  if (value is Timestamp) date = value.toDate();
+  if (value is DateTime) date = value;
+  if (value is String) date = DateTime.tryParse(value);
+  if (date == null) return 'Not yet';
+  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
 
 class _LandingNav extends StatelessWidget {
   final _CircumColors colors;
