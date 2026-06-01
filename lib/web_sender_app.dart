@@ -97,6 +97,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       colors: colors,
                       initialStep: _initialSenderStep,
                       onBack: () => setState(() => _mode = _WebAppMode.landing),
+                      onRoleSelected: _openRole,
                       onToggleTheme: () =>
                           setState(() => _darkMode = !_darkMode),
                     ),
@@ -108,6 +109,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       darkMode: _darkMode,
                       colors: colors,
                       onBack: () => setState(() => _mode = _WebAppMode.landing),
+                      onRoleSelected: _openRole,
                       onToggleTheme: () =>
                           setState(() => _darkMode = !_darkMode),
                     ),
@@ -136,6 +138,17 @@ class _WebSenderAppState extends State<WebSenderApp> {
         ),
       ),
     );
+  }
+
+  void _openRole(CircumRole role) {
+    setState(() {
+      _mode = switch (role) {
+        CircumRole.sender => _WebAppMode.sender,
+        CircumRole.rider => _WebAppMode.rider,
+        CircumRole.admin => _WebAppMode.admin,
+        CircumRole.unknown => _WebAppMode.landing,
+      };
+    });
   }
 }
 
@@ -2939,12 +2952,14 @@ class _RiderEnrollmentPortal extends StatefulWidget {
   final bool darkMode;
   final _CircumColors colors;
   final VoidCallback onBack;
+  final ValueChanged<CircumRole> onRoleSelected;
   final VoidCallback onToggleTheme;
 
   const _RiderEnrollmentPortal({
     required this.darkMode,
     required this.colors,
     required this.onBack,
+    required this.onRoleSelected,
     required this.onToggleTheme,
   });
 
@@ -2978,6 +2993,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   bool _withdrawSubmitting = false;
   bool _documentSubmitting = false;
   bool _saveBank = true;
+  bool _roleChoiceConfirmed = false;
   User? _riderUser;
   _RiderEarningsSnapshot _earnings = _RiderEarningsSnapshot.empty();
   String? _message;
@@ -2991,6 +3007,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   DriverPerformanceMetric _performance =
       DriverPerformanceMetric.empty('web-rider');
   List<DriverRating> _recentRatings = const [];
+  Set<CircumRole> _availableRoles = const {};
 
   @override
   void initState() {
@@ -3038,6 +3055,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _riderUser = user;
         _email.text = user.email ?? _email.text;
+        _roleChoiceConfirmed = false;
       });
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
@@ -3079,6 +3097,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (_signupMode) {
         await user.updateDisplayName(_fullName.text.trim());
         await _saveRiderProfile(user);
+        _availableRoles = {CircumRole.rider};
       } else if (!await _allowRiderUser(user)) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
@@ -3091,6 +3110,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(() {
         _riderUser = user;
+        _roleChoiceConfirmed = _availableRoles.length <= 1;
         _authMessage =
             _signupMode ? 'Your rider account is ready.' : 'You are signed in.';
       });
@@ -3106,19 +3126,25 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<bool> _allowRiderUser(User user) async {
+    final roles = await _rolesForUser(user);
+    if (!mounted) return false;
+    setState(() => _availableRoles = roles);
+    return RoleAccessPolicy.rolesCanAccessRider(roles);
+  }
+
+  Future<Set<CircumRole>> _rolesForUser(User user) async {
     final token = await user.getIdTokenResult(true);
     final claims = token.claims ?? const <String, dynamic>{};
     final db = FirebaseFirestore.instance;
     final userDoc = await db.collection('users').doc(user.uid).get();
     final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
     final adminDoc = await db.collection('adminUsers').doc(user.uid).get();
-    final role = RoleAccessPolicy.resolve(
+    return RoleAccessPolicy.resolveRoles(
       claims: claims,
       user: userDoc.data() ?? const {},
       rider: riderDoc.data() ?? const {},
       adminUser: adminDoc.data() ?? const {},
     );
-    return RoleAccessPolicy.canAccessRider(role);
   }
 
   Future<void> _saveRiderProfile(User user) async {
@@ -3145,6 +3171,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'verificationStatus': 'pending',
       'driverStatus': 'active',
       'role': 'rider',
+      'roles': ['rider'],
       'source': 'circum-web',
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
@@ -3233,6 +3260,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _earnings = _RiderEarningsSnapshot.empty();
       _performance = DriverPerformanceMetric.empty('web-rider');
       _recentRatings = const [];
+      _availableRoles = const {};
+      _roleChoiceConfirmed = false;
       _authMessage = 'Signed out.';
     });
   }
@@ -3501,149 +3530,174 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                         ),
                       ],
                     )
-                  : wide
-                      ? Row(
+                  : !_roleChoiceConfirmed && _availableRoles.length > 1
+                      ? ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            wide ? 28 : 18,
+                            18,
+                            wide ? 28 : 18,
+                            34,
+                          ),
                           children: [
-                            Expanded(
-                              child: ListView(
-                                padding:
-                                    const EdgeInsets.fromLTRB(28, 28, 28, 34),
-                                children: [
-                                  _RiderAccessPanel(
-                                    colors: colors,
-                                    email: _email,
-                                    password: _password,
-                                    signupMode: _signupMode,
-                                    submitting: _authSubmitting,
-                                    user: _riderUser,
-                                    message: _authMessage,
-                                    onToggleMode: () => setState(
-                                        () => _signupMode = !_signupMode),
-                                    onSubmit: _submitAuth,
-                                    onSignOut: _signOutRider,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  _RiderEnrollmentForm(
-                                    colors: colors,
-                                    nested: true,
-                                    fullName: _fullName,
-                                    phone: _phone,
-                                    email: _email,
-                                    postcode: _postcode,
-                                    vehicle: _vehicle,
-                                    vehicleMakeModel: _vehicleMakeModel,
-                                    vehicleColour: _vehicleColour,
-                                    plateNumber: _plateNumber,
-                                    availability: _availability,
-                                    notes: _notes,
-                                    rightToWork: _rightToWork,
-                                    sealedPackageConsent: _sealedPackageConsent,
-                                    submitting: _submitting,
-                                    message: _message,
-                                    onRightToWork: (value) => setState(
-                                        () => _rightToWork = value ?? false),
-                                    onSealedPackageConsent: (value) => setState(
-                                        () => _sealedPackageConsent =
-                                            value ?? false),
-                                    onSubmit: _submit,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: _RiderWorkspace(
-                                colors: colors,
-                                user: _riderUser,
-                                earnings: _earnings,
-                                performance: _performance,
-                                recentRatings: _recentRatings,
-                                applicationId: _applicationId,
-                                withdrawAmount: _withdrawAmount,
-                                bankName: _bankName,
-                                sortCode: _sortCode,
-                                accountNumber: _accountNumber,
-                                documentType: _documentType,
-                                documentNotes: _documentNotes,
-                                saveBank: _saveBank,
-                                submittingWithdrawal: _withdrawSubmitting,
-                                submittingDocument: _documentSubmitting,
-                                withdrawMessage: _withdrawMessage,
-                                documentMessage: _documentMessage,
-                                onSaveBank: (value) =>
-                                    setState(() => _saveBank = value ?? false),
-                                onWithdraw: _requestWithdrawal,
-                                onUploadDocument: _uploadRiderDocument,
-                              ),
+                            _MultiRoleChoicePanel(
+                              colors: colors,
+                              roles: _availableRoles,
+                              onSender: () =>
+                                  widget.onRoleSelected(CircumRole.sender),
+                              onRider: () =>
+                                  setState(() => _roleChoiceConfirmed = true),
+                              onAdmin: () =>
+                                  widget.onRoleSelected(CircumRole.admin),
                             ),
                           ],
                         )
-                      : ListView(
-                          padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
-                          children: [
-                            _RiderAccessPanel(
-                              colors: colors,
-                              email: _email,
-                              password: _password,
-                              signupMode: _signupMode,
-                              submitting: _authSubmitting,
-                              user: _riderUser,
-                              message: _authMessage,
-                              onToggleMode: () =>
-                                  setState(() => _signupMode = !_signupMode),
-                              onSubmit: _submitAuth,
-                              onSignOut: _signOutRider,
+                      : wide
+                          ? Row(
+                              children: [
+                                Expanded(
+                                  child: ListView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        28, 28, 28, 34),
+                                    children: [
+                                      _RiderAccessPanel(
+                                        colors: colors,
+                                        email: _email,
+                                        password: _password,
+                                        signupMode: _signupMode,
+                                        submitting: _authSubmitting,
+                                        user: _riderUser,
+                                        message: _authMessage,
+                                        onToggleMode: () => setState(
+                                            () => _signupMode = !_signupMode),
+                                        onSubmit: _submitAuth,
+                                        onSignOut: _signOutRider,
+                                      ),
+                                      const SizedBox(height: 14),
+                                      _RiderEnrollmentForm(
+                                        colors: colors,
+                                        nested: true,
+                                        fullName: _fullName,
+                                        phone: _phone,
+                                        email: _email,
+                                        postcode: _postcode,
+                                        vehicle: _vehicle,
+                                        vehicleMakeModel: _vehicleMakeModel,
+                                        vehicleColour: _vehicleColour,
+                                        plateNumber: _plateNumber,
+                                        availability: _availability,
+                                        notes: _notes,
+                                        rightToWork: _rightToWork,
+                                        sealedPackageConsent:
+                                            _sealedPackageConsent,
+                                        submitting: _submitting,
+                                        message: _message,
+                                        onRightToWork: (value) => setState(() =>
+                                            _rightToWork = value ?? false),
+                                        onSealedPackageConsent: (value) =>
+                                            setState(() =>
+                                                _sealedPackageConsent =
+                                                    value ?? false),
+                                        onSubmit: _submit,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _RiderWorkspace(
+                                    colors: colors,
+                                    user: _riderUser,
+                                    earnings: _earnings,
+                                    performance: _performance,
+                                    recentRatings: _recentRatings,
+                                    applicationId: _applicationId,
+                                    withdrawAmount: _withdrawAmount,
+                                    bankName: _bankName,
+                                    sortCode: _sortCode,
+                                    accountNumber: _accountNumber,
+                                    documentType: _documentType,
+                                    documentNotes: _documentNotes,
+                                    saveBank: _saveBank,
+                                    submittingWithdrawal: _withdrawSubmitting,
+                                    submittingDocument: _documentSubmitting,
+                                    withdrawMessage: _withdrawMessage,
+                                    documentMessage: _documentMessage,
+                                    onSaveBank: (value) => setState(
+                                        () => _saveBank = value ?? false),
+                                    onWithdraw: _requestWithdrawal,
+                                    onUploadDocument: _uploadRiderDocument,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ListView(
+                              padding:
+                                  const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                              children: [
+                                _RiderAccessPanel(
+                                  colors: colors,
+                                  email: _email,
+                                  password: _password,
+                                  signupMode: _signupMode,
+                                  submitting: _authSubmitting,
+                                  user: _riderUser,
+                                  message: _authMessage,
+                                  onToggleMode: () => setState(
+                                      () => _signupMode = !_signupMode),
+                                  onSubmit: _submitAuth,
+                                  onSignOut: _signOutRider,
+                                ),
+                                const SizedBox(height: 14),
+                                _RiderEnrollmentForm(
+                                  colors: colors,
+                                  nested: true,
+                                  fullName: _fullName,
+                                  phone: _phone,
+                                  email: _email,
+                                  postcode: _postcode,
+                                  vehicle: _vehicle,
+                                  vehicleMakeModel: _vehicleMakeModel,
+                                  vehicleColour: _vehicleColour,
+                                  plateNumber: _plateNumber,
+                                  availability: _availability,
+                                  notes: _notes,
+                                  rightToWork: _rightToWork,
+                                  sealedPackageConsent: _sealedPackageConsent,
+                                  submitting: _submitting,
+                                  message: _message,
+                                  onRightToWork: (value) => setState(
+                                      () => _rightToWork = value ?? false),
+                                  onSealedPackageConsent: (value) => setState(
+                                      () => _sealedPackageConsent =
+                                          value ?? false),
+                                  onSubmit: _submit,
+                                ),
+                                const SizedBox(height: 14),
+                                _RiderWorkspace(
+                                  colors: colors,
+                                  user: _riderUser,
+                                  earnings: _earnings,
+                                  performance: _performance,
+                                  recentRatings: _recentRatings,
+                                  applicationId: _applicationId,
+                                  withdrawAmount: _withdrawAmount,
+                                  bankName: _bankName,
+                                  sortCode: _sortCode,
+                                  accountNumber: _accountNumber,
+                                  documentType: _documentType,
+                                  documentNotes: _documentNotes,
+                                  saveBank: _saveBank,
+                                  submittingWithdrawal: _withdrawSubmitting,
+                                  submittingDocument: _documentSubmitting,
+                                  withdrawMessage: _withdrawMessage,
+                                  documentMessage: _documentMessage,
+                                  onSaveBank: (value) => setState(
+                                      () => _saveBank = value ?? false),
+                                  onWithdraw: _requestWithdrawal,
+                                  onUploadDocument: _uploadRiderDocument,
+                                  nested: true,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 14),
-                            _RiderEnrollmentForm(
-                              colors: colors,
-                              nested: true,
-                              fullName: _fullName,
-                              phone: _phone,
-                              email: _email,
-                              postcode: _postcode,
-                              vehicle: _vehicle,
-                              vehicleMakeModel: _vehicleMakeModel,
-                              vehicleColour: _vehicleColour,
-                              plateNumber: _plateNumber,
-                              availability: _availability,
-                              notes: _notes,
-                              rightToWork: _rightToWork,
-                              sealedPackageConsent: _sealedPackageConsent,
-                              submitting: _submitting,
-                              message: _message,
-                              onRightToWork: (value) =>
-                                  setState(() => _rightToWork = value ?? false),
-                              onSealedPackageConsent: (value) => setState(
-                                  () => _sealedPackageConsent = value ?? false),
-                              onSubmit: _submit,
-                            ),
-                            const SizedBox(height: 14),
-                            _RiderWorkspace(
-                              colors: colors,
-                              user: _riderUser,
-                              earnings: _earnings,
-                              performance: _performance,
-                              recentRatings: _recentRatings,
-                              applicationId: _applicationId,
-                              withdrawAmount: _withdrawAmount,
-                              bankName: _bankName,
-                              sortCode: _sortCode,
-                              accountNumber: _accountNumber,
-                              documentType: _documentType,
-                              documentNotes: _documentNotes,
-                              saveBank: _saveBank,
-                              submittingWithdrawal: _withdrawSubmitting,
-                              submittingDocument: _documentSubmitting,
-                              withdrawMessage: _withdrawMessage,
-                              documentMessage: _documentMessage,
-                              onSaveBank: (value) =>
-                                  setState(() => _saveBank = value ?? false),
-                              onWithdraw: _requestWithdrawal,
-                              onUploadDocument: _uploadRiderDocument,
-                              nested: true,
-                            ),
-                          ],
-                        ),
             ),
           ],
         );
@@ -4725,6 +4779,7 @@ class _CustomerPortal extends StatefulWidget {
   final _CircumColors colors;
   final _SenderStep initialStep;
   final VoidCallback onBack;
+  final ValueChanged<CircumRole> onRoleSelected;
   final VoidCallback onToggleTheme;
 
   const _CustomerPortal({
@@ -4732,6 +4787,7 @@ class _CustomerPortal extends StatefulWidget {
     required this.colors,
     required this.initialStep,
     required this.onBack,
+    required this.onRoleSelected,
     required this.onToggleTheme,
   });
 
@@ -4744,6 +4800,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _dropoff = TextEditingController();
   final _description = TextEditingController();
   final _weight = TextEditingController();
+  final _scheduledPickupDate = TextEditingController();
+  final _scheduledPickupWindow = TextEditingController();
+  final _scheduledDropoffDate = TextEditingController();
+  final _scheduledDropoffWindow = TextEditingController();
   final _chatInput = TextEditingController();
   final _healthName = TextEditingController();
   final _healthPhone = TextEditingController();
@@ -4760,6 +4820,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _senderPhone = TextEditingController();
   final _savedAddressLabel = TextEditingController(text: 'Home');
   final _savedAddress = TextEditingController();
+  String _savedAddressType = 'pickup';
+  double? _irisEstimatedWeightKg;
+  String? _irisWeightBand;
+  String? _irisWeightConfidence;
+  String? _irisWeightExplanation;
+  double? _senderEnteredWeightKg;
+  double? _confirmedWeightKg;
+  String? _confirmedWeightBand;
+  String? _weightSource;
+  DateTime? _weightConfirmedAt;
+  String? _weightMessage;
+  String? _weightPricingReason;
+  bool _weightVerificationRequired = false;
+  bool _settingWeightFromConfirmation = false;
 
   late _SenderStep _step = widget.initialStep;
   _VehicleOption _selectedVehicle = _vehicles.first;
@@ -4789,6 +4863,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _senderAuthBusy = false;
   bool _senderProfileSaving = false;
   bool _senderSignupMode = false;
+  bool _roleChoiceConfirmed = false;
   int _statusIndex = 0;
   int _selectedRating = 0;
   int _senderProfileTab = 0;
@@ -4799,6 +4874,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DriverProfile? _assignedDriver;
   DriverPerformanceMetric? _assignedDriverMetric;
   Set<String> _selectedRatingTags = {};
+  Set<CircumRole> _availableRoles = const {};
   final List<Map<String, dynamic>> _healthPickups = [];
   final List<Map<String, dynamic>> _healthPayments = [];
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _requestSub;
@@ -4828,15 +4904,21 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   void initState() {
     super.initState();
+    _weight.addListener(_handleWeightChanged);
     _restoreSenderSession();
   }
 
   @override
   void dispose() {
+    _weight.removeListener(_handleWeightChanged);
     _pickup.dispose();
     _dropoff.dispose();
     _description.dispose();
     _weight.dispose();
+    _scheduledPickupDate.dispose();
+    _scheduledPickupWindow.dispose();
+    _scheduledDropoffDate.dispose();
+    _scheduledDropoffWindow.dispose();
     _chatInput.dispose();
     _healthName.dispose();
     _healthPhone.dispose();
@@ -4887,7 +4969,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           dropoff: _dropoff.text,
                           vehicle: _selectedVehicle,
                           speed: _selectedSpeed,
-                          weightKg: _weightKg,
+                          weightKg: _confirmedWeightKg ?? 0,
                           breakdown: _quoteBreakdown,
                           step: _step,
                           firebaseOnline: _firebaseOnline,
@@ -4945,6 +5027,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         onSignUp: _signUpSender,
       );
     }
+    if (!_roleChoiceConfirmed && _availableRoles.length > 1) {
+      return _MultiRoleChoicePanel(
+        colors: colors,
+        roles: _availableRoles,
+        onSender: () => setState(() => _roleChoiceConfirmed = true),
+        onRider: () => widget.onRoleSelected(CircumRole.rider),
+        onAdmin: () => widget.onRoleSelected(CircumRole.admin),
+      );
+    }
     return switch (_step) {
       _SenderStep.dashboard => _SenderDashboardStep(
           key: const ValueKey('sender-dashboard'),
@@ -4964,11 +5055,27 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           colors: colors,
           pickup: _pickup,
           dropoff: _dropoff,
+          savedAddresses: _senderProfile?.savedAddresses ?? const [],
+          onSavedPickup: (address) => setState(() => _pickup.text = address),
+          onSavedDropoff: (address) => setState(() => _dropoff.text = address),
           description: _description,
           weight: _weight,
+          irisEstimatedWeightKg: _irisEstimatedWeightKg,
+          irisWeightBand: _irisWeightBand,
+          irisWeightConfidence: _irisWeightConfidence,
+          irisWeightExplanation: _irisWeightExplanation,
+          senderEnteredWeightKg: _senderEnteredWeightKg,
+          pricingWeightKg: _confirmedWeightKg,
+          pricingReason: _weightPricingReason,
+          verificationRequired: _weightVerificationRequired,
+          weightMessage: _weightMessage,
+          onConfirmIrisWeight: _confirmIrisWeight,
+          scheduledPickupDate: _scheduledPickupDate,
+          scheduledPickupWindow: _scheduledPickupWindow,
+          scheduledDropoffDate: _scheduledDropoffDate,
+          scheduledDropoffWindow: _scheduledDropoffWindow,
           analyzing: _analyzing,
           onSubmit: _analyseRequest,
-          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
         ),
       _SenderStep.vehicle => _VehicleStep(
           key: const ValueKey('vehicle'),
@@ -4988,8 +5095,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           vehicle: _selectedVehicle,
           speed: _selectedSpeed,
           breakdown: _quoteBreakdown,
-          weightKg: _weightKg,
+          irisEstimatedWeightKg: _irisEstimatedWeightKg,
+          senderEnteredWeightKg: _senderEnteredWeightKg,
+          weightKg: _confirmedWeightKg ?? 0,
           total: _quoteTotal,
+          weightConfirmed: _hasConfirmedWeight,
+          weightSource: _weightSourceText,
+          pricingReason: _weightPricingReason,
+          scheduledPickupDate: _scheduledPickupDate.text.trim(),
+          scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
+          scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
+          scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
           onBack: () => setState(() => _step = _SenderStep.vehicle),
           onPay: _confirmPayment,
         ),
@@ -5074,6 +5190,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           phone: _senderPhone,
           savedAddressLabel: _savedAddressLabel,
           savedAddress: _savedAddress,
+          savedAddressType: _savedAddressType,
           onBack: () => setState(() => _step = _SenderStep.dashboard),
           onTab: (index) => setState(() => _senderProfileTab = index),
           onSignIn: _signInSender,
@@ -5081,6 +5198,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onSignOut: _signOutSender,
           onSaveProfile: _saveSenderProfile,
           onAddAddress: _addSenderAddress,
+          onSavedAddressType: (type) =>
+              setState(() => _savedAddressType = type),
           onSelectDelivery: (delivery) =>
               setState(() => _selectedSenderDelivery = delivery),
           onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
@@ -5092,15 +5211,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return _quoteBreakdown.total;
   }
 
-  double get _weightKg {
-    return DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
+  bool get _hasConfirmedWeight {
+    return _confirmedWeightKg != null && _confirmedWeightKg! > 0;
+  }
+
+  String get _weightSourceText {
+    return switch (_weightSource) {
+      'iris_confirmed' => 'Iris estimate confirmed by sender',
+      'manual' => 'Manual sender entry',
+      _ => 'Not confirmed',
+    };
   }
 
   DeliveryPricingBreakdown get _quoteBreakdown {
     return DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: _webQuoteDistanceMiles,
-        weightKg: _weightKg,
+        weightKg: _confirmedWeightKg ?? 0,
         vehicleType: _selectedVehicle.name,
         urgent: _selectedSpeed == 'Express',
       ),
@@ -5149,6 +5276,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderUser = user;
       _senderEmail.text = user.email ?? _senderEmail.text;
       _senderAuthLoading = false;
+      _roleChoiceConfirmed = _availableRoles.length <= 1;
     });
     _senderSub = FirebaseFirestore.instance
         .collection('users')
@@ -5224,12 +5352,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'email': user.email,
         'phoneNumber': _senderPhone.text.trim(),
         'role': 'user',
+        'roles': ['sender'],
         'userType': 'sender',
         'status': 'active',
         'verificationStatus': user.emailVerified ? 'verified' : 'unverified',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      _availableRoles = {CircumRole.sender};
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
       setState(() => _senderProfileMessage = 'Your sender profile is ready.');
@@ -5241,29 +5371,44 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<bool> _allowSenderUser(User user) async {
+    final roles = await _rolesForSenderUser(user);
+    if (!mounted) return false;
+    setState(() => _availableRoles = roles);
+    if (RoleAccessPolicy.rolesCanAccessSender(roles)) return true;
+    final db = FirebaseFirestore.instance;
+    final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
+    final adminDoc = await db.collection('adminUsers').doc(user.uid).get();
+    if (!roles.contains(CircumRole.rider) &&
+        !roles.contains(CircumRole.admin) &&
+        !riderDoc.exists &&
+        !adminDoc.exists) {
+      await db.collection('users').doc(user.uid).set({
+        'email': user.email,
+        'role': 'user',
+        'roles': ['sender'],
+        'userType': 'sender',
+        'status': 'active',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      setState(() => _availableRoles = {CircumRole.sender});
+      return true;
+    }
+    return false;
+  }
+
+  Future<Set<CircumRole>> _rolesForSenderUser(User user) async {
     final token = await user.getIdTokenResult(true);
     final claims = token.claims ?? const <String, dynamic>{};
     final db = FirebaseFirestore.instance;
     final userDoc = await db.collection('users').doc(user.uid).get();
     final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
     final adminDoc = await db.collection('adminUsers').doc(user.uid).get();
-    final role = RoleAccessPolicy.resolve(
+    return RoleAccessPolicy.resolveRoles(
       claims: claims,
       user: userDoc.data() ?? const {},
       rider: riderDoc.data() ?? const {},
       adminUser: adminDoc.data() ?? const {},
     );
-    if (role == CircumRole.unknown && !riderDoc.exists && !adminDoc.exists) {
-      await db.collection('users').doc(user.uid).set({
-        'email': user.email,
-        'role': 'user',
-        'userType': 'sender',
-        'status': 'active',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      return true;
-    }
-    return RoleAccessPolicy.canAccessSender(role);
   }
 
   Future<void> _signOutSender() async {
@@ -5275,6 +5420,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderProfile = null;
       _senderDeliveries = const [];
       _selectedSenderDelivery = null;
+      _availableRoles = const {};
+      _roleChoiceConfirmed = false;
       _step = _SenderStep.dashboard;
       _senderProfileMessage = 'Signed out.';
     });
@@ -5321,6 +5468,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             ? 'Saved address'
             : _savedAddressLabel.text.trim(),
         address: address,
+        addressType: _savedAddressType,
       ),
     ];
     setState(() => _senderProfileSaving = true);
@@ -5379,14 +5527,258 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     setState(() => _analyzing = true);
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
+    final senderWeight =
+        DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
+    final estimate = _estimateWeightWithIris();
+    final decision = _resolvePricingWeight(
+      estimate: estimate,
+      senderWeightKg: senderWeight > 0 ? senderWeight : null,
+    );
     setState(() {
+      _senderEnteredWeightKg = senderWeight > 0 ? senderWeight : null;
+      _irisEstimatedWeightKg = estimate.weightKg;
+      _irisWeightBand = estimate.weightBand;
+      _irisWeightConfidence = estimate.confidence;
+      _irisWeightExplanation = estimate.explanation;
+      _weightVerificationRequired = decision.verificationRequired;
+      _weightPricingReason = decision.reason;
       _analyzing = false;
+      if (estimate.confidence == 'high' && senderWeight <= 0) {
+        _weight.text = _formatWeight(estimate.weightKg);
+      }
+      _weightMessage = decision.message;
+    });
+  }
+
+  void _confirmIrisWeight() {
+    final estimateWeight = _irisEstimatedWeightKg;
+    if (estimateWeight == null || estimateWeight <= 0) return;
+    final senderWeight =
+        DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
+    final estimate = _IrisWeightEstimate(
+      weightKg: estimateWeight,
+      weightBand: _irisWeightBand ??
+          DeliveryPricing.weightBandFor(estimateWeight).category,
+      confidence: _irisWeightConfidence ?? 'low',
+      explanation:
+          _irisWeightExplanation ?? 'Iris estimate confirmed by sender.',
+      packageType: _inferPackageType(),
+      requiresVehicleReview: false,
+    );
+    final decision = _resolvePricingWeight(
+      estimate: estimate,
+      senderWeightKg: senderWeight > 0 ? senderWeight : null,
+    );
+    if (decision.weightKg == null) {
+      setState(() => _weightMessage = decision.message);
+      return;
+    }
+    if (senderWeight <= 0) {
+      _settingWeightFromConfirmation = true;
+      _weight.text = _formatWeight(decision.weightKg!);
+      _settingWeightFromConfirmation = false;
+    }
+    _confirmWeight(
+      decision.weightKg!,
+      source: decision.source,
+      reason: decision.reason,
+      verificationRequired: decision.verificationRequired,
+    );
+    setState(() {
+      _weightMessage =
+          'Confirmed parcel weight: ${_formatWeight(decision.weightKg!)} kg.';
       _step = _SenderStep.vehicle;
       _selectedVehicle = _vehicles.first;
     });
   }
 
+  void _confirmWeight(
+    double weightKg, {
+    required String source,
+    String? reason,
+    bool verificationRequired = false,
+  }) {
+    final band = DeliveryPricing.weightBandFor(weightKg).category;
+    setState(() {
+      _confirmedWeightKg = weightKg;
+      _confirmedWeightBand = band;
+      _weightSource = source;
+      _weightConfirmedAt = DateTime.now();
+      _weightPricingReason = reason;
+      _weightVerificationRequired = verificationRequired;
+      _weightMessage =
+          'Confirmed parcel weight: ${_formatWeight(weightKg)} kg.';
+    });
+  }
+
+  void _handleWeightChanged() {
+    if (_settingWeightFromConfirmation || _confirmedWeightKg == null) return;
+    final typedWeight =
+        DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
+    if ((typedWeight - _confirmedWeightKg!).abs() < 0.01) return;
+    if (!mounted) return;
+    setState(() {
+      _confirmedWeightKg = null;
+      _confirmedWeightBand = null;
+      _weightSource = null;
+      _weightConfirmedAt = null;
+      _weightPricingReason = null;
+      _weightMessage = 'Confirm parcel weight before payment.';
+    });
+  }
+
+  _WeightPricingDecision _resolvePricingWeight({
+    required _IrisWeightEstimate estimate,
+    required double? senderWeightKg,
+  }) {
+    final hasSenderWeight = senderWeightKg != null && senderWeightKg > 0;
+    final irisBand = DeliveryPricing.weightBandFor(estimate.weightKg);
+    final senderBand =
+        hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
+    final bandChanged =
+        senderBand != null && senderBand.category != irisBand.category;
+    final differenceKg =
+        hasSenderWeight ? (estimate.weightKg - senderWeightKg).abs() : 0.0;
+    final significantDifference = differenceKg >= 2 || bandChanged;
+    final higherWeight = hasSenderWeight && senderWeightKg > estimate.weightKg
+        ? senderWeightKg
+        : estimate.weightKg;
+    final higherBand = DeliveryPricing.weightBandFor(higherWeight);
+
+    if (!hasSenderWeight && estimate.confidence == 'low') {
+      return const _WeightPricingDecision(
+        message: 'Confirm parcel weight before payment.',
+        reason: 'Iris confidence is low, so sender weight is required.',
+        verificationRequired: true,
+      );
+    }
+
+    if (estimate.confidence == 'low') {
+      return _WeightPricingDecision(
+        weightKg: senderWeightKg,
+        weightBand: senderBand?.category,
+        source: 'manual',
+        message: significantDifference
+            ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the rider will verify at pickup.'
+            : 'Iris confidence is low. Confirm your weight to continue.',
+        reason:
+            'Low-confidence Iris estimate; sender-confirmed weight used and flagged for pickup verification.',
+        verificationRequired: true,
+      );
+    }
+
+    return _WeightPricingDecision(
+      weightKg: higherWeight,
+      weightBand: higherBand.category,
+      source: estimate.confidence == 'high' &&
+              estimate.weightKg >= (senderWeightKg ?? 0)
+          ? 'iris_confirmed'
+          : 'manual',
+      message: significantDifference
+          ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
+          : 'Confirm the parcel weight used for pricing before continuing.',
+      reason: 'Highest credible weight used for pricing accuracy.',
+      verificationRequired: significantDifference,
+    );
+  }
+
+  _IrisWeightEstimate _estimateWeightWithIris() {
+    final text = '${_description.text} ${_pickup.text} ${_dropoff.text}'
+        .trim()
+        .toLowerCase();
+    double estimate = 2;
+    var confidence = 'low';
+    var packageType = 'Parcel';
+    var vehicleReview = false;
+    var explanation =
+        'Iris could not estimate weight safely from the details provided.';
+
+    if (text.contains('document') ||
+        text.contains('letter') ||
+        text.contains('passport')) {
+      estimate = 0.5;
+      confidence = 'high';
+      packageType = 'Documents';
+      explanation = 'The item sounds like documents or a small envelope.';
+    } else if (text.contains('phone') ||
+        text.contains('book') ||
+        text.contains('clothes') ||
+        text.contains('shoe')) {
+      estimate = 2;
+      confidence = 'medium';
+      packageType = 'Small parcel';
+      explanation = 'The item sounds like a small parcel.';
+    } else if (text.contains('laptop') ||
+        text.contains('computer') ||
+        text.contains('console')) {
+      estimate = 3;
+      confidence = 'medium';
+      packageType = 'Electronics';
+      explanation = 'The item sounds like consumer electronics.';
+    } else if (text.contains('box') ||
+        text.contains('parcel') ||
+        text.contains('package')) {
+      estimate = 5;
+      confidence = 'medium';
+      packageType = 'Boxed parcel';
+      explanation =
+          'The description suggests a parcel, but exact contents are unclear.';
+    } else if (text.contains('chair') ||
+        text.contains('tv') ||
+        text.contains('furniture') ||
+        text.contains('bike')) {
+      estimate = 15;
+      confidence = 'low';
+      packageType = 'Large item';
+      vehicleReview = true;
+      explanation =
+          'The item may be oversized or heavy, so sender confirmation is required.';
+    }
+
+    return _IrisWeightEstimate(
+      weightKg: estimate,
+      weightBand: DeliveryPricing.weightBandFor(estimate).category,
+      confidence: confidence,
+      explanation: explanation,
+      packageType: packageType,
+      requiresVehicleReview: vehicleReview,
+    );
+  }
+
+  String _inferPackageType() {
+    final description = _description.text.toLowerCase();
+    if (description.contains('document') || description.contains('letter')) {
+      return 'Documents';
+    }
+    if (description.contains('laptop') ||
+        description.contains('phone') ||
+        description.contains('computer')) {
+      return 'Electronics';
+    }
+    if (description.contains('chair') ||
+        description.contains('furniture') ||
+        description.contains('bike') ||
+        description.contains('tv')) {
+      return 'Large item';
+    }
+    if (description.contains('box')) return 'Boxed parcel';
+    return 'Parcel';
+  }
+
+  String _formatWeight(double weightKg) {
+    return weightKg.truncateToDouble() == weightKg
+        ? weightKg.toStringAsFixed(0)
+        : weightKg.toStringAsFixed(1);
+  }
+
   Future<void> _confirmPayment() async {
+    if (!_hasConfirmedWeight) {
+      setState(() {
+        _weightMessage = 'Confirm parcel weight before payment.';
+        _step = _SenderStep.details;
+      });
+      return;
+    }
     final id =
         'CIR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     setState(() {
@@ -5500,6 +5892,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'deliveryAddress': _healthDelivery.text.trim(),
         'notes': _healthNotes.text.trim(),
         'preferredPickupTime': _healthPreferredTime.text.trim(),
+        'scheduledPickupDate': '',
+        'scheduledPickupWindow': _healthPreferredTime.text.trim(),
+        'scheduledDropoffDate': '',
+        'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
         'frequency': _healthFrequency.value,
         'status': PickupStatus.scheduled.value,
         'price': quote.total,
@@ -5521,6 +5917,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'profileId': id,
           'frequency': _healthFrequency.value,
           'preferredDayTime': _healthPreferredTime.text.trim(),
+          'scheduledPickupDate': '',
+          'scheduledPickupWindow': _healthPreferredTime.text.trim(),
+          'scheduledDropoffDate': '',
+          'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
           'customSchedule': _healthCustomSchedule.text.trim(),
           'paused': false,
           'nextPickupAt': _healthPreferredTime.text.trim(),
@@ -5751,21 +6151,82 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'geopoint': const GeoPoint(51.5054, -0.0235),
       'geohash': 'gcpuv',
     };
+    final packageType = _inferPackageType();
+    final hasPhoto = false;
+    final driverPayout = double.parse((quote.total * 0.75).toStringAsFixed(2));
+    final driverJobSummary = {
+      'pickupDisplay': _pickup.text.trim(),
+      'dropoffDisplay': _dropoff.text.trim(),
+      'estimatedDistanceMiles': _webQuoteDistanceMiles,
+      'estimatedDurationMinutes': 28,
+      'scheduledPickupDate': _scheduledPickupDate.text.trim(),
+      'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
+      'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
+      'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
+      'confirmedWeightKg': _confirmedWeightKg,
+      'confirmedWeightBand': _confirmedWeightBand,
+      'packageType': packageType,
+      'packageDescription': _description.text.trim(),
+      'hasPhoto': hasPhoto,
+      'photoUrl': null,
+      'deliveryInstructions': _description.text.trim(),
+      'vehicleType': _selectedVehicle.name,
+      'totalFare': quote.total,
+      'driverPayout': driverPayout,
+      'specialHandlingNotes': _weightVerificationRequired
+          ? 'Weight verification required at pickup.'
+          : '',
+      'serviceType': 'Normal Delivery',
+    };
     return {
       'requestId': id,
       'code': requestCode.substring(requestCode.length - 6),
       'pickupAddress': _pickup.text.trim(),
       'dropoffAddress': _dropoff.text.trim(),
+      'packageType': packageType,
       'packageDescription': _description.text.trim(),
       'weight': _weight.text.trim(),
-      'weightKg': _weightKg,
-      'weightCategory': quote.weightCategory,
+      'weightKg': _confirmedWeightKg,
+      'irisEstimatedWeightKg': _irisEstimatedWeightKg,
+      'irisWeightBand': _irisWeightBand,
+      'irisWeightConfidence': _irisWeightConfidence,
+      'irisWeightExplanation': _irisWeightExplanation,
+      'senderEnteredWeightKg': _senderEnteredWeightKg,
+      'confirmedWeightKg': _confirmedWeightKg,
+      'confirmedWeightBand': _confirmedWeightBand,
+      'declaredWeightKg': _senderEnteredWeightKg,
+      'driverReportedWeightKg': null,
+      'weightSource': _weightSource,
+      'weightConfirmedAt': _weightConfirmedAt == null
+          ? null
+          : Timestamp.fromDate(_weightConfirmedAt!),
+      'weightAccuracyScore': _weightVerificationRequired ? 80 : 100,
+      'driverWeightAccuracyScore': null,
+      'weightVerificationRequired': _weightVerificationRequired,
+      'weightPricingReason': _weightPricingReason,
+      'weightDisputeStatus': 'none',
+      'driverWeightVerification': {
+        'status': 'pending_pickup',
+        'options': [
+          'weight_appears_correct',
+          'weight_appears_heavier',
+          'weight_appears_significantly_heavier',
+        ],
+        'requiresPhotoForMajorIncrease': true,
+      },
+      'scheduledPickupDate': _scheduledPickupDate.text.trim(),
+      'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
+      'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
+      'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
+      'weightCategory': _confirmedWeightBand,
       'vehicle': _selectedVehicle.name,
       'preferredVehicle': _selectedVehicle.name.toLowerCase(),
       'vehicleType': _selectedVehicle.name,
       'speed': _selectedSpeed,
       'quote': quote.total,
       'price': quote.total,
+      'fare': quote.total,
+      'driverPayout': driverPayout,
       'pricingBreakdown': quote.toJson(),
       'requiresManualQuote': quote.requiresManualQuote,
       'currency': 'GBP',
@@ -5781,6 +6242,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'senderName': senderName,
       'senderEmail': senderUser?.email,
       'appMatchingCompatible': true,
+      'driverJobSummary': driverJobSummary,
       'matchingRules': {
         'collection': 'deliveryRequests',
         'availableStatus': 'requested',
@@ -5797,6 +6259,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'subAddress': '',
         'locality': 'London',
         'moreInformation': _description.text.trim(),
+        'scheduledDate': _scheduledPickupDate.text.trim(),
+        'scheduledWindow': _scheduledPickupWindow.text.trim(),
       },
       'dropoffDetails': {
         'fullname': 'Recipient',
@@ -5806,6 +6270,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'subAddress': '',
         'locality': 'London',
         'moreInformation': '',
+        'scheduledDate': _scheduledDropoffDate.text.trim(),
+        'scheduledWindow': _scheduledDropoffWindow.text.trim(),
       },
       'pickupPosition': pickupGeo,
       'dropoffPosition': dropoffGeo,
@@ -6720,6 +7186,251 @@ class _SenderAccessGate extends StatelessWidget {
   }
 }
 
+class _MultiRoleChoicePanel extends StatelessWidget {
+  final _CircumColors colors;
+  final Set<CircumRole> roles;
+  final VoidCallback onSender;
+  final VoidCallback onRider;
+  final VoidCallback onAdmin;
+
+  const _MultiRoleChoicePanel({
+    required this.colors,
+    required this.roles,
+    required this.onSender,
+    required this.onRider,
+    required this.onAdmin,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Choose how to continue'),
+              const SizedBox(height: 8),
+              Text(
+                'This account has more than one Circum role. Pick the workspace you want for now.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (roles.contains(CircumRole.sender))
+                _RoleChoiceButton(
+                  colors: colors,
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Continue as Sender',
+                  onTap: onSender,
+                ),
+              if (roles.contains(CircumRole.rider)) ...[
+                const SizedBox(height: 10),
+                _RoleChoiceButton(
+                  colors: colors,
+                  icon: Icons.delivery_dining,
+                  label: 'Continue as Rider',
+                  onTap: onRider,
+                ),
+              ],
+              if (roles.contains(CircumRole.admin)) ...[
+                const SizedBox(height: 10),
+                _RoleChoiceButton(
+                  colors: colors,
+                  icon: Icons.admin_panel_settings_outlined,
+                  label: 'Continue as Admin',
+                  onTap: onAdmin,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoleChoiceButton extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _RoleChoiceButton({
+    required this.colors,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon),
+        label: Text(label),
+        style: FilledButton.styleFrom(
+          backgroundColor: colors.text,
+          foregroundColor: colors.inverseText,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedAddressQuickPick extends StatelessWidget {
+  final _CircumColors colors;
+  final List<SavedSenderAddress> addresses;
+  final String addressType;
+  final ValueChanged<String> onSelect;
+
+  const _SavedAddressQuickPick({
+    required this.colors,
+    required this.addresses,
+    required this.addressType,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final matching = addresses
+        .where((address) => addressType == 'pickup'
+            ? address.addressType != 'dropoff'
+            : address.addressType == 'dropoff')
+        .toList(growable: false);
+    if (matching.isEmpty) return const SizedBox.shrink();
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: matching
+            .map(
+              (address) => ActionChip(
+                avatar:
+                    Icon(Icons.place_outlined, color: colors.text, size: 16),
+                label: Text(address.label),
+                onPressed: () => onSelect(address.address),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _WeightConfirmationPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final double? estimatedWeightKg;
+  final String? weightBand;
+  final String? confidence;
+  final String? explanation;
+  final double? senderEnteredWeightKg;
+  final double? pricingWeightKg;
+  final String? pricingReason;
+  final bool verificationRequired;
+  final String message;
+  final VoidCallback onConfirm;
+
+  const _WeightConfirmationPanel({
+    required this.colors,
+    required this.estimatedWeightKg,
+    required this.weightBand,
+    required this.confidence,
+    required this.explanation,
+    required this.senderEnteredWeightKg,
+    required this.pricingWeightKg,
+    required this.pricingReason,
+    required this.verificationRequired,
+    required this.message,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final canConfirm = pricingWeightKg != null && pricingWeightKg! > 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+          ),
+          if (estimatedWeightKg != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Iris estimate: ${estimatedWeightKg!.toStringAsFixed(estimatedWeightKg!.truncateToDouble() == estimatedWeightKg ? 0 : 1)} kg'
+              '${weightBand == null ? '' : ' · $weightBand'}'
+              '${confidence == null ? '' : ' · $confidence confidence'}',
+              style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+          ],
+          if (senderEnteredWeightKg != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Your weight: ${senderEnteredWeightKg!.toStringAsFixed(senderEnteredWeightKg!.truncateToDouble() == senderEnteredWeightKg ? 0 : 1)} kg',
+              style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+          ],
+          if (pricingWeightKg != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Weight used for pricing: ${pricingWeightKg!.toStringAsFixed(pricingWeightKg!.truncateToDouble() == pricingWeightKg ? 0 : 1)} kg',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+            ),
+          ],
+          if (explanation != null && explanation!.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              explanation!,
+              style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+          ],
+          if (pricingReason != null && pricingReason!.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Reason: $pricingReason',
+              style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+          ],
+          if (verificationRequired) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Rider will verify weight at pickup.',
+              style:
+                  TextStyle(color: colors.warning, fontWeight: FontWeight.w800),
+            ),
+          ],
+          if (canConfirm) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: onConfirm,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Accept pricing weight'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SenderDashboardStep extends StatelessWidget {
   final _CircumColors colors;
   final SenderProfile? profile;
@@ -6876,6 +7587,7 @@ class _SenderProfileStep extends StatelessWidget {
   final TextEditingController phone;
   final TextEditingController savedAddressLabel;
   final TextEditingController savedAddress;
+  final String savedAddressType;
   final VoidCallback onBack;
   final ValueChanged<int> onTab;
   final VoidCallback onSignIn;
@@ -6883,6 +7595,7 @@ class _SenderProfileStep extends StatelessWidget {
   final VoidCallback onSignOut;
   final VoidCallback onSaveProfile;
   final VoidCallback onAddAddress;
+  final ValueChanged<String> onSavedAddressType;
   final ValueChanged<SenderDeliveryRecord> onSelectDelivery;
   final VoidCallback onCloseDelivery;
 
@@ -6903,6 +7616,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.phone,
     required this.savedAddressLabel,
     required this.savedAddress,
+    required this.savedAddressType,
     required this.onBack,
     required this.onTab,
     required this.onSignIn,
@@ -6910,6 +7624,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onSignOut,
     required this.onSaveProfile,
     required this.onAddAddress,
+    required this.onSavedAddressType,
     required this.onSelectDelivery,
     required this.onCloseDelivery,
   });
@@ -7191,21 +7906,69 @@ class _SenderProfileStep extends StatelessWidget {
 
   Widget _addressesTab() {
     final addresses = profile?.savedAddresses ?? const <SavedSenderAddress>[];
+    final pickupAddresses =
+        addresses.where((address) => address.addressType != 'dropoff');
+    final dropoffAddresses =
+        addresses.where((address) => address.addressType == 'dropoff');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(colors: colors, title: 'Saved pickup addresses'),
+        _SectionTitle(colors: colors, title: 'Saved locations'),
         const SizedBox(height: 12),
-        _InputBox(
-          colors: colors,
-          controller: savedAddressLabel,
-          hint: 'Label',
+        DropdownButtonFormField<String>(
+          initialValue: _savedLabelValue(savedAddressLabel.text),
+          dropdownColor: colors.field,
+          decoration: InputDecoration(
+            labelText: 'Label',
+            labelStyle: TextStyle(color: colors.mutedText),
+            filled: true,
+            fillColor: colors.field,
+            border: OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+          items: const ['Home', 'Work', 'Custom']
+              .map(
+                  (label) => DropdownMenuItem(value: label, child: Text(label)))
+              .toList(),
+          onChanged: (label) {
+            if (label != null) savedAddressLabel.text = label;
+          },
+        ),
+        if (_savedLabelValue(savedAddressLabel.text) == 'Custom') ...[
+          const SizedBox(height: 10),
+          _InputBox(
+            colors: colors,
+            controller: savedAddressLabel,
+            hint: 'Custom label',
+          ),
+        ],
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              selected: savedAddressType == 'pickup',
+              label: const Text('Pickup'),
+              onSelected: (_) => onSavedAddressType('pickup'),
+            ),
+            ChoiceChip(
+              selected: savedAddressType == 'dropoff',
+              label: const Text('Drop-off'),
+              onSelected: (_) => onSavedAddressType('dropoff'),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         _InputBox(
           colors: colors,
           controller: savedAddress,
-          hint: 'Pickup address',
+          hint: savedAddressType == 'dropoff'
+              ? 'Drop-off address'
+              : 'Pickup address',
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
@@ -7215,21 +7978,40 @@ class _SenderProfileStep extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         if (addresses.isEmpty)
-          _empty(
-              'No saved addresses', 'Add regular pickup spots to book faster.')
-        else
-          ...addresses.map(
-            (address) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.place_outlined, color: colors.text),
-              title: Text(address.label,
-                  style: TextStyle(
-                      color: colors.text, fontWeight: FontWeight.w800)),
-              subtitle: Text(address.address,
-                  style: TextStyle(color: colors.mutedText)),
-            ),
-          ),
+          _empty('No saved locations', 'Add regular spots to book faster.')
+        else ...[
+          if (pickupAddresses.isNotEmpty) ...[
+            _SectionTitle(colors: colors, title: 'Pickup favourites'),
+            const SizedBox(height: 8),
+            ...pickupAddresses.map(_savedAddressTile),
+          ],
+          if (dropoffAddresses.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _SectionTitle(colors: colors, title: 'Drop-off favourites'),
+            const SizedBox(height: 8),
+            ...dropoffAddresses.map(_savedAddressTile),
+          ],
+        ],
       ],
+    );
+  }
+
+  String _savedLabelValue(String label) {
+    final normalized = label.trim();
+    if (normalized == 'Home' || normalized == 'Work') return normalized;
+    return 'Custom';
+  }
+
+  Widget _savedAddressTile(SavedSenderAddress address) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(Icons.place_outlined, color: colors.text),
+      title: Text(
+        address.label,
+        style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+      ),
+      subtitle:
+          Text(address.address, style: TextStyle(color: colors.mutedText)),
     );
   }
 
@@ -7458,22 +8240,54 @@ class _DetailsStep extends StatelessWidget {
   final _CircumColors colors;
   final TextEditingController pickup;
   final TextEditingController dropoff;
+  final List<SavedSenderAddress> savedAddresses;
+  final ValueChanged<String> onSavedPickup;
+  final ValueChanged<String> onSavedDropoff;
   final TextEditingController description;
   final TextEditingController weight;
+  final double? irisEstimatedWeightKg;
+  final String? irisWeightBand;
+  final String? irisWeightConfidence;
+  final String? irisWeightExplanation;
+  final double? senderEnteredWeightKg;
+  final double? pricingWeightKg;
+  final String? pricingReason;
+  final bool verificationRequired;
+  final String? weightMessage;
+  final VoidCallback onConfirmIrisWeight;
+  final TextEditingController scheduledPickupDate;
+  final TextEditingController scheduledPickupWindow;
+  final TextEditingController scheduledDropoffDate;
+  final TextEditingController scheduledDropoffWindow;
   final bool analyzing;
   final VoidCallback onSubmit;
-  final VoidCallback onHealthPlus;
 
   const _DetailsStep({
     super.key,
     required this.colors,
     required this.pickup,
     required this.dropoff,
+    required this.savedAddresses,
+    required this.onSavedPickup,
+    required this.onSavedDropoff,
     required this.description,
     required this.weight,
+    required this.irisEstimatedWeightKg,
+    required this.irisWeightBand,
+    required this.irisWeightConfidence,
+    required this.irisWeightExplanation,
+    required this.senderEnteredWeightKg,
+    required this.pricingWeightKg,
+    required this.pricingReason,
+    required this.verificationRequired,
+    required this.weightMessage,
+    required this.onConfirmIrisWeight,
+    required this.scheduledPickupDate,
+    required this.scheduledPickupWindow,
+    required this.scheduledDropoffDate,
+    required this.scheduledDropoffWindow,
     required this.analyzing,
     required this.onSubmit,
-    required this.onHealthPlus,
   });
 
   @override
@@ -7505,6 +8319,13 @@ class _DetailsStep extends StatelessWidget {
           colors: colors,
           child: Column(
             children: [
+              _SavedAddressQuickPick(
+                colors: colors,
+                addresses: savedAddresses,
+                addressType: 'pickup',
+                onSelect: onSavedPickup,
+              ),
+              if (savedAddresses.isNotEmpty) const SizedBox(height: 12),
               _AddressField(
                 colors: colors,
                 icon: Icons.radio_button_checked,
@@ -7512,11 +8333,78 @@ class _DetailsStep extends StatelessWidget {
                 controller: pickup,
               ),
               const SizedBox(height: 12),
+              _SavedAddressQuickPick(
+                colors: colors,
+                addresses: savedAddresses,
+                addressType: 'dropoff',
+                onSelect: onSavedDropoff,
+              ),
+              if (savedAddresses.isNotEmpty) const SizedBox(height: 12),
               _AddressField(
                 colors: colors,
                 icon: Icons.location_on,
                 label: 'Drop-off location',
                 controller: dropoff,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Schedule'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _InputBox(
+                      colors: colors,
+                      controller: scheduledPickupDate,
+                      hint: 'Pickup date',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _InputBox(
+                      colors: colors,
+                      controller: scheduledPickupWindow,
+                      hint: 'Pickup time window',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _InputBox(
+                      colors: colors,
+                      controller: scheduledDropoffDate,
+                      hint: 'Delivery date',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _InputBox(
+                      colors: colors,
+                      controller: scheduledDropoffWindow,
+                      hint: 'Delivery time window',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Pick the times that work best for collection and delivery.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -7562,6 +8450,22 @@ class _DetailsStep extends StatelessWidget {
                   _PhotoButton(colors: colors),
                 ],
               ),
+              if (weightMessage != null) ...[
+                const SizedBox(height: 12),
+                _WeightConfirmationPanel(
+                  colors: colors,
+                  estimatedWeightKg: irisEstimatedWeightKg,
+                  weightBand: irisWeightBand,
+                  confidence: irisWeightConfidence,
+                  explanation: irisWeightExplanation,
+                  senderEnteredWeightKg: senderEnteredWeightKg,
+                  pricingWeightKg: pricingWeightKg,
+                  pricingReason: pricingReason,
+                  verificationRequired: verificationRequired,
+                  message: weightMessage!,
+                  onConfirm: onConfirmIrisWeight,
+                ),
+              ],
               const SizedBox(height: 12),
               Text(
                 'A photo helps the rider understand the size and handle the item properly.',
@@ -7600,8 +8504,6 @@ class _DetailsStep extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        _HealthPlusCard(colors: colors, onTap: onHealthPlus),
       ],
     );
   }
@@ -8204,6 +9106,42 @@ class _HealthAdminPanel extends StatelessWidget {
   }
 }
 
+class _IrisWeightEstimate {
+  final double weightKg;
+  final String weightBand;
+  final String confidence;
+  final String explanation;
+  final String packageType;
+  final bool requiresVehicleReview;
+
+  const _IrisWeightEstimate({
+    required this.weightKg,
+    required this.weightBand,
+    required this.confidence,
+    required this.explanation,
+    required this.packageType,
+    required this.requiresVehicleReview,
+  });
+}
+
+class _WeightPricingDecision {
+  final double? weightKg;
+  final String? weightBand;
+  final String source;
+  final String message;
+  final String reason;
+  final bool verificationRequired;
+
+  const _WeightPricingDecision({
+    this.weightKg,
+    this.weightBand,
+    this.source = 'manual',
+    required this.message,
+    required this.reason,
+    required this.verificationRequired,
+  });
+}
+
 class _SectionTitle extends StatelessWidget {
   final _CircumColors colors;
   final String title;
@@ -8337,8 +9275,17 @@ class _PaymentStep extends StatelessWidget {
   final _VehicleOption vehicle;
   final String speed;
   final DeliveryPricingBreakdown breakdown;
+  final double? irisEstimatedWeightKg;
+  final double? senderEnteredWeightKg;
   final double weightKg;
   final double total;
+  final bool weightConfirmed;
+  final String weightSource;
+  final String? pricingReason;
+  final String scheduledPickupDate;
+  final String scheduledPickupWindow;
+  final String scheduledDropoffDate;
+  final String scheduledDropoffWindow;
   final VoidCallback onBack;
   final VoidCallback onPay;
 
@@ -8348,14 +9295,34 @@ class _PaymentStep extends StatelessWidget {
     required this.vehicle,
     required this.speed,
     required this.breakdown,
+    required this.irisEstimatedWeightKg,
+    required this.senderEnteredWeightKg,
     required this.weightKg,
     required this.total,
+    required this.weightConfirmed,
+    required this.weightSource,
+    required this.pricingReason,
+    required this.scheduledPickupDate,
+    required this.scheduledPickupWindow,
+    required this.scheduledDropoffDate,
+    required this.scheduledDropoffWindow,
     required this.onBack,
     required this.onPay,
   });
 
+  String _scheduleText(String date, String window) {
+    if (date.isEmpty && window.isEmpty) return 'Not set';
+    if (date.isEmpty) return window;
+    if (window.isEmpty) return date;
+    return '$date, $window';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hasSchedule = scheduledPickupDate.isNotEmpty ||
+        scheduledPickupWindow.isNotEmpty ||
+        scheduledDropoffDate.isNotEmpty ||
+        scheduledDropoffWindow.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -8387,6 +9354,59 @@ class _PaymentStep extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              if (hasSchedule) ...[
+                _PriceLine(
+                  colors: colors,
+                  label: 'Pickup schedule',
+                  value: _scheduleText(
+                    scheduledPickupDate,
+                    scheduledPickupWindow,
+                  ),
+                ),
+                _PriceLine(
+                  colors: colors,
+                  label: 'Delivery schedule',
+                  value: _scheduleText(
+                    scheduledDropoffDate,
+                    scheduledDropoffWindow,
+                  ),
+                ),
+                Divider(color: colors.border, height: 26),
+              ],
+              _PriceLine(
+                colors: colors,
+                label: 'Confirmed parcel weight',
+                value: weightConfirmed
+                    ? '${weightKg.toStringAsFixed(weightKg.truncateToDouble() == weightKg ? 0 : 1)} kg'
+                    : 'Confirm parcel weight before payment.',
+                strong: true,
+              ),
+              if (irisEstimatedWeightKg != null)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Iris estimate',
+                  value:
+                      '${irisEstimatedWeightKg!.toStringAsFixed(irisEstimatedWeightKg!.truncateToDouble() == irisEstimatedWeightKg ? 0 : 1)} kg',
+                ),
+              if (senderEnteredWeightKg != null)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Your weight',
+                  value:
+                      '${senderEnteredWeightKg!.toStringAsFixed(senderEnteredWeightKg!.truncateToDouble() == senderEnteredWeightKg ? 0 : 1)} kg',
+                ),
+              _PriceLine(
+                colors: colors,
+                label: 'Weight source',
+                value: weightSource,
+              ),
+              if (pricingReason != null && pricingReason!.trim().isNotEmpty)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Reason',
+                  value: pricingReason!,
+                ),
+              Divider(color: colors.border, height: 26),
               _PriceLine(
                   colors: colors,
                   label: 'Base fare',
@@ -8452,9 +9472,13 @@ class _PaymentStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: onPay,
+            onPressed: weightConfirmed ? onPay : null,
             icon: const Icon(Icons.lock),
-            label: Text('Pay £${total.toStringAsFixed(2)} & Broadcast'),
+            label: Text(
+              weightConfirmed
+                  ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                  : 'Confirm parcel weight before payment',
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
               foregroundColor: colors.inverseText,
@@ -9113,58 +10137,6 @@ class _IrisTag extends StatelessWidget {
           color: Color(0xff2563eb),
           fontSize: 11,
           fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _HealthPlusCard extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onTap;
-
-  const _HealthPlusCard({required this.colors, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: _GlassPanel(
-        colors: colors,
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xffdcfce7),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child:
-                  const Icon(Icons.health_and_safety, color: Color(0xff16a34a)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Circum Health+',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    'Get your meds before you need them. Starting from £11.',
-                    style: TextStyle(color: colors.mutedText, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: colors.mutedText),
-          ],
         ),
       ),
     );
@@ -10459,6 +11431,7 @@ class _CircumColors {
   Color get mutedText =>
       dark ? const Color(0xff9ca3af) : const Color(0xff6b7280);
   Color get success => const Color(0xff16a34a);
+  Color get warning => const Color(0xfff59e0b);
 }
 
 class _VehicleOption {

@@ -84,13 +84,18 @@ void main() {
         fullName: 'Jane Smith',
         phoneNumber: '+44 7700 900123',
         savedAddresses: const [
-          SavedSenderAddress(label: 'Home', address: 'Canary Wharf'),
+          SavedSenderAddress(
+            label: 'Home',
+            address: 'Canary Wharf',
+            addressType: 'pickup',
+          ),
         ],
         communicationPreferences: const {'sms': true},
       );
 
       expect(patch['fullName'], 'Jane Smith');
       expect(patch['savedAddresses'], hasLength(1));
+      expect(patch['savedAddresses'].first['addressType'], 'pickup');
       expect(patch.containsKey('customerId'), isFalse);
       expect(patch.containsKey('cardNumber'), isFalse);
     });

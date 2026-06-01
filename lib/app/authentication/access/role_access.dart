@@ -6,6 +6,7 @@ enum CircumRole {
 }
 
 const adminRoleNames = {
+  'admin',
   'super_admin',
   'operations_admin',
   'support_agent',
@@ -20,30 +21,57 @@ class RoleAccessPolicy {
     Map<String, dynamic> rider = const {},
     Map<String, dynamic> adminUser = const {},
   }) {
+    final resolvedRoles = resolveRoles(
+      claims: claims,
+      user: user,
+      rider: rider,
+      adminUser: adminUser,
+    );
+
+    if (resolvedRoles.contains(CircumRole.admin)) return CircumRole.admin;
+    if (resolvedRoles.contains(CircumRole.rider)) return CircumRole.rider;
+    if (resolvedRoles.contains(CircumRole.sender)) return CircumRole.sender;
+    return CircumRole.unknown;
+  }
+
+  static Set<CircumRole> resolveRoles({
+    Map<String, dynamic> claims = const {},
+    Map<String, dynamic> user = const {},
+    Map<String, dynamic> rider = const {},
+    Map<String, dynamic> adminUser = const {},
+  }) {
     final roles = <String>{
       ..._roleValues(claims['adminRole']),
       ..._roleValues(claims['role']),
       ..._roleValues(claims['roles']),
+      ..._roleValues(user['roles']),
       ..._roleValues(user['role']),
       ..._roleValues(user['userType']),
+      ..._roleValues(rider['roles']),
       ..._roleValues(rider['role']),
       ..._roleValues(rider['userType']),
       ..._roleValues(adminUser['role']),
       ..._roleValues(adminUser['roles']),
     };
 
-    if (roles.any(adminRoleNames.contains)) return CircumRole.admin;
+    final resolvedRoles = <CircumRole>{};
+    if (roles.any(adminRoleNames.contains)) {
+      resolvedRoles.add(CircumRole.admin);
+    }
+    if (roles.contains('super_admin')) {
+      resolvedRoles.add(CircumRole.sender);
+    }
     if (roles.any((role) => role == 'rider' || role == 'driver')) {
-      return CircumRole.rider;
+      resolvedRoles.add(CircumRole.rider);
     }
     if (roles.any((role) =>
         role == 'sender' ||
         role == 'customer' ||
         role == 'user' ||
         role == 'client')) {
-      return CircumRole.sender;
+      resolvedRoles.add(CircumRole.sender);
     }
-    return CircumRole.unknown;
+    return resolvedRoles.isEmpty ? {CircumRole.unknown} : resolvedRoles;
   }
 
   static bool canAccessSender(CircumRole role) => role == CircumRole.sender;
@@ -51,6 +79,18 @@ class RoleAccessPolicy {
   static bool canAccessRider(CircumRole role) => role == CircumRole.rider;
 
   static bool shouldUseAdminApp(CircumRole role) => role == CircumRole.admin;
+
+  static bool rolesCanAccessSender(Set<CircumRole> roles) {
+    return roles.contains(CircumRole.sender);
+  }
+
+  static bool rolesCanAccessRider(Set<CircumRole> roles) {
+    return roles.contains(CircumRole.rider);
+  }
+
+  static bool rolesCanAccessAdmin(Set<CircumRole> roles) {
+    return roles.contains(CircumRole.admin);
+  }
 
   static Iterable<String> _roleValues(Object? value) {
     if (value == null) return const [];

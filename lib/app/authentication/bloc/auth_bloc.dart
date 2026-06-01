@@ -759,6 +759,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await db.collection("users").doc(user?.uid).update({
           'name': event.username,
           'role': 'user',
+          'roles': ['sender'],
+          'userType': 'sender',
           'phone': user?.phoneNumber,
           'email': user?.email
         }).then((value) => print("DocumentSnapshot successfully updated!"),
@@ -769,6 +771,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await db.collection("users").doc(user?.uid).set({
           'name': event.username,
           "role": 'user',
+          'roles': ['sender'],
+          'userType': 'sender',
           'phone': user?.phoneNumber,
           'email': user?.email
         }).then((value) => print("DocumentSnapshot successfully created!"),

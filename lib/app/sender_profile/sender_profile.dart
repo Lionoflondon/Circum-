@@ -77,11 +77,13 @@ class SenderProfile {
 class SavedSenderAddress {
   final String label;
   final String address;
+  final String addressType;
   final String notes;
 
   const SavedSenderAddress({
     required this.label,
     required this.address,
+    this.addressType = 'pickup',
     this.notes = '',
   });
 
@@ -89,6 +91,8 @@ class SavedSenderAddress {
     return SavedSenderAddress(
       label: '${data['label'] ?? 'Saved address'}',
       address: '${data['address'] ?? ''}',
+      addressType:
+          '${data['addressType'] ?? data['type'] ?? data['usage'] ?? 'pickup'}',
       notes: '${data['notes'] ?? data['moreInformation'] ?? ''}',
     );
   }
@@ -96,6 +100,7 @@ class SavedSenderAddress {
   Map<String, dynamic> toJson() => {
         'label': label,
         'address': address,
+        'addressType': addressType,
         if (notes.trim().isNotEmpty) 'notes': notes,
       };
 }
