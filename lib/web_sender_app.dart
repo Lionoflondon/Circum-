@@ -3005,10 +3005,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _performanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ratingSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _acceptedJobsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _completedJobsSub;
   DriverPerformanceMetric _performance =
       DriverPerformanceMetric.empty('web-rider');
   List<DriverRating> _recentRatings = const [];
   List<Map<String, dynamic>> _availableJobs = const [];
+  List<Map<String, dynamic>> _acceptedJobs = const [];
+  List<Map<String, dynamic>> _completedJobs = const [];
   Set<CircumRole> _availableRoles = const {};
   String? _jobMessage;
 
@@ -3024,6 +3028,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _performanceSub?.cancel();
     _ratingSub?.cancel();
     _availableJobsSub?.cancel();
+    _acceptedJobsSub?.cancel();
+    _completedJobsSub?.cancel();
     _fullName.dispose();
     _phone.dispose();
     _email.dispose();
@@ -3064,6 +3070,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
       _listenToAvailableJobs();
+      _listenToRiderJobs(user.uid);
     } catch (_) {
       if (!mounted) return;
       setState(() => _authMessage = 'Sign in to manage rider earnings.');
@@ -3113,6 +3120,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
       _listenToAvailableJobs();
+      _listenToRiderJobs(user.uid);
       if (!mounted) return;
       setState(() {
         _riderUser = user;
@@ -3202,6 +3210,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'availableBalance': FieldValue.increment(0),
       'pendingWithdrawal': FieldValue.increment(0),
       'lifetimeEarnings': FieldValue.increment(0),
+      'tipsReceived': FieldValue.increment(0),
       'completedJobs': FieldValue.increment(0),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -3272,12 +3281,56 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             .where((job) {
           final matchingStatus =
               '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
+          final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
+          final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
+          final currentRider = _riderUser?.uid;
+          if (currentRider != null &&
+              (ignoredBy.contains(currentRider) ||
+                  rejectedBy.contains(currentRider))) {
+            return false;
+          }
           return matchingStatus == 'available' || matchingStatus == 'requested';
         }).toList(growable: false);
       });
     }, onError: (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not load available jobs right now.');
+    });
+  }
+
+  void _listenToRiderJobs(String riderId) {
+    _acceptedJobsSub?.cancel();
+    _completedJobsSub?.cancel();
+    _acceptedJobsSub = FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .where('riderId', isEqualTo: riderId)
+        .where('status', whereIn: ['accepted', 'picked_up', 'in_transit'])
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+          if (!mounted) return;
+          setState(() {
+            _acceptedJobs = snapshot.docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList(growable: false);
+          });
+        }, onError: (_) {
+          if (!mounted) return;
+          setState(() => _jobMessage = 'Could not load accepted jobs.');
+        });
+    _completedJobsSub = FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .where('riderId', isEqualTo: riderId)
+        .where('status', isEqualTo: 'completed')
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _completedJobs = snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList(growable: false);
+      });
     });
   }
 
@@ -3315,6 +3368,131 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not accept this job. Try again.');
     }
+  }
+
+  Future<void> _rejectOrIgnoreJob(
+    Map<String, dynamic> job,
+    String action,
+  ) async {
+    final user = _riderUser;
+    if (user == null) {
+      setState(() => _jobMessage = 'Sign in before updating a job.');
+      return;
+    }
+    final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
+    if (requestId.isEmpty) return;
+    final field = action == 'reject' ? 'rejectedByRiders' : 'ignoredByRiders';
+    final timestampField = action == 'reject' ? 'rejectedAt' : 'ignoredAt';
+    try {
+      await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(requestId)
+          .set({
+        field: FieldValue.arrayUnion([user.uid]),
+        timestampField: FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (!mounted) return;
+      setState(() => _jobMessage =
+          action == 'reject' ? 'Job rejected.' : 'Job hidden for now.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not update this job. Try again.');
+    }
+  }
+
+  Future<void> _updateAcceptedJobStatus(
+    Map<String, dynamic> job,
+    String status,
+  ) async {
+    final user = _riderUser;
+    if (user == null) {
+      setState(() => _jobMessage = 'Sign in before updating a job.');
+      return;
+    }
+    final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
+    if (requestId.isEmpty) return;
+    setState(() => _jobMessage = 'Updating job $requestId...');
+    try {
+      final db = FirebaseFirestore.instance;
+      final updates = <String, dynamic>{
+        'status': status,
+        'dispatchStatus': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (status == 'picked_up') {
+        updates['pickedUpAt'] = FieldValue.serverTimestamp();
+      }
+      if (status == 'in_transit') {
+        updates['outForDeliveryAt'] = FieldValue.serverTimestamp();
+      }
+      if (status == 'completed') {
+        updates['completedAt'] = FieldValue.serverTimestamp();
+        final payout = _jobPayout(job);
+        final tip = _jobTip(job);
+        final totalCredit = payout + tip;
+        final txId = '${requestId}_${user.uid}_completion';
+        final deliveryRef = db.collection('deliveryRequests').doc(requestId);
+        final walletRef = db.collection('riderWalletTransactions').doc(txId);
+        final earningsRef = db.collection('riderEarnings').doc(user.uid);
+        await db.runTransaction((transaction) async {
+          final existingWallet = await transaction.get(walletRef);
+          transaction.set(deliveryRef, updates, SetOptions(merge: true));
+          if (existingWallet.exists) return;
+          transaction.set(
+            walletRef,
+            {
+              'transactionId': txId,
+              'requestId': requestId,
+              'riderId': user.uid,
+              'type': 'job_completed',
+              'deliveryEarning': payout,
+              'tipAmount': tip,
+              'amount': totalCredit,
+              'status': 'available',
+              'createdAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+          transaction.set(
+            earningsRef,
+            {
+              'availableBalance': FieldValue.increment(totalCredit),
+              'lifetimeEarnings': FieldValue.increment(totalCredit),
+              'tipsReceived': FieldValue.increment(tip),
+              'completedJobs': FieldValue.increment(1),
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        });
+      } else {
+        await db
+            .collection('deliveryRequests')
+            .doc(requestId)
+            .set(updates, SetOptions(merge: true));
+      }
+      if (!mounted) return;
+      setState(() => _jobMessage = status == 'completed'
+          ? 'Job completed. Earnings updated.'
+          : 'Job updated.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not update this job. Try again.');
+    }
+  }
+
+  double _jobPayout(Map<String, dynamic> job) {
+    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
+    final value = summary?['driverPayout'] ?? job['driverPayout'];
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0;
+  }
+
+  double _jobTip(Map<String, dynamic> job) {
+    final value = job['tipAmount'] ?? job['riderTip'] ?? job['tip'];
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0;
   }
 
   Future<void> _reportParcelIssue(
@@ -3360,6 +3538,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     await _performanceSub?.cancel();
     await _ratingSub?.cancel();
     await _availableJobsSub?.cancel();
+    await _acceptedJobsSub?.cancel();
+    await _completedJobsSub?.cancel();
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
     setState(() {
@@ -3368,6 +3548,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _performance = DriverPerformanceMetric.empty('web-rider');
       _recentRatings = const [];
       _availableJobs = const [];
+      _acceptedJobs = const [];
+      _completedJobs = const [];
       _availableRoles = const {};
       _roleChoiceConfirmed = false;
       _authMessage = 'Signed out.';
@@ -3718,6 +3900,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                     performance: _performance,
                                     recentRatings: _recentRatings,
                                     availableJobs: _availableJobs,
+                                    acceptedJobs: _acceptedJobs,
+                                    completedJobs: _completedJobs,
                                     applicationId: _applicationId,
                                     withdrawAmount: _withdrawAmount,
                                     bankName: _bankName,
@@ -3736,6 +3920,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                     onWithdraw: _requestWithdrawal,
                                     onUploadDocument: _uploadRiderDocument,
                                     onAcceptJob: _acceptDeliveryJob,
+                                    onRejectJob: (job) =>
+                                        _rejectOrIgnoreJob(job, 'reject'),
+                                    onIgnoreJob: (job) =>
+                                        _rejectOrIgnoreJob(job, 'ignore'),
+                                    onUpdateJobStatus: _updateAcceptedJobStatus,
                                     onReportIssue: _reportParcelIssue,
                                   ),
                                 ),
@@ -3791,6 +3980,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                   performance: _performance,
                                   recentRatings: _recentRatings,
                                   availableJobs: _availableJobs,
+                                  acceptedJobs: _acceptedJobs,
+                                  completedJobs: _completedJobs,
                                   applicationId: _applicationId,
                                   withdrawAmount: _withdrawAmount,
                                   bankName: _bankName,
@@ -3809,6 +4000,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                   onWithdraw: _requestWithdrawal,
                                   onUploadDocument: _uploadRiderDocument,
                                   onAcceptJob: _acceptDeliveryJob,
+                                  onRejectJob: (job) =>
+                                      _rejectOrIgnoreJob(job, 'reject'),
+                                  onIgnoreJob: (job) =>
+                                      _rejectOrIgnoreJob(job, 'ignore'),
+                                  onUpdateJobStatus: _updateAcceptedJobStatus,
                                   onReportIssue: _reportParcelIssue,
                                   nested: true,
                                 ),
@@ -4182,6 +4378,8 @@ class _RiderWorkspace extends StatelessWidget {
   final DriverPerformanceMetric performance;
   final List<DriverRating> recentRatings;
   final List<Map<String, dynamic>> availableJobs;
+  final List<Map<String, dynamic>> acceptedJobs;
+  final List<Map<String, dynamic>> completedJobs;
   final String? applicationId;
   final TextEditingController withdrawAmount;
   final TextEditingController bankName;
@@ -4199,6 +4397,10 @@ class _RiderWorkspace extends StatelessWidget {
   final VoidCallback onWithdraw;
   final VoidCallback onUploadDocument;
   final ValueChanged<Map<String, dynamic>> onAcceptJob;
+  final ValueChanged<Map<String, dynamic>> onRejectJob;
+  final ValueChanged<Map<String, dynamic>> onIgnoreJob;
+  final void Function(Map<String, dynamic> job, String status)
+      onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final bool nested;
 
@@ -4209,6 +4411,8 @@ class _RiderWorkspace extends StatelessWidget {
     required this.performance,
     required this.recentRatings,
     required this.availableJobs,
+    required this.acceptedJobs,
+    required this.completedJobs,
     required this.applicationId,
     required this.withdrawAmount,
     required this.bankName,
@@ -4226,6 +4430,9 @@ class _RiderWorkspace extends StatelessWidget {
     required this.onWithdraw,
     required this.onUploadDocument,
     required this.onAcceptJob,
+    required this.onRejectJob,
+    required this.onIgnoreJob,
+    required this.onUpdateJobStatus,
     required this.onReportIssue,
     this.nested = false,
   });
@@ -4269,6 +4476,27 @@ class _RiderWorkspace extends StatelessWidget {
             jobs: availableJobs,
             message: jobMessage,
             onAcceptJob: onAcceptJob,
+            onRejectJob: onRejectJob,
+            onIgnoreJob: onIgnoreJob,
+            onReportIssue: onReportIssue,
+          ),
+          const SizedBox(height: 14),
+          _RiderJobListPanel(
+            colors: colors,
+            title: 'Accepted jobs',
+            emptyText: 'Accepted jobs will appear here.',
+            jobs: acceptedJobs,
+            onUpdateJobStatus: onUpdateJobStatus,
+            onReportIssue: onReportIssue,
+          ),
+          const SizedBox(height: 14),
+          _RiderJobListPanel(
+            colors: colors,
+            title: 'Completed jobs',
+            emptyText: 'Completed deliveries will appear here.',
+            jobs: completedJobs,
+            completed: true,
+            onUpdateJobStatus: onUpdateJobStatus,
             onReportIssue: onReportIssue,
           ),
           const SizedBox(height: 14),
@@ -4314,6 +4542,26 @@ class _RiderWorkspace extends StatelessWidget {
                         colors: colors,
                         label: 'Jobs',
                         value: '${earnings.completedJobs}',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _RiderStatTile(
+                        colors: colors,
+                        label: 'Tips',
+                        value: _money(earnings.tipsReceived),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _RiderStatTile(
+                        colors: colors,
+                        label: 'Withdrawn',
+                        value: _money(earnings.withdrawnEarnings),
                       ),
                     ),
                   ],
@@ -4498,6 +4746,8 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
   final List<Map<String, dynamic>> jobs;
   final String? message;
   final ValueChanged<Map<String, dynamic>> onAcceptJob;
+  final ValueChanged<Map<String, dynamic>> onRejectJob;
+  final ValueChanged<Map<String, dynamic>> onIgnoreJob;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
 
   const _AvailableDriverJobsPanel({
@@ -4505,6 +4755,8 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
     required this.jobs,
     required this.message,
     required this.onAcceptJob,
+    required this.onRejectJob,
+    required this.onIgnoreJob,
     required this.onReportIssue,
   });
 
@@ -4543,6 +4795,57 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
                   colors: colors,
                   job: job,
                   onAccept: () => onAcceptJob(job),
+                  onReject: () => onRejectJob(job),
+                  onIgnore: () => onIgnoreJob(job),
+                  onReportWeight: () => onReportIssue(job, 'weight'),
+                  onReportParcel: () => onReportIssue(job, 'parcel'),
+                )),
+        ],
+      ),
+    );
+  }
+}
+
+class _RiderJobListPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String emptyText;
+  final List<Map<String, dynamic>> jobs;
+  final bool completed;
+  final void Function(Map<String, dynamic> job, String status)
+      onUpdateJobStatus;
+  final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
+
+  const _RiderJobListPanel({
+    required this.colors,
+    required this.title,
+    required this.emptyText,
+    required this.jobs,
+    this.completed = false,
+    required this.onUpdateJobStatus,
+    required this.onReportIssue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: title),
+          const SizedBox(height: 12),
+          if (jobs.isEmpty)
+            Text(emptyText, style: TextStyle(color: colors.mutedText))
+          else
+            ...jobs.take(8).map((job) => _DriverJobCard(
+                  colors: colors,
+                  job: job,
+                  completed: completed,
+                  onAccept: () => onUpdateJobStatus(job, 'accepted'),
+                  onUpdateStatus: completed
+                      ? null
+                      : (status) => onUpdateJobStatus(job, status),
                   onReportWeight: () => onReportIssue(job, 'weight'),
                   onReportParcel: () => onReportIssue(job, 'parcel'),
                 )),
@@ -4556,15 +4859,23 @@ class _DriverJobCard extends StatelessWidget {
   final _CircumColors colors;
   final Map<String, dynamic> job;
   final VoidCallback onAccept;
+  final VoidCallback? onReject;
+  final VoidCallback? onIgnore;
+  final void Function(String status)? onUpdateStatus;
   final VoidCallback onReportWeight;
   final VoidCallback onReportParcel;
+  final bool completed;
 
   const _DriverJobCard({
     required this.colors,
     required this.job,
     required this.onAccept,
+    this.onReject,
+    this.onIgnore,
+    this.onUpdateStatus,
     required this.onReportWeight,
     required this.onReportParcel,
+    this.completed = false,
   });
 
   @override
@@ -4690,10 +5001,39 @@ class _DriverJobCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: onAccept,
-                icon: const Icon(Icons.check_circle),
-                label: const Text('Accept job'),
+                onPressed: completed ? null : onAccept,
+                icon: Icon(completed ? Icons.done_all : Icons.check_circle),
+                label: Text(completed ? 'Completed' : 'Accept job'),
               ),
+              if (onUpdateStatus != null && !completed) ...[
+                OutlinedButton.icon(
+                  onPressed: () => onUpdateStatus!('picked_up'),
+                  icon: const Icon(Icons.inventory),
+                  label: const Text('Picked up'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => onUpdateStatus!('in_transit'),
+                  icon: const Icon(Icons.delivery_dining),
+                  label: const Text('In transit'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => onUpdateStatus!('completed'),
+                  icon: const Icon(Icons.flag_circle),
+                  label: const Text('Complete'),
+                ),
+              ],
+              if (onReject != null)
+                OutlinedButton.icon(
+                  onPressed: onReject,
+                  icon: const Icon(Icons.close),
+                  label: const Text('Reject'),
+                ),
+              if (onIgnore != null)
+                OutlinedButton.icon(
+                  onPressed: onIgnore,
+                  icon: const Icon(Icons.visibility_off),
+                  label: const Text('Ignore'),
+                ),
               OutlinedButton.icon(
                 onPressed: onReportWeight,
                 icon: const Icon(Icons.scale),
@@ -5087,12 +5427,16 @@ class _RiderEarningsSnapshot {
   final double availableBalance;
   final double pendingWithdrawal;
   final double lifetimeEarnings;
+  final double tipsReceived;
+  final double withdrawnEarnings;
   final int completedJobs;
 
   const _RiderEarningsSnapshot({
     required this.availableBalance,
     required this.pendingWithdrawal,
     required this.lifetimeEarnings,
+    required this.tipsReceived,
+    required this.withdrawnEarnings,
     required this.completedJobs,
   });
 
@@ -5100,6 +5444,8 @@ class _RiderEarningsSnapshot {
         availableBalance: 0,
         pendingWithdrawal: 0,
         lifetimeEarnings: 0,
+        tipsReceived: 0,
+        withdrawnEarnings: 0,
         completedJobs: 0,
       );
 
@@ -5113,6 +5459,11 @@ class _RiderEarningsSnapshot {
       pendingWithdrawal: (data['pendingWithdrawal'] as num? ?? 0).toDouble(),
       lifetimeEarnings: (data['lifetimeEarnings'] as num? ??
               data['totalAmountEarned'] as num? ??
+              0)
+          .toDouble(),
+      tipsReceived: (data['tipsReceived'] as num? ?? 0).toDouble(),
+      withdrawnEarnings: (data['withdrawnEarnings'] as num? ??
+              data['totalWithdrawn'] as num? ??
               0)
           .toDouble(),
       completedJobs:
