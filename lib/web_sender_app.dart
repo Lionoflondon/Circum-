@@ -5093,7 +5093,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _SenderStep.payment => _PaymentStep(
           key: const ValueKey('payment'),
           colors: colors,
-          vehicle: _selectedVehicle,
+          vehicle: _effectiveVehicle,
           speed: _selectedSpeed,
           breakdown: _quoteBreakdown,
           irisEstimatedWeightKg: _irisEstimatedWeightKg,
@@ -5224,19 +5224,29 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     };
   }
 
-  DeliveryPricingBreakdown get _quoteBreakdown {
+  _VehicleOption get _effectiveVehicle {
     final chargeableWeightKg = _confirmedWeightKg ?? 0;
-    final vehicleName = DeliveryPricing.vehicleCanCarryWeight(
+    if (DeliveryPricing.vehicleCanCarryWeight(
       _selectedVehicle.name,
       chargeableWeightKg,
-    )
-        ? _selectedVehicle.name
-        : DeliveryPricing.recommendedVehicleForWeight(chargeableWeightKg);
+    )) {
+      return _selectedVehicle;
+    }
+    final recommendedVehicleName =
+        DeliveryPricing.recommendedVehicleForWeight(chargeableWeightKg);
+    return _vehicles.firstWhere(
+      (vehicle) => vehicle.name == recommendedVehicleName,
+      orElse: () => _vehicles.last,
+    );
+  }
+
+  DeliveryPricingBreakdown get _quoteBreakdown {
+    final chargeableWeightKg = _confirmedWeightKg ?? 0;
     return DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: _webQuoteDistanceMiles,
         weightKg: chargeableWeightKg,
-        vehicleType: vehicleName,
+        vehicleType: _effectiveVehicle.name,
         express: _selectedSpeed == 'Express',
         priority: _selectedSpeed == 'Priority',
       ),
@@ -5597,7 +5607,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weightMessage =
           'Confirmed parcel weight: ${_formatWeight(decision.weightKg!)} kg.';
       _step = _SenderStep.vehicle;
-      _selectedVehicle = _vehicles.first;
     });
   }
 
