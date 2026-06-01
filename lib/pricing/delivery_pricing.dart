@@ -131,6 +131,20 @@ class DeliveryPricing {
     );
   }
 
+  static bool weightsCrossPricingBands(double firstKg, double secondKg) {
+    return weightBandFor(firstKg).category != weightBandFor(secondKg).category;
+  }
+
+  static double pricingWeightForConfirmedWeights({
+    required double senderWeightKg,
+    required double irisWeightKg,
+  }) {
+    if (weightsCrossPricingBands(senderWeightKg, irisWeightKg)) {
+      return max(senderWeightKg, irisWeightKg);
+    }
+    return senderWeightKg;
+  }
+
   static double calculateVehicleSurcharge(String? vehicleType) {
     final key = vehicleType?.trim().toLowerCase();
     if (key == null || key.isEmpty) return 0;
@@ -170,9 +184,19 @@ class DeliveryPricing {
   }
 
   static double parseWeightKg(String value, {double fallbackKg = 0}) {
-    final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(value);
+    final normalized = value.trim().toLowerCase();
+    final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(normalized);
     if (match == null) return fallbackKg;
-    return double.tryParse(match.group(1)!) ?? fallbackKg;
+    final parsed = double.tryParse(match.group(1)!);
+    if (parsed == null) return fallbackKg;
+    final unitMatch =
+        RegExp(r'\d+(?:\.\d+)?\s*(kg|kilogram|kilograms|g|gram|grams)\b')
+            .firstMatch(normalized);
+    final unit = unitMatch?.group(1);
+    if (unit == 'g' || unit == 'gram' || unit == 'grams') {
+      return parsed / 1000;
+    }
+    return parsed;
   }
 
   static double kilometresToMiles(double kilometres) => kilometres / 1.6093;

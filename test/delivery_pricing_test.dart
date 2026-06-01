@@ -82,5 +82,50 @@ void main() {
       expect(quote.specialConditions, 14);
       expect(quote.total, 22);
     });
+
+    test('parses gram entries as kilograms', () {
+      expect(DeliveryPricing.parseWeightKg('178g'), closeTo(0.178, 0.0001));
+      expect(
+          DeliveryPricing.parseWeightKg('178 grams'), closeTo(0.178, 0.0001));
+      expect(DeliveryPricing.parseWeightKg('2kg'), 2);
+    });
+
+    test('same band with different weights does not create pricing conflict',
+        () {
+      expect(DeliveryPricing.weightBandFor(0.178).category, 'Small Parcel');
+      expect(DeliveryPricing.weightBandFor(2).category, 'Small Parcel');
+      expect(DeliveryPricing.weightsCrossPricingBands(0.178, 2), isFalse);
+      expect(
+        DeliveryPricing.pricingWeightForConfirmedWeights(
+          senderWeightKg: 0.178,
+          irisWeightKg: 2,
+        ),
+        closeTo(0.178, 0.0001),
+      );
+    });
+
+    test('different bands create pricing conflict and use higher band weight',
+        () {
+      expect(DeliveryPricing.weightsCrossPricingBands(4.8, 6.2), isTrue);
+      expect(
+        DeliveryPricing.pricingWeightForConfirmedWeights(
+          senderWeightKg: 4.8,
+          irisWeightKg: 6.2,
+        ),
+        6.2,
+      );
+    });
+
+    test('weight band boundaries are stable', () {
+      expect(DeliveryPricing.weightBandFor(0).category, 'Small Parcel');
+      expect(DeliveryPricing.weightBandFor(5).category, 'Small Parcel');
+      expect(DeliveryPricing.weightBandFor(5.01).category, 'Medium Parcel');
+      expect(DeliveryPricing.weightBandFor(10).category, 'Medium Parcel');
+      expect(DeliveryPricing.weightBandFor(10.01).category, 'Heavy Parcel');
+      expect(DeliveryPricing.weightBandFor(20).category, 'Heavy Parcel');
+      expect(DeliveryPricing.weightBandFor(20.01).category, 'Large Item');
+      expect(DeliveryPricing.weightBandFor(40).category, 'Large Item');
+      expect(DeliveryPricing.weightBandFor(40.01).category, 'Extra Heavy');
+    });
   });
 }

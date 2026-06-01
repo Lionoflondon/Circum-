@@ -5638,11 +5638,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
     final bandChanged =
         senderBand != null && senderBand.category != irisBand.category;
-    final differenceKg =
-        hasSenderWeight ? (estimate.weightKg - senderWeightKg).abs() : 0.0;
-    final significantDifference = differenceKg >= 2 || bandChanged;
-    final higherWeight = hasSenderWeight && senderWeightKg > estimate.weightKg
-        ? senderWeightKg
+    final significantDifference = bandChanged;
+    final higherWeight = hasSenderWeight
+        ? DeliveryPricing.pricingWeightForConfirmedWeights(
+            senderWeightKg: senderWeightKg,
+            irisWeightKg: estimate.weightKg,
+          )
         : estimate.weightKg;
     final higherBand = DeliveryPricing.weightBandFor(higherWeight);
 
