@@ -58,6 +58,12 @@ class _WebSenderAppState extends State<WebSenderApp> {
     _ => _SenderStep.dashboard,
   };
 
+  @override
+  void initState() {
+    super.initState();
+    _logWebsiteVisit();
+  }
+
   _WebAppMode _initialMode() {
     if (_adminHostingTarget) return _WebAppMode.admin;
     return switch (Uri.base.queryParameters['app']) {
@@ -65,6 +71,26 @@ class _WebSenderAppState extends State<WebSenderApp> {
       'rider' || 'driver' || 'earn' => _WebAppMode.rider,
       _ => _WebAppMode.landing,
     };
+  }
+
+  Future<void> _logWebsiteVisit() async {
+    try {
+      await _ensureCircumFirebaseReady();
+      final user = FirebaseAuth.instance.currentUser;
+      await FirebaseFirestore.instance.collection('websiteVisitors').add({
+        'url': Uri.base.toString(),
+        'path': Uri.base.path,
+        'query': Uri.base.queryParameters,
+        'appMode': _mode.name,
+        'userId': user?.uid,
+        'email': user?.email,
+        'signedIn': user != null,
+        'source': 'circum-web',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Visitor analytics must never block the app.
+    }
   }
 
   @override
@@ -307,6 +333,7 @@ enum _AdminSection {
   healthPlus,
   support,
   issues,
+  visitors,
   analytics,
   audit,
 }
@@ -355,6 +382,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _payoutRequests = const [];
   List<Map<String, dynamic>> _adminUsers = const [];
   List<Map<String, dynamic>> _auditLogs = const [];
+  List<Map<String, dynamic>> _websiteVisitors = const [];
 
   @override
   void initState() {
@@ -519,6 +547,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           : Future.value(<Map<String, dynamic>>[]),
       _readCollection(
         db
+            .collection('websiteVisitors')
+            .orderBy('createdAt', descending: true)
+            .limit(80),
+      ),
+      _readCollection(
+        db
             .collection('adminAuditLogs')
             .orderBy('createdAt', descending: true)
             .limit(40),
@@ -535,6 +569,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final healthPickups = results[8];
     final schedules = results[9];
     final payouts = results[10];
+    final visitors = results[11];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -547,7 +582,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _healthPlusPickups = healthPickups;
       _recurringPickupSchedules = schedules;
       _payoutRequests = payouts;
-      _auditLogs = results[11];
+      _websiteVisitors = visitors;
+      _auditLogs = results[12];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -1028,6 +1064,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rowBuilder: _issueRow,
           emptyText: 'No operational issues found.',
         ),
+      _AdminSection.visitors => _AdminDataSection(
+          colors: colors,
+          title: 'Website visitors',
+          subtitle:
+              'Recent web visits by route, mode, account status, and timestamp.',
+          records: adminSearch(_websiteVisitors, query,
+              ['url', 'appMode', 'email', 'userId', 'source']),
+          columns: const ['Visit', 'Mode', 'User', 'When'],
+          rowBuilder: _visitorRow,
+          emptyText: 'No website visits logged yet.',
+        ),
       _AdminSection.analytics => _AdminAnalyticsSection(
           colors: colors,
           metrics: _metrics,
@@ -1145,6 +1192,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminCell(
         '${item['senderId'] ?? item['riderId'] ?? item['userId'] ?? ''}',
       ),
+    ];
+  }
+
+  List<Widget> _visitorRow(Map<String, dynamic> item) {
+    final signedIn = item['signedIn'] == true ? 'Signed in' : 'Guest';
+    return [
+      _AdminCell.primary('${item['url'] ?? item['path'] ?? ''}'),
+      _AdminCell('${item['appMode'] ?? 'web'}'),
+      _AdminCell('${item['email'] ?? item['userId'] ?? signedIn}'),
+      _AdminCell(_adminDateText(item['createdAt'])),
     ];
   }
 
@@ -1300,6 +1357,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           'recordId': id,
           'priority': 'Medium',
           'status': status,
+        });
+      }
+      if (delivery['weightReviewRequired'] == true ||
+          '${delivery['weightDisputeStatus'] ?? ''}' == 'admin_review') {
+        issues.add({
+          'title': 'Weight verification review',
+          'recordType': 'deliveryRequests',
+          'recordId': id,
+          'priority': 'High',
+          'status': delivery['weightDisputeStatus'] ?? 'open',
         });
       }
     }
@@ -2525,6 +2592,7 @@ String _adminSectionLabel(_AdminSection section) {
     _AdminSection.healthPlus => 'Health+',
     _AdminSection.support => 'Support',
     _AdminSection.issues => 'Troubleshooting',
+    _AdminSection.visitors => 'Visitors',
     _AdminSection.analytics => 'Analytics',
     _AdminSection.audit => 'Audit',
   };
@@ -2541,6 +2609,7 @@ IconData _adminSectionIcon(_AdminSection section) {
     _AdminSection.healthPlus => Icons.health_and_safety,
     _AdminSection.support => Icons.support_agent,
     _AdminSection.issues => Icons.report_problem,
+    _AdminSection.visitors => Icons.visibility,
     _AdminSection.analytics => Icons.query_stats,
     _AdminSection.audit => Icons.history,
   };
@@ -3415,6 +3484,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     setState(() => _jobMessage = 'Updating job $requestId...');
     try {
       final db = FirebaseFirestore.instance;
+      final verificationPatch = status == 'picked_up'
+          ? await _collectWeightVerification(job, requestId, user.uid)
+          : null;
+      if (status == 'picked_up' && verificationPatch == null) {
+        if (!mounted) return;
+        setState(() => _jobMessage = 'Verify parcel weight before pickup.');
+        return;
+      }
       final updates = <String, dynamic>{
         'status': status,
         'dispatchStatus': status,
@@ -3422,6 +3499,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       };
       if (status == 'picked_up') {
         updates['pickedUpAt'] = FieldValue.serverTimestamp();
+        updates.addAll(verificationPatch!);
       }
       if (status == 'in_transit') {
         updates['outForDeliveryAt'] = FieldValue.serverTimestamp();
@@ -3482,6 +3560,244 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
   }
 
+  Future<Map<String, dynamic>?> _collectWeightVerification(
+    Map<String, dynamic> job,
+    String requestId,
+    String riderId,
+  ) async {
+    final currentFinalWeight = _jobFinalWeight(job);
+    final weightController =
+        TextEditingController(text: currentFinalWeight.toStringAsFixed(1));
+    final noteController = TextEditingController();
+    var option = 'accurate';
+    var pickedPhotos = <XFile>[];
+    String? errorText;
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Verify parcel weight'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Before pickup, confirm whether the parcel matches the paid weight. Evidence is required for increases.',
+                  style: TextStyle(color: Theme.of(context).hintColor),
+                ),
+                const SizedBox(height: 12),
+                RadioListTile<String>(
+                  value: 'accurate',
+                  groupValue: option,
+                  onChanged: (value) =>
+                      setDialogState(() => option = value ?? option),
+                  title: const Text('Confirm weight is accurate'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<String>(
+                  value: 'heavier',
+                  groupValue: option,
+                  onChanged: (value) =>
+                      setDialogState(() => option = value ?? option),
+                  title: const Text('Weight is heavier than declared'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                RadioListTile<String>(
+                  value: 'significant',
+                  groupValue: option,
+                  onChanged: (value) =>
+                      setDialogState(() => option = value ?? option),
+                  title: const Text('Weight is significantly heavier'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: weightController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Verified weight in kg',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: noteController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Optional note',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picked = await ImagePicker()
+                        .pickMultiImage(imageQuality: 80, maxWidth: 1800);
+                    setDialogState(() => pickedPhotos = picked);
+                  },
+                  icon: const Icon(Icons.photo_camera),
+                  label: Text(pickedPhotos.isEmpty
+                      ? 'Add evidence photo'
+                      : '${pickedPhotos.length} photo(s) added'),
+                ),
+                if (errorText != null) ...[
+                  const SizedBox(height: 8),
+                  Text(errorText!, style: const TextStyle(color: Colors.red)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final verifiedWeight =
+                    double.tryParse(weightController.text.trim()) ?? 0;
+                final requiresEvidence = option != 'accurate';
+                if (verifiedWeight <= 0) {
+                  setDialogState(() => errorText = 'Enter a valid weight.');
+                  return;
+                }
+                if (requiresEvidence && verifiedWeight <= currentFinalWeight) {
+                  setDialogState(() => errorText =
+                      'Corrected weight must be higher than the current paid weight.');
+                  return;
+                }
+                if (requiresEvidence && pickedPhotos.isEmpty) {
+                  setDialogState(
+                      () => errorText = 'Add at least one evidence photo.');
+                  return;
+                }
+                Navigator.pop(context, {
+                  'option': option,
+                  'verifiedWeightKg': verifiedWeight,
+                  'note': noteController.text.trim(),
+                  'photos': pickedPhotos,
+                });
+              },
+              child: const Text('Save verification'),
+            ),
+          ],
+        ),
+      ),
+    );
+    weightController.dispose();
+    noteController.dispose();
+    if (result == null) return null;
+
+    final optionValue = '${result['option']}';
+    final verifiedWeight = result['verifiedWeightKg'] as double;
+    final photos = (result['photos'] as List<XFile>? ?? const <XFile>[]);
+    final evidenceUrls = <String>[];
+    final storagePaths = <String>[];
+    for (final photo in photos) {
+      final bytes = await photo.readAsBytes();
+      final safeName = photo.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final path =
+          'delivery_weight_evidence/$requestId/$riderId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      final ref = FirebaseStorage.instance.ref(path);
+      await ref.putData(bytes);
+      storagePaths.add(path);
+      evidenceUrls.add(await ref.getDownloadURL());
+    }
+
+    final customerWeight = _jobCustomerWeight(job);
+    final irisWeight = _jobIrisWeight(job);
+    final finalWeightUsed = [
+      customerWeight,
+      irisWeight,
+      verifiedWeight,
+    ].reduce((a, b) => a > b ? a : b);
+    final distanceMiles = _jobDistanceMiles(job);
+    final vehicle =
+        DeliveryPricing.recommendedVehicleForWeight(finalWeightUsed);
+    final revisedQuote = DeliveryPricing.calculate(DeliveryPricingInput(
+      distanceMiles: distanceMiles,
+      weightKg: finalWeightUsed,
+      vehicleType: vehicle,
+    ));
+    final revisedPayout =
+        double.parse((revisedQuote.total * 0.75).toStringAsFixed(2));
+    final heavier = finalWeightUsed > currentFinalWeight + 0.01;
+    final summary =
+        (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+
+    if (heavier) {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'recipientId': job['senderId'] ?? job['userId'],
+        'requestId': requestId,
+        'type': 'weight_adjusted',
+        'title': 'Parcel weight updated',
+        'message':
+            'Parcel weight differs from original declaration. Pricing has been adjusted.',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+        'source': 'circum-web',
+      });
+    }
+
+    return {
+      'riderVerifiedWeight': verifiedWeight,
+      'riderVerifiedWeightKg': verifiedWeight,
+      'finalVerifiedWeight': finalWeightUsed,
+      'finalWeightUsed': finalWeightUsed,
+      'finalChargeableWeight': finalWeightUsed,
+      'confirmedWeightKg': finalWeightUsed,
+      'confirmedWeightBand':
+          DeliveryPricing.weightBandFor(finalWeightUsed).category,
+      'weightCategory': DeliveryPricing.weightBandFor(finalWeightUsed).category,
+      'vehicleType': vehicle,
+      'vehicle': vehicle,
+      'preferredVehicle': vehicle.toLowerCase(),
+      'quote': revisedQuote.total,
+      'price': revisedQuote.total,
+      'fare': revisedQuote.total,
+      'driverPayout': revisedPayout,
+      'pricingBreakdown': revisedQuote.toJson(),
+      'weightReviewRequired': optionValue != 'accurate',
+      'weightDisputeStatus':
+          optionValue == 'accurate' ? 'verified' : 'admin_review',
+      'driverWeightDispute': {
+        'reported': optionValue != 'accurate',
+        'issueType': optionValue,
+        'reportedBy': riderId,
+        'reportedAt': FieldValue.serverTimestamp(),
+        'status': optionValue == 'accurate' ? 'verified' : 'admin_review',
+      },
+      'weightVerification': {
+        'customerWeight': customerWeight,
+        'irisWeight': irisWeight,
+        'riderVerifiedWeight': verifiedWeight,
+        'finalWeightUsed': finalWeightUsed,
+        'previousFinalWeight': currentFinalWeight,
+        'option': optionValue,
+        'riderId': riderId,
+        'note': result['note'],
+        'supportingImages': evidenceUrls,
+        'storagePaths': storagePaths,
+        'timestamp': FieldValue.serverTimestamp(),
+      },
+      'driverJobSummary': {
+        ...summary,
+        'finalWeightUsed': finalWeightUsed,
+        'finalChargeableWeight': finalWeightUsed,
+        'confirmedWeightKg': finalWeightUsed,
+        'confirmedWeightBand':
+            DeliveryPricing.weightBandFor(finalWeightUsed).category,
+        'driverPayout': revisedPayout,
+        'totalFare': revisedQuote.total,
+        'vehicleType': vehicle,
+      },
+    };
+  }
+
   double _jobPayout(Map<String, dynamic> job) {
     final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
     final value = summary?['driverPayout'] ?? job['driverPayout'];
@@ -3493,6 +3809,58 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final value = job['tipAmount'] ?? job['riderTip'] ?? job['tip'];
     if (value is num) return value.toDouble();
     return double.tryParse('$value') ?? 0;
+  }
+
+  double _jobCustomerWeight(Map<String, dynamic> job) {
+    return _jobNumber(job, [
+      'customerWeight',
+      'customerDeclaredWeight',
+      'senderEnteredWeightKg',
+      'declaredWeightKg',
+    ]);
+  }
+
+  double _jobIrisWeight(Map<String, dynamic> job) {
+    return _jobNumber(job, [
+      'irisWeight',
+      'irisEstimatedWeight',
+      'irisEstimatedWeightKg',
+    ]);
+  }
+
+  double _jobFinalWeight(Map<String, dynamic> job) {
+    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
+    return _numberValue(job['finalWeightUsed']) ??
+        _numberValue(job['finalChargeableWeight']) ??
+        _numberValue(job['confirmedWeightKg']) ??
+        _numberValue(summary?['finalWeightUsed']) ??
+        _numberValue(summary?['confirmedWeightKg']) ??
+        0;
+  }
+
+  double _jobDistanceMiles(Map<String, dynamic> job) {
+    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
+    final pricing = (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>();
+    return _numberValue(summary?['estimatedDistanceMiles']) ??
+        _numberValue(job['estimatedDistanceMiles']) ??
+        _numberValue(pricing?['distanceMiles']) ??
+        _webQuoteDistanceMiles;
+  }
+
+  double _jobNumber(Map<String, dynamic> job, List<String> keys) {
+    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
+    for (final key in keys) {
+      final direct = _numberValue(job[key]);
+      if (direct != null) return direct;
+      final nested = _numberValue(summary?[key]);
+      if (nested != null) return nested;
+    }
+    return 0;
+  }
+
+  double? _numberValue(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value');
   }
 
   Future<void> _reportParcelIssue(
@@ -4890,8 +5258,9 @@ class _DriverJobCard extends StatelessWidget {
         _num(job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg']);
     final irisWeight =
         _num(job['irisEstimatedWeight'] ?? job['irisEstimatedWeightKg']);
-    final chargeableWeight =
-        _num(job['finalChargeableWeight'] ?? job['confirmedWeightKg']);
+    final chargeableWeight = _num(job['finalWeightUsed'] ??
+        job['finalChargeableWeight'] ??
+        job['confirmedWeightKg']);
     final category =
         '${job['weightCategory'] ?? job['confirmedWeightBand'] ?? summary['confirmedWeightBand'] ?? 'Parcel'}';
     final confidence =
@@ -5009,7 +5378,7 @@ class _DriverJobCard extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: () => onUpdateStatus!('picked_up'),
                   icon: const Icon(Icons.inventory),
-                  label: const Text('Picked up'),
+                  label: const Text('Verify pickup'),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => onUpdateStatus!('in_transit'),
@@ -7012,8 +7381,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'totalFare': quote.total,
       'driverPayout': driverPayout,
       'customerDeclaredWeight': _senderEnteredWeightKg,
+      'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
+      'irisWeight': _irisEstimatedWeightKg,
       'finalChargeableWeight': _confirmedWeightKg,
+      'finalWeightUsed': _confirmedWeightKg,
       'irisConfidenceScore': _irisConfidenceScore(),
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
@@ -7030,8 +7402,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'weight': _weight.text.trim(),
       'weightKg': _confirmedWeightKg,
       'customerDeclaredWeight': _senderEnteredWeightKg,
+      'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
+      'irisWeight': _irisEstimatedWeightKg,
       'finalChargeableWeight': _confirmedWeightKg,
+      'finalWeightUsed': _confirmedWeightKg,
       'irisConfidenceScore': _irisConfidenceScore(),
       'weightReviewRequired': _weightVerificationRequired,
       'irisEstimatedWeightKg': _irisEstimatedWeightKg,
