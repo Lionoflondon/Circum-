@@ -1,15 +1,22 @@
 class PricingConstants {
-  static const double baseFareGbp = 6;
-  static const double additionalFarePerMileGbp = 1;
-  static const double includedBaseMiles = 1;
+  static const double baseFareGbp = 5;
+  static const double additionalFarePerMileGbp = 1.5;
+  static const double includedBaseMiles = 0;
   static const double shortTripFareFloorMiles = 1.6;
   static const double longDistanceThresholdMiles = 20;
   static const double longDistanceMileageMultiplier = 1.2;
 
-  static const double oversizedItemFeeGbp = 10;
-  static const double fragileHandlingFeeGbp = 5;
-  static const double twoPersonHandlingFeeGbp = 25;
-  static const double noLiftFeeGbp = 3;
+  static const Map<String, double> specialConditionFeesGbp = {
+    'oversized': 10,
+    'fragile': 5,
+    'twoPersonHandling': 25,
+    'noLift': 3,
+    'stairsOneToTwoFloors': 3,
+    'stairsThreePlusFloors': 7,
+    'priority': 5,
+    'express': 10,
+    'waitingAdditionalFiveMinutes': 2,
+  };
 
   static const List<WeightBand> weightBands = [
     WeightBand(

@@ -5229,7 +5229,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         distanceMiles: _webQuoteDistanceMiles,
         weightKg: _confirmedWeightKg ?? 0,
         vehicleType: _selectedVehicle.name,
-        urgent: _selectedSpeed == 'Express',
+        express: _selectedSpeed == 'Express',
+        priority: _selectedSpeed == 'Priority',
       ),
     );
   }

@@ -11,7 +11,9 @@ class DeliveryPricingInput {
   final bool twoPersonHandling;
   final int stairsFloors;
   final bool noLift;
-  final bool urgent;
+  final bool priority;
+  final bool express;
+  final int waitingMinutes;
   final double surgeMultiplier;
 
   const DeliveryPricingInput({
@@ -23,7 +25,9 @@ class DeliveryPricingInput {
     this.twoPersonHandling = false,
     this.stairsFloors = 0,
     this.noLift = false,
-    this.urgent = false,
+    this.priority = false,
+    this.express = false,
+    this.waitingMinutes = 0,
     this.surgeMultiplier = 1,
   });
 }
@@ -75,7 +79,9 @@ class DeliveryPricing {
       twoPersonHandling: input.twoPersonHandling,
       stairsFloors: input.stairsFloors,
       noLift: input.noLift,
-      urgent: input.urgent,
+      priority: input.priority,
+      express: input.express,
+      waitingMinutes: input.waitingMinutes,
     );
     final subtotal = PricingConstants.baseFareGbp +
         distanceFare +
@@ -137,16 +143,29 @@ class DeliveryPricing {
     bool twoPersonHandling = false,
     int stairsFloors = 0,
     bool noLift = false,
-    bool urgent = false,
+    bool priority = false,
+    bool express = false,
+    int waitingMinutes = 0,
   }) {
+    final fees = PricingConstants.specialConditionFeesGbp;
     var fee = 0.0;
-    if (oversized) fee += PricingConstants.oversizedItemFeeGbp;
-    if (fragile) fee += PricingConstants.fragileHandlingFeeGbp;
-    if (twoPersonHandling) fee += PricingConstants.twoPersonHandlingFeeGbp;
-    if (noLift) fee += PricingConstants.noLiftFeeGbp;
-    if (stairsFloors >= 1 && stairsFloors <= 2) fee += 3;
-    if (stairsFloors >= 3) fee += 7;
-    if (urgent) fee += 5;
+    if (oversized) fee += fees['oversized'] ?? 0;
+    if (fragile) fee += fees['fragile'] ?? 0;
+    if (twoPersonHandling) fee += fees['twoPersonHandling'] ?? 0;
+    if (noLift) fee += fees['noLift'] ?? 0;
+    if (stairsFloors >= 1 && stairsFloors <= 2) {
+      fee += fees['stairsOneToTwoFloors'] ?? 0;
+    }
+    if (stairsFloors >= 3) fee += fees['stairsThreePlusFloors'] ?? 0;
+    if (express) {
+      fee += fees['express'] ?? 0;
+    } else if (priority) {
+      fee += fees['priority'] ?? 0;
+    }
+    if (waitingMinutes > 10) {
+      final additionalBlocks = ((waitingMinutes - 10) / 5).ceil();
+      fee += additionalBlocks * (fees['waitingAdditionalFiveMinutes'] ?? 0);
+    }
     return fee;
   }
 
