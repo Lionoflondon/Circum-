@@ -83,6 +83,35 @@ void main() {
       expect(quote.total, 22);
     });
 
+    test('express price is always greater than standard', () {
+      final standard = DeliveryPricing.calculate(
+        const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 2),
+      );
+      final express = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 4.8,
+          weightKg: 2,
+          express: true,
+        ),
+      );
+      final prices = DeliveryPricing.serviceLevelPrices(
+        const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 2),
+      );
+
+      expect(express.total, greaterThan(standard.total));
+      expect(prices['expressPrice']!, greaterThan(prices['standardPrice']!));
+      expect(express.serviceLevel, 'express');
+      expect(standard.serviceLevel, 'standard');
+      expect(express.serviceLevelSurcharge, greaterThan(0));
+    });
+
+    test('express jobs rank before standard jobs for rider matching', () {
+      expect(
+        DeliveryPricing.matchingPriorityRank('express'),
+        lessThan(DeliveryPricing.matchingPriorityRank('standard')),
+      );
+    });
+
     test('parses gram entries as kilograms', () {
       expect(DeliveryPricing.parseWeightKg('178g'), closeTo(0.178, 0.0001));
       expect(
@@ -160,6 +189,25 @@ void main() {
           irisWeightKg: null,
         ),
         20,
+      );
+    });
+
+    test('final verified weight uses the highest trusted weight', () {
+      expect(
+        DeliveryPricing.finalVerifiedWeightKg(
+          customerWeightKg: 3,
+          irisWeightKg: 8,
+          riderVerifiedWeightKg: 6,
+        ),
+        8,
+      );
+      expect(
+        DeliveryPricing.finalVerifiedWeightKg(
+          customerWeightKg: 10,
+          irisWeightKg: 7,
+          riderVerifiedWeightKg: 15,
+        ),
+        15,
       );
     });
 

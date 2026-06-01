@@ -5,6 +5,8 @@ class PricingConstants {
   static const double shortTripFareFloorMiles = 1.6;
   static const double longDistanceThresholdMiles = 20;
   static const double longDistanceMileageMultiplier = 1.2;
+  static const double fixedExpressSurchargeGbp = 2.99;
+  static const double expressMultiplier = 1.2;
 
   static const Map<String, double> specialConditionFeesGbp = {
     'oversized': 10,

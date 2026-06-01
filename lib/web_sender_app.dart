@@ -3345,7 +3345,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .listen((snapshot) {
       if (!mounted) return;
       setState(() {
-        _availableJobs = snapshot.docs
+        final jobs = snapshot.docs
             .map((doc) => {'id': doc.id, ...doc.data()})
             .where((job) {
           final matchingStatus =
@@ -3359,12 +3359,30 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             return false;
           }
           return matchingStatus == 'available' || matchingStatus == 'requested';
-        }).toList(growable: false);
+        }).toList();
+        jobs.sort(_compareRiderJobs);
+        _availableJobs = jobs;
       });
     }, onError: (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not load available jobs right now.');
     });
+  }
+
+  int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final serviceA = '${a['selectedServiceLevel'] ?? a['serviceLevel'] ?? ''}';
+    final serviceB = '${b['selectedServiceLevel'] ?? b['serviceLevel'] ?? ''}';
+    final priorityCompare = DeliveryPricing.matchingPriorityRank(serviceA)
+        .compareTo(DeliveryPricing.matchingPriorityRank(serviceB));
+    if (priorityCompare != 0) return priorityCompare;
+
+    final pickupCompare =
+        '${a['scheduledPickupDate'] ?? ''} ${a['scheduledPickupWindow'] ?? ''}'
+            .compareTo(
+                '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}');
+    if (pickupCompare != 0) return pickupCompare;
+
+    return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
   }
 
   void _listenToRiderJobs(String riderId) {
@@ -3709,11 +3727,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     final customerWeight = _jobCustomerWeight(job);
     final irisWeight = _jobIrisWeight(job);
-    final finalWeightUsed = [
-      customerWeight,
-      irisWeight,
-      verifiedWeight,
-    ].reduce((a, b) => a > b ? a : b);
+    final finalWeightUsed = DeliveryPricing.finalVerifiedWeightKg(
+      customerWeightKg: customerWeight,
+      irisWeightKg: irisWeight,
+      riderVerifiedWeightKg: verifiedWeight,
+    );
     final distanceMiles = _jobDistanceMiles(job);
     final vehicle =
         DeliveryPricing.recommendedVehicleForWeight(finalWeightUsed);
@@ -5295,6 +5313,12 @@ class _DriverJobCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if ('${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? ''}'
+                      .toLowerCase() ==
+                  'express') ...[
+                _HealthChip(label: 'Express'),
+                const SizedBox(width: 8),
+              ],
               _HealthChip(label: vehicle),
             ],
           ),
@@ -7333,6 +7357,21 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Map<String, dynamic> _requestPayload(String id) {
     final quote = _quoteBreakdown;
+    final standardQuote = DeliveryPricing.calculate(DeliveryPricingInput(
+      distanceMiles: _webQuoteDistanceMiles,
+      weightKg: _confirmedWeightKg ?? 0,
+      vehicleType: _effectiveVehicle.name,
+    ));
+    final expressQuote = DeliveryPricing.calculate(DeliveryPricingInput(
+      distanceMiles: _webQuoteDistanceMiles,
+      weightKg: _confirmedWeightKg ?? 0,
+      vehicleType: _effectiveVehicle.name,
+      express: true,
+    ));
+    final selectedServiceLevel =
+        _selectedSpeed == 'Express' ? 'express' : 'standard';
+    final serviceLevelSurcharge =
+        double.parse((quote.total - standardQuote.total).toStringAsFixed(2));
     final senderUser = _senderUser ?? FirebaseAuth.instance.currentUser;
     final senderId = senderUser?.uid ?? 'web-sender';
     final senderName = _senderProfile?.fullName.trim().isNotEmpty == true
@@ -7380,6 +7419,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'vehicleType': safeVehicleName,
       'totalFare': quote.total,
       'driverPayout': driverPayout,
+      'serviceLevel': selectedServiceLevel,
+      'selectedServiceLevel': selectedServiceLevel,
+      'priority': selectedServiceLevel == 'express',
+      'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
+      'broadcastRank': selectedServiceLevel == 'express' ? 0 : 1,
       'customerDeclaredWeight': _senderEnteredWeightKg,
       'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
@@ -7390,7 +7434,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
           : '',
-      'serviceType': 'Normal Delivery',
+      'serviceType': selectedServiceLevel == 'express'
+          ? 'Express Delivery'
+          : 'Normal Delivery',
     };
     return {
       'requestId': id,
@@ -7449,6 +7495,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'preferredVehicle': safeVehicleName.toLowerCase(),
       'vehicleType': safeVehicleName,
       'speed': _selectedSpeed,
+      'serviceLevel': selectedServiceLevel,
+      'selectedServiceLevel': selectedServiceLevel,
+      'standardPrice': standardQuote.total,
+      'expressPrice': expressQuote.total,
+      'basePrice': standardQuote.total,
+      'finalCustomerPrice': quote.total,
+      'serviceLevelSurcharge':
+          serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
+      'priority': selectedServiceLevel == 'express',
+      'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
+      'broadcastRank': selectedServiceLevel == 'express' ? 0 : 1,
       'quote': quote.total,
       'price': quote.total,
       'fare': quote.total,
@@ -7473,9 +7530,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'collection': 'deliveryRequests',
         'availableStatus': 'requested',
         'positionField': 'pickupPosition.geopoint',
-        'sortBy': 'distanceFromRider',
+        'sortBy': selectedServiceLevel == 'express'
+            ? 'priorityThenPickupThenDistance'
+            : 'distanceFromRider',
         'preferredVehicle': safeVehicleName.toLowerCase(),
         'requiresVerifiedRider': true,
+        'matchingPriority':
+            selectedServiceLevel == 'express' ? 'high' : 'normal',
       },
       'pickupDetails': {
         'fullname': senderName,
@@ -8130,7 +8191,7 @@ class _DesktopPortalLayout extends StatelessWidget {
                           _PriceLine(
                             colors: colors,
                             label: speed == 'Express'
-                                ? 'Special conditions incl. express'
+                                ? 'Express service'
                                 : 'Special conditions',
                             value:
                                 '£${breakdown.specialConditions.toStringAsFixed(2)}',
@@ -10632,6 +10693,13 @@ class _PaymentStep extends StatelessWidget {
               ],
               _PriceLine(
                 colors: colors,
+                label: 'Service',
+                value: speed == 'Express'
+                    ? 'Express - priority matching'
+                    : 'Standard - flexible pickup',
+              ),
+              _PriceLine(
+                colors: colors,
                 label: 'Confirmed parcel weight',
                 value: weightConfirmed
                     ? '${weightKg.toStringAsFixed(weightKg.truncateToDouble() == weightKg ? 0 : 1)} kg'
@@ -10685,7 +10753,7 @@ class _PaymentStep extends StatelessWidget {
                 _PriceLine(
                     colors: colors,
                     label: speed == 'Express'
-                        ? 'Special conditions incl. express'
+                        ? 'Express service'
                         : 'Special conditions',
                     value:
                         '£${breakdown.specialConditions.toStringAsFixed(2)}'),
@@ -11601,27 +11669,64 @@ class _SpeedToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    const serviceCopy = {
+      'Standard':
+          'Lowest cost. Flexible pickup time. Best for non-urgent deliveries.',
+      'Express':
+          'Priority matching. Faster pickup. Best for urgent deliveries.',
+    };
+    return Column(
       children: ['Standard', 'Express'].map((speed) {
         final active = selected == speed;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: speed == 'Standard' ? 8 : 0),
-            child: ChoiceChip(
-              selected: active,
-              label: Center(child: Text(speed)),
-              onSelected: (_) => onChanged(speed),
-              selectedColor: colors.text,
-              backgroundColor: colors.field,
-              labelStyle: TextStyle(
-                color: active ? colors.inverseText : colors.text,
-                fontWeight: FontWeight.w900,
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => onChanged(speed),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: active ? colors.text : colors.field,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: colors.border),
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-                side: BorderSide(color: colors.border),
+              child: Row(
+                children: [
+                  Icon(
+                    active
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: active ? colors.inverseText : colors.text,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          speed,
+                          style: TextStyle(
+                            color: active ? colors.inverseText : colors.text,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          serviceCopy[speed]!,
+                          style: TextStyle(
+                            color: active
+                                ? colors.inverseText.withOpacity(0.76)
+                                : colors.mutedText,
+                            fontWeight: FontWeight.w700,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
         );

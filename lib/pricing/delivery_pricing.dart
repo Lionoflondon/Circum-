@@ -38,6 +38,8 @@ class DeliveryPricingBreakdown {
   final double weightSurcharge;
   final double vehicleSurcharge;
   final double specialConditions;
+  final double serviceLevelSurcharge;
+  final String serviceLevel;
   final double surgeMultiplier;
   final double total;
   final String weightCategory;
@@ -49,6 +51,8 @@ class DeliveryPricingBreakdown {
     required this.weightSurcharge,
     required this.vehicleSurcharge,
     required this.specialConditions,
+    required this.serviceLevelSurcharge,
+    required this.serviceLevel,
     required this.surgeMultiplier,
     required this.total,
     required this.weightCategory,
@@ -61,6 +65,9 @@ class DeliveryPricingBreakdown {
         'weightSurcharge': weightSurcharge,
         'vehicleSurcharge': vehicleSurcharge,
         'specialConditions': specialConditions,
+        'serviceLevelSurcharge': serviceLevelSurcharge,
+        'serviceLevel': serviceLevel,
+        'finalCustomerPrice': total,
         'surgeMultiplier': surgeMultiplier,
         'total': total,
         'weightCategory': weightCategory,
@@ -73,15 +80,26 @@ class DeliveryPricing {
     final weightBand = weightBandFor(input.weightKg);
     final distanceFare = calculateDistanceFare(input.distanceMiles);
     final vehicleSurcharge = calculateVehicleSurcharge(input.vehicleType);
-    final specialConditions = calculateSpecialConditions(
+    final baseSpecialConditions = calculateSpecialConditions(
       oversized: input.oversized,
       fragile: input.fragile,
       twoPersonHandling: input.twoPersonHandling,
       stairsFloors: input.stairsFloors,
       noLift: input.noLift,
-      priority: input.priority,
-      express: input.express,
       waitingMinutes: input.waitingMinutes,
+    );
+    final preServiceSubtotal = PricingConstants.baseFareGbp +
+        distanceFare +
+        weightBand.surchargeGbp +
+        vehicleSurcharge +
+        baseSpecialConditions;
+    final serviceLevelSurcharge = calculateServiceLevelSurcharge(
+      preServiceSubtotal,
+      express: input.express,
+      priority: input.priority,
+    );
+    final specialConditions = _roundMoney(
+      baseSpecialConditions + serviceLevelSurcharge,
     );
     final subtotal = PricingConstants.baseFareGbp +
         distanceFare +
@@ -99,6 +117,8 @@ class DeliveryPricing {
       weightSurcharge: weightBand.surchargeGbp,
       vehicleSurcharge: vehicleSurcharge,
       specialConditions: specialConditions,
+      serviceLevelSurcharge: serviceLevelSurcharge,
+      serviceLevel: input.express ? 'express' : 'standard',
       surgeMultiplier: surgeMultiplier,
       total: total,
       weightCategory: weightBand.category,
@@ -153,6 +173,18 @@ class DeliveryPricing {
     return max(senderWeightKg, irisWeightKg);
   }
 
+  static double finalVerifiedWeightKg({
+    required double customerWeightKg,
+    double? irisWeightKg,
+    double? riderVerifiedWeightKg,
+  }) {
+    return [
+      customerWeightKg,
+      irisWeightKg ?? 0,
+      riderVerifiedWeightKg ?? 0,
+    ].reduce(max);
+  }
+
   static String recommendedVehicleForWeight(double weightKg) {
     if (weightKg > 10) return 'Van';
     if (weightKg > 5) return 'Car';
@@ -194,7 +226,7 @@ class DeliveryPricing {
     }
     if (stairsFloors >= 3) fee += fees['stairsThreePlusFloors'] ?? 0;
     if (express) {
-      fee += fees['express'] ?? 0;
+      fee += fees['express'] ?? PricingConstants.fixedExpressSurchargeGbp;
     } else if (priority) {
       fee += fees['priority'] ?? 0;
     }
@@ -203,6 +235,64 @@ class DeliveryPricing {
       fee += additionalBlocks * (fees['waitingAdditionalFiveMinutes'] ?? 0);
     }
     return fee;
+  }
+
+  static double calculateServiceLevelSurcharge(
+    double standardSubtotal, {
+    bool express = false,
+    bool priority = false,
+  }) {
+    if (express) {
+      final configuredFee =
+          PricingConstants.specialConditionFeesGbp['express'] ??
+              PricingConstants.fixedExpressSurchargeGbp;
+      final multiplierFee =
+          standardSubtotal * (PricingConstants.expressMultiplier - 1);
+      return _roundMoney(max(
+        max(PricingConstants.fixedExpressSurchargeGbp, configuredFee),
+        multiplierFee,
+      ));
+    }
+    if (priority) {
+      return PricingConstants.specialConditionFeesGbp['priority'] ?? 0;
+    }
+    return 0;
+  }
+
+  static Map<String, double> serviceLevelPrices(DeliveryPricingInput input) {
+    final standard = calculate(DeliveryPricingInput(
+      distanceMiles: input.distanceMiles,
+      weightKg: input.weightKg,
+      vehicleType: input.vehicleType,
+      oversized: input.oversized,
+      fragile: input.fragile,
+      twoPersonHandling: input.twoPersonHandling,
+      stairsFloors: input.stairsFloors,
+      noLift: input.noLift,
+      waitingMinutes: input.waitingMinutes,
+      surgeMultiplier: input.surgeMultiplier,
+    ));
+    final express = calculate(DeliveryPricingInput(
+      distanceMiles: input.distanceMiles,
+      weightKg: input.weightKg,
+      vehicleType: input.vehicleType,
+      oversized: input.oversized,
+      fragile: input.fragile,
+      twoPersonHandling: input.twoPersonHandling,
+      stairsFloors: input.stairsFloors,
+      noLift: input.noLift,
+      express: true,
+      waitingMinutes: input.waitingMinutes,
+      surgeMultiplier: input.surgeMultiplier,
+    ));
+    return {
+      'standardPrice': standard.total,
+      'expressPrice': max(express.total, standard.total + 0.01),
+    };
+  }
+
+  static int matchingPriorityRank(String? serviceLevel) {
+    return serviceLevel?.trim().toLowerCase() == 'express' ? 0 : 1;
   }
 
   static double parseWeightKg(String value, {double fallbackKg = 0}) {
