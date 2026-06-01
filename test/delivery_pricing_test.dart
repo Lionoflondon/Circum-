@@ -100,7 +100,7 @@ void main() {
           senderWeightKg: 0.178,
           irisWeightKg: 2,
         ),
-        closeTo(0.178, 0.0001),
+        2,
       );
     });
 
@@ -113,6 +113,53 @@ void main() {
           irisWeightKg: 6.2,
         ),
         6.2,
+      );
+    });
+
+    test('piano at 20kg is heavy parcel and cannot use bike', () {
+      final quote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 4.8,
+          weightKg: 20,
+          vehicleType: 'Van',
+        ),
+      );
+
+      expect(quote.weightCategory, 'Heavy Parcel');
+      expect(quote.weightSurcharge, 7);
+      expect(DeliveryPricing.recommendedVehicleForWeight(20), 'Van');
+      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 20), isFalse);
+      expect(DeliveryPricing.vehicleCanCarryWeight('Van', 20), isTrue);
+    });
+
+    test('Iris 2kg and sender 20kg uses sender 20kg', () {
+      expect(
+        DeliveryPricing.chargeableWeightKg(
+          senderWeightKg: 20,
+          irisWeightKg: 2,
+        ),
+        20,
+      );
+    });
+
+    test('Iris 25kg and sender 20kg uses Iris 25kg', () {
+      expect(
+        DeliveryPricing.chargeableWeightKg(
+          senderWeightKg: 20,
+          irisWeightKg: 25,
+        ),
+        25,
+      );
+      expect(DeliveryPricing.weightBandFor(25).category, 'Large Item');
+    });
+
+    test('missing Iris does not override sender-confirmed higher weight', () {
+      expect(
+        DeliveryPricing.chargeableWeightKg(
+          senderWeightKg: 20,
+          irisWeightKg: null,
+        ),
+        20,
       );
     });
 

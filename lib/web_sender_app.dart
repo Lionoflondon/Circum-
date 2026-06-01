@@ -5082,6 +5082,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           colors: colors,
           pickup: _pickup.text,
           dropoff: _dropoff.text,
+          chargeableWeightKg: _confirmedWeightKg ?? 0,
           selectedVehicle: _selectedVehicle,
           selectedSpeed: _selectedSpeed,
           onVehicle: (vehicle) => setState(() => _selectedVehicle = vehicle),
@@ -5224,11 +5225,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   DeliveryPricingBreakdown get _quoteBreakdown {
+    final chargeableWeightKg = _confirmedWeightKg ?? 0;
+    final vehicleName = DeliveryPricing.vehicleCanCarryWeight(
+      _selectedVehicle.name,
+      chargeableWeightKg,
+    )
+        ? _selectedVehicle.name
+        : DeliveryPricing.recommendedVehicleForWeight(chargeableWeightKg);
     return DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: _webQuoteDistanceMiles,
-        weightKg: _confirmedWeightKg ?? 0,
-        vehicleType: _selectedVehicle.name,
+        weightKg: chargeableWeightKg,
+        vehicleType: vehicleName,
         express: _selectedSpeed == 'Express',
         priority: _selectedSpeed == 'Priority',
       ),
@@ -5600,6 +5608,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     bool verificationRequired = false,
   }) {
     final band = DeliveryPricing.weightBandFor(weightKg).category;
+    final recommendedVehicleName =
+        DeliveryPricing.recommendedVehicleForWeight(weightKg);
+    final recommendedVehicle = _vehicles.firstWhere(
+      (vehicle) => vehicle.name == recommendedVehicleName,
+      orElse: () => _vehicles.last,
+    );
     setState(() {
       _confirmedWeightKg = weightKg;
       _confirmedWeightBand = band;
@@ -5607,6 +5621,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weightConfirmedAt = DateTime.now();
       _weightPricingReason = reason;
       _weightVerificationRequired = verificationRequired;
+      if (!DeliveryPricing.vehicleCanCarryWeight(
+        _selectedVehicle.name,
+        weightKg,
+      )) {
+        _selectedVehicle = recommendedVehicle;
+      }
       _weightMessage =
           'Confirmed parcel weight: ${_formatWeight(weightKg)} kg.';
     });
@@ -5640,7 +5660,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         senderBand != null && senderBand.category != irisBand.category;
     final significantDifference = bandChanged;
     final higherWeight = hasSenderWeight
-        ? DeliveryPricing.pricingWeightForConfirmedWeights(
+        ? DeliveryPricing.chargeableWeightKg(
             senderWeightKg: senderWeightKg,
             irisWeightKg: estimate.weightKg,
           )
@@ -6155,6 +6175,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     };
     final packageType = _inferPackageType();
     final hasPhoto = false;
+    final safeVehicleName = DeliveryPricing.vehicleCanCarryWeight(
+      _selectedVehicle.name,
+      _confirmedWeightKg ?? 0,
+    )
+        ? _selectedVehicle.name
+        : DeliveryPricing.recommendedVehicleForWeight(_confirmedWeightKg ?? 0);
     final driverPayout = double.parse((quote.total * 0.75).toStringAsFixed(2));
     final driverJobSummary = {
       'pickupDisplay': _pickup.text.trim(),
@@ -6172,7 +6198,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'hasPhoto': hasPhoto,
       'photoUrl': null,
       'deliveryInstructions': _description.text.trim(),
-      'vehicleType': _selectedVehicle.name,
+      'vehicleType': safeVehicleName,
       'totalFare': quote.total,
       'driverPayout': driverPayout,
       'specialHandlingNotes': _weightVerificationRequired
@@ -6221,9 +6247,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
       'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
       'weightCategory': _confirmedWeightBand,
-      'vehicle': _selectedVehicle.name,
-      'preferredVehicle': _selectedVehicle.name.toLowerCase(),
-      'vehicleType': _selectedVehicle.name,
+      'vehicle': safeVehicleName,
+      'preferredVehicle': safeVehicleName.toLowerCase(),
+      'vehicleType': safeVehicleName,
       'speed': _selectedSpeed,
       'quote': quote.total,
       'price': quote.total,
@@ -6250,7 +6276,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'availableStatus': 'requested',
         'positionField': 'pickupPosition.geopoint',
         'sortBy': 'distanceFromRider',
-        'preferredVehicle': _selectedVehicle.name.toLowerCase(),
+        'preferredVehicle': safeVehicleName.toLowerCase(),
         'requiresVerifiedRider': true,
       },
       'pickupDetails': {
@@ -9167,6 +9193,7 @@ class _VehicleStep extends StatelessWidget {
   final _CircumColors colors;
   final String pickup;
   final String dropoff;
+  final double chargeableWeightKg;
   final _VehicleOption selectedVehicle;
   final String selectedSpeed;
   final ValueChanged<_VehicleOption> onVehicle;
@@ -9179,6 +9206,7 @@ class _VehicleStep extends StatelessWidget {
     required this.colors,
     required this.pickup,
     required this.dropoff,
+    required this.chargeableWeightKg,
     required this.selectedVehicle,
     required this.selectedSpeed,
     required this.onVehicle,
@@ -9189,6 +9217,12 @@ class _VehicleStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final recommendedVehicleName =
+        DeliveryPricing.recommendedVehicleForWeight(chargeableWeightKg);
+    final canContinue = DeliveryPricing.vehicleCanCarryWeight(
+      selectedVehicle.name,
+      chargeableWeightKg,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -9209,7 +9243,7 @@ class _VehicleStep extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Recommended: ${selectedVehicle.name}',
+                      'Recommended: $recommendedVehicleName',
                       style: TextStyle(
                         color: colors.text,
                         fontWeight: FontWeight.w900,
@@ -9218,7 +9252,7 @@ class _VehicleStep extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'Based on the item, weight, and route, a ${selectedVehicle.name.toLowerCase()} should be the best fit.',
+                      'Based on the item, weight, and route, a ${recommendedVehicleName.toLowerCase()} should be the best fit.',
                       style: TextStyle(
                         color: colors.mutedText,
                         height: 1.35,
@@ -9251,11 +9285,34 @@ class _VehicleStep extends StatelessWidget {
           selected: selectedSpeed,
           onChanged: onSpeed,
         ),
+        if (!canContinue) ...[
+          const SizedBox(height: 12),
+          _GlassPanel(
+            colors: colors,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_rounded, color: colors.warning),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'This item is too heavy for bike delivery. Car/van required.',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: onContinue,
+            onPressed: canContinue ? onContinue : null,
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
               foregroundColor: colors.inverseText,

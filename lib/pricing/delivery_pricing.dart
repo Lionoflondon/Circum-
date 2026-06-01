@@ -139,10 +139,32 @@ class DeliveryPricing {
     required double senderWeightKg,
     required double irisWeightKg,
   }) {
-    if (weightsCrossPricingBands(senderWeightKg, irisWeightKg)) {
-      return max(senderWeightKg, irisWeightKg);
-    }
-    return senderWeightKg;
+    return chargeableWeightKg(
+      senderWeightKg: senderWeightKg,
+      irisWeightKg: irisWeightKg,
+    );
+  }
+
+  static double chargeableWeightKg({
+    required double senderWeightKg,
+    double? irisWeightKg,
+  }) {
+    if (irisWeightKg == null || irisWeightKg <= 0) return senderWeightKg;
+    return max(senderWeightKg, irisWeightKg);
+  }
+
+  static String recommendedVehicleForWeight(double weightKg) {
+    if (weightKg > 10) return 'Van';
+    if (weightKg > 5) return 'Car';
+    return 'Bike';
+  }
+
+  static bool vehicleCanCarryWeight(String? vehicleType, double weightKg) {
+    final vehicle = vehicleType?.trim().toLowerCase();
+    if (vehicle == 'van') return true;
+    if (vehicle == 'car') return weightKg <= 20;
+    if (vehicle == 'bike' || vehicle == 'bicycle') return weightKg <= 5;
+    return weightKg <= 5;
   }
 
   static double calculateVehicleSurcharge(String? vehicleType) {
