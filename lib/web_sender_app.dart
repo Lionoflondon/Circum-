@@ -3004,10 +3004,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _earningsSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _performanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ratingSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
   DriverPerformanceMetric _performance =
       DriverPerformanceMetric.empty('web-rider');
   List<DriverRating> _recentRatings = const [];
+  List<Map<String, dynamic>> _availableJobs = const [];
   Set<CircumRole> _availableRoles = const {};
+  String? _jobMessage;
 
   @override
   void initState() {
@@ -3020,6 +3023,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _earningsSub?.cancel();
     _performanceSub?.cancel();
     _ratingSub?.cancel();
+    _availableJobsSub?.cancel();
     _fullName.dispose();
     _phone.dispose();
     _email.dispose();
@@ -3059,6 +3063,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       });
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
+      _listenToAvailableJobs();
     } catch (_) {
       if (!mounted) return;
       setState(() => _authMessage = 'Sign in to manage rider earnings.');
@@ -3107,6 +3112,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
+      _listenToAvailableJobs();
       if (!mounted) return;
       setState(() {
         _riderUser = user;
@@ -3251,8 +3257,109 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
   }
 
+  void _listenToAvailableJobs() {
+    _availableJobsSub?.cancel();
+    _availableJobsSub = FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .where('status', isEqualTo: 'requested')
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _availableJobs = snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .where((job) {
+          final matchingStatus =
+              '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
+          return matchingStatus == 'available' || matchingStatus == 'requested';
+        }).toList(growable: false);
+      });
+    }, onError: (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not load available jobs right now.');
+    });
+  }
+
+  Future<void> _acceptDeliveryJob(Map<String, dynamic> job) async {
+    final user = _riderUser;
+    if (user == null) {
+      setState(() => _jobMessage = 'Sign in before accepting a job.');
+      return;
+    }
+    final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
+    if (requestId.isEmpty) return;
+    setState(() => _jobMessage = 'Accepting job $requestId...');
+    try {
+      await _ensureCircumFirebaseReady();
+      final db = FirebaseFirestore.instance;
+      final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
+      final rider = riderDoc.data() ?? const <String, dynamic>{};
+      await db.collection('deliveryRequests').doc(requestId).set({
+        'status': 'accepted',
+        'dispatchStatus': 'accepted',
+        'matchingStatus': 'accepted',
+        'riderId': user.uid,
+        'driverId': user.uid,
+        'assignedDriverId': user.uid,
+        'riderName': rider['fullName'] ?? user.displayName ?? user.email,
+        'driverName': rider['fullName'] ?? user.displayName ?? user.email,
+        'driverVehicle': rider['vehicle'],
+        'driverPlateNumber': rider['plateNumber'],
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Job accepted. Head to pickup.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not accept this job. Try again.');
+    }
+  }
+
+  Future<void> _reportParcelIssue(
+    Map<String, dynamic> job,
+    String issueType,
+  ) async {
+    final user = _riderUser;
+    if (user == null) {
+      setState(() => _jobMessage = 'Sign in before reporting an issue.');
+      return;
+    }
+    final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
+    if (requestId.isEmpty) return;
+    setState(() => _jobMessage = 'Reporting issue for $requestId...');
+    try {
+      await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(requestId)
+          .set({
+        'reportedParcelIssue': issueType != 'weight',
+        'reportedWeightIssue': issueType == 'weight',
+        'driverWeightDispute': {
+          'reported': issueType == 'weight',
+          'issueType': issueType,
+          'reportedBy': user.uid,
+          'reportedAt': FieldValue.serverTimestamp(),
+          'status': 'admin_review',
+        },
+        'weightReviewRequired': true,
+        'weightDisputeStatus': 'admin_review',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Issue flagged for Circum review.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not report this issue. Try again.');
+    }
+  }
+
   Future<void> _signOutRider() async {
     await _earningsSub?.cancel();
+    await _performanceSub?.cancel();
+    await _ratingSub?.cancel();
+    await _availableJobsSub?.cancel();
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
     setState(() {
@@ -3260,6 +3367,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _earnings = _RiderEarningsSnapshot.empty();
       _performance = DriverPerformanceMetric.empty('web-rider');
       _recentRatings = const [];
+      _availableJobs = const [];
       _availableRoles = const {};
       _roleChoiceConfirmed = false;
       _authMessage = 'Signed out.';
@@ -3609,6 +3717,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                     earnings: _earnings,
                                     performance: _performance,
                                     recentRatings: _recentRatings,
+                                    availableJobs: _availableJobs,
                                     applicationId: _applicationId,
                                     withdrawAmount: _withdrawAmount,
                                     bankName: _bankName,
@@ -3621,10 +3730,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                     submittingDocument: _documentSubmitting,
                                     withdrawMessage: _withdrawMessage,
                                     documentMessage: _documentMessage,
+                                    jobMessage: _jobMessage,
                                     onSaveBank: (value) => setState(
                                         () => _saveBank = value ?? false),
                                     onWithdraw: _requestWithdrawal,
                                     onUploadDocument: _uploadRiderDocument,
+                                    onAcceptJob: _acceptDeliveryJob,
+                                    onReportIssue: _reportParcelIssue,
                                   ),
                                 ),
                               ],
@@ -3678,6 +3790,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                   earnings: _earnings,
                                   performance: _performance,
                                   recentRatings: _recentRatings,
+                                  availableJobs: _availableJobs,
                                   applicationId: _applicationId,
                                   withdrawAmount: _withdrawAmount,
                                   bankName: _bankName,
@@ -3690,10 +3803,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                   submittingDocument: _documentSubmitting,
                                   withdrawMessage: _withdrawMessage,
                                   documentMessage: _documentMessage,
+                                  jobMessage: _jobMessage,
                                   onSaveBank: (value) => setState(
                                       () => _saveBank = value ?? false),
                                   onWithdraw: _requestWithdrawal,
                                   onUploadDocument: _uploadRiderDocument,
+                                  onAcceptJob: _acceptDeliveryJob,
+                                  onReportIssue: _reportParcelIssue,
                                   nested: true,
                                 ),
                               ],
@@ -4065,6 +4181,7 @@ class _RiderWorkspace extends StatelessWidget {
   final _RiderEarningsSnapshot earnings;
   final DriverPerformanceMetric performance;
   final List<DriverRating> recentRatings;
+  final List<Map<String, dynamic>> availableJobs;
   final String? applicationId;
   final TextEditingController withdrawAmount;
   final TextEditingController bankName;
@@ -4077,9 +4194,12 @@ class _RiderWorkspace extends StatelessWidget {
   final bool submittingDocument;
   final String? withdrawMessage;
   final String? documentMessage;
+  final String? jobMessage;
   final ValueChanged<bool?> onSaveBank;
   final VoidCallback onWithdraw;
   final VoidCallback onUploadDocument;
+  final ValueChanged<Map<String, dynamic>> onAcceptJob;
+  final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final bool nested;
 
   const _RiderWorkspace({
@@ -4088,6 +4208,7 @@ class _RiderWorkspace extends StatelessWidget {
     required this.earnings,
     required this.performance,
     required this.recentRatings,
+    required this.availableJobs,
     required this.applicationId,
     required this.withdrawAmount,
     required this.bankName,
@@ -4100,9 +4221,12 @@ class _RiderWorkspace extends StatelessWidget {
     required this.submittingDocument,
     required this.withdrawMessage,
     required this.documentMessage,
+    required this.jobMessage,
     required this.onSaveBank,
     required this.onWithdraw,
     required this.onUploadDocument,
+    required this.onAcceptJob,
+    required this.onReportIssue,
     this.nested = false,
   });
 
@@ -4138,6 +4262,14 @@ class _RiderWorkspace extends StatelessWidget {
             colors: colors,
             performance: performance,
             recentRatings: recentRatings,
+          ),
+          const SizedBox(height: 14),
+          _AvailableDriverJobsPanel(
+            colors: colors,
+            jobs: availableJobs,
+            message: jobMessage,
+            onAcceptJob: onAcceptJob,
+            onReportIssue: onReportIssue,
           ),
           const SizedBox(height: 14),
           _GlassPanel(
@@ -4359,6 +4491,313 @@ class _RiderWorkspace extends StatelessWidget {
   }
 
   static String _money(double value) => '£${value.toStringAsFixed(2)}';
+}
+
+class _AvailableDriverJobsPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> jobs;
+  final String? message;
+  final ValueChanged<Map<String, dynamic>> onAcceptJob;
+  final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
+
+  const _AvailableDriverJobsPanel({
+    required this.colors,
+    required this.jobs,
+    required this.message,
+    required this.onAcceptJob,
+    required this.onReportIssue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Available jobs'),
+          const SizedBox(height: 8),
+          Text(
+            'Review the route, parcel, weight, and payout before accepting.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              message!,
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (jobs.isEmpty)
+            Text(
+              'No sender requests are waiting right now.',
+              style: TextStyle(color: colors.mutedText),
+            )
+          else
+            ...jobs.take(8).map((job) => _DriverJobCard(
+                  colors: colors,
+                  job: job,
+                  onAccept: () => onAcceptJob(job),
+                  onReportWeight: () => onReportIssue(job, 'weight'),
+                  onReportParcel: () => onReportIssue(job, 'parcel'),
+                )),
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverJobCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> job;
+  final VoidCallback onAccept;
+  final VoidCallback onReportWeight;
+  final VoidCallback onReportParcel;
+
+  const _DriverJobCard({
+    required this.colors,
+    required this.job,
+    required this.onAccept,
+    required this.onReportWeight,
+    required this.onReportParcel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final summary =
+        (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final pricing =
+        (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final customerWeight =
+        _num(job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg']);
+    final irisWeight =
+        _num(job['irisEstimatedWeight'] ?? job['irisEstimatedWeightKg']);
+    final chargeableWeight =
+        _num(job['finalChargeableWeight'] ?? job['confirmedWeightKg']);
+    final category =
+        '${job['weightCategory'] ?? job['confirmedWeightBand'] ?? summary['confirmedWeightBand'] ?? 'Parcel'}';
+    final confidence =
+        '${job['irisConfidenceScore'] ?? job['irisWeightConfidence'] ?? 'unknown'}';
+    final distance = _num(summary['estimatedDistanceMiles']);
+    final fare = _num(summary['totalFare'] ?? job['fare'] ?? job['price']);
+    final payout = _num(summary['driverPayout'] ?? job['driverPayout']);
+    final vehicle =
+        '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
+    final warnings = _warnings(chargeableWeight, category, job);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${job['requestId'] ?? job['id'] ?? 'Delivery request'}',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _HealthChip(label: vehicle),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.trip_origin,
+            label: 'Pickup',
+            value: '${summary['pickupDisplay'] ?? job['pickupAddress'] ?? ''}',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.place,
+            label: 'Drop-off',
+            value:
+                '${summary['dropoffDisplay'] ?? job['dropoffAddress'] ?? ''}',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.route,
+            label: 'Distance',
+            value: distance > 0
+                ? '${distance.toStringAsFixed(1)} miles'
+                : 'Not set',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.schedule,
+            label: 'Pickup window',
+            value:
+                '${summary['scheduledPickupDate'] ?? job['scheduledPickupDate'] ?? 'Flexible'} ${summary['scheduledPickupWindow'] ?? job['scheduledPickupWindow'] ?? ''}',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.inventory_2,
+            label: 'Parcel',
+            value:
+                '${summary['packageType'] ?? job['packageType'] ?? 'Parcel'} - ${summary['packageDescription'] ?? job['packageDescription'] ?? ''}',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.scale,
+            label: 'Weight',
+            value:
+                'Customer ${_weight(customerWeight)} kg, Iris ${_weight(irisWeight)} kg, chargeable ${_weight(chargeableWeight)} kg',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.fact_check,
+            label: 'Checks',
+            value: '$category, Iris confidence $confidence',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.payments,
+            label: 'Price',
+            value:
+                'Total ${_money(fare)} • distance ${_money(_num(pricing['distanceFare']))} • weight ${_money(_num(pricing['weightSurcharge']))} • payout ${_money(payout)}',
+          ),
+          if (warnings.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: warnings
+                  .map((warning) => _HealthChip(label: warning))
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: onAccept,
+                icon: const Icon(Icons.check_circle),
+                label: const Text('Accept job'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onReportWeight,
+                icon: const Icon(Icons.scale),
+                label: const Text('Weight issue'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onReportParcel,
+                icon: const Icon(Icons.report_problem),
+                label: const Text('Parcel issue'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static double _num(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0;
+  }
+
+  static String _money(double value) => '£${value.toStringAsFixed(2)}';
+
+  static String _weight(double value) => value <= 0
+      ? 'not set'
+      : value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1);
+
+  static List<String> _warnings(
+    double weightKg,
+    String category,
+    Map<String, dynamic> job,
+  ) {
+    final warnings = <String>[];
+    if (weightKg > 20) {
+      warnings.add('Two-person handling may be required');
+    } else if (weightKg > 10) {
+      warnings.add('Heavy parcel');
+    }
+    final lowerCategory = category.toLowerCase();
+    final description =
+        '${job['packageDescription'] ?? ''} ${job['packageType'] ?? ''}'
+            .toLowerCase();
+    if (lowerCategory.contains('large') ||
+        description.contains('furniture') ||
+        description.contains('piano') ||
+        description.contains('tv')) {
+      warnings.add('Large item');
+    }
+    if (job['weightReviewRequired'] == true ||
+        job['weightVerificationRequired'] == true) {
+      warnings.add('Check weight at pickup');
+    }
+    return warnings;
+  }
+}
+
+class _JobInfoLine extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _JobInfoLine({
+    required this.colors,
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: colors.mutedText, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.w700,
+                  height: 1.3,
+                ),
+                children: [
+                  TextSpan(
+                    text: '$label: ',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  TextSpan(text: value.trim().isEmpty ? 'Not set' : value),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DriverPerformancePanel extends StatelessWidget {
@@ -5686,14 +6125,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
     if (estimate.confidence == 'low') {
       return _WeightPricingDecision(
-        weightKg: senderWeightKg,
-        weightBand: senderBand?.category,
-        source: 'manual',
+        weightKg: higherWeight,
+        weightBand: higherBand.category,
+        source: estimate.weightKg > (senderWeightKg ?? 0)
+            ? 'iris_low_confidence_review'
+            : 'manual',
         message: significantDifference
             ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the rider will verify at pickup.'
             : 'Iris confidence is low. Confirm your weight to continue.',
         reason:
-            'Low-confidence Iris estimate; sender-confirmed weight used and flagged for pickup verification.',
+            'Highest weight used for pricing; low-confidence Iris estimate flagged for pickup verification.',
         verificationRequired: true,
       );
     }
@@ -5794,6 +6235,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     if (description.contains('box')) return 'Boxed parcel';
     return 'Parcel';
+  }
+
+  double _irisConfidenceScore() {
+    return switch ((_irisWeightConfidence ?? '').toLowerCase()) {
+      'high' => 0.9,
+      'medium' => 0.65,
+      'low' => 0.3,
+      _ => 0,
+    };
   }
 
   String _formatWeight(double weightKg) {
@@ -6210,6 +6660,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'vehicleType': safeVehicleName,
       'totalFare': quote.total,
       'driverPayout': driverPayout,
+      'customerDeclaredWeight': _senderEnteredWeightKg,
+      'irisEstimatedWeight': _irisEstimatedWeightKg,
+      'finalChargeableWeight': _confirmedWeightKg,
+      'irisConfidenceScore': _irisConfidenceScore(),
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
           : '',
@@ -6224,6 +6678,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'packageDescription': _description.text.trim(),
       'weight': _weight.text.trim(),
       'weightKg': _confirmedWeightKg,
+      'customerDeclaredWeight': _senderEnteredWeightKg,
+      'irisEstimatedWeight': _irisEstimatedWeightKg,
+      'finalChargeableWeight': _confirmedWeightKg,
+      'irisConfidenceScore': _irisConfidenceScore(),
+      'weightReviewRequired': _weightVerificationRequired,
       'irisEstimatedWeightKg': _irisEstimatedWeightKg,
       'irisWeightBand': _irisWeightBand,
       'irisWeightConfidence': _irisWeightConfidence,
@@ -6233,6 +6692,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'confirmedWeightBand': _confirmedWeightBand,
       'declaredWeightKg': _senderEnteredWeightKg,
       'driverReportedWeightKg': null,
+      'driverWeightDispute': {
+        'reported': false,
+        'status': 'none',
+      },
       'weightSource': _weightSource,
       'weightConfirmedAt': _weightConfirmedAt == null
           ? null
