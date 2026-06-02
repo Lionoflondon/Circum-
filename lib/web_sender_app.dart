@@ -401,8 +401,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _adminUsers = const [];
   List<Map<String, dynamic>> _auditLogs = const [];
   List<Map<String, dynamic>> _websiteVisitors = const [];
+  List<Map<String, dynamic>> _riderDocuments = const [];
   bool _adminChatOpen = false;
   String? _activeAdminChatId;
+  String _activeAdminChatTitle = 'Booking chat';
+  bool _driverProfileOpen = false;
+  Map<String, dynamic>? _selectedDriverProfile;
   final List<_ChatMessage> _adminChatMessages = [];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _adminChatSub;
 
@@ -540,6 +544,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _message = 'Signed out of admin.';
       _adminChatOpen = false;
       _activeAdminChatId = null;
+      _activeAdminChatTitle = 'Booking chat';
       _adminChatMessages.clear();
     });
   }
@@ -579,6 +584,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             .orderBy('createdAt', descending: true)
             .limit(80),
       ),
+      _readCollection(db.collection('riderDocuments').limit(120)),
       _readCollection(
         db
             .collection('adminAuditLogs')
@@ -598,6 +604,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final schedules = results[9];
     final payouts = results[10];
     final visitors = results[11];
+    final riderDocuments = results[12];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -611,7 +618,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _recurringPickupSchedules = schedules;
       _payoutRequests = payouts;
       _websiteVisitors = visitors;
-      _auditLogs = results[12];
+      _riderDocuments = riderDocuments;
+      _auditLogs = results[13];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -788,6 +796,164 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await _loadAdminData();
   }
 
+  String _driverId(Map<String, dynamic> driver) {
+    return '${driver['id'] ?? driver['uid'] ?? driver['riderId'] ?? driver['driverId'] ?? ''}'
+        .trim();
+  }
+
+  String _driverWorkflowStatus(Map<String, dynamic> driver) {
+    final raw = [
+      driver['approvalStatus'],
+      driver['driverStatus'],
+      driver['verificationStatus'],
+      driver['status'],
+    ]
+        .where((value) => value != null)
+        .map((value) => '$value'.toLowerCase())
+        .join(' ')
+            .toLowerCase()
+            .trim();
+    if (raw.contains('suspend')) return 'suspended';
+    if (raw.contains('reject')) return 'rejected';
+    if (raw.contains('active') ||
+        raw.contains('approve') ||
+        raw.contains('verified')) {
+      return 'approved';
+    }
+    return 'pending';
+  }
+
+  String _driverStatusLabel(Map<String, dynamic> driver) {
+    return switch (_driverWorkflowStatus(driver)) {
+      'approved' => 'approved',
+      'suspended' => 'suspended',
+      'rejected' => 'rejected',
+      _ => 'pending',
+    };
+  }
+
+  Future<void> _setDriverWorkflowStatus(
+    Map<String, dynamic> driver,
+    String nextStatus,
+  ) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot manage driver status.');
+      return;
+    }
+    final id = _driverId(driver);
+    if (id.isEmpty) return;
+    final previous = _driverWorkflowStatus(driver);
+    final action = switch (nextStatus) {
+      'approved' => previous == 'suspended' || previous == 'rejected'
+          ? 'driver_reactivated'
+          : 'driver_approved',
+      'rejected' => 'driver_rejected',
+      'suspended' => 'driver_suspended',
+      _ => 'driver_status_updated',
+    };
+    final driverStatus = switch (nextStatus) {
+      'approved' => 'active',
+      'rejected' => 'rejected',
+      'suspended' => 'suspended',
+      _ => nextStatus,
+    };
+    await FirebaseFirestore.instance.collection('riderProfiles').doc(id).set({
+      'approvalStatus': nextStatus,
+      'driverStatus': driverStatus,
+      'verificationStatus':
+          nextStatus == 'approved' ? 'approved' : nextStatus,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: action,
+      recordType: 'riderProfiles',
+      recordId: id,
+      oldValue: {'status': previous},
+      newValue: {
+        'status': nextStatus,
+        'adminId': _adminUser?.uid ?? 'unknown-admin',
+        'action': action,
+        'driverId': id,
+      },
+      reason: 'Driver management workflow action',
+    ));
+    setState(() {
+      _message = 'Driver $id updated to $nextStatus.';
+      if (_selectedDriverProfile != null && _driverId(_selectedDriverProfile!) == id) {
+        _selectedDriverProfile = {
+          ..._selectedDriverProfile!,
+          'approvalStatus': nextStatus,
+          'driverStatus': driverStatus,
+          'verificationStatus':
+              nextStatus == 'approved' ? 'approved' : nextStatus,
+        };
+      }
+    });
+    await _loadAdminData();
+  }
+
+  List<_AdminAction> _driverWorkflowActions(Map<String, dynamic> driver) {
+    final status = _driverWorkflowStatus(driver);
+    final canApprove = _can(AdminPermission.approveDrivers);
+    final canEdit = _can(AdminPermission.editDrivers);
+    final actions = <_AdminAction>[];
+    if (status == 'pending') {
+      actions.addAll([
+        _AdminAction(
+          label: 'Approve',
+          enabled: canApprove,
+          onTap: () => _setDriverWorkflowStatus(driver, 'approved'),
+        ),
+        _AdminAction(
+          label: 'Reject',
+          enabled: canApprove,
+          onTap: () => _setDriverWorkflowStatus(driver, 'rejected'),
+        ),
+      ]);
+    } else if (status == 'approved') {
+      actions.addAll([
+        _AdminAction(
+          label: 'Suspend',
+          enabled: canApprove,
+          onTap: () => _setDriverWorkflowStatus(driver, 'suspended'),
+        ),
+        _AdminAction(
+          label: 'Message',
+          enabled: canEdit,
+          onTap: () => _openDriverMessage(driver),
+        ),
+      ]);
+    } else if (status == 'suspended') {
+      actions.addAll([
+        _AdminAction(
+          label: 'Reactivate',
+          enabled: canApprove,
+          onTap: () => _setDriverWorkflowStatus(driver, 'approved'),
+        ),
+        _AdminAction(
+          label: 'Message',
+          enabled: canEdit,
+          onTap: () => _openDriverMessage(driver),
+        ),
+      ]);
+    } else if (status == 'rejected') {
+      actions.add(
+        _AdminAction(
+          label: 'Reactivate',
+          enabled: canApprove,
+          onTap: () => _setDriverWorkflowStatus(driver, 'approved'),
+        ),
+      );
+    }
+    actions.add(_AdminAction(
+      label: 'View Profile',
+      enabled: true,
+      onTap: () => _openDriverProfile(driver),
+    ));
+    return actions;
+  }
+
   Future<void> _updateSupportTicket(
     Map<String, dynamic> ticket,
     String status,
@@ -926,8 +1092,107 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     });
     setState(() {
       _activeAdminChatId = id;
+      _activeAdminChatTitle = 'Booking chat';
       _adminChatOpen = true;
     });
+  }
+
+  void _openDriverProfile(Map<String, dynamic> driver) {
+    setState(() {
+      _selectedDriverProfile = driver;
+      _driverProfileOpen = true;
+    });
+  }
+
+  Future<void> _openDriverMessage(Map<String, dynamic> driver) async {
+    final id = _driverId(driver);
+    if (id.isEmpty) return;
+    final chatId = 'driver_$id';
+    await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
+      'threadId': chatId,
+      'driverId': id,
+      'participants': FieldValue.arrayUnion([id, 'circum-support']),
+      'type': 'driver_admin',
+      'source': 'circum-admin',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    _adminChatSub?.cancel();
+    _adminChatSub = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .limit(100)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _adminChatMessages
+          ..clear()
+          ..addAll(snapshot.docs.map((doc) {
+            final data = doc.data();
+            final role = '${data['senderRole'] ?? data['senderType'] ?? ''}';
+            return _ChatMessage(
+              fromMe: role == 'admin' || data['senderId'] == _adminUser?.uid,
+              text: '${data['messageText'] ?? data['message'] ?? ''}',
+              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+              label: role == 'admin' || role == 'support'
+                  ? 'CIRCUM Support'
+                  : 'Driver',
+            );
+          }).where((message) => message.text.trim().isNotEmpty));
+      });
+    }, onError: (_) {
+      if (!mounted) return;
+      setState(() => _message = 'Could not open driver chat.');
+    });
+    setState(() {
+      _activeAdminChatId = chatId;
+      _activeAdminChatTitle = 'Driver chat';
+      _adminChatOpen = true;
+    });
+  }
+
+  bool _isDeliveryForDriver(Map<String, dynamic> delivery, String driverId) {
+    final ids = [
+      delivery['riderId'],
+      delivery['driverId'],
+      delivery['assignedRiderId'],
+      delivery['assignedDriverId'],
+    ].map((value) => '$value');
+    return ids.contains(driverId);
+  }
+
+  int _driverJobCount(String driverId, Iterable<String> statuses) {
+    final wanted = statuses.map((status) => status.toLowerCase()).toSet();
+    return _deliveries.where((delivery) {
+      if (!_isDeliveryForDriver(delivery, driverId)) return false;
+      final status = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+          .toLowerCase();
+      return wanted.any(status.contains);
+    }).length;
+  }
+
+  double _driverTotalEarnings(String driverId) {
+    return _deliveries.where((delivery) {
+      final status = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+          .toLowerCase();
+      return _isDeliveryForDriver(delivery, driverId) &&
+          (status.contains('complete') || status.contains('delivered'));
+    }).fold<double>(0, (total, delivery) {
+      final payout = delivery['driverPayout'] ??
+          delivery['riderPayout'] ??
+          delivery['estimatedDriverPayout'];
+      if (payout is num) return total + payout.toDouble();
+      return total;
+    });
+  }
+
+  List<Map<String, dynamic>> _documentsForDriver(String driverId) {
+    return _riderDocuments.where((document) {
+      return '${document['riderId'] ?? document['driverId'] ?? document['uid'] ?? ''}' ==
+          driverId;
+    }).toList(growable: false);
   }
 
   Future<void> _sendAdminChatMessage() async {
@@ -1059,12 +1324,37 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             if (_adminChatOpen)
               _ChatSheet(
                 colors: colors,
-                title: 'Booking chat',
+                title: _activeAdminChatTitle,
                 recipient: 'CIRCUM Support',
                 messages: _adminChatMessages,
                 input: _adminChatInput,
                 onClose: () => setState(() => _adminChatOpen = false),
                 onSend: _sendAdminChatMessage,
+              ),
+            if (_driverProfileOpen && _selectedDriverProfile != null)
+              _AdminDriverProfileDrawer(
+                colors: colors,
+                driver: _selectedDriverProfile!,
+                documents: _documentsForDriver(_driverId(_selectedDriverProfile!)),
+                statusLabel: _driverStatusLabel(_selectedDriverProfile!),
+                signupDate:
+                    _adminDateText(_selectedDriverProfile!['createdAt']),
+                completedJobs: _driverJobCount(
+                  _driverId(_selectedDriverProfile!),
+                  const ['complete', 'delivered'],
+                ),
+                cancelledJobs: _driverJobCount(
+                  _driverId(_selectedDriverProfile!),
+                  const ['cancel'],
+                ),
+                activeJobs: _driverJobCount(
+                  _driverId(_selectedDriverProfile!),
+                  const ['pending', 'accepted', 'assigned', 'transit'],
+                ),
+                totalEarnings:
+                    _driverTotalEarnings(_driverId(_selectedDriverProfile!)),
+                actions: _driverWorkflowActions(_selectedDriverProfile!),
+                onClose: () => setState(() => _driverProfileOpen = false),
               ),
           ],
         ),
@@ -1114,7 +1404,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'email',
             'phoneNumber',
             'plateNumber',
-            'vehicleType'
+            'vehicleRegistration',
+            'vehicleType',
+            'approvalStatus',
+            'driverStatus',
+            'verificationStatus'
           ]),
           columns: const ['Driver', 'Vehicle', 'Status', 'Rating', 'Actions'],
           rowBuilder: _driverRow,
@@ -1238,39 +1532,19 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   List<Widget> _driverRow(Map<String, dynamic> item) {
-    final id = '${item['id'] ?? item['riderId'] ?? ''}';
     return [
       _AdminCell.primary('${item['fullName'] ?? item['name'] ?? 'Driver'}'),
       _AdminCell(
-        '${item['vehicleColour'] ?? ''} ${item['vehicleMakeModel'] ?? item['vehicleType'] ?? ''}\n${item['plateNumber'] ?? ''}',
+        '${item['vehicleColour'] ?? ''} ${item['vehicleMakeModel'] ?? item['vehicleType'] ?? ''}\n${item['plateNumber'] ?? item['vehicleRegistration'] ?? ''}',
       ),
       _AdminStatusCell(
         colors: widget.colors,
-        status:
-            '${item['driverStatus'] ?? item['verificationStatus'] ?? item['status'] ?? 'pending'}',
+        status: _driverStatusLabel(item),
       ),
       _AdminCell('${item['averageRating'] ?? item['rating'] ?? 'New'}'),
       _AdminActions(
         colors: widget.colors,
-        actions: [
-          _AdminAction(
-            label: 'Approve',
-            enabled: _can(AdminPermission.approveDrivers),
-            onTap: () => _updateRecordStatus('riderProfiles', item, 'active'),
-          ),
-          _AdminAction(
-            label: 'Suspend',
-            enabled: _can(AdminPermission.approveDrivers),
-            onTap: () =>
-                _updateRecordStatus('riderProfiles', item, 'suspended'),
-          ),
-          _AdminAction(
-            label: 'Note',
-            enabled: _can(AdminPermission.editDrivers),
-            onTap: () => _addAdminNote(
-                'riderProfiles', id, 'Driver reviewed from admin panel'),
-          ),
-        ],
+        actions: _driverWorkflowActions(item),
       ),
     ];
   }
@@ -2364,6 +2638,284 @@ class _AdminDataSection extends StatelessWidget {
   }
 }
 
+class _AdminDriverProfileDrawer extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> driver;
+  final List<Map<String, dynamic>> documents;
+  final String statusLabel;
+  final String signupDate;
+  final int completedJobs;
+  final int cancelledJobs;
+  final int activeJobs;
+  final double totalEarnings;
+  final List<_AdminAction> actions;
+  final VoidCallback onClose;
+
+  const _AdminDriverProfileDrawer({
+    required this.colors,
+    required this.driver,
+    required this.documents,
+    required this.statusLabel,
+    required this.signupDate,
+    required this.completedJobs,
+    required this.cancelledJobs,
+    required this.activeJobs,
+    required this.totalEarnings,
+    required this.actions,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final drawerWidth = width < 720 ? width : 520.0;
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black.withOpacity(0.42),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            width: drawerWidth,
+            height: double.infinity,
+            decoration: BoxDecoration(
+              color: colors.background,
+              border: Border(left: BorderSide(color: colors.border)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.28),
+                  blurRadius: 28,
+                  offset: const Offset(-10, 0),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${driver['fullName'] ?? driver['name'] ?? 'Driver profile'}',
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onClose,
+                        icon: const Icon(Icons.close),
+                        color: colors.text,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _AdminStatusCell(colors: colors, status: statusLabel),
+                  const SizedBox(height: 18),
+                  _GlassPanel(
+                    colors: colors,
+                    child: Column(
+                      children: [
+                        _profileRow('Email', '${driver['email'] ?? ''}'),
+                        _profileRow(
+                          'Phone',
+                          '${driver['phone'] ?? driver['phoneNumber'] ?? ''}',
+                        ),
+                        _profileRow(
+                          'Vehicle type',
+                          '${driver['vehicleType'] ?? driver['typeOfVehicle'] ?? ''}',
+                        ),
+                        _profileRow(
+                          'Vehicle registration',
+                          '${driver['plateNumber'] ?? driver['vehicleRegistration'] ?? ''}',
+                        ),
+                        _profileRow('Signup date', signupDate),
+                        _profileRow(
+                          'Rating',
+                          '${driver['averageRating'] ?? driver['rating'] ?? 'New'}',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _profileStat('Completed jobs', '$completedJobs'),
+                      _profileStat('Cancelled jobs', '$cancelledJobs'),
+                      _profileStat('Active jobs', '$activeJobs'),
+                      _profileStat(
+                        'Total earnings',
+                        _adminMoneyText(totalEarnings),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _GlassPanel(
+                    colors: colors,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Documents',
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        if (documents.isEmpty)
+                          Text(
+                            'No rider documents found yet.',
+                            style: TextStyle(
+                              color: colors.mutedText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
+                        else
+                          ...documents.map((document) {
+                            final url = '${document['downloadUrl'] ?? ''}';
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: colors.border),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.description_outlined,
+                                      color: colors.text),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${document['type'] ?? document['documentType'] ?? 'Document'}',
+                                          style: TextStyle(
+                                            color: colors.text,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${document['verificationStatus'] ?? document['status'] ?? 'pending'}',
+                                          style: TextStyle(
+                                            color: colors.mutedText,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (url.startsWith('http'))
+                                    TextButton(
+                                      onPressed: () =>
+                                          launchUrl(Uri.parse(url)),
+                                      child: const Text('Open'),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _GlassPanel(
+                    colors: colors,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Admin actions',
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _AdminActions(colors: colors, actions: actions),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _profileRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.trim().isEmpty ? 'Not provided' : value,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileStat(String label, String value) {
+    return SizedBox(
+      width: 150,
+      child: _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AdminAnalyticsSection extends StatelessWidget {
   final _CircumColors colors;
   final AdminMetricSnapshot metrics;
@@ -2595,7 +3147,8 @@ class _AdminStatusCell extends StatelessWidget {
         lower.contains('verified');
     final bad = lower.contains('failed') ||
         lower.contains('cancel') ||
-        lower.contains('suspend');
+        lower.contains('suspend') ||
+        lower.contains('reject');
     final color = good
         ? colors.success
         : bad
