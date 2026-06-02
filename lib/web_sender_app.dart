@@ -7452,7 +7452,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'bookingId': pickupId,
           'profileId': profileId,
           'email': _healthEmail.text.trim(),
-          'frequency': _healthFrequency.value,
+          'frequency': _healthFrequency == HealthPlusFrequency.every28Days
+              ? HealthPlusFrequency.custom.value
+              : _healthFrequency.value,
           'subscriptionPlan': _healthSubscriptionPlan,
           'prescriptionType': _healthPrescriptionType,
           'priceBreakdown': quote.toJson(),
