@@ -84,6 +84,13 @@ void main() {
     });
 
     test('express price is always greater than standard', () {
+      final economy = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 4.8,
+          weightKg: 2,
+          economy: true,
+        ),
+      );
       final standard = DeliveryPricing.calculate(
         const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 2),
       );
@@ -98,8 +105,11 @@ void main() {
         const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 2),
       );
 
+      expect(economy.total, lessThan(standard.total));
       expect(express.total, greaterThan(standard.total));
+      expect(prices['economyPrice']!, lessThan(prices['standardPrice']!));
       expect(prices['expressPrice']!, greaterThan(prices['standardPrice']!));
+      expect(economy.serviceLevel, 'economy');
       expect(express.serviceLevel, 'express');
       expect(standard.serviceLevel, 'standard');
       expect(express.serviceLevelSurcharge, greaterThan(0));
@@ -109,6 +119,17 @@ void main() {
       expect(
         DeliveryPricing.matchingPriorityRank('express'),
         lessThan(DeliveryPricing.matchingPriorityRank('standard')),
+      );
+      expect(
+        DeliveryPricing.matchingPriorityRank('standard'),
+        lessThan(DeliveryPricing.matchingPriorityRank('economy')),
+      );
+    });
+
+    test('uses a 10kg safe default when Iris cannot verify weight', () {
+      expect(
+        DeliveryPricing.safeIrisFallbackWeightKg(irisVerified: false),
+        10,
       );
     });
 

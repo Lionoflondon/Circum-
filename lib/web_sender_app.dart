@@ -6514,8 +6514,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         distanceMiles: _webQuoteDistanceMiles,
         weightKg: chargeableWeightKg,
         vehicleType: _effectiveVehicle.name,
+        economy: _selectedSpeed == 'Economy',
         express: _selectedSpeed == 'Express',
-        priority: _selectedSpeed == 'Priority',
       ),
     );
   }
@@ -6944,9 +6944,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final higherBand = DeliveryPricing.weightBandFor(higherWeight);
 
     if (!hasSenderWeight && estimate.confidence == 'low') {
-      return const _WeightPricingDecision(
-        message: 'Confirm parcel weight before payment.',
-        reason: 'Iris confidence is low, so sender weight is required.',
+      final safeDefault = DeliveryPricing.safeIrisFallbackWeightKg(
+        irisVerified: false,
+      );
+      return _WeightPricingDecision(
+        weightKg: safeDefault,
+        weightBand: DeliveryPricing.weightBandFor(safeDefault).category,
+        source: 'iris_safe_default',
+        message:
+            'Iris could not verify the parcel weight. We will price this safely as ${_formatWeight(safeDefault)} kg unless you enter a confirmed weight.',
+        reason:
+            'Iris could not verify weight, so Circum uses a safe 10 kg default before payment.',
         verificationRequired: true,
       );
     }
@@ -7441,6 +7449,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Map<String, dynamic> _requestPayload(String id) {
     final quote = _quoteBreakdown;
+    final economyQuote = DeliveryPricing.calculate(DeliveryPricingInput(
+      distanceMiles: _webQuoteDistanceMiles,
+      weightKg: _confirmedWeightKg ?? 0,
+      vehicleType: _effectiveVehicle.name,
+      economy: true,
+    ));
     final standardQuote = DeliveryPricing.calculate(DeliveryPricingInput(
       distanceMiles: _webQuoteDistanceMiles,
       weightKg: _confirmedWeightKg ?? 0,
@@ -7452,10 +7466,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       vehicleType: _effectiveVehicle.name,
       express: true,
     ));
-    final selectedServiceLevel =
-        _selectedSpeed == 'Express' ? 'express' : 'standard';
-    final serviceLevelSurcharge =
-        double.parse((quote.total - standardQuote.total).toStringAsFixed(2));
+    final selectedServiceLevel = switch (_selectedSpeed) {
+      'Economy' => 'economy',
+      'Express' => 'express',
+      _ => 'standard',
+    };
+    final serviceLevelSurcharge = double.parse(
+      (quote.total - standardQuote.total).toStringAsFixed(2),
+    );
+    final irisVerified = (_irisWeightConfidence ?? '').toLowerCase() != 'low';
     final senderUser = _senderUser ?? FirebaseAuth.instance.currentUser;
     final senderId = senderUser?.uid ?? 'web-sender';
     final senderName = _senderProfile?.fullName.trim().isNotEmpty == true
@@ -7507,12 +7526,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'selectedServiceLevel': selectedServiceLevel,
       'priority': selectedServiceLevel == 'express',
       'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
-      'broadcastRank': selectedServiceLevel == 'express' ? 0 : 1,
+      'broadcastRank': DeliveryPricing.matchingPriorityRank(
+        selectedServiceLevel,
+      ),
       'customerDeclaredWeight': _senderEnteredWeightKg,
       'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
+      'irisVerified': irisVerified,
+      'irisConfidence': _irisWeightConfidence ?? 'unknown',
       'finalChargeableWeight': _confirmedWeightKg,
+      'finalWeight': _confirmedWeightKg,
       'finalWeightUsed': _confirmedWeightKg,
       'irisConfidenceScore': _irisConfidenceScore(),
       'specialHandlingNotes': _weightVerificationRequired
@@ -7520,7 +7544,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           : '',
       'serviceType': selectedServiceLevel == 'express'
           ? 'Express Delivery'
-          : 'Normal Delivery',
+          : selectedServiceLevel == 'economy'
+              ? 'Economy Delivery'
+              : 'Normal Delivery',
     };
     return {
       'requestId': id,
@@ -7535,7 +7561,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
+      'irisVerified': irisVerified,
+      'irisConfidence': _irisWeightConfidence ?? 'unknown',
       'finalChargeableWeight': _confirmedWeightKg,
+      'finalWeight': _confirmedWeightKg,
       'finalWeightUsed': _confirmedWeightKg,
       'irisConfidenceScore': _irisConfidenceScore(),
       'weightReviewRequired': _weightVerificationRequired,
@@ -7576,20 +7605,26 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
       'weightCategory': _confirmedWeightBand,
       'vehicle': safeVehicleName,
+      'selectedVehicle': safeVehicleName,
       'preferredVehicle': safeVehicleName.toLowerCase(),
       'vehicleType': safeVehicleName,
       'speed': _selectedSpeed,
+      'selectedTier': selectedServiceLevel,
       'serviceLevel': selectedServiceLevel,
       'selectedServiceLevel': selectedServiceLevel,
+      'economyPrice': economyQuote.total,
       'standardPrice': standardQuote.total,
       'expressPrice': expressQuote.total,
       'basePrice': standardQuote.total,
+      'finalPrice': quote.total,
       'finalCustomerPrice': quote.total,
       'serviceLevelSurcharge':
           serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
       'priority': selectedServiceLevel == 'express',
       'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
-      'broadcastRank': selectedServiceLevel == 'express' ? 0 : 1,
+      'broadcastRank': DeliveryPricing.matchingPriorityRank(
+        selectedServiceLevel,
+      ),
       'quote': quote.total,
       'price': quote.total,
       'fare': quote.total,
@@ -10813,9 +10848,11 @@ class _PaymentStep extends StatelessWidget {
               _PriceLine(
                 colors: colors,
                 label: 'Service',
-                value: speed == 'Express'
-                    ? 'Express - priority matching'
-                    : 'Standard - flexible pickup',
+                value: switch (speed) {
+                  'Economy' => 'Economy - lowest price',
+                  'Express' => 'Express - priority matching',
+                  _ => 'Standard - flexible pickup',
+                },
               ),
               _PriceLine(
                 colors: colors,
@@ -11795,13 +11832,15 @@ class _SpeedToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const serviceCopy = {
+      'Economy':
+          'Cheapest option. Slower matching. Best when the parcel is not urgent.',
       'Standard':
-          'Lowest cost. Flexible pickup time. Best for non-urgent deliveries.',
+          'Balanced price. Normal rider broadcast. Best for everyday deliveries.',
       'Express':
           'Priority matching. Faster pickup. Best for urgent deliveries.',
     };
     return Column(
-      children: ['Standard', 'Express'].map((speed) {
+      children: ['Economy', 'Standard', 'Express'].map((speed) {
         final active = selected == speed;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
