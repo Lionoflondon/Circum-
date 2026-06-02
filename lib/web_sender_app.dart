@@ -53,7 +53,7 @@ class WebSenderApp extends StatefulWidget {
 class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
   late _WebAppMode _mode = _initialMode();
-  late final _SenderStep _initialSenderStep =
+  late _SenderStep _senderInitialStep =
       switch (Uri.base.queryParameters['app']) {
     'health' => _SenderStep.healthPlus,
     'profile' => _SenderStep.profile,
@@ -123,7 +123,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     child: _CustomerPortal(
                       darkMode: _darkMode,
                       colors: colors,
-                      initialStep: _initialSenderStep,
+                      initialStep: _senderInitialStep,
                       onBack: () => setState(() => _mode = _WebAppMode.landing),
                       onRoleSelected: _openRole,
                       onToggleTheme: () =>
@@ -155,8 +155,15 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     key: const ValueKey('landing'),
                     colors: colors,
                     darkMode: _darkMode,
-                    onStart: () => setState(() => _mode = _WebAppMode.sender),
+                    onStart: () => setState(() {
+                      _senderInitialStep = _SenderStep.dashboard;
+                      _mode = _WebAppMode.sender;
+                    }),
                     onRider: () => setState(() => _mode = _WebAppMode.rider),
+                    onHealthPlus: () => setState(() {
+                      _senderInitialStep = _SenderStep.healthPlus;
+                      _mode = _WebAppMode.sender;
+                    }),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
               },
@@ -185,6 +192,7 @@ class _LandingPage extends StatelessWidget {
   final bool darkMode;
   final VoidCallback onStart;
   final VoidCallback onRider;
+  final VoidCallback onHealthPlus;
   final VoidCallback onToggleTheme;
 
   const _LandingPage({
@@ -193,6 +201,7 @@ class _LandingPage extends StatelessWidget {
     required this.darkMode,
     required this.onStart,
     required this.onRider,
+    required this.onHealthPlus,
     required this.onToggleTheme,
   });
 
@@ -206,6 +215,7 @@ class _LandingPage extends StatelessWidget {
             darkMode: darkMode,
             onStart: onStart,
             onRider: onRider,
+            onHealthPlus: onHealthPlus,
             onToggleTheme: onToggleTheme,
           ),
           Container(
@@ -310,6 +320,12 @@ class _LandingPage extends StatelessWidget {
                         onPressed: onRider,
                       ),
                       _PillButton(
+                        label: 'Get started with Health+',
+                        icon: Icons.health_and_safety,
+                        dark: false,
+                        onPressed: onHealthPlus,
+                      ),
+                      _PillButton(
                         label: 'Download on Android',
                         icon: Icons.android,
                         dark: false,
@@ -321,6 +337,13 @@ class _LandingPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 58),
+                  _HomepageChoices(
+                    colors: colors,
+                    onSendParcel: onStart,
+                    onRider: onRider,
+                    onHealthPlus: onHealthPlus,
+                  ),
+                  const SizedBox(height: 28),
                   _HeroMockup(colors: colors, onStart: onStart),
                 ],
               ),
@@ -329,6 +352,163 @@ class _LandingPage extends StatelessWidget {
           _FeatureBand(colors: colors),
           _LandingFooter(colors: colors),
         ],
+      ),
+    );
+  }
+}
+
+class _HomepageChoices extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onSendParcel;
+  final VoidCallback onRider;
+  final VoidCallback onHealthPlus;
+
+  const _HomepageChoices({
+    required this.colors,
+    required this.onSendParcel,
+    required this.onRider,
+    required this.onHealthPlus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final compact = constraints.maxWidth < 760;
+      final cards = [
+        _HomepageChoiceCard(
+          colors: colors,
+          icon: Icons.local_shipping_outlined,
+          title: 'Send Parcel',
+          subtitle: 'Parcel pickup and delivery',
+          description: 'Book a standard Circum delivery and track your parcel.',
+          cta: 'Send a parcel',
+          onTap: onSendParcel,
+        ),
+        _HomepageChoiceCard(
+          colors: colors,
+          icon: Icons.two_wheeler,
+          title: 'Rider',
+          subtitle: 'Earn with Circum',
+          description: 'Join the rider network and accept local delivery jobs.',
+          cta: 'Become a rider',
+          onTap: onRider,
+        ),
+        _HomepageChoiceCard(
+          colors: colors,
+          icon: Icons.health_and_safety,
+          title: 'Health+',
+          subtitle: 'Medication & prescription pickup',
+          description: 'Schedule one-off or recurring prescription pickups.',
+          cta: 'Get started with Health+',
+          onTap: onHealthPlus,
+        ),
+      ];
+
+      if (compact) {
+        return Column(
+          children: cards
+              .map((card) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: card,
+                  ))
+              .toList(),
+        );
+      }
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: cards
+            .map((card) => Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: card,
+                  ),
+                ))
+            .toList(),
+      );
+    });
+  }
+}
+
+class _HomepageChoiceCard extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String description;
+  final String cta;
+  final VoidCallback onTap;
+
+  const _HomepageChoiceCard({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.description,
+    required this.cta,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 206,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: colors.panel.withOpacity(colors.dark ? 0.84 : 0.92),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(colors.dark ? 0.28 : 0.08),
+              blurRadius: 22,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: colors.text, size: 30),
+            const Spacer(),
+            Text(
+              title,
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              cta,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2642,6 +2822,7 @@ class _LandingNav extends StatelessWidget {
   final bool darkMode;
   final VoidCallback onStart;
   final VoidCallback onRider;
+  final VoidCallback onHealthPlus;
   final VoidCallback onToggleTheme;
 
   const _LandingNav({
@@ -2649,6 +2830,7 @@ class _LandingNav extends StatelessWidget {
     required this.darkMode,
     required this.onStart,
     required this.onRider,
+    required this.onHealthPlus,
     required this.onToggleTheme,
   });
 
@@ -2683,6 +2865,17 @@ class _LandingNav extends StatelessWidget {
                   onPressed: onRider,
                   child: Text(
                     'Rider',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (MediaQuery.sizeOf(context).width >= 680)
+                TextButton(
+                  onPressed: onHealthPlus,
+                  child: Text(
+                    'Health+',
                     style: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w700,
@@ -6075,6 +6268,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _healthPharmacy = TextEditingController();
   final _healthDelivery = TextEditingController();
   final _healthNotes = TextEditingController();
+  final _healthPreferredDay = TextEditingController();
   final _healthPreferredTime = TextEditingController();
   final _healthCustomSchedule = TextEditingController();
   final _ratingFeedback = TextEditingController();
@@ -6191,6 +6385,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _healthPharmacy.dispose();
     _healthDelivery.dispose();
     _healthNotes.dispose();
+    _healthPreferredDay.dispose();
     _healthPreferredTime.dispose();
     _healthCustomSchedule.dispose();
     _ratingFeedback.dispose();
@@ -6418,6 +6613,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           pharmacyAddress: _healthPharmacy,
           deliveryAddress: _healthDelivery,
           notes: _healthNotes,
+          preferredDay: _healthPreferredDay,
           preferredTime: _healthPreferredTime,
           customSchedule: _healthCustomSchedule,
           frequency: _healthFrequency,
@@ -6437,6 +6633,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               setState(() => _healthSavePayment = value ?? false),
           onSubmit: _bookHealthPlus,
           onPauseSchedule: _pauseHealthPlusSchedule,
+          onResumeSchedule: _resumeHealthPlusSchedule,
+          onCancelSchedule: _cancelHealthPlusSchedule,
           onCancelPickup: _cancelNextHealthPlusPickup,
           onUpdatePayment: _openHealthPlusCheckout,
           onAdminStatus: _adminUpdateHealthPlusStatus,
@@ -7184,7 +7382,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'pharmacyAddress': _healthPharmacy.text.trim(),
         'deliveryAddress': _healthDelivery.text.trim(),
         'notes': _healthNotes.text.trim(),
+        'prescriptionNotes': _healthNotes.text.trim(),
+        'preferredDay': _healthPreferredDay.text.trim(),
+        'preferredTime': _healthPreferredTime.text.trim(),
+        'preferredPickupDay': _healthPreferredDay.text.trim(),
+        'preferredPickupTime': _healthPreferredTime.text.trim(),
+        'frequency': _healthFrequency.value,
         'consentConfirmed': _healthConsent,
+        'consentAccepted': _healthConsent,
+        'status': scheduleId == null ? 'one_off' : 'active',
         'source': 'circum-web',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -7200,10 +7406,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'pharmacyAddress': _healthPharmacy.text.trim(),
         'deliveryAddress': _healthDelivery.text.trim(),
         'notes': _healthNotes.text.trim(),
+        'prescriptionNotes': _healthNotes.text.trim(),
+        'preferredDay': _healthPreferredDay.text.trim(),
+        'preferredTime': _healthPreferredTime.text.trim(),
+        'consentAccepted': _healthConsent,
         'preferredPickupTime': _healthPreferredTime.text.trim(),
-        'scheduledPickupDate': '',
+        'preferredPickupDay': _healthPreferredDay.text.trim(),
+        'scheduledPickupDate': _healthPreferredDay.text.trim(),
         'scheduledPickupWindow': _healthPreferredTime.text.trim(),
-        'scheduledDropoffDate': '',
+        'scheduledDropoffDate': _healthPreferredDay.text.trim(),
         'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
         'frequency': _healthFrequency.value,
         'status': PickupStatus.scheduled.value,
@@ -7225,14 +7436,27 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'userId': senderId,
           'profileId': id,
           'frequency': _healthFrequency.value,
-          'preferredDayTime': _healthPreferredTime.text.trim(),
-          'scheduledPickupDate': '',
+          'pharmacyAddress': _healthPharmacy.text.trim(),
+          'deliveryAddress': _healthDelivery.text.trim(),
+          'preferredDay': _healthPreferredDay.text.trim(),
+          'preferredTime': _healthPreferredTime.text.trim(),
+          'prescriptionNotes': _healthNotes.text.trim(),
+          'consentAccepted': _healthConsent,
+          'status': 'active',
+          'preferredDayTime':
+              '${_healthPreferredDay.text.trim()} ${_healthPreferredTime.text.trim()}'
+                  .trim(),
+          'scheduledPickupDate': _healthPreferredDay.text.trim(),
           'scheduledPickupWindow': _healthPreferredTime.text.trim(),
-          'scheduledDropoffDate': '',
+          'scheduledDropoffDate': _healthPreferredDay.text.trim(),
           'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
           'customSchedule': _healthCustomSchedule.text.trim(),
           'paused': false,
-          'nextPickupAt': _healthPreferredTime.text.trim(),
+          'nextPickupAt':
+              '${_healthPreferredDay.text.trim()} ${_healthPreferredTime.text.trim()}'
+                  .trim(),
+          'stripeCustomerId': null,
+          'stripeSubscriptionId': null,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -7248,6 +7472,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'currency': 'GBP',
         'status': 'pending_secure_checkout',
         'savedPaymentMethod': _healthSavePayment,
+        'frequency': _healthFrequency.value,
+        'paymentType':
+            scheduleId == null ? 'one_time_checkout' : 'subscription_checkout',
         'createdAt': FieldValue.serverTimestamp(),
       });
       batch.set(db.collection('healthPlusNotifications').doc(), {
@@ -7371,6 +7598,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(scheduleId)
         .set({
       'paused': true,
+      'status': 'paused',
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
@@ -7382,6 +7610,59 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'createdAt': FieldValue.serverTimestamp(),
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is paused.');
+  }
+
+  Future<void> _resumeHealthPlusSchedule() async {
+    final scheduleId = _healthScheduleId;
+    if (scheduleId == null) {
+      setState(() => _healthMessage = 'This Health+ pickup is one-off.');
+      return;
+    }
+    await _ensureFirebaseReady();
+    await FirebaseFirestore.instance
+        .collection('recurringPickupSchedules')
+        .doc(scheduleId)
+        .set({
+      'paused': false,
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
+      'type': 'recurring_pickup_resumed',
+      'profileId': _healthProfileId,
+      'scheduleId': scheduleId,
+      'status': 'active',
+      'source': 'circum-web',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    setState(() => _healthMessage = 'Your repeat Health+ pickup is active.');
+  }
+
+  Future<void> _cancelHealthPlusSchedule() async {
+    final scheduleId = _healthScheduleId;
+    if (scheduleId == null) {
+      setState(() => _healthMessage = 'This Health+ pickup is one-off.');
+      return;
+    }
+    await _ensureFirebaseReady();
+    await FirebaseFirestore.instance
+        .collection('recurringPickupSchedules')
+        .doc(scheduleId)
+        .set({
+      'paused': true,
+      'status': 'cancelled',
+      'cancelledAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
+      'type': 'recurring_pickup_cancelled',
+      'profileId': _healthProfileId,
+      'scheduleId': scheduleId,
+      'status': 'cancelled',
+      'source': 'circum-web',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    setState(() => _healthMessage = 'Your repeat Health+ pickup is cancelled.');
   }
 
   Future<void> _cancelNextHealthPlusPickup() async {
@@ -9950,6 +10231,7 @@ class _HealthPlusStep extends StatelessWidget {
   final TextEditingController pharmacyAddress;
   final TextEditingController deliveryAddress;
   final TextEditingController notes;
+  final TextEditingController preferredDay;
   final TextEditingController preferredTime;
   final TextEditingController customSchedule;
   final HealthPlusFrequency frequency;
@@ -9967,6 +10249,8 @@ class _HealthPlusStep extends StatelessWidget {
   final ValueChanged<bool?> onSavePayment;
   final VoidCallback onSubmit;
   final VoidCallback onPauseSchedule;
+  final VoidCallback onResumeSchedule;
+  final VoidCallback onCancelSchedule;
   final VoidCallback onCancelPickup;
   final VoidCallback onUpdatePayment;
   final ValueChanged<String> onAdminStatus;
@@ -9980,6 +10264,7 @@ class _HealthPlusStep extends StatelessWidget {
     required this.pharmacyAddress,
     required this.deliveryAddress,
     required this.notes,
+    required this.preferredDay,
     required this.preferredTime,
     required this.customSchedule,
     required this.frequency,
@@ -9997,6 +10282,8 @@ class _HealthPlusStep extends StatelessWidget {
     required this.onSavePayment,
     required this.onSubmit,
     required this.onPauseSchedule,
+    required this.onResumeSchedule,
+    required this.onCancelSchedule,
     required this.onCancelPickup,
     required this.onUpdatePayment,
     required this.onAdminStatus,
@@ -10121,17 +10408,15 @@ class _HealthPlusStep extends StatelessWidget {
               const SizedBox(height: 10),
               _InputBox(
                 colors: colors,
-                controller: preferredTime,
-                hint: 'Preferred day and time',
+                controller: preferredDay,
+                hint: 'Preferred pickup day',
               ),
-              if (frequency == HealthPlusFrequency.custom) ...[
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: customSchedule,
-                  hint: 'Custom repeat schedule',
-                ),
-              ],
+              const SizedBox(height: 10),
+              _InputBox(
+                colors: colors,
+                controller: preferredTime,
+                hint: 'Preferred pickup time',
+              ),
             ],
           ),
         ),
@@ -10255,6 +10540,8 @@ class _HealthPlusStep extends StatelessWidget {
           pickup: nextPickup,
           payments: payments,
           onPauseSchedule: onPauseSchedule,
+          onResumeSchedule: onResumeSchedule,
+          onCancelSchedule: onCancelSchedule,
           onCancelPickup: onCancelPickup,
           onUpdatePayment: onUpdatePayment,
         ),
@@ -10302,10 +10589,16 @@ class _HealthFrequencyPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const visibleFrequencies = [
+      HealthPlusFrequency.oneOff,
+      HealthPlusFrequency.weekly,
+      HealthPlusFrequency.everyTwoWeeks,
+      HealthPlusFrequency.monthly,
+    ];
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: HealthPlusFrequency.values.map((frequency) {
+      children: visibleFrequencies.map((frequency) {
         final active = frequency == selected;
         return ChoiceChip(
           selected: active,
@@ -10339,8 +10632,8 @@ class _HealthDisclaimer extends StatelessWidget {
           _SectionTitle(colors: colors, title: 'Safety and compliance'),
           const SizedBox(height: 8),
           ...[
-            'Health+ is a pickup and delivery service only.',
-            'Circum does not prescribe medication.',
+            'Health+ is a prescription pickup and delivery service only.',
+            'Circum does not prescribe medication or provide medical advice.',
             'Users are responsible for ensuring prescriptions are valid and ready for collection.',
             'Riders only collect and deliver sealed pharmacy packages.',
           ].map((copy) => Padding(
@@ -10374,6 +10667,8 @@ class _HealthDashboard extends StatelessWidget {
   final Map<String, dynamic>? pickup;
   final List<Map<String, dynamic>> payments;
   final VoidCallback onPauseSchedule;
+  final VoidCallback onResumeSchedule;
+  final VoidCallback onCancelSchedule;
   final VoidCallback onCancelPickup;
   final VoidCallback onUpdatePayment;
 
@@ -10382,6 +10677,8 @@ class _HealthDashboard extends StatelessWidget {
     required this.pickup,
     required this.payments,
     required this.onPauseSchedule,
+    required this.onResumeSchedule,
+    required this.onCancelSchedule,
     required this.onCancelPickup,
     required this.onUpdatePayment,
   });
@@ -10427,6 +10724,16 @@ class _HealthDashboard extends StatelessWidget {
                   onPressed: onPauseSchedule,
                   icon: const Icon(Icons.pause),
                   label: const Text('Pause recurring'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onResumeSchedule,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Resume recurring'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onCancelSchedule,
+                  icon: const Icon(Icons.event_busy),
+                  label: const Text('Cancel subscription'),
                 ),
                 OutlinedButton.icon(
                   onPressed: onCancelPickup,
