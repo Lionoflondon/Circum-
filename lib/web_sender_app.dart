@@ -3971,6 +3971,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     try {
       await _ensureCircumFirebaseReady();
       final db = FirebaseFirestore.instance;
+      final pending = await db
+          .collection('payoutRequests')
+          .where('riderId', isEqualTo: user.uid)
+          .where('status', whereIn: ['pending', 'processing'])
+          .limit(1)
+          .get();
+      if (pending.docs.isNotEmpty) {
+        if (!mounted) return;
+        setState(() => _withdrawMessage =
+            'You already have a withdrawal being processed.');
+        return;
+      }
       final requestRef = db.collection('payoutRequests').doc();
       final batch = db.batch();
       batch.set(requestRef, {
@@ -3983,6 +3995,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'accountNumber': _accountNumber.text.trim(),
         'saveAccountDetails': _saveBank,
         'status': 'pending',
+        'auditTrail': [
+          {
+            'type': 'withdrawal_requested',
+            'riderId': user.uid,
+            'amount': amount,
+            'status': 'pending',
+            'source': 'circum-web',
+            'createdAt': Timestamp.now(),
+          }
+        ],
         'source': 'circum-web',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -5038,13 +5060,30 @@ class _RiderWorkspace extends StatelessWidget {
                 _SectionTitle(colors: colors, title: 'Driver documents'),
                 const SizedBox(height: 8),
                 Text(
-                  'Upload right-to-work proof, driving licence, insurance, or vehicle documents for Circum review.',
+                  'Upload your driving licence, insurance, proof of address, vehicle documents, and profile photo for Circum review.',
                   style: TextStyle(
                       color: colors.mutedText,
                       height: 1.35,
                       fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    'Driving licence',
+                    'Insurance',
+                    'Proof of address',
+                    'Vehicle documents',
+                    'Profile photo',
+                  ].map((type) {
+                    return ActionChip(
+                      label: Text(type),
+                      onPressed: () => documentType.text = type,
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 10),
                 _InputBox(
                     colors: colors,
                     controller: documentType,
@@ -5286,8 +5325,18 @@ class _DriverJobCard extends StatelessWidget {
     final distance = _num(summary['estimatedDistanceMiles']);
     final fare = _num(summary['totalFare'] ?? job['fare'] ?? job['price']);
     final payout = _num(summary['driverPayout'] ?? job['driverPayout']);
+    final tip =
+        _num(job['tipAmount'] ?? job['riderTip'] ?? summary['tipAmount']);
     final vehicle =
         '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
+    final serviceLevel =
+        '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
+    final duration = _num(summary['estimatedDurationMinutes'] ??
+        job['estimatedDurationMinutes'] ??
+        job['etaMinutes']);
+    final dimensions =
+        '${summary['packageDimensions'] ?? job['packageDimensions'] ?? job['dimensions'] ?? ''}'
+            .trim();
     final warnings = _warnings(chargeableWeight, category, job);
 
     return Container(
@@ -5325,6 +5374,14 @@ class _DriverJobCard extends StatelessWidget {
           const SizedBox(height: 10),
           _JobInfoLine(
             colors: colors,
+            icon: Icons.bolt,
+            label: 'Service',
+            value: serviceLevel.toLowerCase() == 'express'
+                ? 'Express priority'
+                : 'Standard',
+          ),
+          _JobInfoLine(
+            colors: colors,
             icon: Icons.trip_origin,
             label: 'Pickup',
             value: '${summary['pickupDisplay'] ?? job['pickupAddress'] ?? ''}',
@@ -5346,6 +5403,13 @@ class _DriverJobCard extends StatelessWidget {
           ),
           _JobInfoLine(
             colors: colors,
+            icon: Icons.timer,
+            label: 'ETA',
+            value:
+                duration > 0 ? '${duration.toStringAsFixed(0)} min' : 'Not set',
+          ),
+          _JobInfoLine(
+            colors: colors,
             icon: Icons.schedule,
             label: 'Pickup window',
             value:
@@ -5357,6 +5421,12 @@ class _DriverJobCard extends StatelessWidget {
             label: 'Parcel',
             value:
                 '${summary['packageType'] ?? job['packageType'] ?? 'Parcel'} - ${summary['packageDescription'] ?? job['packageDescription'] ?? ''}',
+          ),
+          _JobInfoLine(
+            colors: colors,
+            icon: Icons.straighten,
+            label: 'Dimensions',
+            value: dimensions.isEmpty ? 'Not provided' : dimensions,
           ),
           _JobInfoLine(
             colors: colors,
@@ -5376,7 +5446,7 @@ class _DriverJobCard extends StatelessWidget {
             icon: Icons.payments,
             label: 'Price',
             value:
-                'Total ${_money(fare)} • distance ${_money(_num(pricing['distanceFare']))} • weight ${_money(_num(pricing['weightSurcharge']))} • payout ${_money(payout)}',
+                'Total ${_money(fare)} • distance ${_money(_num(pricing['distanceFare']))} • weight ${_money(_num(pricing['weightSurcharge']))} • payout ${_money(payout)}${tip > 0 ? ' • tip ${_money(tip)}' : ''}',
           ),
           if (warnings.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -6049,6 +6119,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _roleChoiceConfirmed = false;
   int _statusIndex = 0;
   int _selectedRating = 0;
+  double _selectedTipAmount = 0;
   int _senderProfileTab = 0;
   User? _senderUser;
   SenderProfile? _senderProfile;
@@ -6309,11 +6380,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           ratingStars: _selectedRating,
           ratingFeedback: _ratingFeedback,
           selectedRatingTags: _selectedRatingTags,
+          selectedTipAmount: _selectedTipAmount,
           ratingSubmitting: _ratingSubmitting,
           ratingSubmitted: _ratingSubmitted,
           ratingMessage: _ratingMessage,
           onRatingChanged: (rating) => setState(() => _selectedRating = rating),
           onRatingTag: _toggleRatingTag,
+          onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
           onSubmitRating: _submitDriverRating,
           onChatDriver: () => setState(() {
             _supportChat = false;
@@ -7815,11 +7888,45 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           {
             'driverRatingId': ratingId,
             'driverRatedByCustomer': true,
+            if (_selectedTipAmount > 0) ...{
+              'tipAmount': _selectedTipAmount,
+              'riderTip': _selectedTipAmount,
+              'tipStatus': 'paid',
+            },
             'ratedAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
         );
+        if (_selectedTipAmount > 0) {
+          final tipTxId = '${requestId}_${driverId}_tip';
+          transaction.set(
+            db.collection('riderWalletTransactions').doc(tipTxId),
+            {
+              'transactionId': tipTxId,
+              'requestId': requestId,
+              'riderId': driverId,
+              'customerId': customerId,
+              'type': 'tip',
+              'tipAmount': _selectedTipAmount,
+              'amount': _selectedTipAmount,
+              'status': 'available',
+              'source': 'circum-web',
+              'createdAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+          transaction.set(
+            db.collection('riderEarnings').doc(driverId),
+            {
+              'availableBalance': FieldValue.increment(_selectedTipAmount),
+              'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
+              'tipsReceived': FieldValue.increment(_selectedTipAmount),
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        }
       });
       await _recalculateDriverPerformance(driverId);
       if (!mounted) return;
@@ -8029,6 +8136,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _statusIndex = 0;
       _broadcasting = false;
       _selectedRating = 0;
+      _selectedTipAmount = 0;
       _selectedRatingTags = {};
       _ratingFeedback.clear();
       _ratingSubmitted = false;
@@ -10834,11 +10942,13 @@ class _TrackingStep extends StatelessWidget {
   final int ratingStars;
   final TextEditingController ratingFeedback;
   final Set<String> selectedRatingTags;
+  final double selectedTipAmount;
   final bool ratingSubmitting;
   final bool ratingSubmitted;
   final String? ratingMessage;
   final ValueChanged<int> onRatingChanged;
   final ValueChanged<String> onRatingTag;
+  final ValueChanged<double> onTipChanged;
   final VoidCallback onSubmitRating;
   final VoidCallback onChatDriver;
   final VoidCallback onChatSupport;
@@ -10860,11 +10970,13 @@ class _TrackingStep extends StatelessWidget {
     required this.ratingStars,
     required this.ratingFeedback,
     required this.selectedRatingTags,
+    required this.selectedTipAmount,
     required this.ratingSubmitting,
     required this.ratingSubmitted,
     required this.ratingMessage,
     required this.onRatingChanged,
     required this.onRatingTag,
+    required this.onTipChanged,
     required this.onSubmitRating,
     required this.onChatDriver,
     required this.onChatSupport,
@@ -10973,11 +11085,13 @@ class _TrackingStep extends StatelessWidget {
             stars: ratingStars,
             feedback: ratingFeedback,
             selectedTags: selectedRatingTags,
+            selectedTipAmount: selectedTipAmount,
             submitting: ratingSubmitting,
             submitted: ratingSubmitted,
             message: ratingMessage,
             onRatingChanged: onRatingChanged,
             onTag: onRatingTag,
+            onTipChanged: onTipChanged,
             onSubmit: onSubmitRating,
           ),
         ],
@@ -12080,11 +12194,13 @@ class _DriverRatingPrompt extends StatelessWidget {
   final int stars;
   final TextEditingController feedback;
   final Set<String> selectedTags;
+  final double selectedTipAmount;
   final bool submitting;
   final bool submitted;
   final String? message;
   final ValueChanged<int> onRatingChanged;
   final ValueChanged<String> onTag;
+  final ValueChanged<double> onTipChanged;
   final VoidCallback onSubmit;
 
   const _DriverRatingPrompt({
@@ -12093,11 +12209,13 @@ class _DriverRatingPrompt extends StatelessWidget {
     required this.stars,
     required this.feedback,
     required this.selectedTags,
+    required this.selectedTipAmount,
     required this.submitting,
     required this.submitted,
     required this.message,
     required this.onRatingChanged,
     required this.onTag,
+    required this.onTipChanged,
     required this.onSubmit,
   });
 
@@ -12165,6 +12283,35 @@ class _DriverRatingPrompt extends StatelessWidget {
             hint: 'Optional feedback',
             maxLines: 3,
             enabled: !submitted,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Add a tip',
+            style: TextStyle(
+              color: colors.text,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [0.0, 2.0, 5.0, 10.0].map((amount) {
+              final selected = selectedTipAmount == amount;
+              return ChoiceChip(
+                selected: selected,
+                onSelected: submitted ? null : (_) => onTipChanged(amount),
+                label: Text(
+                    amount == 0 ? 'No tip' : '+£${amount.toStringAsFixed(0)}'),
+                selectedColor: colors.text,
+                labelStyle: TextStyle(
+                  color: selected ? colors.inverseText : colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+                backgroundColor: colors.field,
+                shape: StadiumBorder(side: BorderSide(color: colors.border)),
+              );
+            }).toList(),
           ),
           if (message != null) ...[
             const SizedBox(height: 10),
