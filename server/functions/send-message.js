@@ -72,7 +72,9 @@ const sendMessage = functions.https.onCall(async (data, context) => {
 
     // Send push notification if FCM token exists
     if (fcmToken) {
-      const senderData = senderType === "rider" ? riderDoc.data() : userDoc.data();
+      const senderData = senderType === "rider" ?
+        riderDoc.data() :
+        userDoc.data();
       const senderName = (senderData.name || senderData.username || "Circum")
           .split(" ")[0];
 

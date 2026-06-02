@@ -1,6 +1,8 @@
 /* eslint-disable max-len */
+/* eslint-disable require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
+const {getAuth} = require("firebase-admin/auth");
 const stripeConfig = functions.config().stripe || {};
 const stripe = require("stripe")(stripeConfig.livekey);
 const {
@@ -12,8 +14,82 @@ const {
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+}
+
+const ADMIN_ROLES = [
+  "super_admin",
+  "operations_admin",
+  "support_agent",
+  "finance_admin",
+  "driver_manager",
+  "owner",
+  "admin",
+  "support",
+  "operations",
+];
+
+async function verifyAdminRequest(req) {
+  const header = req.headers.authorization || "";
+  if (!header.startsWith("Bearer ")) {
+    throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Admin authentication is required.",
+    );
+  }
+
+  const token = header.substring("Bearer ".length);
+  const decoded = await getAuth().verifyIdToken(token);
+  const claimsRoles = Array.isArray(decoded.roles) ? decoded.roles : [];
+  const claimRole = decoded.role || decoded.adminRole;
+  const roles = claimRole ? claimsRoles.concat([claimRole]) : claimsRoles;
+  const hasClaimRole = decoded.admin === true ||
+    roles.some((role) => ADMIN_ROLES.includes(role));
+
+  if (hasClaimRole) {
+    return {
+      uid: decoded.uid,
+      email: decoded.email || null,
+      role: claimRole || roles[0] || "admin",
+    };
+  }
+
+  const adminDoc = await getFirestore()
+      .collection("adminUsers")
+      .doc(decoded.uid)
+      .get();
+  if (!adminDoc.exists) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        "Admin access is required.",
+    );
+  }
+
+  const adminData = adminDoc.data();
+  const status = adminData.status || "inactive";
+  const role = adminData.role;
+  if (status !== "active" || !ADMIN_ROLES.includes(role)) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        "Active admin access is required.",
+    );
+  }
+
+  return {
+    uid: decoded.uid,
+    email: decoded.email || adminData.email || null,
+    role,
+  };
+}
+
+function sendHttpsError(res, error) {
+  if (!(error instanceof functions.https.HttpsError)) {
+    return false;
+  }
+  const status = error.code === "unauthenticated" ? 401 : 403;
+  res.status(status).send({error: error.message, code: error.code});
+  return true;
 }
 
 exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, res) => {
@@ -31,16 +107,19 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       successUrl,
       cancelUrl,
     } = req.body;
+    const breakdown = priceBreakdown || {};
 
     if (!bookingId || !profileId) {
       return res.status(400).send({error: "bookingId and profileId are required"});
     }
 
     const amountPence = calculateHealthPlusAmountPence({
-      baseFarePence: Math.round((priceBreakdown?.baseFare || 6) * 100),
-      distanceFarePence: Math.round((priceBreakdown?.distanceFare || 3.8) * 100),
-      weightSurchargePence: Math.round((priceBreakdown?.weightSurcharge || 0) * 100),
-      serviceFeePence: Math.round((priceBreakdown?.serviceFee || 1.2) * 100),
+      baseFarePence: Math.round((breakdown.baseFare || 6) * 100),
+      distanceFarePence:
+        Math.round((breakdown.distanceFare || 3.8) * 100),
+      weightSurchargePence:
+        Math.round((breakdown.weightSurcharge || 0) * 100),
+      serviceFeePence: Math.round((breakdown.serviceFee || 1.2) * 100),
     });
     const recurring = normalizeSchedule(frequency) !== "one_off";
 
@@ -99,13 +178,15 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
   if (req.method !== "POST") return res.status(405).send({error: "POST required"});
 
   try {
+    const admin = await verifyAdminRequest(req);
     const {pickupId, status, driverId, adminId, note} = req.body;
     if (!pickupId || !status) {
       return res.status(400).send({error: "pickupId and status are required"});
     }
 
     const update = buildAdminStatusUpdate(status, driverId);
-    if (adminId) update.lastAdminId = adminId;
+    update.lastAdminId = admin.uid;
+    update.lastAdminRole = admin.role;
     if (note) update.adminNote = note;
 
     const db = getFirestore();
@@ -115,13 +196,17 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
       pickupId,
       status,
       driverId: driverId || null,
-      adminId: adminId || null,
+      adminId: admin.uid,
+      adminEmail: admin.email,
+      adminRole: admin.role,
+      requestedAdminId: adminId || null,
       note: note || null,
       source: "cloud-functions",
       createdAt: Date.now(),
     });
     return res.send({success: true, pickupId, update});
   } catch (error) {
+    if (sendHttpsError(res, error)) return;
     console.error("Health+ status update error", error);
     return res.status(500).send({error: error.message});
   }

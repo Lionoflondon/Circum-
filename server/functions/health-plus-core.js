@@ -1,3 +1,4 @@
+/* eslint-disable require-jsdoc */
 const HEALTH_PLUS_MINIMUM_PENCE = 1100;
 const HEALTH_PLUS_SERVICE_FEE_PENCE = 120;
 const DEFAULT_DISTANCE_FARE_PENCE = 380;
@@ -15,10 +16,18 @@ const PICKUP_STATUSES = [
 ];
 
 function calculateHealthPlusAmountPence(input = {}) {
-  const baseFare = input.baseFarePence ?? BASE_FARE_PENCE;
-  const distanceFare = input.distanceFarePence ?? DEFAULT_DISTANCE_FARE_PENCE;
-  const weightSurcharge = input.weightSurchargePence ?? 0;
-  const serviceFee = input.serviceFeePence ?? HEALTH_PLUS_SERVICE_FEE_PENCE;
+  const baseFare = input.baseFarePence == null ?
+    BASE_FARE_PENCE :
+    input.baseFarePence;
+  const distanceFare = input.distanceFarePence == null ?
+    DEFAULT_DISTANCE_FARE_PENCE :
+    input.distanceFarePence;
+  const weightSurcharge = input.weightSurchargePence == null ?
+    0 :
+    input.weightSurchargePence;
+  const serviceFee = input.serviceFeePence == null ?
+    HEALTH_PLUS_SERVICE_FEE_PENCE :
+    input.serviceFeePence;
   const subtotal = baseFare + distanceFare + weightSurcharge + serviceFee;
   return Math.max(subtotal, HEALTH_PLUS_MINIMUM_PENCE);
 }
