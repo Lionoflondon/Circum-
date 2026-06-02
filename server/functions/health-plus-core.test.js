@@ -35,6 +35,7 @@ test("creates recurring secure checkout session params", () => {
 
 test("normalizes recurring pickup schedules", () => {
   assert.equal(normalizeSchedule("every_2_weeks"), "every_2_weeks");
+  assert.equal(normalizeSchedule("every_28_days"), "every_28_days");
   assert.equal(normalizeSchedule("random"), "one_off");
 });
 

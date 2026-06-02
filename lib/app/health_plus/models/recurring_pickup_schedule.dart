@@ -2,6 +2,7 @@ enum HealthPlusFrequency {
   oneOff,
   weekly,
   everyTwoWeeks,
+  every28Days,
   monthly,
   custom,
 }
@@ -12,6 +13,7 @@ extension HealthPlusFrequencyValue on HealthPlusFrequency {
       HealthPlusFrequency.oneOff => 'one_off',
       HealthPlusFrequency.weekly => 'weekly',
       HealthPlusFrequency.everyTwoWeeks => 'every_2_weeks',
+      HealthPlusFrequency.every28Days => 'every_28_days',
       HealthPlusFrequency.monthly => 'monthly',
       HealthPlusFrequency.custom => 'custom',
     };
@@ -22,6 +24,7 @@ extension HealthPlusFrequencyValue on HealthPlusFrequency {
       HealthPlusFrequency.oneOff => 'One-off pickup',
       HealthPlusFrequency.weekly => 'Weekly pickup',
       HealthPlusFrequency.everyTwoWeeks => 'Every 2 weeks',
+      HealthPlusFrequency.every28Days => 'Every 28 days',
       HealthPlusFrequency.monthly => 'Monthly pickup',
       HealthPlusFrequency.custom => 'Custom repeat schedule',
     };

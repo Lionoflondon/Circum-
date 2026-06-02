@@ -28,6 +28,7 @@ function normalizeSchedule(frequency) {
     "one_off",
     "weekly",
     "every_2_weeks",
+    "every_28_days",
     "monthly",
     "custom",
   ];
