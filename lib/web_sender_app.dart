@@ -379,6 +379,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   final _search = TextEditingController();
   final _adminInviteEmail = TextEditingController();
   final _adminInviteNote = TextEditingController();
+  final _adminChatInput = TextEditingController();
   _AdminSection _section = _AdminSection.overview;
   AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   User? _adminUser;
@@ -400,6 +401,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _adminUsers = const [];
   List<Map<String, dynamic>> _auditLogs = const [];
   List<Map<String, dynamic>> _websiteVisitors = const [];
+  bool _adminChatOpen = false;
+  String? _activeAdminChatId;
+  final List<_ChatMessage> _adminChatMessages = [];
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _adminChatSub;
 
   @override
   void initState() {
@@ -414,6 +419,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     _search.dispose();
     _adminInviteEmail.dispose();
     _adminInviteNote.dispose();
+    _adminChatInput.dispose();
+    _adminChatSub?.cancel();
     super.dispose();
   }
 
@@ -525,11 +532,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   Future<void> _signOut() async {
+    await _adminChatSub?.cancel();
     await FirebaseAuth.instance.signOut();
     setState(() {
       _adminUser = null;
       _roles = const [];
       _message = 'Signed out of admin.';
+      _adminChatOpen = false;
+      _activeAdminChatId = null;
+      _adminChatMessages.clear();
     });
   }
 
@@ -878,6 +889,90 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     setState(() => _message = 'Internal note saved.');
   }
 
+  void _openAdminChat(Map<String, dynamic> delivery) {
+    final id = '${delivery['id'] ?? delivery['requestId'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    _adminChatSub?.cancel();
+    _adminChatSub = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(id)
+        .collection('messages')
+        .orderBy('createdAt')
+        .limit(100)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _adminChatMessages
+          ..clear()
+          ..addAll(snapshot.docs.map((doc) {
+            final data = doc.data();
+            final role = '${data['senderRole'] ?? data['senderType'] ?? ''}';
+            return _ChatMessage(
+              fromMe: role == 'admin' || data['senderId'] == _adminUser?.uid,
+              text: '${data['messageText'] ?? data['message'] ?? ''}',
+              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+              label: role == 'admin' || role == 'support'
+                  ? 'CIRCUM Support'
+                  : role == 'rider' || role == 'driver'
+                      ? 'Rider'
+                      : 'Sender',
+            );
+          }).where((message) => message.text.trim().isNotEmpty));
+      });
+    }, onError: (_) {
+      if (!mounted) return;
+      setState(() => _message = 'Could not open booking chat.');
+    });
+    setState(() {
+      _activeAdminChatId = id;
+      _adminChatOpen = true;
+    });
+  }
+
+  Future<void> _sendAdminChatMessage() async {
+    final id = _activeAdminChatId;
+    final text = _adminChatInput.text.trim();
+    if (id == null || text.isEmpty) return;
+    _adminChatInput.clear();
+    final chatRef = FirebaseFirestore.instance.collection('chats').doc(id);
+    await chatRef.collection('messages').add({
+      'threadId': id,
+      'bookingId': id,
+      'requestId': id,
+      'senderId': _adminUser?.uid ?? 'circum-support',
+      'senderRole': 'admin',
+      'senderType': 'support',
+      'messageText': text,
+      'message': text,
+      'readBy': [_adminUser?.uid ?? 'circum-support'],
+      'system': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'timeStamp': DateTime.now().toIso8601String(),
+    });
+    await chatRef.set({
+      'threadId': id,
+      'bookingId': id,
+      'requestId': id,
+      'participants': FieldValue.arrayUnion(['circum-support']),
+      'lastMessage': text,
+      'lastMessageTimestamp': FieldValue.serverTimestamp(),
+      'unreadBy': FieldValue.arrayUnion(['sender', 'rider']),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'source': 'circum-admin',
+    }, SetOptions(merge: true));
+  }
+
+  String _formatMessageTime(dynamic timestamp, dynamic fallback) {
+    DateTime? date;
+    if (timestamp is Timestamp) date = timestamp.toDate();
+    if (date == null && fallback is String) date = DateTime.tryParse(fallback);
+    if (date == null) return 'Now';
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   bool _can(AdminPermission permission) {
     return AdminAccessPolicy.can(_roles, permission);
   }
@@ -919,42 +1014,58 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
-        child: Row(
+        child: Stack(
           children: [
-            if (!mobile)
-              _AdminSidebar(
-                colors: colors,
-                section: _section,
-                roles: _roles,
-                onSection: (section) => setState(() => _section = section),
-                onBack: widget.onBack,
-                onSignOut: _signOut,
-              ),
-            Expanded(
-              child: Column(
-                children: [
-                  _AdminTopBar(
+            Row(
+              children: [
+                if (!mobile)
+                  _AdminSidebar(
                     colors: colors,
-                    darkMode: widget.darkMode,
                     section: _section,
                     roles: _roles,
-                    search: _search,
-                    mobile: mobile,
-                    onBack: widget.onBack,
-                    onRefresh: _loadAdminData,
-                    onToggleTheme: widget.onToggleTheme,
-                    onSearchChanged: () => setState(() {}),
                     onSection: (section) => setState(() => _section = section),
+                    onBack: widget.onBack,
+                    onSignOut: _signOut,
                   ),
-                  if (_message != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-                      child: _AdminNotice(colors: colors, message: _message!),
-                    ),
-                  Expanded(child: _buildSection(colors)),
-                ],
-              ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _AdminTopBar(
+                        colors: colors,
+                        darkMode: widget.darkMode,
+                        section: _section,
+                        roles: _roles,
+                        search: _search,
+                        mobile: mobile,
+                        onBack: widget.onBack,
+                        onRefresh: _loadAdminData,
+                        onToggleTheme: widget.onToggleTheme,
+                        onSearchChanged: () => setState(() {}),
+                        onSection: (section) =>
+                            setState(() => _section = section),
+                      ),
+                      if (_message != null)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+                          child:
+                              _AdminNotice(colors: colors, message: _message!),
+                        ),
+                      Expanded(child: _buildSection(colors)),
+                    ],
+                  ),
+                ),
+              ],
             ),
+            if (_adminChatOpen)
+              _ChatSheet(
+                colors: colors,
+                title: 'Booking chat',
+                recipient: 'CIRCUM Support',
+                messages: _adminChatMessages,
+                input: _adminChatInput,
+                onClose: () => setState(() => _adminChatOpen = false),
+                onSend: _sendAdminChatMessage,
+              ),
           ],
         ),
       ),
@@ -1192,6 +1303,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             enabled: _can(AdminPermission.editDeliveries),
             onTap: () =>
                 _updateRecordStatus('deliveryRequests', item, 'resolved'),
+          ),
+          _AdminAction(
+            label: 'Chat',
+            enabled: _can(AdminPermission.viewSupport),
+            onTap: () => _openAdminChat(item),
           ),
         ],
       ),
@@ -3115,6 +3231,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   Map<String, dynamic>? _riderProfile;
   Set<CircumRole> _availableRoles = const {};
   String? _jobMessage;
+  bool _riderChatOpen = false;
+  Map<String, dynamic>? _activeRiderChatJob;
+  final _riderChatInput = TextEditingController();
+  final List<_ChatMessage> _riderChatMessages = [];
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _riderChatSub;
 
   @override
   void initState() {
@@ -3130,6 +3251,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _availableJobsSub?.cancel();
     _acceptedJobsSub?.cancel();
     _completedJobsSub?.cancel();
+    _riderChatSub?.cancel();
     _fullName.dispose();
     _phone.dispose();
     _email.dispose();
@@ -3147,6 +3269,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _accountNumber.dispose();
     _documentType.dispose();
     _documentNotes.dispose();
+    _riderChatInput.dispose();
     super.dispose();
   }
 
@@ -3517,6 +3640,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'driverPlateNumber': rider['plateNumber'],
         'acceptedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await db.collection('chats').doc(requestId).set({
+        'threadId': requestId,
+        'bookingId': requestId,
+        'requestId': requestId,
+        'participants': FieldValue.arrayUnion([user.uid, 'circum-support']),
+        'participantRoles': {
+          user.uid: 'rider',
+          'circum-support': 'admin',
+        },
+        'assignedRiderId': user.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'source': 'circum-web',
       }, SetOptions(merge: true));
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
@@ -3988,6 +4124,101 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
   }
 
+  void _openRiderChat(Map<String, dynamic> job) {
+    final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
+    if (requestId.isEmpty) return;
+    _riderChatSub?.cancel();
+    _riderChatSub = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(requestId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .limit(80)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _riderChatMessages
+          ..clear()
+          ..addAll(snapshot.docs.map((doc) {
+            final data = doc.data();
+            final role = '${data['senderRole'] ?? data['senderType'] ?? ''}';
+            return _ChatMessage(
+              fromMe: data['senderId'] == _riderUser?.uid,
+              text: '${data['messageText'] ?? data['message'] ?? ''}',
+              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+              label: role == 'admin' || role == 'support'
+                  ? 'CIRCUM Support'
+                  : role == 'sender' || role == 'user'
+                      ? 'Sender'
+                      : 'Rider',
+            );
+          }).where((message) => message.text.trim().isNotEmpty));
+      });
+    }, onError: (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not open this chat.');
+    });
+    setState(() {
+      _activeRiderChatJob = job;
+      _riderChatOpen = true;
+    });
+  }
+
+  Future<void> _sendRiderChatMessage() async {
+    final user = _riderUser;
+    final job = _activeRiderChatJob;
+    final text = _riderChatInput.text.trim();
+    if (user == null || job == null || text.isEmpty) return;
+    final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
+    if (requestId.isEmpty) return;
+    _riderChatInput.clear();
+    try {
+      await _ensureCircumFirebaseReady();
+      final chatRef =
+          FirebaseFirestore.instance.collection('chats').doc(requestId);
+      await chatRef.collection('messages').add({
+        'threadId': requestId,
+        'bookingId': requestId,
+        'requestId': requestId,
+        'senderId': user.uid,
+        'senderRole': 'rider',
+        'senderType': 'rider',
+        'messageText': text,
+        'message': text,
+        'readBy': [user.uid],
+        'createdAt': FieldValue.serverTimestamp(),
+        'timeStamp': DateTime.now().toIso8601String(),
+      });
+      await chatRef.set({
+        'threadId': requestId,
+        'bookingId': requestId,
+        'requestId': requestId,
+        'participants': FieldValue.arrayUnion([user.uid, 'circum-support']),
+        'lastMessage': text,
+        'lastMessageTimestamp': FieldValue.serverTimestamp(),
+        'unreadBy': FieldValue.arrayUnion(['sender', 'admin']),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'source': 'circum-web',
+      }, SetOptions(merge: true));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Message could not be sent.');
+    }
+  }
+
+  String _formatMessageTime(dynamic timestamp, dynamic fallback) {
+    DateTime? date;
+    if (timestamp is Timestamp) date = timestamp.toDate();
+    if (date == null && fallback is String) {
+      date = DateTime.tryParse(fallback);
+    }
+    if (date == null) return 'Now';
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   Future<void> _signOutRider() async {
     await _earningsSub?.cancel();
     await _performanceSub?.cancel();
@@ -3995,6 +4226,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     await _availableJobsSub?.cancel();
     await _acceptedJobsSub?.cancel();
     await _completedJobsSub?.cancel();
+    await _riderChatSub?.cancel();
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
     setState(() {
@@ -4009,6 +4241,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _availableRoles = const {};
       _roleChoiceConfirmed = false;
       _authMessage = 'Signed out.';
+      _riderChatOpen = false;
+      _activeRiderChatJob = null;
+      _riderChatMessages.clear();
     });
   }
 
@@ -4328,6 +4563,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       onIgnoreJob: (job) => _rejectOrIgnoreJob(job, 'ignore'),
       onUpdateJobStatus: _updateAcceptedJobStatus,
       onReportIssue: _reportParcelIssue,
+      onOpenChat: _openRiderChat,
       nested: nested,
     );
   }
@@ -4367,45 +4603,21 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= _desktopWebBreakpoint;
-        return Column(
-          children: [
-            _PortalHeader(
-              colors: colors,
-              darkMode: widget.darkMode,
-              onBack: widget.onBack,
-              onToggleTheme: widget.onToggleTheme,
-            ),
-            Expanded(
-              child: _riderUser == null
-                  ? ListView(
-                      padding: EdgeInsets.fromLTRB(
-                        wide ? 28 : 18,
-                        18,
-                        wide ? 28 : 18,
-                        34,
-                      ),
-                      children: [
-                        _RiderPublicIntro(colors: colors),
-                        const SizedBox(height: 14),
-                        _RiderAccessPanel(
-                          colors: colors,
-                          email: _email,
-                          password: _password,
-                          signupMode: _signupMode,
-                          submitting: _authSubmitting,
-                          user: _riderUser,
-                          message: _authMessage,
-                          onToggleMode: () =>
-                              setState(() => _signupMode = !_signupMode),
-                          onSubmit: _submitAuth,
-                          onSignOut: _signOutRider,
-                        ),
-                      ],
-                    )
-                  : !_roleChoiceConfirmed && _availableRoles.length > 1
+    return Stack(
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= _desktopWebBreakpoint;
+            return Column(
+              children: [
+                _PortalHeader(
+                  colors: colors,
+                  darkMode: widget.darkMode,
+                  onBack: widget.onBack,
+                  onToggleTheme: widget.onToggleTheme,
+                ),
+                Expanded(
+                  child: _riderUser == null
                       ? ListView(
                           padding: EdgeInsets.fromLTRB(
                             wide ? 28 : 18,
@@ -4414,23 +4626,61 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                             34,
                           ),
                           children: [
-                            _MultiRoleChoicePanel(
+                            _RiderPublicIntro(colors: colors),
+                            const SizedBox(height: 14),
+                            _RiderAccessPanel(
                               colors: colors,
-                              roles: _availableRoles,
-                              onSender: () =>
-                                  widget.onRoleSelected(CircumRole.sender),
-                              onRider: () =>
-                                  setState(() => _roleChoiceConfirmed = true),
-                              onAdmin: () =>
-                                  widget.onRoleSelected(CircumRole.admin),
+                              email: _email,
+                              password: _password,
+                              signupMode: _signupMode,
+                              submitting: _authSubmitting,
+                              user: _riderUser,
+                              message: _authMessage,
+                              onToggleMode: () =>
+                                  setState(() => _signupMode = !_signupMode),
+                              onSubmit: _submitAuth,
+                              onSignOut: _signOutRider,
                             ),
                           ],
                         )
-                      : _buildSignedInRiderContent(colors, wide),
-            ),
-          ],
-        );
-      },
+                      : !_roleChoiceConfirmed && _availableRoles.length > 1
+                          ? ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 28 : 18,
+                                18,
+                                wide ? 28 : 18,
+                                34,
+                              ),
+                              children: [
+                                _MultiRoleChoicePanel(
+                                  colors: colors,
+                                  roles: _availableRoles,
+                                  onSender: () =>
+                                      widget.onRoleSelected(CircumRole.sender),
+                                  onRider: () => setState(
+                                      () => _roleChoiceConfirmed = true),
+                                  onAdmin: () =>
+                                      widget.onRoleSelected(CircumRole.admin),
+                                ),
+                              ],
+                            )
+                          : _buildSignedInRiderContent(colors, wide),
+                ),
+              ],
+            );
+          },
+        ),
+        if (_riderChatOpen)
+          _ChatSheet(
+            colors: colors,
+            title: 'Delivery chat',
+            recipient: 'Sender and CIRCUM Support',
+            messages: _riderChatMessages,
+            input: _riderChatInput,
+            onClose: () => setState(() => _riderChatOpen = false),
+            onSend: _sendRiderChatMessage,
+          ),
+      ],
     );
   }
 }
@@ -4934,6 +5184,7 @@ class _RiderWorkspace extends StatelessWidget {
   final void Function(Map<String, dynamic> job, String status)
       onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
+  final ValueChanged<Map<String, dynamic>> onOpenChat;
   final bool nested;
 
   const _RiderWorkspace({
@@ -4966,6 +5217,7 @@ class _RiderWorkspace extends StatelessWidget {
     required this.onIgnoreJob,
     required this.onUpdateJobStatus,
     required this.onReportIssue,
+    required this.onOpenChat,
     this.nested = false,
   });
 
@@ -5011,6 +5263,7 @@ class _RiderWorkspace extends StatelessWidget {
             onRejectJob: onRejectJob,
             onIgnoreJob: onIgnoreJob,
             onReportIssue: onReportIssue,
+            onOpenChat: onOpenChat,
           ),
           const SizedBox(height: 14),
           _RiderJobListPanel(
@@ -5020,6 +5273,7 @@ class _RiderWorkspace extends StatelessWidget {
             jobs: acceptedJobs,
             onUpdateJobStatus: onUpdateJobStatus,
             onReportIssue: onReportIssue,
+            onOpenChat: onOpenChat,
           ),
           const SizedBox(height: 14),
           _RiderJobListPanel(
@@ -5030,6 +5284,7 @@ class _RiderWorkspace extends StatelessWidget {
             completed: true,
             onUpdateJobStatus: onUpdateJobStatus,
             onReportIssue: onReportIssue,
+            onOpenChat: onOpenChat,
           ),
           const SizedBox(height: 14),
           _GlassPanel(
@@ -5298,6 +5553,7 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onRejectJob;
   final ValueChanged<Map<String, dynamic>> onIgnoreJob;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
+  final ValueChanged<Map<String, dynamic>> onOpenChat;
 
   const _AvailableDriverJobsPanel({
     required this.colors,
@@ -5307,6 +5563,7 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
     required this.onRejectJob,
     required this.onIgnoreJob,
     required this.onReportIssue,
+    required this.onOpenChat,
   });
 
   @override
@@ -5348,6 +5605,7 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
                   onIgnore: () => onIgnoreJob(job),
                   onReportWeight: () => onReportIssue(job, 'weight'),
                   onReportParcel: () => onReportIssue(job, 'parcel'),
+                  onOpenChat: () => onOpenChat(job),
                 )),
         ],
       ),
@@ -5364,6 +5622,7 @@ class _RiderJobListPanel extends StatelessWidget {
   final void Function(Map<String, dynamic> job, String status)
       onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
+  final ValueChanged<Map<String, dynamic>> onOpenChat;
 
   const _RiderJobListPanel({
     required this.colors,
@@ -5373,6 +5632,7 @@ class _RiderJobListPanel extends StatelessWidget {
     this.completed = false,
     required this.onUpdateJobStatus,
     required this.onReportIssue,
+    required this.onOpenChat,
   });
 
   @override
@@ -5397,6 +5657,7 @@ class _RiderJobListPanel extends StatelessWidget {
                       : (status) => onUpdateJobStatus(job, status),
                   onReportWeight: () => onReportIssue(job, 'weight'),
                   onReportParcel: () => onReportIssue(job, 'parcel'),
+                  onOpenChat: () => onOpenChat(job),
                 )),
         ],
       ),
@@ -5413,6 +5674,7 @@ class _DriverJobCard extends StatelessWidget {
   final void Function(String status)? onUpdateStatus;
   final VoidCallback onReportWeight;
   final VoidCallback onReportParcel;
+  final VoidCallback onOpenChat;
   final bool completed;
 
   const _DriverJobCard({
@@ -5424,6 +5686,7 @@ class _DriverJobCard extends StatelessWidget {
     this.onUpdateStatus,
     required this.onReportWeight,
     required this.onReportParcel,
+    required this.onOpenChat,
     this.completed = false,
   });
 
@@ -5594,6 +5857,11 @@ class _DriverJobCard extends StatelessWidget {
                 onPressed: completed ? null : onAccept,
                 icon: Icon(completed ? Icons.done_all : Icons.check_circle),
                 label: Text(completed ? 'Completed' : 'Accept job'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onOpenChat,
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Messages'),
               ),
               if (onUpdateStatus != null && !completed) ...[
                 OutlinedButton.icon(
@@ -7288,21 +7556,36 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       batch.set(
           db.collection('chats').doc(id),
           {
+            'threadId': id,
+            'bookingId': id,
             'requestId': id,
             'participants': [senderId, 'circum-support'],
+            'participantRoles': {
+              senderId: 'sender',
+              'circum-support': 'admin',
+            },
             'lastMessage':
                 'Your request is live. Iris is checking nearby riders now.',
             'lastMessageTimestamp': FieldValue.serverTimestamp(),
+            'unreadBy': ['admin'],
+            'updatedAt': FieldValue.serverTimestamp(),
             'source': 'circum-web',
           },
           SetOptions(merge: true));
       batch.set(db.collection('chats').doc(id).collection('messages').doc(), {
+        'threadId': id,
+        'bookingId': id,
         'requestId': id,
-        'senderId': 'circum-support',
+        'senderId': senderId,
+        'senderRole': 'system',
         'senderType': 'support',
         'recipientId': senderId,
-        'recipientType': 'user',
+        'recipientType': 'sender',
+        'messageText':
+            'Your request is live. Iris is checking nearby riders now.',
         'message': 'Your request is live. Iris is checking nearby riders now.',
+        'readBy': [senderId],
+        'system': true,
         'status': 'sent',
         'createdAt': FieldValue.serverTimestamp(),
         'timeStamp': DateTime.now().toIso8601String(),
@@ -8362,12 +8645,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       for (final doc in snapshot.docs) {
         final data = doc.data();
         final senderType = '${data['senderType'] ?? 'support'}';
-        final message = '${data['message'] ?? ''}'.trim();
+        final senderRole = '${data['senderRole'] ?? senderType}';
+        final message =
+            '${data['messageText'] ?? data['message'] ?? ''}'.trim();
         if (message.isEmpty) continue;
         final chatMessage = _ChatMessage(
-          fromMe: senderType == 'user',
+          fromMe: data['senderId'] == _senderUser?.uid &&
+              senderRole != 'system' &&
+              senderType != 'support',
           text: message,
           time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+          label: senderRole == 'system' ||
+                  senderType == 'support' ||
+                  senderType == 'admin'
+              ? 'CIRCUM Support'
+              : senderType == 'rider' || senderType == 'driver'
+                  ? 'Rider'
+                  : 'You',
         );
         if (senderType == 'rider' || senderType == 'driver') {
           driverMessages.add(chatMessage);
@@ -8441,24 +8735,37 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final db = FirebaseFirestore.instance;
       final chatRef = db.collection('chats').doc(requestId);
       await chatRef.collection('messages').add({
+        'threadId': requestId,
+        'bookingId': requestId,
         'requestId': requestId,
-        'senderId': 'web-sender',
+        'senderId': _senderUser?.uid ?? 'web-sender',
+        'senderRole': 'sender',
         'senderType': 'user',
-        'recipientId': _supportChat ? 'circum-support' : 'assigned-rider',
-        'recipientType': _supportChat ? 'support' : 'rider',
+        'recipientId': _supportChat
+            ? 'circum-support'
+            : (_assignedDriverId ?? 'assigned-rider'),
+        'recipientType': _supportChat ? 'admin' : 'rider',
+        'messageText': text,
         'message': text,
         'status': 'sent',
+        'readBy': [_senderUser?.uid ?? 'web-sender'],
         'createdAt': FieldValue.serverTimestamp(),
         'timeStamp': DateTime.now().toIso8601String(),
       });
       await chatRef.set({
+        'threadId': requestId,
+        'bookingId': requestId,
         'requestId': requestId,
         'lastMessage': text,
         'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        'participants': [
-          'web-sender',
-          _supportChat ? 'circum-support' : 'assigned-rider'
-        ],
+        'participants': FieldValue.arrayUnion([
+          _senderUser?.uid ?? 'web-sender',
+          _supportChat
+              ? 'circum-support'
+              : (_assignedDriverId ?? 'assigned-rider')
+        ]),
+        'unreadBy': FieldValue.arrayUnion([_supportChat ? 'admin' : 'rider']),
+        'updatedAt': FieldValue.serverTimestamp(),
         'source': 'circum-web',
       }, SetOptions(merge: true));
     } catch (_) {
@@ -12027,15 +12334,42 @@ class _ChatSheet extends StatelessWidget {
                             color: message.fromMe ? colors.text : colors.field,
                             borderRadius: BorderRadius.circular(18),
                           ),
-                          child: Text(
-                            message.text,
-                            style: TextStyle(
-                              color: message.fromMe
-                                  ? colors.inverseText
-                                  : colors.text,
-                              height: 1.35,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if ((message.label ?? '').isNotEmpty)
+                                Text(
+                                  message.label!,
+                                  style: TextStyle(
+                                    color: message.fromMe
+                                        ? colors.inverseText
+                                        : colors.mutedText,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              Text(
+                                message.text,
+                                style: TextStyle(
+                                  color: message.fromMe
+                                      ? colors.inverseText
+                                      : colors.text,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                message.time,
+                                style: TextStyle(
+                                  color: message.fromMe
+                                      ? colors.inverseText
+                                      : colors.mutedText,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -13938,11 +14272,13 @@ class _ChatMessage {
   final bool fromMe;
   final String text;
   final String time;
+  final String? label;
 
   const _ChatMessage({
     required this.fromMe,
     required this.text,
     required this.time,
+    this.label,
   });
 }
 
