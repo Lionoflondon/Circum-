@@ -6944,17 +6944,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final higherBand = DeliveryPricing.weightBandFor(higherWeight);
 
     if (!hasSenderWeight && estimate.confidence == 'low') {
-      final safeDefault = DeliveryPricing.safeIrisFallbackWeightKg(
-        irisVerified: false,
-      );
-      return _WeightPricingDecision(
-        weightKg: safeDefault,
-        weightBand: DeliveryPricing.weightBandFor(safeDefault).category,
-        source: 'iris_safe_default',
-        message:
-            'Iris could not verify the parcel weight. We will price this safely as ${_formatWeight(safeDefault)} kg unless you enter a confirmed weight.',
-        reason:
-            'Iris could not verify weight, so Circum uses a safe 10 kg default before payment.',
+      return const _WeightPricingDecision(
+        message: 'Confirm parcel weight before payment.',
+        reason: 'Iris confidence is low, so sender weight is required.',
         verificationRequired: true,
       );
     }

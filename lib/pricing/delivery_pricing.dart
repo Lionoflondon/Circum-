@@ -192,10 +192,6 @@ class DeliveryPricing {
     ].reduce(max);
   }
 
-  static double safeIrisFallbackWeightKg({required bool irisVerified}) {
-    return irisVerified ? 0 : PricingConstants.unverifiedIrisSafeDefaultKg;
-  }
-
   static String recommendedVehicleForWeight(double weightKg) {
     if (weightKg > 10) return 'Van';
     if (weightKg > 5) return 'Car';

@@ -126,13 +126,6 @@ void main() {
       );
     });
 
-    test('uses a 10kg safe default when Iris cannot verify weight', () {
-      expect(
-        DeliveryPricing.safeIrisFallbackWeightKg(irisVerified: false),
-        10,
-      );
-    });
-
     test('parses gram entries as kilograms', () {
       expect(DeliveryPricing.parseWeightKg('178g'), closeTo(0.178, 0.0001));
       expect(
