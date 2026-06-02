@@ -7,6 +7,7 @@ import 'package:circum/app/authentication/access/role_access.dart';
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
+import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
@@ -3111,6 +3112,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   List<Map<String, dynamic>> _availableJobs = const [];
   List<Map<String, dynamic>> _acceptedJobs = const [];
   List<Map<String, dynamic>> _completedJobs = const [];
+  Map<String, dynamic>? _riderProfile;
   Set<CircumRole> _availableRoles = const {};
   String? _jobMessage;
 
@@ -3160,8 +3162,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'Use a rider account here. Sender and admin accounts have their own sign-in.');
         return;
       }
+      final riderProfile = await _loadRiderProfile(user.uid);
       setState(() {
         _riderUser = user;
+        _riderProfile = riderProfile;
         _email.text = user.email ?? _email.text;
         _roleChoiceConfirmed = false;
       });
@@ -3207,6 +3211,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (_signupMode) {
         await user.updateDisplayName(_fullName.text.trim());
         await _saveRiderProfile(user);
+        _riderProfile = await _loadRiderProfile(user.uid);
         _availableRoles = {CircumRole.rider};
       } else if (!await _allowRiderUser(user)) {
         await FirebaseAuth.instance.signOut();
@@ -3214,6 +3219,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         setState(() => _authMessage =
             'This account is not a rider account. Use sender login or the admin site instead.');
         return;
+      } else {
+        _riderProfile = await _loadRiderProfile(user.uid);
       }
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
@@ -3259,9 +3266,40 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     );
   }
 
+  Future<Map<String, dynamic>?> _loadRiderProfile(String uid) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('riderProfiles')
+        .doc(uid)
+        .get();
+    if (!snapshot.exists) return null;
+    return {'id': snapshot.id, ...?snapshot.data()};
+  }
+
+  String _riderApprovalStatus() {
+    final profile = _riderProfile;
+    if (profile == null) return 'missing';
+    final approval = '${profile['approvalStatus'] ?? ''}'.trim().toLowerCase();
+    if (approval == 'pending' ||
+        approval == 'approved' ||
+        approval == 'rejected' ||
+        approval == 'suspended') {
+      return approval;
+    }
+
+    final verification =
+        '${profile['verificationStatus'] ?? ''}'.trim().toLowerCase();
+    if (verification == 'approved' || verification == 'verified') {
+      return 'approved';
+    }
+    if (verification == 'rejected') return 'rejected';
+    if (verification == 'suspended') return 'suspended';
+    return 'pending';
+  }
+
   Future<void> _saveRiderProfile(User user) async {
     final db = FirebaseFirestore.instance;
     await db.collection('riderProfiles').doc(user.uid).set({
+      'uid': user.uid,
       'riderId': user.uid,
       'fullName': _fullName.text.trim().isEmpty
           ? user.displayName
@@ -3273,6 +3311,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'vehicleMakeModel': _vehicleMakeModel.text.trim(),
       'vehicleColour': _vehicleColour.text.trim(),
       'plateNumber': _plateNumber.text.trim(),
+      'vehicleRegistration': _plateNumber.text.trim(),
       'vehicle': DriverVehicle(
         type: _vehicle.text.trim(),
         makeModel: _vehicleMakeModel.text.trim(),
@@ -3280,6 +3319,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         plateNumber: _plateNumber.text.trim(),
       ).toJson(),
       'availability': _availability.text.trim(),
+      'approvalStatus': 'pending',
       'verificationStatus': 'pending',
       'driverStatus': 'active',
       'role': 'rider',
@@ -3959,6 +3999,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (!mounted) return;
     setState(() {
       _riderUser = null;
+      _riderProfile = null;
       _earnings = _RiderEarningsSnapshot.empty();
       _performance = DriverPerformanceMetric.empty('web-rider');
       _recentRatings = const [];
@@ -4216,6 +4257,113 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
   }
 
+  Widget _buildRiderAccessPanel(_CircumColors colors) {
+    return _RiderAccessPanel(
+      colors: colors,
+      email: _email,
+      password: _password,
+      signupMode: _signupMode,
+      submitting: _authSubmitting,
+      user: _riderUser,
+      message: _authMessage,
+      onToggleMode: () => setState(() => _signupMode = !_signupMode),
+      onSubmit: _submitAuth,
+      onSignOut: _signOutRider,
+    );
+  }
+
+  Widget _buildRiderEnrollmentForm(_CircumColors colors) {
+    return _RiderEnrollmentForm(
+      colors: colors,
+      nested: true,
+      fullName: _fullName,
+      phone: _phone,
+      email: _email,
+      postcode: _postcode,
+      vehicle: _vehicle,
+      vehicleMakeModel: _vehicleMakeModel,
+      vehicleColour: _vehicleColour,
+      plateNumber: _plateNumber,
+      availability: _availability,
+      notes: _notes,
+      rightToWork: _rightToWork,
+      sealedPackageConsent: _sealedPackageConsent,
+      submitting: _submitting,
+      message: _message,
+      onRightToWork: (value) => setState(() => _rightToWork = value ?? false),
+      onSealedPackageConsent: (value) =>
+          setState(() => _sealedPackageConsent = value ?? false),
+      onSubmit: _submit,
+    );
+  }
+
+  Widget _buildRiderWorkspace(_CircumColors colors, {bool nested = false}) {
+    return _RiderWorkspace(
+      colors: colors,
+      user: _riderUser,
+      earnings: _earnings,
+      performance: _performance,
+      recentRatings: _recentRatings,
+      availableJobs: _availableJobs,
+      acceptedJobs: _acceptedJobs,
+      completedJobs: _completedJobs,
+      applicationId: _applicationId,
+      withdrawAmount: _withdrawAmount,
+      bankName: _bankName,
+      sortCode: _sortCode,
+      accountNumber: _accountNumber,
+      documentType: _documentType,
+      documentNotes: _documentNotes,
+      saveBank: _saveBank,
+      submittingWithdrawal: _withdrawSubmitting,
+      submittingDocument: _documentSubmitting,
+      withdrawMessage: _withdrawMessage,
+      documentMessage: _documentMessage,
+      jobMessage: _jobMessage,
+      onSaveBank: (value) => setState(() => _saveBank = value ?? false),
+      onWithdraw: _requestWithdrawal,
+      onUploadDocument: _uploadRiderDocument,
+      onAcceptJob: _acceptDeliveryJob,
+      onRejectJob: (job) => _rejectOrIgnoreJob(job, 'reject'),
+      onIgnoreJob: (job) => _rejectOrIgnoreJob(job, 'ignore'),
+      onUpdateJobStatus: _updateAcceptedJobStatus,
+      onReportIssue: _reportParcelIssue,
+      nested: nested,
+    );
+  }
+
+  Widget _buildSignedInRiderContent(_CircumColors colors, bool wide) {
+    if (_riderProfile == null) {
+      final children = [
+        _buildRiderAccessPanel(colors),
+        const SizedBox(height: 14),
+        _buildRiderEnrollmentForm(colors),
+      ];
+      return ListView(
+        padding: EdgeInsets.fromLTRB(wide ? 28 : 18, 18, wide ? 28 : 18, 34),
+        children: children,
+      );
+    }
+
+    final approvalStatus = _riderApprovalStatus();
+    if (approvalStatus != 'approved') {
+      return ListView(
+        padding: EdgeInsets.fromLTRB(wide ? 28 : 18, 18, wide ? 28 : 18, 34),
+        children: [
+          _buildRiderAccessPanel(colors),
+          const SizedBox(height: 14),
+          _RiderApprovalStatusPanel(
+            colors: colors,
+            status: approvalStatus,
+            profile: _riderProfile!,
+          ),
+        ],
+      );
+    }
+
+    return _buildRiderWorkspace(colors, nested: !wide);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
@@ -4278,175 +4426,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                             ),
                           ],
                         )
-                      : wide
-                          ? Row(
-                              children: [
-                                Expanded(
-                                  child: ListView(
-                                    padding: const EdgeInsets.fromLTRB(
-                                        28, 28, 28, 34),
-                                    children: [
-                                      _RiderAccessPanel(
-                                        colors: colors,
-                                        email: _email,
-                                        password: _password,
-                                        signupMode: _signupMode,
-                                        submitting: _authSubmitting,
-                                        user: _riderUser,
-                                        message: _authMessage,
-                                        onToggleMode: () => setState(
-                                            () => _signupMode = !_signupMode),
-                                        onSubmit: _submitAuth,
-                                        onSignOut: _signOutRider,
-                                      ),
-                                      const SizedBox(height: 14),
-                                      _RiderEnrollmentForm(
-                                        colors: colors,
-                                        nested: true,
-                                        fullName: _fullName,
-                                        phone: _phone,
-                                        email: _email,
-                                        postcode: _postcode,
-                                        vehicle: _vehicle,
-                                        vehicleMakeModel: _vehicleMakeModel,
-                                        vehicleColour: _vehicleColour,
-                                        plateNumber: _plateNumber,
-                                        availability: _availability,
-                                        notes: _notes,
-                                        rightToWork: _rightToWork,
-                                        sealedPackageConsent:
-                                            _sealedPackageConsent,
-                                        submitting: _submitting,
-                                        message: _message,
-                                        onRightToWork: (value) => setState(() =>
-                                            _rightToWork = value ?? false),
-                                        onSealedPackageConsent: (value) =>
-                                            setState(() =>
-                                                _sealedPackageConsent =
-                                                    value ?? false),
-                                        onSubmit: _submit,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _RiderWorkspace(
-                                    colors: colors,
-                                    user: _riderUser,
-                                    earnings: _earnings,
-                                    performance: _performance,
-                                    recentRatings: _recentRatings,
-                                    availableJobs: _availableJobs,
-                                    acceptedJobs: _acceptedJobs,
-                                    completedJobs: _completedJobs,
-                                    applicationId: _applicationId,
-                                    withdrawAmount: _withdrawAmount,
-                                    bankName: _bankName,
-                                    sortCode: _sortCode,
-                                    accountNumber: _accountNumber,
-                                    documentType: _documentType,
-                                    documentNotes: _documentNotes,
-                                    saveBank: _saveBank,
-                                    submittingWithdrawal: _withdrawSubmitting,
-                                    submittingDocument: _documentSubmitting,
-                                    withdrawMessage: _withdrawMessage,
-                                    documentMessage: _documentMessage,
-                                    jobMessage: _jobMessage,
-                                    onSaveBank: (value) => setState(
-                                        () => _saveBank = value ?? false),
-                                    onWithdraw: _requestWithdrawal,
-                                    onUploadDocument: _uploadRiderDocument,
-                                    onAcceptJob: _acceptDeliveryJob,
-                                    onRejectJob: (job) =>
-                                        _rejectOrIgnoreJob(job, 'reject'),
-                                    onIgnoreJob: (job) =>
-                                        _rejectOrIgnoreJob(job, 'ignore'),
-                                    onUpdateJobStatus: _updateAcceptedJobStatus,
-                                    onReportIssue: _reportParcelIssue,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : ListView(
-                              padding:
-                                  const EdgeInsets.fromLTRB(18, 12, 18, 28),
-                              children: [
-                                _RiderAccessPanel(
-                                  colors: colors,
-                                  email: _email,
-                                  password: _password,
-                                  signupMode: _signupMode,
-                                  submitting: _authSubmitting,
-                                  user: _riderUser,
-                                  message: _authMessage,
-                                  onToggleMode: () => setState(
-                                      () => _signupMode = !_signupMode),
-                                  onSubmit: _submitAuth,
-                                  onSignOut: _signOutRider,
-                                ),
-                                const SizedBox(height: 14),
-                                _RiderEnrollmentForm(
-                                  colors: colors,
-                                  nested: true,
-                                  fullName: _fullName,
-                                  phone: _phone,
-                                  email: _email,
-                                  postcode: _postcode,
-                                  vehicle: _vehicle,
-                                  vehicleMakeModel: _vehicleMakeModel,
-                                  vehicleColour: _vehicleColour,
-                                  plateNumber: _plateNumber,
-                                  availability: _availability,
-                                  notes: _notes,
-                                  rightToWork: _rightToWork,
-                                  sealedPackageConsent: _sealedPackageConsent,
-                                  submitting: _submitting,
-                                  message: _message,
-                                  onRightToWork: (value) => setState(
-                                      () => _rightToWork = value ?? false),
-                                  onSealedPackageConsent: (value) => setState(
-                                      () => _sealedPackageConsent =
-                                          value ?? false),
-                                  onSubmit: _submit,
-                                ),
-                                const SizedBox(height: 14),
-                                _RiderWorkspace(
-                                  colors: colors,
-                                  user: _riderUser,
-                                  earnings: _earnings,
-                                  performance: _performance,
-                                  recentRatings: _recentRatings,
-                                  availableJobs: _availableJobs,
-                                  acceptedJobs: _acceptedJobs,
-                                  completedJobs: _completedJobs,
-                                  applicationId: _applicationId,
-                                  withdrawAmount: _withdrawAmount,
-                                  bankName: _bankName,
-                                  sortCode: _sortCode,
-                                  accountNumber: _accountNumber,
-                                  documentType: _documentType,
-                                  documentNotes: _documentNotes,
-                                  saveBank: _saveBank,
-                                  submittingWithdrawal: _withdrawSubmitting,
-                                  submittingDocument: _documentSubmitting,
-                                  withdrawMessage: _withdrawMessage,
-                                  documentMessage: _documentMessage,
-                                  jobMessage: _jobMessage,
-                                  onSaveBank: (value) => setState(
-                                      () => _saveBank = value ?? false),
-                                  onWithdraw: _requestWithdrawal,
-                                  onUploadDocument: _uploadRiderDocument,
-                                  onAcceptJob: _acceptDeliveryJob,
-                                  onRejectJob: (job) =>
-                                      _rejectOrIgnoreJob(job, 'reject'),
-                                  onIgnoreJob: (job) =>
-                                      _rejectOrIgnoreJob(job, 'ignore'),
-                                  onUpdateJobStatus: _updateAcceptedJobStatus,
-                                  onReportIssue: _reportParcelIssue,
-                                  nested: true,
-                                ),
-                              ],
-                            ),
+                      : _buildSignedInRiderContent(colors, wide),
             ),
           ],
         );
@@ -4613,6 +4593,121 @@ class _RiderAccessPanel extends StatelessWidget {
             Text(message!,
                 style:
                     TextStyle(color: colors.text, fontWeight: FontWeight.w800)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RiderApprovalStatusPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final String status;
+  final Map<String, dynamic> profile;
+
+  const _RiderApprovalStatusPanel({
+    required this.colors,
+    required this.status,
+    required this.profile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = status.toLowerCase();
+    final title = switch (normalized) {
+      'rejected' => 'Application needs attention',
+      'suspended' => 'Rider account suspended',
+      _ => 'Application pending',
+    };
+    final body = switch (normalized) {
+      'rejected' =>
+        'Circum could not approve this rider profile yet. Check the note below and contact support if you need help.',
+      'suspended' =>
+        'This rider account cannot accept jobs right now. Contact Circum support for the next step.',
+      _ =>
+        'Your rider profile has been created. Circum will review your details and documents before jobs appear here.',
+    };
+    final note = [
+      profile['adminMessage'],
+      profile['approvalNote'],
+      profile['rejectionReason'],
+      profile['accountNote'],
+    ]
+        .where((value) => '${value ?? ''}'.trim().isNotEmpty)
+        .map((value) => '$value'.trim())
+        .join('\n');
+
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                normalized == 'suspended'
+                    ? Icons.block
+                    : normalized == 'rejected'
+                        ? Icons.report_problem_outlined
+                        : Icons.pending_actions,
+                color: colors.text,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _SectionTitle(colors: colors, title: title),
+              ),
+              _HealthChip(label: normalized),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            body,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w700,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _RiderChecklistRow(
+            colors: colors,
+            icon: Icons.person_outline,
+            label: 'Rider',
+            value: '${profile['fullName'] ?? profile['email'] ?? 'Signed in'}',
+          ),
+          _RiderChecklistRow(
+            colors: colors,
+            icon: Icons.directions_bike,
+            label: 'Vehicle',
+            value:
+                '${profile['vehicleType'] ?? 'Vehicle'} ${profile['vehicleRegistration'] ?? profile['plateNumber'] ?? ''}'
+                    .trim(),
+          ),
+          _RiderChecklistRow(
+            colors: colors,
+            icon: Icons.verified_user_outlined,
+            label: 'Approval status',
+            value: normalized,
+          ),
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors.field,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: colors.border),
+              ),
+              child: Text(
+                note,
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+            ),
           ],
         ],
       ),
@@ -5351,6 +5446,8 @@ class _DriverJobCard extends StatelessWidget {
         '${job['weightCategory'] ?? job['confirmedWeightBand'] ?? summary['confirmedWeightBand'] ?? 'Parcel'}';
     final confidence =
         '${job['irisConfidenceScore'] ?? job['irisWeightConfidence'] ?? 'unknown'}';
+    final weightSource =
+        '${job['irisWeightSource'] ?? summary['irisWeightSource'] ?? 'unknown'}';
     final distance = _num(summary['estimatedDistanceMiles']);
     final fare = _num(summary['totalFare'] ?? job['fare'] ?? job['price']);
     final payout = _num(summary['driverPayout'] ?? job['driverPayout']);
@@ -5468,7 +5565,8 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.fact_check,
             label: 'Checks',
-            value: '$category, Iris confidence $confidence',
+            value:
+                '$category, Iris confidence $confidence, source $weightSource',
           ),
           _JobInfoLine(
             colors: colors,
@@ -6109,6 +6207,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _irisWeightBand;
   String? _irisWeightConfidence;
   String? _irisWeightExplanation;
+  String? _irisWeightSource;
+  double? _irisWeightConfidenceScore;
   double? _senderEnteredWeightKg;
   double? _confirmedWeightKg;
   String? _confirmedWeightBand;
@@ -6875,6 +6975,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _irisWeightBand = estimate.weightBand;
       _irisWeightConfidence = estimate.confidence;
       _irisWeightExplanation = estimate.explanation;
+      _irisWeightSource = estimate.weightSource;
+      _irisWeightConfidenceScore = estimate.confidenceScore;
       _weightVerificationRequired = decision.verificationRequired;
       _weightPricingReason = decision.reason;
       _analyzing = false;
@@ -6899,6 +7001,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _irisWeightExplanation ?? 'Iris estimate confirmed by sender.',
       packageType: _inferPackageType(),
       requiresVehicleReview: false,
+      weightSource: _irisWeightSource ?? 'category_fallback',
+      confidenceScore: _irisWeightConfidenceScore,
     );
     final decision = _resolvePricingWeight(
       estimate: estimate,
@@ -7035,6 +7139,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final text = '${_description.text} ${_pickup.text} ${_dropoff.text}'
         .trim()
         .toLowerCase();
+    final knownProduct = _knownProductWeightEstimate(text);
+    if (knownProduct != null) return knownProduct;
+
     double estimate = 2;
     var confidence = 'low';
     var packageType = 'Parcel';
@@ -7091,6 +7198,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       explanation: explanation,
       packageType: packageType,
       requiresVehicleReview: vehicleReview,
+      weightSource: 'category_fallback',
+      confidenceScore: _scoreForIrisConfidence(confidence),
+    );
+  }
+
+  _IrisWeightEstimate? _knownProductWeightEstimate(String text) {
+    final product = IrisWeightEstimator.knownProductEstimate(text);
+    if (product == null) return null;
+    return _IrisWeightEstimate(
+      weightKg: product.weightKg,
+      weightBand: product.weightBand,
+      confidence: product.confidence,
+      explanation: product.explanation,
+      packageType: product.packageType,
+      requiresVehicleReview: product.requiresVehicleReview,
+      weightSource: product.weightSource,
+      confidenceScore: product.confidenceScore,
     );
   }
 
@@ -7115,7 +7239,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   double _irisConfidenceScore() {
-    return switch ((_irisWeightConfidence ?? '').toLowerCase()) {
+    return _irisWeightConfidenceScore ??
+        _scoreForIrisConfidence(_irisWeightConfidence);
+  }
+
+  double _scoreForIrisConfidence(String? confidence) {
+    return switch ((confidence ?? '').toLowerCase()) {
       'high' => 0.9,
       'medium' => 0.65,
       'low' => 0.3,
@@ -7704,6 +7833,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
+      'irisWeightSource': _irisWeightSource ?? 'unknown',
       'irisVerified': irisVerified,
       'irisConfidence': _irisWeightConfidence ?? 'unknown',
       'finalChargeableWeight': _confirmedWeightKg,
@@ -7732,6 +7862,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
+      'irisWeightSource': _irisWeightSource ?? 'unknown',
       'irisVerified': irisVerified,
       'irisConfidence': _irisWeightConfidence ?? 'unknown',
       'finalChargeableWeight': _confirmedWeightKg,
@@ -10843,8 +10974,10 @@ class _HealthTrustGrid extends StatelessWidget {
       (Icons.inventory_2_outlined, 'Sealed package only'),
       (Icons.handshake_outlined, 'Secure handover'),
       (Icons.medical_information_outlined, 'No medical advice provided'),
-      (Icons.assignment_turned_in_outlined,
-          'Prescription remains customer/pharmacy responsibility'),
+      (
+        Icons.assignment_turned_in_outlined,
+        'Prescription remains customer/pharmacy responsibility'
+      ),
     ];
 
     return _GlassPanel(
@@ -11129,6 +11262,8 @@ class _IrisWeightEstimate {
   final String explanation;
   final String packageType;
   final bool requiresVehicleReview;
+  final String weightSource;
+  final double? confidenceScore;
 
   const _IrisWeightEstimate({
     required this.weightKg,
@@ -11137,6 +11272,8 @@ class _IrisWeightEstimate {
     required this.explanation,
     required this.packageType,
     required this.requiresVehicleReview,
+    this.weightSource = 'category_fallback',
+    this.confidenceScore,
   });
 }
 
