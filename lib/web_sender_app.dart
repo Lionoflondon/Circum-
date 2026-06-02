@@ -24,6 +24,8 @@ const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _adminHostingTarget = bool.fromEnvironment('CIRCUM_ADMIN_HOSTING');
+const _androidDownloadUrl =
+    'https://play.google.com/store/apps/details?id=com.circum.app';
 const _spectrumGradient = [
   Color(0xffff8c00),
   Color(0xfff80032),
@@ -306,6 +308,15 @@ class _LandingPage extends StatelessWidget {
                         icon: Icons.two_wheeler,
                         dark: false,
                         onPressed: onRider,
+                      ),
+                      _PillButton(
+                        label: 'Download on Android',
+                        icon: Icons.android,
+                        dark: false,
+                        onPressed: () => launchUrl(
+                          Uri.parse(_androidDownloadUrl),
+                          mode: LaunchMode.externalApplication,
+                        ),
                       ),
                     ],
                   ),
