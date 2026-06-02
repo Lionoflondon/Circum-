@@ -24,8 +24,6 @@ const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _adminHostingTarget = bool.fromEnvironment('CIRCUM_ADMIN_HOSTING');
-const _androidDownloadUrl =
-    'https://play.google.com/store/apps/details?id=com.circum.app';
 const _spectrumGradient = [
   Color(0xffff8c00),
   Color(0xfff80032),
@@ -325,25 +323,9 @@ class _LandingPage extends StatelessWidget {
                         dark: false,
                         onPressed: onHealthPlus,
                       ),
-                      _PillButton(
-                        label: 'Download on Android',
-                        icon: Icons.android,
-                        dark: false,
-                        onPressed: () => launchUrl(
-                          Uri.parse(_androidDownloadUrl),
-                          mode: LaunchMode.externalApplication,
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 58),
-                  _HomepageChoices(
-                    colors: colors,
-                    onSendParcel: onStart,
-                    onRider: onRider,
-                    onHealthPlus: onHealthPlus,
-                  ),
-                  const SizedBox(height: 28),
                   _HeroMockup(colors: colors, onStart: onStart),
                 ],
               ),
@@ -352,163 +334,6 @@ class _LandingPage extends StatelessWidget {
           _FeatureBand(colors: colors),
           _LandingFooter(colors: colors),
         ],
-      ),
-    );
-  }
-}
-
-class _HomepageChoices extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onSendParcel;
-  final VoidCallback onRider;
-  final VoidCallback onHealthPlus;
-
-  const _HomepageChoices({
-    required this.colors,
-    required this.onSendParcel,
-    required this.onRider,
-    required this.onHealthPlus,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final compact = constraints.maxWidth < 760;
-      final cards = [
-        _HomepageChoiceCard(
-          colors: colors,
-          icon: Icons.local_shipping_outlined,
-          title: 'Send Parcel',
-          subtitle: 'Parcel pickup and delivery',
-          description: 'Book a standard Circum delivery and track your parcel.',
-          cta: 'Send a parcel',
-          onTap: onSendParcel,
-        ),
-        _HomepageChoiceCard(
-          colors: colors,
-          icon: Icons.two_wheeler,
-          title: 'Rider',
-          subtitle: 'Earn with Circum',
-          description: 'Join the rider network and accept local delivery jobs.',
-          cta: 'Become a rider',
-          onTap: onRider,
-        ),
-        _HomepageChoiceCard(
-          colors: colors,
-          icon: Icons.health_and_safety,
-          title: 'Health+',
-          subtitle: 'Medication & prescription pickup',
-          description: 'Schedule one-off or recurring prescription pickups.',
-          cta: 'Get started with Health+',
-          onTap: onHealthPlus,
-        ),
-      ];
-
-      if (compact) {
-        return Column(
-          children: cards
-              .map((card) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: card,
-                  ))
-              .toList(),
-        );
-      }
-
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: cards
-            .map((card) => Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: card,
-                  ),
-                ))
-            .toList(),
-      );
-    });
-  }
-}
-
-class _HomepageChoiceCard extends StatelessWidget {
-  final _CircumColors colors;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String description;
-  final String cta;
-  final VoidCallback onTap;
-
-  const _HomepageChoiceCard({
-    required this.colors,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.description,
-    required this.cta,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        height: 206,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: colors.panel.withOpacity(colors.dark ? 0.84 : 0.92),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(colors.dark ? 0.28 : 0.08),
-              blurRadius: 22,
-              offset: const Offset(0, 14),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: colors.text, size: 30),
-            const Spacer(),
-            Text(
-              title,
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              style: TextStyle(
-                color: colors.mutedText,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              cta,
-              style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
