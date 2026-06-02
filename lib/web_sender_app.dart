@@ -3188,21 +3188,55 @@ class _AdminActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 6,
-      children: actions
-          .map(
-            (action) => OutlinedButton(
-              onPressed: action.enabled ? action.onTap : null,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: colors.text,
-                side: BorderSide(color: colors.border),
-                visualDensity: VisualDensity.compact,
-              ),
-              child: Text(action.label),
-            ),
-          )
-          .toList(),
+    final narrow = MediaQuery.sizeOf(context).width < 768;
+    final buttons = actions.map(_buttonFor).toList(growable: false);
+    if (narrow) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 120, maxWidth: 220),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[
+              buttons[i],
+              if (i != buttons.length - 1) const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      );
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 420),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: buttons,
+      ),
+    );
+  }
+
+  Widget _buttonFor(_AdminAction action) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 96),
+      child: OutlinedButton(
+        onPressed: action.enabled ? action.onTap : null,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colors.text,
+          side: BorderSide(color: colors.border),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(
+          action.label,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }
@@ -13152,6 +13186,16 @@ class _AddressFieldState extends State<_AddressField> {
     if (value.length < 3) return const [];
     final clean = value.replaceAll(RegExp(r'\s+'), ' ');
     if (clean.toLowerCase().contains('united kingdom')) return const [];
+    final typed = clean.toLowerCase();
+    final seeded = _ukAddressSuggestionSeeds
+        .where((address) {
+          final lower = address.toLowerCase();
+          final words = typed.split(' ').where((word) => word.isNotEmpty);
+          return words.every(lower.contains);
+        })
+        .take(4)
+        .toList(growable: false);
+    if (seeded.isNotEmpty) return seeded;
     final postcodeLike = RegExp(r'[A-Z]{1,2}\d', caseSensitive: false)
         .hasMatch(clean.replaceAll(' ', ''));
     final city = postcodeLike ? 'London' : 'Greater London';
@@ -13227,6 +13271,25 @@ class _AddressFieldState extends State<_AddressField> {
     );
   }
 }
+
+const _ukAddressSuggestionSeeds = [
+  '10 Downing Street, Westminster, London SW1A 2AA, United Kingdom',
+  '221B Baker Street, Marylebone, London NW1 6XE, United Kingdom',
+  '1 Canada Square, Canary Wharf, London E14 5AB, United Kingdom',
+  'The Shard, 32 London Bridge Street, London SE1 9SG, United Kingdom',
+  'Westfield London, Ariel Way, London W12 7GF, United Kingdom',
+  'Selfridges, 400 Oxford Street, London W1A 1AB, United Kingdom',
+  'King\'s Cross Station, Euston Road, London N1C 4TB, United Kingdom',
+  'Manchester Piccadilly Station, Manchester M1 2BN, United Kingdom',
+  'Bullring, Birmingham B5 4BU, United Kingdom',
+  'Cabot Circus, Bristol BS1 3BD, United Kingdom',
+  'St James Quarter, Edinburgh EH1 3AD, United Kingdom',
+  'Cardiff Central Station, Cardiff CF10 1EP, United Kingdom',
+  'Leeds Station, New Station Street, Leeds LS1 4DY, United Kingdom',
+  'Liverpool ONE, Liverpool L1 8JQ, United Kingdom',
+  'Brighton Station, Queens Road, Brighton BN1 3XP, United Kingdom',
+  'Oxford City Centre, Oxford OX1 1BX, United Kingdom',
+];
 
 class _InputBox extends StatelessWidget {
   final _CircumColors colors;
