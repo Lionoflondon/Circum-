@@ -9972,18 +9972,20 @@ class _DetailsStep extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _InputBox(
+                    child: _CompactSelectBox(
                       colors: colors,
                       controller: scheduledPickupDate,
-                      hint: 'Pickup date',
+                      label: 'Pickup date',
+                      options: _scheduleDateOptions,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _InputBox(
+                    child: _CompactSelectBox(
                       colors: colors,
                       controller: scheduledPickupWindow,
-                      hint: 'Pickup time window',
+                      label: 'Pickup window',
+                      options: _pickupWindowOptions,
                     ),
                   ),
                 ],
@@ -9992,18 +9994,20 @@ class _DetailsStep extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _InputBox(
+                    child: _CompactSelectBox(
                       colors: colors,
                       controller: scheduledDropoffDate,
-                      hint: 'Delivery date',
+                      label: 'Delivery date',
+                      options: _scheduleDateOptions,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _InputBox(
+                    child: _CompactSelectBox(
                       colors: colors,
                       controller: scheduledDropoffWindow,
-                      hint: 'Delivery time window',
+                      label: 'Delivery window',
+                      options: _deliveryWindowOptions,
                     ),
                   ),
                 ],
@@ -12236,6 +12240,127 @@ class _InputBox extends StatelessWidget {
           borderSide: BorderSide.none,
           borderRadius: BorderRadius.circular(16),
         ),
+      ),
+    );
+  }
+}
+
+const _scheduleDateOptions = [
+  'Today',
+  'Tomorrow',
+  'Next 2 days',
+  'This week',
+  'Choose later',
+];
+
+const _pickupWindowOptions = [
+  'ASAP',
+  'Morning',
+  'Afternoon',
+  'Evening',
+  'Flexible',
+];
+
+const _deliveryWindowOptions = [
+  'Same day',
+  'Morning',
+  'Afternoon',
+  'Evening',
+  'Flexible',
+];
+
+class _CompactSelectBox extends StatefulWidget {
+  final _CircumColors colors;
+  final TextEditingController controller;
+  final String label;
+  final List<String> options;
+
+  const _CompactSelectBox({
+    required this.colors,
+    required this.controller,
+    required this.label,
+    required this.options,
+  });
+
+  @override
+  State<_CompactSelectBox> createState() => _CompactSelectBoxState();
+}
+
+class _CompactSelectBoxState extends State<_CompactSelectBox> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleControllerChange);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleControllerChange);
+    super.dispose();
+  }
+
+  void _handleControllerChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final selected = widget.options.contains(widget.controller.text)
+        ? widget.controller.text
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 10, 5),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.label,
+            style: TextStyle(color: colors.mutedText, fontSize: 11),
+          ),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selected,
+              isExpanded: true,
+              isDense: true,
+              hint: Text(
+                'Select',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              icon: Icon(Icons.expand_more, color: colors.text, size: 18),
+              dropdownColor: colors.panel,
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+              items: widget.options
+                  .map(
+                    (option) => DropdownMenuItem<String>(
+                      value: option,
+                      child: Text(
+                        option,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                widget.controller.text = value;
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
