@@ -416,7 +416,7 @@ class _HomepageChoices extends StatelessWidget {
       }
 
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: cards
             .map((card) => Expanded(
                   child: Padding(
