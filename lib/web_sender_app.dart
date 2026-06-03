@@ -3307,7 +3307,7 @@ class _AdminActions extends StatelessWidget {
     final buttons = actions.map(_buttonFor).toList(growable: false);
     if (narrow) {
       return ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 120, maxWidth: 220),
+        constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
@@ -3321,10 +3321,10 @@ class _AdminActions extends StatelessWidget {
       );
     }
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 420),
+      constraints: const BoxConstraints(minWidth: 300),
       child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+        spacing: 10,
+        runSpacing: 10,
         alignment: WrapAlignment.start,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: buttons,
@@ -3335,7 +3335,7 @@ class _AdminActions extends StatelessWidget {
   Widget _buttonFor(_AdminAction action) {
     final intent = _adminActionColor(action.label);
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 96),
+      constraints: const BoxConstraints(minWidth: 108),
       child: OutlinedButton(
         onPressed: action.enabled ? action.onTap : null,
         style: OutlinedButton.styleFrom(
