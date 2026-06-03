@@ -811,8 +811,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .where((value) => value != null)
         .map((value) => '$value'.toLowerCase())
         .join(' ')
-            .toLowerCase()
-            .trim();
+        .toLowerCase()
+        .trim();
     if (raw.contains('suspend')) return 'suspended';
     if (raw.contains('reject')) return 'rejected';
     if (raw.contains('active') ||
@@ -860,8 +860,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await FirebaseFirestore.instance.collection('riderProfiles').doc(id).set({
       'approvalStatus': nextStatus,
       'driverStatus': driverStatus,
-      'verificationStatus':
-          nextStatus == 'approved' ? 'approved' : nextStatus,
+      'verificationStatus': nextStatus == 'approved' ? 'approved' : nextStatus,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     await _writeAudit(AdminAuditEntry(
@@ -880,7 +879,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     ));
     setState(() {
       _message = 'Driver $id updated to $nextStatus.';
-      if (_selectedDriverProfile != null && _driverId(_selectedDriverProfile!) == id) {
+      if (_selectedDriverProfile != null &&
+          _driverId(_selectedDriverProfile!) == id) {
         _selectedDriverProfile = {
           ..._selectedDriverProfile!,
           'approvalStatus': nextStatus,
@@ -1365,7 +1365,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               _AdminDriverProfileDrawer(
                 colors: colors,
                 driver: _selectedDriverProfile!,
-                documents: _documentsForDriver(_driverId(_selectedDriverProfile!)),
+                documents:
+                    _documentsForDriver(_driverId(_selectedDriverProfile!)),
                 statusLabel: _driverStatusLabel(_selectedDriverProfile!),
                 signupDate:
                     _adminDateText(_selectedDriverProfile!['createdAt']),
@@ -1457,7 +1458,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'riderName',
             'status'
           ]),
-          columns: const ['ID', 'Route', 'Status', 'Price', 'Actions'],
+          columns: const [
+            'ID',
+            'Route',
+            'Status',
+            'Weight / IRIS',
+            'Price',
+            'Actions'
+          ],
           rowBuilder: _deliveryRow,
           emptyText: 'No delivery records yet.',
         ),
@@ -1587,6 +1595,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           '${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}\n→ ${item['dropoffAddress'] ?? ''}'),
       _AdminStatusCell(
           colors: widget.colors, status: '${item['status'] ?? 'requested'}'),
+      _AdminCell(_adminIrisWeightSummary(item)),
       _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
       _AdminActions(
         colors: widget.colors,
@@ -1877,6 +1886,25 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         item['amount'] ?? item['price'] ?? item['quote'] ?? item['total'];
     if (value is num) return value.toDouble();
     return double.tryParse('$value') ?? 0;
+  }
+
+  String _adminIrisWeightSummary(Map<String, dynamic> item) {
+    final learning = item['irisLearningData'] is Map
+        ? Map<String, dynamic>.from(item['irisLearningData'] as Map)
+        : const <String, dynamic>{};
+    final finalWeight = item['finalWeightUsed'] ??
+        item['finalChargeableWeight'] ??
+        item['confirmedWeightKg'] ??
+        item['weightKg'] ??
+        'n/a';
+    final source = item['weightSource'] ??
+        item['irisWeightSource'] ??
+        learning['source'] ??
+        'unknown';
+    final reason = '${learning['reason'] ?? ''}'.trim();
+    return reason.isEmpty
+        ? '$finalWeight kg\n$source'
+        : '$finalWeight kg\n$source\n$reason';
   }
 }
 
@@ -3097,35 +3125,35 @@ class _AdminMetricCard extends StatelessWidget {
         child: _GlassPanel(
           colors: colors,
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 34,
-              height: 4,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: _spectrumGradient),
-                borderRadius: BorderRadius.circular(999),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 4,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: _spectrumGradient),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: TextStyle(
-                color: colors.mutedText,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
+              const SizedBox(height: 12),
+              Text(
+                label,
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
@@ -3385,7 +3413,8 @@ class _AdminNavButton extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 7),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: selected ? const LinearGradient(colors: _spectrumGradient) : null,
+          gradient:
+              selected ? const LinearGradient(colors: _spectrumGradient) : null,
           borderRadius: BorderRadius.circular(16),
           boxShadow: selected
               ? [
@@ -3409,7 +3438,8 @@ class _AdminNavButton extends StatelessWidget {
             ),
           ),
           selectedTileColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
     );
@@ -7202,6 +7232,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _irisWeightExplanation;
   String? _irisWeightSource;
   double? _irisWeightConfidenceScore;
+  double? _irisHistoricalVerifiedWeightKg;
+  String? _irisLearningReason;
   double? _senderEnteredWeightKg;
   double? _confirmedWeightKg;
   String? _confirmedWeightBand;
@@ -7449,6 +7481,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           irisWeightExplanation: _irisWeightExplanation,
           senderEnteredWeightKg: _senderEnteredWeightKg,
           pricingWeightKg: _confirmedWeightKg,
+          weightSource: _weightSourceText,
           pricingReason: _weightPricingReason,
           verificationRequired: _weightVerificationRequired,
           weightMessage: _weightMessage,
@@ -7626,8 +7659,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   String get _weightSourceText {
     return switch (_weightSource) {
-      'iris_confirmed' => 'Iris estimate confirmed by sender',
-      'manual' => 'Manual sender entry',
+      'catalogue_match' => 'Catalogue Match',
+      'verified_parcel_history' => 'Past Verified Parcels',
+      'iris_confirmed' => 'IRIS estimate confirmed by sender',
+      'customer_declared' || 'manual' => 'Customer Declared',
       _ => 'Not confirmed',
     };
   }
@@ -7957,7 +7992,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (!mounted) return;
     final senderWeight =
         DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
-    final estimate = _estimateWeightWithIris();
+    final estimate = await _estimateWeightWithIris();
     final decision = _resolvePricingWeight(
       estimate: estimate,
       senderWeightKg: senderWeight > 0 ? senderWeight : null,
@@ -7970,6 +8005,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _irisWeightExplanation = estimate.explanation;
       _irisWeightSource = estimate.weightSource;
       _irisWeightConfidenceScore = estimate.confidenceScore;
+      _irisHistoricalVerifiedWeightKg = estimate.historicalVerifiedWeightKg;
+      _irisLearningReason = estimate.learningReason;
       _weightVerificationRequired = decision.verificationRequired;
       _weightPricingReason = decision.reason;
       _analyzing = false;
@@ -8103,37 +8140,43 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         weightBand: higherBand.category,
         source: estimate.weightKg > (senderWeightKg ?? 0)
             ? 'iris_low_confidence_review'
-            : 'manual',
+            : 'customer_declared',
         message: significantDifference
             ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the rider will verify at pickup.'
-            : 'Iris confidence is low. Confirm your weight to continue.',
+            : 'IRIS has analysed this item and selected the most reliable weight available.',
         reason:
-            'Highest weight used for pricing; low-confidence Iris estimate flagged for pickup verification.',
+            'IRIS selected the most reliable weight available for fair pricing.',
         verificationRequired: true,
       );
     }
 
+    final source = estimate.weightKg >= (senderWeightKg ?? 0)
+        ? estimate.weightSource == 'known_product_lookup'
+            ? 'catalogue_match'
+            : 'iris_confirmed'
+        : 'customer_declared';
+
     return _WeightPricingDecision(
       weightKg: higherWeight,
       weightBand: higherBand.category,
-      source: estimate.confidence == 'high' &&
-              estimate.weightKg >= (senderWeightKg ?? 0)
-          ? 'iris_confirmed'
-          : 'manual',
+      source: source,
       message: significantDifference
           ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
-          : 'Confirm the parcel weight used for pricing before continuing.',
-      reason: 'Highest credible weight used for pricing accuracy.',
+          : 'IRIS has analysed this item and selected the most reliable weight available.',
+      reason:
+          'IRIS selected the most reliable weight available for fair pricing.',
       verificationRequired: significantDifference,
     );
   }
 
-  _IrisWeightEstimate _estimateWeightWithIris() {
+  Future<_IrisWeightEstimate> _estimateWeightWithIris() async {
     final text = '${_description.text} ${_pickup.text} ${_dropoff.text}'
         .trim()
         .toLowerCase();
     final knownProduct = _knownProductWeightEstimate(text);
-    if (knownProduct != null) return knownProduct;
+    if (knownProduct != null) {
+      return _applyVerifiedParcelLearning(knownProduct, text);
+    }
 
     double estimate = 2;
     var confidence = 'low';
@@ -8184,7 +8227,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'The item may be oversized or heavy, so sender confirmation is required.';
     }
 
-    return _IrisWeightEstimate(
+    final estimateResult = _IrisWeightEstimate(
       weightKg: estimate,
       weightBand: DeliveryPricing.weightBandFor(estimate).category,
       confidence: confidence,
@@ -8194,6 +8237,103 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       weightSource: 'category_fallback',
       confidenceScore: _scoreForIrisConfidence(confidence),
     );
+    return _applyVerifiedParcelLearning(estimateResult, text);
+  }
+
+  Future<_IrisWeightEstimate> _applyVerifiedParcelLearning(
+    _IrisWeightEstimate base,
+    String text,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return base;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .where('senderId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'completed')
+          .limit(40)
+          .get();
+      final matches = <double>[];
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final description =
+            '${data['packageDescription'] ?? data['description'] ?? ''}'
+                .toLowerCase();
+        if (!_looksLikeSimilarParcel(text, description)) continue;
+        final verified = _readWeightKg(data['finalVerifiedWeight']) ??
+            _readWeightKg(data['riderVerifiedWeight']) ??
+            _readWeightKg(data['driverReportedWeightKg']) ??
+            _readWeightKg(data['finalWeightUsed']) ??
+            _readWeightKg(data['finalChargeableWeight']);
+        if (verified != null && verified > 0) matches.add(verified);
+      }
+      if (matches.isEmpty) return base;
+      matches.sort();
+      final high = matches.last;
+      final low = matches.first;
+      final baseBand = DeliveryPricing.weightBandFor(base.weightKg).category;
+      final learnedBand = DeliveryPricing.weightBandFor(high).category;
+      if (high <= base.weightKg || learnedBand == baseBand) {
+        return base.copyWith(
+          historicalVerifiedWeightKg: high,
+          learningReason:
+              'Similar completed parcels were verified at ${_formatWeight(low)}–${_formatWeight(high)}kg.',
+        );
+      }
+      return base.copyWith(
+        weightKg: high,
+        weightBand: learnedBand,
+        confidence: base.confidence == 'low' ? 'medium' : base.confidence,
+        confidenceScore: base.confidenceScore == null
+            ? 0.7
+            : base.confidenceScore!.clamp(0.7, 0.9).toDouble(),
+        explanation:
+            'Similar completed parcels were verified at ${_formatWeight(low)}–${_formatWeight(high)}kg.',
+        weightSource: 'verified_parcel_history',
+        truthBand: 'High Confidence',
+        historicalVerifiedWeightKg: high,
+        learningReason:
+            'Similar completed parcels were verified at ${_formatWeight(low)}–${_formatWeight(high)}kg.',
+      );
+    } catch (_) {
+      return base;
+    }
+  }
+
+  bool _looksLikeSimilarParcel(String current, String previous) {
+    final currentTokens = _parcelTokens(current);
+    final previousTokens = _parcelTokens(previous);
+    if (currentTokens.isEmpty || previousTokens.isEmpty) return false;
+    return currentTokens.intersection(previousTokens).length >= 2 ||
+        currentTokens.any(previousTokens.contains);
+  }
+
+  Set<String> _parcelTokens(String value) {
+    const ignored = {
+      'the',
+      'and',
+      'for',
+      'with',
+      'parcel',
+      'package',
+      'delivery',
+      'send',
+      'box',
+    };
+    return value
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((token) => token.length > 2 && !ignored.contains(token))
+        .toSet();
+  }
+
+  double? _readWeightKg(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final parsed = DeliveryPricing.parseWeightKg(value, fallbackKg: 0);
+      return parsed > 0 ? parsed : null;
+    }
+    return null;
   }
 
   _IrisWeightEstimate? _knownProductWeightEstimate(String text) {
@@ -8207,6 +8347,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       packageType: product.packageType,
       requiresVehicleReview: product.requiresVehicleReview,
       weightSource: product.weightSource,
+      truthBand: product.truthBand,
       confidenceScore: product.confidenceScore,
     );
   }
@@ -8234,6 +8375,34 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   double _irisConfidenceScore() {
     return _irisWeightConfidenceScore ??
         _scoreForIrisConfidence(_irisWeightConfidence);
+  }
+
+  String _irisTruthBand() {
+    if (_irisWeightSource == 'known_product_lookup') return 'Exact Match';
+    if (_irisWeightSource == 'verified_parcel_history') {
+      return 'High Confidence';
+    }
+    return switch ((_irisWeightConfidence ?? '').toLowerCase()) {
+      'high' => 'High Confidence',
+      'medium' => 'Medium Confidence',
+      'low' => 'Low Confidence',
+      _ => 'Low Confidence',
+    };
+  }
+
+  Map<String, dynamic>? _irisLearningData() {
+    if (_irisHistoricalVerifiedWeightKg == null &&
+        (_irisLearningReason == null || _irisLearningReason!.trim().isEmpty)) {
+      return null;
+    }
+    return {
+      'source': 'completed_sender_delivery_history',
+      'historicalVerifiedWeightKg': _irisHistoricalVerifiedWeightKg,
+      'reason': _irisLearningReason,
+      'matchedDescription': _description.text.trim(),
+      'adminReviewStatus': 'open',
+      'canAdminOverride': true,
+    };
   }
 
   double _scoreForIrisConfidence(String? confidence) {
@@ -8842,8 +9011,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
       'irisWeightSource': _irisWeightSource ?? 'unknown',
+      'catalogueMatchWeight': _irisWeightSource == 'known_product_lookup'
+          ? _irisEstimatedWeightKg
+          : null,
+      'aiEstimatedWeight': _irisWeightSource == 'known_product_lookup'
+          ? null
+          : _irisEstimatedWeightKg,
       'irisVerified': irisVerified,
       'irisConfidence': _irisWeightConfidence ?? 'unknown',
+      'irisTruthBand': _irisTruthBand(),
+      'irisLearningData': _irisLearningData(),
       'finalChargeableWeight': _confirmedWeightKg,
       'finalWeight': _confirmedWeightKg,
       'finalWeightUsed': _confirmedWeightKg,
@@ -8871,8 +9048,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
       'irisWeightSource': _irisWeightSource ?? 'unknown',
+      'catalogueMatchWeight': _irisWeightSource == 'known_product_lookup'
+          ? _irisEstimatedWeightKg
+          : null,
+      'aiEstimatedWeight': _irisWeightSource == 'known_product_lookup'
+          ? null
+          : _irisEstimatedWeightKg,
       'irisVerified': irisVerified,
       'irisConfidence': _irisWeightConfidence ?? 'unknown',
+      'irisTruthBand': _irisTruthBand(),
+      'irisLearningData': _irisLearningData(),
       'finalChargeableWeight': _confirmedWeightKg,
       'finalWeight': _confirmedWeightKg,
       'finalWeightUsed': _confirmedWeightKg,
@@ -10111,6 +10296,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
   final String? explanation;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
+  final String weightSource;
   final String? pricingReason;
   final bool verificationRequired;
   final String message;
@@ -10124,6 +10310,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
     required this.explanation,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
+    required this.weightSource,
     required this.pricingReason,
     required this.verificationRequired,
     required this.message,
@@ -10164,10 +10351,15 @@ class _WeightConfirmationPanel extends StatelessWidget {
             ),
           ],
           if (pricingWeightKg != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '✓ Weight Used: ${pricingWeightKg!.toStringAsFixed(pricingWeightKg!.truncateToDouble() == pricingWeightKg ? 0 : 3)}kg',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 4),
             Text(
-              'Weight used for pricing: ${pricingWeightKg!.toStringAsFixed(pricingWeightKg!.truncateToDouble() == pricingWeightKg ? 0 : 1)} kg',
-              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+              '✓ Source: $weightSource',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
             ),
           ],
           if (explanation != null && explanation!.trim().isNotEmpty) ...[
@@ -10180,10 +10372,27 @@ class _WeightConfirmationPanel extends StatelessWidget {
           if (pricingReason != null && pricingReason!.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              'Reason: $pricingReason',
+              pricingReason!,
               style: TextStyle(color: colors.mutedText, height: 1.35),
             ),
           ],
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: () => _showIrisInfo(context),
+            icon: Icon(Icons.info_outline, color: colors.adminAccent, size: 18),
+            label: Text(
+              'Learn how IRIS works',
+              style: TextStyle(
+                color: colors.adminAccent,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
           if (verificationRequired) ...[
             const SizedBox(height: 6),
             Text(
@@ -10200,6 +10409,35 @@ class _WeightConfirmationPanel extends StatelessWidget {
               label: const Text('Accept pricing weight'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  void _showIrisInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: colors.panel,
+        title: Text(
+          'How IRIS works',
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'IRIS compares:\n'
+          '• Item description\n'
+          '• Product catalogue matches\n'
+          '• Image analysis, if provided\n'
+          '• Customer declared weight\n'
+          '• Rider verification\n\n'
+          'To ensure fair pricing, the most reliable credible weight is used.',
+          style: TextStyle(color: colors.mutedText, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -11026,6 +11264,7 @@ class _DetailsStep extends StatelessWidget {
   final String? irisWeightExplanation;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
+  final String weightSource;
   final String? pricingReason;
   final bool verificationRequired;
   final String? weightMessage;
@@ -11053,6 +11292,7 @@ class _DetailsStep extends StatelessWidget {
     required this.irisWeightExplanation,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
+    required this.weightSource,
     required this.pricingReason,
     required this.verificationRequired,
     required this.weightMessage,
@@ -11239,6 +11479,7 @@ class _DetailsStep extends StatelessWidget {
                   explanation: irisWeightExplanation,
                   senderEnteredWeightKg: senderEnteredWeightKg,
                   pricingWeightKg: pricingWeightKg,
+                  weightSource: weightSource,
                   pricingReason: pricingReason,
                   verificationRequired: verificationRequired,
                   message: weightMessage!,
@@ -12295,7 +12536,10 @@ class _IrisWeightEstimate {
   final String packageType;
   final bool requiresVehicleReview;
   final String weightSource;
+  final String truthBand;
   final double? confidenceScore;
+  final double? historicalVerifiedWeightKg;
+  final String? learningReason;
 
   const _IrisWeightEstimate({
     required this.weightKg,
@@ -12305,8 +12549,41 @@ class _IrisWeightEstimate {
     required this.packageType,
     required this.requiresVehicleReview,
     this.weightSource = 'category_fallback',
+    this.truthBand = 'Low Confidence',
     this.confidenceScore,
+    this.historicalVerifiedWeightKg,
+    this.learningReason,
   });
+
+  _IrisWeightEstimate copyWith({
+    double? weightKg,
+    String? weightBand,
+    String? confidence,
+    String? explanation,
+    String? packageType,
+    bool? requiresVehicleReview,
+    String? weightSource,
+    String? truthBand,
+    double? confidenceScore,
+    double? historicalVerifiedWeightKg,
+    String? learningReason,
+  }) {
+    return _IrisWeightEstimate(
+      weightKg: weightKg ?? this.weightKg,
+      weightBand: weightBand ?? this.weightBand,
+      confidence: confidence ?? this.confidence,
+      explanation: explanation ?? this.explanation,
+      packageType: packageType ?? this.packageType,
+      requiresVehicleReview:
+          requiresVehicleReview ?? this.requiresVehicleReview,
+      weightSource: weightSource ?? this.weightSource,
+      truthBand: truthBand ?? this.truthBand,
+      confidenceScore: confidenceScore ?? this.confidenceScore,
+      historicalVerifiedWeightKg:
+          historicalVerifiedWeightKg ?? this.historicalVerifiedWeightKg,
+      learningReason: learningReason ?? this.learningReason,
+    );
+  }
 }
 
 class _WeightPricingDecision {
@@ -12628,7 +12905,7 @@ class _PaymentStep extends StatelessWidget {
               if (pricingReason != null && pricingReason!.trim().isNotEmpty)
                 _PriceLine(
                   colors: colors,
-                  label: 'Reason',
+                  label: 'IRIS note',
                   value: pricingReason!,
                 ),
               Divider(color: colors.border, height: 26),
@@ -15014,8 +15291,10 @@ class _CircumColors {
   Color get warning => const Color(0xfff59e0b);
   Color get adminChrome =>
       dark ? const Color(0xff07111f) : const Color(0xfff8fbff);
-  Color get adminAccent => dark ? const Color(0xff38bdf8) : const Color(0xff2563eb);
-  Color get adminGlow => dark ? const Color(0xffa855f7) : const Color(0xff38bdf8);
+  Color get adminAccent =>
+      dark ? const Color(0xff38bdf8) : const Color(0xff2563eb);
+  Color get adminGlow =>
+      dark ? const Color(0xffa855f7) : const Color(0xff38bdf8);
 }
 
 class _VehicleOption {

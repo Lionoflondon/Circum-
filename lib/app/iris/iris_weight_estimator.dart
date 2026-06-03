@@ -8,6 +8,7 @@ class IrisWeightLookupResult {
   final String explanation;
   final String packageType;
   final String weightSource;
+  final String truthBand;
   final bool requiresVehicleReview;
 
   const IrisWeightLookupResult({
@@ -18,6 +19,7 @@ class IrisWeightLookupResult {
     required this.explanation,
     required this.packageType,
     required this.weightSource,
+    required this.truthBand,
     required this.requiresVehicleReview,
   });
 }
@@ -37,6 +39,7 @@ class IrisWeightEstimator {
               'Iris matched the description to ${product.name} using Circum known-product data.',
           packageType: product.packageType,
           weightSource: 'known_product_lookup',
+          truthBand: product.truthBand,
           requiresVehicleReview: product.weightKg > 10,
         );
       }
@@ -50,6 +53,21 @@ class IrisWeightEstimator {
       name: 'Apple iPhone 13',
       weightKg: 0.174,
       packageType: 'Phone',
+      truthBand: 'Exact Match',
+    ),
+    _KnownIrisProduct(
+      patterns: ['iphone 15', 'apple iphone 15'],
+      name: 'Apple iPhone 15',
+      weightKg: 0.171,
+      packageType: 'Phone',
+      truthBand: 'Exact Match',
+    ),
+    _KnownIrisProduct(
+      patterns: ['airpods pro', 'apple airpods pro'],
+      name: 'AirPods Pro',
+      weightKg: 0.056,
+      packageType: 'Earphones',
+      truthBand: 'Exact Match',
     ),
     _KnownIrisProduct(
       patterns: ['iphone 14', 'apple iphone 14'],
@@ -103,6 +121,7 @@ class _KnownIrisProduct {
   final String packageType;
   final String confidence;
   final double confidenceScore;
+  final String truthBand;
 
   const _KnownIrisProduct({
     required this.patterns,
@@ -111,5 +130,6 @@ class _KnownIrisProduct {
     required this.packageType,
     this.confidence = 'high',
     this.confidenceScore = 0.9,
+    this.truthBand = 'Very High Confidence',
   });
 }
