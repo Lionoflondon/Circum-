@@ -1281,6 +1281,36 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       body: SafeArea(
         child: Stack(
           children: [
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.topLeft,
+                    radius: 1.1,
+                    colors: [
+                      Color(0x3322d3ee),
+                      Color(0x221e3a8a),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [
+                      Color(0x22f472b6),
+                      Colors.transparent,
+                      Color(0x1a14b8a6),
+                    ],
+                  ),
+                ),
+              ),
+            ),
             Row(
               children: [
                 if (!mobile)
@@ -2140,6 +2170,20 @@ class _AdminUsersSection extends StatelessWidget {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
+                    columnSpacing: 24,
+                    horizontalMargin: 16,
+                    dataRowMinHeight: 58,
+                    dataRowMaxHeight: 82,
+                    headingRowColor: WidgetStatePropertyAll(
+                      colors.adminAccent.withOpacity(0.10),
+                    ),
+                    dataRowColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return colors.adminAccent.withOpacity(0.08);
+                      }
+                      return Colors.transparent;
+                    }),
+                    dividerThickness: 0.5,
                     headingTextStyle: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w900,
@@ -2243,8 +2287,15 @@ class _AdminSidebar extends StatelessWidget {
     return Container(
       width: 260,
       decoration: BoxDecoration(
-        color: colors.panel,
+        color: colors.adminChrome.withOpacity(colors.dark ? 0.9 : 0.82),
         border: Border(right: BorderSide(color: colors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff38bdf8).withOpacity(0.12),
+            blurRadius: 28,
+            offset: const Offset(10, 0),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -2338,8 +2389,15 @@ class _AdminTopBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
       decoration: BoxDecoration(
-        color: colors.background,
+        color: colors.adminChrome.withOpacity(colors.dark ? 0.88 : 0.78),
         border: Border(bottom: BorderSide(color: colors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff8b5cf6).withOpacity(0.10),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -3025,11 +3083,31 @@ class _AdminMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 190,
-      child: _GlassPanel(
-        colors: colors,
-        child: Column(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: colors.adminAccent.withOpacity(0.16),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: _GlassPanel(
+          colors: colors,
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: 34,
+              height: 4,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: _spectrumGradient),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 12),
             Text(
               label,
               style: TextStyle(
@@ -3048,6 +3126,7 @@ class _AdminMetricCard extends StatelessWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
@@ -3155,10 +3234,18 @@ class _AdminStatusCell extends StatelessWidget {
             ? const Color(0xffdc2626)
             : const Color(0xffca8a04);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withOpacity(colors.dark ? 0.16 : 0.11),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.36)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Text(
         status,
@@ -3218,16 +3305,25 @@ class _AdminActions extends StatelessWidget {
   }
 
   Widget _buttonFor(_AdminAction action) {
+    final intent = _adminActionColor(action.label);
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 96),
       child: OutlinedButton(
         onPressed: action.enabled ? action.onTap : null,
         style: OutlinedButton.styleFrom(
-          foregroundColor: colors.text,
-          side: BorderSide(color: colors.border),
+          foregroundColor: intent,
+          backgroundColor: intent.withOpacity(colors.dark ? 0.14 : 0.10),
+          disabledForegroundColor: colors.mutedText,
+          disabledBackgroundColor: colors.field.withOpacity(0.5),
+          side: BorderSide(color: intent.withOpacity(0.55)),
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          shadowColor: intent.withOpacity(0.26),
+          elevation: action.enabled ? 1 : 0,
         ),
         child: Text(
           action.label,
@@ -3238,6 +3334,33 @@ class _AdminActions extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _adminActionColor(String label) {
+    final lower = label.toLowerCase();
+    if (lower.contains('approve') ||
+        lower.contains('resolve') ||
+        lower.contains('delivered') ||
+        lower.contains('collected') ||
+        lower.contains('reactivate')) {
+      return const Color(0xff14b8a6);
+    }
+    if (lower.contains('failed') ||
+        lower.contains('reject') ||
+        lower.contains('suspend') ||
+        lower.contains('cancel') ||
+        lower.contains('delete')) {
+      return const Color(0xfff97316);
+    }
+    if (lower.contains('message') ||
+        lower.contains('chat') ||
+        lower.contains('view')) {
+      return const Color(0xff8b5cf6);
+    }
+    if (lower.contains('duplicate') || lower.contains('assign')) {
+      return const Color(0xff0ea5e9);
+    }
+    return colors.adminAccent;
   }
 }
 
@@ -3260,19 +3383,34 @@ class _AdminNavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
-      child: ListTile(
-        selected: selected,
-        onTap: onTap,
-        leading: Icon(icon, color: selected ? colors.inverseText : colors.text),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: selected ? colors.inverseText : colors.text,
-            fontWeight: FontWeight.w900,
-          ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: selected ? const LinearGradient(colors: _spectrumGradient) : null,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xff38bdf8).withOpacity(0.22),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : null,
         ),
-        selectedTileColor: colors.text,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: ListTile(
+          selected: selected,
+          onTap: onTap,
+          leading: Icon(icon, color: selected ? Colors.white : colors.text),
+          title: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.white : colors.text,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          selectedTileColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
       ),
     );
   }
@@ -14338,14 +14476,27 @@ class _GlassPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colors.panel,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.panel.withOpacity(colors.dark ? 0.92 : 0.96),
+            colors.adminAccent.withOpacity(colors.dark ? 0.10 : 0.06),
+            colors.panel.withOpacity(colors.dark ? 0.86 : 0.94),
+          ],
+        ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.border),
+        border: Border.all(color: colors.adminAccent.withOpacity(0.18)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(colors.dark ? 0.18 : 0.05),
             blurRadius: 18,
             offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: colors.adminGlow.withOpacity(colors.dark ? 0.12 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           )
         ],
       ),
@@ -14861,6 +15012,10 @@ class _CircumColors {
       dark ? const Color(0xff9ca3af) : const Color(0xff6b7280);
   Color get success => const Color(0xff16a34a);
   Color get warning => const Color(0xfff59e0b);
+  Color get adminChrome =>
+      dark ? const Color(0xff07111f) : const Color(0xfff8fbff);
+  Color get adminAccent => dark ? const Color(0xff38bdf8) : const Color(0xff2563eb);
+  Color get adminGlow => dark ? const Color(0xffa855f7) : const Color(0xff38bdf8);
 }
 
 class _VehicleOption {
