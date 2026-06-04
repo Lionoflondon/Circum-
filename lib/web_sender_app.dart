@@ -7188,6 +7188,18 @@ enum _SenderStep {
   profile,
 }
 
+enum _CheckoutState {
+  draft,
+  validating,
+  optionsReady,
+  awaitingPayment,
+  processingPayment,
+  bookingCreated,
+  matchingRiders,
+  riderAssigned,
+  failed,
+}
+
 class _CustomerPortal extends StatefulWidget {
   final bool darkMode;
   final _CircumColors colors;
@@ -7259,6 +7271,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   _VehicleOption _selectedVehicle = _vehicles.first;
   String _selectedSpeed = 'Standard';
   HealthPlusFrequency _healthFrequency = HealthPlusFrequency.oneOff;
+  _CheckoutState _checkoutState = _CheckoutState.draft;
   bool _analyzing = false;
   bool _broadcasting = false;
   bool _chatOpen = false;
@@ -7310,6 +7323,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _driverPerformanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _assignedDriverRatingsSub;
+
+  bool get _matchingHasStarted =>
+      _checkoutState == _CheckoutState.matchingRiders ||
+      _checkoutState == _CheckoutState.riderAssigned;
 
   final List<_ChatMessage> _driverMessages = [
     _ChatMessage(
@@ -7400,6 +7417,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           weightKg: _deliveryClassification.finalWeightKg,
                           breakdown: _quoteBreakdown,
                           step: _step,
+                          checkoutState: _checkoutState,
                           firebaseOnline: _firebaseOnline,
                           firebaseError: _firebaseError,
                           statusIndex: _statusIndex,
@@ -7489,6 +7507,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           pickupVerified: _validatedPickup != null,
           dropoffVerified: _validatedDropoff != null,
           locationValidationMessage: _locationValidationMessage,
+          checkoutState: _checkoutState,
           canSubmit: _canAnalyzeDelivery,
           onPickupSelected: _selectPickupAddress,
           onDropoffSelected: _selectDropoffAddress,
@@ -7535,11 +7554,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               });
               return;
             }
-            setState(() => _selectedVehicle = vehicle);
+            setState(() {
+              _selectedVehicle = vehicle;
+              _checkoutState = _CheckoutState.awaitingPayment;
+            });
           },
-          onSpeed: (speed) => setState(() => _selectedSpeed = speed),
+          onSpeed: (speed) => setState(() {
+            _selectedSpeed = speed;
+            _checkoutState = _CheckoutState.awaitingPayment;
+          }),
           onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onContinue: () => setState(() => _step = _SenderStep.payment),
+          onContinue: () => setState(() {
+            _checkoutState = _CheckoutState.awaitingPayment;
+            _step = _SenderStep.payment;
+          }),
         ),
       _SenderStep.payment => _PaymentStep(
           key: const ValueKey('payment'),
@@ -7554,6 +7582,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           senderEnteredWeightKg: _senderEnteredWeightKg,
           weightKg: _deliveryClassification.finalWeightKg,
           total: _quoteTotal,
+          checkoutState: _checkoutState,
           weightConfirmed: _hasConfirmedWeight,
           weightSource: _weightSourceText,
           pricingReason: _weightPricingReason,
@@ -7561,7 +7590,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
           scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
           scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
-          onBack: () => setState(() => _step = _SenderStep.vehicle),
+          onBack: () => setState(() {
+            if (!_matchingHasStarted) {
+              _checkoutState = _CheckoutState.awaitingPayment;
+            }
+            _step = _SenderStep.vehicle;
+          }),
           onPay: _confirmPayment,
         ),
       _SenderStep.tracking => _TrackingStep(
@@ -7573,6 +7607,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           vehicle: _effectiveVehicle,
           statusIndex: _statusIndex,
           broadcasting: _broadcasting,
+          checkoutState: _checkoutState,
           firebaseOnline: _firebaseOnline,
           firebaseError: _firebaseError,
           assignedDriver: _assignedDriver,
@@ -7809,6 +7844,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _selectPickupAddress(_ValidatedAddress address) {
     setState(() {
+      _checkoutState = _CheckoutState.draft;
+      _broadcasting = false;
       _validatedPickup = address;
       _pickup.text = address.displayAddress;
     });
@@ -7817,6 +7854,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _selectDropoffAddress(_ValidatedAddress address) {
     setState(() {
+      _checkoutState = _CheckoutState.draft;
+      _broadcasting = false;
       _validatedDropoff = address;
       _dropoff.text = address.displayAddress;
     });
@@ -7826,17 +7865,27 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   void _handlePickupEdited(String value) {
     if (_validatedPickup == null) return;
     if (value.trim() == _validatedPickup!.displayAddress) return;
-    setState(() => _validatedPickup = null);
+    setState(() {
+      _checkoutState = _CheckoutState.draft;
+      _broadcasting = false;
+      _validatedPickup = null;
+    });
   }
 
   void _handleDropoffEdited(String value) {
     if (_validatedDropoff == null) return;
     if (value.trim() == _validatedDropoff!.displayAddress) return;
-    setState(() => _validatedDropoff = null);
+    setState(() {
+      _checkoutState = _CheckoutState.draft;
+      _broadcasting = false;
+      _validatedDropoff = null;
+    });
   }
 
   void _applySavedPickupAddress(String address) {
     setState(() {
+      _checkoutState = _CheckoutState.draft;
+      _broadcasting = false;
       _pickup.text = address;
       _validatedPickup = null;
     });
@@ -7844,6 +7893,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _applySavedDropoffAddress(String address) {
     setState(() {
+      _checkoutState = _CheckoutState.draft;
+      _broadcasting = false;
       _dropoff.text = address;
       _validatedDropoff = null;
     });
@@ -8155,10 +8206,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<void> _analyseRequest() async {
     if (!_hasValidatedRoute) {
-      setState(() => _firebaseError = _locationValidationMessage);
+      setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _firebaseError = _locationValidationMessage;
+      });
       return;
     }
-    setState(() => _analyzing = true);
+    setState(() {
+      _checkoutState = _CheckoutState.validating;
+      _analyzing = true;
+      _broadcasting = false;
+    });
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     final senderWeight =
@@ -8181,6 +8239,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weightVerificationRequired = decision.verificationRequired;
       _weightPricingReason = decision.reason;
       _analyzing = false;
+      _checkoutState = decision.weightKg == null
+          ? _CheckoutState.draft
+          : _CheckoutState.optionsReady;
       if (estimate.confidence == 'high' && senderWeight <= 0) {
         _weight.text = _formatWeight(estimate.weightKg);
       }
@@ -8235,6 +8296,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     setState(() {
       _weightMessage =
           'Confirmed parcel weight: ${_formatWeight(decision.weightKg!)} kg.';
+      _checkoutState = _CheckoutState.awaitingPayment;
       _step = _SenderStep.vehicle;
     });
   }
@@ -8259,6 +8321,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weightConfirmedAt = DateTime.now();
       _weightPricingReason = reason;
       _weightVerificationRequired = verificationRequired;
+      if (!_matchingHasStarted) {
+        _checkoutState = _CheckoutState.optionsReady;
+      }
       if (!DeliveryPricing.vehicleCanCarryWeight(
         _selectedVehicle.name,
         weightKg,
@@ -8282,6 +8347,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weightSource = null;
       _weightConfirmedAt = null;
       _weightPricingReason = null;
+      _checkoutState = _CheckoutState.draft;
+      _broadcasting = false;
       _weightMessage = 'Confirm parcel weight before payment.';
     });
   }
@@ -8608,6 +8675,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _confirmPayment() async {
     if (!_hasValidatedRoute) {
       setState(() {
+        _checkoutState = _CheckoutState.failed;
         _firebaseError = _locationValidationMessage;
         _step = _SenderStep.details;
       });
@@ -8615,6 +8683,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     if (!_hasConfirmedWeight) {
       setState(() {
+        _checkoutState = _CheckoutState.failed;
         _weightMessage = 'Confirm parcel weight before payment.';
         _step = _SenderStep.details;
       });
@@ -8630,6 +8699,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       );
       if (!_hasConsistentDispatchClassification) {
         setState(() {
+          _checkoutState = _CheckoutState.failed;
           _firebaseError =
               'This delivery needs recalculation because weight, vehicle, and pricing do not match.';
           _step = _SenderStep.details;
@@ -8640,6 +8710,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_quoteBreakdown.requiresManualQuote ||
         _deliveryClassification.requiresManualReview) {
       setState(() {
+        _checkoutState = _CheckoutState.failed;
         _firebaseError =
             'This delivery needs manual review because the item is heavy or specialist.';
         _step = _SenderStep.payment;
@@ -8649,12 +8720,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final id =
         'CIR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     setState(() {
+      _checkoutState = _CheckoutState.processingPayment;
       _activeOrderId = id;
       _activeRequestDocId = id;
-      _broadcasting = true;
+      _broadcasting = false;
       _statusIndex = 0;
       _firebaseError = null;
-      _step = _SenderStep.tracking;
     });
 
     try {
@@ -8706,10 +8777,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _listenToRequest(id);
       _listenToChat(id);
       if (!mounted) return;
-      setState(() => _firebaseOnline = true);
+      setState(() {
+        _checkoutState = _CheckoutState.matchingRiders;
+        _broadcasting = true;
+        _firebaseOnline = true;
+        _step = _SenderStep.tracking;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _broadcasting = false;
         _firebaseOnline = false;
         _firebaseError =
             'We could not save this delivery just now. Please try again.';
@@ -9435,9 +9513,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final status = '${data['status'] ?? 'requested'}'.toLowerCase();
       final driverId = _driverIdFromRequest(data);
       setState(() {
+        final matchingStatus = status == 'requested' || status == 'pending';
+        if (driverId != null || _statusIndexFromFirebase(status) > 0) {
+          _checkoutState = _CheckoutState.riderAssigned;
+        } else if (matchingStatus &&
+            (_checkoutState == _CheckoutState.bookingCreated ||
+                _checkoutState == _CheckoutState.matchingRiders)) {
+          _checkoutState = _CheckoutState.matchingRiders;
+        }
         _firebaseOnline = true;
         _firebaseError = null;
-        _broadcasting = status == 'requested' || status == 'pending';
+        _broadcasting =
+            _checkoutState == _CheckoutState.matchingRiders && matchingStatus;
         _statusIndex = _statusIndexFromFirebase(status);
       });
       if (driverId != null && driverId != _assignedDriverId) {
@@ -9450,6 +9537,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }, onError: (Object _) {
       if (!mounted) return;
       setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _broadcasting = false;
         _firebaseOnline = false;
         _firebaseError = 'Could not listen to this delivery in Firestore.';
       });
@@ -9930,6 +10019,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _assignedDriverRatingsSub?.cancel();
     setState(() {
       _step = _SenderStep.dashboard;
+      _checkoutState = _CheckoutState.draft;
       _activeOrderId = null;
       _activeRequestDocId = null;
       _assignedDriverId = null;
@@ -9957,6 +10047,7 @@ class _DesktopPortalLayout extends StatelessWidget {
   final double weightKg;
   final DeliveryPricingBreakdown breakdown;
   final _SenderStep step;
+  final _CheckoutState checkoutState;
   final bool firebaseOnline;
   final String? firebaseError;
   final int statusIndex;
@@ -9971,6 +10062,7 @@ class _DesktopPortalLayout extends StatelessWidget {
     required this.weightKg,
     required this.breakdown,
     required this.step,
+    required this.checkoutState,
     required this.firebaseOnline,
     required this.firebaseError,
     required this.statusIndex,
@@ -10123,6 +10215,7 @@ class _DesktopPortalLayout extends StatelessWidget {
                     colors: colors,
                     online: firebaseOnline,
                     error: firebaseError,
+                    checkoutState: checkoutState,
                   ),
                   const SizedBox(height: 18),
                   _GlassPanel(
@@ -11496,6 +11589,7 @@ class _DetailsStep extends StatelessWidget {
   final bool pickupVerified;
   final bool dropoffVerified;
   final String locationValidationMessage;
+  final _CheckoutState checkoutState;
   final bool canSubmit;
   final ValueChanged<_ValidatedAddress> onPickupSelected;
   final ValueChanged<_ValidatedAddress> onDropoffSelected;
@@ -11532,6 +11626,7 @@ class _DetailsStep extends StatelessWidget {
     required this.pickupVerified,
     required this.dropoffVerified,
     required this.locationValidationMessage,
+    required this.checkoutState,
     required this.canSubmit,
     required this.onPickupSelected,
     required this.onDropoffSelected,
@@ -11560,6 +11655,16 @@ class _DetailsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final matchingHasStarted = checkoutState == _CheckoutState.matchingRiders ||
+        checkoutState == _CheckoutState.riderAssigned;
+    final validating = analyzing || checkoutState == _CheckoutState.validating;
+    final ctaLabel = matchingHasStarted
+        ? 'Delivery is connecting'
+        : validating
+            ? 'Checking options...'
+            : canSubmit
+                ? 'See delivery options'
+                : 'Verify addresses before pricing';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -11789,21 +11894,16 @@ class _DetailsStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: analyzing || !canSubmit ? null : onSubmit,
-            icon: analyzing
+            onPressed:
+                validating || matchingHasStarted || !canSubmit ? null : onSubmit,
+            icon: validating
                 ? const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.auto_awesome),
-            label: Text(
-              analyzing
-                  ? 'Checking options...'
-                  : canSubmit
-                      ? 'See delivery options'
-                      : 'Verify addresses before pricing',
-            ),
+            label: Text(ctaLabel),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
               foregroundColor: colors.inverseText,
@@ -13240,6 +13340,7 @@ class _PaymentStep extends StatelessWidget {
   final double? senderEnteredWeightKg;
   final double weightKg;
   final double total;
+  final _CheckoutState checkoutState;
   final bool weightConfirmed;
   final String weightSource;
   final String? pricingReason;
@@ -13263,6 +13364,7 @@ class _PaymentStep extends StatelessWidget {
     required this.senderEnteredWeightKg,
     required this.weightKg,
     required this.total,
+    required this.checkoutState,
     required this.weightConfirmed,
     required this.weightSource,
     required this.pricingReason,
@@ -13287,6 +13389,8 @@ class _PaymentStep extends StatelessWidget {
         scheduledPickupWindow.isNotEmpty ||
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
+    final processingPayment =
+        checkoutState == _CheckoutState.processingPayment;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -13456,12 +13560,21 @@ class _PaymentStep extends StatelessWidget {
           child: FilledButton.icon(
             onPressed: weightConfirmed &&
                     locationsConfirmed &&
-                    !breakdown.requiresManualQuote
+                    !breakdown.requiresManualQuote &&
+                    !processingPayment
                 ? onPay
                 : null,
-            icon: const Icon(Icons.lock),
+            icon: processingPayment
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.lock),
             label: Text(
-              !locationsConfirmed
+              processingPayment
+                  ? 'Processing payment...'
+                  : !locationsConfirmed
                   ? 'Confirm pickup and drop-off before payment'
                   : breakdown.requiresManualQuote
                       ? 'Manual review required'
@@ -13492,6 +13605,7 @@ class _TrackingStep extends StatelessWidget {
   final _VehicleOption vehicle;
   final int statusIndex;
   final bool broadcasting;
+  final _CheckoutState checkoutState;
   final bool firebaseOnline;
   final String? firebaseError;
   final DriverProfile? assignedDriver;
@@ -13520,6 +13634,7 @@ class _TrackingStep extends StatelessWidget {
     required this.vehicle,
     required this.statusIndex,
     required this.broadcasting,
+    required this.checkoutState,
     required this.firebaseOnline,
     required this.firebaseError,
     required this.assignedDriver,
@@ -13582,6 +13697,7 @@ class _TrackingStep extends StatelessWidget {
           colors: colors,
           online: firebaseOnline,
           error: firebaseError,
+          checkoutState: checkoutState,
         ),
         const SizedBox(height: 14),
         Stack(
@@ -13682,16 +13798,29 @@ class _FirebaseStatusBanner extends StatelessWidget {
   final _CircumColors colors;
   final bool online;
   final String? error;
+  final _CheckoutState checkoutState;
 
   const _FirebaseStatusBanner({
     required this.colors,
     required this.online,
     required this.error,
+    required this.checkoutState,
   });
 
   @override
   Widget build(BuildContext context) {
-    final healthy = online && error == null;
+    final healthy = online &&
+        error == null &&
+        (checkoutState == _CheckoutState.matchingRiders ||
+            checkoutState == _CheckoutState.riderAssigned);
+    final message = switch (checkoutState) {
+      _CheckoutState.bookingCreated =>
+        'Booking created. Preparing rider search.',
+      _CheckoutState.matchingRiders => 'Connecting this delivery...',
+      _CheckoutState.riderAssigned => 'Rider assigned. Tracking is live.',
+      _CheckoutState.failed => error ?? 'This delivery could not be started.',
+      _ => error ?? 'Delivery has not started matching yet.',
+    };
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -13711,9 +13840,7 @@ class _FirebaseStatusBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              healthy
-                  ? 'This delivery is saved and live.'
-                  : error ?? 'Connecting this delivery...',
+              healthy ? 'This delivery is saved and live.' : message,
               style: TextStyle(
                 color:
                     healthy ? const Color(0xff166534) : const Color(0xff9a3412),

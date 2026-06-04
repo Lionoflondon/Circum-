@@ -284,6 +284,20 @@ void main() {
       expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 1), isTrue);
     });
 
+    test('phone remains small and bike compatible when weight is light', () {
+      final classification = DeliveryPricing.resolveClassification(
+        description: 'iPhone 13',
+        userEnteredWeightKg: 0.178,
+        irisEstimateKg: 0.174,
+        confidence: 'high',
+      );
+
+      expect(classification.finalWeightKg, closeTo(0.178, 0.001));
+      expect(classification.finalWeightBand, 'Small Parcel');
+      expect(classification.vehicleType, 'Bike');
+      expect(classification.requiresManualReview, isFalse);
+    });
+
     test('65 inch TV is not bike compatible', () {
       final classification = DeliveryPricing.resolveClassification(
         description: 'TV 65 inch',
