@@ -1,7 +1,7 @@
 # Circum Project Memory
 
 Last updated: 2026-06-04  
-Current working branch: `iris-production-sync`  
+Current working branch: `main`  
 Firebase project: `circum-2797c`
 
 ## Live URLs
