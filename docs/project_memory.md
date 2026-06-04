@@ -638,3 +638,93 @@ Not ready:
 - Rider acceptance callable exists but is not exported from `index.js`.
 - Live Firebase/FCM end-to-end testing has not been run in this validation pass.
 - Node runtime and Runtime Config deprecation warnings need planned migration.
+
+## Rider Acceptance Blocker Resolution
+
+Snapshot date: 2026-06-04  
+Branch: `main`
+
+### Files Changed
+
+- `server/functions/index.js`
+- `server/functions/accept-ride-requests.js`
+
+### What Was Fixed
+
+- Exported the existing rider acceptance callable as `acceptRideRequests`.
+- Reworked `accept-ride-requests.js` from duplicated broadcast/search logic into an actual rider acceptance callable.
+- The callable now:
+  - requires Firebase Auth.
+  - requires `requestId`.
+  - loads the authenticated rider profile from `riderProfiles/{uid}` or `riders/{uid}`.
+  - loads the delivery request by document ID or `requestId`.
+  - checks IRIS dispatchability.
+  - loads `irisPrivate/{requestId}` when present for private rider matching rules.
+  - verifies rider suitability with `riderMatchesIris`.
+  - transactionally assigns the first valid rider.
+  - writes `status`, `dispatchStatus`, and `matchingStatus` as `accepted`.
+  - stores `riderId`, `driverId`, `assignedDriverId`, and `assignedRiderId`.
+  - stores rider display fields used by sender/admin screens.
+  - creates or updates the booking chat thread.
+  - sends the sender FCM `connection` / `accepted` update when a sender token exists.
+
+### Callable Naming
+
+- Firebase export name: `acceptRideRequests`.
+- This matches the existing function filename and the expected callable naming convention used by the backend.
+- Existing web rider flow also writes acceptance directly to Firestore; the callable now supports the backend/mobile function path.
+
+### Workflow Validation
+
+Validated at source level:
+
+- Sender creates job:
+  - `sendPackage` is exported.
+  - `send-package.js` stores `deliveryRequests` and broadcasts to eligible riders.
+- Rider sees available jobs:
+  - `getAvaliableRequests` is exported.
+  - `get-avaliable-requests.js` filters open `requested` jobs and sorts priority/Express work first.
+- Rider accepts job:
+  - `acceptRideRequests` is now exported.
+  - acceptance is transactional and prevents another rider taking an already assigned request.
+- Acceptance status updates:
+  - delivery request status fields are updated to `accepted`.
+  - rider assignment fields are stored for sender, rider, and admin views.
+- Sender receives update:
+  - callable sends FCM data payload with `type=connection`, `status=accepted`, and rider payload compatible with existing sender message handling.
+
+### Validation Commands
+
+Passed:
+
+- `npm run lint` from `server/functions` using bundled npm.
+- `node --test iris-core.test.js iris-security.test.js health-plus-core.test.js`
+  - 20 tests passed.
+- `firebase deploy --only functions --project circum-2797c --dry-run`
+  - Functions loaded, analysed, and packaged successfully.
+
+Warnings still present:
+
+- Node.js 20 Firebase Functions runtime is deprecated and scheduled for decommissioning on 2026-10-30.
+- `functions.config()` / Runtime Config is deprecated and should be migrated before March 2027.
+
+### Production Readiness After Fix
+
+Production readiness estimate: `93%`
+
+Ready:
+
+- IRIS backend tests pass.
+- Health+ backend tests pass.
+- Functions lint passes.
+- Functions dry-run passes.
+- Send package callable is exported.
+- Rider request listing callable is exported.
+- Rider acceptance callable is now exported and updates assignment state.
+- Firestore rules already compiled successfully in the previous validation pass.
+
+Remaining manual verification:
+
+- Deploy functions to Firebase.
+- Run one live sender-to-rider acceptance using real Firebase Auth users and a real FCM sender token.
+- Confirm the sender receives the acceptance notification in-app.

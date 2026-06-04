@@ -9,6 +9,7 @@ const {v4: uuidv4} = require("uuid");
 
 const sendPackage = require("./send-package");
 const getAvaliableRequests = require("./get-avaliable-requests");
+const acceptRideRequests = require("./accept-ride-requests");
 const sendMessage = require("./send-message");
 const sendRiderUpdate = require("./send-rider-update");
 const healthPlus = require("./health-plus");
@@ -18,6 +19,7 @@ initializeApp();
 
 exports.sendPackage = sendPackage;
 exports.getAvaliableRequests = getAvaliableRequests;
+exports.acceptRideRequests = acceptRideRequests;
 exports.sendMessage = sendMessage;
 exports.sendRiderUpdate = sendRiderUpdate;
 exports.createHealthPlusCheckoutSession = healthPlus.createHealthPlusCheckoutSession;

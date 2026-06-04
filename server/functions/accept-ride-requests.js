@@ -1,172 +1,180 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions/v1");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderMatchesIris} = require("./iris-core");
 
-const acceptRideRequests = functions.https.onCall(async (data, context) => {
-  try {
-    const toRadians = (degrees) => {
-      return degrees * (Math.PI / 180);
-    };
-    const {requestId} = data;
-    // Check if the user is authenticated
-    if (!context.auth) {
-      // Throw an error if no authentication is present
-      throw new functions.https.HttpsError("unauthenticated",
-          "User must be authenticated to call this function.");
-    }
+const cleanText = (value, fallback = "") => {
+  if (value === undefined || value === null) return fallback;
+  const text = `${value}`.trim();
+  return text.length > 0 ? text : fallback;
+};
 
-    // Get the authenticated user's UID
-    const uid = context.auth.uid;
+const riderPayload = (riderId, rider) => {
+  const vehicle = rider.vehicle || rider.vehicleDetails || {};
+  return {
+    courierName: cleanText(rider.fullName || rider.name || rider.displayName || rider.email, "Circum rider"),
+    phoneNumber: cleanText(rider.phone || rider.phoneNumber || rider.mobile),
+    locality: cleanText(rider.locality || rider.city),
+    typeOfVehicle: cleanText(rider.vehicleType || vehicle.type, "Vehicle"),
+    plateNumber: cleanText(rider.plateNumber || rider.vehicleRegistration || vehicle.registration),
+    estimatedDeliveryTime: cleanText(rider.estimatedDeliveryTime, "On the way"),
+    code: cleanText(rider.code || rider.fcmToken),
+    rating: cleanText(rider.rating || rider.averageRating, "New"),
+    riderId,
+    photoURL: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl, "null"),
+  };
+};
 
-    // const userRef = await getFirestore().collection("users").doc(uid).get();
-    const snapshot = await getFirestore().collection("deliveryRequests") .where("requestId", "==", requestId).get();
-    const deliveryRequest = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    if (deliveryRequest.length === 0) {
-      return {message: "Delivery request not found"};
-    }
-
-    if (!isDispatchable(deliveryRequest[0])) {
-      return {
-        message: "Delivery request is not dispatchable by Iris.",
-        requestId: requestId,
-        irisStatus: deliveryRequest[0].iris && deliveryRequest[0].iris.status,
-      };
-    }
-    const privateDoc = await getFirestore()
-        .collection("irisPrivate")
-        .doc(deliveryRequest[0].requestId || deliveryRequest[0].id)
-        .get();
-    if (privateDoc.exists) {
-      deliveryRequest[0].irisPrivate = privateDoc.data();
-    }
-
-    // console.log(`${deliveryRequest[0].pickupPosition.geopoint.latitude}, ${deliveryRequest[0].pickupPosition.geopoint.longitude}`);
-
-    // Create a reference point
-    // eslint-disable-next-line new-cap
-    const pickupPoint = {
-      latitude: deliveryRequest[0].pickupPosition.geopoint.latitude,
-      longitude: deliveryRequest[0].pickupPosition.geopoint.longitude,
-    };
-
-    // Fetch all riders
-    const ridersSnapshot = await getFirestore().collection("riders")
-        .where("status", "==", "online")
-        .get();
-
-    // console.log(ridersSnapshot.docs);
-
-    // Calculate distances
-    const ridersWithDistances = await Promise.all(
-        ridersSnapshot.docs
-            .filter((doc) => {
-              const riderData = doc.data();
-              if (!riderMatchesIris(riderData, deliveryRequest[0])) return false;
-              return riderData.position &&
-                 riderData.position.geopoint &&
-                 riderData.position.geopoint.latitude &&
-                 riderData.position.geopoint.longitude;
-            })
-            .map(async (doc) => {
-              try {
-                const riderData = doc.data();
-                const riderLocation = riderData.position.geopoint;
-
-                // Ensure valid coordinates
-                if (!riderLocation.latitude || !riderLocation.longitude) {
-                  return null;
-                }
-
-                // Haversine formula for distance calculation
-                const R = 6371; // Earth's radius in kilometers
-                const dLat = toRadians(riderLocation.latitude - pickupPoint.latitude);
-                const dLon = toRadians(riderLocation.longitude - pickupPoint.longitude);
-
-                const a =
-              Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(toRadians(pickupPoint.latitude)) *
-              Math.cos(toRadians(riderLocation.latitude)) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                const distance = R * c; // Distance in kilometers
-
-                return {
-                  id: doc.id,
-                  ...riderData,
-                  distanceFromPickup: distance,
-                };
-              } catch (error) {
-                console.error("Error processing rider:", error);
-                return null;
-              }
-            }),
-    );
-
-
-    console.log(ridersWithDistances);
-
-    // Filter out null values and sort
-    const closestRiders = ridersWithDistances
-        .filter((rider) => rider !== null)
-        .sort((a, b) => a.distanceFromPickup - b.distanceFromPickup)
-        .slice(0, 5);
-
-    closestRiders.forEach(async (rider) => {
-      console.log(rider);
-      console.log(rider.fcmToken);
-      const message = {
-        apns: {
-          payload: {
-            aps: {
-              "content-available": 1,
-            },
-          },
-        },
-        data: {
-          "type": "broadcast-request",
-          "data": JSON.stringify(rider),
-        },
-        // notification: {
-        //   title: `${req.user.firstName}`,
-        //   body: text,
-        // },
-        token: rider.fcmToken,
-
-      };
-
-      await getMessaging().send(message).then(
-          (response)=> {
-            console.log(`Successfully sent message: ${response}`);
-            // console.log(`token: ${metadata.pushToken}`);
-          },
-      ).catch((err)=>{
-        //   console.log(err)
-        // console.log('new error')
-      });
-    });
-
-    // Your function logic here
-    return {
-      message: `Endpoint accessed by user ${uid}`,
-      requestId: requestId,
-      request: deliveryRequest,
-      coordinates: `${deliveryRequest[0].pickupPosition[0]}, ${deliveryRequest[0].pickupPosition[1]}`,
-      closestRiders: closestRiders,
-      // Return your actual response data
-    };
-  } catch (e) {
-    return {
-      error: e,
-    };
+const findDeliveryRequest = async (db, transaction, requestId) => {
+  const directRef = db.collection("deliveryRequests").doc(requestId);
+  const directDoc = await transaction.get(directRef);
+  if (directDoc.exists) {
+    return {ref: directDoc.ref, id: directDoc.id, data: directDoc.data()};
   }
-});
 
+  const snapshot = await transaction.get(db.collection("deliveryRequests")
+      .where("requestId", "==", requestId)
+      .limit(1));
+
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return {ref: doc.ref, id: doc.id, data: doc.data()};
+};
+
+const getRiderProfile = async (db, riderId) => {
+  const profileDoc = await db.collection("riderProfiles").doc(riderId).get();
+  if (profileDoc.exists) return profileDoc.data();
+
+  const riderDoc = await db.collection("riders").doc(riderId).get();
+  if (riderDoc.exists) return riderDoc.data();
+
+  return null;
+};
+
+const notifySender = async (deliveryRequest, payload) => {
+  const token = cleanText(deliveryRequest.code || deliveryRequest.fcmToken || deliveryRequest.pushToken);
+  if (!token) return false;
+
+  await getMessaging().send({
+    apns: {
+      payload: {
+        aps: {
+          "content-available": 1,
+        },
+      },
+    },
+    data: {
+      "type": "connection",
+      "status": "accepted",
+      "data": JSON.stringify(payload),
+    },
+    token,
+  });
+  return true;
+};
+
+const acceptRideRequests = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to accept a delivery.");
+  }
+
+  const requestId = cleanText(data && data.requestId);
+  if (!requestId) {
+    throw new functions.https.HttpsError("invalid-argument", "requestId is required.");
+  }
+
+  const riderId = context.auth.uid;
+  const db = getFirestore();
+  const rider = await getRiderProfile(db, riderId);
+
+  if (!rider) {
+    throw new functions.https.HttpsError("not-found", "Rider profile not found.");
+  }
+
+  const accepted = await db.runTransaction(async (transaction) => {
+    const found = await findDeliveryRequest(db, transaction, requestId);
+    if (!found) {
+      throw new functions.https.HttpsError("not-found", "Delivery request not found.");
+    }
+
+    const deliveryRequest = found.data;
+    const privateDoc = await transaction.get(db.collection("irisPrivate").doc(deliveryRequest.requestId || found.id));
+    if (privateDoc.exists) {
+      deliveryRequest.irisPrivate = privateDoc.data();
+    }
+    if (!isDispatchable(deliveryRequest)) {
+      throw new functions.https.HttpsError("failed-precondition", "Delivery request is not dispatchable by Iris.");
+    }
+
+    if (!riderMatchesIris(rider, deliveryRequest)) {
+      throw new functions.https.HttpsError("failed-precondition", "Rider does not match this delivery requirement.");
+    }
+
+    const currentStatus = cleanText(deliveryRequest.status).toLowerCase();
+    const assignedRider = cleanText(deliveryRequest.riderId || deliveryRequest.driverId || deliveryRequest.assignedDriverId);
+    if (assignedRider && assignedRider !== riderId) {
+      throw new functions.https.HttpsError("already-exists", "Delivery request has already been accepted.");
+    }
+    if (currentStatus && !["requested", "pending", "broadcast", "broadcasted"].includes(currentStatus) && assignedRider !== riderId) {
+      throw new functions.https.HttpsError("failed-precondition", `Delivery request is not open for acceptance: ${currentStatus}.`);
+    }
+
+    const payload = riderPayload(riderId, rider);
+    transaction.set(found.ref, {
+      status: "accepted",
+      dispatchStatus: "accepted",
+      matchingStatus: "accepted",
+      riderId,
+      driverId: riderId,
+      assignedDriverId: riderId,
+      assignedRiderId: riderId,
+      riderName: payload.courierName,
+      driverName: payload.courierName,
+      courierName: payload.courierName,
+      driverVehicle: payload.typeOfVehicle,
+      driverPlateNumber: payload.plateNumber,
+      acceptedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    const chatRef = db.collection("chats").doc(found.data.requestId || found.id);
+    transaction.set(chatRef, {
+      threadId: found.data.requestId || found.id,
+      bookingId: found.data.requestId || found.id,
+      requestId: found.data.requestId || found.id,
+      participants: FieldValue.arrayUnion(riderId, "circum-support"),
+      participantRoles: {
+        [riderId]: "rider",
+        "circum-support": "admin",
+      },
+      assignedRiderId: riderId,
+      updatedAt: FieldValue.serverTimestamp(),
+      source: "acceptRideRequests",
+    }, {merge: true});
+
+    return {
+      id: found.id,
+      requestId: found.data.requestId || requestId,
+      deliveryRequest,
+      payload,
+    };
+  });
+
+  let senderNotified = false;
+  try {
+    senderNotified = await notifySender(accepted.deliveryRequest, accepted.payload);
+  } catch (error) {
+    console.error("Sender acceptance notification failed:", error);
+  }
+
+  return {
+    status: "accepted",
+    requestId: accepted.requestId,
+    riderId,
+    senderNotified,
+    rider: accepted.payload,
+  };
+});
 
 module.exports = acceptRideRequests;
