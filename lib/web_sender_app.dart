@@ -36,6 +36,14 @@ const _spectrumGradient = [
 
 enum _WebAppMode { landing, sender, rider, admin }
 
+bool _isPublicHostingHost() {
+  final host = Uri.base.host.toLowerCase();
+  return host == 'circumuk.com' ||
+      host == 'www.circumuk.com' ||
+      host == 'circum-2797c.web.app' ||
+      host == 'circum-app-2797c.web.app';
+}
+
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
@@ -66,7 +74,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   _WebAppMode _initialMode() {
-    if (_adminHostingTarget) return _WebAppMode.admin;
+    if (_adminHostingTarget && !_isPublicHostingHost()) {
+      return _WebAppMode.admin;
+    }
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' => _WebAppMode.rider,

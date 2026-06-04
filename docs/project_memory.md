@@ -13,13 +13,19 @@ Firebase project: `circum-2797c`
 
 ## Deployment Setup
 
-- Main Firebase Hosting target: `hosting:main`
+- Public/root Firebase Hosting target: `hosting:public`
+- Public fallback Firebase Hosting target: `hosting:app`
 - Admin Firebase Hosting target: `hosting:admin`
 - Main build output used by hosting: `build/web_main`
 - Admin build output used by hosting: `build/web_admin`
+- Current Firebase Hosting target map:
+  - `public` -> `circum-2797c`
+  - `app` -> `circum-app-2797c`
+  - `admin` -> `circum-admin-2797c`
 - Recent deploy commands used:
-  - `firebase deploy --only hosting:main --project circum-2797c`
+  - `firebase deploy --only hosting:public,hosting:app --project circum-2797c`
   - `firebase deploy --only hosting:admin --project circum-2797c`
+  - `firebase deploy --only hosting:public,hosting:app,hosting:admin --project circum-2797c`
 
 ## Completed And Deployed
 
@@ -210,8 +216,17 @@ Firebase project: `circum-2797c`
 ### Firebase And Functions
 
 - Firebase Hosting configured for multiple targets:
-  - main public app
+  - public/root app
+  - public fallback app
   - admin app
+- Firebase Hosting routing fix completed on 2026-06-04:
+  - `circumuk.com` serves the public build from `build/web_main`.
+  - `circum-2797c.web.app` and `circum-app-2797c.web.app` serve the public build from `build/web_main`.
+  - `admin.circumuk.com` and `circum-admin-2797c.web.app` serve the admin build from `build/web_admin`.
+  - Public deploy script now deploys only `hosting:public,hosting:app`.
+  - Admin deploy script now deploys only `hosting:admin`.
+  - Full web deploy script now deploys only `hosting:public,hosting:app,hosting:admin`.
+  - Public-host defensive guard prevents an admin-compiled web build from defaulting to admin mode on `circumuk.com`, `www.circumuk.com`, `circum-2797c.web.app`, or `circum-app-2797c.web.app`.
 - Firebase project used: `circum-2797c`.
 - Functions deployment work completed for Node 22 compatibility.
 - Health+ checkout function compatibility work completed.
@@ -283,6 +298,7 @@ Firebase project: `circum-2797c`
 - Flutter web builds show wasm dry-run compatibility warnings from third-party packages such as secure storage, keyboard visibility, share_plus, and win32/ffi transitive code.
 - These wasm warnings do not currently block the JavaScript web build.
 - `.firebase/` appears as an untracked local Firebase cache folder and should remain uncommitted unless intentionally needed.
+- `www.circumuk.com` did not resolve from local DNS during the 2026-06-04 Firebase routing verification. Add/repair the DNS/custom-domain record for `www` before treating it as live.
 - Disk space previously blocked a Flutter web build; generated build folders were cleared to restore space.
 
 ## Suggested Next Safe Tasks

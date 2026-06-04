@@ -5,7 +5,10 @@
   "targets": {
     "circum-2797c": {
       "hosting": {
-        "main": [
+        "public": [
+          "circum-2797c"
+        ],
+        "app": [
           "circum-app-2797c"
         ],
         "admin": [
