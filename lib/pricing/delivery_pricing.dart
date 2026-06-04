@@ -77,7 +77,67 @@ class DeliveryPricingBreakdown {
       };
 }
 
+class DeliveryClassification {
+  final double finalWeightKg;
+  final String finalWeightBand;
+  final double? irisEstimateKg;
+  final double? userEnteredWeightKg;
+  final String confidence;
+  final String resolutionReason;
+  final bool requiresManualReview;
+  final String vehicleType;
+  final String selectedWeightSource;
+
+  const DeliveryClassification({
+    required this.finalWeightKg,
+    required this.finalWeightBand,
+    required this.irisEstimateKg,
+    required this.userEnteredWeightKg,
+    required this.confidence,
+    required this.resolutionReason,
+    required this.requiresManualReview,
+    required this.vehicleType,
+    required this.selectedWeightSource,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'finalWeightKg': finalWeightKg,
+        'finalWeightBand': finalWeightBand,
+        'irisEstimateKg': irisEstimateKg,
+        'userEnteredWeightKg': userEnteredWeightKg,
+        'confidence': confidence,
+        'resolutionReason': resolutionReason,
+        'requiresManualReview': requiresManualReview,
+        'vehicleType': vehicleType,
+        'selectedWeightSource': selectedWeightSource,
+      };
+}
+
 class DeliveryPricing {
+  static const Map<String, double> heavyKeywordMinimumWeightsKg = {
+    'piano': 50,
+    'fridge': 25,
+    'freezer': 25,
+    'washing machine': 25,
+    'tumble dryer': 25,
+    'sofa': 12,
+    'wardrobe': 20.01,
+    'mattress': 12,
+    'bed frame': 12,
+    'dresser': 12,
+    'chest of drawers': 20.01,
+    'treadmill': 20.01,
+    'exercise bike': 20.01,
+    'large tv': 12,
+    'tv 65': 12,
+    '65 inch': 12,
+    '65 tv': 12,
+    '75 tv': 20.01,
+    '75 inch': 20.01,
+    'table': 12,
+    'cabinet': 12,
+  };
+
   static DeliveryPricingBreakdown calculate(DeliveryPricingInput input) {
     final weightBand = weightBandFor(input.weightKg);
     final distanceFare = calculateDistanceFare(input.distanceMiles);
@@ -192,6 +252,88 @@ class DeliveryPricing {
     ].reduce(max);
   }
 
+  static DeliveryClassification resolveClassification({
+    required String description,
+    double? userEnteredWeightKg,
+    double? irisEstimateKg,
+    double? historicalVerifiedMinKg,
+    double? historicalVerifiedMaxKg,
+    double? driverVerifiedWeightKg,
+    String confidence = 'unknown',
+  }) {
+    final candidates = <String, double>{};
+    if (userEnteredWeightKg != null && userEnteredWeightKg > 0) {
+      candidates['customer_declared'] = userEnteredWeightKg;
+    }
+    if (irisEstimateKg != null && irisEstimateKg > 0) {
+      candidates['iris_estimate'] = irisEstimateKg;
+    }
+    if (historicalVerifiedMaxKg != null && historicalVerifiedMaxKg > 0) {
+      candidates['historical_verified'] = historicalVerifiedMaxKg;
+    }
+    if (driverVerifiedWeightKg != null && driverVerifiedWeightKg > 0) {
+      candidates['driver_verified'] = driverVerifiedWeightKg;
+    }
+
+    final keywordWeight = keywordMinimumWeightKg(description);
+    if (keywordWeight != null) {
+      candidates['keyword_override'] = keywordWeight;
+    }
+
+    if (candidates.isEmpty) {
+      candidates['minimum_valid_weight'] = 0.1;
+    }
+
+    var selectedSource = candidates.keys.first;
+    var finalWeight = candidates[selectedSource]!;
+    for (final entry in candidates.entries) {
+      if (entry.value > finalWeight) {
+        selectedSource = entry.key;
+        finalWeight = entry.value;
+      }
+    }
+
+    final band = weightBandFor(finalWeight);
+    final manualReview = band.requiresManualQuote ||
+        selectedSource == 'keyword_override' && finalWeight >= 40 ||
+        (historicalVerifiedMinKg != null &&
+            historicalVerifiedMaxKg != null &&
+            historicalVerifiedMaxKg > historicalVerifiedMinKg);
+
+    return DeliveryClassification(
+      finalWeightKg: finalWeight,
+      finalWeightBand: band.category,
+      irisEstimateKg: irisEstimateKg,
+      userEnteredWeightKg: userEnteredWeightKg,
+      confidence: confidence,
+      resolutionReason: _classificationReason(selectedSource, band.category),
+      requiresManualReview: manualReview,
+      vehicleType: recommendedVehicleForWeight(finalWeight),
+      selectedWeightSource: selectedSource,
+    );
+  }
+
+  static double? keywordMinimumWeightKg(String description) {
+    final normalized = description.toLowerCase();
+    for (final entry in heavyKeywordMinimumWeightsKg.entries) {
+      if (normalized.contains(entry.key)) return entry.value;
+    }
+    return null;
+  }
+
+  static String _classificationReason(String source, String band) {
+    return switch (source) {
+      'keyword_override' => 'Item type requires at least $band handling.',
+      'driver_verified' => 'Rider verified weight is the highest source.',
+      'historical_verified' =>
+        'Similar completed parcels indicate a higher $band classification.',
+      'iris_estimate' => 'IRIS estimate is the highest reliable weight.',
+      'customer_declared' =>
+        'Customer declared weight is the highest reliable weight.',
+      _ => 'Minimum valid parcel weight applied.',
+    };
+  }
+
   static String recommendedVehicleForWeight(double weightKg) {
     if (weightKg > 10) return 'Van';
     if (weightKg > 5) return 'Car';
@@ -201,7 +343,7 @@ class DeliveryPricing {
   static bool vehicleCanCarryWeight(String? vehicleType, double weightKg) {
     final vehicle = vehicleType?.trim().toLowerCase();
     if (vehicle == 'van') return true;
-    if (vehicle == 'car') return weightKg <= 20;
+    if (vehicle == 'car') return weightKg <= 10;
     if (vehicle == 'bike' || vehicle == 'bicycle') return weightKg <= 5;
     return weightKg <= 5;
   }

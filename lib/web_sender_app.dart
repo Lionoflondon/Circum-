@@ -7395,9 +7395,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           colors: colors,
                           pickup: _pickup.text,
                           dropoff: _dropoff.text,
-                          vehicle: _selectedVehicle,
+                          vehicle: _effectiveVehicle,
                           speed: _selectedSpeed,
-                          weightKg: _confirmedWeightKg ?? 0,
+                          weightKg: _deliveryClassification.finalWeightKg,
                           breakdown: _quoteBreakdown,
                           step: _step,
                           firebaseOnline: _firebaseOnline,
@@ -7519,10 +7519,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           colors: colors,
           pickup: _pickup.text,
           dropoff: _dropoff.text,
-          chargeableWeightKg: _confirmedWeightKg ?? 0,
-          selectedVehicle: _selectedVehicle,
+          chargeableWeightKg: _deliveryClassification.finalWeightKg,
+          selectedVehicle: _effectiveVehicle,
           selectedSpeed: _selectedSpeed,
-          onVehicle: (vehicle) => setState(() => _selectedVehicle = vehicle),
+          onVehicle: (vehicle) {
+            final classification = _deliveryClassification;
+            if (!DeliveryPricing.vehicleCanCarryWeight(
+              vehicle.name,
+              classification.finalWeightKg,
+            )) {
+              setState(() {
+                _selectedVehicle = _effectiveVehicle;
+                _weightMessage =
+                    'This item is too heavy for ${vehicle.name}. ${classification.vehicleType} required.';
+              });
+              return;
+            }
+            setState(() => _selectedVehicle = vehicle);
+          },
           onSpeed: (speed) => setState(() => _selectedSpeed = speed),
           onBack: () => setState(() => _step = _SenderStep.dashboard),
           onContinue: () => setState(() => _step = _SenderStep.payment),
@@ -7538,7 +7552,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           routeMessage: _locationValidationMessage,
           irisEstimatedWeightKg: _irisEstimatedWeightKg,
           senderEnteredWeightKg: _senderEnteredWeightKg,
-          weightKg: _confirmedWeightKg ?? 0,
+          weightKg: _deliveryClassification.finalWeightKg,
           total: _quoteTotal,
           weightConfirmed: _hasConfirmedWeight,
           weightSource: _weightSourceText,
@@ -7556,7 +7570,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           orderId: _activeOrderId ?? 'CIR-2026',
           pickup: _pickup.text,
           dropoff: _dropoff.text,
-          vehicle: _selectedVehicle,
+          vehicle: _effectiveVehicle,
           statusIndex: _statusIndex,
           broadcasting: _broadcasting,
           firebaseOnline: _firebaseOnline,
@@ -7678,7 +7692,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   bool get _hasConfirmedWeight {
-    return _confirmedWeightKg != null && _confirmedWeightKg! > 0;
+    return _confirmedWeightKg != null &&
+        _confirmedWeightKg! > 0 &&
+        _confirmedWeightBand != null;
+  }
+
+  DeliveryClassification get _deliveryClassification {
+    return DeliveryPricing.resolveClassification(
+      description: _description.text,
+      userEnteredWeightKg: _senderEnteredWeightKg ??
+          DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
+      irisEstimateKg: _irisEstimatedWeightKg,
+      historicalVerifiedMaxKg: _irisHistoricalVerifiedWeightKg,
+      confidence: _irisWeightConfidence ?? 'unknown',
+    );
   }
 
   bool get _hasValidatedRoute {
@@ -7734,22 +7761,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return switch (_weightSource) {
       'catalogue_match' => 'Catalogue Match',
       'verified_parcel_history' => 'Past Verified Parcels',
+      'keyword_override' => 'Item Type Rule',
       'iris_confirmed' => 'IRIS estimate confirmed by sender',
       'customer_declared' || 'manual' => 'Customer Declared',
       _ => 'Not confirmed',
     };
   }
 
+  bool get _hasConsistentDispatchClassification {
+    if (!_hasConfirmedWeight) return false;
+    final classification = _deliveryClassification;
+    final quote = _quoteBreakdown;
+    return classification.finalWeightKg > 0 &&
+        classification.finalWeightBand == quote.weightCategory &&
+        classification.vehicleType == _effectiveVehicle.name &&
+        DeliveryPricing.vehicleCanCarryWeight(
+          _effectiveVehicle.name,
+          classification.finalWeightKg,
+        ) &&
+        !(classification.finalWeightBand != 'Small Parcel' &&
+            _effectiveVehicle.name == 'Bike');
+  }
+
   _VehicleOption get _effectiveVehicle {
-    final chargeableWeightKg = _confirmedWeightKg ?? 0;
-    if (DeliveryPricing.vehicleCanCarryWeight(
-      _selectedVehicle.name,
-      chargeableWeightKg,
-    )) {
-      return _selectedVehicle;
-    }
-    final recommendedVehicleName =
-        DeliveryPricing.recommendedVehicleForWeight(chargeableWeightKg);
+    final classification = _deliveryClassification;
+    final recommendedVehicleName = classification.vehicleType;
     return _vehicles.firstWhere(
       (vehicle) => vehicle.name == recommendedVehicleName,
       orElse: () => _vehicles.last,
@@ -7757,7 +7793,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   DeliveryPricingBreakdown get _quoteBreakdown {
-    final chargeableWeightKg = _confirmedWeightKg ?? 0;
+    final classification = _deliveryClassification;
+    final chargeableWeightKg = classification.finalWeightKg;
     final distanceMiles = _confirmedRouteDistanceMiles ?? 0;
     return DeliveryPricing.calculate(
       DeliveryPricingInput(
@@ -8149,6 +8186,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }
       _weightMessage = decision.message;
     });
+    if (decision.weightKg != null) {
+      _confirmWeight(
+        decision.weightKg!,
+        source: decision.source,
+        reason: decision.reason,
+        verificationRequired: decision.verificationRequired,
+      );
+    }
   }
 
   void _confirmIrisWeight() {
@@ -8245,22 +8290,27 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required _IrisWeightEstimate estimate,
     required double? senderWeightKg,
   }) {
+    final classification = DeliveryPricing.resolveClassification(
+      description: _description.text,
+      userEnteredWeightKg: senderWeightKg,
+      irisEstimateKg: estimate.weightKg,
+      historicalVerifiedMaxKg: estimate.historicalVerifiedWeightKg,
+      confidence: estimate.confidence,
+    );
     final hasSenderWeight = senderWeightKg != null && senderWeightKg > 0;
     final irisBand = DeliveryPricing.weightBandFor(estimate.weightKg);
     final senderBand =
         hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
     final bandChanged =
         senderBand != null && senderBand.category != irisBand.category;
-    final significantDifference = bandChanged;
-    final higherWeight = hasSenderWeight
-        ? DeliveryPricing.chargeableWeightKg(
-            senderWeightKg: senderWeightKg,
-            irisWeightKg: estimate.weightKg,
-          )
-        : estimate.weightKg;
+    final significantDifference =
+        bandChanged || classification.selectedWeightSource == 'keyword_override';
+    final higherWeight = classification.finalWeightKg;
     final higherBand = DeliveryPricing.weightBandFor(higherWeight);
 
-    if (!hasSenderWeight && estimate.confidence == 'low') {
+    if (!hasSenderWeight &&
+        estimate.confidence == 'low' &&
+        classification.selectedWeightSource != 'keyword_override') {
       return const _WeightPricingDecision(
         message: 'Confirm parcel weight before payment.',
         reason: 'Iris confidence is low, so sender weight is required.',
@@ -8272,19 +8322,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return _WeightPricingDecision(
         weightKg: higherWeight,
         weightBand: higherBand.category,
-        source: estimate.weightKg > (senderWeightKg ?? 0)
-            ? 'iris_low_confidence_review'
-            : 'customer_declared',
+        source: classification.selectedWeightSource,
         message: significantDifference
             ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the rider will verify at pickup.'
             : 'IRIS has analysed this item and selected the most reliable weight available.',
         reason:
-            'IRIS selected the most reliable weight available for fair pricing.',
+            classification.resolutionReason,
         verificationRequired: true,
       );
     }
 
-    final source = estimate.weightKg >= (senderWeightKg ?? 0)
+    final source = classification.selectedWeightSource == 'keyword_override'
+        ? 'keyword_override'
+        : estimate.weightKg >= (senderWeightKg ?? 0)
         ? estimate.weightSource == 'known_product_lookup'
             ? 'catalogue_match'
             : 'iris_confirmed'
@@ -8298,8 +8348,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
           : 'IRIS has analysed this item and selected the most reliable weight available.',
       reason:
-          'IRIS selected the most reliable weight available for fair pricing.',
-      verificationRequired: significantDifference,
+          classification.resolutionReason,
+      verificationRequired:
+          significantDifference || classification.requiresManualReview,
     );
   }
 
@@ -8566,6 +8617,32 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() {
         _weightMessage = 'Confirm parcel weight before payment.';
         _step = _SenderStep.details;
+      });
+      return;
+    }
+    if (!_hasConsistentDispatchClassification) {
+      final classification = _deliveryClassification;
+      _confirmWeight(
+        classification.finalWeightKg,
+        source: classification.selectedWeightSource,
+        reason: classification.resolutionReason,
+        verificationRequired: true,
+      );
+      if (!_hasConsistentDispatchClassification) {
+        setState(() {
+          _firebaseError =
+              'This delivery needs recalculation because weight, vehicle, and pricing do not match.';
+          _step = _SenderStep.details;
+        });
+        return;
+      }
+    }
+    if (_quoteBreakdown.requiresManualQuote ||
+        _deliveryClassification.requiresManualReview) {
+      setState(() {
+        _firebaseError =
+            'This delivery needs manual review because the item is heavy or specialist.';
+        _step = _SenderStep.payment;
       });
       return;
     }
@@ -9067,23 +9144,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Map<String, dynamic> _requestPayload(String id) {
     final quote = _quoteBreakdown;
+    final classification = _deliveryClassification;
     final pickupAddress = _validatedPickup!;
     final dropoffAddress = _validatedDropoff!;
     final distanceMiles = _confirmedRouteDistanceMiles!;
     final economyQuote = DeliveryPricing.calculate(DeliveryPricingInput(
       distanceMiles: distanceMiles,
-      weightKg: _confirmedWeightKg ?? 0,
+      weightKg: classification.finalWeightKg,
       vehicleType: _effectiveVehicle.name,
       economy: true,
     ));
     final standardQuote = DeliveryPricing.calculate(DeliveryPricingInput(
       distanceMiles: distanceMiles,
-      weightKg: _confirmedWeightKg ?? 0,
+      weightKg: classification.finalWeightKg,
       vehicleType: _effectiveVehicle.name,
     ));
     final expressQuote = DeliveryPricing.calculate(DeliveryPricingInput(
       distanceMiles: distanceMiles,
-      weightKg: _confirmedWeightKg ?? 0,
+      weightKg: classification.finalWeightKg,
       vehicleType: _effectiveVehicle.name,
       express: true,
     ));
@@ -9111,12 +9189,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final dropoffGeo = dropoffAddress.toPositionMap();
     final packageType = _inferPackageType();
     final hasPhoto = false;
-    final safeVehicleName = DeliveryPricing.vehicleCanCarryWeight(
-      _selectedVehicle.name,
-      _confirmedWeightKg ?? 0,
-    )
-        ? _selectedVehicle.name
-        : DeliveryPricing.recommendedVehicleForWeight(_confirmedWeightKg ?? 0);
+    final safeVehicleName = classification.vehicleType;
     final driverPayout = double.parse((quote.total * 0.75).toStringAsFixed(2));
     final driverJobSummary = {
       'pickupDisplay': _pickup.text.trim(),
@@ -9127,14 +9200,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
       'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
       'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
-      'confirmedWeightKg': _confirmedWeightKg,
-      'confirmedWeightBand': _confirmedWeightBand,
+      'confirmedWeightKg': classification.finalWeightKg,
+      'confirmedWeightBand': classification.finalWeightBand,
+      'deliveryClassification': classification.toJson(),
+      'finalWeightKg': classification.finalWeightKg,
+      'finalWeightBand': classification.finalWeightBand,
+      'selectedWeightSource': classification.selectedWeightSource,
+      'resolutionReason': classification.resolutionReason,
+      'requiresManualReview': classification.requiresManualReview,
       'packageType': packageType,
       'packageDescription': _description.text.trim(),
       'hasPhoto': hasPhoto,
       'photoUrl': null,
       'deliveryInstructions': _description.text.trim(),
-      'vehicleType': safeVehicleName,
+      'vehicleType': classification.vehicleType,
       'totalFare': quote.total,
       'driverPayout': driverPayout,
       'serviceLevel': selectedServiceLevel,
@@ -9159,9 +9238,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisConfidence': _irisWeightConfidence ?? 'unknown',
       'irisTruthBand': _irisTruthBand(),
       'irisLearningData': _irisLearningData(),
-      'finalChargeableWeight': _confirmedWeightKg,
-      'finalWeight': _confirmedWeightKg,
-      'finalWeightUsed': _confirmedWeightKg,
+      'finalChargeableWeight': classification.finalWeightKg,
+      'finalWeight': classification.finalWeightKg,
+      'finalWeightUsed': classification.finalWeightKg,
       'irisConfidenceScore': _irisConfidenceScore(),
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
@@ -9188,7 +9267,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'packageType': packageType,
       'packageDescription': _description.text.trim(),
       'weight': _weight.text.trim(),
-      'weightKg': _confirmedWeightKg,
+      'weightKg': classification.finalWeightKg,
+      'deliveryClassification': classification.toJson(),
+      'finalWeightKg': classification.finalWeightKg,
+      'finalWeightBand': classification.finalWeightBand,
+      'selectedWeightSource': classification.selectedWeightSource,
+      'resolutionReason': classification.resolutionReason,
+      'requiresManualReview': classification.requiresManualReview,
       'customerDeclaredWeight': _senderEnteredWeightKg,
       'customerWeight': _senderEnteredWeightKg,
       'irisEstimatedWeight': _irisEstimatedWeightKg,
@@ -9204,9 +9289,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisConfidence': _irisWeightConfidence ?? 'unknown',
       'irisTruthBand': _irisTruthBand(),
       'irisLearningData': _irisLearningData(),
-      'finalChargeableWeight': _confirmedWeightKg,
-      'finalWeight': _confirmedWeightKg,
-      'finalWeightUsed': _confirmedWeightKg,
+      'finalChargeableWeight': classification.finalWeightKg,
+      'finalWeight': classification.finalWeightKg,
+      'finalWeightUsed': classification.finalWeightKg,
       'irisConfidenceScore': _irisConfidenceScore(),
       'weightReviewRequired': _weightVerificationRequired,
       'irisEstimatedWeightKg': _irisEstimatedWeightKg,
@@ -9214,8 +9299,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisWeightConfidence': _irisWeightConfidence,
       'irisWeightExplanation': _irisWeightExplanation,
       'senderEnteredWeightKg': _senderEnteredWeightKg,
-      'confirmedWeightKg': _confirmedWeightKg,
-      'confirmedWeightBand': _confirmedWeightBand,
+      'confirmedWeightKg': classification.finalWeightKg,
+      'confirmedWeightBand': classification.finalWeightBand,
       'declaredWeightKg': _senderEnteredWeightKg,
       'driverReportedWeightKg': null,
       'driverWeightDispute': {
@@ -9244,7 +9329,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
       'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
       'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
-      'weightCategory': _confirmedWeightBand,
+      'weightCategory': classification.finalWeightBand,
       'vehicle': safeVehicleName,
       'selectedVehicle': safeVehicleName,
       'preferredVehicle': safeVehicleName.toLowerCase(),
@@ -13369,12 +13454,18 @@ class _PaymentStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: weightConfirmed && locationsConfirmed ? onPay : null,
+            onPressed: weightConfirmed &&
+                    locationsConfirmed &&
+                    !breakdown.requiresManualQuote
+                ? onPay
+                : null,
             icon: const Icon(Icons.lock),
             label: Text(
               !locationsConfirmed
                   ? 'Confirm pickup and drop-off before payment'
-                  : weightConfirmed
+                  : breakdown.requiresManualQuote
+                      ? 'Manual review required'
+                      : weightConfirmed
                   ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
                   : 'Confirm parcel weight before payment',
             ),

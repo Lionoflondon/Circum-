@@ -236,5 +236,63 @@ void main() {
       expect(DeliveryPricing.weightBandFor(40).category, 'Large Item');
       expect(DeliveryPricing.weightBandFor(40.01).category, 'Extra Heavy');
     });
+
+    test('piano resolves to extra heavy van classification', () {
+      final classification = DeliveryPricing.resolveClassification(
+        description: 'Piano',
+        userEnteredWeightKg: 25,
+        irisEstimateKg: 50,
+        historicalVerifiedMinKg: 25,
+        historicalVerifiedMaxKg: 50,
+        confidence: 'medium',
+      );
+      final quote = DeliveryPricing.calculate(DeliveryPricingInput(
+        distanceMiles: 6.65,
+        weightKg: classification.finalWeightKg,
+        vehicleType: classification.vehicleType,
+      ));
+
+      expect(classification.finalWeightKg, 50);
+      expect(classification.finalWeightBand, 'Extra Heavy');
+      expect(classification.vehicleType, isNot('Bike'));
+      expect(classification.vehicleType, 'Van');
+      expect(quote.weightCategory, isNot('Small Parcel'));
+      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 50), isFalse);
+      expect(DeliveryPricing.vehicleCanCarryWeight('Van', 50), isTrue);
+    });
+
+    test('sofa enforces heavy van classification', () {
+      final classification = DeliveryPricing.resolveClassification(
+        description: 'Sofa',
+        userEnteredWeightKg: 10,
+      );
+
+      expect(classification.finalWeightBand, 'Heavy Parcel');
+      expect(classification.vehicleType, 'Van');
+      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 12), isFalse);
+    });
+
+    test('small envelope remains small and bike compatible', () {
+      final classification = DeliveryPricing.resolveClassification(
+        description: 'Small envelope',
+        userEnteredWeightKg: 1,
+      );
+
+      expect(classification.finalWeightKg, 1);
+      expect(classification.finalWeightBand, 'Small Parcel');
+      expect(classification.vehicleType, 'Bike');
+      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 1), isTrue);
+    });
+
+    test('65 inch TV is not bike compatible', () {
+      final classification = DeliveryPricing.resolveClassification(
+        description: 'TV 65 inch',
+        userEnteredWeightKg: 8,
+      );
+
+      expect(classification.finalWeightBand, 'Heavy Parcel');
+      expect(classification.vehicleType, 'Van');
+      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 12), isFalse);
+    });
   });
 }
