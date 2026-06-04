@@ -19,6 +19,7 @@ initializeApp();
 
 exports.sendPackage = sendPackage;
 exports.getAvaliableRequests = getAvaliableRequests;
+exports.getAvailableRequests = getAvaliableRequests;
 exports.acceptRideRequests = acceptRideRequests;
 exports.sendMessage = sendMessage;
 exports.sendRiderUpdate = sendRiderUpdate;
