@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:circum/app/admin/admin_operations.dart';
@@ -7279,6 +7280,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _firebaseError;
   String? _ratingMessage;
   String? _senderProfileMessage;
+  _ValidatedAddress? _validatedPickup;
+  _ValidatedAddress? _validatedDropoff;
   bool _firebaseOnline = false;
   bool _senderAuthLoading = true;
   bool _senderAuthBusy = false;
@@ -7481,8 +7484,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           pickup: _pickup,
           dropoff: _dropoff,
           savedAddresses: _senderProfile?.savedAddresses ?? const [],
-          onSavedPickup: (address) => setState(() => _pickup.text = address),
-          onSavedDropoff: (address) => setState(() => _dropoff.text = address),
+          onSavedPickup: _applySavedPickupAddress,
+          onSavedDropoff: _applySavedDropoffAddress,
+          pickupVerified: _validatedPickup != null,
+          dropoffVerified: _validatedDropoff != null,
+          locationValidationMessage: _locationValidationMessage,
+          canSubmit: _canAnalyzeDelivery,
+          onPickupSelected: _selectPickupAddress,
+          onDropoffSelected: _selectDropoffAddress,
+          onPickupEdited: _handlePickupEdited,
+          onDropoffEdited: _handleDropoffEdited,
           description: _description,
           weight: _weight,
           irisEstimatedWeightKg: _irisEstimatedWeightKg,
@@ -7522,6 +7533,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           vehicle: _effectiveVehicle,
           speed: _selectedSpeed,
           breakdown: _quoteBreakdown,
+          distanceMiles: _confirmedRouteDistanceMiles,
+          locationsConfirmed: _hasValidatedRoute,
+          routeMessage: _locationValidationMessage,
           irisEstimatedWeightKg: _irisEstimatedWeightKg,
           senderEnteredWeightKg: _senderEnteredWeightKg,
           weightKg: _confirmedWeightKg ?? 0,
@@ -7667,6 +7681,41 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return _confirmedWeightKg != null && _confirmedWeightKg! > 0;
   }
 
+  bool get _hasValidatedRoute {
+    return _validatedPickup?.hasCoordinates == true &&
+        _validatedDropoff?.hasCoordinates == true &&
+        _confirmedRouteDistanceMiles != null;
+  }
+
+  bool get _canAnalyzeDelivery {
+    return _hasValidatedRoute &&
+        _description.text.trim().isNotEmpty &&
+        !_analyzing;
+  }
+
+  String get _locationValidationMessage {
+    if (_validatedPickup == null && _validatedDropoff == null) {
+      return 'Choose pickup and drop-off from the address suggestions before pricing.';
+    }
+    if (_validatedPickup == null) {
+      return 'Choose a verified pickup address from the suggestions.';
+    }
+    if (_validatedDropoff == null) {
+      return 'Choose a verified drop-off address from the suggestions.';
+    }
+    if (_confirmedRouteDistanceMiles == null) {
+      return 'Distance not confirmed. Re-select both addresses.';
+    }
+    return 'Verified route: ${_confirmedRouteDistanceMiles!.toStringAsFixed(1)} miles.';
+  }
+
+  double? get _confirmedRouteDistanceMiles {
+    final pickup = _validatedPickup;
+    final dropoff = _validatedDropoff;
+    if (pickup == null || dropoff == null) return null;
+    return _coordinateDistanceMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+  }
+
   String get _weightSourceText {
     return switch (_weightSource) {
       'catalogue_match' => 'Catalogue Match',
@@ -7695,15 +7744,73 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   DeliveryPricingBreakdown get _quoteBreakdown {
     final chargeableWeightKg = _confirmedWeightKg ?? 0;
+    final distanceMiles = _confirmedRouteDistanceMiles ?? 0;
     return DeliveryPricing.calculate(
       DeliveryPricingInput(
-        distanceMiles: _webQuoteDistanceMiles,
+        distanceMiles: distanceMiles,
         weightKg: chargeableWeightKg,
         vehicleType: _effectiveVehicle.name,
         economy: _selectedSpeed == 'Economy',
         express: _selectedSpeed == 'Express',
       ),
     );
+  }
+
+  void _selectPickupAddress(_ValidatedAddress address) {
+    setState(() {
+      _validatedPickup = address;
+      _pickup.text = address.displayAddress;
+    });
+    _debugPricingInputs();
+  }
+
+  void _selectDropoffAddress(_ValidatedAddress address) {
+    setState(() {
+      _validatedDropoff = address;
+      _dropoff.text = address.displayAddress;
+    });
+    _debugPricingInputs();
+  }
+
+  void _handlePickupEdited(String value) {
+    if (_validatedPickup == null) return;
+    if (value.trim() == _validatedPickup!.displayAddress) return;
+    setState(() => _validatedPickup = null);
+  }
+
+  void _handleDropoffEdited(String value) {
+    if (_validatedDropoff == null) return;
+    if (value.trim() == _validatedDropoff!.displayAddress) return;
+    setState(() => _validatedDropoff = null);
+  }
+
+  void _applySavedPickupAddress(String address) {
+    setState(() {
+      _pickup.text = address;
+      _validatedPickup = null;
+    });
+  }
+
+  void _applySavedDropoffAddress(String address) {
+    setState(() {
+      _dropoff.text = address;
+      _validatedDropoff = null;
+    });
+  }
+
+  void _debugPricingInputs() {
+    assert(() {
+      debugPrint(
+        'Circum booking debug: pickup=${_validatedPickup?.displayAddress}, '
+        'dropoff=${_validatedDropoff?.displayAddress}, '
+        'pickupLatLng=${_validatedPickup?.lat}/${_validatedPickup?.lng}, '
+        'dropoffLatLng=${_validatedDropoff?.lat}/${_validatedDropoff?.lng}, '
+        'distanceMiles=${_confirmedRouteDistanceMiles?.toStringAsFixed(2)}, '
+        'chargeableWeight=$_confirmedWeightKg, '
+        'finalPrice=${_quoteBreakdown.total.toStringAsFixed(2)}',
+      );
+      return true;
+    }());
   }
 
   HealthPlusPriceBreakdown get _healthQuote {
@@ -7996,7 +8103,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<void> _analyseRequest() async {
-    if (_pickup.text.trim().isEmpty || _dropoff.text.trim().isEmpty) return;
+    if (!_hasValidatedRoute) {
+      setState(() => _firebaseError = _locationValidationMessage);
+      return;
+    }
     setState(() => _analyzing = true);
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
@@ -8431,6 +8541,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<void> _confirmPayment() async {
+    if (!_hasValidatedRoute) {
+      setState(() {
+        _firebaseError = _locationValidationMessage;
+        _step = _SenderStep.details;
+      });
+      return;
+    }
     if (!_hasConfirmedWeight) {
       setState(() {
         _weightMessage = 'Confirm parcel weight before payment.';
@@ -8936,19 +9053,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Map<String, dynamic> _requestPayload(String id) {
     final quote = _quoteBreakdown;
+    final pickupAddress = _validatedPickup!;
+    final dropoffAddress = _validatedDropoff!;
+    final distanceMiles = _confirmedRouteDistanceMiles!;
     final economyQuote = DeliveryPricing.calculate(DeliveryPricingInput(
-      distanceMiles: _webQuoteDistanceMiles,
+      distanceMiles: distanceMiles,
       weightKg: _confirmedWeightKg ?? 0,
       vehicleType: _effectiveVehicle.name,
       economy: true,
     ));
     final standardQuote = DeliveryPricing.calculate(DeliveryPricingInput(
-      distanceMiles: _webQuoteDistanceMiles,
+      distanceMiles: distanceMiles,
       weightKg: _confirmedWeightKg ?? 0,
       vehicleType: _effectiveVehicle.name,
     ));
     final expressQuote = DeliveryPricing.calculate(DeliveryPricingInput(
-      distanceMiles: _webQuoteDistanceMiles,
+      distanceMiles: distanceMiles,
       weightKg: _confirmedWeightKg ?? 0,
       vehicleType: _effectiveVehicle.name,
       express: true,
@@ -8973,14 +9093,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         ? _senderProfile!.phoneNumber
         : _senderPhone.text.trim();
     final requestCode = id.replaceAll(RegExp(r'[^0-9]'), '').padLeft(6, '0');
-    final pickupGeo = {
-      'geopoint': const GeoPoint(51.5245, -0.0754),
-      'geohash': 'gcpvn',
-    };
-    final dropoffGeo = {
-      'geopoint': const GeoPoint(51.5054, -0.0235),
-      'geohash': 'gcpuv',
-    };
+    final pickupGeo = pickupAddress.toPositionMap();
+    final dropoffGeo = dropoffAddress.toPositionMap();
     final packageType = _inferPackageType();
     final hasPhoto = false;
     final safeVehicleName = DeliveryPricing.vehicleCanCarryWeight(
@@ -8993,7 +9107,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final driverJobSummary = {
       'pickupDisplay': _pickup.text.trim(),
       'dropoffDisplay': _dropoff.text.trim(),
-      'estimatedDistanceMiles': _webQuoteDistanceMiles,
+      'estimatedDistanceMiles': distanceMiles,
       'estimatedDurationMinutes': 28,
       'scheduledPickupDate': _scheduledPickupDate.text.trim(),
       'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
@@ -9047,8 +9161,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return {
       'requestId': id,
       'code': requestCode.substring(requestCode.length - 6),
-      'pickupAddress': _pickup.text.trim(),
-      'dropoffAddress': _dropoff.text.trim(),
+      'pickupAddress': pickupAddress.displayAddress,
+      'dropoffAddress': dropoffAddress.displayAddress,
+      'pickupAddressRaw': pickupAddress.rawInput,
+      'dropoffAddressRaw': dropoffAddress.rawInput,
+      'pickupAddressCanonical': pickupAddress.toJson(),
+      'dropoffAddressCanonical': dropoffAddress.toJson(),
+      'distanceMiles': distanceMiles,
+      'routeDistanceMiles': distanceMiles,
+      'routeDistanceSource': 'validated_coordinates',
+      'routeDistanceConfirmed': true,
       'packageType': packageType,
       'packageDescription': _description.text.trim(),
       'weight': _weight.text.trim(),
@@ -9166,7 +9288,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'fullname': senderName,
         'phone': senderPhone,
         'position': pickupGeo,
-        'address': _pickup.text.trim(),
+        'address': pickupAddress.displayAddress,
+        'rawAddress': pickupAddress.rawInput,
+        'postcode': pickupAddress.postcode,
+        'geocodeConfidence': pickupAddress.confidence,
         'subAddress': '',
         'locality': 'London',
         'moreInformation': _description.text.trim(),
@@ -9177,7 +9302,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'fullname': 'Recipient',
         'phone': '',
         'position': dropoffGeo,
-        'address': _dropoff.text.trim(),
+        'address': dropoffAddress.displayAddress,
+        'rawAddress': dropoffAddress.rawInput,
+        'postcode': dropoffAddress.postcode,
+        'geocodeConfidence': dropoffAddress.confidence,
         'subAddress': '',
         'locality': 'London',
         'moreInformation': '',
@@ -11266,6 +11394,14 @@ class _DetailsStep extends StatelessWidget {
   final List<SavedSenderAddress> savedAddresses;
   final ValueChanged<String> onSavedPickup;
   final ValueChanged<String> onSavedDropoff;
+  final bool pickupVerified;
+  final bool dropoffVerified;
+  final String locationValidationMessage;
+  final bool canSubmit;
+  final ValueChanged<_ValidatedAddress> onPickupSelected;
+  final ValueChanged<_ValidatedAddress> onDropoffSelected;
+  final ValueChanged<String> onPickupEdited;
+  final ValueChanged<String> onDropoffEdited;
   final TextEditingController description;
   final TextEditingController weight;
   final double? irisEstimatedWeightKg;
@@ -11294,6 +11430,14 @@ class _DetailsStep extends StatelessWidget {
     required this.savedAddresses,
     required this.onSavedPickup,
     required this.onSavedDropoff,
+    required this.pickupVerified,
+    required this.dropoffVerified,
+    required this.locationValidationMessage,
+    required this.canSubmit,
+    required this.onPickupSelected,
+    required this.onDropoffSelected,
+    required this.onPickupEdited,
+    required this.onDropoffEdited,
     required this.description,
     required this.weight,
     required this.irisEstimatedWeightKg,
@@ -11356,6 +11500,9 @@ class _DetailsStep extends StatelessWidget {
                 icon: Icons.radio_button_checked,
                 label: 'Pickup location',
                 controller: pickup,
+                verified: pickupVerified,
+                onSelected: onPickupSelected,
+                onEdited: onPickupEdited,
               ),
               const SizedBox(height: 12),
               _SavedAddressQuickPick(
@@ -11370,6 +11517,36 @@ class _DetailsStep extends StatelessWidget {
                 icon: Icons.location_on,
                 label: 'Drop-off location',
                 controller: dropoff,
+                verified: dropoffVerified,
+                onSelected: onDropoffSelected,
+                onEdited: onDropoffEdited,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    pickupVerified && dropoffVerified
+                        ? Icons.verified
+                        : Icons.info_outline,
+                    color:
+                        pickupVerified && dropoffVerified ? colors.success : colors.mutedText,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      locationValidationMessage,
+                      style: TextStyle(
+                        color: pickupVerified && dropoffVerified
+                            ? colors.text
+                            : colors.mutedText,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -11513,7 +11690,7 @@ class _DetailsStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: analyzing ? null : onSubmit,
+            onPressed: analyzing || !canSubmit ? null : onSubmit,
             icon: analyzing
                 ? const SizedBox(
                     width: 18,
@@ -11522,7 +11699,12 @@ class _DetailsStep extends StatelessWidget {
                   )
                 : const Icon(Icons.auto_awesome),
             label: Text(
-                analyzing ? 'Checking options...' : 'See delivery options'),
+              analyzing
+                  ? 'Checking options...'
+                  : canSubmit
+                      ? 'See delivery options'
+                      : 'Verify addresses before pricing',
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
               foregroundColor: colors.inverseText,
@@ -12614,6 +12796,126 @@ class _WeightPricingDecision {
   });
 }
 
+class _AddressSuggestion {
+  final String displayAddress;
+  final double lat;
+  final double lng;
+  final double confidence;
+  final String provider;
+  final String sourceInput;
+
+  const _AddressSuggestion({
+    required this.displayAddress,
+    required this.lat,
+    required this.lng,
+    required this.confidence,
+    required this.provider,
+    required this.sourceInput,
+  });
+
+  _ValidatedAddress toValidatedAddress() {
+    return _ValidatedAddress(
+      rawInput: sourceInput,
+      displayAddress: displayAddress,
+      postcode: _extractUkPostcode(displayAddress),
+      lat: lat,
+      lng: lng,
+      confidence: confidence,
+      provider: provider,
+      locationId: _stableLocationId(displayAddress, lat, lng),
+    );
+  }
+}
+
+class _ValidatedAddress {
+  final String rawInput;
+  final String displayAddress;
+  final String? postcode;
+  final double lat;
+  final double lng;
+  final double confidence;
+  final String provider;
+  final String locationId;
+
+  const _ValidatedAddress({
+    required this.rawInput,
+    required this.displayAddress,
+    required this.postcode,
+    required this.lat,
+    required this.lng,
+    required this.confidence,
+    required this.provider,
+    required this.locationId,
+  });
+
+  bool get hasCoordinates => lat.isFinite && lng.isFinite;
+
+  Map<String, dynamic> toJson() => {
+        'rawInput': rawInput,
+        'displayAddress': displayAddress,
+        'postcode': postcode,
+        'lat': lat,
+        'lng': lng,
+        'geocodeConfidence': confidence,
+        'provider': provider,
+        'locationId': locationId,
+      };
+
+  Map<String, dynamic> toPositionMap() => {
+        'geopoint': GeoPoint(lat, lng),
+        'lat': lat,
+        'lng': lng,
+        'geocodeConfidence': confidence,
+        'locationId': locationId,
+        'provider': provider,
+      };
+}
+
+String? _extractUkPostcode(String address) {
+  final match = RegExp(
+    r'\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b',
+    caseSensitive: false,
+  ).firstMatch(address);
+  return match?.group(1)?.toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+}
+
+String _stableLocationId(String address, double lat, double lng) {
+  final normalized = address.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+  return '${normalized.substring(0, math.min(normalized.length, 48))}'
+      '-${lat.toStringAsFixed(4)}-${lng.toStringAsFixed(4)}';
+}
+
+String _cityForAddress(String value, {required bool postcodeLike}) {
+  final lower = value.toLowerCase();
+  for (final city in _ukCityCoordinates.keys) {
+    if (lower.contains(city.toLowerCase())) return city;
+  }
+  return postcodeLike ? 'London' : 'London';
+}
+
+double _coordinateDistanceMiles(
+  double pickupLat,
+  double pickupLng,
+  double dropoffLat,
+  double dropoffLng,
+) {
+  const earthRadiusMiles = 3958.8;
+  final dLat = _degreesToRadians(dropoffLat - pickupLat);
+  final dLng = _degreesToRadians(dropoffLng - pickupLng);
+  final lat1 = _degreesToRadians(pickupLat);
+  final lat2 = _degreesToRadians(dropoffLat);
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(lat1) *
+          math.cos(lat2) *
+          math.sin(dLng / 2) *
+          math.sin(dLng / 2);
+  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  final directMiles = earthRadiusMiles * c;
+  return double.parse((directMiles * 1.25).clamp(0.1, 999).toStringAsFixed(2));
+}
+
+double _degreesToRadians(double degrees) => degrees * math.pi / 180;
+
 class _SectionTitle extends StatelessWidget {
   final _CircumColors colors;
   final String title;
@@ -12778,6 +13080,9 @@ class _PaymentStep extends StatelessWidget {
   final _VehicleOption vehicle;
   final String speed;
   final DeliveryPricingBreakdown breakdown;
+  final double? distanceMiles;
+  final bool locationsConfirmed;
+  final String routeMessage;
   final double? irisEstimatedWeightKg;
   final double? senderEnteredWeightKg;
   final double weightKg;
@@ -12798,6 +13103,9 @@ class _PaymentStep extends StatelessWidget {
     required this.vehicle,
     required this.speed,
     required this.breakdown,
+    required this.distanceMiles,
+    required this.locationsConfirmed,
+    required this.routeMessage,
     required this.irisEstimatedWeightKg,
     required this.senderEnteredWeightKg,
     required this.weightKg,
@@ -12848,7 +13156,9 @@ class _PaymentStep extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    '${_webQuoteDistanceMiles.toStringAsFixed(1)} miles',
+                    distanceMiles == null
+                        ? 'Distance not confirmed'
+                        : '${distanceMiles!.toStringAsFixed(1)} miles',
                     style: TextStyle(
                       color: colors.mutedText,
                       fontFamily: 'monospace',
@@ -12857,6 +13167,13 @@ class _PaymentStep extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              _PriceLine(
+                colors: colors,
+                label: 'Route',
+                value: routeMessage,
+                strong: locationsConfirmed,
+              ),
+              Divider(color: colors.border, height: 26),
               if (hasSchedule) ...[
                 _PriceLine(
                   colors: colors,
@@ -12984,10 +13301,12 @@ class _PaymentStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: weightConfirmed ? onPay : null,
+            onPressed: weightConfirmed && locationsConfirmed ? onPay : null,
             icon: const Icon(Icons.lock),
             label: Text(
-              weightConfirmed
+              !locationsConfirmed
+                  ? 'Confirm pickup and drop-off before payment'
+                  : weightConfirmed
                   ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
                   : 'Confirm parcel weight before payment',
             ),
@@ -13573,6 +13892,9 @@ class _AddressField extends StatefulWidget {
   final String label;
   final TextEditingController controller;
   final bool pharmacyMode;
+  final bool verified;
+  final ValueChanged<_ValidatedAddress>? onSelected;
+  final ValueChanged<String>? onEdited;
 
   const _AddressField({
     required this.colors,
@@ -13580,6 +13902,9 @@ class _AddressField extends StatefulWidget {
     required this.label,
     required this.controller,
     this.pharmacyMode = false,
+    this.verified = false,
+    this.onSelected,
+    this.onEdited,
   });
 
   @override
@@ -13587,7 +13912,8 @@ class _AddressField extends StatefulWidget {
 }
 
 class _AddressFieldState extends State<_AddressField> {
-  List<String> _suggestions = const [];
+  List<_AddressSuggestion> _suggestions = const [];
+  bool _selectingSuggestion = false;
 
   @override
   void initState() {
@@ -13607,40 +13933,82 @@ class _AddressFieldState extends State<_AddressField> {
     if (mounted) setState(() => _suggestions = next);
   }
 
-  List<String> _buildAddressSuggestions(String value) {
+  List<_AddressSuggestion> _buildAddressSuggestions(String value) {
     if (value.length < 3) return const [];
     final clean = value.replaceAll(RegExp(r'\s+'), ' ');
     if (clean.toLowerCase().contains('united kingdom')) return const [];
     final typed = clean.toLowerCase();
-    final seeded = _ukAddressSuggestionSeeds
-        .where((address) {
-          final lower = address.toLowerCase();
+    final seeded = _ukAddressSuggestionSeeds.entries
+        .where((entry) {
+          final lower = entry.key.toLowerCase();
           final words = typed.split(' ').where((word) => word.isNotEmpty);
           return words.every(lower.contains);
         })
+        .map(
+          (entry) => _AddressSuggestion(
+            displayAddress: entry.key,
+            lat: entry.value.$1,
+            lng: entry.value.$2,
+            confidence: 0.96,
+            provider: 'circum_seeded_geocoder',
+            sourceInput: clean,
+          ),
+        )
         .take(4)
         .toList(growable: false);
     if (seeded.isNotEmpty) return seeded;
     final postcodeLike = RegExp(r'[A-Z]{1,2}\d', caseSensitive: false)
         .hasMatch(clean.replaceAll(' ', ''));
-    final city = postcodeLike ? 'London' : 'Greater London';
+    final city = _cityForAddress(clean, postcodeLike: postcodeLike);
+    final coords = _ukCityCoordinates[city] ?? _ukCityCoordinates['London']!;
     if (widget.pharmacyMode) {
       return [
-        '$clean Pharmacy, High Street, $city, United Kingdom',
-        '$clean, Pharmacy Counter, $city, United Kingdom',
+        _AddressSuggestion(
+          displayAddress: '$clean Pharmacy, High Street, $city, United Kingdom',
+          lat: coords.$1,
+          lng: coords.$2,
+          confidence: 0.72,
+          provider: 'circum_assisted_geocoder',
+          sourceInput: clean,
+        ),
+        _AddressSuggestion(
+          displayAddress: '$clean, Pharmacy Counter, $city, United Kingdom',
+          lat: coords.$1,
+          lng: coords.$2,
+          confidence: 0.7,
+          provider: 'circum_assisted_geocoder',
+          sourceInput: clean,
+        ),
       ];
     }
     return [
-      '$clean, $city, United Kingdom',
-      '$clean, London, United Kingdom',
+      _AddressSuggestion(
+        displayAddress: '$clean, $city, United Kingdom',
+        lat: coords.$1,
+        lng: coords.$2,
+        confidence: 0.72,
+        provider: 'circum_assisted_geocoder',
+        sourceInput: clean,
+      ),
+      _AddressSuggestion(
+        displayAddress: '$clean, London, United Kingdom',
+        lat: _ukCityCoordinates['London']!.$1,
+        lng: _ukCityCoordinates['London']!.$2,
+        confidence: 0.68,
+        provider: 'circum_assisted_geocoder',
+        sourceInput: clean,
+      ),
     ];
   }
 
-  void _selectSuggestion(String suggestion) {
-    widget.controller.text = suggestion;
+  void _selectSuggestion(_AddressSuggestion suggestion) {
+    _selectingSuggestion = true;
+    widget.controller.text = suggestion.displayAddress;
     widget.controller.selection = TextSelection.collapsed(
-      offset: suggestion.length,
+      offset: suggestion.displayAddress.length,
     );
+    _selectingSuggestion = false;
+    widget.onSelected?.call(suggestion.toValidatedAddress());
     setState(() => _suggestions = const []);
   }
 
@@ -13652,10 +14020,16 @@ class _AddressFieldState extends State<_AddressField> {
       children: [
         TextField(
           controller: widget.controller,
+          onChanged: (value) {
+            if (!_selectingSuggestion) widget.onEdited?.call(value);
+          },
           style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
           decoration: InputDecoration(
             prefixIcon: Icon(widget.icon, color: colors.text, size: 18),
             labelText: widget.label,
+            suffixIcon: widget.verified
+                ? Icon(Icons.verified, color: colors.success, size: 18)
+                : null,
             labelStyle: TextStyle(color: colors.mutedText),
             filled: true,
             fillColor: colors.field,
@@ -13683,7 +14057,7 @@ class _AddressFieldState extends State<_AddressField> {
                     label: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 320),
                       child: Text(
-                        suggestion,
+                        suggestion.displayAddress,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -13692,29 +14066,64 @@ class _AddressFieldState extends State<_AddressField> {
                 .toList(),
           ),
         ],
+        if (widget.verified) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Verified address selected',
+            style: TextStyle(
+              color: colors.success,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-const _ukAddressSuggestionSeeds = [
-  '10 Downing Street, Westminster, London SW1A 2AA, United Kingdom',
-  '221B Baker Street, Marylebone, London NW1 6XE, United Kingdom',
-  '1 Canada Square, Canary Wharf, London E14 5AB, United Kingdom',
-  'The Shard, 32 London Bridge Street, London SE1 9SG, United Kingdom',
-  'Westfield London, Ariel Way, London W12 7GF, United Kingdom',
-  'Selfridges, 400 Oxford Street, London W1A 1AB, United Kingdom',
-  'King\'s Cross Station, Euston Road, London N1C 4TB, United Kingdom',
-  'Manchester Piccadilly Station, Manchester M1 2BN, United Kingdom',
-  'Bullring, Birmingham B5 4BU, United Kingdom',
-  'Cabot Circus, Bristol BS1 3BD, United Kingdom',
-  'St James Quarter, Edinburgh EH1 3AD, United Kingdom',
-  'Cardiff Central Station, Cardiff CF10 1EP, United Kingdom',
-  'Leeds Station, New Station Street, Leeds LS1 4DY, United Kingdom',
-  'Liverpool ONE, Liverpool L1 8JQ, United Kingdom',
-  'Brighton Station, Queens Road, Brighton BN1 3XP, United Kingdom',
-  'Oxford City Centre, Oxford OX1 1BX, United Kingdom',
-];
+const Map<String, (double, double)> _ukAddressSuggestionSeeds = {
+  '10 Downing Street, Westminster, London SW1A 2AA, United Kingdom':
+      (51.5034, -0.1276),
+  '221B Baker Street, Marylebone, London NW1 6XE, United Kingdom':
+      (51.5237, -0.1585),
+  '1 Canada Square, Canary Wharf, London E14 5AB, United Kingdom':
+      (51.5054, -0.0235),
+  'The Shard, 32 London Bridge Street, London SE1 9SG, United Kingdom':
+      (51.5045, -0.0865),
+  'Westfield London, Ariel Way, London W12 7GF, United Kingdom':
+      (51.5074, -0.2217),
+  'Selfridges, 400 Oxford Street, London W1A 1AB, United Kingdom':
+      (51.5145, -0.1527),
+  'King\'s Cross Station, Euston Road, London N1C 4TB, United Kingdom':
+      (51.5308, -0.1238),
+  'Manchester Piccadilly Station, Manchester M1 2BN, United Kingdom':
+      (53.4774, -2.2309),
+  'Bullring, Birmingham B5 4BU, United Kingdom': (52.4776, -1.8936),
+  'Cabot Circus, Bristol BS1 3BD, United Kingdom': (51.4581, -2.5837),
+  'St James Quarter, Edinburgh EH1 3AD, United Kingdom': (55.9547, -3.1882),
+  'Cardiff Central Station, Cardiff CF10 1EP, United Kingdom':
+      (51.4755, -3.1780),
+  'Leeds Station, New Station Street, Leeds LS1 4DY, United Kingdom':
+      (53.7947, -1.5479),
+  'Liverpool ONE, Liverpool L1 8JQ, United Kingdom': (53.4049, -2.9876),
+  'Brighton Station, Queens Road, Brighton BN1 3XP, United Kingdom':
+      (50.8290, -0.1413),
+  'Oxford City Centre, Oxford OX1 1BX, United Kingdom': (51.7520, -1.2577),
+};
+
+const Map<String, (double, double)> _ukCityCoordinates = {
+  'London': (51.5074, -0.1278),
+  'Manchester': (53.4808, -2.2426),
+  'Birmingham': (52.4862, -1.8904),
+  'Bristol': (51.4545, -2.5879),
+  'Edinburgh': (55.9533, -3.1883),
+  'Cardiff': (51.4816, -3.1791),
+  'Leeds': (53.8008, -1.5491),
+  'Liverpool': (53.4084, -2.9916),
+  'Brighton': (50.8225, -0.1372),
+  'Oxford': (51.7520, -1.2577),
+};
 
 class _InputBox extends StatelessWidget {
   final _CircumColors colors;
