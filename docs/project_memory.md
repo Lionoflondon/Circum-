@@ -525,3 +525,116 @@ Reasons:
 - No expected Git conflicts.
 - IRIS files are already pushed to GitHub.
 - Main risk is not source-control conflict; it is backend deployment/runtime verification for Firebase Functions and Firestore rule behaviour.
+
+## Post-Merge Validation Report
+
+Snapshot date: 2026-06-04  
+Merged source: `origin/iris-production-sync`  
+Merged target: `main`  
+Merge type: fast-forward  
+Merge result: clean, no Git conflicts  
+Current merged HEAD: `ab35121 Document branch reconciliation`
+
+### Backend Tests
+
+Passed:
+
+- `node --test iris-core.test.js iris-security.test.js`
+  - 16 tests passed.
+- `node --test health-plus-core.test.js`
+  - 4 tests passed.
+
+Note:
+
+- Shell `npm` was not on the default PATH in this environment.
+- Lint was run using the bundled project npm binary instead.
+
+### Firebase Functions Validation
+
+Passed:
+
+- `npm run lint` from `server/functions` using bundled npm.
+- `firebase deploy --only functions --project circum-2797c --dry-run` from `server`.
+
+Warnings:
+
+- Node.js 20 runtime is deprecated as of 2026-04-30 and scheduled for decommissioning on 2026-10-30.
+- `functions.config()` / Cloud Runtime Config is deprecated and must be migrated before March 2027.
+
+### Firestore Rules Validation
+
+Passed:
+
+- `firebase deploy --only firestore:rules --project circum-2797c --dry-run`
+- `firestore.rules` compiled successfully.
+
+### Send Package Flow Validation
+
+Source-level validation passed with caveats:
+
+- `server/functions/send-package.js` is exported as `sendPackage` from `server/functions/index.js`.
+- The function requires authenticated users.
+- It loads `deliveryRequests` by `requestId`.
+- It blocks non-dispatchable IRIS results through `isDispatchable`.
+- It filters online riders through `riderMatchesIris`.
+- It sends FCM broadcast messages to matched riders.
+
+Caveat:
+
+- Full live validation still requires a real Firebase delivery request, online rider records, and FCM token verification.
+
+### Rider Request Listing Validation
+
+Source-level validation passed with caveats:
+
+- `server/functions/get-avaliable-requests.js` is exported as `getAvaliableRequests` from `server/functions/index.js`.
+- The function requires authenticated riders.
+- It loads the rider profile from `riders/{uid}`.
+- It filters requested delivery jobs through `isDispatchable`.
+- It checks rider suitability through `riderMatchesIris`.
+- It sorts Express/high-priority work above normal work using `dispatchPriority`.
+
+Caveat:
+
+- Full live validation still requires real rider location data and delivery request records.
+
+### Rider Acceptance Flow Validation
+
+Validation status: blocker found.
+
+- `server/functions/accept-ride-requests.js` exists.
+- It contains an authenticated callable function body.
+- It performs IRIS dispatchability and rider compatibility checks.
+- It is not exported from `server/functions/index.js`.
+
+Impact:
+
+- Firebase Functions dry-run will not deploy this function as a callable endpoint unless it is exported elsewhere.
+- The rider acceptance flow cannot be considered production-ready from this merged source state.
+
+Resolution needed:
+
+- Export the existing acceptance callable from `server/functions/index.js`.
+- Add or verify a focused acceptance test that proves first valid rider assignment works.
+- Confirm the client calls the deployed callable name.
+
+### Production Readiness
+
+Post-merge production readiness estimate: `86%`
+
+Ready:
+
+- Git merge is clean.
+- Backend IRIS tests pass.
+- Health+ backend tests pass.
+- Functions lint passes.
+- Functions dry-run packaging/analyse passes.
+- Firestore rules compile.
+- Send package flow is exported and source-valid.
+- Rider request listing is exported and source-valid.
+
+Not ready:
+
+- Rider acceptance callable exists but is not exported from `index.js`.
+- Live Firebase/FCM end-to-end testing has not been run in this validation pass.
+- Node runtime and Runtime Config deprecation warnings need planned migration.
