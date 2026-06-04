@@ -7704,7 +7704,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return 'Choose a verified drop-off address from the suggestions.';
     }
     if (_confirmedRouteDistanceMiles == null) {
-      return 'Distance not confirmed. Re-select both addresses.';
+      return 'Route distance not confirmed';
     }
     return 'Verified route: ${_confirmedRouteDistanceMiles!.toStringAsFixed(1)} miles.';
   }
@@ -7713,7 +7713,21 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickup = _validatedPickup;
     final dropoff = _validatedDropoff;
     if (pickup == null || dropoff == null) return null;
-    return _coordinateDistanceMiles(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+    if (!_coordinatesAreUsable(pickup.lat, pickup.lng) ||
+        !_coordinatesAreUsable(dropoff.lat, dropoff.lng)) {
+      return null;
+    }
+    if (_coordinatesAreSame(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)) {
+      return null;
+    }
+    final miles = _coordinateDistanceMiles(
+      pickup.lat,
+      pickup.lng,
+      dropoff.lat,
+      dropoff.lng,
+    );
+    if (miles == null || miles < 0.2) return null;
+    return miles;
   }
 
   String get _weightSourceText {
@@ -12848,7 +12862,7 @@ class _ValidatedAddress {
     required this.locationId,
   });
 
-  bool get hasCoordinates => lat.isFinite && lng.isFinite;
+  bool get hasCoordinates => _coordinatesAreUsable(lat, lng);
 
   Map<String, dynamic> toJson() => {
         'rawInput': rawInput,
@@ -12885,20 +12899,56 @@ String _stableLocationId(String address, double lat, double lng) {
       '-${lat.toStringAsFixed(4)}-${lng.toStringAsFixed(4)}';
 }
 
-String _cityForAddress(String value, {required bool postcodeLike}) {
+String _cityForAddress(String value) {
   final lower = value.toLowerCase();
   for (final city in _ukCityCoordinates.keys) {
     if (lower.contains(city.toLowerCase())) return city;
   }
-  return postcodeLike ? 'London' : 'London';
+  final postcode = _extractUkPostcode(value);
+  if (postcode != null) {
+    final outward = _postcodeOutward(postcode);
+    if (outward.startsWith('CR')) return 'Croydon';
+    if (outward.startsWith('SE') ||
+        outward.startsWith('SW') ||
+        outward.startsWith('E') ||
+        outward.startsWith('N') ||
+        outward.startsWith('NW') ||
+        outward.startsWith('W')) {
+      return 'London';
+    }
+  }
+  return 'London';
 }
 
-double _coordinateDistanceMiles(
+bool _coordinatesAreUsable(double lat, double lng) {
+  if (!lat.isFinite || !lng.isFinite) return false;
+  if (lat == 0 || lng == 0) return false;
+  return lat >= 49 && lat <= 61 && lng >= -9 && lng <= 2;
+}
+
+bool _coordinatesAreSame(
   double pickupLat,
   double pickupLng,
   double dropoffLat,
   double dropoffLng,
 ) {
+  return (pickupLat - dropoffLat).abs() < 0.0005 &&
+      (pickupLng - dropoffLng).abs() < 0.0005;
+}
+
+double? _coordinateDistanceMiles(
+  double pickupLat,
+  double pickupLng,
+  double dropoffLat,
+  double dropoffLng,
+) {
+  if (!_coordinatesAreUsable(pickupLat, pickupLng) ||
+      !_coordinatesAreUsable(dropoffLat, dropoffLng)) {
+    return null;
+  }
+  if (_coordinatesAreSame(pickupLat, pickupLng, dropoffLat, dropoffLng)) {
+    return null;
+  }
   const earthRadiusMiles = 3958.8;
   final dLat = _degreesToRadians(dropoffLat - pickupLat);
   final dLng = _degreesToRadians(dropoffLng - pickupLng);
@@ -12911,10 +12961,28 @@ double _coordinateDistanceMiles(
           math.sin(dLng / 2);
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   final directMiles = earthRadiusMiles * c;
-  return double.parse((directMiles * 1.25).clamp(0.1, 999).toStringAsFixed(2));
+  if (directMiles < 0.15) return null;
+  return double.parse((directMiles * 1.25).clamp(0.2, 999).toStringAsFixed(2));
 }
 
 double _degreesToRadians(double degrees) => degrees * math.pi / 180;
+
+String _postcodeOutward(String postcode) {
+  return postcode
+      .toUpperCase()
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .split(' ')
+      .first;
+}
+
+(double, double)? _postcodeCoordinatesForAddress(String address) {
+  final postcode = _extractUkPostcode(address);
+  if (postcode == null) return null;
+  final outward = _postcodeOutward(postcode);
+  final area = RegExp(r'^[A-Z]+').firstMatch(outward)?.group(0);
+  return _ukPostcodeCoordinates[outward] ??
+      (area == null ? null : _ukPostcodeCoordinates[area]);
+}
 
 class _SectionTitle extends StatelessWidget {
   final _CircumColors colors;
@@ -13957,26 +14025,25 @@ class _AddressFieldState extends State<_AddressField> {
         .take(4)
         .toList(growable: false);
     if (seeded.isNotEmpty) return seeded;
-    final postcodeLike = RegExp(r'[A-Z]{1,2}\d', caseSensitive: false)
-        .hasMatch(clean.replaceAll(' ', ''));
-    final city = _cityForAddress(clean, postcodeLike: postcodeLike);
-    final coords = _ukCityCoordinates[city] ?? _ukCityCoordinates['London']!;
+    final coords = _postcodeCoordinatesForAddress(clean);
+    if (coords == null) return const [];
+    final city = _cityForAddress(clean);
     if (widget.pharmacyMode) {
       return [
         _AddressSuggestion(
           displayAddress: '$clean Pharmacy, High Street, $city, United Kingdom',
           lat: coords.$1,
           lng: coords.$2,
-          confidence: 0.72,
-          provider: 'circum_assisted_geocoder',
+          confidence: 0.82,
+          provider: 'circum_postcode_geocoder',
           sourceInput: clean,
         ),
         _AddressSuggestion(
           displayAddress: '$clean, Pharmacy Counter, $city, United Kingdom',
           lat: coords.$1,
           lng: coords.$2,
-          confidence: 0.7,
-          provider: 'circum_assisted_geocoder',
+          confidence: 0.8,
+          provider: 'circum_postcode_geocoder',
           sourceInput: clean,
         ),
       ];
@@ -13986,16 +14053,16 @@ class _AddressFieldState extends State<_AddressField> {
         displayAddress: '$clean, $city, United Kingdom',
         lat: coords.$1,
         lng: coords.$2,
-        confidence: 0.72,
-        provider: 'circum_assisted_geocoder',
+        confidence: 0.82,
+        provider: 'circum_postcode_geocoder',
         sourceInput: clean,
       ),
       _AddressSuggestion(
-        displayAddress: '$clean, London, United Kingdom',
-        lat: _ukCityCoordinates['London']!.$1,
-        lng: _ukCityCoordinates['London']!.$2,
-        confidence: 0.68,
-        provider: 'circum_assisted_geocoder',
+        displayAddress: '$clean, United Kingdom',
+        lat: coords.$1,
+        lng: coords.$2,
+        confidence: 0.8,
+        provider: 'circum_postcode_geocoder',
         sourceInput: clean,
       ),
     ];
@@ -14114,6 +14181,7 @@ const Map<String, (double, double)> _ukAddressSuggestionSeeds = {
 
 const Map<String, (double, double)> _ukCityCoordinates = {
   'London': (51.5074, -0.1278),
+  'Croydon': (51.3762, -0.0982),
   'Manchester': (53.4808, -2.2426),
   'Birmingham': (52.4862, -1.8904),
   'Bristol': (51.4545, -2.5879),
@@ -14123,6 +14191,72 @@ const Map<String, (double, double)> _ukCityCoordinates = {
   'Liverpool': (53.4084, -2.9916),
   'Brighton': (50.8225, -0.1372),
   'Oxford': (51.7520, -1.2577),
+};
+
+const Map<String, (double, double)> _ukPostcodeCoordinates = {
+  'SE1': (51.5033, -0.0890),
+  'SE2': (51.4882, 0.1213),
+  'SE3': (51.4685, 0.0196),
+  'SE4': (51.4612, -0.0379),
+  'SE5': (51.4736, -0.0920),
+  'SE6': (51.4339, -0.0166),
+  'SE7': (51.4869, 0.0312),
+  'SE8': (51.4825, -0.0279),
+  'SE9': (51.4504, 0.0513),
+  'SE10': (51.4816, -0.0011),
+  'SE11': (51.4901, -0.1101),
+  'SE12': (51.4452, 0.0138),
+  'SE13': (51.4589, -0.0117),
+  'SE14': (51.4757, -0.0406),
+  'SE15': (51.4735, -0.0671),
+  'SE16': (51.4979, -0.0535),
+  'SE17': (51.4880, -0.0923),
+  'SE18': (51.4896, 0.0708),
+  'SE19': (51.4195, -0.0868),
+  'SE20': (51.4125, -0.0551),
+  'SE21': (51.4402, -0.0886),
+  'SE22': (51.4530, -0.0720),
+  'SE23': (51.4416, -0.0497),
+  'SE24': (51.4538, -0.1012),
+  'SE25': (51.3995, -0.0751),
+  'SE26': (51.4267, -0.0546),
+  'SE27': (51.4306, -0.1033),
+  'SE28': (51.5029, 0.1042),
+  'CR0': (51.3762, -0.0982),
+  'CR2': (51.3452, -0.0920),
+  'CR3': (51.2853, -0.0801),
+  'CR4': (51.4035, -0.1604),
+  'CR5': (51.3093, -0.1392),
+  'CR6': (51.3095, -0.0579),
+  'CR7': (51.3987, -0.1071),
+  'CR8': (51.3373, -0.1151),
+  'E': (51.5326, 0.0553),
+  'EC': (51.5155, -0.0922),
+  'N': (51.5680, -0.1080),
+  'NW': (51.5480, -0.1980),
+  'SW': (51.4450, -0.1700),
+  'W': (51.5120, -0.2200),
+  'WC': (51.5190, -0.1200),
+  'BR': (51.4060, 0.0150),
+  'DA': (51.4470, 0.2190),
+  'EN': (51.6520, -0.0810),
+  'HA': (51.5810, -0.3370),
+  'IG': (51.5590, 0.0750),
+  'KT': (51.3920, -0.3000),
+  'RM': (51.5600, 0.1830),
+  'SM': (51.3650, -0.1950),
+  'TW': (51.4490, -0.4100),
+  'UB': (51.5200, -0.4100),
+  'WD': (51.6600, -0.3900),
+  'M': (53.4808, -2.2426),
+  'B': (52.4862, -1.8904),
+  'BS': (51.4545, -2.5879),
+  'EH': (55.9533, -3.1883),
+  'CF': (51.4816, -3.1791),
+  'LS': (53.8008, -1.5491),
+  'L': (53.4084, -2.9916),
+  'BN': (50.8225, -0.1372),
+  'OX': (51.7520, -1.2577),
 };
 
 class _InputBox extends StatelessWidget {
