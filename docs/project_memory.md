@@ -395,8 +395,8 @@ Tracked remote branch: `origin/iris-production-sync`
 ### B. GitHub Source State
 
 - `origin/main` currently points at `dadc442 Fix admin action button wrapping`.
-- `origin/iris-production-sync` currently points at `624ed27 Sync IRIS v1 production architecture` before pushing this memory update.
-- Local branch `iris-production-sync` was ahead by one documentation commit before push.
+- `origin/iris-production-sync` currently points at `9b64b1a Add project memory documentation`.
+- Local branch `iris-production-sync` is synchronized with `origin/iris-production-sync` at the time of this snapshot.
 - IRIS implementation is present on GitHub in `origin/iris-production-sync`.
 
 ### C. Missing Files
@@ -430,3 +430,98 @@ Reasoning:
 - IRIS architecture is committed to a GitHub branch.
 - Sender, rider, admin, Health+, pricing, and chat foundations exist.
 - Remaining blockers are concentrated around final checkout/tracking weight display, rider-matching timeout/retry state, live backend verification, and full end-to-end Firebase role/security QA.
+
+## Branch Reconciliation Report
+
+Snapshot date: 2026-06-04  
+Compared branches: `origin/main` and `origin/iris-production-sync`  
+Merge base: `dadc442 Fix admin action button wrapping`  
+`origin/iris-production-sync` HEAD: `9b64b1a Add project memory documentation`  
+`origin/main` HEAD: `dadc442 Fix admin action button wrapping`
+
+### Files Unique To Main
+
+None found.
+
+`origin/main` is the merge base for this comparison and has no branch-only commits or files relative to `origin/iris-production-sync`.
+
+### Files Unique To IRIS Production Sync
+
+- `docs/project_memory.md`
+- `server/functions/iris-core.js`
+- `server/functions/iris-core.test.js`
+- `server/functions/iris-security.test.js`
+- `server/functions/iris.js`
+
+### Files Modified On IRIS Production Sync
+
+These files already exist on `origin/main`, but differ on `origin/iris-production-sync`:
+
+- `firestore.rules`
+- `server/functions/accept-ride-requests.js`
+- `server/functions/get-avaliable-requests.js`
+- `server/functions/index.js`
+- `server/functions/package.json`
+- `server/functions/send-package.js`
+
+### Files Modified Differently On Both Branches
+
+None found.
+
+Because `origin/main` is the merge base and has no commits that are absent from `origin/iris-production-sync`, there are no files with independent changes on both sides.
+
+### Expected Conflicts
+
+None expected from the current branch relationship.
+
+`git merge-tree origin/main origin/iris-production-sync` produced a clean merge tree and did not report conflict markers or unresolved paths.
+
+### Safe Merge Strategy
+
+Recommended strategy:
+
+1. Open a pull request from `iris-production-sync` into `main`.
+2. Review the backend/function and Firestore rule changes carefully.
+3. Run backend tests, especially:
+   - `server/functions/iris-core.test.js`
+   - `server/functions/iris-security.test.js`
+   - delivery request creation tests around `send-package.js`
+   - rider request visibility tests around `get-avaliable-requests.js`
+   - rider acceptance tests around `accept-ride-requests.js`
+4. Verify Firebase Functions dependency installation and deployment in a clean environment.
+5. Merge only after backend deploy readiness is confirmed.
+
+Because `main` is currently an ancestor of `iris-production-sync`, this can be merged without code conflicts if no new commits land on `main` first.
+
+### Recommended Source Of Truth Branch
+
+Recommended source of truth for IRIS/backend architecture: `origin/iris-production-sync`.
+
+Reason:
+
+- It contains the latest IRIS backend architecture.
+- It contains the project memory documentation.
+- It includes all current `main` history plus the IRIS-specific backend changes.
+
+Recommended source of truth for currently deployed/stable public branch: `origin/main`.
+
+Reason:
+
+- It is the current production-stable baseline.
+- It does not yet include the full IRIS backend/function divergence.
+
+Operational recommendation:
+
+- Treat `origin/iris-production-sync` as the candidate release branch.
+- Treat `origin/main` as the production baseline until backend/functions are verified and the IRIS branch is merged.
+
+### Merge Readiness
+
+Merge readiness estimate: `84%`
+
+Reasons:
+
+- No branch-only `main` commits.
+- No expected Git conflicts.
+- IRIS files are already pushed to GitHub.
+- Main risk is not source-control conflict; it is backend deployment/runtime verification for Firebase Functions and Firestore rule behaviour.
