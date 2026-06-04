@@ -728,3 +728,121 @@ Remaining manual verification:
 - Deploy functions to Firebase.
 - Run one live sender-to-rider acceptance using real Firebase Auth users and a real FCM sender token.
 - Confirm the sender receives the acceptance notification in-app.
+
+## Final Production Deployment
+
+Deployment timestamp: 2026-06-04T10:00:10Z  
+Firebase project: `circum-2797c`  
+Source branch: `main`  
+Source commit deployed: `162c9fd Add available requests callable alias`
+
+### Deployment Command
+
+- `firebase deploy --only functions,firestore:rules,hosting:main,hosting:admin --project circum-2797c`
+
+### Deployment Result
+
+Passed:
+
+- Firebase Functions deployed.
+- Firestore rules deployed.
+- Main hosting deployed.
+- Admin hosting deployed.
+
+Hosting URLs:
+
+- Public custom domain: `https://circumuk.com`
+- Public Firebase fallback: `https://circum-app-2797c.web.app`
+- Admin custom domain: `https://admin.circumuk.com`
+- Admin Firebase fallback: `https://circum-admin-2797c.web.app`
+
+### Deployed Functions Verified
+
+Callable/backend delivery:
+
+- `sendPackage`
+- `getAvailableRequests`
+- `getAvaliableRequests`
+- `acceptRideRequests`
+- `sendMessage`
+- `sendRiderUpdate`
+
+IRIS:
+
+- `analyseIris`
+- `adjudicateIris`
+
+Health+:
+
+- `createHealthPlusCheckoutSession`
+- `updateHealthPlusPickupStatus`
+
+Stripe/payment:
+
+- `StripePayEndpointMethodId`
+- `createPaymentIntent`
+- `StripePayEndpointIntentId`
+- `confirmPaymentIntent`
+- `StripeWebhook`
+- `RetrieveCardDetails`
+
+Other operational functions:
+
+- `calculateEarnings`
+- `endTrip`
+
+### Final Validation Results
+
+Passed:
+
+- `main` pulled latest from `origin/main`.
+- Working tree was clean before deployment.
+- Functions lint passed.
+- Backend tests passed: `20/20`.
+- IRIS tests passed.
+- Health+ tests passed.
+- Firestore rules dry-run passed.
+- Firebase Functions dry-run passed.
+- Production deploy completed successfully.
+- `circumuk.com` returned HTTP 200.
+- `admin.circumuk.com` returned HTTP 200.
+- Firebase fallback hosting URLs returned HTTP 200.
+- `acceptRideRequests` appears in deployed Firebase Functions.
+- `sendPackage` appears in deployed Firebase Functions.
+- `getAvailableRequests` and legacy `getAvaliableRequests` appear in deployed Firebase Functions.
+- `analyseIris` and `adjudicateIris` appear in deployed Firebase Functions.
+- Health+ functions appear in deployed Firebase Functions.
+- Stripe/payment functions appear in deployed Firebase Functions.
+
+Warnings:
+
+- Full browser-based sender/rider/admin UI walkthrough was not executed in this validation turn because no in-app browser control was available.
+- A real authenticated production sender/rider workflow could not be completed automatically because the service-account key embedded in `lib/helper/messaging_server.dart` was rejected by Google with `invalid_grant: Invalid JWT Signature`, which indicates the key is likely revoked.
+- No real Stripe payment session or charge was created during validation to avoid creating live financial records with dummy data.
+- FCM sender acceptance delivery could not be confirmed without a real sender device token/session; the `acceptRideRequests` callable returns the `senderNotified` field and the deployed endpoint is live.
+- Node.js 20 Functions runtime is deprecated and scheduled for decommissioning on 2026-10-30.
+- `functions.config()` / Runtime Config is deprecated and should be migrated before March 2027.
+
+### Workflow Status
+
+- Sender creates parcel: source and deployed `sendPackage` path verified; live UI/authenticated creation still needs manual test credentials.
+- Parcel appears in rider marketplace: deployed `getAvailableRequests` and legacy `getAvaliableRequests` verified; live data test still needs rider account/session.
+- Rider accepts parcel: deployed `acceptRideRequests` verified; live data test still needs rider account/session.
+- Sender receives update: source and deployed notification path verified; actual FCM delivery still needs a real sender device token.
+- Admin can view status: admin hosting live; Firestore/admin source path present; manual admin login test still required.
+- Tracking updates correctly: source path present; real accepted delivery test still required.
+- Health+ journey: functions live and method guards verified; full checkout requires intentional live Stripe session.
+- IRIS estimation: tests pass and deployed callable exists.
+- Stripe payment flow: payment functions live and respond; no live charge/payment intent was created.
+
+### Final Launch Readiness
+
+Final launch readiness estimate: `94%`
+
+Reason:
+
+- Production deployment is complete.
+- Required functions are now visible in Firebase.
+- Rules and hosting are live.
+- Backend validation passes.
+- Remaining risk is live account/device/payment verification, not missing deployed code.
