@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {dispatchPriority, isDispatchable, riderMatchesIris} = require("./iris-core");
 
 const sendPackage = functions.https.onCall(async (data, context) => {
   try {
@@ -30,6 +31,21 @@ const sendPackage = functions.https.onCall(async (data, context) => {
       return {message: "Delivery request not found"};
     }
 
+    if (!isDispatchable(deliveryRequest[0])) {
+      return {
+        message: "Delivery request is not dispatchable by Iris.",
+        requestId: requestId,
+        irisStatus: deliveryRequest[0].iris && deliveryRequest[0].iris.status,
+      };
+    }
+    const privateDoc = await getFirestore()
+        .collection("irisPrivate")
+        .doc(deliveryRequest[0].requestId || deliveryRequest[0].id)
+        .get();
+    if (privateDoc.exists) {
+      deliveryRequest[0].irisPrivate = privateDoc.data();
+    }
+
     // console.log(`${deliveryRequest[0].pickupPosition.geopoint.latitude}, ${deliveryRequest[0].pickupPosition.geopoint.longitude}`);
 
     // Create a reference point
@@ -51,6 +67,7 @@ const sendPackage = functions.https.onCall(async (data, context) => {
         ridersSnapshot.docs
             .filter((doc) => {
               const riderData = doc.data();
+              if (!riderMatchesIris(riderData, deliveryRequest[0])) return false;
               return riderData.position &&
                  riderData.position.geopoint &&
                  riderData.position.geopoint.latitude &&
@@ -98,7 +115,9 @@ const sendPackage = functions.https.onCall(async (data, context) => {
     // Filter out null values and sort
     const closestRiders = ridersWithDistances
         .filter((rider) => rider !== null)
-        .sort((a, b) => a.distanceFromPickup - b.distanceFromPickup)
+        .sort((a, b) => dispatchPriority(deliveryRequest[0]) === 1 ?
+          a.distanceFromPickup - b.distanceFromPickup :
+          a.distanceFromPickup - b.distanceFromPickup)
         .slice(0, 5);
 
     closestRiders.forEach(async (rider) => {

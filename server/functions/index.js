@@ -12,6 +12,7 @@ const getAvaliableRequests = require("./get-avaliable-requests");
 const sendMessage = require("./send-message");
 const sendRiderUpdate = require("./send-rider-update");
 const healthPlus = require("./health-plus");
+const iris = require("./iris");
 
 initializeApp();
 
@@ -21,6 +22,8 @@ exports.sendMessage = sendMessage;
 exports.sendRiderUpdate = sendRiderUpdate;
 exports.createHealthPlusCheckoutSession = healthPlus.createHealthPlusCheckoutSession;
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
+exports.analyseIris = iris.analyseIris;
+exports.adjudicateIris = iris.adjudicateIris;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
@@ -435,11 +438,30 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
       accountBalance: riderBalance+ rideCost,
     });
 
+    const irisData = require("./iris-core");
+    const privateIrisDoc = await getFirestore()
+        .collection("irisPrivate")
+        .doc(requestId)
+        .get();
+    const privateIrisData = privateIrisDoc.exists ? privateIrisDoc.data() : {};
+    const learningSnapshot = irisData.createLearningSnapshot({
+      ...(rideDataRes.iris || {}),
+      verification: privateIrisData.verification || {},
+    }, {
+      ...rideDataRes,
+      completedAt: Date.now(),
+    });
+
     await getFirestore().collection("deliveryRequests").doc(rideData.id).update({
       "status": "completed",
       "historyId": uuiduuid,
       "updatedAt": Date.now(),
     });
+    await getFirestore().collection("irisPrivate").doc(requestId).set({
+      requestId,
+      learningSnapshot,
+      updatedAt: Date.now(),
+    }, {merge: true});
 
     const newRideData = rideDataRes;
     newRideData.userId = rideData.id;

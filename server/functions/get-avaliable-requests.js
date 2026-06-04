@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
+const {dispatchPriority, isDispatchable, riderMatchesIris} = require("./iris-core");
 
 const getNearbyRequests = functions.https.onCall(async (data, context) => {
   try {
@@ -42,12 +43,21 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
         requestsSnapshot.docs
             .filter((doc) => {
               const requestData = doc.data();
+              if (!isDispatchable(requestData)) return false;
               return requestData.pickupPosition.geopoint.latitude &&
                      requestData.pickupPosition.geopoint.longitude;
             })
             .map(async (doc) => {
               try {
                 const requestData = doc.data();
+                const privateDoc = await getFirestore()
+                    .collection("irisPrivate")
+                    .doc(requestData.requestId || doc.id)
+                    .get();
+                if (privateDoc.exists) {
+                  requestData.irisPrivate = privateDoc.data();
+                }
+                if (!riderMatchesIris(riderData, requestData)) return null;
                 const pickupLocation = requestData.pickupPosition.geopoint;
 
                 // Haversine formula for distance calculation
@@ -79,7 +89,8 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     // Filter out null values and get 5 closest requests
     const nearestRequests = requestsWithDistances
         .filter((request) => request !== null)
-        .sort((a, b) => a.distanceFromRider - b.distanceFromRider)
+        .sort((a, b) => dispatchPriority(b) - dispatchPriority(a) ||
+          a.distanceFromRider - b.distanceFromRider)
         .slice(0, 5);
 
     return {

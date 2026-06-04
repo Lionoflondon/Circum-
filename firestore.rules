@@ -10,27 +10,8 @@ service cloud.firestore {
       return signedIn() && (
         request.auth.token.adminRole == role ||
         request.auth.token.role == role ||
-        (request.auth.token.roles is list && role in request.auth.token.roles) ||
-        adminUserUidHasRole(role) ||
-        adminUserEmailHasRole(role)
+        (request.auth.token.roles is list && role in request.auth.token.roles)
       );
-    }
-
-    function adminUserUidHasRole(role) {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.status == 'active' &&
-        get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.roles is list &&
-        role in get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.roles;
-    }
-
-    function adminUserEmailHasRole(role) {
-      return signedIn() &&
-        request.auth.token.email is string &&
-        exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)) &&
-        get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.status == 'active' &&
-        get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.roles is list &&
-        role in get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email)).data.roles;
     }
 
     function isAdmin() {
@@ -88,6 +69,60 @@ service cloud.firestore {
       );
     }
 
+    function isOwnDeliveryUpdate() {
+      return isOwnDelivery('') &&
+        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+    }
+
+    function isAssignedRiderUpdate() {
+      return isAssignedRider() &&
+        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+    }
+
+    function isAssignedRiderPrivateCreate() {
+      return signedIn() &&
+        request.resource.data.deliveryDocId is string &&
+        (
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.riderId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.driverId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.keys().hasOnly(['requestId', 'deliveryDocId', 'verification', 'updatedAt']) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider']);
+    }
+
+    function isSenderPrivateCreate() {
+      return signedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.keys().hasOnly([
+          'version',
+          'requestId',
+          'senderId',
+          'internal',
+          'verification',
+          'updatedAt',
+          'createdAt'
+        ]) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider', 'adjudication']) &&
+        request.resource.data.verification.rider == null &&
+        request.resource.data.verification.adjudication == null;
+    }
+
+    function isAssignedRiderPrivateUpdate() {
+      return signedIn() &&
+        resource.data.deliveryDocId is string &&
+        (
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.riderId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.driverId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['verification', 'updatedAt']) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider']);
+    }
+
     function isParticipant() {
       return signedIn() &&
         resource.data.participants is list &&
@@ -101,20 +136,8 @@ service cloud.firestore {
     }
 
     match /adminUsers/{userId} {
-      allow read: if signedIn() && (
-        request.auth.uid == userId ||
-        request.auth.token.email == userId ||
-        isAdmin()
-      );
-      allow create, update: if hasRole('super_admin') &&
-        userId != request.auth.uid &&
-        userId != request.auth.token.email;
-      allow update: if signedIn() &&
-        (userId == request.auth.uid || userId == request.auth.token.email) &&
-        request.resource.data.diff(resource.data).changedKeys().hasOnly(['lastLoginAt']);
-      allow delete: if hasRole('super_admin') &&
-        userId != request.auth.uid &&
-        userId != request.auth.token.email;
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if hasRole('super_admin');
     }
 
     match /adminAuditLogs/{logId} {
@@ -158,14 +181,14 @@ service cloud.firestore {
     }
 
     match /riderProfiles/{driverId} {
-      allow read: if isAdmin() || signedIn();
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
       allow create, update: if isDriverManager() ||
         (signedIn() && request.auth.uid == driverId);
       allow delete: if hasRole('super_admin');
     }
 
     match /riders/{driverId} {
-      allow read: if isAdmin() || signedIn();
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
       allow create, update: if isDriverManager() ||
         (signedIn() && request.auth.uid == driverId);
       allow delete: if hasRole('super_admin');
@@ -174,8 +197,7 @@ service cloud.firestore {
     match /driverRatings/{ratingId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.customerId == request.auth.uid) ||
-        (signedIn() && resource.data.driverId == request.auth.uid) ||
-        (signedIn() && resource.data.hiddenByAdmin != true);
+        (signedIn() && resource.data.driverId == request.auth.uid);
       allow create: if signedIn() &&
         request.resource.data.customerId == request.auth.uid;
       allow update: if isAdmin() &&
@@ -184,7 +206,7 @@ service cloud.firestore {
     }
 
     match /driverPerformanceMetrics/{metricId} {
-      allow read: if isAdmin() || signedIn();
+      allow read: if isAdmin() || (signedIn() && metricId == request.auth.uid);
       allow write: if isAdmin();
     }
 
@@ -195,15 +217,33 @@ service cloud.firestore {
         isAvailableRiderJob();
       allow create: if isAdmin() || isCreatingOwnDelivery();
       allow update: if isAdmin() ||
-        isOwnDelivery(deliveryId) ||
-        isAssignedRider();
+        isOwnDeliveryUpdate() ||
+        isAssignedRiderUpdate();
       allow delete: if hasRole('super_admin');
     }
 
     match /webSenderRequests/{requestId} {
       allow read, update: if isAdmin() ||
-        (signedIn() && resource.data.senderId == request.auth.uid);
+        (
+          signedIn() &&
+          resource.data.senderId == request.auth.uid &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris'])
+        );
       allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisPrivate/{requestId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() ||
+        isSenderPrivateCreate() ||
+        isAssignedRiderPrivateCreate();
+      allow update: if isAdmin() || isAssignedRiderPrivateUpdate();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisReferrals/{referralId} {
+      allow read, write: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
