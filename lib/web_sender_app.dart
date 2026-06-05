@@ -39,7 +39,7 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, admin }
+enum _WebAppMode { landing, sender, rider, riderOrder, admin }
 
 bool _isPublicHostingHost() {
   final host = Uri.base.host.toLowerCase();
@@ -81,6 +81,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
   _WebAppMode _initialMode() {
     if (_adminHostingTarget && !_isPublicHostingHost()) {
       return _WebAppMode.admin;
+    }
+    if (Uri.base.path == '/riders/circum-order') {
+      return _WebAppMode.riderOrder;
     }
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
@@ -165,6 +168,14 @@ class _WebSenderAppState extends State<WebSenderApp> {
                         : () => setState(() => _mode = _WebAppMode.landing),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
+                _WebAppMode.riderOrder => _CircumOrderPage(
+                    key: const ValueKey('circum-order'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onRider: () => setState(() => _mode = _WebAppMode.rider),
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
                 _WebAppMode.landing => _LandingPage(
                     key: const ValueKey('landing'),
                     colors: colors,
@@ -174,6 +185,8 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       _mode = _WebAppMode.sender;
                     }),
                     onRider: () => setState(() => _mode = _WebAppMode.rider),
+                    onCircumOrder: () =>
+                        setState(() => _mode = _WebAppMode.riderOrder),
                     onHealthPlus: () => setState(() {
                       _senderInitialStep = _SenderStep.healthPlus;
                       _mode = _WebAppMode.sender;
@@ -206,6 +219,7 @@ class _LandingPage extends StatelessWidget {
   final bool darkMode;
   final VoidCallback onStart;
   final VoidCallback onRider;
+  final VoidCallback onCircumOrder;
   final VoidCallback onHealthPlus;
   final VoidCallback onToggleTheme;
 
@@ -215,6 +229,7 @@ class _LandingPage extends StatelessWidget {
     required this.darkMode,
     required this.onStart,
     required this.onRider,
+    required this.onCircumOrder,
     required this.onHealthPlus,
     required this.onToggleTheme,
   });
@@ -229,6 +244,7 @@ class _LandingPage extends StatelessWidget {
             darkMode: darkMode,
             onStart: onStart,
             onRider: onRider,
+            onCircumOrder: onCircumOrder,
             onHealthPlus: onHealthPlus,
             onToggleTheme: onToggleTheme,
           ),
@@ -3534,6 +3550,7 @@ class _LandingNav extends StatelessWidget {
   final bool darkMode;
   final VoidCallback onStart;
   final VoidCallback onRider;
+  final VoidCallback onCircumOrder;
   final VoidCallback onHealthPlus;
   final VoidCallback onToggleTheme;
 
@@ -3542,6 +3559,7 @@ class _LandingNav extends StatelessWidget {
     required this.darkMode,
     required this.onStart,
     required this.onRider,
+    required this.onCircumOrder,
     required this.onHealthPlus,
     required this.onToggleTheme,
   });
@@ -3577,6 +3595,17 @@ class _LandingNav extends StatelessWidget {
                   onPressed: onRider,
                   child: Text(
                     'Rider',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (MediaQuery.sizeOf(context).width >= 760)
+                TextButton(
+                  onPressed: onCircumOrder,
+                  child: Text(
+                    'The Circum Order',
                     style: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w700,
@@ -3928,6 +3957,676 @@ class _PhoneStage extends StatelessWidget {
             child: child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CircumOrderRank {
+  final String name;
+  final String motto;
+  final String title;
+  final String badge;
+  final IconData icon;
+
+  const _CircumOrderRank({
+    required this.name,
+    required this.motto,
+    required this.title,
+    required this.badge,
+    required this.icon,
+  });
+
+  String get label => name.toUpperCase();
+  String get customerLabel => '${_titleCase(name)} $title';
+}
+
+const _circumOrderRanks = [
+  _CircumOrderRank(
+    name: 'Agent',
+    motto: 'I Have Joined The Network',
+    title: 'Verified by Circum',
+    badge: 'AGENT',
+    icon: Icons.radio_button_checked,
+  ),
+  _CircumOrderRank(
+    name: 'Sentinel',
+    motto: 'I Have Proven Myself',
+    title: 'Proven Operator',
+    badge: 'SENTINEL',
+    icon: Icons.task_alt,
+  ),
+  _CircumOrderRank(
+    name: 'Warden',
+    motto: 'Circum Trusts Me',
+    title: 'Reliability Specialist',
+    badge: 'WARDEN',
+    icon: Icons.verified_user_outlined,
+  ),
+  _CircumOrderRank(
+    name: 'Knight',
+    motto: 'I Defend The Network',
+    title: 'Elite Delivery Specialist',
+    badge: 'KNIGHT',
+    icon: Icons.workspace_premium_outlined,
+  ),
+  _CircumOrderRank(
+    name: 'Veteran',
+    motto: 'I Helped Build This',
+    title: 'Circum Veteran',
+    badge: 'VETERAN',
+    icon: Icons.auto_awesome,
+  ),
+];
+
+String _titleCase(String value) {
+  if (value.isEmpty) return value;
+  return value.substring(0, 1).toUpperCase() + value.substring(1).toLowerCase();
+}
+
+_CircumOrderRank _circumOrderRankForPerformance(
+  DriverPerformanceMetric performance,
+) {
+  final trips = performance.completedTrips;
+  final rating = performance.averageRating;
+  if (trips >= 1000 && rating >= 4.7) return _circumOrderRanks[4];
+  if (trips >= 500 && rating >= 4.6) return _circumOrderRanks[3];
+  if (trips >= 200 && rating >= 4.5) return _circumOrderRanks[2];
+  if (trips >= 50 && rating >= 4.2) return _circumOrderRanks[1];
+  return _circumOrderRanks[0];
+}
+
+String _pdfTextEscape(String value) {
+  return value
+      .replaceAll(r'\', r'\\')
+      .replaceAll('(', r'\(')
+      .replaceAll(')', r'\)');
+}
+
+Uri _circumOrderPdfUri() {
+  final lines = <String>[
+    'THE CIRCUM ORDER',
+    'Every Veteran Was Once An Agent.',
+    '',
+    'The official charter of the Circum driver network.',
+    '',
+    'Agent - I Have Joined The Network',
+    'Sentinel - I Have Proven Myself',
+    'Warden - Circum Trusts Me',
+    'Knight - I Defend The Network',
+    'Veteran - I Helped Build This',
+    '',
+    'Circum rewards contribution.',
+    'Those who create value, protect the network, serve customers and',
+    'help build the platform will be recognised and rewarded.',
+    '',
+    'Every Veteran Was Once An Agent.',
+  ];
+
+  var y = 742;
+  final stream = StringBuffer();
+  for (final line in lines) {
+    final size = line == 'THE CIRCUM ORDER' ? 22 : 12;
+    stream.writeln(
+      'BT /F1 $size Tf 72 $y Td (${_pdfTextEscape(line)}) Tj ET',
+    );
+    y -= line.isEmpty ? 18 : 28;
+  }
+  final content = stream.toString();
+  final objects = <String>[
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
+    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+    '5 0 obj\n<< /Length ${content.length} >>\nstream\n$content\nendstream\nendobj\n',
+  ];
+  final buffer = StringBuffer('%PDF-1.4\n');
+  final offsets = <int>[];
+  var length = buffer.toString().length;
+  for (final object in objects) {
+    offsets.add(length);
+    buffer.write(object);
+    length += object.length;
+  }
+  final xrefOffset = length;
+  buffer
+    ..writeln('xref')
+    ..writeln('0 ${objects.length + 1}')
+    ..writeln('0000000000 65535 f ');
+  for (final offset in offsets) {
+    buffer.writeln('${offset.toString().padLeft(10, '0')} 00000 n ');
+  }
+  buffer
+    ..writeln('trailer')
+    ..writeln('<< /Size ${objects.length + 1} /Root 1 0 R >>')
+    ..writeln('startxref')
+    ..writeln('$xrefOffset')
+    ..writeln('%%EOF');
+  return Uri.parse(
+    'data:application/pdf;base64,${base64Encode(ascii.encode(buffer.toString()))}',
+  );
+}
+
+class _CircumOrderPage extends StatefulWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final VoidCallback onBack;
+  final VoidCallback onRider;
+  final VoidCallback onToggleTheme;
+
+  const _CircumOrderPage({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.onBack,
+    required this.onRider,
+    required this.onToggleTheme,
+  });
+
+  @override
+  State<_CircumOrderPage> createState() => _CircumOrderPageState();
+}
+
+class _CircumOrderPageState extends State<_CircumOrderPage> {
+  final _scrollController = ScrollController();
+  final _charterKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _readCharter() {
+    final context = _charterKey.currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Future<void> _downloadCharter() async {
+    await launchUrl(_circumOrderPdfUri(), webOnlyWindowName: '_blank');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final narrow = MediaQuery.sizeOf(context).width < 720;
+    return Container(
+      color: colors.background,
+      child: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          SliverToBoxAdapter(
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      'assets/images/circum_wordmark.png',
+                      width: 136,
+                      height: 32,
+                      fit: BoxFit.contain,
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: widget.onRider,
+                      child: Text(
+                        'Become a Rider',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: widget.darkMode ? 'Light mode' : 'Dark mode',
+                      onPressed: widget.onToggleTheme,
+                      icon: Icon(
+                        widget.darkMode ? Icons.light_mode : Icons.dark_mode,
+                        color: colors.text,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Home',
+                      onPressed: widget.onBack,
+                      icon: Icon(Icons.close, color: colors.text),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: colors.dark
+                      ? const [
+                          Color(0xff050816),
+                          Color(0xff221142),
+                          Color(0xff173f8a),
+                          Color(0xff061826),
+                        ]
+                      : const [
+                          Color(0xffffffff),
+                          Color(0xffffeef7),
+                          Color(0xffeaf7ff),
+                          Color(0xffffffff),
+                        ],
+                ),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                narrow ? 18 : 48,
+                narrow ? 42 : 70,
+                narrow ? 18 : 48,
+                46,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _HealthChip(label: 'Rider culture'),
+                      const SizedBox(height: 20),
+                      Text(
+                        'THE CIRCUM ORDER',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: narrow ? 44 : 76,
+                          height: 0.96,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Every Veteran Was Once An Agent.',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: narrow ? 24 : 34,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'The official charter of the Circum driver network. Learn how trust, contribution, reliability and service are recognised and rewarded across the platform.',
+                        style: TextStyle(
+                          color: colors.mutedText,
+                          fontSize: narrow ? 16 : 19,
+                          height: 1.45,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 26),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _readCharter,
+                            icon: const Icon(Icons.menu_book_outlined),
+                            label: const Text('Read Charter'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: colors.text,
+                              foregroundColor: colors.inverseText,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _downloadCharter,
+                            icon: const Icon(Icons.picture_as_pdf_outlined),
+                            label: const Text('Download Charter PDF'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                narrow ? 18 : 48,
+                28,
+                narrow ? 18 : 48,
+                54,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1120),
+                  child: Column(
+                    children: [
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionTitle(
+                              colors: colors,
+                              title: 'Rank progression',
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                for (var i = 0;
+                                    i < _circumOrderRanks.length;
+                                    i++) ...[
+                                  _CircumOrderRankCard(
+                                    colors: colors,
+                                    rank: _circumOrderRanks[i],
+                                  ),
+                                  if (i < _circumOrderRanks.length - 1)
+                                    Icon(Icons.arrow_forward,
+                                        color: colors.mutedText),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _GlassPanel(
+                        key: _charterKey,
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionTitle(
+                              colors: colors,
+                              title: 'Founding principle',
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Circum rewards contribution.\n\nThose who create value, protect the network, serve customers and help build the platform will be recognised and rewarded.\n\nEvery Veteran Was Once An Agent.',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                height: 1.45,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionTitle(
+                              colors: colors,
+                              title: 'Rider profile integration',
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Rider profiles show rank badge, rank title, completed deliveries, rating, and member since date. The Order is recognition, not a restriction system: Agents remain fully eligible to earn and progress.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                height: 1.4,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: _circumOrderRanks
+                                  .map((rank) => _OrderBadge(
+                                        colors: colors,
+                                        rank: rank,
+                                      ))
+                                  .toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionTitle(
+                              colors: colors,
+                              title: 'Future escalation framework',
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Open Market → Warden Escalation → Knight Escalation → Veteran Escalation',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'This prepares the product language for future operations work. Dispatch rules have not been changed.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                height: 1.35,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircumOrderRankCard extends StatelessWidget {
+  final _CircumColors colors;
+  final _CircumOrderRank rank;
+
+  const _CircumOrderRankCard({
+    required this.colors,
+    required this.rank,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 176,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(rank.icon, color: colors.text),
+          const SizedBox(height: 10),
+          Text(
+            rank.badge,
+            style: TextStyle(
+              color: colors.text,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            rank.motto,
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.25,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            rank.title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderBadge extends StatelessWidget {
+  final _CircumColors colors;
+  final _CircumOrderRank rank;
+
+  const _OrderBadge({
+    required this.colors,
+    required this.rank,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(rank.icon, size: 18),
+      label: Text('${rank.badge} · ${rank.title}'),
+      backgroundColor: colors.field,
+      side: BorderSide(color: colors.border),
+    );
+  }
+}
+
+class _RiderOrderProfileCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic>? profile;
+  final DriverPerformanceMetric performance;
+
+  const _RiderOrderProfileCard({
+    required this.colors,
+    required this.profile,
+    required this.performance,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rank = _circumOrderRankForPerformance(performance);
+    final name = '${profile?['fullName'] ?? profile?['email'] ?? 'Rider'}';
+    final rating = performance.averageRating <= 0
+        ? 'New'
+        : performance.averageRating.toStringAsFixed(2);
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(colors: _spectrumGradient),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff8c28ff).withOpacity(0.28),
+                      blurRadius: 22,
+                    ),
+                  ],
+                ),
+                child: Icon(rank.icon, color: Colors.white, size: 30),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      rank.badge,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      rank.title,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _HealthChip(label: 'The Circum Order'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            name,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _RiderStatTile(
+                  colors: colors,
+                  label: 'Deliveries',
+                  value: '${performance.completedTrips}',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _RiderStatTile(
+                  colors: colors,
+                  label: 'Rating',
+                  value: rating,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _RiderStatTile(
+                  colors: colors,
+                  label: 'Member since',
+                  value: _adminDateText(profile?['createdAt']),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -5306,6 +6005,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     return _RiderWorkspace(
       colors: colors,
       user: _riderUser,
+      riderProfile: _riderProfile,
       earnings: _earnings,
       performance: _performance,
       recentRatings: _recentRatings,
@@ -5396,7 +6096,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                             34,
                           ),
                           children: [
-                            _RiderPublicIntro(colors: colors),
+                            _RiderPublicIntro(
+                              colors: colors,
+                              onCircumOrder: () => launchUrl(
+                                Uri.base.replace(
+                                  path: '/riders/circum-order',
+                                  queryParameters: const {},
+                                ),
+                                webOnlyWindowName: '_self',
+                              ),
+                            ),
                             const SizedBox(height: 14),
                             _RiderAccessPanel(
                               colors: colors,
@@ -5457,8 +6166,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
 class _RiderPublicIntro extends StatelessWidget {
   final _CircumColors colors;
+  final VoidCallback onCircumOrder;
 
-  const _RiderPublicIntro({required this.colors});
+  const _RiderPublicIntro({
+    required this.colors,
+    required this.onCircumOrder,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -5490,6 +6203,12 @@ class _RiderPublicIntro extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              ActionChip(
+                avatar: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('The Circum Order'),
+                onPressed: onCircumOrder,
+                backgroundColor: colors.field,
+              ),
               Chip(
                 avatar: const Icon(Icons.verified_user_outlined, size: 18),
                 label: const Text('Verified riders only'),
@@ -5926,6 +6645,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
 class _RiderWorkspace extends StatelessWidget {
   final _CircumColors colors;
   final User? user;
+  final Map<String, dynamic>? riderProfile;
   final _RiderEarningsSnapshot earnings;
   final DriverPerformanceMetric performance;
   final List<DriverRating> recentRatings;
@@ -5960,6 +6680,7 @@ class _RiderWorkspace extends StatelessWidget {
   const _RiderWorkspace({
     required this.colors,
     required this.user,
+    required this.riderProfile,
     required this.earnings,
     required this.performance,
     required this.recentRatings,
@@ -6019,6 +6740,12 @@ class _RiderWorkspace extends StatelessWidget {
           const SizedBox(height: 18),
           _MiniMap(colors: colors, active: true),
           const SizedBox(height: 18),
+          _RiderOrderProfileCard(
+            colors: colors,
+            profile: riderProfile,
+            performance: performance,
+          ),
+          const SizedBox(height: 14),
           _DriverPerformancePanel(
             colors: colors,
             performance: performance,
@@ -15896,6 +16623,7 @@ class _DriverCard extends StatelessWidget {
             },
             performance: metric);
     final performance = metric ?? profile.performance;
+    final orderRank = _circumOrderRankForPerformance(performance);
     final rating = performance.averageRating <= 0
         ? 'New'
         : performance.averageRating.toStringAsFixed(2);
@@ -15941,7 +16669,7 @@ class _DriverCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      profile.fullName,
+                      '${orderRank.name} ${profile.fullName}',
                       style: TextStyle(
                         color: colors.text,
                         fontSize: 18,
@@ -15949,7 +16677,7 @@ class _DriverCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '★ $rating  •  ${performance.completedTrips} trips  •  ${profile.vehicle.plateNumber.isEmpty ? 'Plate pending' : profile.vehicle.plateNumber}',
+                      '${orderRank.title}  •  ★ $rating  •  ${performance.completedTrips} trips  •  ${profile.vehicle.plateNumber.isEmpty ? 'Plate pending' : profile.vehicle.plateNumber}',
                       style: TextStyle(
                         color: colors.mutedText,
                         fontSize: 12,
@@ -16296,7 +17024,7 @@ class _GlassPanel extends StatelessWidget {
   final _CircumColors colors;
   final Widget child;
 
-  const _GlassPanel({required this.colors, required this.child});
+  const _GlassPanel({super.key, required this.colors, required this.child});
 
   @override
   Widget build(BuildContext context) {
