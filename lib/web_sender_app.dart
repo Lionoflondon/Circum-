@@ -14513,6 +14513,8 @@ class _AddressFieldState extends State<_AddressField> {
   List<_AddressSuggestion> _suggestions = const [];
   bool _selectingSuggestion = false;
   bool _loadingSuggestions = false;
+  bool _resolvingSuggestion = false;
+  String? _suggestionError;
   int _suggestionRequest = 0;
   late final String _placesSessionToken =
       '${DateTime.now().millisecondsSinceEpoch}-${identityHashCode(this)}';
@@ -14537,7 +14539,10 @@ class _AddressFieldState extends State<_AddressField> {
       if (mounted) setState(() => _suggestions = const []);
       return;
     }
-    setState(() => _loadingSuggestions = true);
+    setState(() {
+      _loadingSuggestions = true;
+      _suggestionError = null;
+    });
     _buildAddressSuggestions(value).then((next) {
       if (!mounted || requestId != _suggestionRequest) return;
       setState(() {
@@ -14742,22 +14747,86 @@ class _AddressFieldState extends State<_AddressField> {
     }
   }
 
+  Future<_AddressSuggestion?> _googleFindPlaceFromText(
+    _AddressSuggestion suggestion,
+  ) async {
+    final query = suggestion.searchText ?? suggestion.displayAddress;
+    if (_googlePlacesApiKey.trim().isEmpty) return null;
+    try {
+      final uri = Uri.https(
+        'maps.googleapis.com',
+        '/maps/api/place/findplacefromtext/json',
+        {
+          'input': query,
+          'inputtype': 'textquery',
+          'language': 'en',
+          'fields': 'formatted_address,geometry,place_id,name',
+          'key': _googlePlacesApiKey,
+          'locationbias': 'country:uk',
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if ('${body['status']}' != 'OK') return null;
+      final candidates = body['candidates'] as List<dynamic>? ?? const [];
+      final typedCandidates = candidates.whereType<Map<String, dynamic>>();
+      if (typedCandidates.isEmpty) return null;
+      final result = typedCandidates.first;
+      final geometry = result['geometry'] as Map<String, dynamic>?;
+      final location = geometry?['location'] as Map<String, dynamic>?;
+      final lat = (location?['lat'] as num?)?.toDouble();
+      final lng = (location?['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) return null;
+      return _AddressSuggestion(
+        displayAddress:
+            _cleanGoogleAddress('${result['formatted_address'] ?? suggestion.displayAddress}'),
+        lat: lat,
+        lng: lng,
+        confidence: 0.98,
+        provider: 'google_places',
+        sourceInput: suggestion.sourceInput,
+        placeId: '${result['place_id'] ?? ''}'.isEmpty
+            ? null
+            : '${result['place_id']}',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<_AddressSuggestion?> _resolvePopularPlace(
     _AddressSuggestion suggestion,
   ) async {
     final query = suggestion.searchText ?? suggestion.displayAddress;
     final predictions = await _googlePlacesAutocomplete(query);
-    if (predictions.isEmpty) return null;
-    return _googlePlaceDetails(predictions.first);
+    if (predictions.isNotEmpty) {
+      final resolved = await _googlePlaceDetails(predictions.first);
+      if (resolved != null) return resolved;
+    }
+    return _googleFindPlaceFromText(suggestion);
   }
 
   Future<void> _selectSuggestion(_AddressSuggestion suggestion) async {
+    if (_resolvingSuggestion) return;
+    setState(() {
+      _resolvingSuggestion = true;
+      _suggestionError = null;
+    });
     final resolved = suggestion.isPopularPlace
         ? await _resolvePopularPlace(suggestion)
         : suggestion.provider == 'google_places'
             ? await _googlePlaceDetails(suggestion)
             : suggestion;
-    if (resolved == null) return;
+    if (!mounted) return;
+    if (resolved == null || !resolved.toValidatedAddress().hasCoordinates) {
+      setState(() {
+        _resolvingSuggestion = false;
+        _suggestionError =
+            'Could not verify this place with Google Places. Try a different suggestion or type more detail.';
+      });
+      return;
+    }
     _selectingSuggestion = true;
     widget.controller.text = resolved.displayAddress;
     widget.controller.selection = TextSelection.collapsed(
@@ -14765,7 +14834,11 @@ class _AddressFieldState extends State<_AddressField> {
     );
     _selectingSuggestion = false;
     widget.onSelected?.call(resolved.toValidatedAddress());
-    setState(() => _suggestions = const []);
+    setState(() {
+      _suggestions = const [];
+      _resolvingSuggestion = false;
+      _suggestionError = null;
+    });
   }
 
   @override
@@ -14802,35 +14875,66 @@ class _AddressFieldState extends State<_AddressField> {
             runSpacing: 8,
             children: _suggestions
                 .map(
-                  (suggestion) => ActionChip(
-                    onPressed: () => _selectSuggestion(suggestion),
-                    avatar: Icon(
-                      suggestion.isPopularPlace
-                          ? Icons.star_rounded
-                          : widget.pharmacyMode
-                              ? Icons.local_pharmacy
-                              : Icons.place_outlined,
-                      size: 16,
-                    ),
-                    label: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 320),
-                      child: Column(
+                  (suggestion) => InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: _resolvingSuggestion
+                        ? null
+                        : () => _selectSuggestion(suggestion),
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 340),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.field,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: suggestion.isPopularPlace
+                              ? colors.adminAccent
+                              : colors.border,
+                        ),
+                      ),
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            suggestion.displayAddress,
-                            overflow: TextOverflow.ellipsis,
+                          Icon(
+                            suggestion.isPopularPlace
+                                ? Icons.star_rounded
+                                : widget.pharmacyMode
+                                    ? Icons.local_pharmacy
+                                    : Icons.place_outlined,
+                            color: colors.text,
+                            size: 16,
                           ),
-                          if (suggestion.isPopularPlace)
-                            Text(
-                              'Popular place',
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  suggestion.displayAddress,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: colors.text,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                if (suggestion.isPopularPlace)
+                                  Text(
+                                    _resolvingSuggestion
+                                        ? 'Verifying with Google Places...'
+                                        : 'Popular place',
+                                    style: TextStyle(
+                                      color: colors.mutedText,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -14839,14 +14943,28 @@ class _AddressFieldState extends State<_AddressField> {
                 .toList(),
           ),
         ],
-        if (_loadingSuggestions) ...[
+        if (_loadingSuggestions || _resolvingSuggestion) ...[
           const SizedBox(height: 6),
           Text(
-            'Checking Google Places...',
+            _resolvingSuggestion
+                ? 'Verifying selected place...'
+                : 'Checking Google Places...',
             style: TextStyle(
               color: colors.mutedText,
               fontSize: 12,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+        if (_suggestionError != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _suggestionError!,
+            style: TextStyle(
+              color: colors.warning,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              height: 1.35,
             ),
           ),
         ],
