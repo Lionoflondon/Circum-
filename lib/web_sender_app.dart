@@ -7263,6 +7263,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   double? _irisWeightConfidenceScore;
   double? _irisHistoricalVerifiedWeightKg;
   String? _irisLearningReason;
+  ItemDimensionsCm? _irisTypicalDimensions;
+  String? _irisVehicleSuitability;
+  bool _irisFragile = false;
+  bool _irisStackable = true;
+  String? _irisHandlingNotes;
   double? _senderEnteredWeightKg;
   double? _confirmedWeightKg;
   String? _confirmedWeightBand;
@@ -7547,18 +7552,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           pickup: _pickup.text,
           dropoff: _dropoff.text,
           chargeableWeightKg: _deliveryClassification.finalWeightKg,
+          vehicleSuitability: _vehicleSuitability,
           selectedVehicle: _effectiveVehicle,
           selectedSpeed: _selectedSpeed,
           onVehicle: (vehicle) {
-            final classification = _deliveryClassification;
-            if (!DeliveryPricing.vehicleCanCarryWeight(
+            final suitability = _vehicleSuitability;
+            if (!DeliveryPricing.vehicleCanCarryDelivery(
               vehicle.name,
-              classification.finalWeightKg,
+              suitability,
             )) {
               setState(() {
                 _selectedVehicle = _effectiveVehicle;
                 _weightMessage =
-                    'This item is too heavy for ${vehicle.name}. ${classification.vehicleType} required.';
+                    'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
               });
               return;
             }
@@ -7820,21 +7826,40 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final quote = _quoteBreakdown;
     return classification.finalWeightKg > 0 &&
         classification.finalWeightBand == quote.weightCategory &&
-        classification.vehicleType == _effectiveVehicle.name &&
-        DeliveryPricing.vehicleCanCarryWeight(
+        _vehicleSuitability.recommendedVehicle == _effectiveVehicle.name &&
+        DeliveryPricing.vehicleCanCarryDelivery(
           _effectiveVehicle.name,
-          classification.finalWeightKg,
+          _vehicleSuitability,
         ) &&
         !(classification.finalWeightBand != 'Small Parcel' &&
             _effectiveVehicle.name == 'Bike');
   }
 
   _VehicleOption get _effectiveVehicle {
-    final classification = _deliveryClassification;
-    final recommendedVehicleName = classification.vehicleType;
+    final recommendedVehicleName = _vehicleSuitability.recommendedVehicle;
     return _vehicles.firstWhere(
       (vehicle) => vehicle.name == recommendedVehicleName,
       orElse: () => _vehicles.last,
+    );
+  }
+
+  VehicleSuitability get _vehicleSuitability {
+    final classification = _deliveryClassification;
+    return DeliveryPricing.resolveVehicleSuitability(
+      weightKg: classification.finalWeightKg,
+      description: _description.text,
+      itemCategory: _irisMatchedItemName ?? _inferPackageType(),
+      dimensions: _irisTypicalDimensions == null
+          ? null
+          : DeliveryItemDimensions(
+              lengthCm: _irisTypicalDimensions!.length,
+              widthCm: _irisTypicalDimensions!.width,
+              heightCm: _irisTypicalDimensions!.height,
+            ),
+      repositoryVehicleSuitability: _irisVehicleSuitability,
+      fragile: _irisFragile,
+      stackable: _irisStackable,
+      handlingNotes: _irisHandlingNotes,
     );
   }
 
@@ -8298,6 +8323,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _irisWeightConfidenceScore = estimate.confidenceScore;
       _irisHistoricalVerifiedWeightKg = estimate.historicalVerifiedWeightKg;
       _irisLearningReason = estimate.learningReason;
+      _irisTypicalDimensions = estimate.typicalDimensions;
+      _irisVehicleSuitability = estimate.vehicleSuitability;
+      _irisFragile = estimate.fragile;
+      _irisStackable = estimate.stackable;
+      _irisHandlingNotes = estimate.handlingNotes;
       _weightVerificationRequired = decision.verificationRequired;
       _weightPricingReason = decision.reason;
       _analyzing = false;
@@ -8371,8 +8401,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     bool verificationRequired = false,
   }) {
     final band = DeliveryPricing.weightBandFor(weightKg).category;
-    final recommendedVehicleName =
-        DeliveryPricing.recommendedVehicleForWeight(weightKg);
+    final recommendedVehicleName = _vehicleSuitability.recommendedVehicle;
     final recommendedVehicle = _vehicles.firstWhere(
       (vehicle) => vehicle.name == recommendedVehicleName,
       orElse: () => _vehicles.last,
@@ -8387,9 +8416,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (!_matchingHasStarted) {
         _checkoutState = _CheckoutState.optionsReady;
       }
-      if (!DeliveryPricing.vehicleCanCarryWeight(
+      if (!DeliveryPricing.vehicleCanCarryDelivery(
         _selectedVehicle.name,
-        weightKg,
+        _vehicleSuitability,
       )) {
         _selectedVehicle = recommendedVehicle;
       }
@@ -8682,6 +8711,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         truthBand: product.truthBand,
         matchedItemName: product.matchedItemName,
         confidenceScore: product.confidenceScore,
+        typicalDimensions: product.typicalDimensions,
+        vehicleSuitability: product.vehicleSuitability,
+        fragile: product.fragile,
+        stackable: product.stackable,
+        handlingNotes: product.handlingNotes,
     );
   }
 
@@ -9348,7 +9382,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final dropoffGeo = dropoffAddress.toPositionMap();
     final packageType = _inferPackageType();
     final hasPhoto = false;
-    final safeVehicleName = classification.vehicleType;
+    final suitability = _vehicleSuitability;
+    final safeVehicleName = suitability.recommendedVehicle;
     final driverPayout = double.parse((quote.total * 0.75).toStringAsFixed(2));
     final driverJobSummary = {
       'pickupDisplay': _pickup.text.trim(),
@@ -9361,7 +9396,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
       'confirmedWeightKg': classification.finalWeightKg,
       'confirmedWeightBand': classification.finalWeightBand,
-      'deliveryClassification': classification.toJson(),
+      'deliveryClassification': {
+        ...classification.toJson(),
+        'vehicleType': safeVehicleName,
+      },
+      'vehicleSuitability': {
+        'recommendedVehicle': suitability.recommendedVehicle,
+        'allowedVehicles': suitability.allowedVehicles,
+        'score': suitability.score,
+        'factors': suitability.factors,
+        'explanation': suitability.explanation,
+        'handlingNotes': suitability.handlingNotes,
+        'fragile': suitability.fragile,
+        'stackable': suitability.stackable,
+      },
       'finalWeightKg': classification.finalWeightKg,
       'finalWeightBand': classification.finalWeightBand,
       'selectedWeightSource': classification.selectedWeightSource,
@@ -9373,7 +9421,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'hasPhoto': hasPhoto,
       'photoUrl': null,
       'deliveryInstructions': _description.text.trim(),
-      'vehicleType': classification.vehicleType,
+      'vehicleType': safeVehicleName,
       'totalFare': quote.total,
       'driverPayout': driverPayout,
       'serviceLevel': selectedServiceLevel,
@@ -10756,9 +10804,9 @@ class _WeightConfirmationPanel extends StatelessWidget {
           if (estimatedWeightKg != null) ...[
             const SizedBox(height: 6),
             Text(
-              'Iris estimate: ${estimatedWeightKg!.toStringAsFixed(estimatedWeightKg!.truncateToDouble() == estimatedWeightKg ? 0 : 1)} kg'
+              'IRIS estimate: ${estimatedWeightKg!.toStringAsFixed(estimatedWeightKg!.truncateToDouble() == estimatedWeightKg ? 0 : 1)} kg'
               '${weightBand == null ? '' : ' · $weightBand'}'
-              '${confidence == null ? '' : ' · $confidence confidence'}',
+              '${confidence == null ? '' : ' · ${_confidenceDisplayText()}'}',
               style: TextStyle(color: colors.mutedText, height: 1.35),
             ),
           ],
@@ -10776,14 +10824,14 @@ class _WeightConfirmationPanel extends StatelessWidget {
           if (senderEnteredWeightKg != null) ...[
             const SizedBox(height: 4),
             Text(
-              'Your weight: ${senderEnteredWeightKg!.toStringAsFixed(senderEnteredWeightKg!.truncateToDouble() == senderEnteredWeightKg ? 0 : 1)} kg',
+              'Your estimate: ${senderEnteredWeightKg!.toStringAsFixed(senderEnteredWeightKg!.truncateToDouble() == senderEnteredWeightKg ? 0 : 1)} kg',
               style: TextStyle(color: colors.mutedText, height: 1.35),
             ),
           ],
           if (pricingWeightKg != null) ...[
             const SizedBox(height: 8),
             Text(
-              '✓ Weight Used: ${pricingWeightKg!.toStringAsFixed(pricingWeightKg!.truncateToDouble() == pricingWeightKg ? 0 : 3)}kg',
+              '✓ Final pricing weight: ${pricingWeightKg!.toStringAsFixed(pricingWeightKg!.truncateToDouble() == pricingWeightKg ? 0 : 3)}kg',
               style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 4),
@@ -10836,12 +10884,23 @@ class _WeightConfirmationPanel extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onConfirm,
               icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Accept pricing weight'),
+              label: const Text(
+                'IRIS has calculated the pricing weight. Rider will verify at collection.',
+              ),
             ),
           ],
         ],
       ),
     );
+  }
+
+  String _confidenceDisplayText() {
+    final source = weightSource.toLowerCase();
+    if (truthBand == 'Exact Match') return 'Exact Match (High Confidence)';
+    if (source == 'repository match') return 'Repository Match (Medium Confidence)';
+    if (source == 'photo match') return 'Image Estimate (Medium Confidence)';
+    if (source == 'customer declared') return 'User Declared Only (Low Confidence)';
+    return '$truthBand${confidence == null ? '' : ' (${confidence!} confidence)'}';
   }
 
   void _showIrisInfo(BuildContext context) {
@@ -13046,6 +13105,11 @@ class _IrisWeightEstimate {
   final double? confidenceScore;
   final double? historicalVerifiedWeightKg;
   final String? learningReason;
+  final ItemDimensionsCm? typicalDimensions;
+  final String? vehicleSuitability;
+  final bool fragile;
+  final bool stackable;
+  final String? handlingNotes;
 
   const _IrisWeightEstimate({
     required this.weightKg,
@@ -13060,6 +13124,11 @@ class _IrisWeightEstimate {
     this.confidenceScore,
     this.historicalVerifiedWeightKg,
     this.learningReason,
+    this.typicalDimensions,
+    this.vehicleSuitability,
+    this.fragile = false,
+    this.stackable = true,
+    this.handlingNotes,
   });
 
   _IrisWeightEstimate copyWith({
@@ -13075,6 +13144,11 @@ class _IrisWeightEstimate {
     double? confidenceScore,
     double? historicalVerifiedWeightKg,
     String? learningReason,
+    ItemDimensionsCm? typicalDimensions,
+    String? vehicleSuitability,
+    bool? fragile,
+    bool? stackable,
+    String? handlingNotes,
   }) {
     return _IrisWeightEstimate(
       weightKg: weightKg ?? this.weightKg,
@@ -13091,6 +13165,11 @@ class _IrisWeightEstimate {
       historicalVerifiedWeightKg:
           historicalVerifiedWeightKg ?? this.historicalVerifiedWeightKg,
       learningReason: learningReason ?? this.learningReason,
+      typicalDimensions: typicalDimensions ?? this.typicalDimensions,
+      vehicleSuitability: vehicleSuitability ?? this.vehicleSuitability,
+      fragile: fragile ?? this.fragile,
+      stackable: stackable ?? this.stackable,
+      handlingNotes: handlingNotes ?? this.handlingNotes,
     );
   }
 }
@@ -13406,6 +13485,7 @@ class _VehicleStep extends StatelessWidget {
   final String pickup;
   final String dropoff;
   final double chargeableWeightKg;
+  final VehicleSuitability vehicleSuitability;
   final _VehicleOption selectedVehicle;
   final String selectedSpeed;
   final ValueChanged<_VehicleOption> onVehicle;
@@ -13419,6 +13499,7 @@ class _VehicleStep extends StatelessWidget {
     required this.pickup,
     required this.dropoff,
     required this.chargeableWeightKg,
+    required this.vehicleSuitability,
     required this.selectedVehicle,
     required this.selectedSpeed,
     required this.onVehicle,
@@ -13429,11 +13510,10 @@ class _VehicleStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recommendedVehicleName =
-        DeliveryPricing.recommendedVehicleForWeight(chargeableWeightKg);
-    final canContinue = DeliveryPricing.vehicleCanCarryWeight(
+    final recommendedVehicleName = vehicleSuitability.recommendedVehicle;
+    final canContinue = DeliveryPricing.vehicleCanCarryDelivery(
       selectedVehicle.name,
-      chargeableWeightKg,
+      vehicleSuitability,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -13464,13 +13544,32 @@ class _VehicleStep extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'Based on the item, weight, and route, a ${recommendedVehicleName.toLowerCase()} should be the best fit.',
+                      '${vehicleSuitability.explanation}\nRecommended vehicle: $recommendedVehicleName.',
                       style: TextStyle(
                         color: colors.mutedText,
                         height: 1.35,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: vehicleSuitability.factors
+                          .map((factor) => _HealthChip(label: '✓ $factor'))
+                          .toList(),
+                    ),
+                    if (vehicleSuitability.handlingNotes.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        vehicleSuitability.handlingNotes,
+                        style: TextStyle(
+                          color: colors.mutedText,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -13508,7 +13607,7 @@ class _VehicleStep extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'This item is too heavy for bike delivery. Car/van required.',
+                    'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: $recommendedVehicleName.',
                     style: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w800,
@@ -13674,7 +13773,7 @@ class _PaymentStep extends StatelessWidget {
               ),
               _PriceLine(
                 colors: colors,
-                label: 'Confirmed parcel weight',
+                label: 'Final pricing weight',
                 value: weightConfirmed
                     ? '${weightKg.toStringAsFixed(weightKg.truncateToDouble() == weightKg ? 0 : 1)} kg'
                     : 'Confirm parcel weight before payment.',
@@ -13690,7 +13789,7 @@ class _PaymentStep extends StatelessWidget {
               if (senderEnteredWeightKg != null)
                 _PriceLine(
                   colors: colors,
-                  label: 'Your weight',
+                  label: 'Your estimate',
                   value:
                       '${senderEnteredWeightKg!.toStringAsFixed(senderEnteredWeightKg!.truncateToDouble() == senderEnteredWeightKg ? 0 : 1)} kg',
                 ),

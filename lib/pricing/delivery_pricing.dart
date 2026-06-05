@@ -113,6 +113,52 @@ class DeliveryClassification {
       };
 }
 
+class DeliveryItemDimensions {
+  final double lengthCm;
+  final double widthCm;
+  final double heightCm;
+
+  const DeliveryItemDimensions({
+    required this.lengthCm,
+    required this.widthCm,
+    required this.heightCm,
+  });
+
+  double get longestSideCm => max(lengthCm, max(widthCm, heightCm));
+  double get volumeCm3 => lengthCm * widthCm * heightCm;
+
+  String get label =>
+      '${lengthCm.toStringAsFixed(0)} x ${widthCm.toStringAsFixed(0)} x ${heightCm.toStringAsFixed(0)} cm';
+}
+
+class VehicleSuitability {
+  final String recommendedVehicle;
+  final List<String> allowedVehicles;
+  final int score;
+  final List<String> factors;
+  final String explanation;
+  final String handlingNotes;
+  final bool fragile;
+  final bool stackable;
+
+  const VehicleSuitability({
+    required this.recommendedVehicle,
+    required this.allowedVehicles,
+    required this.score,
+    required this.factors,
+    required this.explanation,
+    required this.handlingNotes,
+    required this.fragile,
+    required this.stackable,
+  });
+
+  bool allows(String? vehicleType) {
+    final normalized = _normalizePricingVehicle(vehicleType);
+    return allowedVehicles
+        .any((vehicle) => _normalizePricingVehicle(vehicle) == normalized);
+  }
+}
+
 class DeliveryPricing {
   static const Map<String, double> heavyKeywordMinimumWeightsKg = {
     'piano': 50,
@@ -354,12 +400,118 @@ class DeliveryPricing {
     return 'Bike';
   }
 
+  static VehicleSuitability resolveVehicleSuitability({
+    required double weightKg,
+    required String description,
+    String? itemCategory,
+    DeliveryItemDimensions? dimensions,
+    String? repositoryVehicleSuitability,
+    bool fragile = false,
+    bool stackable = true,
+    String? handlingNotes,
+  }) {
+    final text = description.toLowerCase();
+    final factors = <String>['Weight'];
+    if (dimensions != null) factors.add('Dimensions');
+    if ((itemCategory ?? '').trim().isNotEmpty) factors.add('Item type');
+    if ((repositoryVehicleSuitability ?? '').trim().isNotEmpty) {
+      factors.add('Repository metadata');
+    }
+
+    final bulkyByKeyword = [
+      'washing machine',
+      'tumble dryer',
+      'fridge',
+      'freezer',
+      'sofa',
+      'wardrobe',
+      'mattress',
+      'bicycle',
+      'bike',
+      'piano',
+    ].any(text.contains);
+    final compactByType = [
+      'microwave',
+      'suitcase',
+      'luggage',
+      'laptop',
+      'phone',
+      'shoebox',
+      'small parcel',
+    ].any(text.contains);
+    final flatPacked = text.contains('flat pack') || text.contains('flat-pack');
+    final oversizedDimensions = dimensions != null &&
+        (dimensions.longestSideCm > 120 || dimensions.volumeCm3 > 180000);
+
+    var allowed = <String>{'Bike'};
+    var recommended = 'Bike';
+    var score = 30;
+
+    if (weightKg > 5 || compactByType || fragile) {
+      allowed = {'Car', 'Van'};
+      recommended = 'Car';
+      score = 60;
+    }
+    if (weightKg > 15 || bulkyByKeyword || oversizedDimensions) {
+      allowed = {'Van'};
+      recommended = 'Van';
+      score = 88;
+    }
+    if (flatPacked && weightKg <= 25 && !oversizedDimensions) {
+      allowed = {'Car', 'Van'};
+      recommended = 'Car';
+      score = max(score, 68);
+    }
+
+    final repo = repositoryVehicleSuitability?.toLowerCase().trim() ?? '';
+    if (repo == 'van') {
+      allowed = {'Van'};
+      recommended = 'Van';
+      score = max(score, 90);
+    } else if (repo == 'car or van') {
+      allowed = {'Car', 'Van'};
+      if (recommended == 'Bike') recommended = 'Car';
+      score = max(score, 70);
+    } else if (repo == 'car') {
+      allowed = {'Car', 'Van'};
+      recommended = 'Car';
+      score = max(score, 65);
+    }
+
+    return VehicleSuitability(
+      recommendedVehicle: recommended,
+      allowedVehicles: allowed.toList(growable: false),
+      score: score,
+      factors: factors,
+      explanation:
+          'Vehicle recommendation based on ${factors.map((factor) => factor.toLowerCase()).join(', ')}.',
+      handlingNotes: handlingNotes?.trim().isNotEmpty == true
+          ? handlingNotes!.trim()
+          : stackable
+              ? 'Stackable item.'
+              : 'Do not stack this item.',
+      fragile: fragile,
+      stackable: stackable,
+    );
+  }
+
   static bool vehicleCanCarryWeight(String? vehicleType, double weightKg) {
     final vehicle = vehicleType?.trim().toLowerCase();
     if (vehicle == 'van') return true;
     if (vehicle == 'car') return weightKg <= 10;
     if (vehicle == 'bike' || vehicle == 'bicycle') return weightKg <= 5;
     return weightKg <= 5;
+  }
+
+  static bool vehicleCanCarryDelivery(
+    String? vehicleType,
+    VehicleSuitability suitability,
+  ) {
+    return suitability.allows(vehicleType);
+  }
+
+  static String _normalizeVehicle(String? vehicleType) {
+    return _normalizePricingVehicle(vehicleType);
   }
 
   static double calculateVehicleSurcharge(String? vehicleType) {
@@ -504,4 +656,12 @@ class DeliveryPricing {
 
   static double _roundMoney(double value) =>
       double.parse(value.toStringAsFixed(2));
+}
+
+String _normalizePricingVehicle(String? vehicleType) {
+  final vehicle = vehicleType?.trim().toLowerCase() ?? '';
+  if (vehicle.contains('van')) return 'van';
+  if (vehicle.contains('car')) return 'car';
+  if (vehicle.contains('bike') || vehicle.contains('bicycle')) return 'bike';
+  return vehicle;
 }

@@ -308,5 +308,40 @@ void main() {
       expect(classification.vehicleType, 'Van');
       expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 12), isFalse);
     });
+
+    test('vehicle suitability considers dimensions and item type', () {
+      final microwave = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 12,
+        description: 'Microwave',
+        itemCategory: 'Kitchen appliance',
+        dimensions: const DeliveryItemDimensions(
+          lengthCm: 45,
+          widthCm: 35,
+          heightCm: 28,
+        ),
+        repositoryVehicleSuitability: 'Car or Van',
+        fragile: true,
+        stackable: false,
+      );
+      final suitcase = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 12,
+        description: 'Large suitcase',
+        itemCategory: 'Luggage',
+      );
+      final washingMachine = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 12,
+        description: 'Washing machine',
+        itemCategory: 'Appliance',
+      );
+
+      expect(microwave.recommendedVehicle, 'Car');
+      expect(DeliveryPricing.vehicleCanCarryDelivery('Car', microwave), isTrue);
+      expect(suitcase.recommendedVehicle, 'Car');
+      expect(washingMachine.recommendedVehicle, 'Van');
+      expect(
+        DeliveryPricing.vehicleCanCarryDelivery('Car', washingMachine),
+        isFalse,
+      );
+    });
   });
 }

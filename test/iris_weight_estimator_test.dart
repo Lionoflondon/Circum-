@@ -27,6 +27,9 @@ void main() {
           'Repository Match');
       expect(estimate.matchedItemName, 'Apple iPhone 15');
       expect(estimate.truthBand, 'Exact Match');
+      expect(estimate.typicalDimensions?.label, '15 x 8 x 2 cm');
+      expect(estimate.vehicleSuitability, 'Bike');
+      expect(estimate.fragile, isTrue);
     });
 
     test('iPhone 15 with heavier declared weight charges declared weight', () {
