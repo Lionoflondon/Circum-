@@ -160,6 +160,9 @@ class VehicleSuitability {
 }
 
 class DeliveryPricing {
+  static const double riderDeliveryFareShare = 0.65;
+  static const double platformDeliveryFareShare = 0.35;
+
   static const Map<String, double> heavyKeywordMinimumWeightsKg = {
     'piano': 50,
     'fridge': 25,
@@ -382,7 +385,9 @@ class DeliveryPricing {
 
   static String weightSourceLabel(String? source) {
     return switch (source) {
-      'repository_match' || 'catalogue_match' || 'known_product_lookup' =>
+      'repository_match' ||
+      'catalogue_match' ||
+      'known_product_lookup' =>
         'Repository Match',
       'photo_match' || 'iris_confirmed' || 'visual_estimate' => 'Photo Match',
       'rider_verified' || 'driver_verified' => 'Rider Verified',
@@ -634,6 +639,14 @@ class DeliveryPricing {
       'economy' => 2,
       _ => 1,
     };
+  }
+
+  static double riderPayoutFromFare(double deliveryFare) {
+    return _roundMoney(deliveryFare * riderDeliveryFareShare);
+  }
+
+  static double platformRevenueFromFare(double deliveryFare) {
+    return _roundMoney(deliveryFare * platformDeliveryFareShare);
   }
 
   static double parseWeightKg(String value, {double fallbackKg = 0}) {

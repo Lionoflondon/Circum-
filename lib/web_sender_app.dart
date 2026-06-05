@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:circum/app/admin/admin_operations.dart';
 import 'package:circum/app/authentication/access/role_access.dart';
+import 'package:circum/app/delivery_security/vanguard_protection.dart';
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
@@ -1488,7 +1489,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           colors: colors,
           title: 'Finance',
           subtitle:
-              'Payments, refunds, driver payouts, commission checks, and revenue follow-up.',
+              'Payments, refunds, driver payouts, and revenue follow-up. CIRCUM retains 35% to operate the platform, support disputes, payments, safety, and system maintenance.',
           records: adminSearch(_financeRows(), query,
               ['id', 'senderId', 'riderId', 'status', 'type']),
           columns: const ['Type', 'Record', 'Status', 'Amount', 'Notes'],
@@ -1917,9 +1918,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         learning['source'] ??
         'unknown';
     final reason = '${learning['reason'] ?? ''}'.trim();
+    final vanguard = item['vanguardEnabled'] == true
+        ? '\nVanguard: collection ${item['collectionPinVerified'] == true ? 'passed' : 'pending'}, delivery ${item['deliveryPinVerified'] == true ? 'passed' : 'pending'}'
+        : '';
     return reason.isEmpty
-        ? '$finalWeight kg\n$source'
-        : '$finalWeight kg\n$source\n$reason';
+        ? '$finalWeight kg\n$source$vanguard'
+        : '$finalWeight kg\n$source\n$reason$vanguard';
   }
 }
 
@@ -4916,7 +4920,7 @@ class _RiderEarningsTab extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Rider earnings'),
               const SizedBox(height: 10),
               Text(
-                'Track completed jobs, available balance, pending withdrawals, tips, and lifetime earnings from your rider dashboard.',
+                'Drivers earn 65% of each completed delivery. Track completed jobs, available balance, pending withdrawals, tips, and lifetime earnings from your rider dashboard.',
                 style: TextStyle(
                   color: colors.mutedText,
                   height: 1.4,
@@ -5571,6 +5575,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     setState(() => _jobMessage = 'Updating job $requestId...');
     try {
       final db = FirebaseFirestore.instance;
+      final vanguardPatch = await _collectVanguardPinVerification(
+        job,
+        requestId,
+        user.uid,
+        status,
+      );
+      if (vanguardPatch == null &&
+          _jobVanguardEnabled(job) &&
+          (status == 'picked_up' || status == 'completed')) {
+        return;
+      }
       final verificationPatch = status == 'picked_up'
           ? await _collectWeightVerification(job, requestId, user.uid)
           : null;
@@ -5586,6 +5601,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       };
       if (status == 'picked_up') {
         updates['pickedUpAt'] = FieldValue.serverTimestamp();
+        if (vanguardPatch != null) updates.addAll(vanguardPatch);
         updates.addAll(verificationPatch!);
       }
       if (status == 'in_transit') {
@@ -5593,6 +5609,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
       if (status == 'completed') {
         updates['completedAt'] = FieldValue.serverTimestamp();
+        if (vanguardPatch != null) updates.addAll(vanguardPatch);
         final payout = _jobPayout(job);
         final tip = _jobTip(job);
         final totalCredit = payout + tip;
@@ -5645,6 +5662,156 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not update this job. Try again.');
     }
+  }
+
+  Future<Map<String, dynamic>?> _collectVanguardPinVerification(
+    Map<String, dynamic> job,
+    String requestId,
+    String riderId,
+    String status,
+  ) async {
+    if (!_jobVanguardEnabled(job) ||
+        (status != 'picked_up' && status != 'completed')) {
+      return const <String, dynamic>{};
+    }
+    final stage = status == 'completed' ? 'delivery' : 'collection';
+    final alreadyVerified = stage == 'delivery'
+        ? job['deliveryPinVerified'] == true
+        : job['collectionPinVerified'] == true;
+    if (alreadyVerified) return const <String, dynamic>{};
+
+    final pinController = TextEditingController();
+    String? errorText;
+    final enteredPin = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(stage == 'delivery'
+              ? 'Enter delivery PIN'
+              : 'Enter collection PIN'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                stage == 'delivery'
+                    ? 'This is a Vanguard protected delivery. Enter the recipient’s delivery PIN to complete delivery.'
+                    : 'This is a Vanguard protected delivery. Enter the sender’s collection PIN to confirm handover.',
+                style: TextStyle(color: Theme.of(context).hintColor),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: pinController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: const InputDecoration(
+                  labelText: '6-digit PIN',
+                  border: OutlineInputBorder(),
+                  counterText: '',
+                ),
+              ),
+              if (errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(errorText!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = pinController.text.trim();
+                if (!RegExp(r'^\d{6}$').hasMatch(value)) {
+                  setDialogState(
+                      () => errorText = 'Enter the 6-digit Vanguard PIN.');
+                  return;
+                }
+                Navigator.pop(context, value);
+              },
+              child: const Text('Verify PIN'),
+            ),
+          ],
+        ),
+      ),
+    );
+    pinController.dispose();
+    if (enteredPin == null) {
+      setState(() => _jobMessage = stage == 'delivery'
+          ? 'Delivery PIN required before completion.'
+          : 'Collection PIN required before pickup.');
+      return null;
+    }
+
+    final attemptField = stage == 'delivery'
+        ? 'deliveryPinAttemptCount'
+        : 'collectionPinAttemptCount';
+    final attemptCount = _numberValue(job[attemptField])?.toInt() ?? 0;
+    final expectedPin = stage == 'delivery'
+        ? VanguardProtection.deliveryPin(job)
+        : VanguardProtection.collectionPin(job);
+    final check = VanguardProtection.verifyPin(
+      enabled: true,
+      expectedPin: expectedPin,
+      enteredPin: enteredPin,
+      attemptCount: attemptCount,
+      stage: stage,
+    );
+    if (!check.passed) {
+      await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(requestId)
+          .set({
+        attemptField: check.attemptCount,
+        'vanguardReviewRequired': check.flagForReview,
+        'vanguardLastFailedStage': stage,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (!mounted) return null;
+      setState(() => _jobMessage = check.errorMessage);
+      return null;
+    }
+
+    final protection =
+        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final nextProtection = {
+      ...protection,
+      stage == 'delivery' ? 'deliveryPin' : 'collectionPin': null,
+    };
+    final verifiedField =
+        stage == 'delivery' ? 'deliveryPinVerified' : 'collectionPinVerified';
+    final verifiedAtField = stage == 'delivery'
+        ? 'deliveryPinVerifiedAt'
+        : 'collectionPinVerifiedAt';
+    final verifiedByField = stage == 'delivery'
+        ? 'deliveryPinVerifiedBy'
+        : 'collectionPinVerifiedBy';
+    return {
+      verifiedField: true,
+      verifiedAtField: FieldValue.serverTimestamp(),
+      verifiedByField: riderId,
+      attemptField: check.attemptCount,
+      'vanguardProtection': nextProtection,
+      'vanguardVerification': {
+        stage: {
+          'status': 'passed',
+          'riderId': riderId,
+          'verifiedAt': FieldValue.serverTimestamp(),
+          'attemptCount': check.attemptCount,
+        },
+      },
+    };
+  }
+
+  bool _jobVanguardEnabled(Map<String, dynamic> job) {
+    if (job['vanguardEnabled'] == true) return true;
+    final protection =
+        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>();
+    return protection?['enabled'] == true;
   }
 
   Future<Map<String, dynamic>?> _collectWeightVerification(
@@ -5810,7 +5977,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       vehicleType: vehicle,
     ));
     final revisedPayout =
-        double.parse((revisedQuote.total * 0.75).toStringAsFixed(2));
+        DeliveryPricing.riderPayoutFromFare(revisedQuote.total);
+    final revisedPlatformRevenue =
+        DeliveryPricing.platformRevenueFromFare(revisedQuote.total);
     final heavier = finalWeightUsed > currentFinalWeight + 0.01;
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
@@ -5847,6 +6016,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'price': revisedQuote.total,
       'fare': revisedQuote.total,
       'driverPayout': revisedPayout,
+      'riderPayout': revisedPayout,
+      'platformRevenue': revisedPlatformRevenue,
+      'platformShare': DeliveryPricing.platformDeliveryFareShare,
+      'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': revisedQuote.toJson(),
       'weightReviewRequired': optionValue != 'accurate',
       'weightDisputeStatus':
@@ -5879,6 +6052,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'confirmedWeightBand':
             DeliveryPricing.weightBandFor(finalWeightUsed).category,
         'driverPayout': revisedPayout,
+        'riderPayout': revisedPayout,
+        'platformRevenue': revisedPlatformRevenue,
         'totalFare': revisedQuote.total,
         'vehicleType': vehicle,
       },
@@ -6490,8 +6665,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   child: switch (_riderTab) {
                     _RiderPortalTab.order => _CircumOrderContent(
                         colors: colors,
-                        onBecomeRider: () =>
-                            setState(() => _riderTab = _RiderPortalTab.overview),
+                        onBecomeRider: () => setState(
+                            () => _riderTab = _RiderPortalTab.overview),
                       ),
                     _RiderPortalTab.earnings => _RiderEarningsTab(
                         colors: colors,
@@ -6501,52 +6676,52 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                       _RiderReferralsTab(colors: colors),
                     _RiderPortalTab.overview => _riderUser == null
                         ? ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            wide ? 28 : 18,
-                            18,
-                            wide ? 28 : 18,
-                            34,
-                          ),
-                          children: [
-                            _RiderPublicIntro(colors: colors),
-                            const SizedBox(height: 14),
-                            _RiderAccessPanel(
-                              colors: colors,
-                              email: _email,
-                              password: _password,
-                              signupMode: _signupMode,
-                              submitting: _authSubmitting,
-                              user: _riderUser,
-                              message: _authMessage,
-                              onToggleMode: () =>
-                                  setState(() => _signupMode = !_signupMode),
-                              onSubmit: _submitAuth,
-                              onSignOut: _signOutRider,
+                            padding: EdgeInsets.fromLTRB(
+                              wide ? 28 : 18,
+                              18,
+                              wide ? 28 : 18,
+                              34,
                             ),
-                          ],
-                        )
-                        : !_roleChoiceConfirmed && _availableRoles.length > 1
-                          ? ListView(
-                              padding: EdgeInsets.fromLTRB(
-                                wide ? 28 : 18,
-                                18,
-                                wide ? 28 : 18,
-                                34,
+                            children: [
+                              _RiderPublicIntro(colors: colors),
+                              const SizedBox(height: 14),
+                              _RiderAccessPanel(
+                                colors: colors,
+                                email: _email,
+                                password: _password,
+                                signupMode: _signupMode,
+                                submitting: _authSubmitting,
+                                user: _riderUser,
+                                message: _authMessage,
+                                onToggleMode: () =>
+                                    setState(() => _signupMode = !_signupMode),
+                                onSubmit: _submitAuth,
+                                onSignOut: _signOutRider,
                               ),
-                              children: [
-                                _MultiRoleChoicePanel(
-                                  colors: colors,
-                                  roles: _availableRoles,
-                                  onSender: () =>
-                                      widget.onRoleSelected(CircumRole.sender),
-                                  onRider: () => setState(
-                                      () => _roleChoiceConfirmed = true),
-                                  onAdmin: () =>
-                                      widget.onRoleSelected(CircumRole.admin),
+                            ],
+                          )
+                        : !_roleChoiceConfirmed && _availableRoles.length > 1
+                            ? ListView(
+                                padding: EdgeInsets.fromLTRB(
+                                  wide ? 28 : 18,
+                                  18,
+                                  wide ? 28 : 18,
+                                  34,
                                 ),
-                              ],
-                            )
-                          : _buildSignedInRiderContent(colors, wide),
+                                children: [
+                                  _MultiRoleChoicePanel(
+                                    colors: colors,
+                                    roles: _availableRoles,
+                                    onSender: () => widget
+                                        .onRoleSelected(CircumRole.sender),
+                                    onRider: () => setState(
+                                        () => _roleChoiceConfirmed = true),
+                                    onAdmin: () =>
+                                        widget.onRoleSelected(CircumRole.admin),
+                                  ),
+                                ],
+                              )
+                            : _buildSignedInRiderContent(colors, wide),
                   },
                 ),
               ],
@@ -6591,7 +6766,7 @@ class _RiderPublicIntro extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Create a rider account to apply, upload documents, accept jobs, track earnings, and manage payouts.',
+            'Create a rider account to apply, upload documents, accept jobs, and manage payouts. Drivers earn 65% of each completed delivery.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.45,
@@ -7611,6 +7786,9 @@ class _DriverJobCard extends StatelessWidget {
         '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
     final serviceLevel =
         '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
+    final vanguardEnabled = job['vanguardEnabled'] == true ||
+        summary['vanguardEnabled'] == true ||
+        ((job['vanguardProtection'] as Map?)?['enabled'] == true);
     final duration = _num(summary['estimatedDurationMinutes'] ??
         job['estimatedDurationMinutes'] ??
         job['etaMinutes']);
@@ -7646,6 +7824,10 @@ class _DriverJobCard extends StatelessWidget {
                       .toLowerCase() ==
                   'express') ...[
                 _HealthChip(label: 'Express'),
+                const SizedBox(width: 8),
+              ],
+              if (vanguardEnabled) ...[
+                _HealthChip(label: 'Vanguard'),
                 const SizedBox(width: 8),
               ],
               _HealthChip(label: vehicle),
@@ -7737,6 +7919,16 @@ class _DriverJobCard extends StatelessWidget {
               children: warnings
                   .map((warning) => _HealthChip(label: warning))
                   .toList(),
+            ),
+          ],
+          if (vanguardEnabled) ...[
+            const SizedBox(height: 8),
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.security,
+              label: 'Vanguard',
+              value:
+                  'PIN verification required at collection and final delivery.',
             ),
           ],
           const SizedBox(height: 12),
@@ -8443,6 +8635,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   SenderDeliveryRecord? _selectedSenderDelivery;
   DriverProfile? _assignedDriver;
   DriverPerformanceMetric? _assignedDriverMetric;
+  Map<String, dynamic>? _activeVanguardData;
   Set<String> _selectedRatingTags = {};
   Set<CircumRole> _availableRoles = const {};
   final List<Map<String, dynamic>> _healthPickups = [];
@@ -8745,6 +8938,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           checkoutState: _checkoutState,
           firebaseOnline: _firebaseOnline,
           firebaseError: _firebaseError,
+          vanguardData: _activeVanguardData,
           assignedDriver: _assignedDriver,
           assignedDriverMetric: _assignedDriverMetric,
           ratingStars: _selectedRating,
@@ -9583,8 +9777,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
     final bandChanged =
         senderBand != null && senderBand.category != irisBand.category;
-    final significantDifference =
-        bandChanged || classification.selectedWeightSource == 'keyword_override';
+    final significantDifference = bandChanged ||
+        classification.selectedWeightSource == 'keyword_override';
     final mismatchReview = _hasIrisMismatchReview(
       senderWeightKg: senderWeightKg,
       estimateWeightKg: estimate.weightKg,
@@ -9610,8 +9804,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         message: significantDifference
             ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the rider will verify at pickup.'
             : 'IRIS has analysed this item and selected the most reliable weight available.',
-        reason:
-            classification.resolutionReason,
+        reason: classification.resolutionReason,
         verificationRequired: true,
       );
     }
@@ -9631,12 +9824,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       message: mismatchReview
           ? 'Potential mismatch detected — manual review required.'
           : significantDifference
-          ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
-          : 'IRIS has analysed this item and selected the most reliable weight available.',
-      reason:
-          classification.resolutionReason,
-      verificationRequired:
-          mismatchReview || significantDifference || classification.requiresManualReview,
+              ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
+              : 'IRIS has analysed this item and selected the most reliable weight available.',
+      reason: classification.resolutionReason,
+      verificationRequired: mismatchReview ||
+          significantDifference ||
+          classification.requiresManualReview,
     );
   }
 
@@ -9828,15 +10021,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       explanation: product.explanation,
       packageType: product.packageType,
       requiresVehicleReview: product.requiresVehicleReview,
-        weightSource: product.weightSource,
-        truthBand: product.truthBand,
-        matchedItemName: product.matchedItemName,
-        confidenceScore: product.confidenceScore,
-        typicalDimensions: product.typicalDimensions,
-        vehicleSuitability: product.vehicleSuitability,
-        fragile: product.fragile,
-        stackable: product.stackable,
-        handlingNotes: product.handlingNotes,
+      weightSource: product.weightSource,
+      truthBand: product.truthBand,
+      matchedItemName: product.matchedItemName,
+      confidenceScore: product.confidenceScore,
+      typicalDimensions: product.typicalDimensions,
+      vehicleSuitability: product.vehicleSuitability,
+      fragile: product.fragile,
+      stackable: product.stackable,
+      handlingNotes: product.handlingNotes,
     );
   }
 
@@ -9968,6 +10161,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _ensureFirebaseReady();
       final db = FirebaseFirestore.instance;
       final request = _requestPayload(id);
+      _activeVanguardData = request['vanguardEnabled'] == true
+          ? Map<String, dynamic>.from(request)
+          : null;
       final senderId = '${request['senderId']}';
       final batch = db.batch();
       batch.set(db.collection('webSenderRequests').doc(id), request);
@@ -10502,10 +10698,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupGeo = pickupAddress.toPositionMap();
     final dropoffGeo = dropoffAddress.toPositionMap();
     final packageType = _inferPackageType();
+    final vanguardFields = VanguardProtection.initialFields(
+      description: _description.text.trim(),
+      packageType: packageType,
+      declaredValueGbp: null,
+    );
+    final vanguardEnabled = vanguardFields['vanguardEnabled'] == true;
     final hasPhoto = false;
     final suitability = _vehicleSuitability;
     final safeVehicleName = suitability.recommendedVehicle;
-    final driverPayout = double.parse((quote.total * 0.75).toStringAsFixed(2));
+    final driverPayout = DeliveryPricing.riderPayoutFromFare(quote.total);
+    final platformRevenue =
+        DeliveryPricing.platformRevenueFromFare(quote.total);
     final driverJobSummary = {
       'pickupDisplay': _pickup.text.trim(),
       'dropoffDisplay': _dropoff.text.trim(),
@@ -10545,6 +10749,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'vehicleType': safeVehicleName,
       'totalFare': quote.total,
       'driverPayout': driverPayout,
+      'riderPayout': driverPayout,
+      'platformRevenue': platformRevenue,
       'serviceLevel': selectedServiceLevel,
       'selectedServiceLevel': selectedServiceLevel,
       'priority': selectedServiceLevel == 'express',
@@ -10574,7 +10780,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisConfidenceScore': _irisConfidenceScore(),
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
-          : '',
+          : vanguardEnabled
+              ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
+              : '',
+      'vanguardEnabled': vanguardEnabled,
       'serviceType': selectedServiceLevel == 'express'
           ? 'Express Delivery'
           : selectedServiceLevel == 'economy'
@@ -10687,7 +10896,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'price': quote.total,
       'fare': quote.total,
       'driverPayout': driverPayout,
+      'riderPayout': driverPayout,
+      'platformRevenue': platformRevenue,
+      'platformShare': DeliveryPricing.platformDeliveryFareShare,
+      'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': quote.toJson(),
+      ...vanguardFields,
       'requiresManualQuote': quote.requiresManualQuote,
       'currency': 'GBP',
       'status': 'requested',
@@ -10780,6 +10994,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _broadcasting =
             _checkoutState == _CheckoutState.matchingRiders && matchingStatus;
         _statusIndex = _statusIndexFromFirebase(status);
+        _activeVanguardData = data['vanguardEnabled'] == true
+            ? Map<String, dynamic>.from(data)
+            : null;
       });
       if (driverId != null && driverId != _assignedDriverId) {
         _assignedDriverId = driverId;
@@ -11279,6 +11496,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _assignedDriverId = null;
       _assignedDriver = null;
       _assignedDriverMetric = null;
+      _activeVanguardData = null;
       _statusIndex = 0;
       _broadcasting = false;
       _selectedRating = 0;
@@ -11931,7 +12149,8 @@ class _WeightConfirmationPanel extends StatelessWidget {
               style: TextStyle(color: colors.mutedText, height: 1.35),
             ),
           ],
-          if (matchedItemName != null && matchedItemName!.trim().isNotEmpty) ...[
+          if (matchedItemName != null &&
+              matchedItemName!.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               'Matched item: $matchedItemName · $truthBand',
@@ -12018,9 +12237,11 @@ class _WeightConfirmationPanel extends StatelessWidget {
   String _confidenceDisplayText() {
     final source = weightSource.toLowerCase();
     if (truthBand == 'Exact Match') return 'Exact Match (High Confidence)';
-    if (source == 'repository match') return 'Repository Match (Medium Confidence)';
+    if (source == 'repository match')
+      return 'Repository Match (Medium Confidence)';
     if (source == 'photo match') return 'Image Estimate (Medium Confidence)';
-    if (source == 'customer declared') return 'User Declared Only (Low Confidence)';
+    if (source == 'customer declared')
+      return 'User Declared Only (Low Confidence)';
     return '$truthBand${confidence == null ? '' : ' (${confidence!} confidence)'}';
   }
 
@@ -13024,8 +13245,9 @@ class _DetailsStep extends StatelessWidget {
                     pickupVerified && dropoffVerified
                         ? Icons.verified
                         : Icons.info_outline,
-                    color:
-                        pickupVerified && dropoffVerified ? colors.success : colors.mutedText,
+                    color: pickupVerified && dropoffVerified
+                        ? colors.success
+                        : colors.mutedText,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
@@ -13188,8 +13410,9 @@ class _DetailsStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed:
-                validating || matchingHasStarted || !canSubmit ? null : onSubmit,
+            onPressed: validating || matchingHasStarted || !canSubmit
+                ? null
+                : onSubmit,
             icon: validating
                 ? const SizedBox(
                     width: 18,
@@ -14351,8 +14574,8 @@ class _AddressSuggestion {
       lng: resolvedLng,
       confidence: confidence,
       provider: provider,
-      locationId:
-          placeId ?? _stableLocationId(displayAddress, resolvedLat, resolvedLng),
+      locationId: placeId ??
+          _stableLocationId(displayAddress, resolvedLat, resolvedLng),
       placeId: placeId,
       buildingNumber: components['buildingNumber'],
       street: components['street'],
@@ -14492,7 +14715,8 @@ String _cleanGoogleAddress(String address) {
 }
 
 String _stableLocationId(String address, double lat, double lng) {
-  final normalized = address.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+  final normalized =
+      address.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
   return '${normalized.substring(0, math.min(normalized.length, 48))}'
       '-${lat.toStringAsFixed(4)}-${lng.toStringAsFixed(4)}';
 }
@@ -14553,10 +14777,7 @@ double? _coordinateDistanceMiles(
   final lat1 = _degreesToRadians(pickupLat);
   final lat2 = _degreesToRadians(dropoffLat);
   final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(lat1) *
-          math.cos(lat2) *
-          math.sin(dLng / 2) *
-          math.sin(dLng / 2);
+      math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   final directMiles = earthRadiusMiles * c;
   if (directMiles < 0.15) return null;
@@ -14822,8 +15043,7 @@ class _PaymentStep extends StatelessWidget {
         scheduledPickupWindow.isNotEmpty ||
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
-    final processingPayment =
-        checkoutState == _CheckoutState.processingPayment;
+    final processingPayment = checkoutState == _CheckoutState.processingPayment;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -15008,12 +15228,12 @@ class _PaymentStep extends StatelessWidget {
               processingPayment
                   ? 'Processing payment...'
                   : !locationsConfirmed
-                  ? 'Confirm pickup and drop-off before payment'
-                  : breakdown.requiresManualQuote
-                      ? 'Manual review required'
-                      : weightConfirmed
-                  ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
-                  : 'Confirm parcel weight before payment',
+                      ? 'Confirm pickup and drop-off before payment'
+                      : breakdown.requiresManualQuote
+                          ? 'Manual review required'
+                          : weightConfirmed
+                              ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                              : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
@@ -15041,6 +15261,7 @@ class _TrackingStep extends StatelessWidget {
   final _CheckoutState checkoutState;
   final bool firebaseOnline;
   final String? firebaseError;
+  final Map<String, dynamic>? vanguardData;
   final DriverProfile? assignedDriver;
   final DriverPerformanceMetric? assignedDriverMetric;
   final int ratingStars;
@@ -15070,6 +15291,7 @@ class _TrackingStep extends StatelessWidget {
     required this.checkoutState,
     required this.firebaseOnline,
     required this.firebaseError,
+    required this.vanguardData,
     required this.assignedDriver,
     required this.assignedDriverMetric,
     required this.ratingStars,
@@ -15132,6 +15354,10 @@ class _TrackingStep extends StatelessWidget {
           error: firebaseError,
           checkoutState: checkoutState,
         ),
+        if (vanguardData?['vanguardEnabled'] == true) ...[
+          const SizedBox(height: 14),
+          _VanguardCustomerPanel(colors: colors, data: vanguardData!),
+        ],
         const SizedBox(height: 14),
         Stack(
           children: [
@@ -15281,6 +15507,136 @@ class _FirebaseStatusBanner extends StatelessWidget {
                 height: 1.3,
                 fontWeight: FontWeight.w800,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardCustomerPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> data;
+
+  const _VanguardCustomerPanel({
+    required this.colors,
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final protection =
+        (data['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final collectionVerified = data['collectionPinVerified'] == true;
+    final deliveryVerified = data['deliveryPinVerified'] == true;
+    final collectionPin = '${protection['collectionPin'] ?? ''}'.trim();
+    final deliveryPin = '${protection['deliveryPin'] ?? ''}'.trim();
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.security, color: colors.text),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Circum Vanguard Protection',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Vanguard Protection Activated\n\nThis item qualifies for enhanced delivery protection.\n\n✓ Collection PIN required\n✓ Delivery PIN required\n✓ Chain of custody enabled\n✓ Vanguard verification active\n\nGive this collection PIN to the rider only when handing over the sealed parcel.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _VanguardPinRow(
+            colors: colors,
+            label: 'Collection PIN',
+            pin: collectionVerified ? 'Verified' : collectionPin,
+            verified: collectionVerified,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Give this delivery PIN to the rider only when the parcel is physically delivered to you.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _VanguardPinRow(
+            colors: colors,
+            label: 'Delivery PIN',
+            pin: deliveryVerified ? 'Verified' : deliveryPin,
+            verified: deliveryVerified,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardPinRow extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String pin;
+  final bool verified;
+
+  const _VanguardPinRow({
+    required this.colors,
+    required this.label,
+    required this.pin,
+    required this.verified,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            verified ? Icons.verified : Icons.pin,
+            color: verified ? colors.success : colors.text,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Text(
+            pin.isEmpty ? 'Pending' : pin,
+            style: TextStyle(
+              color: colors.text,
+              fontWeight: FontWeight.w900,
+              fontFamily: pin.length == 6 ? 'monospace' : null,
+              fontSize: pin.length == 6 ? 18 : 14,
             ),
           ),
         ],
@@ -15673,7 +16029,8 @@ class _AddressFieldState extends State<_AddressField> {
     });
   }
 
-  Future<List<_AddressSuggestion>> _buildAddressSuggestions(String value) async {
+  Future<List<_AddressSuggestion>> _buildAddressSuggestions(
+      String value) async {
     if (value.length < 3) return const [];
     final clean = value.replaceAll(RegExp(r'\s+'), ' ');
     if (clean.toLowerCase().contains('united kingdom')) return const [];
@@ -15853,8 +16210,8 @@ class _AddressFieldState extends State<_AddressField> {
         result['address_components'] as List<dynamic>? ?? const [],
       );
       return _AddressSuggestion(
-        displayAddress:
-            _cleanGoogleAddress('${result['formatted_address'] ?? suggestion.displayAddress}'),
+        displayAddress: _cleanGoogleAddress(
+            '${result['formatted_address'] ?? suggestion.displayAddress}'),
         lat: lat,
         lng: lng,
         confidence: 0.99,
@@ -15900,8 +16257,8 @@ class _AddressFieldState extends State<_AddressField> {
       final lng = (location?['lng'] as num?)?.toDouble();
       if (lat == null || lng == null) return null;
       return _AddressSuggestion(
-        displayAddress:
-            _cleanGoogleAddress('${result['formatted_address'] ?? suggestion.displayAddress}'),
+        displayAddress: _cleanGoogleAddress(
+            '${result['formatted_address'] ?? suggestion.displayAddress}'),
         lat: lat,
         lng: lng,
         confidence: 0.98,
@@ -16120,7 +16477,8 @@ class _PopularPlace {
 
   bool matches(String normalizedInput) {
     return _normalizedSearchTerms.any(
-      (term) => term.contains(normalizedInput) || normalizedInput.contains(term),
+      (term) =>
+          term.contains(normalizedInput) || normalizedInput.contains(term),
     );
   }
 
@@ -16269,32 +16627,54 @@ bool _sameSuggestionText(String left, String right) {
 }
 
 const Map<String, (double, double)> _ukAddressSuggestionSeeds = {
-  '10 Downing Street, Westminster, London SW1A 2AA, United Kingdom':
-      (51.5034, -0.1276),
-  '221B Baker Street, Marylebone, London NW1 6XE, United Kingdom':
-      (51.5237, -0.1585),
-  '1 Canada Square, Canary Wharf, London E14 5AB, United Kingdom':
-      (51.5054, -0.0235),
-  'The Shard, 32 London Bridge Street, London SE1 9SG, United Kingdom':
-      (51.5045, -0.0865),
-  'Westfield London, Ariel Way, London W12 7GF, United Kingdom':
-      (51.5074, -0.2217),
-  'Selfridges, 400 Oxford Street, London W1A 1AB, United Kingdom':
-      (51.5145, -0.1527),
-  'King\'s Cross Station, Euston Road, London N1C 4TB, United Kingdom':
-      (51.5308, -0.1238),
-  'Manchester Piccadilly Station, Manchester M1 2BN, United Kingdom':
-      (53.4774, -2.2309),
+  '10 Downing Street, Westminster, London SW1A 2AA, United Kingdom': (
+    51.5034,
+    -0.1276
+  ),
+  '221B Baker Street, Marylebone, London NW1 6XE, United Kingdom': (
+    51.5237,
+    -0.1585
+  ),
+  '1 Canada Square, Canary Wharf, London E14 5AB, United Kingdom': (
+    51.5054,
+    -0.0235
+  ),
+  'The Shard, 32 London Bridge Street, London SE1 9SG, United Kingdom': (
+    51.5045,
+    -0.0865
+  ),
+  'Westfield London, Ariel Way, London W12 7GF, United Kingdom': (
+    51.5074,
+    -0.2217
+  ),
+  'Selfridges, 400 Oxford Street, London W1A 1AB, United Kingdom': (
+    51.5145,
+    -0.1527
+  ),
+  'King\'s Cross Station, Euston Road, London N1C 4TB, United Kingdom': (
+    51.5308,
+    -0.1238
+  ),
+  'Manchester Piccadilly Station, Manchester M1 2BN, United Kingdom': (
+    53.4774,
+    -2.2309
+  ),
   'Bullring, Birmingham B5 4BU, United Kingdom': (52.4776, -1.8936),
   'Cabot Circus, Bristol BS1 3BD, United Kingdom': (51.4581, -2.5837),
   'St James Quarter, Edinburgh EH1 3AD, United Kingdom': (55.9547, -3.1882),
-  'Cardiff Central Station, Cardiff CF10 1EP, United Kingdom':
-      (51.4755, -3.1780),
-  'Leeds Station, New Station Street, Leeds LS1 4DY, United Kingdom':
-      (53.7947, -1.5479),
+  'Cardiff Central Station, Cardiff CF10 1EP, United Kingdom': (
+    51.4755,
+    -3.1780
+  ),
+  'Leeds Station, New Station Street, Leeds LS1 4DY, United Kingdom': (
+    53.7947,
+    -1.5479
+  ),
   'Liverpool ONE, Liverpool L1 8JQ, United Kingdom': (53.4049, -2.9876),
-  'Brighton Station, Queens Road, Brighton BN1 3XP, United Kingdom':
-      (50.8290, -0.1413),
+  'Brighton Station, Queens Road, Brighton BN1 3XP, United Kingdom': (
+    50.8290,
+    -0.1413
+  ),
   'Oxford City Centre, Oxford OX1 1BX, United Kingdom': (51.7520, -1.2577),
 };
 

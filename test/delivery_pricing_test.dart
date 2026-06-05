@@ -126,6 +126,21 @@ void main() {
       );
     });
 
+    test('uses a 65/35 rider and platform fare split', () {
+      expect(DeliveryPricing.riderDeliveryFareShare, 0.65);
+      expect(DeliveryPricing.platformDeliveryFareShare, 0.35);
+      expect(DeliveryPricing.riderPayoutFromFare(100), 65);
+      expect(DeliveryPricing.platformRevenueFromFare(100), 35);
+
+      final quote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 2),
+      );
+
+      expect(quote.total, 12.2);
+      expect(DeliveryPricing.riderPayoutFromFare(quote.total), 7.93);
+      expect(DeliveryPricing.platformRevenueFromFare(quote.total), 4.27);
+    });
+
     test('parses gram entries as kilograms', () {
       expect(DeliveryPricing.parseWeightKg('178g'), closeTo(0.178, 0.0001));
       expect(
