@@ -39,7 +39,7 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, riderOrder, admin }
+enum _WebAppMode { landing, sender, rider, admin }
 
 bool _isPublicHostingHost() {
   final host = Uri.base.host.toLowerCase();
@@ -82,13 +82,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
     if (_adminHostingTarget && !_isPublicHostingHost()) {
       return _WebAppMode.admin;
     }
-    if (Uri.base.path == '/riders/circum-order') {
-      return _WebAppMode.riderOrder;
-    }
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
-      'rider' || 'driver' || 'earn' => _WebAppMode.rider,
-      'circum-order' => _WebAppMode.riderOrder,
+      'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
       _ => _WebAppMode.landing,
     };
   }
@@ -169,14 +165,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
                         : () => setState(() => _mode = _WebAppMode.landing),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
-                _WebAppMode.riderOrder => _CircumOrderPage(
-                    key: const ValueKey('circum-order'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                    onRider: () => setState(() => _mode = _WebAppMode.rider),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
                 _WebAppMode.landing => _LandingPage(
                     key: const ValueKey('landing'),
                     colors: colors,
@@ -186,8 +174,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       _mode = _WebAppMode.sender;
                     }),
                     onRider: () => setState(() => _mode = _WebAppMode.rider),
-                    onCircumOrder: () =>
-                        setState(() => _mode = _WebAppMode.riderOrder),
                     onHealthPlus: () => setState(() {
                       _senderInitialStep = _SenderStep.healthPlus;
                       _mode = _WebAppMode.sender;
@@ -220,7 +206,6 @@ class _LandingPage extends StatelessWidget {
   final bool darkMode;
   final VoidCallback onStart;
   final VoidCallback onRider;
-  final VoidCallback onCircumOrder;
   final VoidCallback onHealthPlus;
   final VoidCallback onToggleTheme;
 
@@ -230,7 +215,6 @@ class _LandingPage extends StatelessWidget {
     required this.darkMode,
     required this.onStart,
     required this.onRider,
-    required this.onCircumOrder,
     required this.onHealthPlus,
     required this.onToggleTheme,
   });
@@ -245,7 +229,6 @@ class _LandingPage extends StatelessWidget {
             darkMode: darkMode,
             onStart: onStart,
             onRider: onRider,
-            onCircumOrder: onCircumOrder,
             onHealthPlus: onHealthPlus,
             onToggleTheme: onToggleTheme,
           ),
@@ -3551,7 +3534,6 @@ class _LandingNav extends StatelessWidget {
   final bool darkMode;
   final VoidCallback onStart;
   final VoidCallback onRider;
-  final VoidCallback onCircumOrder;
   final VoidCallback onHealthPlus;
   final VoidCallback onToggleTheme;
 
@@ -3560,7 +3542,6 @@ class _LandingNav extends StatelessWidget {
     required this.darkMode,
     required this.onStart,
     required this.onRider,
-    required this.onCircumOrder,
     required this.onHealthPlus,
     required this.onToggleTheme,
   });
@@ -3596,17 +3577,6 @@ class _LandingNav extends StatelessWidget {
                   onPressed: onRider,
                   child: Text(
                     'Rider',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              if (MediaQuery.sizeOf(context).width >= 760)
-                TextButton(
-                  onPressed: onCircumOrder,
-                  child: Text(
-                    'The Circum Order',
                     style: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w700,
@@ -4034,86 +4004,207 @@ const _circumOrderCharterSections = [
   _CircumOrderSection(
     title: 'A Declaration of Purpose',
     paragraphs: [
-      'The Circum Order is the official charter of the Circum driver network. It exists to give every operator a visible path through the platform, from first approval to long-term recognition.',
-      'Circum is built on trust. Every delivery carries someone else\'s time, money, medicine, document, parcel, or promise. The Order recognises the riders who protect that trust in ordinary work, one completed job at a time.',
+      'Circum was not founded merely to move parcels.',
+      'It was founded to move trust.',
+      'Every delivery entrusted to our network represents more than an item. It represents a promise.',
+      'A promise that something valuable will be collected, protected and delivered by people who understand the responsibility placed upon them.',
+      'Technology may power the platform.',
+      'Artificial intelligence may assist decision-making.',
+      'Systems may coordinate logistics.',
+      'But none of these things are the foundation of Circum.',
+      'People are.',
+      'The strength of Circum has never been software.',
+      'The strength of Circum is the character of those who choose to serve within it.',
+      'For this reason, Circum rejects the idea that every participant should remain forever anonymous, interchangeable and forgotten.',
+      'A person who completes one delivery is not the same as a person who completes one thousand.',
+      'A person who builds trust deserves recognition.',
+      'A person who helps create value deserves honour.',
+      'A person who protects the network deserves remembrance.',
+      'The Circum Order exists to recognise this truth.',
     ],
   ),
   _CircumOrderSection(
     title: 'Why The Order Exists',
     paragraphs: [
-      'The Order exists because delivery work should not feel invisible. Reliability, care, customer service, accuracy, and contribution should be seen by the network and remembered by the platform.',
-      'It is not a barrier to earning. It is not a restriction system. It is a recognition system for riders who serve customers well, support the network, and help Circum become stronger over time.',
+      'Most platforms reduce people to metrics.',
+      'A rating.',
+      'A number.',
+      'A profile.',
+      'A transaction.',
+      'Circum believes people are more than data.',
+      'Human beings require purpose.',
+      'They require progression.',
+      'They require achievement.',
+      'They require recognition.',
+      'Most importantly, they require a reason to remain committed when challenges arise.',
+      'The Order exists because contribution matters.',
+      'Trust matters.',
+      'Service matters.',
+      'Character matters.',
+      'The Order transforms participation into progression.',
+      'It creates a pathway through which every individual may rise through merit, discipline and service.',
+      'No promotion is purchased.',
+      'No title is gifted.',
+      'Every rank is earned.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Journey Begins',
     paragraphs: [
-      'Every rider starts with the same invitation: join the network, prove reliability, complete work with care, and build a record that speaks clearly.',
-      'The journey is simple. Show up. Communicate. Protect the parcel. Respect the customer. Respect the sender. Respect the network. Over time, the work becomes the record.',
+      'Every person who joins Circum begins in the same place.',
+      'No exceptions.',
+      'No shortcuts.',
+      'No privileges.',
+      'Everyone begins as an Agent.',
+      'This principle is sacred.',
+      'The newest recruit and the most respected Veteran share the same origin.',
+      'Every Veteran was once an Agent.',
+      'Every Knight was once an Agent.',
+      'Every Warden was once an Agent.',
+      'Every Sentinel was once an Agent.',
+      'The Order begins with humility because true trust must always be earned.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Agent',
     paragraphs: [
-      'Agent is the first rank of The Circum Order.',
-      'An Agent has joined the network and been verified by Circum. Agents are eligible to earn, accept jobs, complete deliveries, receive ratings, and begin building their record.',
-      'Agent motto: I Have Joined The Network.',
+      '“I Have Joined The Network”',
+      'An Agent is ambitious.',
+      'An Agent is determined.',
+      'An Agent is building a reputation.',
+      'The Agent represents possibility.',
+      'They are the lifeblood of the network.',
+      'They carry the future of Circum.',
+      'They are hungry to succeed and eager to prove themselves.',
+      'The Order does not view Agents as inexperienced participants.',
+      'The Order views Agents as future leaders.',
+      'The responsibility of every Agent is simple:',
+      'Serve customers well.',
+      'Act with integrity.',
+      'Build trust through action.',
+      'Grow through service.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Sentinel',
     paragraphs: [
-      'Sentinel recognises a rider who has proven consistency through completed work and dependable service.',
-      'A Sentinel shows up, follows the job details, communicates clearly, and builds early trust with customers and Circum operations.',
-      'Sentinel motto: I Have Proven Myself.',
+      '“I Have Proven Myself”',
+      'The title Sentinel was chosen carefully.',
+      'A Sentinel is one who watches.',
+      'One who remains alert.',
+      'One who can be trusted to stand guard over something valuable.',
+      'The Sentinel has moved beyond potential.',
+      'They have demonstrated reliability.',
+      'They have shown consistency.',
+      'They have proven through action that they can be trusted.',
+      'The Sentinel stands as an example to Agents who follow behind them.',
+      'Their reputation has begun to speak before they arrive.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Warden',
     paragraphs: [
-      'Warden recognises a rider whose reliability is trusted across the platform.',
-      'A Warden has demonstrated care, judgement, strong completion habits, and the ability to handle responsibility without needing constant oversight.',
-      'Warden motto: Circum Trusts Me.',
+      '“Circum Trusts Me”',
+      'Trust is one of the rarest commodities in the world.',
+      'The Warden is a person who has earned it.',
+      'The title Warden represents stewardship.',
+      'Responsibility.',
+      'Protection.',
+      'A Warden does not merely complete deliveries.',
+      'A Warden protects the standards of the network.',
+      'When uncertainty emerges, Wardens step forward.',
+      'When reliability is required, Wardens answer the call.',
+      'A Warden understands that their actions affect more than themselves.',
+      'They carry responsibility for the reputation of Circum itself.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Knight',
     paragraphs: [
-      'Knight recognises an elite delivery specialist.',
-      'A Knight protects customer trust, handles difficult work with discipline, communicates under pressure, and strengthens the reputation of the network through visible excellence.',
-      'Knight motto: I Defend The Network.',
+      '“I Defend The Network”',
+      'A Knight is not merely trusted.',
+      'A Knight is entrusted.',
+      'Throughout history, Knights represented honour, loyalty, courage and service.',
+      'The Circum Knight embodies the same ideals.',
+      'Knights stand ready when challenges arise.',
+      'They protect service quality.',
+      'They uphold standards.',
+      'They answer difficult assignments.',
+      'They defend the trust customers place in the platform.',
+      'The Knight understands that leadership is not authority.',
+      'Leadership is responsibility.',
+      'When the network is tested, Knights stand firm.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Veteran',
     paragraphs: [
-      'Veteran recognises a rider whose contribution has helped build Circum over time.',
-      'A Veteran represents legacy, service, consistency, and earned trust. Veterans are riders whose record shows that they did more than complete jobs. They helped shape the standard.',
-      'Veteran motto: I Helped Build This.',
+      '“I Helped Build This”',
+      'The highest rank within Circum is Veteran.',
+      'This title was chosen because experience alone is not enough.',
+      'A person may spend years within a network and contribute very little.',
+      'A Veteran is different.',
+      'A Veteran creates value.',
+      'A Veteran strengthens the network.',
+      'A Veteran leaves a legacy.',
+      'Veterans are builders.',
+      'They helped create the community others now enjoy.',
+      'They remained committed when growth was uncertain.',
+      'They helped transform an idea into an institution.',
+      'Their contribution is remembered.',
+      'Their service is honoured.',
+      'Their legacy is protected.',
+      'The title Veteran is not a reward for surviving.',
+      'It is recognition for building.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Principle of Recognition',
     paragraphs: [
-      'Circum rewards contribution.',
-      'Those who create value, protect the network, serve customers and help build the platform will be recognised and rewarded.',
-      'Recognition is earned through work: completed deliveries, strong ratings, customer care, reliability, communication, and meaningful contribution to the network.',
+      'Circum believes that contribution should never be forgotten.',
+      'The people who create value should share in the success they helped create.',
+      'The people who protect the network should be recognised.',
+      'The people who build trust should be rewarded.',
+      'The people who strengthen the community should be remembered.',
+      'This principle sits at the heart of the Order.',
+      'It is the reason the hierarchy exists.',
+      'It is the reason promotions exist.',
+      'It is the reason Veterans exist.',
+      'Circum does not forget its builders.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Open Market Principle',
     paragraphs: [
-      'All ranks can see and accept jobs.',
-      'The Order is not designed to lock Agents out of work or reserve earning opportunities only for senior ranks. Agents remain fully eligible to earn and progress.',
-      'Future operations may support escalation language such as Open Market, Warden Escalation, Knight Escalation, and Veteran Escalation. That language is for future support and operational handling. It does not change dispatch rules today.',
+      'The Order is not a barrier.',
+      'It is not a caste system.',
+      'It is not a gatekeeping mechanism.',
+      'Every Agent may compete.',
+      'Every Agent may grow.',
+      'Every Agent may rise.',
+      'Opportunity remains open.',
+      'The marketplace belongs to everyone.',
+      'The Order exists not to restrict opportunity but to recognise merit.',
+      'The path upward remains available to all who are willing to earn it.',
     ],
   ),
   _CircumOrderSection(
     title: 'The Circum Declaration',
     paragraphs: [
+      'We believe trust is earned.',
+      'We believe service matters.',
+      'We believe contribution should be recognised.',
+      'We believe loyalty should be remembered.',
+      'We believe leadership is responsibility.',
+      'We believe those who build value deserve honour.',
+      'We believe every Veteran was once an Agent.',
+      'We believe the strength of Circum is not technology.',
+      'The strength of Circum is its people.',
+      'And so we commit ourselves to building a network founded upon trust, discipline, service, excellence and legacy.',
+      'This is the Circum Order.',
+      'This is our charter.',
+      'This is our promise.',
       'Every Veteran Was Once An Agent.',
-      'No rider begins at the top. Every recognised operator starts by joining, learning, completing work, earning trust, and proving their place through service.',
-      'The Circum Order exists so that the record of that service is visible. It is the charter of the rider network and the promise that contribution will not be forgotten.',
     ],
   ),
 ];
@@ -4147,7 +4238,7 @@ Uri _circumOrderPdfUri() {
     'THE CIRCUM ORDER',
     'Every Veteran Was Once An Agent.',
     '',
-    'The official charter of the Circum driver network.',
+    'Founding Charter of the Driver Network',
     '',
     'Agent - I Have Joined The Network',
     'Sentinel - I Have Proven Myself',
@@ -4252,39 +4343,25 @@ Uri _circumOrderPdfUri() {
   );
 }
 
-class _CircumOrderPage extends StatefulWidget {
+class _CircumOrderContent extends StatefulWidget {
   final _CircumColors colors;
-  final bool darkMode;
-  final VoidCallback onBack;
-  final VoidCallback onRider;
-  final VoidCallback onToggleTheme;
+  final VoidCallback onBecomeRider;
 
-  const _CircumOrderPage({
-    super.key,
+  const _CircumOrderContent({
     required this.colors,
-    required this.darkMode,
-    required this.onBack,
-    required this.onRider,
-    required this.onToggleTheme,
+    required this.onBecomeRider,
   });
 
   @override
-  State<_CircumOrderPage> createState() => _CircumOrderPageState();
+  State<_CircumOrderContent> createState() => _CircumOrderContentState();
 }
 
-class _CircumOrderPageState extends State<_CircumOrderPage> {
-  final _scrollController = ScrollController();
+class _CircumOrderContentState extends State<_CircumOrderContent> {
   final _charterKey = GlobalKey();
   final _sectionKeys = List.generate(
     _circumOrderCharterSections.length,
     (_) => GlobalKey(),
   );
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
 
   void _readCharter() {
     final context = _charterKey.currentContext;
@@ -4315,343 +4392,215 @@ class _CircumOrderPageState extends State<_CircumOrderPage> {
   Widget build(BuildContext context) {
     final colors = widget.colors;
     final narrow = MediaQuery.sizeOf(context).width < 720;
-    return Container(
-      color: colors.background,
-      child: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          SliverToBoxAdapter(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-                child: Row(
-                  children: [
-                    Image.asset(
-                      'assets/images/circum_wordmark.png',
-                      width: 136,
-                      height: 32,
-                      fit: BoxFit.contain,
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: widget.onRider,
-                      child: Text(
-                        'Become a Rider',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontWeight: FontWeight.w800,
-                        ),
+    return ListView(
+      padding: EdgeInsets.fromLTRB(narrow ? 18 : 28, 18, narrow ? 18 : 28, 34),
+      children: [
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(narrow ? 22 : 34),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: colors.dark
+                  ? const [
+                      Color(0xff050816),
+                      Color(0xff221142),
+                      Color(0xff173f8a),
+                      Color(0xff061826),
+                    ]
+                  : const [
+                      Color(0xffffffff),
+                      Color(0xffffeef7),
+                      Color(0xffeaf7ff),
+                      Color(0xffffffff),
+                    ],
+            ),
+            border: Border.all(color: colors.adminAccent.withOpacity(0.18)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _HealthChip(label: 'Riders · The Circum Order'),
+              const SizedBox(height: 18),
+              Text(
+                'THE CIRCUM ORDER',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: narrow ? 42 : 68,
+                  height: 0.96,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Every Veteran Was Once An Agent.',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: narrow ? 23 : 32,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Founding Charter of the Driver Network',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: narrow ? 16 : 19,
+                  height: 1.45,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _readCharter,
+                    icon: const Icon(Icons.menu_book_outlined),
+                    label: const Text('Read Charter'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.text,
+                      foregroundColor: colors.inverseText,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 16,
                       ),
                     ),
-                    IconButton(
-                      tooltip: widget.darkMode ? 'Light mode' : 'Dark mode',
-                      onPressed: widget.onToggleTheme,
-                      icon: Icon(
-                        widget.darkMode ? Icons.light_mode : Icons.dark_mode,
-                        color: colors.text,
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _downloadCharter,
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: const Text('Download Charter PDF'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 16,
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Home',
-                      onPressed: widget.onBack,
-                      icon: Icon(Icons.close, color: colors.text),
+                  ),
+                  TextButton.icon(
+                    onPressed: widget.onBecomeRider,
+                    icon: const Icon(Icons.two_wheeler),
+                    label: const Text('Become a Rider'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Rank progression'),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  for (var i = 0; i < _circumOrderRanks.length; i++) ...[
+                    _CircumOrderRankCard(
+                      colors: colors,
+                      rank: _circumOrderRanks[i],
                     ),
+                    if (i < _circumOrderRanks.length - 1)
+                      Icon(Icons.arrow_forward, color: colors.mutedText),
                   ],
-                ),
+                ],
               ),
-            ),
+            ],
           ),
-          SliverToBoxAdapter(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: colors.dark
-                      ? const [
-                          Color(0xff050816),
-                          Color(0xff221142),
-                          Color(0xff173f8a),
-                          Color(0xff061826),
-                        ]
-                      : const [
-                          Color(0xffffffff),
-                          Color(0xffffeef7),
-                          Color(0xffeaf7ff),
-                          Color(0xffffffff),
-                        ],
+        ),
+        const SizedBox(height: 18),
+        _GlassPanel(
+          key: _charterKey,
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Founding principle'),
+              const SizedBox(height: 12),
+              Text(
+                'Circum rewards contribution.\n\nThose who create value, protect the network, serve customers and help build the platform will be recognised and rewarded.\n\nEvery Veteran Was Once An Agent.',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  height: 1.45,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              padding: EdgeInsets.fromLTRB(
-                narrow ? 18 : 48,
-                narrow ? 42 : 70,
-                narrow ? 18 : 48,
-                46,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _HealthChip(label: 'Rider culture'),
-                      const SizedBox(height: 20),
-                      Text(
-                        'THE CIRCUM ORDER',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontSize: narrow ? 44 : 76,
-                          height: 0.96,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Every Veteran Was Once An Agent.',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontSize: narrow ? 24 : 34,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'The official charter of the Circum driver network. Learn how trust, contribution, reliability and service are recognised and rewarded across the platform.',
-                        style: TextStyle(
-                          color: colors.mutedText,
-                          fontSize: narrow ? 16 : 19,
-                          height: 1.45,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 26),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: _readCharter,
-                            icon: const Icon(Icons.menu_book_outlined),
-                            label: const Text('Read Charter'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: colors.text,
-                              foregroundColor: colors.inverseText,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 22,
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: _downloadCharter,
-                            icon: const Icon(Icons.picture_as_pdf_outlined),
-                            label: const Text('Download Charter PDF'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 22,
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            ],
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                narrow ? 18 : 48,
-                28,
-                narrow ? 18 : 48,
-                54,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1120),
-                  child: Column(
-                    children: [
-                      _GlassPanel(
-                        colors: colors,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SectionTitle(
-                              colors: colors,
-                              title: 'Rank progression',
-                            ),
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                for (var i = 0;
-                                    i < _circumOrderRanks.length;
-                                    i++) ...[
-                                  _CircumOrderRankCard(
-                                    colors: colors,
-                                    rank: _circumOrderRanks[i],
-                                  ),
-                                  if (i < _circumOrderRanks.length - 1)
-                                    Icon(Icons.arrow_forward,
-                                        color: colors.mutedText),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _GlassPanel(
-                        key: _charterKey,
-                        colors: colors,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SectionTitle(
-                              colors: colors,
-                              title: 'Founding principle',
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Circum rewards contribution.\n\nThose who create value, protect the network, serve customers and help build the platform will be recognised and rewarded.\n\nEvery Veteran Was Once An Agent.',
-                              style: TextStyle(
-                                color: colors.text,
-                                fontSize: 18,
-                                height: 1.45,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _GlassPanel(
-                        colors: colors,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SectionTitle(
-                              colors: colors,
-                              title: 'Charter sections',
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Jump through the complete founding charter.',
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                for (var i = 0;
-                                    i < _circumOrderCharterSections.length;
-                                    i++)
-                                  ActionChip(
-                                    label: Text(
-                                      '${i + 1}. ${_circumOrderCharterSections[i].title}',
-                                    ),
-                                    onPressed: () => _scrollToSection(i),
-                                    backgroundColor: colors.field,
-                                    side: BorderSide(color: colors.border),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      for (var i = 0;
-                          i < _circumOrderCharterSections.length;
-                          i++) ...[
-                        _CircumOrderCharterCard(
-                          key: _sectionKeys[i],
-                          colors: colors,
-                          index: i + 1,
-                          section: _circumOrderCharterSections[i],
-                        ),
-                        const SizedBox(height: 18),
-                      ],
-                      _GlassPanel(
-                        colors: colors,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SectionTitle(
-                              colors: colors,
-                              title: 'Rider profile integration',
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Rider profiles show rank badge, rank title, completed deliveries, rating, and member since date. The Order is recognition, not a restriction system: Agents remain fully eligible to earn and progress.',
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                height: 1.4,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: _circumOrderRanks
-                                  .map((rank) => _OrderBadge(
-                                        colors: colors,
-                                        rank: rank,
-                                      ))
-                                  .toList(),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _GlassPanel(
-                        colors: colors,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SectionTitle(
-                              colors: colors,
-                              title: 'Future escalation framework',
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Open Market → Warden Escalation → Knight Escalation → Veteran Escalation',
-                              style: TextStyle(
-                                color: colors.text,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'This prepares the product language for future operations work. Dispatch rules have not been changed.',
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                height: 1.35,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+        ),
+        const SizedBox(height: 18),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Charter sections'),
+              const SizedBox(height: 10),
+              Text(
+                'Jump through the founding charter inside the Riders experience.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < _circumOrderCharterSections.length; i++)
+                    ActionChip(
+                      label: Text(
+                        '${i + 1}. ${_circumOrderCharterSections[i].title}',
+                      ),
+                      onPressed: () => _scrollToSection(i),
+                      backgroundColor: colors.field,
+                      side: BorderSide(color: colors.border),
+                    ),
+                ],
+              ),
+            ],
           ),
+        ),
+        const SizedBox(height: 18),
+        for (var i = 0; i < _circumOrderCharterSections.length; i++) ...[
+          _CircumOrderCharterCard(
+            key: _sectionKeys[i],
+            colors: colors,
+            index: i + 1,
+            section: _circumOrderCharterSections[i],
+          ),
+          const SizedBox(height: 18),
         ],
-      ),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Future rank data'),
+              const SizedBox(height: 10),
+              Text(
+                'This layout can later attach delivery requirements, profit-share percentages, badges, benefits, and promotion criteria to each rank without redesigning the Riders page.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.45,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -4769,26 +4718,6 @@ class _CircumOrderRankCard extends StatelessWidget {
   }
 }
 
-class _OrderBadge extends StatelessWidget {
-  final _CircumColors colors;
-  final _CircumOrderRank rank;
-
-  const _OrderBadge({
-    required this.colors,
-    required this.rank,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(rank.icon, size: 18),
-      label: Text('${rank.badge} · ${rank.title}'),
-      backgroundColor: colors.field,
-      side: BorderSide(color: colors.border),
-    );
-  }
-}
-
 class _RiderOrderProfileCard extends StatelessWidget {
   final _CircumColors colors;
   final Map<String, dynamic>? profile;
@@ -4898,6 +4827,193 @@ class _RiderOrderProfileCard extends StatelessWidget {
   }
 }
 
+enum _RiderPortalTab { overview, earnings, referrals, order }
+
+String _riderTabLabel(_RiderPortalTab tab) {
+  return switch (tab) {
+    _RiderPortalTab.overview => 'Overview',
+    _RiderPortalTab.earnings => 'Earnings',
+    _RiderPortalTab.referrals => 'Referrals',
+    _RiderPortalTab.order => 'The Circum Order',
+  };
+}
+
+IconData _riderTabIcon(_RiderPortalTab tab) {
+  return switch (tab) {
+    _RiderPortalTab.overview => Icons.dashboard_outlined,
+    _RiderPortalTab.earnings => Icons.payments_outlined,
+    _RiderPortalTab.referrals => Icons.group_add_outlined,
+    _RiderPortalTab.order => Icons.auto_awesome,
+  };
+}
+
+class _RiderPortalTabs extends StatelessWidget {
+  final _CircumColors colors;
+  final _RiderPortalTab selected;
+  final ValueChanged<_RiderPortalTab> onSelected;
+
+  const _RiderPortalTabs({
+    required this.colors,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final tab in _RiderPortalTab.values) ...[
+              ChoiceChip(
+                selected: selected == tab,
+                avatar: Icon(_riderTabIcon(tab), size: 18),
+                label: Text(_riderTabLabel(tab)),
+                onSelected: (_) => onSelected(tab),
+                selectedColor: colors.text,
+                backgroundColor: colors.field,
+                labelStyle: TextStyle(
+                  color: selected == tab ? colors.inverseText : colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+                side: BorderSide(color: colors.border),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderEarningsTab extends StatelessWidget {
+  final _CircumColors colors;
+  final _RiderEarningsSnapshot earnings;
+
+  const _RiderEarningsTab({
+    required this.colors,
+    required this.earnings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Rider earnings'),
+              const SizedBox(height: 10),
+              Text(
+                'Track completed jobs, available balance, pending withdrawals, tips, and lifetime earnings from your rider dashboard.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _RiderStatTile(
+                      colors: colors,
+                      label: 'Available',
+                      value: _RiderWorkspace._money(earnings.availableBalance),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _RiderStatTile(
+                      colors: colors,
+                      label: 'Tips',
+                      value: _RiderWorkspace._money(earnings.tipsReceived),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _RiderStatTile(
+                      colors: colors,
+                      label: 'Lifetime',
+                      value: _RiderWorkspace._money(earnings.lifetimeEarnings),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _RiderStatTile(
+                      colors: colors,
+                      label: 'Completed',
+                      value: '${earnings.completedJobs}',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderReferralsTab extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderReferralsTab({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Referrals'),
+              const SizedBox(height: 10),
+              Text(
+                'Invite reliable operators into the Circum network. Referral rewards, eligibility rules, and progress tracking can be attached here when the referral programme launches.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.45,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: const [
+                  _HealthChip(label: 'Future rewards'),
+                  _HealthChip(label: 'Trusted operators'),
+                  _HealthChip(label: 'Network growth'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RiderEnrollmentPortal extends StatefulWidget {
   final bool darkMode;
   final _CircumColors colors;
@@ -4965,6 +5081,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   List<Map<String, dynamic>> _completedJobs = const [];
   Map<String, dynamic>? _riderProfile;
   Set<CircumRole> _availableRoles = const {};
+  late _RiderPortalTab _riderTab = _initialRiderTab();
   String? _jobMessage;
   bool _riderChatOpen = false;
   Map<String, dynamic>? _activeRiderChatJob;
@@ -4976,6 +5093,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   void initState() {
     super.initState();
     _restoreRiderSession();
+  }
+
+  _RiderPortalTab _initialRiderTab() {
+    final section = Uri.base.queryParameters['section'] ??
+        Uri.base.queryParameters['tab'] ??
+        Uri.base.queryParameters['app'];
+    return switch (section) {
+      'earnings' => _RiderPortalTab.earnings,
+      'referrals' => _RiderPortalTab.referrals,
+      'circum-order' || 'order' => _RiderPortalTab.order,
+      _ => _RiderPortalTab.overview,
+    };
   }
 
   @override
@@ -6352,9 +6481,26 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   onBack: widget.onBack,
                   onToggleTheme: widget.onToggleTheme,
                 ),
+                _RiderPortalTabs(
+                  colors: colors,
+                  selected: _riderTab,
+                  onSelected: (tab) => setState(() => _riderTab = tab),
+                ),
                 Expanded(
-                  child: _riderUser == null
-                      ? ListView(
+                  child: switch (_riderTab) {
+                    _RiderPortalTab.order => _CircumOrderContent(
+                        colors: colors,
+                        onBecomeRider: () =>
+                            setState(() => _riderTab = _RiderPortalTab.overview),
+                      ),
+                    _RiderPortalTab.earnings => _RiderEarningsTab(
+                        colors: colors,
+                        earnings: _earnings,
+                      ),
+                    _RiderPortalTab.referrals =>
+                      _RiderReferralsTab(colors: colors),
+                    _RiderPortalTab.overview => _riderUser == null
+                        ? ListView(
                           padding: EdgeInsets.fromLTRB(
                             wide ? 28 : 18,
                             18,
@@ -6362,16 +6508,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                             34,
                           ),
                           children: [
-                            _RiderPublicIntro(
-                              colors: colors,
-                              onCircumOrder: () => launchUrl(
-                                Uri.base.replace(
-                                  path: '/riders/circum-order',
-                                  queryParameters: const {},
-                                ),
-                                webOnlyWindowName: '_self',
-                              ),
-                            ),
+                            _RiderPublicIntro(colors: colors),
                             const SizedBox(height: 14),
                             _RiderAccessPanel(
                               colors: colors,
@@ -6388,7 +6525,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                             ),
                           ],
                         )
-                      : !_roleChoiceConfirmed && _availableRoles.length > 1
+                        : !_roleChoiceConfirmed && _availableRoles.length > 1
                           ? ListView(
                               padding: EdgeInsets.fromLTRB(
                                 wide ? 28 : 18,
@@ -6410,6 +6547,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                               ],
                             )
                           : _buildSignedInRiderContent(colors, wide),
+                  },
                 ),
               ],
             );
@@ -6432,12 +6570,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
 class _RiderPublicIntro extends StatelessWidget {
   final _CircumColors colors;
-  final VoidCallback onCircumOrder;
 
-  const _RiderPublicIntro({
-    required this.colors,
-    required this.onCircumOrder,
-  });
+  const _RiderPublicIntro({required this.colors});
 
   @override
   Widget build(BuildContext context) {
@@ -6469,12 +6603,6 @@ class _RiderPublicIntro extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              ActionChip(
-                avatar: const Icon(Icons.auto_awesome, size: 18),
-                label: const Text('The Circum Order'),
-                onPressed: onCircumOrder,
-                backgroundColor: colors.field,
-              ),
               Chip(
                 avatar: const Icon(Icons.verified_user_outlined, size: 18),
                 label: const Text('Verified riders only'),
