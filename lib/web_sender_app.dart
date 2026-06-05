@@ -88,6 +88,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' => _WebAppMode.rider,
+      'circum-order' => _WebAppMode.riderOrder,
       _ => _WebAppMode.landing,
     };
   }
@@ -4019,6 +4020,104 @@ const _circumOrderRanks = [
   ),
 ];
 
+class _CircumOrderSection {
+  final String title;
+  final List<String> paragraphs;
+
+  const _CircumOrderSection({
+    required this.title,
+    required this.paragraphs,
+  });
+}
+
+const _circumOrderCharterSections = [
+  _CircumOrderSection(
+    title: 'A Declaration of Purpose',
+    paragraphs: [
+      'The Circum Order is the official charter of the Circum driver network. It exists to give every operator a visible path through the platform, from first approval to long-term recognition.',
+      'Circum is built on trust. Every delivery carries someone else\'s time, money, medicine, document, parcel, or promise. The Order recognises the riders who protect that trust in ordinary work, one completed job at a time.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'Why The Order Exists',
+    paragraphs: [
+      'The Order exists because delivery work should not feel invisible. Reliability, care, customer service, accuracy, and contribution should be seen by the network and remembered by the platform.',
+      'It is not a barrier to earning. It is not a restriction system. It is a recognition system for riders who serve customers well, support the network, and help Circum become stronger over time.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Journey Begins',
+    paragraphs: [
+      'Every rider starts with the same invitation: join the network, prove reliability, complete work with care, and build a record that speaks clearly.',
+      'The journey is simple. Show up. Communicate. Protect the parcel. Respect the customer. Respect the sender. Respect the network. Over time, the work becomes the record.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Agent',
+    paragraphs: [
+      'Agent is the first rank of The Circum Order.',
+      'An Agent has joined the network and been verified by Circum. Agents are eligible to earn, accept jobs, complete deliveries, receive ratings, and begin building their record.',
+      'Agent motto: I Have Joined The Network.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Sentinel',
+    paragraphs: [
+      'Sentinel recognises a rider who has proven consistency through completed work and dependable service.',
+      'A Sentinel shows up, follows the job details, communicates clearly, and builds early trust with customers and Circum operations.',
+      'Sentinel motto: I Have Proven Myself.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Warden',
+    paragraphs: [
+      'Warden recognises a rider whose reliability is trusted across the platform.',
+      'A Warden has demonstrated care, judgement, strong completion habits, and the ability to handle responsibility without needing constant oversight.',
+      'Warden motto: Circum Trusts Me.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Knight',
+    paragraphs: [
+      'Knight recognises an elite delivery specialist.',
+      'A Knight protects customer trust, handles difficult work with discipline, communicates under pressure, and strengthens the reputation of the network through visible excellence.',
+      'Knight motto: I Defend The Network.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Veteran',
+    paragraphs: [
+      'Veteran recognises a rider whose contribution has helped build Circum over time.',
+      'A Veteran represents legacy, service, consistency, and earned trust. Veterans are riders whose record shows that they did more than complete jobs. They helped shape the standard.',
+      'Veteran motto: I Helped Build This.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Principle of Recognition',
+    paragraphs: [
+      'Circum rewards contribution.',
+      'Those who create value, protect the network, serve customers and help build the platform will be recognised and rewarded.',
+      'Recognition is earned through work: completed deliveries, strong ratings, customer care, reliability, communication, and meaningful contribution to the network.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Open Market Principle',
+    paragraphs: [
+      'All ranks can see and accept jobs.',
+      'The Order is not designed to lock Agents out of work or reserve earning opportunities only for senior ranks. Agents remain fully eligible to earn and progress.',
+      'Future operations may support escalation language such as Open Market, Warden Escalation, Knight Escalation, and Veteran Escalation. That language is for future support and operational handling. It does not change dispatch rules today.',
+    ],
+  ),
+  _CircumOrderSection(
+    title: 'The Circum Declaration',
+    paragraphs: [
+      'Every Veteran Was Once An Agent.',
+      'No rider begins at the top. Every recognised operator starts by joining, learning, completing work, earning trust, and proving their place through service.',
+      'The Circum Order exists so that the record of that service is visible. It is the charter of the rider network and the promise that contribution will not be forgotten.',
+    ],
+  ),
+];
+
 String _titleCase(String value) {
   if (value.isEmpty) return value;
   return value.substring(0, 1).toUpperCase() + value.substring(1).toLowerCase();
@@ -4044,7 +4143,7 @@ String _pdfTextEscape(String value) {
 }
 
 Uri _circumOrderPdfUri() {
-  final lines = <String>[
+  final rawLines = <String>[
     'THE CIRCUM ORDER',
     'Every Veteran Was Once An Agent.',
     '',
@@ -4060,26 +4159,72 @@ Uri _circumOrderPdfUri() {
     'Those who create value, protect the network, serve customers and',
     'help build the platform will be recognised and rewarded.',
     '',
-    'Every Veteran Was Once An Agent.',
+    ..._circumOrderCharterSections.expand(
+      (section) => [
+        '',
+        section.title,
+        ...section.paragraphs.expand((paragraph) => [paragraph, '']),
+      ],
+    ),
   ];
-
-  var y = 742;
-  final stream = StringBuffer();
-  for (final line in lines) {
-    final size = line == 'THE CIRCUM ORDER' ? 22 : 12;
-    stream.writeln(
-      'BT /F1 $size Tf 72 $y Td (${_pdfTextEscape(line)}) Tj ET',
-    );
-    y -= line.isEmpty ? 18 : 28;
+  final lines = <String>[];
+  for (final line in rawLines) {
+    if (line.length <= 72) {
+      lines.add(line);
+      continue;
+    }
+    final words = line.split(' ');
+    var current = '';
+    for (final word in words) {
+      final candidate = current.isEmpty ? word : '$current $word';
+      if (candidate.length > 72) {
+        lines.add(current);
+        current = word;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current.isNotEmpty) lines.add(current);
   }
-  final content = stream.toString();
+
+  final pages = <List<String>>[];
+  for (var i = 0; i < lines.length; i += 28) {
+    pages.add(lines.skip(i).take(28).toList());
+  }
+
+  final kids = <String>[];
   final objects = <String>[
     '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
-    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
-    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
-    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
-    '5 0 obj\n<< /Length ${content.length} >>\nstream\n$content\nendstream\nendobj\n',
+    '',
+    '3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
   ];
+  var nextObject = 4;
+  for (final pageLines in pages) {
+    final pageObject = nextObject++;
+    final contentObject = nextObject++;
+    kids.add('$pageObject 0 R');
+    var y = 742;
+    final stream = StringBuffer();
+    for (final line in pageLines) {
+      final isTitle = line == 'THE CIRCUM ORDER';
+      final isSectionTitle =
+          _circumOrderCharterSections.any((section) => section.title == line);
+      final size = isTitle ? 22 : (isSectionTitle ? 15 : 11);
+      stream.writeln(
+        'BT /F1 $size Tf 72 $y Td (${_pdfTextEscape(line)}) Tj ET',
+      );
+      y -= line.isEmpty ? 12 : (isSectionTitle ? 24 : 20);
+    }
+    final content = stream.toString();
+    objects.add(
+      '$pageObject 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents $contentObject 0 R >>\nendobj\n',
+    );
+    objects.add(
+      '$contentObject 0 obj\n<< /Length ${content.length} >>\nstream\n$content\nendstream\nendobj\n',
+    );
+  }
+  objects[1] =
+      '2 0 obj\n<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>\nendobj\n';
   final buffer = StringBuffer('%PDF-1.4\n');
   final offsets = <int>[];
   var length = buffer.toString().length;
@@ -4130,6 +4275,10 @@ class _CircumOrderPage extends StatefulWidget {
 class _CircumOrderPageState extends State<_CircumOrderPage> {
   final _scrollController = ScrollController();
   final _charterKey = GlobalKey();
+  final _sectionKeys = List.generate(
+    _circumOrderCharterSections.length,
+    (_) => GlobalKey(),
+  );
 
   @override
   void dispose() {
@@ -4144,6 +4293,17 @@ class _CircumOrderPageState extends State<_CircumOrderPage> {
       context,
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _scrollToSection(int index) {
+    final context = _sectionKeys[index].currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: 0.05,
     );
   }
 
@@ -4379,6 +4539,56 @@ class _CircumOrderPageState extends State<_CircumOrderPage> {
                           children: [
                             _SectionTitle(
                               colors: colors,
+                              title: 'Charter sections',
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Jump through the complete founding charter.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (var i = 0;
+                                    i < _circumOrderCharterSections.length;
+                                    i++)
+                                  ActionChip(
+                                    label: Text(
+                                      '${i + 1}. ${_circumOrderCharterSections[i].title}',
+                                    ),
+                                    onPressed: () => _scrollToSection(i),
+                                    backgroundColor: colors.field,
+                                    side: BorderSide(color: colors.border),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      for (var i = 0;
+                          i < _circumOrderCharterSections.length;
+                          i++) ...[
+                        _CircumOrderCharterCard(
+                          key: _sectionKeys[i],
+                          colors: colors,
+                          index: i + 1,
+                          section: _circumOrderCharterSections[i],
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SectionTitle(
+                              colors: colors,
                               title: 'Rider profile integration',
                             ),
                             const SizedBox(height: 10),
@@ -4440,6 +4650,62 @@ class _CircumOrderPageState extends State<_CircumOrderPage> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircumOrderCharterCard extends StatelessWidget {
+  final _CircumColors colors;
+  final int index;
+  final _CircumOrderSection section;
+
+  const _CircumOrderCharterCard({
+    super.key,
+    required this.colors,
+    required this.index,
+    required this.section,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            index.toString().padLeft(2, '0'),
+            style: TextStyle(
+              color: colors.adminAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            section.title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: MediaQuery.sizeOf(context).width < 680 ? 24 : 34,
+              height: 1.08,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 14),
+          for (final paragraph in section.paragraphs) ...[
+            Text(
+              paragraph,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontSize: 16,
+                height: 1.55,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
         ],
       ),
     );
