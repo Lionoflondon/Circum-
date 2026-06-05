@@ -13121,6 +13121,8 @@ class _AddressSuggestion {
   final String provider;
   final String sourceInput;
   final String? placeId;
+  final String? searchText;
+  final String? category;
   final Map<String, String> components;
 
   const _AddressSuggestion({
@@ -13131,8 +13133,12 @@ class _AddressSuggestion {
     required this.provider,
     required this.sourceInput,
     this.placeId,
+    this.searchText,
+    this.category,
     this.components = const {},
   });
+
+  bool get isPopularPlace => provider == 'circum_popular_place';
 
   _ValidatedAddress toValidatedAddress() {
     final resolvedLat = lat ?? 0;
@@ -14446,9 +14452,40 @@ class _AddressFieldState extends State<_AddressField> {
     if (value.length < 3) return const [];
     final clean = value.replaceAll(RegExp(r'\s+'), ' ');
     if (clean.toLowerCase().contains('united kingdom')) return const [];
+    final popular = _popularPlaceSuggestions(clean);
     final google = await _googlePlacesAutocomplete(clean);
-    if (google.isNotEmpty) return google;
+    final combined = <_AddressSuggestion>[
+      ...popular,
+      ...google.where(
+        (suggestion) => !popular.any(
+          (place) => _sameSuggestionText(
+            place.displayAddress,
+            suggestion.displayAddress,
+          ),
+        ),
+      ),
+    ];
+    if (combined.isNotEmpty) return combined.take(8).toList(growable: false);
     return _localAddressSuggestions(clean);
+  }
+
+  List<_AddressSuggestion> _popularPlaceSuggestions(String clean) {
+    final typed = _normalizePlaceQuery(clean);
+    if (typed.length < 3) return const [];
+    return _circumPopularPlaces
+        .where((place) => place.matches(typed))
+        .map(
+          (place) => _AddressSuggestion(
+            displayAddress: place.displayName,
+            confidence: 0.98,
+            provider: 'circum_popular_place',
+            sourceInput: clean,
+            searchText: place.searchText,
+            category: place.category,
+          ),
+        )
+        .take(4)
+        .toList(growable: false);
   }
 
   List<_AddressSuggestion> _localAddressSuggestions(String clean) {
@@ -14606,10 +14643,21 @@ class _AddressFieldState extends State<_AddressField> {
     }
   }
 
+  Future<_AddressSuggestion?> _resolvePopularPlace(
+    _AddressSuggestion suggestion,
+  ) async {
+    final query = suggestion.searchText ?? suggestion.displayAddress;
+    final predictions = await _googlePlacesAutocomplete(query);
+    if (predictions.isEmpty) return null;
+    return _googlePlaceDetails(predictions.first);
+  }
+
   Future<void> _selectSuggestion(_AddressSuggestion suggestion) async {
-    final resolved = suggestion.provider == 'google_places'
-        ? await _googlePlaceDetails(suggestion)
-        : suggestion;
+    final resolved = suggestion.isPopularPlace
+        ? await _resolvePopularPlace(suggestion)
+        : suggestion.provider == 'google_places'
+            ? await _googlePlaceDetails(suggestion)
+            : suggestion;
     if (resolved == null) return;
     _selectingSuggestion = true;
     widget.controller.text = resolved.displayAddress;
@@ -14658,16 +14706,33 @@ class _AddressFieldState extends State<_AddressField> {
                   (suggestion) => ActionChip(
                     onPressed: () => _selectSuggestion(suggestion),
                     avatar: Icon(
-                      widget.pharmacyMode
-                          ? Icons.local_pharmacy
-                          : Icons.place_outlined,
+                      suggestion.isPopularPlace
+                          ? Icons.star_rounded
+                          : widget.pharmacyMode
+                              ? Icons.local_pharmacy
+                              : Icons.place_outlined,
                       size: 16,
                     ),
                     label: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 320),
-                      child: Text(
-                        suggestion.displayAddress,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            suggestion.displayAddress,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (suggestion.isPopularPlace)
+                            Text(
+                              'Popular place',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -14700,6 +14765,169 @@ class _AddressFieldState extends State<_AddressField> {
       ],
     );
   }
+}
+
+class _PopularPlace {
+  final String displayName;
+  final List<String> searchAliases;
+  final String searchText;
+  final String category;
+
+  const _PopularPlace({
+    required this.displayName,
+    required this.searchAliases,
+    required this.searchText,
+    required this.category,
+  });
+
+  bool matches(String normalizedInput) {
+    return _normalizedSearchTerms.any(
+      (term) => term.contains(normalizedInput) || normalizedInput.contains(term),
+    );
+  }
+
+  Iterable<String> get _normalizedSearchTerms sync* {
+    yield _normalizePlaceQuery(displayName);
+    yield _normalizePlaceQuery(searchText);
+    for (final alias in searchAliases) {
+      yield _normalizePlaceQuery(alias);
+    }
+  }
+}
+
+const List<_PopularPlace> _circumPopularPlaces = [
+  _PopularPlace(
+    displayName: 'Heathrow Airport',
+    searchAliases: ['heathrow', 'lhr', 'london heathrow'],
+    searchText: 'Heathrow Airport, Hounslow, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'Heathrow Terminal 2 & 3',
+    searchAliases: ['heathrow t2', 'heathrow t3', 'terminal 2', 'terminal 3'],
+    searchText: 'Heathrow Terminal 2 and 3, Hounslow, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'Heathrow Terminal 4',
+    searchAliases: ['heathrow t4', 'terminal 4'],
+    searchText: 'Heathrow Terminal 4, Hounslow, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'Heathrow Terminal 5',
+    searchAliases: ['heathrow t5', 'terminal 5'],
+    searchText: 'Heathrow Terminal 5, Hounslow, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'King\'s Cross Station',
+    searchAliases: ['kings cross', 'king cross', 'kings x', 'kx station'],
+    searchText: 'King\'s Cross Station, Euston Road, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'St Pancras International',
+    searchAliases: ['st pancras', 'saint pancras', 'st pancras station'],
+    searchText: 'St Pancras International, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Euston Station',
+    searchAliases: ['euston', 'london euston'],
+    searchText: 'Euston Station, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Victoria Station',
+    searchAliases: ['victoria', 'london victoria'],
+    searchText: 'Victoria Station, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'London Bridge Station',
+    searchAliases: ['london bridge'],
+    searchText: 'London Bridge Station, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Waterloo Station',
+    searchAliases: ['waterloo', 'london waterloo'],
+    searchText: 'Waterloo Station, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Paddington Station',
+    searchAliases: ['paddington', 'london paddington'],
+    searchText: 'Paddington Station, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Liverpool Street Station',
+    searchAliases: ['liverpool street', 'london liverpool street'],
+    searchText: 'Liverpool Street Station, London, United Kingdom',
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Gatwick Airport',
+    searchAliases: ['gatwick', 'lgw', 'london gatwick'],
+    searchText: 'Gatwick Airport, Horley, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'Luton Airport',
+    searchAliases: ['luton', 'ltn', 'london luton'],
+    searchText: 'London Luton Airport, Luton, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'Stansted Airport',
+    searchAliases: ['stansted', 'stn', 'london stansted'],
+    searchText: 'London Stansted Airport, Stansted, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'London City Airport',
+    searchAliases: ['city airport', 'lcy'],
+    searchText: 'London City Airport, London, United Kingdom',
+    category: 'airport',
+  ),
+  _PopularPlace(
+    displayName: 'Westfield Stratford City',
+    searchAliases: ['westfield stratford', 'stratford westfield'],
+    searchText: 'Westfield Stratford City, London, United Kingdom',
+    category: 'shopping centre',
+  ),
+  _PopularPlace(
+    displayName: 'Westfield London White City',
+    searchAliases: ['westfield white city', 'westfield london'],
+    searchText: 'Westfield London, Ariel Way, London, United Kingdom',
+    category: 'shopping centre',
+  ),
+  _PopularPlace(
+    displayName: 'The O2 Arena',
+    searchAliases: ['o2', 'o2 arena', 'the o2'],
+    searchText: 'The O2 Arena, Peninsula Square, London, United Kingdom',
+    category: 'landmark',
+  ),
+  _PopularPlace(
+    displayName: 'Wembley Stadium',
+    searchAliases: ['wembley', 'wembley arena'],
+    searchText: 'Wembley Stadium, London, United Kingdom',
+    category: 'landmark',
+  ),
+];
+
+String _normalizePlaceQuery(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll(RegExp(r"[\u2018\u2019']"), '')
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim();
+}
+
+bool _sameSuggestionText(String left, String right) {
+  return _normalizePlaceQuery(left) == _normalizePlaceQuery(right);
 }
 
 const Map<String, (double, double)> _ukAddressSuggestionSeeds = {
