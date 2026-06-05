@@ -26,6 +26,10 @@ const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _adminHostingTarget = bool.fromEnvironment('CIRCUM_ADMIN_HOSTING');
+const _googlePlacesApiKey = String.fromEnvironment(
+  'GOOGLE_PLACES_API_KEY',
+  defaultValue: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+);
 const _spectrumGradient = [
   Color(0xffff8c00),
   Color(0xfff80032),
@@ -7249,11 +7253,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _savedAddressLabel = TextEditingController(text: 'Home');
   final _savedAddress = TextEditingController();
   String _savedAddressType = 'pickup';
+  _ValidatedAddress? _validatedSavedAddress;
   double? _irisEstimatedWeightKg;
   String? _irisWeightBand;
   String? _irisWeightConfidence;
   String? _irisWeightExplanation;
   String? _irisWeightSource;
+  String? _irisMatchedItemName;
   double? _irisWeightConfidenceScore;
   double? _irisHistoricalVerifiedWeightKg;
   String? _irisLearningReason;
@@ -7519,6 +7525,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           irisWeightBand: _irisWeightBand,
           irisWeightConfidence: _irisWeightConfidence,
           irisWeightExplanation: _irisWeightExplanation,
+          irisMatchedItemName: _irisMatchedItemName,
+          irisTruthBand: _irisTruthBand(),
           senderEnteredWeightKg: _senderEnteredWeightKg,
           pricingWeightKg: _confirmedWeightKg,
           weightSource: _weightSourceText,
@@ -7715,6 +7723,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onAddAddress: _addSenderAddress,
           onSavedAddressType: (type) =>
               setState(() => _savedAddressType = type),
+          onSavedAddressSelected: (address) => setState(() {
+            _validatedSavedAddress = address;
+            _savedAddress.text = address.displayAddress;
+          }),
+          onSavedAddressEdited: (_) =>
+              setState(() => _validatedSavedAddress = null),
           onSelectDelivery: (delivery) =>
               setState(() => _selectedSenderDelivery = delivery),
           onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
@@ -7793,14 +7807,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   String get _weightSourceText {
-    return switch (_weightSource) {
-      'catalogue_match' => 'Catalogue Match',
-      'verified_parcel_history' => 'Past Verified Parcels',
-      'keyword_override' => 'Item Type Rule',
-      'iris_confirmed' => 'IRIS estimate confirmed by sender',
-      'customer_declared' || 'manual' => 'Customer Declared',
-      _ => 'Not confirmed',
-    };
+    return DeliveryPricing.weightSourceLabel(_weightSource);
   }
 
   bool get _hasConsistentDispatchClassification {
@@ -7882,22 +7889,26 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
   }
 
-  void _applySavedPickupAddress(String address) {
+  void _applySavedPickupAddress(SavedSenderAddress address) {
+    final validated = address.toValidatedAddress();
     setState(() {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
-      _pickup.text = address;
-      _validatedPickup = null;
+      _pickup.text = address.address;
+      _validatedPickup = validated;
     });
+    if (validated != null) _debugPricingInputs();
   }
 
-  void _applySavedDropoffAddress(String address) {
+  void _applySavedDropoffAddress(SavedSenderAddress address) {
+    final validated = address.toValidatedAddress();
     setState(() {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
-      _dropoff.text = address;
-      _validatedDropoff = null;
+      _dropoff.text = address.address;
+      _validatedDropoff = validated;
     });
+    if (validated != null) _debugPricingInputs();
   }
 
   void _debugPricingInputs() {
@@ -8142,7 +8153,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _addSenderAddress() async {
     final user = _senderUser;
     final address = _savedAddress.text.trim();
-    if (user == null || address.isEmpty) return;
+    final validated = _validatedSavedAddress;
+    if (user == null || address.isEmpty || validated == null) {
+      setState(() => _senderProfileMessage =
+          'Choose a verified address suggestion before saving.');
+      return;
+    }
     final next = [
       ...?_senderProfile?.savedAddresses,
       SavedSenderAddress(
@@ -8151,6 +8167,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             : _savedAddressLabel.text.trim(),
         address: address,
         addressType: _savedAddressType,
+        postcode: validated.postcode,
+        lat: validated.lat,
+        lng: validated.lng,
+        placeId: validated.placeId,
+        provider: validated.provider,
+        locationId: validated.locationId,
       ),
     ];
     setState(() => _senderProfileSaving = true);
@@ -8161,6 +8183,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       _savedAddress.clear();
+      _validatedSavedAddress = null;
       setState(() => _senderProfileMessage = 'Saved address added.');
     } finally {
       if (mounted) setState(() => _senderProfileSaving = false);
@@ -8233,6 +8256,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _irisWeightConfidence = estimate.confidence;
       _irisWeightExplanation = estimate.explanation;
       _irisWeightSource = estimate.weightSource;
+      _irisMatchedItemName = estimate.matchedItemName;
       _irisWeightConfidenceScore = estimate.confidenceScore;
       _irisHistoricalVerifiedWeightKg = estimate.historicalVerifiedWeightKg;
       _irisLearningReason = estimate.learningReason;
@@ -8272,6 +8296,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       packageType: _inferPackageType(),
       requiresVehicleReview: false,
       weightSource: _irisWeightSource ?? 'category_fallback',
+      matchedItemName: _irisMatchedItemName,
       confidenceScore: _irisWeightConfidenceScore,
     );
     final decision = _resolvePricingWeight(
@@ -8372,6 +8397,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         senderBand != null && senderBand.category != irisBand.category;
     final significantDifference =
         bandChanged || classification.selectedWeightSource == 'keyword_override';
+    final mismatchReview = _hasIrisMismatchReview(
+      senderWeightKg: senderWeightKg,
+      estimateWeightKg: estimate.weightKg,
+    );
     final higherWeight = classification.finalWeightKg;
     final higherBand = DeliveryPricing.weightBandFor(higherWeight);
 
@@ -8401,23 +8430,36 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
     final source = classification.selectedWeightSource == 'keyword_override'
         ? 'keyword_override'
-        : estimate.weightKg >= (senderWeightKg ?? 0)
-        ? estimate.weightSource == 'known_product_lookup'
-            ? 'catalogue_match'
-            : 'iris_confirmed'
-        : 'customer_declared';
+        : estimate.weightSource == 'known_product_lookup'
+            ? 'repository_match'
+            : estimate.weightKg >= (senderWeightKg ?? 0)
+                ? 'photo_match'
+                : 'customer_declared';
 
     return _WeightPricingDecision(
       weightKg: higherWeight,
       weightBand: higherBand.category,
       source: source,
-      message: significantDifference
+      message: mismatchReview
+          ? 'Potential mismatch detected — manual review required.'
+          : significantDifference
           ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
           : 'IRIS has analysed this item and selected the most reliable weight available.',
       reason:
           classification.resolutionReason,
       verificationRequired:
-          significantDifference || classification.requiresManualReview,
+          mismatchReview || significantDifference || classification.requiresManualReview,
+    );
+  }
+
+  bool _hasIrisMismatchReview({
+    required double? senderWeightKg,
+    required double estimateWeightKg,
+  }) {
+    return IrisWeightEstimator.potentialMismatchDetected(
+      description: _description.text,
+      customerDeclaredWeightKg: senderWeightKg,
+      irisEstimatedWeightKg: estimateWeightKg,
     );
   }
 
@@ -8598,9 +8640,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       explanation: product.explanation,
       packageType: product.packageType,
       requiresVehicleReview: product.requiresVehicleReview,
-      weightSource: product.weightSource,
-      truthBand: product.truthBand,
-      confidenceScore: product.confidenceScore,
+        weightSource: product.weightSource,
+        truthBand: product.truthBand,
+        matchedItemName: product.matchedItemName,
+        confidenceScore: product.confidenceScore,
     );
   }
 
@@ -9284,6 +9327,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'finalWeightKg': classification.finalWeightKg,
       'finalWeightBand': classification.finalWeightBand,
       'selectedWeightSource': classification.selectedWeightSource,
+      'displayWeightSource': _weightSource,
       'resolutionReason': classification.resolutionReason,
       'requiresManualReview': classification.requiresManualReview,
       'packageType': packageType,
@@ -9306,6 +9350,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
       'irisWeightSource': _irisWeightSource ?? 'unknown',
+      'irisMatchedItemName': _irisMatchedItemName,
       'catalogueMatchWeight': _irisWeightSource == 'known_product_lookup'
           ? _irisEstimatedWeightKg
           : null,
@@ -9350,6 +9395,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'finalWeightKg': classification.finalWeightKg,
       'finalWeightBand': classification.finalWeightBand,
       'selectedWeightSource': classification.selectedWeightSource,
+      'displayWeightSource': _weightSource,
       'resolutionReason': classification.resolutionReason,
       'requiresManualReview': classification.requiresManualReview,
       'customerDeclaredWeight': _senderEnteredWeightKg,
@@ -9357,6 +9403,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisEstimatedWeight': _irisEstimatedWeightKg,
       'irisWeight': _irisEstimatedWeightKg,
       'irisWeightSource': _irisWeightSource ?? 'unknown',
+      'irisMatchedItemName': _irisMatchedItemName,
       'catalogueMatchWeight': _irisWeightSource == 'known_product_lookup'
           ? _irisEstimatedWeightKg
           : null,
@@ -10580,7 +10627,7 @@ class _SavedAddressQuickPick extends StatelessWidget {
   final _CircumColors colors;
   final List<SavedSenderAddress> addresses;
   final String addressType;
-  final ValueChanged<String> onSelect;
+  final ValueChanged<SavedSenderAddress> onSelect;
 
   const _SavedAddressQuickPick({
     required this.colors,
@@ -10609,7 +10656,7 @@ class _SavedAddressQuickPick extends StatelessWidget {
                 avatar:
                     Icon(Icons.place_outlined, color: colors.text, size: 16),
                 label: Text(address.label),
-                onPressed: () => onSelect(address.address),
+                onPressed: () => onSelect(address),
               ),
             )
             .toList(),
@@ -10624,6 +10671,8 @@ class _WeightConfirmationPanel extends StatelessWidget {
   final String? weightBand;
   final String? confidence;
   final String? explanation;
+  final String? matchedItemName;
+  final String truthBand;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
   final String weightSource;
@@ -10638,6 +10687,8 @@ class _WeightConfirmationPanel extends StatelessWidget {
     required this.weightBand,
     required this.confidence,
     required this.explanation,
+    required this.matchedItemName,
+    required this.truthBand,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
     required this.weightSource,
@@ -10671,6 +10722,17 @@ class _WeightConfirmationPanel extends StatelessWidget {
               '${weightBand == null ? '' : ' · $weightBand'}'
               '${confidence == null ? '' : ' · $confidence confidence'}',
               style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+          ],
+          if (matchedItemName != null && matchedItemName!.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Matched item: $matchedItemName · $truthBand',
+              style: TextStyle(
+                color: colors.text,
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
           if (senderEnteredWeightKg != null) ...[
@@ -10939,6 +11001,8 @@ class _SenderProfileStep extends StatelessWidget {
   final VoidCallback onSaveProfile;
   final VoidCallback onAddAddress;
   final ValueChanged<String> onSavedAddressType;
+  final ValueChanged<_ValidatedAddress> onSavedAddressSelected;
+  final ValueChanged<String> onSavedAddressEdited;
   final ValueChanged<SenderDeliveryRecord> onSelectDelivery;
   final VoidCallback onCloseDelivery;
 
@@ -10968,6 +11032,8 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onSaveProfile,
     required this.onAddAddress,
     required this.onSavedAddressType,
+    required this.onSavedAddressSelected,
+    required this.onSavedAddressEdited,
     required this.onSelectDelivery,
     required this.onCloseDelivery,
   });
@@ -11306,12 +11372,16 @@ class _SenderProfileStep extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        _InputBox(
+        _AddressField(
           colors: colors,
-          controller: savedAddress,
-          hint: savedAddressType == 'dropoff'
+          icon: Icons.place_outlined,
+          label: savedAddressType == 'dropoff'
               ? 'Drop-off address'
               : 'Pickup address',
+          controller: savedAddress,
+          verified: false,
+          onSelected: onSavedAddressSelected,
+          onEdited: onSavedAddressEdited,
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
@@ -11584,8 +11654,8 @@ class _DetailsStep extends StatelessWidget {
   final TextEditingController pickup;
   final TextEditingController dropoff;
   final List<SavedSenderAddress> savedAddresses;
-  final ValueChanged<String> onSavedPickup;
-  final ValueChanged<String> onSavedDropoff;
+  final ValueChanged<SavedSenderAddress> onSavedPickup;
+  final ValueChanged<SavedSenderAddress> onSavedDropoff;
   final bool pickupVerified;
   final bool dropoffVerified;
   final String locationValidationMessage;
@@ -11601,6 +11671,8 @@ class _DetailsStep extends StatelessWidget {
   final String? irisWeightBand;
   final String? irisWeightConfidence;
   final String? irisWeightExplanation;
+  final String? irisMatchedItemName;
+  final String irisTruthBand;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
   final String weightSource;
@@ -11638,6 +11710,8 @@ class _DetailsStep extends StatelessWidget {
     required this.irisWeightBand,
     required this.irisWeightConfidence,
     required this.irisWeightExplanation,
+    required this.irisMatchedItemName,
+    required this.irisTruthBand,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
     required this.weightSource,
@@ -11868,6 +11942,8 @@ class _DetailsStep extends StatelessWidget {
                   weightBand: irisWeightBand,
                   confidence: irisWeightConfidence,
                   explanation: irisWeightExplanation,
+                  matchedItemName: irisMatchedItemName,
+                  truthBand: irisTruthBand,
                   senderEnteredWeightKg: senderEnteredWeightKg,
                   pricingWeightKg: pricingWeightKg,
                   weightSource: weightSource,
@@ -12928,6 +13004,7 @@ class _IrisWeightEstimate {
   final bool requiresVehicleReview;
   final String weightSource;
   final String truthBand;
+  final String? matchedItemName;
   final double? confidenceScore;
   final double? historicalVerifiedWeightKg;
   final String? learningReason;
@@ -12941,6 +13018,7 @@ class _IrisWeightEstimate {
     required this.requiresVehicleReview,
     this.weightSource = 'category_fallback',
     this.truthBand = 'Low Confidence',
+    this.matchedItemName,
     this.confidenceScore,
     this.historicalVerifiedWeightKg,
     this.learningReason,
@@ -12955,6 +13033,7 @@ class _IrisWeightEstimate {
     bool? requiresVehicleReview,
     String? weightSource,
     String? truthBand,
+    String? matchedItemName,
     double? confidenceScore,
     double? historicalVerifiedWeightKg,
     String? learningReason,
@@ -12969,6 +13048,7 @@ class _IrisWeightEstimate {
           requiresVehicleReview ?? this.requiresVehicleReview,
       weightSource: weightSource ?? this.weightSource,
       truthBand: truthBand ?? this.truthBand,
+      matchedItemName: matchedItemName ?? this.matchedItemName,
       confidenceScore: confidenceScore ?? this.confidenceScore,
       historicalVerifiedWeightKg:
           historicalVerifiedWeightKg ?? this.historicalVerifiedWeightKg,
@@ -12997,31 +13077,44 @@ class _WeightPricingDecision {
 
 class _AddressSuggestion {
   final String displayAddress;
-  final double lat;
-  final double lng;
+  final double? lat;
+  final double? lng;
   final double confidence;
   final String provider;
   final String sourceInput;
+  final String? placeId;
+  final Map<String, String> components;
 
   const _AddressSuggestion({
     required this.displayAddress,
-    required this.lat,
-    required this.lng,
+    this.lat,
+    this.lng,
     required this.confidence,
     required this.provider,
     required this.sourceInput,
+    this.placeId,
+    this.components = const {},
   });
 
   _ValidatedAddress toValidatedAddress() {
+    final resolvedLat = lat ?? 0;
+    final resolvedLng = lng ?? 0;
     return _ValidatedAddress(
       rawInput: sourceInput,
       displayAddress: displayAddress,
-      postcode: _extractUkPostcode(displayAddress),
-      lat: lat,
-      lng: lng,
+      postcode: components['postcode'] ?? _extractUkPostcode(displayAddress),
+      lat: resolvedLat,
+      lng: resolvedLng,
       confidence: confidence,
       provider: provider,
-      locationId: _stableLocationId(displayAddress, lat, lng),
+      locationId:
+          placeId ?? _stableLocationId(displayAddress, resolvedLat, resolvedLng),
+      placeId: placeId,
+      buildingNumber: components['buildingNumber'],
+      street: components['street'],
+      city: components['city'],
+      county: components['county'],
+      country: components['country'],
     );
   }
 }
@@ -13035,6 +13128,12 @@ class _ValidatedAddress {
   final double confidence;
   final String provider;
   final String locationId;
+  final String? placeId;
+  final String? buildingNumber;
+  final String? street;
+  final String? city;
+  final String? county;
+  final String? country;
 
   const _ValidatedAddress({
     required this.rawInput,
@@ -13045,6 +13144,12 @@ class _ValidatedAddress {
     required this.confidence,
     required this.provider,
     required this.locationId,
+    this.placeId,
+    this.buildingNumber,
+    this.street,
+    this.city,
+    this.county,
+    this.country,
   });
 
   bool get hasCoordinates => _coordinatesAreUsable(lat, lng);
@@ -13058,6 +13163,12 @@ class _ValidatedAddress {
         'geocodeConfidence': confidence,
         'provider': provider,
         'locationId': locationId,
+        if (placeId != null) 'placeId': placeId,
+        if (buildingNumber != null) 'buildingNumber': buildingNumber,
+        if (street != null) 'street': street,
+        if (city != null) 'city': city,
+        if (county != null) 'county': county,
+        if (country != null) 'country': country,
       };
 
   Map<String, dynamic> toPositionMap() => {
@@ -13066,8 +13177,32 @@ class _ValidatedAddress {
         'lng': lng,
         'geocodeConfidence': confidence,
         'locationId': locationId,
+        if (placeId != null) 'placeId': placeId,
         'provider': provider,
       };
+}
+
+extension _SavedSenderAddressValidation on SavedSenderAddress {
+  _ValidatedAddress? toValidatedAddress() {
+    final savedLat = lat;
+    final savedLng = lng;
+    if (savedLat == null ||
+        savedLng == null ||
+        !_coordinatesAreUsable(savedLat, savedLng)) {
+      return null;
+    }
+    return _ValidatedAddress(
+      rawInput: address,
+      displayAddress: address,
+      postcode: postcode ?? _extractUkPostcode(address),
+      lat: savedLat,
+      lng: savedLng,
+      confidence: 0.98,
+      provider: provider ?? 'saved_google_place',
+      locationId: locationId ?? _stableLocationId(address, savedLat, savedLng),
+      placeId: placeId,
+    );
+  }
 }
 
 String? _extractUkPostcode(String address) {
@@ -13076,6 +13211,40 @@ String? _extractUkPostcode(String address) {
     caseSensitive: false,
   ).firstMatch(address);
   return match?.group(1)?.toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+}
+
+Map<String, String> _googleAddressComponents(List<dynamic> components) {
+  String? byType(String type) {
+    for (final component in components.whereType<Map<String, dynamic>>()) {
+      final types = (component['types'] as List<dynamic>? ?? const [])
+          .map((value) => '$value')
+          .toSet();
+      if (types.contains(type)) return '${component['long_name']}';
+    }
+    return null;
+  }
+
+  final streetNumber = byType('street_number');
+  final route = byType('route');
+  final city = byType('postal_town') ?? byType('locality');
+  final county = byType('administrative_area_level_2');
+  final postcode = byType('postal_code');
+  final country = byType('country');
+  return {
+    if (streetNumber != null) 'buildingNumber': streetNumber,
+    if (route != null) 'street': route,
+    if (city != null) 'city': city,
+    if (county != null) 'county': county,
+    if (postcode != null) 'postcode': postcode,
+    if (country != null) 'country': country,
+  };
+}
+
+String _cleanGoogleAddress(String address) {
+  return address
+      .replaceAll(', UK', ', United Kingdom')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 }
 
 String _stableLocationId(String address, double lat, double lng) {
@@ -14200,6 +14369,10 @@ class _AddressField extends StatefulWidget {
 class _AddressFieldState extends State<_AddressField> {
   List<_AddressSuggestion> _suggestions = const [];
   bool _selectingSuggestion = false;
+  bool _loadingSuggestions = false;
+  int _suggestionRequest = 0;
+  late final String _placesSessionToken =
+      '${DateTime.now().millisecondsSinceEpoch}-${identityHashCode(this)}';
 
   @override
   void initState() {
@@ -14214,15 +14387,33 @@ class _AddressFieldState extends State<_AddressField> {
   }
 
   void _updateSuggestions() {
+    if (_selectingSuggestion) return;
     final value = widget.controller.text.trim();
-    final next = _buildAddressSuggestions(value);
-    if (mounted) setState(() => _suggestions = next);
+    final requestId = ++_suggestionRequest;
+    if (value.length < 3) {
+      if (mounted) setState(() => _suggestions = const []);
+      return;
+    }
+    setState(() => _loadingSuggestions = true);
+    _buildAddressSuggestions(value).then((next) {
+      if (!mounted || requestId != _suggestionRequest) return;
+      setState(() {
+        _suggestions = next;
+        _loadingSuggestions = false;
+      });
+    });
   }
 
-  List<_AddressSuggestion> _buildAddressSuggestions(String value) {
+  Future<List<_AddressSuggestion>> _buildAddressSuggestions(String value) async {
     if (value.length < 3) return const [];
     final clean = value.replaceAll(RegExp(r'\s+'), ' ');
     if (clean.toLowerCase().contains('united kingdom')) return const [];
+    final google = await _googlePlacesAutocomplete(clean);
+    if (google.isNotEmpty) return google;
+    return _localAddressSuggestions(clean);
+  }
+
+  List<_AddressSuggestion> _localAddressSuggestions(String clean) {
     final typed = clean.toLowerCase();
     final seeded = _ukAddressSuggestionSeeds.entries
         .where((entry) {
@@ -14286,14 +14477,109 @@ class _AddressFieldState extends State<_AddressField> {
     ];
   }
 
-  void _selectSuggestion(_AddressSuggestion suggestion) {
+  Future<List<_AddressSuggestion>> _googlePlacesAutocomplete(
+    String input,
+  ) async {
+    if (_googlePlacesApiKey.trim().isEmpty) return const [];
+    try {
+      final uri = Uri.https(
+        'maps.googleapis.com',
+        '/maps/api/place/autocomplete/json',
+        {
+          'input': input,
+          'language': 'en',
+          'components': 'country:uk',
+          'key': _googlePlacesApiKey,
+          'sessiontoken': _placesSessionToken,
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (response.statusCode != 200) return const [];
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if ('${body['status']}' != 'OK') return const [];
+      final predictions = body['predictions'] as List<dynamic>? ?? const [];
+      return predictions
+          .whereType<Map<String, dynamic>>()
+          .where((prediction) =>
+              prediction['place_id'] != null &&
+              prediction['description'] != null)
+          .map(
+            (prediction) => _AddressSuggestion(
+              displayAddress: '${prediction['description']}',
+              confidence: 0.99,
+              provider: 'google_places',
+              sourceInput: input,
+              placeId: '${prediction['place_id']}',
+            ),
+          )
+          .take(6)
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<_AddressSuggestion?> _googlePlaceDetails(
+    _AddressSuggestion suggestion,
+  ) async {
+    final placeId = suggestion.placeId;
+    if (placeId == null || _googlePlacesApiKey.trim().isEmpty) {
+      return suggestion;
+    }
+    try {
+      final uri = Uri.https(
+        'maps.googleapis.com',
+        '/maps/api/place/details/json',
+        {
+          'place_id': placeId,
+          'language': 'en',
+          'fields':
+              'formatted_address,address_components,geometry,place_id,name',
+          'key': _googlePlacesApiKey,
+          'sessiontoken': _placesSessionToken,
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if ('${body['status']}' != 'OK') return null;
+      final result = body['result'] as Map<String, dynamic>;
+      final geometry = result['geometry'] as Map<String, dynamic>?;
+      final location = geometry?['location'] as Map<String, dynamic>?;
+      final lat = (location?['lat'] as num?)?.toDouble();
+      final lng = (location?['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) return null;
+      final components = _googleAddressComponents(
+        result['address_components'] as List<dynamic>? ?? const [],
+      );
+      return _AddressSuggestion(
+        displayAddress:
+            _cleanGoogleAddress('${result['formatted_address'] ?? suggestion.displayAddress}'),
+        lat: lat,
+        lng: lng,
+        confidence: 0.99,
+        provider: 'google_places',
+        sourceInput: suggestion.sourceInput,
+        placeId: placeId,
+        components: components,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _selectSuggestion(_AddressSuggestion suggestion) async {
+    final resolved = suggestion.provider == 'google_places'
+        ? await _googlePlaceDetails(suggestion)
+        : suggestion;
+    if (resolved == null) return;
     _selectingSuggestion = true;
-    widget.controller.text = suggestion.displayAddress;
+    widget.controller.text = resolved.displayAddress;
     widget.controller.selection = TextSelection.collapsed(
-      offset: suggestion.displayAddress.length,
+      offset: resolved.displayAddress.length,
     );
     _selectingSuggestion = false;
-    widget.onSelected?.call(suggestion.toValidatedAddress());
+    widget.onSelected?.call(resolved.toValidatedAddress());
     setState(() => _suggestions = const []);
   }
 
@@ -14349,6 +14635,17 @@ class _AddressFieldState extends State<_AddressField> {
                   ),
                 )
                 .toList(),
+          ),
+        ],
+        if (_loadingSuggestions) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Checking Google Places...',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
         if (widget.verified) ...[

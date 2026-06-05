@@ -334,6 +334,20 @@ class DeliveryPricing {
     };
   }
 
+  static String weightSourceLabel(String? source) {
+    return switch (source) {
+      'repository_match' || 'catalogue_match' || 'known_product_lookup' =>
+        'Repository Match',
+      'photo_match' || 'iris_confirmed' || 'visual_estimate' => 'Photo Match',
+      'rider_verified' || 'driver_verified' => 'Rider Verified',
+      'admin_verified' => 'Admin Verified',
+      'customer_declared' || 'manual' => 'Customer Declared',
+      'verified_parcel_history' => 'Past Verified Parcels',
+      'keyword_override' => 'Item Type Rule',
+      _ => 'Not confirmed',
+    };
+  }
+
   static String recommendedVehicleForWeight(double weightKg) {
     if (weightKg > 10) return 'Van';
     if (weightKg > 5) return 'Car';

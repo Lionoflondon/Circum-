@@ -23,6 +23,9 @@ void main() {
       expect(estimate, isNotNull);
       expect(estimate!.weightKg, closeTo(0.171, 0.001));
       expect(estimate.weightSource, 'known_product_lookup');
+      expect(DeliveryPricing.weightSourceLabel(estimate.weightSource),
+          'Repository Match');
+      expect(estimate.matchedItemName, 'Apple iPhone 15');
       expect(estimate.truthBand, 'Exact Match');
     });
 
@@ -69,6 +72,45 @@ void main() {
         ),
         8,
       );
+    });
+
+    test('unknown item falls back to customer declared source', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('mystery item');
+      final classification = DeliveryPricing.resolveClassification(
+        description: 'mystery item',
+        userEnteredWeightKg: 3,
+      );
+
+      expect(estimate, isNull);
+      expect(classification.selectedWeightSource, 'customer_declared');
+      expect(DeliveryPricing.weightSourceLabel(classification.selectedWeightSource),
+          'Customer Declared');
+    });
+
+    test('heavy mismatch triggers manual review warning', () {
+      expect(
+        IrisWeightEstimator.potentialMismatchDetected(
+          description: 'small iPhone parcel',
+          customerDeclaredWeightKg: 15,
+          irisEstimatedWeightKg: 0.171,
+        ),
+        isTrue,
+      );
+    });
+
+    test('rider verified weight overrides Iris and customer weight', () {
+      final classification = DeliveryPricing.resolveClassification(
+        description: 'Apple iPhone 15',
+        userEnteredWeightKg: 0.197,
+        irisEstimateKg: 0.171,
+        driverVerifiedWeightKg: 1.2,
+        confidence: 'high',
+      );
+
+      expect(classification.finalWeightKg, 1.2);
+      expect(classification.selectedWeightSource, 'driver_verified');
+      expect(DeliveryPricing.weightSourceLabel(classification.selectedWeightSource),
+          'Rider Verified');
     });
   });
 }

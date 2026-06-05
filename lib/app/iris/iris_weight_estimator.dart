@@ -1,6 +1,7 @@
 import 'package:circum/pricing/delivery_pricing.dart';
 
 class IrisWeightLookupResult {
+  final String matchedItemName;
   final double weightKg;
   final String weightBand;
   final String confidence;
@@ -12,6 +13,7 @@ class IrisWeightLookupResult {
   final bool requiresVehicleReview;
 
   const IrisWeightLookupResult({
+    required this.matchedItemName,
     required this.weightKg,
     required this.weightBand,
     required this.confidence,
@@ -31,6 +33,7 @@ class IrisWeightEstimator {
       if (product.patterns.any(text.contains)) {
         final band = DeliveryPricing.weightBandFor(product.weightKg).category;
         return IrisWeightLookupResult(
+          matchedItemName: product.name,
           weightKg: product.weightKg,
           weightBand: band,
           confidence: product.confidence,
@@ -45,6 +48,25 @@ class IrisWeightEstimator {
       }
     }
     return null;
+  }
+
+  static bool potentialMismatchDetected({
+    required String description,
+    double? customerDeclaredWeightKg,
+    double? irisEstimatedWeightKg,
+  }) {
+    final text = description.trim().toLowerCase();
+    final describesSmallItem = text.contains('phone') ||
+        text.contains('iphone') ||
+        text.contains('airpods') ||
+        text.contains('envelope') ||
+        text.contains('letter') ||
+        text.contains('small');
+    final heaviest = [
+      customerDeclaredWeightKg ?? 0,
+      irisEstimatedWeightKg ?? 0,
+    ].reduce((a, b) => a > b ? a : b);
+    return describesSmallItem && heaviest > 10;
   }
 
   static const List<_KnownIrisProduct> _knownProducts = [
@@ -94,6 +116,42 @@ class IrisWeightEstimator {
       packageType: 'Laptop',
       confidence: 'medium',
       confidenceScore: 0.7,
+    ),
+    _KnownIrisProduct(
+      patterns: ['tv', 'television'],
+      name: 'Television',
+      weightKg: 12,
+      packageType: 'Large item',
+      confidence: 'medium',
+      confidenceScore: 0.7,
+      truthBand: 'Medium Confidence',
+    ),
+    _KnownIrisProduct(
+      patterns: ['sofa', 'couch'],
+      name: 'Sofa',
+      weightKg: 12,
+      packageType: 'Furniture',
+      confidence: 'medium',
+      confidenceScore: 0.7,
+      truthBand: 'Medium Confidence',
+    ),
+    _KnownIrisProduct(
+      patterns: ['microwave'],
+      name: 'Microwave',
+      weightKg: 12,
+      packageType: 'Kitchen appliance',
+      confidence: 'medium',
+      confidenceScore: 0.7,
+      truthBand: 'Medium Confidence',
+    ),
+    _KnownIrisProduct(
+      patterns: ['bicycle', 'bike'],
+      name: 'Bicycle',
+      weightKg: 15,
+      packageType: 'Large item',
+      confidence: 'medium',
+      confidenceScore: 0.7,
+      truthBand: 'Medium Confidence',
     ),
     _KnownIrisProduct(
       patterns: ['shoebox', 'shoe box'],

@@ -79,12 +79,24 @@ class SavedSenderAddress {
   final String address;
   final String addressType;
   final String notes;
+  final String? postcode;
+  final double? lat;
+  final double? lng;
+  final String? placeId;
+  final String? provider;
+  final String? locationId;
 
   const SavedSenderAddress({
     required this.label,
     required this.address,
     this.addressType = 'pickup',
     this.notes = '',
+    this.postcode,
+    this.lat,
+    this.lng,
+    this.placeId,
+    this.provider,
+    this.locationId,
   });
 
   factory SavedSenderAddress.fromMap(Map<String, dynamic> data) {
@@ -94,6 +106,13 @@ class SavedSenderAddress {
       addressType:
           '${data['addressType'] ?? data['type'] ?? data['usage'] ?? 'pickup'}',
       notes: '${data['notes'] ?? data['moreInformation'] ?? ''}',
+      postcode: data['postcode'] == null ? null : '${data['postcode']}',
+      lat: (data['lat'] as num?)?.toDouble(),
+      lng: (data['lng'] as num?)?.toDouble(),
+      placeId: data['placeId'] == null ? null : '${data['placeId']}',
+      provider: data['provider'] == null ? null : '${data['provider']}',
+      locationId:
+          data['locationId'] == null ? null : '${data['locationId']}',
     );
   }
 
@@ -102,6 +121,12 @@ class SavedSenderAddress {
         'address': address,
         'addressType': addressType,
         if (notes.trim().isNotEmpty) 'notes': notes,
+        if (postcode?.trim().isNotEmpty == true) 'postcode': postcode,
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
+        if (placeId?.trim().isNotEmpty == true) 'placeId': placeId,
+        if (provider?.trim().isNotEmpty == true) 'provider': provider,
+        if (locationId?.trim().isNotEmpty == true) 'locationId': locationId,
       };
 }
 
