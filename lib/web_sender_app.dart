@@ -7510,8 +7510,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           savedAddresses: _senderProfile?.savedAddresses ?? const [],
           onSavedPickup: _applySavedPickupAddress,
           onSavedDropoff: _applySavedDropoffAddress,
-          pickupVerified: _validatedPickup != null,
-          dropoffVerified: _validatedDropoff != null,
+          pickupVerified: _pickupAddressVerified,
+          dropoffVerified: _dropoffAddressVerified,
           locationValidationMessage: _locationValidationMessage,
           checkoutState: _checkoutState,
           canSubmit: _canAnalyzeDelivery,
@@ -7758,10 +7758,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   bool get _hasValidatedRoute {
-    return _validatedPickup?.hasCoordinates == true &&
-        _validatedDropoff?.hasCoordinates == true &&
+    return _pickupAddressVerified &&
+        _dropoffAddressVerified &&
         _confirmedRouteDistanceMiles != null;
   }
+
+  bool get _pickupAddressVerified => _validatedPickup?.hasCoordinates == true;
+
+  bool get _dropoffAddressVerified => _validatedDropoff?.hasCoordinates == true;
 
   bool get _canAnalyzeDelivery {
     return _hasValidatedRoute &&
@@ -7770,13 +7774,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   String get _locationValidationMessage {
-    if (_validatedPickup == null && _validatedDropoff == null) {
+    if (!_pickupAddressVerified && !_dropoffAddressVerified) {
       return 'Choose pickup and drop-off from the address suggestions before pricing.';
     }
-    if (_validatedPickup == null) {
+    if (!_pickupAddressVerified) {
       return 'Choose a verified pickup address from the suggestions.';
     }
-    if (_validatedDropoff == null) {
+    if (!_dropoffAddressVerified) {
       return 'Choose a verified drop-off address from the suggestions.';
     }
     if (_confirmedRouteDistanceMiles == null) {
@@ -7850,21 +7854,43 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   void _selectPickupAddress(_ValidatedAddress address) {
+    if (!address.hasCoordinates) {
+      setState(() {
+        _checkoutState = _CheckoutState.draft;
+        _broadcasting = false;
+        _validatedPickup = null;
+        _firebaseError =
+            'Pickup address selected, but no usable coordinates were returned. Choose a verified suggestion.';
+      });
+      return;
+    }
     setState(() {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedPickup = address;
       _pickup.text = address.displayAddress;
+      _firebaseError = null;
     });
     _debugPricingInputs();
   }
 
   void _selectDropoffAddress(_ValidatedAddress address) {
+    if (!address.hasCoordinates) {
+      setState(() {
+        _checkoutState = _CheckoutState.draft;
+        _broadcasting = false;
+        _validatedDropoff = null;
+        _firebaseError =
+            'Drop-off address selected, but no usable coordinates were returned. Choose a verified suggestion.';
+      });
+      return;
+    }
     setState(() {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedDropoff = address;
       _dropoff.text = address.displayAddress;
+      _firebaseError = null;
     });
     _debugPricingInputs();
   }
@@ -7896,6 +7922,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _broadcasting = false;
       _pickup.text = address.address;
       _validatedPickup = validated;
+      if (validated == null) {
+        _firebaseError =
+            'Saved pickup address needs revalidation. Choose it again from address suggestions.';
+      } else {
+        _firebaseError = null;
+      }
     });
     if (validated != null) _debugPricingInputs();
   }
@@ -7907,6 +7939,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _broadcasting = false;
       _dropoff.text = address.address;
       _validatedDropoff = validated;
+      if (validated == null) {
+        _firebaseError =
+            'Saved drop-off address needs revalidation. Choose it again from address suggestions.';
+      } else {
+        _firebaseError = null;
+      }
     });
     if (validated != null) _debugPricingInputs();
   }
