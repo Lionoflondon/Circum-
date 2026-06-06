@@ -9081,7 +9081,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool get _hasValidatedRoute {
     return _pickupAddressVerified &&
         _dropoffAddressVerified &&
-        _confirmedRouteDistanceMiles != null;
+        _confirmedRouteDistanceMiles != null &&
+        _confirmedRouteDistanceMiles! > 0;
   }
 
   bool get _pickupAddressVerified => _validatedPickup?.hasCoordinates == true;
@@ -9089,9 +9090,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool get _dropoffAddressVerified => _validatedDropoff?.hasCoordinates == true;
 
   bool get _canAnalyzeDelivery {
-    return _hasValidatedRoute &&
-        _description.text.trim().isNotEmpty &&
-        !_analyzing;
+    return _hasValidatedRoute && !_analyzing;
   }
 
   String get _locationValidationMessage {
@@ -9297,6 +9296,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'pickupLatLng=${_validatedPickup?.lat}/${_validatedPickup?.lng}, '
         'dropoffLatLng=${_validatedDropoff?.lat}/${_validatedDropoff?.lng}, '
         'distanceMiles=${_confirmedRouteDistanceMiles?.toStringAsFixed(2)}, '
+        'pickupVerified=$_pickupAddressVerified, '
+        'dropoffVerified=$_dropoffAddressVerified, '
+        'pricingUnlocked=$_canAnalyzeDelivery, '
         'chargeableWeight=$_confirmedWeightKg, '
         'finalPrice=${_quoteBreakdown.total.toStringAsFixed(2)}',
       );
@@ -13220,6 +13222,7 @@ class _DetailsStep extends StatelessWidget {
                 verified: pickupVerified,
                 onSelected: onPickupSelected,
                 onEdited: onPickupEdited,
+                verifiedMessage: 'Verified pickup address selected',
               ),
               const SizedBox(height: 12),
               _SavedAddressQuickPick(
@@ -13237,6 +13240,7 @@ class _DetailsStep extends StatelessWidget {
                 verified: dropoffVerified,
                 onSelected: onDropoffSelected,
                 onEdited: onDropoffEdited,
+                verifiedMessage: 'Verified drop-off address selected',
               ),
               const SizedBox(height: 12),
               Row(
@@ -15970,6 +15974,7 @@ class _AddressField extends StatefulWidget {
   final bool verified;
   final ValueChanged<_ValidatedAddress>? onSelected;
   final ValueChanged<String>? onEdited;
+  final String verifiedMessage;
 
   const _AddressField({
     required this.colors,
@@ -15980,6 +15985,7 @@ class _AddressField extends StatefulWidget {
     this.verified = false,
     this.onSelected,
     this.onEdited,
+    this.verifiedMessage = 'Verified address selected',
   });
 
   @override
@@ -16059,10 +16065,12 @@ class _AddressFieldState extends State<_AddressField> {
         .map(
           (place) => _AddressSuggestion(
             displayAddress: place.displayName,
+            lat: place.lat,
+            lng: place.lng,
             confidence: 0.98,
             provider: 'circum_popular_place',
             sourceInput: clean,
-            searchText: place.searchText,
+            searchText: place.formattedAddress,
             category: place.category,
           ),
         )
@@ -16282,7 +16290,24 @@ class _AddressFieldState extends State<_AddressField> {
       final resolved = await _googlePlaceDetails(predictions.first);
       if (resolved != null) return resolved;
     }
-    return _googleFindPlaceFromText(suggestion);
+    final found = await _googleFindPlaceFromText(suggestion);
+    if (found != null) return found;
+    if (suggestion.lat != null &&
+        suggestion.lng != null &&
+        _coordinatesAreUsable(suggestion.lat!, suggestion.lng!)) {
+      return _AddressSuggestion(
+        displayAddress: suggestion.searchText ?? suggestion.displayAddress,
+        lat: suggestion.lat,
+        lng: suggestion.lng,
+        confidence: 0.97,
+        provider: 'circum_popular_place',
+        sourceInput: suggestion.sourceInput,
+        placeId: suggestion.placeId,
+        searchText: suggestion.searchText,
+        category: suggestion.category,
+      );
+    }
+    return null;
   }
 
   Future<void> _selectSuggestion(_AddressSuggestion suggestion) async {
@@ -16449,7 +16474,7 @@ class _AddressFieldState extends State<_AddressField> {
         if (widget.verified) ...[
           const SizedBox(height: 6),
           Text(
-            'Verified address selected',
+            widget.verifiedMessage,
             style: TextStyle(
               color: colors.success,
               fontSize: 12,
@@ -16465,13 +16490,17 @@ class _AddressFieldState extends State<_AddressField> {
 class _PopularPlace {
   final String displayName;
   final List<String> searchAliases;
-  final String searchText;
+  final String formattedAddress;
+  final double lat;
+  final double lng;
   final String category;
 
   const _PopularPlace({
     required this.displayName,
     required this.searchAliases,
-    required this.searchText,
+    required this.formattedAddress,
+    required this.lat,
+    required this.lng,
     required this.category,
   });
 
@@ -16484,7 +16513,7 @@ class _PopularPlace {
 
   Iterable<String> get _normalizedSearchTerms sync* {
     yield _normalizePlaceQuery(displayName);
-    yield _normalizePlaceQuery(searchText);
+    yield _normalizePlaceQuery(formattedAddress);
     for (final alias in searchAliases) {
       yield _normalizePlaceQuery(alias);
     }
@@ -16495,122 +16524,277 @@ const List<_PopularPlace> _circumPopularPlaces = [
   _PopularPlace(
     displayName: 'Heathrow Airport',
     searchAliases: ['heathrow', 'lhr', 'london heathrow'],
-    searchText: 'Heathrow Airport, Hounslow, United Kingdom',
+    formattedAddress: 'Heathrow Airport, Hounslow TW6, United Kingdom',
+    lat: 51.4700,
+    lng: -0.4543,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'Heathrow Terminal 2 & 3',
     searchAliases: ['heathrow t2', 'heathrow t3', 'terminal 2', 'terminal 3'],
-    searchText: 'Heathrow Terminal 2 and 3, Hounslow, United Kingdom',
+    formattedAddress:
+        'Heathrow Terminal 2 & 3, Hounslow TW6 1EW, United Kingdom',
+    lat: 51.4713,
+    lng: -0.4524,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'Heathrow Terminal 4',
     searchAliases: ['heathrow t4', 'terminal 4'],
-    searchText: 'Heathrow Terminal 4, Hounslow, United Kingdom',
+    formattedAddress: 'Heathrow Terminal 4, Hounslow TW6 3XA, United Kingdom',
+    lat: 51.4590,
+    lng: -0.4464,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'Heathrow Terminal 5',
     searchAliases: ['heathrow t5', 'terminal 5'],
-    searchText: 'Heathrow Terminal 5, Hounslow, United Kingdom',
+    formattedAddress: 'Heathrow Terminal 5, Hounslow TW6 2GA, United Kingdom',
+    lat: 51.4722,
+    lng: -0.4870,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'King\'s Cross Station',
     searchAliases: ['kings cross', 'king cross', 'kings x', 'kx station'],
-    searchText: 'King\'s Cross Station, Euston Road, London, United Kingdom',
+    formattedAddress:
+        'King\'s Cross Station, Euston Road, London N1C 4TB, United Kingdom',
+    lat: 51.5308,
+    lng: -0.1238,
     category: 'station',
   ),
   _PopularPlace(
     displayName: 'St Pancras International',
     searchAliases: ['st pancras', 'saint pancras', 'st pancras station'],
-    searchText: 'St Pancras International, London, United Kingdom',
+    formattedAddress:
+        'St Pancras International, Euston Road, London N1C 4QP, United Kingdom',
+    lat: 51.5320,
+    lng: -0.1252,
     category: 'station',
   ),
   _PopularPlace(
     displayName: 'Euston Station',
     searchAliases: ['euston', 'london euston'],
-    searchText: 'Euston Station, London, United Kingdom',
-    category: 'station',
-  ),
-  _PopularPlace(
-    displayName: 'Victoria Station',
-    searchAliases: ['victoria', 'london victoria'],
-    searchText: 'Victoria Station, London, United Kingdom',
-    category: 'station',
-  ),
-  _PopularPlace(
-    displayName: 'London Bridge Station',
-    searchAliases: ['london bridge'],
-    searchText: 'London Bridge Station, London, United Kingdom',
-    category: 'station',
-  ),
-  _PopularPlace(
-    displayName: 'Waterloo Station',
-    searchAliases: ['waterloo', 'london waterloo'],
-    searchText: 'Waterloo Station, London, United Kingdom',
+    formattedAddress: 'Euston Station, London NW1 2RT, United Kingdom',
+    lat: 51.5281,
+    lng: -0.1339,
     category: 'station',
   ),
   _PopularPlace(
     displayName: 'Paddington Station',
     searchAliases: ['paddington', 'london paddington'],
-    searchText: 'Paddington Station, London, United Kingdom',
+    formattedAddress:
+        'Paddington Station, Praed Street, London W2 1HQ, United Kingdom',
+    lat: 51.5154,
+    lng: -0.1755,
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Victoria Station',
+    searchAliases: ['victoria', 'london victoria'],
+    formattedAddress: 'Victoria Station, London SW1V 1JU, United Kingdom',
+    lat: 51.4952,
+    lng: -0.1441,
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Waterloo Station',
+    searchAliases: ['waterloo', 'london waterloo'],
+    formattedAddress: 'Waterloo Station, London SE1 8SW, United Kingdom',
+    lat: 51.5033,
+    lng: -0.1147,
     category: 'station',
   ),
   _PopularPlace(
     displayName: 'Liverpool Street Station',
     searchAliases: ['liverpool street', 'london liverpool street'],
-    searchText: 'Liverpool Street Station, London, United Kingdom',
+    formattedAddress:
+        'Liverpool Street Station, London EC2M 7QA, United Kingdom',
+    lat: 51.5178,
+    lng: -0.0817,
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'London Bridge Station',
+    searchAliases: ['london bridge'],
+    formattedAddress: 'London Bridge Station, London SE1 9SP, United Kingdom',
+    lat: 51.5050,
+    lng: -0.0864,
+    category: 'station',
+  ),
+  _PopularPlace(
+    displayName: 'Stratford Station',
+    searchAliases: ['stratford', 'london stratford'],
+    formattedAddress: 'Stratford Station, London E15 1AZ, United Kingdom',
+    lat: 51.5413,
+    lng: -0.0030,
     category: 'station',
   ),
   _PopularPlace(
     displayName: 'Gatwick Airport',
     searchAliases: ['gatwick', 'lgw', 'london gatwick'],
-    searchText: 'Gatwick Airport, Horley, United Kingdom',
+    formattedAddress: 'Gatwick Airport, Horley RH6 0NP, United Kingdom',
+    lat: 51.1537,
+    lng: -0.1821,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'Luton Airport',
     searchAliases: ['luton', 'ltn', 'london luton'],
-    searchText: 'London Luton Airport, Luton, United Kingdom',
+    formattedAddress: 'London Luton Airport, Luton LU2 9LY, United Kingdom',
+    lat: 51.8747,
+    lng: -0.3683,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'Stansted Airport',
     searchAliases: ['stansted', 'stn', 'london stansted'],
-    searchText: 'London Stansted Airport, Stansted, United Kingdom',
+    formattedAddress:
+        'London Stansted Airport, Stansted CM24 1QW, United Kingdom',
+    lat: 51.8860,
+    lng: 0.2389,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'London City Airport',
     searchAliases: ['city airport', 'lcy'],
-    searchText: 'London City Airport, London, United Kingdom',
+    formattedAddress:
+        'London City Airport, Hartmann Road, London E16 2PX, United Kingdom',
+    lat: 51.5053,
+    lng: 0.0553,
     category: 'airport',
   ),
   _PopularPlace(
     displayName: 'Westfield Stratford City',
-    searchAliases: ['westfield stratford', 'stratford westfield'],
-    searchText: 'Westfield Stratford City, London, United Kingdom',
+    searchAliases: ['westfield stratford', 'stratford westfield', 'westfield'],
+    formattedAddress:
+        'Westfield Stratford City, Montfichet Road, London E20 1EJ, United Kingdom',
+    lat: 51.5432,
+    lng: -0.0076,
     category: 'shopping centre',
   ),
   _PopularPlace(
     displayName: 'Westfield London White City',
-    searchAliases: ['westfield white city', 'westfield london'],
-    searchText: 'Westfield London, Ariel Way, London, United Kingdom',
+    searchAliases: ['westfield white city', 'westfield london', 'westfield'],
+    formattedAddress:
+        'Westfield London, Ariel Way, London W12 7GF, United Kingdom',
+    lat: 51.5074,
+    lng: -0.2217,
     category: 'shopping centre',
+  ),
+  _PopularPlace(
+    displayName: 'Canary Wharf',
+    searchAliases: ['canary wharf'],
+    formattedAddress: 'Canary Wharf, London E14, United Kingdom',
+    lat: 51.5054,
+    lng: -0.0235,
+    category: 'business district',
+  ),
+  _PopularPlace(
+    displayName: 'Oxford Street',
+    searchAliases: ['oxford street'],
+    formattedAddress: 'Oxford Street, London W1, United Kingdom',
+    lat: 51.5154,
+    lng: -0.1410,
+    category: 'shopping area',
+  ),
+  _PopularPlace(
+    displayName: 'Selfridges London',
+    searchAliases: ['selfridges', 'selfridges london'],
+    formattedAddress:
+        'Selfridges, 400 Oxford Street, London W1A 1AB, United Kingdom',
+    lat: 51.5145,
+    lng: -0.1527,
+    category: 'retail',
+  ),
+  _PopularPlace(
+    displayName: 'Harrods',
+    searchAliases: ['harrods', 'harrods london'],
+    formattedAddress:
+        'Harrods, 87-135 Brompton Road, London SW1X 7XL, United Kingdom',
+    lat: 51.4994,
+    lng: -0.1633,
+    category: 'retail',
+  ),
+  _PopularPlace(
+    displayName: 'IKEA Wembley',
+    searchAliases: ['ikea wembley', 'ikea'],
+    formattedAddress:
+        'IKEA Wembley, 2 Drury Way, Wembley HA9 0TH, United Kingdom',
+    lat: 51.5587,
+    lng: -0.2600,
+    category: 'retail',
+  ),
+  _PopularPlace(
+    displayName: 'IKEA Greenwich',
+    searchAliases: ['ikea greenwich', 'ikea'],
+    formattedAddress:
+        'IKEA Greenwich, 55-57 Bugsby\'s Way, London SE10 0QJ, United Kingdom',
+    lat: 51.4907,
+    lng: 0.0127,
+    category: 'retail',
+  ),
+  _PopularPlace(
+    displayName: 'IKEA Croydon',
+    searchAliases: ['ikea croydon', 'ikea'],
+    formattedAddress:
+        'IKEA Croydon, Valley Park, Croydon CR0 4UZ, United Kingdom',
+    lat: 51.3751,
+    lng: -0.1220,
+    category: 'retail',
   ),
   _PopularPlace(
     displayName: 'The O2 Arena',
     searchAliases: ['o2', 'o2 arena', 'the o2'],
-    searchText: 'The O2 Arena, Peninsula Square, London, United Kingdom',
+    formattedAddress:
+        'The O2 Arena, Peninsula Square, London SE10 0DX, United Kingdom',
+    lat: 51.5030,
+    lng: 0.0032,
+    category: 'landmark',
+  ),
+  _PopularPlace(
+    displayName: 'ExCeL London',
+    searchAliases: ['excel', 'excel london', 'exhibition centre london'],
+    formattedAddress:
+        'ExCeL London, Royal Victoria Dock, London E16 1XL, United Kingdom',
+    lat: 51.5085,
+    lng: 0.0290,
     category: 'landmark',
   ),
   _PopularPlace(
     displayName: 'Wembley Stadium',
     searchAliases: ['wembley', 'wembley arena'],
-    searchText: 'Wembley Stadium, London, United Kingdom',
-    category: 'landmark',
+    formattedAddress: 'Wembley Stadium, Wembley HA9 0WS, United Kingdom',
+    lat: 51.5560,
+    lng: -0.2796,
+    category: 'stadium',
+  ),
+  _PopularPlace(
+    displayName: 'Emirates Stadium',
+    searchAliases: ['emirates stadium', 'arsenal stadium'],
+    formattedAddress:
+        'Emirates Stadium, Hornsey Road, London N7 7AJ, United Kingdom',
+    lat: 51.5549,
+    lng: -0.1084,
+    category: 'stadium',
+  ),
+  _PopularPlace(
+    displayName: 'Stamford Bridge',
+    searchAliases: ['stamford bridge', 'chelsea stadium'],
+    formattedAddress:
+        'Stamford Bridge, Fulham Road, London SW6 1HS, United Kingdom',
+    lat: 51.4816,
+    lng: -0.1910,
+    category: 'stadium',
+  ),
+  _PopularPlace(
+    displayName: 'Tottenham Hotspur Stadium',
+    searchAliases: ['tottenham stadium', 'spurs stadium'],
+    formattedAddress:
+        'Tottenham Hotspur Stadium, 782 High Road, London N17 0BX, United Kingdom',
+    lat: 51.6043,
+    lng: -0.0664,
+    category: 'stadium',
   ),
 ];
 
