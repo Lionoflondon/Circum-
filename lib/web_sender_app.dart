@@ -5042,6 +5042,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _phone = TextEditingController(text: '+44 7700 900456');
   final _email = TextEditingController(text: 'rider@circum.app');
   final _password = TextEditingController();
+  final _currentPassword = TextEditingController();
+  final _newPassword = TextEditingController();
+  final _confirmNewPassword = TextEditingController();
+  final _newEmail = TextEditingController();
+  final _emailChangePassword = TextEditingController();
   final _postcode = TextEditingController(text: 'E1 6AN');
   final _vehicle = TextEditingController(text: 'Bike');
   final _vehicleMakeModel = TextEditingController(text: 'Volt London e-bike');
@@ -5059,6 +5064,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   bool _sealedPackageConsent = false;
   bool _signupMode = true;
   bool _authSubmitting = false;
+  bool _securitySubmitting = false;
   bool _submitting = false;
   bool _withdrawSubmitting = false;
   bool _documentSubmitting = false;
@@ -5068,6 +5074,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   _RiderEarningsSnapshot _earnings = _RiderEarningsSnapshot.empty();
   String? _message;
   String? _authMessage;
+  String? _securityMessage;
   String? _withdrawMessage;
   String? _documentMessage;
   String? _applicationId;
@@ -5124,6 +5131,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _phone.dispose();
     _email.dispose();
     _password.dispose();
+    _currentPassword.dispose();
+    _newPassword.dispose();
+    _confirmNewPassword.dispose();
+    _newEmail.dispose();
+    _emailChangePassword.dispose();
     _postcode.dispose();
     _vehicle.dispose();
     _vehicleMakeModel.dispose();
@@ -5232,6 +5244,130 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() => _authMessage = 'We could not continue. Please try again.');
     } finally {
       if (mounted) setState(() => _authSubmitting = false);
+    }
+  }
+
+  Future<void> _sendRiderPasswordReset() async {
+    final email = _email.text.trim();
+    if (email.isEmpty) {
+      setState(() => _authMessage = 'Enter your email address first.');
+      return;
+    }
+    setState(() {
+      _authSubmitting = true;
+      _authMessage = 'Sending password reset email...';
+    });
+    try {
+      await _ensureCircumFirebaseReady();
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      setState(() => _authMessage =
+          'Password reset sent. Check your email and follow the secure link.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _authMessage = switch (error.code) {
+            'invalid-email' => 'Enter a valid email address.',
+            'user-not-found' => 'No rider account found for that email.',
+            _ =>
+              'We could not send the reset email. Check the address and try again.',
+          });
+    } finally {
+      if (mounted) setState(() => _authSubmitting = false);
+    }
+  }
+
+  Future<UserCredential> _reauthenticateRider(String password) async {
+    final user = _riderUser ?? FirebaseAuth.instance.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.trim().isEmpty) {
+      throw FirebaseAuthException(
+        code: 'requires-recent-login',
+        message: 'Sign in again before changing account security settings.',
+      );
+    }
+    final credential = EmailAuthProvider.credential(
+      email: email,
+      password: password,
+    );
+    return user.reauthenticateWithCredential(credential);
+  }
+
+  Future<void> _changeRiderPassword() async {
+    if (_securitySubmitting) return;
+    final current = _currentPassword.text.trim();
+    final next = _newPassword.text.trim();
+    final confirm = _confirmNewPassword.text.trim();
+    if (current.isEmpty || next.length < 6 || next != confirm) {
+      setState(() => _securityMessage =
+          'Enter your current password and make sure the new passwords match.');
+      return;
+    }
+    setState(() {
+      _securitySubmitting = true;
+      _securityMessage = 'Updating password...';
+    });
+    try {
+      await _ensureCircumFirebaseReady();
+      await _reauthenticateRider(current);
+      await (_riderUser ?? FirebaseAuth.instance.currentUser)
+          ?.updatePassword(next);
+      _currentPassword.clear();
+      _newPassword.clear();
+      _confirmNewPassword.clear();
+      if (!mounted) return;
+      setState(() => _securityMessage = 'Password updated.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _securityMessage = _friendlyAuthMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _securityMessage = 'Could not update password.');
+    } finally {
+      if (mounted) setState(() => _securitySubmitting = false);
+    }
+  }
+
+  Future<void> _changeRiderEmail() async {
+    if (_securitySubmitting) return;
+    final nextEmail = _newEmail.text.trim();
+    final password = _emailChangePassword.text.trim();
+    if (nextEmail.isEmpty || !nextEmail.contains('@') || password.isEmpty) {
+      setState(() =>
+          _securityMessage = 'Enter the new email and your current password.');
+      return;
+    }
+    setState(() {
+      _securitySubmitting = true;
+      _securityMessage = 'Updating email...';
+    });
+    try {
+      await _ensureCircumFirebaseReady();
+      await _reauthenticateRider(password);
+      final user = _riderUser ?? FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'requires-recent-login');
+      }
+      await user.verifyBeforeUpdateEmail(nextEmail);
+      await FirebaseFirestore.instance
+          .collection('riderProfiles')
+          .doc(user.uid)
+          .set({
+        'pendingEmail': nextEmail,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      _newEmail.clear();
+      _emailChangePassword.clear();
+      if (!mounted) return;
+      setState(() => _securityMessage =
+          'Verification sent. Open the email link to confirm the new address.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _securityMessage = _friendlyAuthMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _securityMessage = 'Could not update email.');
+    } finally {
+      if (mounted) setState(() => _securitySubmitting = false);
     }
   }
 
@@ -6542,6 +6678,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       message: _authMessage,
       onToggleMode: () => setState(() => _signupMode = !_signupMode),
       onSubmit: _submitAuth,
+      onForgotPassword: _sendRiderPasswordReset,
       onSignOut: _signOutRider,
     );
   }
@@ -6595,9 +6732,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       withdrawMessage: _withdrawMessage,
       documentMessage: _documentMessage,
       jobMessage: _jobMessage,
+      currentPassword: _currentPassword,
+      newPassword: _newPassword,
+      confirmNewPassword: _confirmNewPassword,
+      newEmail: _newEmail,
+      emailChangePassword: _emailChangePassword,
+      securitySubmitting: _securitySubmitting,
+      securityMessage: _securityMessage,
       onSaveBank: (value) => setState(() => _saveBank = value ?? false),
       onWithdraw: _requestWithdrawal,
       onUploadDocument: _uploadRiderDocument,
+      onChangePassword: _changeRiderPassword,
+      onChangeEmail: _changeRiderEmail,
       onAcceptJob: _acceptDeliveryJob,
       onRejectJob: (job) => _rejectOrIgnoreJob(job, 'reject'),
       onIgnoreJob: (job) => _rejectOrIgnoreJob(job, 'ignore'),
@@ -6696,6 +6842,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                 onToggleMode: () =>
                                     setState(() => _signupMode = !_signupMode),
                                 onSubmit: _submitAuth,
+                                onForgotPassword: _sendRiderPasswordReset,
                                 onSignOut: _signOutRider,
                               ),
                             ],
@@ -6811,6 +6958,7 @@ class _RiderAccessPanel extends StatelessWidget {
   final String? message;
   final VoidCallback onToggleMode;
   final VoidCallback onSubmit;
+  final VoidCallback onForgotPassword;
   final VoidCallback onSignOut;
 
   const _RiderAccessPanel({
@@ -6823,6 +6971,7 @@ class _RiderAccessPanel extends StatelessWidget {
     required this.message,
     required this.onToggleMode,
     required this.onSubmit,
+    required this.onForgotPassword,
     required this.onSignOut,
   });
 
@@ -6857,6 +7006,13 @@ class _RiderAccessPanel extends StatelessWidget {
                 controller: password,
                 hint: 'Password',
                 obscureText: true),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: submitting ? null : onForgotPassword,
+                child: const Text('Forgot Password?'),
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -7234,9 +7390,18 @@ class _RiderWorkspace extends StatelessWidget {
   final String? withdrawMessage;
   final String? documentMessage;
   final String? jobMessage;
+  final TextEditingController currentPassword;
+  final TextEditingController newPassword;
+  final TextEditingController confirmNewPassword;
+  final TextEditingController newEmail;
+  final TextEditingController emailChangePassword;
+  final bool securitySubmitting;
+  final String? securityMessage;
   final ValueChanged<bool?> onSaveBank;
   final VoidCallback onWithdraw;
   final VoidCallback onUploadDocument;
+  final VoidCallback onChangePassword;
+  final VoidCallback onChangeEmail;
   final ValueChanged<Map<String, dynamic>> onAcceptJob;
   final ValueChanged<Map<String, dynamic>> onRejectJob;
   final ValueChanged<Map<String, dynamic>> onIgnoreJob;
@@ -7269,9 +7434,18 @@ class _RiderWorkspace extends StatelessWidget {
     required this.withdrawMessage,
     required this.documentMessage,
     required this.jobMessage,
+    required this.currentPassword,
+    required this.newPassword,
+    required this.confirmNewPassword,
+    required this.newEmail,
+    required this.emailChangePassword,
+    required this.securitySubmitting,
+    required this.securityMessage,
     required this.onSaveBank,
     required this.onWithdraw,
     required this.onUploadDocument,
+    required this.onChangePassword,
+    required this.onChangeEmail,
     required this.onAcceptJob,
     required this.onRejectJob,
     required this.onIgnoreJob,
@@ -7319,6 +7493,20 @@ class _RiderWorkspace extends StatelessWidget {
             colors: colors,
             performance: performance,
             recentRatings: recentRatings,
+          ),
+          const SizedBox(height: 14),
+          _AccountSecurityPanel(
+            colors: colors,
+            title: 'Security',
+            currentPassword: currentPassword,
+            newPassword: newPassword,
+            confirmNewPassword: confirmNewPassword,
+            newEmail: newEmail,
+            emailChangePassword: emailChangePassword,
+            submitting: securitySubmitting,
+            message: securityMessage,
+            onChangePassword: onChangePassword,
+            onChangeEmail: onChangeEmail,
           ),
           const SizedBox(height: 14),
           _AvailableDriverJobsPanel(
@@ -7609,6 +7797,139 @@ class _RiderWorkspace extends StatelessWidget {
   }
 
   static String _money(double value) => '£${value.toStringAsFixed(2)}';
+}
+
+class _AccountSecurityPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final TextEditingController currentPassword;
+  final TextEditingController newPassword;
+  final TextEditingController confirmNewPassword;
+  final TextEditingController newEmail;
+  final TextEditingController emailChangePassword;
+  final bool submitting;
+  final String? message;
+  final VoidCallback onChangePassword;
+  final VoidCallback onChangeEmail;
+
+  const _AccountSecurityPanel({
+    required this.colors,
+    required this.title,
+    required this.currentPassword,
+    required this.newPassword,
+    required this.confirmNewPassword,
+    required this.newEmail,
+    required this.emailChangePassword,
+    required this.submitting,
+    required this.message,
+    required this.onChangePassword,
+    required this.onChangeEmail,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: title),
+          const SizedBox(height: 8),
+          Text(
+            'Manage your sign-in details with Firebase Authentication.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _InputBox(
+            colors: colors,
+            controller: currentPassword,
+            hint: 'Current password',
+            obscureText: true,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _InputBox(
+                  colors: colors,
+                  controller: newPassword,
+                  hint: 'New password',
+                  obscureText: true,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _InputBox(
+                  colors: colors,
+                  controller: confirmNewPassword,
+                  hint: 'Confirm new password',
+                  obscureText: true,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: submitting ? null : onChangePassword,
+              icon: submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.password),
+              label: const Text('Change password'),
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.text,
+                foregroundColor: colors.inverseText,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _InputBox(
+            colors: colors,
+            controller: newEmail,
+            hint: 'New email address',
+          ),
+          const SizedBox(height: 10),
+          _InputBox(
+            colors: colors,
+            controller: emailChangePassword,
+            hint: 'Current password for email change',
+            obscureText: true,
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: submitting ? null : onChangeEmail,
+              icon: const Icon(Icons.mark_email_read_outlined),
+              label: const Text('Change email and send verification'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colors.text,
+                side: BorderSide(color: colors.border),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              message!,
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _AvailableDriverJobsPanel extends StatelessWidget {
@@ -8561,6 +8882,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _ratingFeedback = TextEditingController();
   final _senderEmail = TextEditingController();
   final _senderPassword = TextEditingController();
+  final _senderCurrentPassword = TextEditingController();
+  final _senderNewPassword = TextEditingController();
+  final _senderConfirmNewPassword = TextEditingController();
+  final _senderNewEmail = TextEditingController();
+  final _senderEmailChangePassword = TextEditingController();
   final _senderName = TextEditingController();
   final _senderPhone = TextEditingController();
   final _savedAddressLabel = TextEditingController(text: 'Home');
@@ -8617,11 +8943,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _firebaseError;
   String? _ratingMessage;
   String? _senderProfileMessage;
+  String? _senderSecurityMessage;
   _ValidatedAddress? _validatedPickup;
   _ValidatedAddress? _validatedDropoff;
   bool _firebaseOnline = false;
   bool _senderAuthLoading = true;
   bool _senderAuthBusy = false;
+  bool _senderSecurityBusy = false;
   bool _senderProfileSaving = false;
   bool _senderSignupMode = false;
   bool _roleChoiceConfirmed = false;
@@ -8700,6 +9028,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _ratingFeedback.dispose();
     _senderEmail.dispose();
     _senderPassword.dispose();
+    _senderCurrentPassword.dispose();
+    _senderNewPassword.dispose();
+    _senderConfirmNewPassword.dispose();
+    _senderNewEmail.dispose();
+    _senderEmailChangePassword.dispose();
     _senderName.dispose();
     _senderPhone.dispose();
     _savedAddressLabel.dispose();
@@ -8796,6 +9129,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             setState(() => _senderSignupMode = !_senderSignupMode),
         onSignIn: _signInSender,
         onSignUp: _signUpSender,
+        onForgotPassword: _sendSenderPasswordReset,
       );
     }
     if (!_roleChoiceConfirmed && _availableRoles.length > 1) {
@@ -9032,6 +9366,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           password: _senderPassword,
           fullName: _senderName,
           phone: _senderPhone,
+          currentPassword: _senderCurrentPassword,
+          newPassword: _senderNewPassword,
+          confirmNewPassword: _senderConfirmNewPassword,
+          newEmail: _senderNewEmail,
+          emailChangePassword: _senderEmailChangePassword,
+          securitySubmitting: _senderSecurityBusy,
+          securityMessage: _senderSecurityMessage,
           savedAddressLabel: _savedAddressLabel,
           savedAddress: _savedAddress,
           savedAddressType: _savedAddressType,
@@ -9039,6 +9380,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onTab: (index) => setState(() => _senderProfileTab = index),
           onSignIn: _signInSender,
           onSignUp: _signUpSender,
+          onForgotPassword: _sendSenderPasswordReset,
+          onChangePassword: _changeSenderPassword,
+          onChangeEmail: _changeSenderEmail,
           onSignOut: _signOutSender,
           onSaveProfile: _saveSenderProfile,
           onAddAddress: _addSenderAddress,
@@ -9440,6 +9784,128 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
+    }
+  }
+
+  Future<void> _sendSenderPasswordReset() async {
+    final email = _senderEmail.text.trim();
+    if (email.isEmpty) {
+      setState(() => _senderProfileMessage = 'Enter your email address first.');
+      return;
+    }
+    setState(() {
+      _senderAuthBusy = true;
+      _senderProfileMessage = 'Sending password reset email...';
+    });
+    try {
+      await _ensureFirebaseReady();
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      setState(() => _senderProfileMessage =
+          'Password reset sent. Check your email and follow the secure link.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _senderProfileMessage = switch (error.code) {
+            'invalid-email' => 'Enter a valid email address.',
+            'user-not-found' =>
+              'No Circum sender profile found for that email.',
+            _ =>
+              'We could not send the reset email. Check the address and try again.',
+          });
+    } finally {
+      if (mounted) setState(() => _senderAuthBusy = false);
+    }
+  }
+
+  Future<UserCredential> _reauthenticateSender(String password) async {
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.trim().isEmpty) {
+      throw FirebaseAuthException(
+        code: 'requires-recent-login',
+        message: 'Sign in again before changing account security settings.',
+      );
+    }
+    return user.reauthenticateWithCredential(
+      EmailAuthProvider.credential(email: email, password: password),
+    );
+  }
+
+  Future<void> _changeSenderPassword() async {
+    if (_senderSecurityBusy) return;
+    final current = _senderCurrentPassword.text.trim();
+    final next = _senderNewPassword.text.trim();
+    final confirm = _senderConfirmNewPassword.text.trim();
+    if (current.isEmpty || next.length < 6 || next != confirm) {
+      setState(() => _senderSecurityMessage =
+          'Enter your current password and make sure the new passwords match.');
+      return;
+    }
+    setState(() {
+      _senderSecurityBusy = true;
+      _senderSecurityMessage = 'Updating password...';
+    });
+    try {
+      await _ensureFirebaseReady();
+      await _reauthenticateSender(current);
+      await (_senderUser ?? FirebaseAuth.instance.currentUser)
+          ?.updatePassword(next);
+      _senderCurrentPassword.clear();
+      _senderNewPassword.clear();
+      _senderConfirmNewPassword.clear();
+      if (!mounted) return;
+      setState(() => _senderSecurityMessage = 'Password updated.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(
+          () => _senderSecurityMessage = _friendlySenderAuthMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _senderSecurityMessage = 'Could not update password.');
+    } finally {
+      if (mounted) setState(() => _senderSecurityBusy = false);
+    }
+  }
+
+  Future<void> _changeSenderEmail() async {
+    if (_senderSecurityBusy) return;
+    final nextEmail = _senderNewEmail.text.trim();
+    final password = _senderEmailChangePassword.text.trim();
+    if (nextEmail.isEmpty || !nextEmail.contains('@') || password.isEmpty) {
+      setState(() => _senderSecurityMessage =
+          'Enter the new email and your current password.');
+      return;
+    }
+    setState(() {
+      _senderSecurityBusy = true;
+      _senderSecurityMessage = 'Updating email...';
+    });
+    try {
+      await _ensureFirebaseReady();
+      await _reauthenticateSender(password);
+      final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'requires-recent-login');
+      }
+      await user.verifyBeforeUpdateEmail(nextEmail);
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'pendingEmail': nextEmail,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      _senderNewEmail.clear();
+      _senderEmailChangePassword.clear();
+      if (!mounted) return;
+      setState(() => _senderSecurityMessage =
+          'Verification sent. Open the email link to confirm the new address.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(
+          () => _senderSecurityMessage = _friendlySenderAuthMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _senderSecurityMessage = 'Could not update email.');
+    } finally {
+      if (mounted) setState(() => _senderSecurityBusy = false);
     }
   }
 
@@ -11836,6 +12302,7 @@ class _SenderAccessGate extends StatelessWidget {
   final VoidCallback onToggleMode;
   final VoidCallback onSignIn;
   final VoidCallback onSignUp;
+  final VoidCallback onForgotPassword;
 
   const _SenderAccessGate({
     required this.colors,
@@ -11849,6 +12316,7 @@ class _SenderAccessGate extends StatelessWidget {
     required this.onToggleMode,
     required this.onSignIn,
     required this.onSignUp,
+    required this.onForgotPassword,
   });
 
   @override
@@ -11893,6 +12361,13 @@ class _SenderAccessGate extends StatelessWidget {
                 controller: password,
                 hint: 'Password',
                 obscureText: true,
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: busy ? null : onForgotPassword,
+                  child: const Text('Forgot Password?'),
+                ),
               ),
               if (message != null) ...[
                 const SizedBox(height: 12),
@@ -12431,6 +12906,13 @@ class _SenderProfileStep extends StatelessWidget {
   final TextEditingController password;
   final TextEditingController fullName;
   final TextEditingController phone;
+  final TextEditingController currentPassword;
+  final TextEditingController newPassword;
+  final TextEditingController confirmNewPassword;
+  final TextEditingController newEmail;
+  final TextEditingController emailChangePassword;
+  final bool securitySubmitting;
+  final String? securityMessage;
   final TextEditingController savedAddressLabel;
   final TextEditingController savedAddress;
   final String savedAddressType;
@@ -12438,6 +12920,9 @@ class _SenderProfileStep extends StatelessWidget {
   final ValueChanged<int> onTab;
   final VoidCallback onSignIn;
   final VoidCallback onSignUp;
+  final VoidCallback onForgotPassword;
+  final VoidCallback onChangePassword;
+  final VoidCallback onChangeEmail;
   final VoidCallback onSignOut;
   final VoidCallback onSaveProfile;
   final VoidCallback onAddAddress;
@@ -12462,6 +12947,13 @@ class _SenderProfileStep extends StatelessWidget {
     required this.password,
     required this.fullName,
     required this.phone,
+    required this.currentPassword,
+    required this.newPassword,
+    required this.confirmNewPassword,
+    required this.newEmail,
+    required this.emailChangePassword,
+    required this.securitySubmitting,
+    required this.securityMessage,
     required this.savedAddressLabel,
     required this.savedAddress,
     required this.savedAddressType,
@@ -12469,6 +12961,9 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onTab,
     required this.onSignIn,
     required this.onSignUp,
+    required this.onForgotPassword,
+    required this.onChangePassword,
+    required this.onChangeEmail,
     required this.onSignOut,
     required this.onSaveProfile,
     required this.onAddAddress,
@@ -12508,6 +13003,13 @@ class _SenderProfileStep extends StatelessWidget {
               controller: password,
               hint: 'Password',
               obscureText: true,
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: busy ? null : onForgotPassword,
+                child: const Text('Forgot Password?'),
+              ),
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -12706,6 +13208,20 @@ class _SenderProfileStep extends StatelessWidget {
           onPressed: onSignOut,
           icon: const Icon(Icons.logout),
           label: const Text('Sign out'),
+        ),
+        const SizedBox(height: 14),
+        _AccountSecurityPanel(
+          colors: colors,
+          title: 'Security',
+          currentPassword: currentPassword,
+          newPassword: newPassword,
+          confirmNewPassword: confirmNewPassword,
+          newEmail: newEmail,
+          emailChangePassword: emailChangePassword,
+          submitting: securitySubmitting,
+          message: securityMessage,
+          onChangePassword: onChangePassword,
+          onChangeEmail: onChangeEmail,
         ),
       ],
     );
