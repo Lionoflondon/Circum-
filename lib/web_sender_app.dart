@@ -17584,7 +17584,7 @@ class _DriverCard extends StatelessWidget {
     final orderRank = _circumOrderRankForPerformance(performance);
     final rating = performance.averageRating <= 0
         ? 'New'
-        : performance.averageRating.toStringAsFixed(2);
+        : performance.averageRating.toStringAsFixed(1);
     final initials = profile.fullName.trim().isEmpty
         ? 'C'
         : profile.fullName.trim().substring(0, 1).toUpperCase();
@@ -17623,26 +17623,14 @@ class _DriverCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${orderRank.name} ${profile.fullName}',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '${orderRank.title}  •  ★ $rating  •  ${performance.completedTrips} trips  •  ${profile.vehicle.plateNumber.isEmpty ? 'Plate pending' : profile.vehicle.plateNumber}',
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                child: _RiderRankPresentation(
+                  colors: colors,
+                  rank: orderRank.label,
+                  rankTitle: orderRank.title,
+                  name: profile.fullName,
+                  rating: rating,
+                  tripCount: performance.completedTrips,
+                  vehiclePlate: profile.vehicle.plateNumber,
                 ),
               ),
               IconButton.filled(
@@ -17740,6 +17728,77 @@ class _DriverCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _RiderRankPresentation extends StatelessWidget {
+  final _CircumColors colors;
+  final String rank;
+  final String rankTitle;
+  final String name;
+  final String rating;
+  final int tripCount;
+  final String vehiclePlate;
+
+  const _RiderRankPresentation({
+    required this.colors,
+    required this.rank,
+    required this.rankTitle,
+    required this.name,
+    required this.rating,
+    required this.tripCount,
+    required this.vehiclePlate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final plate = vehiclePlate.trim().isEmpty ? 'Plate pending' : vehiclePlate;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: _spectrumGradient),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Text(
+              '◈ ${rank.toUpperCase()}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '$rankTitle\n$tripCount Deliveries Completed\n$rating Rating\n$plate',
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: colors.mutedText,
+            fontSize: 12,
+            height: 1.35,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
