@@ -12040,7 +12040,7 @@ class _DesktopPortalLayout extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'Live delivery',
+                          'Delivery Status',
                           style: TextStyle(
                             color: colors.text,
                             fontSize: 28,
@@ -12053,19 +12053,48 @@ class _DesktopPortalLayout extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'See the route, price, rider match, and delivery status in one place.',
+                    'See the current milestone, route summary, price, rider match, and delivery status in one place.',
                     style: TextStyle(
                       color: colors.mutedText,
                       height: 1.4,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 22),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: _MiniMap(colors: colors, active: true),
-                  ),
                   const SizedBox(height: 20),
+                  _GlassPanel(
+                    colors: colors,
+                    child: Row(
+                      children: [
+                        Icon(Icons.flag_circle, color: colors.text),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                status.title,
+                                style: TextStyle(
+                                  color: colors.text,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                status.body,
+                                style: TextStyle(
+                                  color: colors.mutedText,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   _GlassPanel(
                     colors: colors,
                     child: Column(
@@ -15832,7 +15861,6 @@ class _TrackingStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assigned = statusIndex > 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -15843,7 +15871,7 @@ class _TrackingStep extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Live Tracking',
+                    'Delivery Status',
                     style: TextStyle(
                       color: colors.text,
                       fontSize: 28,
@@ -15879,45 +15907,7 @@ class _TrackingStep extends StatelessWidget {
           _VanguardCustomerPanel(colors: colors, data: vanguardData!),
         ],
         const SizedBox(height: 14),
-        Stack(
-          children: [
-            _MiniMap(colors: colors, active: assigned),
-            Positioned(
-              top: 14,
-              right: 14,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: colors.panel.withOpacity(0.92),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: colors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'ESTIMATED',
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      assigned ? '14 min' : 'Matching',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+        _Timeline(colors: colors, activeIndex: statusIndex),
         const SizedBox(height: 14),
         if (broadcasting)
           _BroadcastCard(colors: colors)
@@ -15949,8 +15939,6 @@ class _TrackingStep extends StatelessWidget {
         ],
         const SizedBox(height: 14),
         _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
-        const SizedBox(height: 14),
-        _Timeline(colors: colors, activeIndex: statusIndex),
         const SizedBox(height: 14),
         SizedBox(
           width: double.infinity,
