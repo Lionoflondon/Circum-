@@ -5945,6 +5945,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         : job['collectionPinVerified'] == true;
     if (alreadyVerified) return const <String, dynamic>{};
 
+    final summary =
+        (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final collectionContact =
+        (job['collectionContact'] as Map?)?.cast<String, dynamic>();
+    final receiverDetails =
+        (job['receiverDetails'] as Map?)?.cast<String, dynamic>();
+    final collectionName =
+        '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the sender or collection contact'}'
+            .trim();
+    final receiverName =
+        '${summary['receiverName'] ?? job['receiverName'] ?? receiverDetails?['name'] ?? 'the receiver'}'
+            .trim();
     final pinController = TextEditingController();
     String? errorText;
     final enteredPin = await showDialog<String>(
@@ -5961,8 +5974,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             children: [
               Text(
                 stage == 'delivery'
-                    ? 'This is a Vanguard protected delivery. Enter the recipient’s delivery PIN to complete delivery.'
-                    : 'This is a Vanguard protected delivery. Enter the sender’s collection PIN to confirm handover.',
+                    ? 'This is a Vanguard protected delivery. Enter ${receiverName.isEmpty ? 'the receiver' : receiverName}’s delivery PIN to complete delivery.'
+                    : 'This is a Vanguard protected delivery. Enter ${collectionName.isEmpty ? 'the sender or collection contact' : collectionName}’s collection PIN to confirm handover.',
                 style: TextStyle(color: Theme.of(context).hintColor),
               ),
               const SizedBox(height: 12),
@@ -8246,6 +8259,23 @@ class _DriverJobCard extends StatelessWidget {
         '${summary['packageDimensions'] ?? job['packageDimensions'] ?? job['dimensions'] ?? ''}'
             .trim();
     final warnings = _warnings(chargeableWeight, category, job);
+    final showContactDetails = onReject == null && onIgnore == null;
+    final senderName = _contactValue(job, summary, 'senderName',
+        nestedKey: 'senderDetails', nestedName: 'name');
+    final senderPhone = _contactValue(job, summary, 'senderPhone',
+        nestedKey: 'senderDetails', nestedName: 'phone');
+    final receiverName = _contactValue(job, summary, 'receiverName',
+        nestedKey: 'receiverDetails', nestedName: 'name');
+    final receiverPhone = _contactValue(job, summary, 'receiverPhone',
+        nestedKey: 'receiverDetails', nestedName: 'phone');
+    final collectionName = _contactValue(job, summary, 'collectionContactName',
+        nestedKey: 'collectionContact', nestedName: 'name');
+    final collectionPhone = _contactValue(
+        job, summary, 'collectionContactPhone',
+        nestedKey: 'collectionContact', nestedName: 'phone');
+    final collectionDifferent = (job['collectionContactDifferent'] == true ||
+        summary['collectionContactDifferent'] == true ||
+        ((job['collectionContact'] as Map?)?['differentFromSender'] == true));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -8305,6 +8335,30 @@ class _DriverJobCard extends StatelessWidget {
             value:
                 '${summary['dropoffDisplay'] ?? job['dropoffAddress'] ?? ''}',
           ),
+          if (showContactDetails) ...[
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.person,
+              label: 'Sender',
+              value:
+                  '${senderName.isEmpty ? 'Not set' : senderName}${senderPhone.isEmpty ? '' : ' • $senderPhone'}',
+            ),
+            if (collectionDifferent)
+              _JobInfoLine(
+                colors: colors,
+                icon: Icons.handshake_outlined,
+                label: 'Collection contact',
+                value:
+                    '${collectionName.isEmpty ? 'Not set' : collectionName}${collectionPhone.isEmpty ? '' : ' • $collectionPhone'}',
+              ),
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.person_pin_circle,
+              label: 'Receiver',
+              value:
+                  '${receiverName.isEmpty ? 'Not set' : receiverName}${receiverPhone.isEmpty ? '' : ' • $receiverPhone'}',
+            ),
+          ],
           _JobInfoLine(
             colors: colors,
             icon: Icons.route,
@@ -8452,6 +8506,17 @@ class _DriverJobCard extends StatelessWidget {
   static String _weight(double value) => value <= 0
       ? 'not set'
       : value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1);
+
+  static String _contactValue(
+    Map<String, dynamic> job,
+    Map<String, dynamic> summary,
+    String key, {
+    required String nestedKey,
+    required String nestedName,
+  }) {
+    final nested = (job[nestedKey] as Map?)?.cast<String, dynamic>();
+    return '${summary[key] ?? job[key] ?? nested?[nestedName] ?? ''}'.trim();
+  }
 
   static List<String> _warnings(
     double weightKg,
@@ -9018,6 +9083,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _senderEmailChangePassword = TextEditingController();
   final _senderName = TextEditingController();
   final _senderPhone = TextEditingController();
+  final _receiverName = TextEditingController();
+  final _receiverPhone = TextEditingController();
+  final _collectionContactName = TextEditingController();
+  final _collectionContactPhone = TextEditingController();
   final _savedAddressLabel = TextEditingController(text: 'Home');
   final _savedAddress = TextEditingController();
   String _savedAddressType = 'pickup';
@@ -9082,6 +9151,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _senderProfileSaving = false;
   bool _senderSignupMode = false;
   bool _roleChoiceConfirmed = false;
+  bool _differentCollectionContact = false;
   int _statusIndex = 0;
   int _selectedRating = 0;
   double _selectedTipAmount = 0;
@@ -9131,12 +9201,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   void initState() {
     super.initState();
     _weight.addListener(_handleWeightChanged);
+    _senderName.addListener(_handleContactDetailsChanged);
+    _senderPhone.addListener(_handleContactDetailsChanged);
+    _receiverName.addListener(_handleContactDetailsChanged);
+    _receiverPhone.addListener(_handleContactDetailsChanged);
+    _collectionContactName.addListener(_handleContactDetailsChanged);
+    _collectionContactPhone.addListener(_handleContactDetailsChanged);
     _restoreSenderSession();
   }
 
   @override
   void dispose() {
     _weight.removeListener(_handleWeightChanged);
+    _senderName.removeListener(_handleContactDetailsChanged);
+    _senderPhone.removeListener(_handleContactDetailsChanged);
+    _receiverName.removeListener(_handleContactDetailsChanged);
+    _receiverPhone.removeListener(_handleContactDetailsChanged);
+    _collectionContactName.removeListener(_handleContactDetailsChanged);
+    _collectionContactPhone.removeListener(_handleContactDetailsChanged);
     _pickup.dispose();
     _dropoff.dispose();
     _description.dispose();
@@ -9166,6 +9248,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _senderEmailChangePassword.dispose();
     _senderName.dispose();
     _senderPhone.dispose();
+    _receiverName.dispose();
+    _receiverPhone.dispose();
+    _collectionContactName.dispose();
+    _collectionContactPhone.dispose();
     _savedAddressLabel.dispose();
     _savedAddress.dispose();
     _requestSub?.cancel();
@@ -9176,6 +9262,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _driverPerformanceSub?.cancel();
     _assignedDriverRatingsSub?.cancel();
     super.dispose();
+  }
+
+  void _handleContactDetailsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -9300,6 +9390,27 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           locationValidationMessage: _locationValidationMessage,
           checkoutState: _checkoutState,
           canSubmit: _canAnalyzeDelivery,
+          senderName: _senderName,
+          senderPhone: _senderPhone,
+          senderDisplayName: _effectiveSenderName,
+          senderDisplayPhone: _effectiveSenderPhone,
+          senderDetailsRequired: _senderDetailsRequired,
+          receiverName: _receiverName,
+          receiverPhone: _receiverPhone,
+          differentCollectionContact: _differentCollectionContact,
+          collectionContactName: _collectionContactName,
+          collectionContactPhone: _collectionContactPhone,
+          contactDetailsReady: _hasRequiredContactDetails,
+          contactValidationMessage: _contactValidationMessage,
+          onDifferentCollectionContact: (value) {
+            setState(() {
+              _differentCollectionContact = value;
+              if (!value) {
+                _collectionContactName.clear();
+                _collectionContactPhone.clear();
+              }
+            });
+          },
           onPickupSelected: _selectPickupAddress,
           onDropoffSelected: _selectDropoffAddress,
           onPickupEdited: _handlePickupEdited,
@@ -9569,7 +9680,64 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool get _dropoffAddressVerified => _validatedDropoff?.hasCoordinates == true;
 
   bool get _canAnalyzeDelivery {
-    return _hasValidatedRoute && !_analyzing;
+    return _hasValidatedRoute && _hasRequiredContactDetails && !_analyzing;
+  }
+
+  String get _effectiveSenderName {
+    final profileName = _senderProfile?.fullName.trim() ?? '';
+    if (profileName.isNotEmpty) return profileName;
+    final enteredName = _senderName.text.trim();
+    if (enteredName.isNotEmpty) return enteredName;
+    return _senderUser?.displayName?.trim() ?? '';
+  }
+
+  String get _effectiveSenderPhone {
+    final profilePhone = _senderProfile?.phoneNumber.trim() ?? '';
+    if (profilePhone.isNotEmpty) return profilePhone;
+    return _senderPhone.text.trim();
+  }
+
+  bool get _senderDetailsRequired =>
+      _effectiveSenderName.isEmpty || _effectiveSenderPhone.isEmpty;
+
+  String get _effectiveCollectionContactName => _differentCollectionContact
+      ? _collectionContactName.text.trim()
+      : _effectiveSenderName;
+
+  String get _effectiveCollectionContactPhone => _differentCollectionContact
+      ? _collectionContactPhone.text.trim()
+      : _effectiveSenderPhone;
+
+  bool get _hasRequiredContactDetails {
+    if (_effectiveSenderName.isEmpty || _effectiveSenderPhone.isEmpty) {
+      return false;
+    }
+    if (_receiverName.text.trim().isEmpty ||
+        _receiverPhone.text.trim().isEmpty) {
+      return false;
+    }
+    if (_differentCollectionContact &&
+        (_collectionContactName.text.trim().isEmpty ||
+            _collectionContactPhone.text.trim().isEmpty)) {
+      return false;
+    }
+    return true;
+  }
+
+  String get _contactValidationMessage {
+    if (_effectiveSenderName.isEmpty || _effectiveSenderPhone.isEmpty) {
+      return 'Add sender name and phone number before pricing.';
+    }
+    if (_receiverName.text.trim().isEmpty ||
+        _receiverPhone.text.trim().isEmpty) {
+      return 'Add receiver name and phone number before pricing.';
+    }
+    if (_differentCollectionContact &&
+        (_collectionContactName.text.trim().isEmpty ||
+            _collectionContactPhone.text.trim().isEmpty)) {
+      return 'Add the collection contact name and phone number.';
+    }
+    return 'Sender, receiver, and collection contact details are ready.';
   }
 
   String get _locationValidationMessage {
@@ -10213,6 +10381,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() {
         _checkoutState = _CheckoutState.failed;
         _firebaseError = _locationValidationMessage;
+      });
+      return;
+    }
+    if (!_hasRequiredContactDetails) {
+      setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _firebaseError = _contactValidationMessage;
       });
       return;
     }
@@ -11289,14 +11464,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final irisVerified = (_irisWeightConfidence ?? '').toLowerCase() != 'low';
     final senderUser = _senderUser ?? FirebaseAuth.instance.currentUser;
     final senderId = senderUser?.uid ?? 'web-sender';
-    final senderName = _senderProfile?.fullName.trim().isNotEmpty == true
-        ? _senderProfile!.fullName
-        : _senderName.text.trim().isNotEmpty
-            ? _senderName.text.trim()
-            : senderUser?.displayName ?? 'Web Sender';
-    final senderPhone = _senderProfile?.phoneNumber.trim().isNotEmpty == true
-        ? _senderProfile!.phoneNumber
-        : _senderPhone.text.trim();
+    final senderName = _effectiveSenderName;
+    final senderPhone = _effectiveSenderPhone;
+    final receiverName = _receiverName.text.trim();
+    final receiverPhone = _receiverPhone.text.trim();
+    final collectionContactName = _effectiveCollectionContactName;
+    final collectionContactPhone = _effectiveCollectionContactPhone;
+    final collectionContactDifferent = _differentCollectionContact;
     final requestCode = id.replaceAll(RegExp(r'[^0-9]'), '').padLeft(6, '0');
     final pickupGeo = pickupAddress.toPositionMap();
     final dropoffGeo = dropoffAddress.toPositionMap();
@@ -11356,6 +11530,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'platformRevenue': platformRevenue,
       'serviceLevel': selectedServiceLevel,
       'selectedServiceLevel': selectedServiceLevel,
+      'senderName': senderName,
+      'senderPhone': senderPhone,
+      'collectionContactName': collectionContactName,
+      'collectionContactPhone': collectionContactPhone,
+      'collectionContactDifferent': collectionContactDifferent,
+      'receiverName': receiverName,
+      'receiverPhone': receiverPhone,
       'priority': selectedServiceLevel == 'express',
       'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
       'broadcastRank': DeliveryPricing.matchingPriorityRank(
@@ -11517,7 +11698,29 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'senderId': senderId,
       'userId': senderId,
       'senderName': senderName,
+      'senderPhone': senderPhone,
       'senderEmail': senderUser?.email,
+      'senderDetails': {
+        'userId': senderId,
+        'name': senderName,
+        'phone': senderPhone,
+        'email': senderUser?.email,
+      },
+      'collectionContact': {
+        'name': collectionContactName,
+        'phone': collectionContactPhone,
+        'sameAsSender': !collectionContactDifferent,
+        'differentFromSender': collectionContactDifferent,
+      },
+      'receiverDetails': {
+        'name': receiverName,
+        'phone': receiverPhone,
+      },
+      'collectionContactName': collectionContactName,
+      'collectionContactPhone': collectionContactPhone,
+      'collectionContactDifferent': collectionContactDifferent,
+      'receiverName': receiverName,
+      'receiverPhone': receiverPhone,
       'appMatchingCompatible': true,
       'driverJobSummary': driverJobSummary,
       'matchingRules': {
@@ -11533,8 +11736,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             selectedServiceLevel == 'express' ? 'high' : 'normal',
       },
       'pickupDetails': {
-        'fullname': senderName,
-        'phone': senderPhone,
+        'fullname': collectionContactName,
+        'phone': collectionContactPhone,
+        'senderName': senderName,
+        'senderPhone': senderPhone,
+        'collectionContactName': collectionContactName,
+        'collectionContactPhone': collectionContactPhone,
+        'collectionContactDifferent': collectionContactDifferent,
         'position': pickupGeo,
         'address': pickupAddress.displayAddress,
         'rawAddress': pickupAddress.rawInput,
@@ -11547,8 +11755,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'scheduledWindow': _scheduledPickupWindow.text.trim(),
       },
       'dropoffDetails': {
-        'fullname': 'Recipient',
-        'phone': '',
+        'fullname': receiverName,
+        'phone': receiverPhone,
+        'receiverName': receiverName,
+        'receiverPhone': receiverPhone,
         'position': dropoffGeo,
         'address': dropoffAddress.displayAddress,
         'rawAddress': dropoffAddress.rawInput,
@@ -13804,6 +14014,19 @@ class _DetailsStep extends StatelessWidget {
   final String locationValidationMessage;
   final _CheckoutState checkoutState;
   final bool canSubmit;
+  final TextEditingController senderName;
+  final TextEditingController senderPhone;
+  final String senderDisplayName;
+  final String senderDisplayPhone;
+  final bool senderDetailsRequired;
+  final TextEditingController receiverName;
+  final TextEditingController receiverPhone;
+  final bool differentCollectionContact;
+  final TextEditingController collectionContactName;
+  final TextEditingController collectionContactPhone;
+  final bool contactDetailsReady;
+  final String contactValidationMessage;
+  final ValueChanged<bool> onDifferentCollectionContact;
   final ValueChanged<_ValidatedAddress> onPickupSelected;
   final ValueChanged<_ValidatedAddress> onDropoffSelected;
   final ValueChanged<String> onPickupEdited;
@@ -13843,6 +14066,19 @@ class _DetailsStep extends StatelessWidget {
     required this.locationValidationMessage,
     required this.checkoutState,
     required this.canSubmit,
+    required this.senderName,
+    required this.senderPhone,
+    required this.senderDisplayName,
+    required this.senderDisplayPhone,
+    required this.senderDetailsRequired,
+    required this.receiverName,
+    required this.receiverPhone,
+    required this.differentCollectionContact,
+    required this.collectionContactName,
+    required this.collectionContactPhone,
+    required this.contactDetailsReady,
+    required this.contactValidationMessage,
+    required this.onDifferentCollectionContact,
     required this.onPickupSelected,
     required this.onDropoffSelected,
     required this.onPickupEdited,
@@ -13881,7 +14117,11 @@ class _DetailsStep extends StatelessWidget {
             ? 'Checking options...'
             : canSubmit
                 ? 'See delivery options'
-                : 'Verify addresses before pricing';
+                : !pickupVerified || !dropoffVerified
+                    ? 'Verify addresses before pricing'
+                    : !contactDetailsReady
+                        ? 'Add contact details before pricing'
+                        : 'Confirm route before pricing';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -13971,6 +14211,118 @@ class _DetailsStep extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'People involved'),
+              const SizedBox(height: 10),
+              if (senderDetailsRequired) ...[
+                Text(
+                  'Add sender details for the person booking this delivery.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _InputBox(
+                        colors: colors,
+                        controller: senderName,
+                        hint: 'Sender name',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _InputBox(
+                        colors: colors,
+                        controller: senderPhone,
+                        hint: 'Sender phone',
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                _ContactSummaryLine(
+                  colors: colors,
+                  icon: Icons.person,
+                  label: 'Sender',
+                  value: '$senderDisplayName • $senderDisplayPhone',
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _InputBox(
+                      colors: colors,
+                      controller: receiverName,
+                      hint: 'Receiver name',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _InputBox(
+                      colors: colors,
+                      controller: receiverPhone,
+                      hint: 'Receiver phone',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: differentCollectionContact,
+                onChanged: (value) =>
+                    onDifferentCollectionContact(value ?? false),
+                activeColor: colors.text,
+                title: Text(
+                  'Is someone else handing over the parcel?',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (differentCollectionContact) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _InputBox(
+                        colors: colors,
+                        controller: collectionContactName,
+                        hint: 'Collection contact name',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _InputBox(
+                        colors: colors,
+                        controller: collectionContactPhone,
+                        hint: 'Collection contact phone',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
+              _ContactSummaryLine(
+                colors: colors,
+                icon: contactDetailsReady ? Icons.verified : Icons.info_outline,
+                label: 'Contact check',
+                value: contactValidationMessage,
               ),
             ],
           ),
@@ -14135,6 +14487,42 @@ class _DetailsStep extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               padding: const EdgeInsets.symmetric(vertical: 17),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContactSummaryLine extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ContactSummaryLine({
+    required this.colors,
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: colors.mutedText, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '$label: $value',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -16407,6 +16795,16 @@ class _VanguardCustomerPanel extends StatelessWidget {
     final deliveryVerified = data['deliveryPinVerified'] == true;
     final collectionPin = '${protection['collectionPin'] ?? ''}'.trim();
     final deliveryPin = '${protection['deliveryPin'] ?? ''}'.trim();
+    final collectionContact =
+        (data['collectionContact'] as Map?)?.cast<String, dynamic>();
+    final receiverDetails =
+        (data['receiverDetails'] as Map?)?.cast<String, dynamic>();
+    final collectionName =
+        '${data['collectionContactName'] ?? collectionContact?['name'] ?? data['senderName'] ?? 'the sender or collection contact'}'
+            .trim();
+    final receiverName =
+        '${data['receiverName'] ?? receiverDetails?['name'] ?? 'the receiver'}'
+            .trim();
     return _GlassPanel(
       colors: colors,
       child: Column(
@@ -16430,7 +16828,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Vanguard Protection Activated\n\nThis item qualifies for enhanced delivery protection.\n\n✓ Collection PIN required\n✓ Delivery PIN required\n✓ Chain of custody enabled\n✓ Vanguard verification active\n\nGive this collection PIN to the rider only when handing over the sealed parcel.',
+            'Vanguard Protection Activated\n\nThis item qualifies for enhanced delivery protection.\n\n✓ Collection PIN required\n✓ Receiver delivery PIN required\n✓ Chain of custody enabled\n✓ Vanguard verification active\n\nGive this collection PIN to the rider only when ${collectionName.isEmpty ? 'the sender or collection contact' : collectionName} hands over the sealed parcel.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.35,
@@ -16446,7 +16844,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Give this delivery PIN to the rider only when the parcel is physically delivered to you.',
+            'Give this receiver delivery PIN to the rider only when ${receiverName.isEmpty ? 'the receiver' : receiverName} physically receives the parcel.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.35,
