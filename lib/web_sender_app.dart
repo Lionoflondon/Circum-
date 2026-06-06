@@ -20010,8 +20010,8 @@ const _trackingStatuses = [
     'Iris is checking nearby riders for this delivery.',
   ),
   _TrackingStatus(
-    'Rider accepted',
-    'Marcus A. accepted the job and is heading to pickup.',
+    'Rider assigned',
+    'CIRCUM has assigned a rider to this delivery.',
   ),
   _TrackingStatus(
     'Package picked up',
