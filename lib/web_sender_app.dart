@@ -1477,6 +1477,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ]),
           columns: const [
             'ID',
+            'Received',
             'Route',
             'Status',
             'Weight / IRIS',
@@ -1608,6 +1609,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final id = '${item['id'] ?? item['requestId'] ?? ''}';
     return [
       _AdminCell.primary('${item['requestId'] ?? id}'),
+      _AdminCell(_jobReceivedText(item)),
       _AdminCell(
           '${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}\n→ ${item['dropoffAddress'] ?? ''}'),
       _AdminStatusCell(
@@ -3524,6 +3526,61 @@ IconData _adminSectionIcon(_AdminSection section) {
 }
 
 String _adminMoneyText(double value) => '£${value.toStringAsFixed(2)}';
+
+const _shortMonthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+DateTime? _jobReceivedDate(Map<String, dynamic> job) {
+  for (final key in ['createdAt', 'requestedAt', 'timestamp', 'timeStamp']) {
+    final date = _dateFromAny(job[key]);
+    if (date != null) return date;
+  }
+  return null;
+}
+
+DateTime? _dateFromAny(dynamic value) {
+  DateTime? date;
+  if (value is Timestamp) date = value.toDate();
+  if (value is DateTime) date = value;
+  if (value is String) date = DateTime.tryParse(value);
+  return date?.toLocal();
+}
+
+String _jobReceivedText(Map<String, dynamic> job) {
+  return _jobReceivedTextFromDate(_jobReceivedDate(job));
+}
+
+String _jobReceivedTextFromDate(DateTime? date) {
+  if (date == null) return 'Time received unavailable';
+  final local = date.toLocal();
+  final now = DateTime.now();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  if (local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day) {
+    return 'Received: Today, $hour:$minute';
+  }
+  final monthIndex = local.month < 1
+      ? 0
+      : local.month > 12
+          ? 11
+          : local.month - 1;
+  final month = _shortMonthNames[monthIndex];
+  return 'Received: ${local.day} $month, $hour:$minute';
+}
 
 String _adminDateText(dynamic value) {
   DateTime? date;
@@ -8324,6 +8381,12 @@ class _DriverJobCard extends StatelessWidget {
           ),
           _JobInfoLine(
             colors: colors,
+            icon: Icons.schedule,
+            label: 'Received',
+            value: _jobReceivedText(job),
+          ),
+          _JobInfoLine(
+            colors: colors,
             icon: Icons.trip_origin,
             label: 'Pickup',
             value: '${summary['pickupDisplay'] ?? job['pickupAddress'] ?? ''}',
@@ -9164,6 +9227,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DriverPerformanceMetric? _assignedDriverMetric;
   Map<String, dynamic>? _activeVanguardData;
   Map<String, dynamic>? _liveLocationData;
+  DateTime? _activeRequestReceivedAt;
   Set<String> _selectedRatingTags = {};
   Set<CircumRole> _availableRoles = const {};
   final List<Map<String, dynamic>> _healthPickups = [];
@@ -9301,6 +9365,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           firebaseOnline: _firebaseOnline,
                           firebaseError: _firebaseError,
                           statusIndex: _statusIndex,
+                          receivedAt: _activeRequestReceivedAt,
                           child: _buildCurrentStep(colors),
                         )
                       : SingleChildScrollView(
@@ -9515,6 +9580,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           checkoutState: _checkoutState,
           firebaseOnline: _firebaseOnline,
           firebaseError: _firebaseError,
+          receivedAt: _activeRequestReceivedAt,
           pickupAddress: _validatedPickup,
           dropoffAddress: _validatedDropoff,
           liveLocation: _liveLocationData,
@@ -11811,6 +11877,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _activeVanguardData = data['vanguardEnabled'] == true
             ? Map<String, dynamic>.from(data)
             : null;
+        _activeRequestReceivedAt = _jobReceivedDate(data);
       });
       if (driverId != null && driverId != _assignedDriverId) {
         _assignedDriverId = driverId;
@@ -12332,6 +12399,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _assignedDriverMetric = null;
       _activeVanguardData = null;
       _liveLocationData = null;
+      _activeRequestReceivedAt = null;
       _statusIndex = 0;
       _broadcasting = false;
       _selectedRating = 0;
@@ -12358,6 +12426,7 @@ class _DesktopPortalLayout extends StatelessWidget {
   final bool firebaseOnline;
   final String? firebaseError;
   final int statusIndex;
+  final DateTime? receivedAt;
   final Widget child;
 
   const _DesktopPortalLayout({
@@ -12373,6 +12442,7 @@ class _DesktopPortalLayout extends StatelessWidget {
     required this.firebaseOnline,
     required this.firebaseError,
     required this.statusIndex,
+    required this.receivedAt,
     required this.child,
   });
 
@@ -12425,6 +12495,14 @@ class _DesktopPortalLayout extends StatelessWidget {
                       color: colors.mutedText,
                       height: 1.4,
                       fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _jobReceivedTextFromDate(receivedAt),
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -13641,7 +13719,7 @@ class _SenderProfileStep extends StatelessWidget {
                 ),
               ),
               subtitle: Text(
-                '${delivery.pickupAddress} to ${delivery.dropoffAddress}\n${_readableDate(delivery.createdAt)}',
+                '${delivery.pickupAddress} to ${delivery.dropoffAddress}\n${_jobReceivedTextFromDate(delivery.createdAt)}',
                 style: TextStyle(color: colors.mutedText),
               ),
               trailing: Column(
@@ -13878,7 +13956,7 @@ class _SenderDeliveryDetails extends StatelessWidget {
       'Status': delivery.status,
       'Pickup': delivery.pickupAddress,
       'Drop-off': delivery.dropoffAddress,
-      'Date sent': _readableDate(delivery.createdAt),
+      'Received': _jobReceivedTextFromDate(delivery.createdAt),
       'Driver': delivery.assignedDriverName.isEmpty
           ? 'Not assigned yet'
           : delivery.assignedDriverName,
@@ -16355,6 +16433,7 @@ class _TrackingStep extends StatelessWidget {
   final _CheckoutState checkoutState;
   final bool firebaseOnline;
   final String? firebaseError;
+  final DateTime? receivedAt;
   final _ValidatedAddress? pickupAddress;
   final _ValidatedAddress? dropoffAddress;
   final Map<String, dynamic>? liveLocation;
@@ -16388,6 +16467,7 @@ class _TrackingStep extends StatelessWidget {
     required this.checkoutState,
     required this.firebaseOnline,
     required this.firebaseError,
+    required this.receivedAt,
     required this.pickupAddress,
     required this.dropoffAddress,
     required this.liveLocation,
@@ -16434,6 +16514,13 @@ class _TrackingStep extends StatelessWidget {
                     style: TextStyle(
                       color: colors.mutedText,
                       fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    _jobReceivedTextFromDate(receivedAt),
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
