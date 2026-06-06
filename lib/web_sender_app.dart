@@ -17,6 +17,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -5099,6 +5100,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _riderChatInput = TextEditingController();
   final List<_ChatMessage> _riderChatMessages = [];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _riderChatSub;
+  Timer? _riderLiveLocationTimer;
+  String? _trackingDeliveryId;
 
   @override
   void initState() {
@@ -5127,6 +5130,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _acceptedJobsSub?.cancel();
     _completedJobsSub?.cancel();
     _riderChatSub?.cancel();
+    _stopRiderLiveLocationPublishing(status: 'offline');
     _fullName.dispose();
     _phone.dispose();
     _email.dispose();
@@ -5597,6 +5601,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 .map((doc) => {'id': doc.id, ...doc.data()})
                 .toList(growable: false);
           });
+          _syncRiderLiveLocationPublishing();
         }, onError: (_) {
           if (!mounted) return;
           setState(() => _jobMessage = 'Could not load accepted jobs.');
@@ -5645,6 +5650,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'acceptedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
       await db.collection('chats').doc(requestId).set({
         'threadId': requestId,
         'bookingId': requestId,
@@ -5663,6 +5669,126 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not accept this job. Try again.');
+    }
+  }
+
+  void _syncRiderLiveLocationPublishing() {
+    final user = _riderUser;
+    if (user == null) {
+      _stopRiderLiveLocationPublishing(status: 'offline');
+      return;
+    }
+    final activeJob = _acceptedJobs.cast<Map<String, dynamic>?>().firstWhere(
+      (job) {
+        final status = '${job?['status'] ?? ''}'.toLowerCase();
+        return status == 'accepted' ||
+            status == 'picked_up' ||
+            status == 'in_transit' ||
+            status == 'in_progress';
+      },
+      orElse: () => null,
+    );
+    if (activeJob == null) {
+      _stopRiderLiveLocationPublishing(status: 'offline');
+      return;
+    }
+    final requestId =
+        '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'.trim();
+    final status = '${activeJob['status'] ?? 'accepted'}'.toLowerCase();
+    if (requestId.isEmpty || requestId == _trackingDeliveryId) return;
+    _startRiderLiveLocationPublishing(requestId, user.uid, status);
+  }
+
+  Future<void> _startRiderLiveLocationPublishing(
+    String deliveryId,
+    String riderId,
+    String status,
+  ) async {
+    if (_trackingDeliveryId == deliveryId && _riderLiveLocationTimer != null) {
+      return;
+    }
+    _stopRiderLiveLocationPublishing(status: 'switching');
+    final allowed = await _ensureRiderLocationPermission();
+    if (!allowed) {
+      if (mounted) {
+        setState(() => _jobMessage =
+            'Location permission is needed for live tracking while travelling.');
+      }
+      return;
+    }
+    _trackingDeliveryId = deliveryId;
+    await _publishRiderLiveLocation(deliveryId, riderId, status);
+    _riderLiveLocationTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+      _publishRiderLiveLocation(deliveryId, riderId, status);
+    });
+  }
+
+  void _stopRiderLiveLocationPublishing({required String status}) {
+    final deliveryId = _trackingDeliveryId;
+    final riderId = _riderUser?.uid;
+    _riderLiveLocationTimer?.cancel();
+    _riderLiveLocationTimer = null;
+    _trackingDeliveryId = null;
+    if (deliveryId != null && riderId != null) {
+      FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(deliveryId)
+          .collection('tracking')
+          .doc('liveLocation')
+          .set({
+        'riderId': riderId,
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+
+  Future<bool> _ensureRiderLocationPermission() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return false;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      return permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _publishRiderLiveLocation(
+    String deliveryId,
+    String riderId,
+    String status,
+  ) async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 6),
+        ),
+      );
+      await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(deliveryId)
+          .collection('tracking')
+          .doc('liveLocation')
+          .set({
+        'riderId': riderId,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'heading': position.heading,
+        'speed': position.speed,
+        'accuracy': position.accuracy,
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      if (mounted) {
+        setState(() => _jobMessage = 'Live tracking update could not be sent.');
+      }
     }
   }
 
@@ -5789,6 +5915,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             .collection('deliveryRequests')
             .doc(requestId)
             .set(updates, SetOptions(merge: true));
+      }
+      if (status == 'completed' || status == 'cancelled') {
+        _stopRiderLiveLocationPublishing(status: status);
       }
       if (!mounted) return;
       setState(() => _jobMessage = status == 'completed'
@@ -8964,11 +9093,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DriverProfile? _assignedDriver;
   DriverPerformanceMetric? _assignedDriverMetric;
   Map<String, dynamic>? _activeVanguardData;
+  Map<String, dynamic>? _liveLocationData;
   Set<String> _selectedRatingTags = {};
   Set<CircumRole> _availableRoles = const {};
   final List<Map<String, dynamic>> _healthPickups = [];
   final List<Map<String, dynamic>> _healthPayments = [];
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _requestSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _liveLocationSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _senderSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _driverProfileSub;
@@ -9038,6 +9169,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _savedAddressLabel.dispose();
     _savedAddress.dispose();
     _requestSub?.cancel();
+    _liveLocationSub?.cancel();
     _chatSub?.cancel();
     _senderSub?.cancel();
     _driverProfileSub?.cancel();
@@ -9272,6 +9404,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           checkoutState: _checkoutState,
           firebaseOnline: _firebaseOnline,
           firebaseError: _firebaseError,
+          pickupAddress: _validatedPickup,
+          dropoffAddress: _validatedDropoff,
+          liveLocation: _liveLocationData,
           vanguardData: _activeVanguardData,
           assignedDriver: _assignedDriver,
           assignedDriverMetric: _assignedDriverMetric,
@@ -11439,6 +11574,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _listenToRequest(String id) {
     _requestSub?.cancel();
+    _listenToLiveLocation(id);
     _requestSub = FirebaseFirestore.instance
         .collection('deliveryRequests')
         .doc(id)
@@ -11481,6 +11617,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _firebaseOnline = false;
         _firebaseError = 'Could not listen to this delivery in Firestore.';
       });
+    });
+  }
+
+  void _listenToLiveLocation(String deliveryId) {
+    _liveLocationSub?.cancel();
+    _liveLocationSub = FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .doc(deliveryId)
+        .collection('tracking')
+        .doc('liveLocation')
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _liveLocationData = snapshot.data();
+      });
+    }, onError: (_) {
+      if (!mounted) return;
+      setState(() => _liveLocationData = null);
     });
   }
 
@@ -11952,6 +12107,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _reset() {
     _requestSub?.cancel();
+    _liveLocationSub?.cancel();
     _chatSub?.cancel();
     _driverProfileSub?.cancel();
     _driverPerformanceSub?.cancel();
@@ -11965,6 +12121,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _assignedDriver = null;
       _assignedDriverMetric = null;
       _activeVanguardData = null;
+      _liveLocationData = null;
       _statusIndex = 0;
       _broadcasting = false;
       _selectedRating = 0;
@@ -15810,6 +15967,9 @@ class _TrackingStep extends StatelessWidget {
   final _CheckoutState checkoutState;
   final bool firebaseOnline;
   final String? firebaseError;
+  final _ValidatedAddress? pickupAddress;
+  final _ValidatedAddress? dropoffAddress;
+  final Map<String, dynamic>? liveLocation;
   final Map<String, dynamic>? vanguardData;
   final DriverProfile? assignedDriver;
   final DriverPerformanceMetric? assignedDriverMetric;
@@ -15840,6 +16000,9 @@ class _TrackingStep extends StatelessWidget {
     required this.checkoutState,
     required this.firebaseOnline,
     required this.firebaseError,
+    required this.pickupAddress,
+    required this.dropoffAddress,
+    required this.liveLocation,
     required this.vanguardData,
     required this.assignedDriver,
     required this.assignedDriverMetric,
@@ -15907,7 +16070,13 @@ class _TrackingStep extends StatelessWidget {
           _VanguardCustomerPanel(colors: colors, data: vanguardData!),
         ],
         const SizedBox(height: 14),
-        _Timeline(colors: colors, activeIndex: statusIndex),
+        _LiveDeliveryTrackingPanel(
+          colors: colors,
+          pickup: pickupAddress,
+          dropoff: dropoffAddress,
+          liveLocation: liveLocation,
+          statusIndex: statusIndex,
+        ),
         const SizedBox(height: 14),
         if (broadcasting)
           _BroadcastCard(colors: colors)
@@ -15958,6 +16127,203 @@ class _TrackingStep extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _LiveDeliveryTrackingPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final _ValidatedAddress? pickup;
+  final _ValidatedAddress? dropoff;
+  final Map<String, dynamic>? liveLocation;
+  final int statusIndex;
+
+  const _LiveDeliveryTrackingPanel({
+    required this.colors,
+    required this.pickup,
+    required this.dropoff,
+    required this.liveLocation,
+    required this.statusIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final live = liveLocation;
+    final riderLat = _num(live?['latitude']);
+    final riderLng = _num(live?['longitude']);
+    final updatedAt = _dateTimeFromFirestore(live?['updatedAt']);
+    final fresh = updatedAt != null &&
+        DateTime.now().difference(updatedAt).inSeconds <= 60;
+    final hasLiveTracking = fresh &&
+        pickup?.hasCoordinates == true &&
+        dropoff?.hasCoordinates == true &&
+        riderLat != null &&
+        riderLng != null &&
+        _coordinatesAreUsable(riderLat, riderLng);
+
+    if (!hasLiveTracking) {
+      return _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.location_off, color: colors.warning),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Tracking temporarily unavailable',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Live GPS will appear when the assigned rider is travelling and has location enabled.',
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _Timeline(colors: colors, activeIndex: statusIndex),
+          ],
+        ),
+      );
+    }
+
+    final destination = statusIndex < 2 ? pickup! : dropoff!;
+    final remainingMiles = _coordinateDistanceMiles(
+          riderLat,
+          riderLng,
+          destination.lat,
+          destination.lng,
+        ) ??
+        0;
+    final etaMinutes = math.max(1, (remainingMiles / 18 * 60).round());
+    final mapUrl = _staticLiveMapUrl(
+      pickup: pickup!,
+      dropoff: dropoff!,
+      riderLat: riderLat,
+      riderLng: riderLng,
+    );
+
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.gps_fixed, color: colors.success),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Live rider location',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                'Updated ${_relativeSeconds(updatedAt!)} ago',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: AspectRatio(
+              aspectRatio: 1.65,
+              child: Image.network(
+                mapUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => _Timeline(
+                  colors: colors,
+                  activeIndex: statusIndex,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _RiderStatTile(
+                  colors: colors,
+                  label: 'Remaining',
+                  value: '${remainingMiles.toStringAsFixed(1)} mi',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _RiderStatTile(
+                  colors: colors,
+                  label: 'Dynamic ETA',
+                  value: '$etaMinutes min',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static double? _num(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value');
+  }
+
+  static DateTime? _dateTimeFromFirestore(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  static String _relativeSeconds(DateTime updatedAt) {
+    final seconds = DateTime.now().difference(updatedAt).inSeconds;
+    if (seconds < 1) return 'now';
+    return '${seconds}s';
+  }
+
+  static String _staticLiveMapUrl({
+    required _ValidatedAddress pickup,
+    required _ValidatedAddress dropoff,
+    required double riderLat,
+    required double riderLng,
+  }) {
+    final params = {
+      'size': '900x540',
+      'scale': '2',
+      'maptype': 'roadmap',
+      'markers': [
+        'color:blue|label:P|${pickup.lat},${pickup.lng}',
+        'color:green|label:D|${dropoff.lat},${dropoff.lng}',
+        'color:red|label:R|$riderLat,$riderLng',
+      ],
+      'path':
+          'color:0x2563ebff|weight:5|${pickup.lat},${pickup.lng}|$riderLat,$riderLng|${dropoff.lat},${dropoff.lng}',
+      'key': _googlePlacesApiKey,
+    };
+    return Uri.https(
+      'maps.googleapis.com',
+      '/maps/api/staticmap',
+      params,
+    ).toString();
   }
 }
 

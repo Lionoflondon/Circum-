@@ -79,6 +79,41 @@ service cloud.firestore {
         !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
     }
 
+    function deliveryFor(deliveryId) {
+      return get(/databases/$(database)/documents/deliveryRequests/$(deliveryId)).data;
+    }
+
+    function canReadDeliveryTracking(deliveryId) {
+      return signedIn() && (
+        isAdmin() ||
+        deliveryFor(deliveryId).senderId == request.auth.uid ||
+        deliveryFor(deliveryId).userId == request.auth.uid ||
+        deliveryFor(deliveryId).riderId == request.auth.uid ||
+        deliveryFor(deliveryId).driverId == request.auth.uid ||
+        deliveryFor(deliveryId).assignedDriverId == request.auth.uid
+      );
+    }
+
+    function canWriteOwnLiveLocation(deliveryId) {
+      return signedIn() &&
+        request.resource.data.riderId == request.auth.uid &&
+        (
+          deliveryFor(deliveryId).riderId == request.auth.uid ||
+          deliveryFor(deliveryId).driverId == request.auth.uid ||
+          deliveryFor(deliveryId).assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.keys().hasOnly([
+          'riderId',
+          'latitude',
+          'longitude',
+          'heading',
+          'speed',
+          'accuracy',
+          'updatedAt',
+          'status'
+        ]);
+    }
+
     function isAssignedRiderPrivateCreate() {
       return signedIn() &&
         request.resource.data.deliveryDocId is string &&
@@ -220,6 +255,13 @@ service cloud.firestore {
         isOwnDeliveryUpdate() ||
         isAssignedRiderUpdate();
       allow delete: if hasRole('super_admin');
+
+      match /tracking/{trackingId} {
+        allow read: if canReadDeliveryTracking(deliveryId);
+        allow create, update: if trackingId == 'liveLocation' &&
+          canWriteOwnLiveLocation(deliveryId);
+        allow delete: if isAdmin();
+      }
     }
 
     match /webSenderRequests/{requestId} {
