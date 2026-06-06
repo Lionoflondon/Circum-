@@ -265,8 +265,6 @@ class _LandingPage extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 1180),
               child: Column(
                 children: [
-                  _PoweredByTag(colors: colors),
-                  const SizedBox(height: 28),
                   Stack(
                     alignment: Alignment.center,
                     children: [
@@ -19480,46 +19478,6 @@ class _FeatureCard extends StatelessWidget {
               color: colors.mutedText,
               height: 1.45,
               fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PoweredByTag extends StatelessWidget {
-  final _CircumColors colors;
-
-  const _PoweredByTag({required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Color(0xff22c55e),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Live with Iris',
-            style: TextStyle(
-              color: colors.mutedText,
-              fontSize: 12,
-              letterSpacing: 0.6,
-              fontWeight: FontWeight.w900,
             ),
           ),
         ],
