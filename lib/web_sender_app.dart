@@ -70,10 +70,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
   late _WebAppMode _mode = _initialMode();
   late _SenderStep _senderInitialStep =
       switch (Uri.base.queryParameters['app']) {
-    'health' => _SenderStep.healthPlus,
-    'profile' => _SenderStep.profile,
-    _ => _SenderStep.dashboard,
-  };
+        'health' => _SenderStep.healthPlus,
+        'profile' => _SenderStep.profile,
+        _ => _SenderStep.dashboard,
+      };
 
   @override
   void initState() {
@@ -135,54 +135,52 @@ class _WebSenderAppState extends State<WebSenderApp> {
               duration: const Duration(milliseconds: 260),
               child: switch (_mode) {
                 _WebAppMode.sender => _PhoneStage(
-                    key: const ValueKey('sender-app'),
+                  key: const ValueKey('sender-app'),
+                  colors: colors,
+                  child: _CustomerPortal(
+                    darkMode: _darkMode,
                     colors: colors,
-                    child: _CustomerPortal(
-                      darkMode: _darkMode,
-                      colors: colors,
-                      initialStep: _senderInitialStep,
-                      onBack: () => setState(() => _mode = _WebAppMode.landing),
-                      onRoleSelected: _openRole,
-                      onToggleTheme: () =>
-                          setState(() => _darkMode = !_darkMode),
-                    ),
+                    initialStep: _senderInitialStep,
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onRoleSelected: _openRole,
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
+                ),
                 _WebAppMode.rider => _PhoneStage(
-                    key: const ValueKey('rider-app'),
+                  key: const ValueKey('rider-app'),
+                  colors: colors,
+                  child: _RiderEnrollmentPortal(
+                    darkMode: _darkMode,
                     colors: colors,
-                    child: _RiderEnrollmentPortal(
-                      darkMode: _darkMode,
-                      colors: colors,
-                      onBack: () => setState(() => _mode = _WebAppMode.landing),
-                      onRoleSelected: _openRole,
-                      onToggleTheme: () =>
-                          setState(() => _darkMode = !_darkMode),
-                    ),
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onRoleSelected: _openRole,
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
+                ),
                 _WebAppMode.admin => _AdminOperationsPanel(
-                    key: const ValueKey('admin-ops'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onBack: _adminHostingTarget
-                        ? () {}
-                        : () => setState(() => _mode = _WebAppMode.landing),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
+                  key: const ValueKey('admin-ops'),
+                  colors: colors,
+                  darkMode: _darkMode,
+                  onBack: _adminHostingTarget
+                      ? () {}
+                      : () => setState(() => _mode = _WebAppMode.landing),
+                  onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                ),
                 _WebAppMode.landing => _LandingPage(
-                    key: const ValueKey('landing'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onStart: () => setState(() {
-                      _senderInitialStep = _SenderStep.dashboard;
-                      _mode = _WebAppMode.sender;
-                    }),
-                    onRider: () => setState(() => _mode = _WebAppMode.rider),
-                    onHealthPlus: () => setState(() {
-                      _senderInitialStep = _SenderStep.healthPlus;
-                      _mode = _WebAppMode.sender;
-                    }),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
+                  key: const ValueKey('landing'),
+                  colors: colors,
+                  darkMode: _darkMode,
+                  onStart: () => setState(() {
+                    _senderInitialStep = _SenderStep.dashboard;
+                    _mode = _WebAppMode.sender;
+                  }),
+                  onRider: () => setState(() => _mode = _WebAppMode.rider),
+                  onHealthPlus: () => setState(() {
+                    _senderInitialStep = _SenderStep.healthPlus;
+                    _mode = _WebAppMode.sender;
+                  }),
+                  onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                ),
               },
             ),
             _CompanyLiveChatButton(colors: colors),
@@ -310,8 +308,9 @@ class _LandingPage extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.mutedText,
-                      fontSize:
-                          MediaQuery.sizeOf(context).width < 680 ? 18 : 22,
+                      fontSize: MediaQuery.sizeOf(context).width < 680
+                          ? 18
+                          : 22,
                       height: 1.45,
                       fontWeight: FontWeight.w600,
                     ),
@@ -486,9 +485,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final emailDoc = email == null || email.isEmpty
         ? null
         : await FirebaseFirestore.instance
-            .collection('adminUsers')
-            .doc(email)
-            .get();
+              .collection('adminUsers')
+              .doc(email)
+              .get();
     final adminRecords = [
       if (adminDoc.exists) adminDoc.data(),
       if (emailDoc?.exists == true) emailDoc?.data(),
@@ -497,8 +496,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final docRoles = inactiveAdmin
         ? <String>[]
         : adminRecords
-            .expand((record) => AdminUserAccess.activeRolesFromRecord(record))
-            .toList();
+              .expand((record) => AdminUserAccess.activeRolesFromRecord(record))
+              .toList();
     final nextRoles = {...claimRoles, ...docRoles}.toList();
     if (inactiveAdmin) nextRoles.clear();
     setState(() {
@@ -510,16 +509,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       final db = FirebaseFirestore.instance;
       final patch = {'lastLoginAt': FieldValue.serverTimestamp()};
       if (adminDoc.exists) {
-        await db.collection('adminUsers').doc(user.uid).set(
-              patch,
-              SetOptions(merge: true),
-            );
+        await db
+            .collection('adminUsers')
+            .doc(user.uid)
+            .set(patch, SetOptions(merge: true));
       }
       if (emailDoc?.exists == true && email != null) {
-        await db.collection('adminUsers').doc(email).set(
-              patch,
-              SetOptions(merge: true),
-            );
+        await db
+            .collection('adminUsers')
+            .doc(email)
+            .set(patch, SetOptions(merge: true));
       }
     }
   }
@@ -538,8 +537,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       );
       await _loadAdminAccess(credential.user!);
       if (!AdminAccessPolicy.hasAnyAdminRole(_roles)) {
-        setState(() => _message =
-            'This account is signed in but has no active Circum admin role.');
+        setState(
+          () => _message =
+              'This account is signed in but has no active Circum admin role.',
+        );
         return;
       }
       await _loadAdminData();
@@ -682,7 +683,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     }
     if (email == _adminUser?.email?.trim().toLowerCase()) {
       setState(
-          () => _message = 'You cannot change your own admin access here.');
+        () => _message = 'You cannot change your own admin access here.',
+      );
       return;
     }
     final role = existing == null
@@ -702,22 +704,26 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .collection('adminUsers')
         .doc(id)
         .set(patch, SetOptions(merge: true));
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: existing == null ? 'admin_user_added' : 'admin_user_updated',
-      recordType: 'adminUsers',
-      recordId: id,
-      oldValue: existing == null
-          ? const {}
-          : {
-              'role': existing['role'] ?? existing['roles'],
-              'status': existing['status'],
-            },
-      newValue: {'role': role, 'status': nextStatus, 'email': email},
-      reason: _adminInviteNote.text.trim().isEmpty
-          ? 'Admin access managed from admin panel'
-          : _adminInviteNote.text.trim(),
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: existing == null
+            ? 'admin_user_added'
+            : 'admin_user_updated',
+        recordType: 'adminUsers',
+        recordId: id,
+        oldValue: existing == null
+            ? const {}
+            : {
+                'role': existing['role'] ?? existing['roles'],
+                'status': existing['status'],
+              },
+        newValue: {'role': role, 'status': nextStatus, 'email': email},
+        reason: _adminInviteNote.text.trim().isEmpty
+            ? 'Admin access managed from admin panel'
+            : _adminInviteNote.text.trim(),
+      ),
+    );
     _adminInviteEmail.clear();
     _adminInviteNote.clear();
     setState(() => _message = 'Admin access saved for $email.');
@@ -741,15 +747,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'roles': [role.value],
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: 'admin_user_role_changed',
-      recordType: 'adminUsers',
-      recordId: id,
-      oldValue: {'role': oldRole},
-      newValue: {'role': role.value},
-      reason: 'Role changed from admin users page',
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: 'admin_user_role_changed',
+        recordType: 'adminUsers',
+        recordId: id,
+        oldValue: {'role': oldRole},
+        newValue: {'role': role.value},
+        reason: 'Role changed from admin users page',
+      ),
+    );
     setState(() => _message = 'Updated $email to ${role.value}.');
     await _loadAdminData();
   }
@@ -771,15 +779,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .collection('deliveryRequests')
         .doc(newId)
         .set(duplicate);
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: 'delivery_duplicate',
-      recordType: 'deliveryRequests',
-      recordId: newId,
-      oldValue: {'requestId': delivery['requestId'] ?? delivery['id']},
-      newValue: {'requestId': newId},
-      reason: 'Admin duplicated delivery from operations panel',
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: 'delivery_duplicate',
+        recordType: 'deliveryRequests',
+        recordId: newId,
+        oldValue: {'requestId': delivery['requestId'] ?? delivery['id']},
+        newValue: {'requestId': newId},
+        reason: 'Admin duplicated delivery from operations panel',
+      ),
+    );
     setState(() => _message = 'Duplicated delivery as $newId.');
     await _loadAdminData();
   }
@@ -799,15 +809,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: 'status_update',
-      recordType: collection,
-      recordId: id,
-      oldValue: {'status': oldStatus},
-      newValue: {'status': status},
-      reason: 'Updated from admin operations panel',
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: 'status_update',
+        recordType: collection,
+        recordId: id,
+        oldValue: {'status': oldStatus},
+        newValue: {'status': status},
+        reason: 'Updated from admin operations panel',
+      ),
+    );
     setState(() => _message = 'Updated $id to $status.');
     await _loadAdminData();
   }
@@ -818,17 +830,18 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   String _driverWorkflowStatus(Map<String, dynamic> driver) {
-    final raw = [
-      driver['approvalStatus'],
-      driver['driverStatus'],
-      driver['verificationStatus'],
-      driver['status'],
-    ]
-        .where((value) => value != null)
-        .map((value) => '$value'.toLowerCase())
-        .join(' ')
-        .toLowerCase()
-        .trim();
+    final raw =
+        [
+              driver['approvalStatus'],
+              driver['driverStatus'],
+              driver['verificationStatus'],
+              driver['status'],
+            ]
+            .where((value) => value != null)
+            .map((value) => '$value'.toLowerCase())
+            .join(' ')
+            .toLowerCase()
+            .trim();
     if (raw.contains('suspend')) return 'suspended';
     if (raw.contains('reject')) return 'rejected';
     if (raw.contains('active') ||
@@ -860,9 +873,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     if (id.isEmpty) return;
     final previous = _driverWorkflowStatus(driver);
     final action = switch (nextStatus) {
-      'approved' => previous == 'suspended' || previous == 'rejected'
-          ? 'driver_reactivated'
-          : 'driver_approved',
+      'approved' =>
+        previous == 'suspended' || previous == 'rejected'
+            ? 'driver_reactivated'
+            : 'driver_approved',
       'rejected' => 'driver_rejected',
       'suspended' => 'driver_suspended',
       _ => 'driver_status_updated',
@@ -879,20 +893,22 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'verificationStatus': nextStatus == 'approved' ? 'approved' : nextStatus,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: action,
-      recordType: 'riderProfiles',
-      recordId: id,
-      oldValue: {'status': previous},
-      newValue: {
-        'status': nextStatus,
-        'adminId': _adminUser?.uid ?? 'unknown-admin',
-        'action': action,
-        'driverId': id,
-      },
-      reason: 'Driver management workflow action',
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: action,
+        recordType: 'riderProfiles',
+        recordId: id,
+        oldValue: {'status': previous},
+        newValue: {
+          'status': nextStatus,
+          'adminId': _adminUser?.uid ?? 'unknown-admin',
+          'action': action,
+          'driverId': id,
+        },
+        reason: 'Driver management workflow action',
+      ),
+    );
     setState(() {
       _message = 'Driver $id updated to $nextStatus.';
       if (_selectedDriverProfile != null &&
@@ -901,8 +917,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ..._selectedDriverProfile!,
           'approvalStatus': nextStatus,
           'driverStatus': driverStatus,
-          'verificationStatus':
-              nextStatus == 'approved' ? 'approved' : nextStatus,
+          'verificationStatus': nextStatus == 'approved'
+              ? 'approved'
+              : nextStatus,
         };
       }
     });
@@ -962,11 +979,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         ),
       );
     }
-    actions.add(_AdminAction(
-      label: 'View Profile',
-      enabled: true,
-      onTap: () => _openDriverProfile(driver),
-    ));
+    actions.add(
+      _AdminAction(
+        label: 'View Profile',
+        enabled: true,
+        onTap: () => _openDriverProfile(driver),
+      ),
+    );
     return actions;
   }
 
@@ -993,15 +1012,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .collection('supportTickets')
         .doc(id)
         .set(patch, SetOptions(merge: true));
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: 'support_ticket_$status',
-      recordType: 'supportTickets',
-      recordId: id,
-      oldValue: {'status': oldStatus},
-      newValue: {'status': status},
-      reason: 'Updated from admin operations panel',
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: 'support_ticket_$status',
+        recordType: 'supportTickets',
+        recordId: id,
+        oldValue: {'status': oldStatus},
+        newValue: {'status': status},
+        reason: 'Updated from admin operations panel',
+      ),
+    );
     setState(() => _message = 'Support ticket $id updated to $status.');
     await _loadAdminData();
   }
@@ -1033,15 +1054,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'adminUserId': _adminUser?.uid,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: 'health_plus_status_update',
-      recordType: 'prescriptionPickups',
-      recordId: id,
-      oldValue: {'status': oldStatus},
-      newValue: {'status': status},
-      reason: 'Updated from admin operations panel',
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: 'health_plus_status_update',
+        recordType: 'prescriptionPickups',
+        recordId: id,
+        oldValue: {'status': oldStatus},
+        newValue: {'status': status},
+        reason: 'Updated from admin operations panel',
+      ),
+    );
     setState(() => _message = 'Health+ pickup $id updated to $status.');
     await _loadAdminData();
   }
@@ -1060,14 +1083,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'adminEmail': _adminUser?.email,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _adminUser?.uid ?? 'unknown-admin',
-      actionType: 'admin_note_added',
-      recordType: recordType,
-      recordId: recordId,
-      newValue: {'note': note.trim()},
-      reason: 'Internal note',
-    ));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: 'admin_note_added',
+        recordType: recordType,
+        recordId: recordId,
+        newValue: {'note': note.trim()},
+        reason: 'Internal note',
+      ),
+    );
     setState(() => _message = 'Internal note saved.');
   }
 
@@ -1082,30 +1107,44 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .orderBy('createdAt')
         .limit(100)
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _adminChatMessages
-          ..clear()
-          ..addAll(snapshot.docs.map((doc) {
-            final data = doc.data();
-            final role = '${data['senderRole'] ?? data['senderType'] ?? ''}';
-            return _ChatMessage(
-              fromMe: role == 'admin' || data['senderId'] == _adminUser?.uid,
-              text: '${data['messageText'] ?? data['message'] ?? ''}',
-              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
-              label: role == 'admin' || role == 'support'
-                  ? 'CIRCUM Support'
-                  : role == 'rider' || role == 'driver'
-                      ? 'Rider'
-                      : 'Sender',
-            );
-          }).where((message) => message.text.trim().isNotEmpty));
-      });
-    }, onError: (_) {
-      if (!mounted) return;
-      setState(() => _message = 'Could not open booking chat.');
-    });
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _adminChatMessages
+                ..clear()
+                ..addAll(
+                  snapshot.docs
+                      .map((doc) {
+                        final data = doc.data();
+                        final role =
+                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                        return _ChatMessage(
+                          fromMe:
+                              role == 'admin' ||
+                              data['senderId'] == _adminUser?.uid,
+                          text:
+                              '${data['messageText'] ?? data['message'] ?? ''}',
+                          time: _formatMessageTime(
+                            data['createdAt'],
+                            data['timeStamp'],
+                          ),
+                          label: role == 'admin' || role == 'support'
+                              ? 'CIRCUM Support'
+                              : role == 'rider' || role == 'driver'
+                              ? 'Rider'
+                              : 'Sender',
+                        );
+                      })
+                      .where((message) => message.text.trim().isNotEmpty),
+                );
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _message = 'Could not open booking chat.');
+          },
+        );
     setState(() {
       _activeAdminChatId = id;
       _activeAdminChatTitle = 'Booking chat';
@@ -1140,28 +1179,42 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .orderBy('createdAt')
         .limit(100)
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _adminChatMessages
-          ..clear()
-          ..addAll(snapshot.docs.map((doc) {
-            final data = doc.data();
-            final role = '${data['senderRole'] ?? data['senderType'] ?? ''}';
-            return _ChatMessage(
-              fromMe: role == 'admin' || data['senderId'] == _adminUser?.uid,
-              text: '${data['messageText'] ?? data['message'] ?? ''}',
-              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
-              label: role == 'admin' || role == 'support'
-                  ? 'CIRCUM Support'
-                  : 'Driver',
-            );
-          }).where((message) => message.text.trim().isNotEmpty));
-      });
-    }, onError: (_) {
-      if (!mounted) return;
-      setState(() => _message = 'Could not open driver chat.');
-    });
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _adminChatMessages
+                ..clear()
+                ..addAll(
+                  snapshot.docs
+                      .map((doc) {
+                        final data = doc.data();
+                        final role =
+                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                        return _ChatMessage(
+                          fromMe:
+                              role == 'admin' ||
+                              data['senderId'] == _adminUser?.uid,
+                          text:
+                              '${data['messageText'] ?? data['message'] ?? ''}',
+                          time: _formatMessageTime(
+                            data['createdAt'],
+                            data['timeStamp'],
+                          ),
+                          label: role == 'admin' || role == 'support'
+                              ? 'CIRCUM Support'
+                              : 'Driver',
+                        );
+                      })
+                      .where((message) => message.text.trim().isNotEmpty),
+                );
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _message = 'Could not open driver chat.');
+          },
+        );
     setState(() {
       _activeAdminChatId = chatId;
       _activeAdminChatTitle = 'Driver chat';
@@ -1190,25 +1243,31 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   double _driverTotalEarnings(String driverId) {
-    return _deliveries.where((delivery) {
-      final status = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
-          .toLowerCase();
-      return _isDeliveryForDriver(delivery, driverId) &&
-          (status.contains('complete') || status.contains('delivered'));
-    }).fold<double>(0, (total, delivery) {
-      final payout = delivery['driverPayout'] ??
-          delivery['riderPayout'] ??
-          delivery['estimatedDriverPayout'];
-      if (payout is num) return total + payout.toDouble();
-      return total;
-    });
+    return _deliveries
+        .where((delivery) {
+          final status =
+              '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+                  .toLowerCase();
+          return _isDeliveryForDriver(delivery, driverId) &&
+              (status.contains('complete') || status.contains('delivered'));
+        })
+        .fold<double>(0, (total, delivery) {
+          final payout =
+              delivery['driverPayout'] ??
+              delivery['riderPayout'] ??
+              delivery['estimatedDriverPayout'];
+          if (payout is num) return total + payout.toDouble();
+          return total;
+        });
   }
 
   List<Map<String, dynamic>> _documentsForDriver(String driverId) {
-    return _riderDocuments.where((document) {
-      return '${document['riderId'] ?? document['driverId'] ?? document['uid'] ?? ''}' ==
-          driverId;
-    }).toList(growable: false);
+    return _riderDocuments
+        .where((document) {
+          return '${document['riderId'] ?? document['driverId'] ?? document['uid'] ?? ''}' ==
+              driverId;
+        })
+        .toList(growable: false);
   }
 
   Future<void> _sendAdminChatMessage() async {
@@ -1262,8 +1321,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return switch (error.code) {
       'user-not-found' => 'No employee account found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'Those sign-in details are not right.',
+      'invalid-credential' => 'Those sign-in details are not right.',
       _ => 'Admin sign in failed. Please check the details.',
     };
   }
@@ -1358,8 +1416,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       if (_message != null)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-                          child:
-                              _AdminNotice(colors: colors, message: _message!),
+                          child: _AdminNotice(
+                            colors: colors,
+                            message: _message!,
+                          ),
                         ),
                       Expanded(child: _buildSection(colors)),
                     ],
@@ -1381,11 +1441,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               _AdminDriverProfileDrawer(
                 colors: colors,
                 driver: _selectedDriverProfile!,
-                documents:
-                    _documentsForDriver(_driverId(_selectedDriverProfile!)),
+                documents: _documentsForDriver(
+                  _driverId(_selectedDriverProfile!),
+                ),
                 statusLabel: _driverStatusLabel(_selectedDriverProfile!),
-                signupDate:
-                    _adminDateText(_selectedDriverProfile!['createdAt']),
+                signupDate: _adminDateText(
+                  _selectedDriverProfile!['createdAt'],
+                ),
                 completedJobs: _driverJobCount(
                   _driverId(_selectedDriverProfile!),
                   const ['complete', 'delivered'],
@@ -1398,8 +1460,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   _driverId(_selectedDriverProfile!),
                   const ['pending', 'accepted', 'assigned', 'transit'],
                 ),
-                totalEarnings:
-                    _driverTotalEarnings(_driverId(_selectedDriverProfile!)),
+                totalEarnings: _driverTotalEarnings(
+                  _driverId(_selectedDriverProfile!),
+                ),
                 actions: _driverWorkflowActions(_selectedDriverProfile!),
                 onClose: () => setState(() => _driverProfileOpen = false),
               ),
@@ -1413,175 +1476,192 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final query = _search.text;
     return switch (_section) {
       _AdminSection.overview => _AdminOverviewSection(
-          colors: colors,
-          metrics: _metrics,
-          issues: _issueRows(),
-        ),
+        colors: colors,
+        metrics: _metrics,
+        issues: _issueRows(),
+      ),
       _AdminSection.adminUsers => _AdminUsersSection(
-          colors: colors,
-          records: adminSearch(_adminUsers, query, ['email', 'role', 'status']),
-          inviteEmail: _adminInviteEmail,
-          inviteNote: _adminInviteNote,
-          selectedRole: _adminInviteRole,
-          canManage: _can(AdminPermission.manageAdmins),
-          currentEmail: _adminUser?.email,
-          onRoleChanged: (role) => setState(() => _adminInviteRole = role),
-          onAdd: () => _saveAdminUser(),
-          onChangeRole: _changeAdminRole,
-          onStatus: (record, status) =>
-              _confirmAdminAccessChange(record, status),
-        ),
+        colors: colors,
+        records: adminSearch(_adminUsers, query, ['email', 'role', 'status']),
+        inviteEmail: _adminInviteEmail,
+        inviteNote: _adminInviteNote,
+        selectedRole: _adminInviteRole,
+        canManage: _can(AdminPermission.manageAdmins),
+        currentEmail: _adminUser?.email,
+        onRoleChanged: (role) => setState(() => _adminInviteRole = role),
+        onAdd: () => _saveAdminUser(),
+        onChangeRole: _changeAdminRole,
+        onStatus: (record, status) => _confirmAdminAccessChange(record, status),
+      ),
       _AdminSection.senders => _AdminDataSection(
-          colors: colors,
-          title: 'Senders',
-          subtitle: 'Customer accounts, delivery history, notes, and value.',
-          records: adminSearch(
-              _senders, query, ['fullName', 'name', 'email', 'phone']),
-          columns: const ['Name', 'Email', 'Phone', 'Status', 'Value'],
-          rowBuilder: _senderRow,
-          emptyText: 'No sender records yet.',
-        ),
+        colors: colors,
+        title: 'Senders',
+        subtitle: 'Customer accounts, delivery history, notes, and value.',
+        records: adminSearch(_senders, query, [
+          'fullName',
+          'name',
+          'email',
+          'phone',
+        ]),
+        columns: const ['Name', 'Email', 'Phone', 'Status', 'Value'],
+        rowBuilder: _senderRow,
+        emptyText: 'No sender records yet.',
+      ),
       _AdminSection.drivers => _AdminDataSection(
-          colors: colors,
-          title: 'Drivers',
-          subtitle: 'Vehicle, ratings, verification, earnings, and quality.',
-          records: adminSearch(_drivers, query, [
-            'fullName',
-            'name',
-            'email',
-            'phoneNumber',
-            'plateNumber',
-            'vehicleRegistration',
-            'vehicleType',
-            'approvalStatus',
-            'driverStatus',
-            'verificationStatus'
-          ]),
-          columns: const ['Driver', 'Vehicle', 'Status', 'Rating', 'Actions'],
-          rowBuilder: _driverRow,
-          emptyText: 'No driver profiles yet.',
-        ),
+        colors: colors,
+        title: 'Drivers',
+        subtitle: 'Vehicle, ratings, verification, earnings, and quality.',
+        records: adminSearch(_drivers, query, [
+          'fullName',
+          'name',
+          'email',
+          'phoneNumber',
+          'plateNumber',
+          'vehicleRegistration',
+          'vehicleType',
+          'approvalStatus',
+          'driverStatus',
+          'verificationStatus',
+        ]),
+        columns: const ['Driver', 'Vehicle', 'Status', 'Rating', 'Actions'],
+        rowBuilder: _driverRow,
+        emptyText: 'No driver profiles yet.',
+      ),
       _AdminSection.deliveries => _AdminDataSection(
-          colors: colors,
-          title: 'Deliveries',
-          subtitle:
-              'Track, edit safe fields, duplicate, cancel, and resolve orders.',
-          records: adminSearch(_deliveries, query, [
-            'requestId',
-            'pickupAddress',
-            'dropoffAddress',
-            'senderName',
-            'riderName',
-            'status'
-          ]),
-          columns: const [
-            'ID',
-            'Received',
-            'Route',
-            'Status',
-            'Weight / IRIS',
-            'Price',
-            'Actions'
-          ],
-          rowBuilder: _deliveryRow,
-          emptyText: 'No delivery records yet.',
-        ),
+        colors: colors,
+        title: 'Deliveries',
+        subtitle:
+            'Track, edit safe fields, duplicate, cancel, and resolve orders.',
+        records: adminSearch(_deliveries, query, [
+          'requestId',
+          'pickupAddress',
+          'dropoffAddress',
+          'senderName',
+          'riderName',
+          'status',
+        ]),
+        columns: const [
+          'ID',
+          'Received',
+          'Route',
+          'Status',
+          'Weight / IRIS',
+          'Price',
+          'Actions',
+        ],
+        rowBuilder: _deliveryRow,
+        emptyText: 'No delivery records yet.',
+      ),
       _AdminSection.finance => _AdminDataSection(
-          colors: colors,
-          title: 'Finance',
-          subtitle:
-              'Payments, refunds, driver payouts, and revenue follow-up. CIRCUM retains 35% to operate the platform, support disputes, payments, safety, and system maintenance.',
-          records: adminSearch(_financeRows(), query,
-              ['id', 'senderId', 'riderId', 'status', 'type']),
-          columns: const ['Type', 'Record', 'Status', 'Amount', 'Notes'],
-          rowBuilder: _financeRow,
-          emptyText: 'No finance records yet.',
-        ),
+        colors: colors,
+        title: 'Finance',
+        subtitle:
+            'Payments, refunds, driver payouts, and revenue follow-up. CIRCUM retains 35% to operate the platform, support disputes, payments, safety, and system maintenance.',
+        records: adminSearch(_financeRows(), query, [
+          'id',
+          'senderId',
+          'riderId',
+          'status',
+          'type',
+        ]),
+        columns: const ['Type', 'Record', 'Status', 'Amount', 'Notes'],
+        rowBuilder: _financeRow,
+        emptyText: 'No finance records yet.',
+      ),
       _AdminSection.healthPlus => _AdminDataSection(
-          colors: colors,
-          title: 'Health+',
-          subtitle:
-              'Prescription pickups, recurring schedules, payment status, and customer notes.',
-          records: adminSearch(_healthPlusRows(), query, [
-            'id',
-            'fullName',
-            'pharmacyAddress',
-            'deliveryAddress',
-            'status',
-            'frequency'
-          ]),
-          columns: const [
-            'Pickup',
-            'Customer',
-            'Schedule',
-            'Status',
-            'Actions'
-          ],
-          rowBuilder: _healthPlusRow,
-          emptyText: 'No Health+ records yet.',
-        ),
+        colors: colors,
+        title: 'Health+',
+        subtitle:
+            'Prescription pickups, recurring schedules, payment status, and customer notes.',
+        records: adminSearch(_healthPlusRows(), query, [
+          'id',
+          'fullName',
+          'pharmacyAddress',
+          'deliveryAddress',
+          'status',
+          'frequency',
+        ]),
+        columns: const ['Pickup', 'Customer', 'Schedule', 'Status', 'Actions'],
+        rowBuilder: _healthPlusRow,
+        emptyText: 'No Health+ records yet.',
+      ),
       _AdminSection.support => _AdminDataSection(
-          colors: colors,
-          title: 'Support',
-          subtitle:
-              'Live chat tickets, refund requests, customer messages, admin assignment, and resolution notes.',
-          records: adminSearch(_supportTickets, query,
-              ['id', 'name', 'email', 'message', 'status', 'type']),
-          columns: const ['Ticket', 'Customer', 'Status', 'Message', 'Actions'],
-          rowBuilder: _supportRow,
-          emptyText: 'No support tickets yet.',
-        ),
+        colors: colors,
+        title: 'Support',
+        subtitle:
+            'Live chat tickets, refund requests, customer messages, admin assignment, and resolution notes.',
+        records: adminSearch(_supportTickets, query, [
+          'id',
+          'name',
+          'email',
+          'message',
+          'status',
+          'type',
+        ]),
+        columns: const ['Ticket', 'Customer', 'Status', 'Message', 'Actions'],
+        rowBuilder: _supportRow,
+        emptyText: 'No support tickets yet.',
+      ),
       _AdminSection.issues => _AdminDataSection(
-          colors: colors,
-          title: 'Troubleshooting',
-          subtitle:
-              'Stuck jobs, failed payments, unassigned requests, complaints, refunds, and low ratings.',
-          records: _issueRows(),
-          columns: const ['Issue', 'Record', 'Priority', 'Status', 'Action'],
-          rowBuilder: _issueRow,
-          emptyText: 'No operational issues found.',
-        ),
+        colors: colors,
+        title: 'Troubleshooting',
+        subtitle:
+            'Stuck jobs, failed payments, unassigned requests, complaints, refunds, and low ratings.',
+        records: _issueRows(),
+        columns: const ['Issue', 'Record', 'Priority', 'Status', 'Action'],
+        rowBuilder: _issueRow,
+        emptyText: 'No operational issues found.',
+      ),
       _AdminSection.visitors => _AdminDataSection(
-          colors: colors,
-          title: 'Website visitors',
-          subtitle:
-              'Recent web visits by route, mode, account status, and timestamp.',
-          records: adminSearch(_websiteVisitors, query,
-              ['url', 'appMode', 'email', 'userId', 'source']),
-          columns: const ['Visit', 'Mode', 'User', 'When'],
-          rowBuilder: _visitorRow,
-          emptyText: 'No website visits logged yet.',
-        ),
+        colors: colors,
+        title: 'Website visitors',
+        subtitle:
+            'Recent web visits by route, mode, account status, and timestamp.',
+        records: adminSearch(_websiteVisitors, query, [
+          'url',
+          'appMode',
+          'email',
+          'userId',
+          'source',
+        ]),
+        columns: const ['Visit', 'Mode', 'User', 'When'],
+        rowBuilder: _visitorRow,
+        emptyText: 'No website visits logged yet.',
+      ),
       _AdminSection.analytics => _AdminAnalyticsSection(
-          colors: colors,
-          metrics: _metrics,
-          deliveries: _deliveries,
-          payments: _payments,
-        ),
+        colors: colors,
+        metrics: _metrics,
+        deliveries: _deliveries,
+        payments: _payments,
+      ),
       _AdminSection.audit => _AdminDataSection(
-          colors: colors,
-          title: 'Audit trail',
-          subtitle: 'Every important admin action should leave a trace.',
-          records: _auditLogs,
-          columns: const ['Action', 'Record', 'Admin', 'Reason'],
-          rowBuilder: _auditRow,
-          emptyText: 'No audit entries yet.',
-        ),
+        colors: colors,
+        title: 'Audit trail',
+        subtitle: 'Every important admin action should leave a trace.',
+        records: _auditLogs,
+        columns: const ['Action', 'Record', 'Admin', 'Reason'],
+        rowBuilder: _auditRow,
+        emptyText: 'No audit entries yet.',
+      ),
     };
   }
 
   List<Widget> _senderRow(Map<String, dynamic> item) {
     final id = '${item['id'] ?? item['userId'] ?? ''}';
     final value = _deliveries
-        .where((delivery) =>
-            '${delivery['senderId'] ?? delivery['userId'] ?? ''}' == id)
+        .where(
+          (delivery) =>
+              '${delivery['senderId'] ?? delivery['userId'] ?? ''}' == id,
+        )
         .fold<double>(0, (total, delivery) => total + _adminMoney(delivery));
     return [
       _AdminCell.primary('${item['fullName'] ?? item['name'] ?? 'Sender'}'),
       _AdminCell('${item['email'] ?? ''}'),
       _AdminCell('${item['phone'] ?? item['phoneNumber'] ?? ''}'),
       _AdminStatusCell(
-          colors: widget.colors, status: '${item['status'] ?? 'active'}'),
+        colors: widget.colors,
+        status: '${item['status'] ?? 'active'}',
+      ),
       _AdminCell('£${value.toStringAsFixed(2)}'),
     ];
   }
@@ -1592,10 +1672,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminCell(
         '${item['vehicleColour'] ?? ''} ${item['vehicleMakeModel'] ?? item['vehicleType'] ?? ''}\n${item['plateNumber'] ?? item['vehicleRegistration'] ?? ''}',
       ),
-      _AdminStatusCell(
-        colors: widget.colors,
-        status: _driverStatusLabel(item),
-      ),
+      _AdminStatusCell(colors: widget.colors, status: _driverStatusLabel(item)),
       _AdminCell('${item['averageRating'] ?? item['rating'] ?? 'New'}'),
       _AdminActions(
         colors: widget.colors,
@@ -1610,9 +1687,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminCell.primary('${item['requestId'] ?? id}'),
       _AdminCell(_jobReceivedText(item)),
       _AdminCell(
-          '${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}\n→ ${item['dropoffAddress'] ?? ''}'),
+        '${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}\n→ ${item['dropoffAddress'] ?? ''}',
+      ),
       _AdminStatusCell(
-          colors: widget.colors, status: '${item['status'] ?? 'requested'}'),
+        colors: widget.colors,
+        status: '${item['status'] ?? 'requested'}',
+      ),
       _AdminCell(_adminIrisWeightSummary(item)),
       _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
       _AdminActions(
@@ -1649,9 +1729,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return [
       _AdminCell.primary('${item['type'] ?? 'payment'}'),
       _AdminCell(
-          '${item['id'] ?? item['paymentId'] ?? item['payoutId'] ?? ''}'),
+        '${item['id'] ?? item['paymentId'] ?? item['payoutId'] ?? ''}',
+      ),
       _AdminStatusCell(
-          colors: widget.colors, status: '${item['status'] ?? 'pending'}'),
+        colors: widget.colors,
+        status: '${item['status'] ?? 'pending'}',
+      ),
       _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
       _AdminCell(
         '${item['senderId'] ?? item['riderId'] ?? item['userId'] ?? ''}',
@@ -1678,9 +1761,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         '${item['fullName'] ?? item['senderName'] ?? 'Health+ customer'}\n${item['phoneNumber'] ?? ''}',
       ),
       _AdminCell(
-          '${item['frequency'] ?? 'one-off'}\n${item['preferredPickupTime'] ?? item['nextPickupAt'] ?? ''}'),
+        '${item['frequency'] ?? 'one-off'}\n${item['preferredPickupTime'] ?? item['nextPickupAt'] ?? ''}',
+      ),
       _AdminStatusCell(
-          colors: widget.colors, status: '${item['status'] ?? 'scheduled'}'),
+        colors: widget.colors,
+        status: '${item['status'] ?? 'scheduled'}',
+      ),
       _AdminActions(
         colors: widget.colors,
         actions: [
@@ -1709,7 +1795,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminCell.primary('${item['id'] ?? 'ticket'}'),
       _AdminCell('${item['name'] ?? 'Customer'}\n${item['email'] ?? ''}'),
       _AdminStatusCell(
-          colors: widget.colors, status: '${item['status'] ?? 'open'}'),
+        colors: widget.colors,
+        status: '${item['status'] ?? 'open'}',
+      ),
       _AdminCell('${item['message'] ?? item['type'] ?? ''}'),
       _AdminActions(
         colors: widget.colors,
@@ -1774,9 +1862,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(status == 'active'
-            ? 'Activate admin access?'
-            : 'Deactivate admin access?'),
+        title: Text(
+          status == 'active'
+              ? 'Activate admin access?'
+              : 'Deactivate admin access?',
+        ),
         content: Text(
           status == 'active'
               ? 'This will let $email access the admin panel with their Firebase Auth login.'
@@ -1815,8 +1905,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       }
       if (status.contains('failed') || status.contains('cancel')) {
         issues.add({
-          'title':
-              status.contains('failed') ? 'Failed delivery' : 'Cancelled job',
+          'title': status.contains('failed')
+              ? 'Failed delivery'
+              : 'Cancelled job',
           'recordType': 'deliveryRequests',
           'recordId': id,
           'priority': 'Medium',
@@ -1846,8 +1937,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         });
       }
     }
-    for (final ticket in _supportTickets
-        .where((ticket) => '${ticket['type']}'.contains('refund'))) {
+    for (final ticket in _supportTickets.where(
+      (ticket) => '${ticket['type']}'.contains('refund'),
+    )) {
       issues.add({
         'title': 'Refund request',
         'recordType': 'supportTickets',
@@ -1862,8 +1954,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _financeRows() {
     return [
       ..._payments.map((item) => {'type': 'payment', ...item}),
-      ..._healthPlusPayments
-          .map((item) => {'type': 'health_plus_payment', ...item}),
+      ..._healthPlusPayments.map(
+        (item) => {'type': 'health_plus_payment', ...item},
+      ),
       ..._payoutRequests.map((item) => {'type': 'driver_payout', ...item}),
       ..._supportTickets
           .where((ticket) => '${ticket['type']}'.contains('refund'))
@@ -1873,10 +1966,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Map<String, dynamic>> _healthPlusRows() {
     return [
-      ..._healthPlusPickups
-          .map((item) => {'recordType': 'prescriptionPickups', ...item}),
-      ..._recurringPickupSchedules
-          .map((item) => {'recordType': 'recurringPickupSchedules', ...item}),
+      ..._healthPlusPickups.map(
+        (item) => {'recordType': 'prescriptionPickups', ...item},
+      ),
+      ..._recurringPickupSchedules.map(
+        (item) => {'recordType': 'recurringPickupSchedules', ...item},
+      ),
     ];
   }
 
@@ -1910,12 +2005,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final learning = item['irisLearningData'] is Map
         ? Map<String, dynamic>.from(item['irisLearningData'] as Map)
         : const <String, dynamic>{};
-    final finalWeight = item['finalWeightUsed'] ??
+    final finalWeight =
+        item['finalWeightUsed'] ??
         item['finalChargeableWeight'] ??
         item['confirmedWeightKg'] ??
         item['weightKg'] ??
         'n/a';
-    final source = item['weightSource'] ??
+    final source =
+        item['weightSource'] ??
         item['irisWeightSource'] ??
         learning['source'] ??
         'unknown';
@@ -2012,7 +2109,10 @@ class _AdminLoginView extends StatelessWidget {
                     ),
                     const SizedBox(height: 18),
                     _InputBox(
-                        colors: colors, controller: email, hint: 'Work email'),
+                      colors: colors,
+                      controller: email,
+                      hint: 'Work email',
+                    ),
                     const SizedBox(height: 10),
                     _InputBox(
                       colors: colors,
@@ -2039,12 +2139,14 @@ class _AdminLoginView extends StatelessWidget {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.admin_panel_settings),
                         label: Text(
-                            signingIn ? 'Checking...' : 'Open admin panel'),
+                          signingIn ? 'Checking...' : 'Open admin panel',
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: colors.text,
                           foregroundColor: colors.inverseText,
@@ -2130,7 +2232,9 @@ class _AdminUsersSection extends StatelessWidget {
                         controller: inviteEmail,
                         keyboardType: TextInputType.emailAddress,
                         style: TextStyle(
-                            color: colors.text, fontWeight: FontWeight.w800),
+                          color: colors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
                         decoration: InputDecoration(
                           labelText: 'Employee email',
                           labelStyle: TextStyle(color: colors.mutedText),
@@ -2178,7 +2282,9 @@ class _AdminUsersSection extends StatelessWidget {
                       child: TextField(
                         controller: inviteNote,
                         style: TextStyle(
-                            color: colors.text, fontWeight: FontWeight.w800),
+                          color: colors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
                         decoration: InputDecoration(
                           labelText: 'Reason or note',
                           labelStyle: TextStyle(color: colors.mutedText),
@@ -2261,7 +2367,8 @@ class _AdminUsersSection extends StatelessWidget {
   DataRow _row(Map<String, dynamic> item) {
     final email = '${item['email'] ?? item['id'] ?? ''}'.trim().toLowerCase();
     final self = email == currentEmail?.trim().toLowerCase();
-    final role = AdminRole.fromString(
+    final role =
+        AdminRole.fromString(
           '${item['role'] ?? (item['roles'] is List && (item['roles'] as List).isNotEmpty ? (item['roles'] as List).first : '')}',
         ) ??
         AdminRole.operationsAdmin;
@@ -2456,10 +2563,12 @@ class _AdminTopBar extends StatelessWidget {
                 PopupMenuButton<_AdminSection>(
                   onSelected: onSection,
                   itemBuilder: (context) => _AdminSection.values
-                      .map((item) => PopupMenuItem(
-                            value: item,
-                            child: Text(_adminSectionLabel(item)),
-                          ))
+                      .map(
+                        (item) => PopupMenuItem(
+                          value: item,
+                          child: Text(_adminSectionLabel(item)),
+                        ),
+                      )
                       .toList(),
                   icon: Icon(Icons.menu, color: colors.text),
                 ),
@@ -2538,82 +2647,100 @@ class _AdminOverviewSection extends StatelessWidget {
           runSpacing: 12,
           children: [
             _AdminMetricCard(
-                colors: colors,
-                label: 'Total deliveries',
-                value: '${metrics.totalDeliveries}'),
+              colors: colors,
+              label: 'Total deliveries',
+              value: '${metrics.totalDeliveries}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Active deliveries',
-                value: '${metrics.activeDeliveries}'),
+              colors: colors,
+              label: 'Active deliveries',
+              value: '${metrics.activeDeliveries}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Completed',
-                value: '${metrics.completedDeliveries}'),
+              colors: colors,
+              label: 'Completed',
+              value: '${metrics.completedDeliveries}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Failed',
-                value: '${metrics.failedDeliveries}'),
+              colors: colors,
+              label: 'Failed',
+              value: '${metrics.failedDeliveries}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Cancelled',
-                value: '${metrics.cancelledDeliveries}'),
+              colors: colors,
+              label: 'Cancelled',
+              value: '${metrics.cancelledDeliveries}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Total senders',
-                value: '${metrics.totalSenders}'),
+              colors: colors,
+              label: 'Total senders',
+              value: '${metrics.totalSenders}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Active senders',
-                value: '${metrics.activeSenders}'),
+              colors: colors,
+              label: 'Active senders',
+              value: '${metrics.activeSenders}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Total drivers',
-                value: '${metrics.totalDrivers}'),
+              colors: colors,
+              label: 'Total drivers',
+              value: '${metrics.totalDrivers}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Active drivers',
-                value: '${metrics.activeDrivers}'),
+              colors: colors,
+              label: 'Active drivers',
+              value: '${metrics.activeDrivers}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Pending drivers',
-                value: '${metrics.pendingDrivers}'),
+              colors: colors,
+              label: 'Pending drivers',
+              value: '${metrics.pendingDrivers}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Revenue today',
-                value: _adminMoneyText(metrics.revenueToday)),
+              colors: colors,
+              label: 'Revenue today',
+              value: _adminMoneyText(metrics.revenueToday),
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Revenue this week',
-                value: _adminMoneyText(metrics.revenueThisWeek)),
+              colors: colors,
+              label: 'Revenue this week',
+              value: _adminMoneyText(metrics.revenueThisWeek),
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Revenue this month',
-                value: _adminMoneyText(metrics.revenueThisMonth)),
+              colors: colors,
+              label: 'Revenue this month',
+              value: _adminMoneyText(metrics.revenueThisMonth),
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Average order',
-                value: _adminMoneyText(metrics.averageDeliveryValue)),
+              colors: colors,
+              label: 'Average order',
+              value: _adminMoneyText(metrics.averageDeliveryValue),
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Driver rating',
-                value: metrics.averageDriverRating.toStringAsFixed(2)),
+              colors: colors,
+              label: 'Driver rating',
+              value: metrics.averageDriverRating.toStringAsFixed(2),
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Satisfaction',
-                value:
-                    '${metrics.customerSatisfactionScore.toStringAsFixed(0)}%'),
+              colors: colors,
+              label: 'Satisfaction',
+              value: '${metrics.customerSatisfactionScore.toStringAsFixed(0)}%',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Complaints',
-                value: '${metrics.complaintsCount}'),
+              colors: colors,
+              label: 'Complaints',
+              value: '${metrics.complaintsCount}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Refund requests',
-                value: '${metrics.refundRequests}'),
+              colors: colors,
+              label: 'Refund requests',
+              value: '${metrics.refundRequests}',
+            ),
             _AdminMetricCard(
-                colors: colors,
-                label: 'Open support',
-                value: '${metrics.unresolvedSupportIssues}'),
+              colors: colors,
+              label: 'Open support',
+              value: '${metrics.unresolvedSupportIssues}',
+            ),
           ],
         ),
         const SizedBox(height: 18),
@@ -2625,21 +2752,25 @@ class _AdminOverviewSection extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Operational pulse'),
               const SizedBox(height: 12),
               _AdminBar(
-                  colors: colors,
-                  label: 'Cancellation rate',
-                  value: metrics.cancellationRate),
+                colors: colors,
+                label: 'Cancellation rate',
+                value: metrics.cancellationRate,
+              ),
               _AdminBar(
-                  colors: colors,
-                  label: 'Failed delivery rate',
-                  value: metrics.failedDeliveryRate),
+                colors: colors,
+                label: 'Failed delivery rate',
+                value: metrics.failedDeliveryRate,
+              ),
               _AdminBar(
-                  colors: colors,
-                  label: 'Repeat customer rate',
-                  value: metrics.repeatCustomerRate),
+                colors: colors,
+                label: 'Repeat customer rate',
+                value: metrics.repeatCustomerRate,
+              ),
               _AdminBar(
-                  colors: colors,
-                  label: 'Refund rate',
-                  value: metrics.refundRate),
+                colors: colors,
+                label: 'Refund rate',
+                value: metrics.refundRate,
+              ),
               const SizedBox(height: 12),
               Text(
                 issues.isEmpty
@@ -2709,7 +2840,9 @@ class _AdminDataSection extends StatelessWidget {
                 Text(
                   emptyText,
                   style: TextStyle(
-                      color: colors.mutedText, fontWeight: FontWeight.w700),
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w700,
+                  ),
                 )
               else
                 SingleChildScrollView(
@@ -2729,9 +2862,9 @@ class _AdminDataSection extends StatelessWidget {
                     rows: records
                         .map(
                           (record) => DataRow(
-                            cells: rowBuilder(record)
-                                .map((child) => DataCell(child))
-                                .toList(),
+                            cells: rowBuilder(
+                              record,
+                            ).map((child) => DataCell(child)).toList(),
                           ),
                         )
                         .toList(),
@@ -2895,8 +3028,10 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.description_outlined,
-                                      color: colors.text),
+                                  Icon(
+                                    Icons.description_outlined,
+                                    color: colors.text,
+                                  ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
@@ -2980,10 +3115,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
           Expanded(
             child: Text(
               value.trim().isEmpty ? 'Not provided' : value,
-              style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w800,
-              ),
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -3055,49 +3187,56 @@ class _AdminAnalyticsSection extends StatelessWidget {
                 runSpacing: 12,
                 children: [
                   _AdminMetricCard(
-                      colors: colors,
-                      label: 'Avg distance',
-                      value: '${avgDistance.toStringAsFixed(1)} mi'),
+                    colors: colors,
+                    label: 'Avg distance',
+                    value: '${avgDistance.toStringAsFixed(1)} mi',
+                  ),
                   _AdminMetricCard(
-                      colors: colors,
-                      label: 'Avg weight',
-                      value: '${avgWeight.toStringAsFixed(1)} kg'),
+                    colors: colors,
+                    label: 'Avg weight',
+                    value: '${avgWeight.toStringAsFixed(1)} kg',
+                  ),
                   _AdminMetricCard(
-                      colors: colors,
-                      label: 'Avg price',
-                      value: _adminMoneyText(metrics.averageDeliveryValue)),
+                    colors: colors,
+                    label: 'Avg price',
+                    value: _adminMoneyText(metrics.averageDeliveryValue),
+                  ),
                   _AdminMetricCard(
-                      colors: colors,
-                      label: 'Health+ recurring',
-                      value:
-                          _adminMoneyText(metrics.healthPlusRecurringRevenue)),
+                    colors: colors,
+                    label: 'Health+ recurring',
+                    value: _adminMoneyText(metrics.healthPlusRecurringRevenue),
+                  ),
                   _AdminMetricCard(
-                      colors: colors,
-                      label: 'Completion rate',
-                      value:
-                          '${(100 - metrics.failedDeliveryRate - metrics.cancellationRate).clamp(0, 100).toStringAsFixed(0)}%'),
+                    colors: colors,
+                    label: 'Completion rate',
+                    value:
+                        '${(100 - metrics.failedDeliveryRate - metrics.cancellationRate).clamp(0, 100).toStringAsFixed(0)}%',
+                  ),
                   _AdminMetricCard(
-                      colors: colors,
-                      label: 'Repeat customers',
-                      value:
-                          '${metrics.repeatCustomerRate.toStringAsFixed(0)}%'),
+                    colors: colors,
+                    label: 'Repeat customers',
+                    value: '${metrics.repeatCustomerRate.toStringAsFixed(0)}%',
+                  ),
                 ],
               ),
               const SizedBox(height: 18),
               _AdminBar(
-                  colors: colors,
-                  label: 'Revenue momentum',
-                  value: payments.isEmpty ? 0 : 74),
+                colors: colors,
+                label: 'Revenue momentum',
+                value: payments.isEmpty ? 0 : 74,
+              ),
               _AdminBar(
-                  colors: colors,
-                  label: 'Driver completion',
-                  value: (100 - metrics.failedDeliveryRate)
-                      .clamp(0, 100)
-                      .toDouble()),
+                colors: colors,
+                label: 'Driver completion',
+                value: (100 - metrics.failedDeliveryRate)
+                    .clamp(0, 100)
+                    .toDouble(),
+              ),
               _AdminBar(
-                  colors: colors,
-                  label: 'Customer repeat',
-                  value: metrics.repeatCustomerRate),
+                colors: colors,
+                label: 'Customer repeat',
+                value: metrics.repeatCustomerRate,
+              ),
             ],
           ),
         ),
@@ -3108,8 +3247,10 @@ class _AdminAnalyticsSection extends StatelessWidget {
   double _average(List<Map<String, dynamic>> records, String field) {
     final values = records
         .map((record) => record[field])
-        .map((value) =>
-            value is num ? value.toDouble() : double.tryParse('$value') ?? 0)
+        .map(
+          (value) =>
+              value is num ? value.toDouble() : double.tryParse('$value') ?? 0,
+        )
         .where((value) => value > 0)
         .toList();
     if (values.isEmpty) return 0;
@@ -3269,19 +3410,21 @@ class _AdminStatusCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lower = status.toLowerCase();
-    final good = lower.contains('active') ||
+    final good =
+        lower.contains('active') ||
         lower.contains('complete') ||
         lower.contains('resolved') ||
         lower.contains('verified');
-    final bad = lower.contains('failed') ||
+    final bad =
+        lower.contains('failed') ||
         lower.contains('cancel') ||
         lower.contains('suspend') ||
         lower.contains('reject');
     final color = good
         ? colors.success
         : bad
-            ? const Color(0xffdc2626)
-            : const Color(0xffca8a04);
+        ? const Color(0xffdc2626)
+        : const Color(0xffca8a04);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
@@ -3434,8 +3577,9 @@ class _AdminNavButton extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 7),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient:
-              selected ? const LinearGradient(colors: _spectrumGradient) : null,
+          gradient: selected
+              ? const LinearGradient(colors: _spectrumGradient)
+              : null,
           borderRadius: BorderRadius.circular(16),
           boxShadow: selected
               ? [
@@ -3459,8 +3603,9 @@ class _AdminNavButton extends StatelessWidget {
             ),
           ),
           selectedTileColor: Colors.transparent,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       ),
     );
@@ -3575,10 +3720,51 @@ String _jobReceivedTextFromDate(DateTime? date) {
   final monthIndex = local.month < 1
       ? 0
       : local.month > 12
-          ? 11
-          : local.month - 1;
+      ? 11
+      : local.month - 1;
   final month = _shortMonthNames[monthIndex];
   return 'Received: ${local.day} $month, $hour:$minute';
+}
+
+bool _isActiveSenderDeliveryStatus(String status) {
+  final normalized = status.toLowerCase().trim().replaceAll('-', '_');
+  const activeStatuses = {
+    'pending',
+    'requested',
+    'received',
+    'finding_rider',
+    'rider_assigned',
+    'assigned',
+    'accepted',
+    'en_route_to_pickup',
+    'collected',
+    'picked_up',
+    'in_transit',
+    'arriving',
+    'disputed',
+  };
+  const inactiveStatuses = {
+    'completed',
+    'complete',
+    'delivered',
+    'cancelled',
+    'canceled',
+    'failed',
+    'refunded',
+    'archived',
+  };
+  if (inactiveStatuses.contains(normalized)) return false;
+  return activeStatuses.contains(normalized);
+}
+
+String _displayStatusLabel(String status) {
+  final normalized = status.trim().replaceAll('_', ' ');
+  if (normalized.isEmpty) return 'Status pending';
+  return normalized
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
 }
 
 String _adminDateText(dynamic value) {
@@ -3662,8 +3848,10 @@ class _LandingNav extends StatelessWidget {
                   backgroundColor: colors.text,
                   foregroundColor: colors.inverseText,
                   shape: const StadiumBorder(),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                 ),
                 child: const Text('Send a Parcel'),
               ),
@@ -3831,7 +4019,7 @@ class _HeroMockup extends StatelessWidget {
                 color: Colors.black.withOpacity(colors.dark ? 0.32 : 0.08),
                 blurRadius: 36,
                 offset: const Offset(0, 18),
-              )
+              ),
             ],
           ),
           child: wide
@@ -3842,13 +4030,7 @@ class _HeroMockup extends StatelessWidget {
                     Expanded(flex: 4, child: panel),
                   ],
                 )
-              : Column(
-                  children: [
-                    map,
-                    const SizedBox(height: 16),
-                    panel,
-                  ],
-                ),
+              : Column(children: [map, const SizedBox(height: 16), panel]),
         );
       },
     );
@@ -3942,7 +4124,7 @@ class _PhoneStage extends StatelessWidget {
                   color: Color(0x22000000),
                   blurRadius: 32,
                   offset: Offset(0, 18),
-                )
+                ),
               ],
             ),
             clipBehavior: Clip.antiAlias,
@@ -3972,14 +4154,16 @@ class _PhoneStage extends StatelessWidget {
             border: MediaQuery.sizeOf(context).width < 520
                 ? null
                 : Border.all(
-                    color: colors.dark ? Colors.black : Colors.black, width: 8),
+                    color: colors.dark ? Colors.black : Colors.black,
+                    width: 8,
+                  ),
             boxShadow: [
               if (MediaQuery.sizeOf(context).width >= 520)
                 const BoxShadow(
                   color: Color(0x33000000),
                   blurRadius: 34,
                   offset: Offset(0, 18),
-                )
+                ),
             ],
           ),
           child: ClipRRect(
@@ -4055,10 +4239,7 @@ class _CircumOrderSection {
   final String title;
   final List<String> paragraphs;
 
-  const _CircumOrderSection({
-    required this.title,
-    required this.paragraphs,
-  });
+  const _CircumOrderSection({required this.title, required this.paragraphs});
 }
 
 const _circumOrderCharterSections = [
@@ -4359,8 +4540,9 @@ Uri _circumOrderPdfUri() {
     final stream = StringBuffer();
     for (final line in pageLines) {
       final isTitle = line == 'THE CIRCUM ORDER';
-      final isSectionTitle =
-          _circumOrderCharterSections.any((section) => section.title == line);
+      final isSectionTitle = _circumOrderCharterSections.any(
+        (section) => section.title == line,
+      );
       final size = isTitle ? 22 : (isSectionTitle ? 15 : 11);
       stream.writeln(
         'BT /F1 $size Tf 72 $y Td (${_pdfTextEscape(line)}) Tj ET',
@@ -4726,10 +4908,7 @@ class _CircumOrderRankCard extends StatelessWidget {
   final _CircumColors colors;
   final _CircumOrderRank rank;
 
-  const _CircumOrderRankCard({
-    required this.colors,
-    required this.rank,
-  });
+  const _CircumOrderRankCard({required this.colors, required this.rank});
 
   @override
   Widget build(BuildContext context) {
@@ -4797,6 +4976,14 @@ class _RiderOrderProfileCard extends StatelessWidget {
     final rating = performance.averageRating <= 0
         ? 'New'
         : performance.averageRating.toStringAsFixed(2);
+    final verificationStatus =
+        '${profile?['verificationStatus'] ?? profile?['approvalStatus'] ?? 'pending'}';
+    final verified =
+        verificationStatus.toLowerCase() == 'approved' ||
+        verificationStatus.toLowerCase() == 'verified';
+    final memberSince = _dateFromAny(
+      profile?['memberSince'] ?? profile?['createdAt'],
+    );
     return _GlassPanel(
       colors: colors,
       child: Column(
@@ -4855,6 +5042,22 @@ class _RiderOrderProfileCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HealthChip(
+                label: verified
+                    ? 'Verified by Circum'
+                    : _displayStatusLabel(verificationStatus),
+              ),
+              _HealthChip(
+                label:
+                    'Quality ${performance.qualityScore.toStringAsFixed(0)}%',
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -4872,14 +5075,16 @@ class _RiderOrderProfileCard extends StatelessWidget {
                   value: rating,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _RiderStatTile(
-                  colors: colors,
-                  label: 'Member since',
-                  value: _adminDateText(profile?['createdAt']),
+              if (memberSince != null) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _RiderStatTile(
+                    colors: colors,
+                    label: 'Member since',
+                    value: _adminDateText(memberSince),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -4959,10 +5164,7 @@ class _RiderEarningsTab extends StatelessWidget {
   final _CircumColors colors;
   final _RiderEarningsSnapshot earnings;
 
-  const _RiderEarningsTab({
-    required this.colors,
-    required this.earnings,
-  });
+  const _RiderEarningsTab({required this.colors, required this.earnings});
 
   @override
   Widget build(BuildContext context) {
@@ -5111,7 +5313,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _plateNumber = TextEditingController(text: 'CIR 24K');
   final _availability = TextEditingController(text: 'Weekdays, evenings');
   final _notes = TextEditingController(text: 'Experienced London courier.');
-  final _withdrawAmount = TextEditingController(text: '25');
+  final _withdrawAmount = TextEditingController();
   final _bankName = TextEditingController();
   final _sortCode = TextEditingController();
   final _accountNumber = TextEditingController();
@@ -5141,8 +5343,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _acceptedJobsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _completedJobsSub;
-  DriverPerformanceMetric _performance =
-      DriverPerformanceMetric.empty('web-rider');
+  DriverPerformanceMetric _performance = DriverPerformanceMetric.empty(
+    'web-rider',
+  );
   List<DriverRating> _recentRatings = const [];
   List<Map<String, dynamic>> _availableJobs = const [];
   List<Map<String, dynamic>> _acceptedJobs = const [];
@@ -5162,11 +5365,24 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   @override
   void initState() {
     super.initState();
+    for (final controller in [
+      _withdrawAmount,
+      _bankName,
+      _sortCode,
+      _accountNumber,
+    ]) {
+      controller.addListener(_refreshWithdrawalForm);
+    }
     _restoreRiderSession();
   }
 
+  void _refreshWithdrawalForm() {
+    if (mounted) setState(() {});
+  }
+
   _RiderPortalTab _initialRiderTab() {
-    final section = Uri.base.queryParameters['section'] ??
+    final section =
+        Uri.base.queryParameters['section'] ??
         Uri.base.queryParameters['tab'] ??
         Uri.base.queryParameters['app'];
     return switch (section) {
@@ -5203,6 +5419,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _plateNumber.dispose();
     _availability.dispose();
     _notes.dispose();
+    for (final controller in [
+      _withdrawAmount,
+      _bankName,
+      _sortCode,
+      _accountNumber,
+    ]) {
+      controller.removeListener(_refreshWithdrawalForm);
+    }
     _withdrawAmount.dispose();
     _bankName.dispose();
     _sortCode.dispose();
@@ -5221,8 +5445,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!await _allowRiderUser(user)) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
-        setState(() => _authMessage =
-            'Use a rider account here. Sender and admin accounts have their own sign-in.');
+        setState(
+          () => _authMessage =
+              'Use a rider account here. Sender and admin accounts have their own sign-in.',
+        );
         return;
       }
       final riderProfile = await _loadRiderProfile(user.uid);
@@ -5247,15 +5473,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final email = _email.text.trim();
     final password = _password.text.trim();
     if (email.isEmpty || password.length < 6) {
-      setState(() => _authMessage =
-          'Enter an email and a password with at least 6 characters.');
+      setState(
+        () => _authMessage =
+            'Enter an email and a password with at least 6 characters.',
+      );
       return;
     }
 
     setState(() {
       _authSubmitting = true;
-      _authMessage =
-          _signupMode ? 'Creating your rider account...' : 'Signing you in...';
+      _authMessage = _signupMode
+          ? 'Creating your rider account...'
+          : 'Signing you in...';
     });
 
     try {
@@ -5279,8 +5508,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       } else if (!await _allowRiderUser(user)) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
-        setState(() => _authMessage =
-            'This account is not a rider account. Use sender login or the admin site instead.');
+        setState(
+          () => _authMessage =
+              'This account is not a rider account. Use sender login or the admin site instead.',
+        );
         return;
       } else {
         _riderProfile = await _loadRiderProfile(user.uid);
@@ -5293,8 +5524,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _riderUser = user;
         _roleChoiceConfirmed = _availableRoles.length <= 1;
-        _authMessage =
-            _signupMode ? 'Your rider account is ready.' : 'You are signed in.';
+        _authMessage = _signupMode
+            ? 'Your rider account is ready.'
+            : 'You are signed in.';
       });
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
@@ -5321,16 +5553,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await _ensureCircumFirebaseReady();
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (!mounted) return;
-      setState(() => _authMessage =
-          'Password reset sent. Check your email and follow the secure link.');
+      setState(
+        () => _authMessage =
+            'Password reset sent. Check your email and follow the secure link.',
+      );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
-      setState(() => _authMessage = switch (error.code) {
-            'invalid-email' => 'Enter a valid email address.',
-            'user-not-found' => 'No rider account found for that email.',
-            _ =>
-              'We could not send the reset email. Check the address and try again.',
-          });
+      setState(
+        () => _authMessage = switch (error.code) {
+          'invalid-email' => 'Enter a valid email address.',
+          'user-not-found' => 'No rider account found for that email.',
+          _ =>
+            'We could not send the reset email. Check the address and try again.',
+        },
+      );
     } finally {
       if (mounted) setState(() => _authSubmitting = false);
     }
@@ -5358,8 +5594,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final next = _newPassword.text.trim();
     final confirm = _confirmNewPassword.text.trim();
     if (current.isEmpty || next.length < 6 || next != confirm) {
-      setState(() => _securityMessage =
-          'Enter your current password and make sure the new passwords match.');
+      setState(
+        () => _securityMessage =
+            'Enter your current password and make sure the new passwords match.',
+      );
       return;
     }
     setState(() {
@@ -5369,8 +5607,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     try {
       await _ensureCircumFirebaseReady();
       await _reauthenticateRider(current);
-      await (_riderUser ?? FirebaseAuth.instance.currentUser)
-          ?.updatePassword(next);
+      await (_riderUser ?? FirebaseAuth.instance.currentUser)?.updatePassword(
+        next,
+      );
       _currentPassword.clear();
       _newPassword.clear();
       _confirmNewPassword.clear();
@@ -5392,8 +5631,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final nextEmail = _newEmail.text.trim();
     final password = _emailChangePassword.text.trim();
     if (nextEmail.isEmpty || !nextEmail.contains('@') || password.isEmpty) {
-      setState(() =>
-          _securityMessage = 'Enter the new email and your current password.');
+      setState(
+        () =>
+            _securityMessage = 'Enter the new email and your current password.',
+      );
       return;
     }
     setState(() {
@@ -5412,14 +5653,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('riderProfiles')
           .doc(user.uid)
           .set({
-        'pendingEmail': nextEmail,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'pendingEmail': nextEmail,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       _newEmail.clear();
       _emailChangePassword.clear();
       if (!mounted) return;
-      setState(() => _securityMessage =
-          'Verification sent. Open the email link to confirm the new address.');
+      setState(
+        () => _securityMessage =
+            'Verification sent. Open the email link to confirm the new address.',
+      );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(() => _securityMessage = _friendlyAuthMessage(error));
@@ -5473,8 +5716,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return approval;
     }
 
-    final verification =
-        '${profile['verificationStatus'] ?? ''}'.trim().toLowerCase();
+    final verification = '${profile['verificationStatus'] ?? ''}'
+        .trim()
+        .toLowerCase();
     if (verification == 'approved' || verification == 'verified') {
       return 'approved';
     }
@@ -5539,7 +5783,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'completedJobs': FieldValue.increment(0),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await db.collection('driverPerformanceMetrics').doc(user.uid).set(
+    await db
+        .collection('driverPerformanceMetrics')
+        .doc(user.uid)
+        .set(
           DriverPerformanceMetric.empty(user.uid).toJson()
             ..addAll({'updatedAt': FieldValue.serverTimestamp()}),
           SetOptions(merge: true),
@@ -5555,11 +5802,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
+          });
+        });
   }
 
   void _listenToRiderPerformance(String riderId) {
@@ -5570,25 +5817,27 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _performance =
-            DriverPerformanceMetric.fromMap(riderId, snapshot.data());
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _performance = DriverPerformanceMetric.fromMap(
+              riderId,
+              snapshot.data(),
+            );
+          });
+        });
     _ratingSub = FirebaseFirestore.instance
         .collection('driverRatings')
         .where('driverId', isEqualTo: riderId)
         .limit(8)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _recentRatings = snapshot.docs
-            .map((doc) => DriverRating.fromMap(doc.data()))
-            .toList();
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _recentRatings = snapshot.docs
+                .map((doc) => DriverRating.fromMap(doc.data()))
+                .toList();
+          });
+        });
   }
 
   void _listenToAvailableJobs() {
@@ -5598,44 +5847,55 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .where('status', isEqualTo: 'requested')
         .limit(20)
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        final jobs = snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .where((job) {
-          final matchingStatus =
-              '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
-          final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
-          final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
-          final currentRider = _riderUser?.uid;
-          if (currentRider != null &&
-              (ignoredBy.contains(currentRider) ||
-                  rejectedBy.contains(currentRider))) {
-            return false;
-          }
-          return matchingStatus == 'available' || matchingStatus == 'requested';
-        }).toList();
-        jobs.sort(_compareRiderJobs);
-        _availableJobs = jobs;
-      });
-    }, onError: (_) {
-      if (!mounted) return;
-      setState(() => _jobMessage = 'Could not load available jobs right now.');
-    });
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              final jobs = snapshot.docs
+                  .map((doc) => {'id': doc.id, ...doc.data()})
+                  .where((job) {
+                    final matchingStatus =
+                        '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
+                    final ignoredBy =
+                        (job['ignoredByRiders'] as List?) ?? const [];
+                    final rejectedBy =
+                        (job['rejectedByRiders'] as List?) ?? const [];
+                    final currentRider = _riderUser?.uid;
+                    if (currentRider != null &&
+                        (ignoredBy.contains(currentRider) ||
+                            rejectedBy.contains(currentRider))) {
+                      return false;
+                    }
+                    return matchingStatus == 'available' ||
+                        matchingStatus == 'requested';
+                  })
+                  .toList();
+              jobs.sort(_compareRiderJobs);
+              _availableJobs = jobs;
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(
+              () => _jobMessage = 'Could not load available jobs right now.',
+            );
+          },
+        );
   }
 
   int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
     final serviceA = '${a['selectedServiceLevel'] ?? a['serviceLevel'] ?? ''}';
     final serviceB = '${b['selectedServiceLevel'] ?? b['serviceLevel'] ?? ''}';
-    final priorityCompare = DeliveryPricing.matchingPriorityRank(serviceA)
-        .compareTo(DeliveryPricing.matchingPriorityRank(serviceB));
+    final priorityCompare = DeliveryPricing.matchingPriorityRank(
+      serviceA,
+    ).compareTo(DeliveryPricing.matchingPriorityRank(serviceB));
     if (priorityCompare != 0) return priorityCompare;
 
     final pickupCompare =
         '${a['scheduledPickupDate'] ?? ''} ${a['scheduledPickupWindow'] ?? ''}'
             .compareTo(
-                '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}');
+              '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}',
+            );
     if (pickupCompare != 0) return pickupCompare;
 
     return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
@@ -5647,21 +5907,35 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _acceptedJobsSub = FirebaseFirestore.instance
         .collection('deliveryRequests')
         .where('riderId', isEqualTo: riderId)
-        .where('status', whereIn: ['accepted', 'picked_up', 'in_transit'])
+        .where(
+          'status',
+          whereIn: [
+            'accepted',
+            'en_route_to_pickup',
+            'arrived_at_pickup',
+            'collected',
+            'picked_up',
+            'in_transit',
+            'arriving',
+          ],
+        )
         .limit(20)
         .snapshots()
-        .listen((snapshot) {
-          if (!mounted) return;
-          setState(() {
-            _acceptedJobs = snapshot.docs
-                .map((doc) => {'id': doc.id, ...doc.data()})
-                .toList(growable: false);
-          });
-          _syncRiderLiveLocationPublishing();
-        }, onError: (_) {
-          if (!mounted) return;
-          setState(() => _jobMessage = 'Could not load accepted jobs.');
-        });
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _acceptedJobs = snapshot.docs
+                  .map((doc) => {'id': doc.id, ...doc.data()})
+                  .toList(growable: false);
+            });
+            _syncRiderLiveLocationPublishing();
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _jobMessage = 'Could not load accepted jobs.');
+          },
+        );
     _completedJobsSub = FirebaseFirestore.instance
         .collection('deliveryRequests')
         .where('riderId', isEqualTo: riderId)
@@ -5669,13 +5943,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(20)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _completedJobs = snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList(growable: false);
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _completedJobs = snapshot.docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList(growable: false);
+          });
+        });
   }
 
   Future<void> _acceptDeliveryJob(Map<String, dynamic> job) async {
@@ -5712,10 +5986,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'bookingId': requestId,
         'requestId': requestId,
         'participants': FieldValue.arrayUnion([user.uid, 'circum-support']),
-        'participantRoles': {
-          user.uid: 'rider',
-          'circum-support': 'admin',
-        },
+        'participantRoles': {user.uid: 'rider', 'circum-support': 'admin'},
         'assignedRiderId': user.uid,
         'updatedAt': FieldValue.serverTimestamp(),
         'source': 'circum-web',
@@ -5734,22 +6005,21 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _stopRiderLiveLocationPublishing(status: 'offline');
       return;
     }
-    final activeJob = _acceptedJobs.cast<Map<String, dynamic>?>().firstWhere(
-      (job) {
-        final status = '${job?['status'] ?? ''}'.toLowerCase();
-        return status == 'accepted' ||
-            status == 'picked_up' ||
-            status == 'in_transit' ||
-            status == 'in_progress';
-      },
-      orElse: () => null,
-    );
+    final activeJob = _acceptedJobs.cast<Map<String, dynamic>?>().firstWhere((
+      job,
+    ) {
+      final status = '${job?['status'] ?? ''}'.toLowerCase();
+      return status == 'accepted' ||
+          status == 'picked_up' ||
+          status == 'in_transit' ||
+          status == 'in_progress';
+    }, orElse: () => null);
     if (activeJob == null) {
       _stopRiderLiveLocationPublishing(status: 'offline');
       return;
     }
-    final requestId =
-        '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'.trim();
+    final requestId = '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'
+        .trim();
     final status = '${activeJob['status'] ?? 'accepted'}'.toLowerCase();
     if (requestId.isEmpty || requestId == _trackingDeliveryId) return;
     _startRiderLiveLocationPublishing(requestId, user.uid, status);
@@ -5767,8 +6037,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final allowed = await _ensureRiderLocationPermission();
     if (!allowed) {
       if (mounted) {
-        setState(() => _jobMessage =
-            'Location permission is needed for live tracking while travelling.');
+        setState(
+          () => _jobMessage =
+              'Location permission is needed for live tracking while travelling.',
+        );
       }
       return;
     }
@@ -5792,10 +6064,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('tracking')
           .doc('liveLocation')
           .set({
-        'riderId': riderId,
-        'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'riderId': riderId,
+            'status': status,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     }
   }
 
@@ -5832,15 +6104,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('tracking')
           .doc('liveLocation')
           .set({
-        'riderId': riderId,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'heading': position.heading,
-        'speed': position.speed,
-        'accuracy': position.accuracy,
-        'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'riderId': riderId,
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+            'heading': position.heading,
+            'speed': position.speed,
+            'accuracy': position.accuracy,
+            'status': status,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } catch (_) {
       if (mounted) {
         setState(() => _jobMessage = 'Live tracking update could not be sent.');
@@ -5866,13 +6138,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('deliveryRequests')
           .doc(requestId)
           .set({
-        field: FieldValue.arrayUnion([user.uid]),
-        timestampField: FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            field: FieldValue.arrayUnion([user.uid]),
+            timestampField: FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       if (!mounted) return;
-      setState(() => _jobMessage =
-          action == 'reject' ? 'Job rejected.' : 'Job hidden for now.');
+      setState(
+        () => _jobMessage = action == 'reject'
+            ? 'Job rejected.'
+            : 'Job hidden for now.',
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not update this job. Try again.');
@@ -5939,32 +6214,24 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           final existingWallet = await transaction.get(walletRef);
           transaction.set(deliveryRef, updates, SetOptions(merge: true));
           if (existingWallet.exists) return;
-          transaction.set(
-            walletRef,
-            {
-              'transactionId': txId,
-              'requestId': requestId,
-              'riderId': user.uid,
-              'type': 'job_completed',
-              'deliveryEarning': payout,
-              'tipAmount': tip,
-              'amount': totalCredit,
-              'status': 'available',
-              'createdAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
-          transaction.set(
-            earningsRef,
-            {
-              'availableBalance': FieldValue.increment(totalCredit),
-              'lifetimeEarnings': FieldValue.increment(totalCredit),
-              'tipsReceived': FieldValue.increment(tip),
-              'completedJobs': FieldValue.increment(1),
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+          transaction.set(walletRef, {
+            'transactionId': txId,
+            'requestId': requestId,
+            'riderId': user.uid,
+            'type': 'job_completed',
+            'deliveryEarning': payout,
+            'tipAmount': tip,
+            'amount': totalCredit,
+            'status': 'available',
+            'createdAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          transaction.set(earningsRef, {
+            'availableBalance': FieldValue.increment(totalCredit),
+            'lifetimeEarnings': FieldValue.increment(totalCredit),
+            'tipsReceived': FieldValue.increment(tip),
+            'completedJobs': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         });
       } else {
         await db
@@ -5976,9 +6243,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _stopRiderLiveLocationPublishing(status: status);
       }
       if (!mounted) return;
-      setState(() => _jobMessage = status == 'completed'
-          ? 'Job completed. Earnings updated.'
-          : 'Job updated.');
+      setState(
+        () => _jobMessage = status == 'completed'
+            ? 'Delivery completed.'
+            : 'Job updated.',
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not update this job. Try again.');
@@ -6003,11 +6272,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final collectionContact =
-        (job['collectionContact'] as Map?)?.cast<String, dynamic>();
-    final receiverDetails =
-        (job['receiverDetails'] as Map?)?.cast<String, dynamic>();
+        const <String, dynamic>{};
+    final collectionContact = (job['collectionContact'] as Map?)
+        ?.cast<String, dynamic>();
+    final receiverDetails = (job['receiverDetails'] as Map?)
+        ?.cast<String, dynamic>();
     final collectionName =
         '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the sender or collection contact'}'
             .trim();
@@ -6021,9 +6290,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(stage == 'delivery'
-              ? 'Enter delivery PIN'
-              : 'Enter collection PIN'),
+          title: Text(
+            stage == 'delivery' ? 'Enter delivery PIN' : 'Enter collection PIN',
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -6061,7 +6330,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 final value = pinController.text.trim();
                 if (!RegExp(r'^\d{6}$').hasMatch(value)) {
                   setDialogState(
-                      () => errorText = 'Enter the 6-digit Vanguard PIN.');
+                    () => errorText = 'Enter the 6-digit Vanguard PIN.',
+                  );
                   return;
                 }
                 Navigator.pop(context, value);
@@ -6074,9 +6344,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     );
     pinController.dispose();
     if (enteredPin == null) {
-      setState(() => _jobMessage = stage == 'delivery'
-          ? 'Delivery PIN required before completion.'
-          : 'Collection PIN required before pickup.');
+      setState(
+        () => _jobMessage = stage == 'delivery'
+            ? 'Delivery PIN required before completion.'
+            : 'Collection PIN required before pickup.',
+      );
       return null;
     }
 
@@ -6099,11 +6371,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('deliveryRequests')
           .doc(requestId)
           .set({
-        attemptField: check.attemptCount,
-        'vanguardReviewRequired': check.flagForReview,
-        'vanguardLastFailedStage': stage,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            attemptField: check.attemptCount,
+            'vanguardReviewRequired': check.flagForReview,
+            'vanguardLastFailedStage': stage,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       if (!mounted) return null;
       setState(() => _jobMessage = check.errorMessage);
       return null;
@@ -6111,13 +6383,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     final protection =
         (job['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
     final nextProtection = {
       ...protection,
       stage == 'delivery' ? 'deliveryPin' : 'collectionPin': null,
     };
-    final verifiedField =
-        stage == 'delivery' ? 'deliveryPinVerified' : 'collectionPinVerified';
+    final verifiedField = stage == 'delivery'
+        ? 'deliveryPinVerified'
+        : 'collectionPinVerified';
     final verifiedAtField = stage == 'delivery'
         ? 'deliveryPinVerifiedAt'
         : 'collectionPinVerifiedAt';
@@ -6143,8 +6416,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   bool _jobVanguardEnabled(Map<String, dynamic> job) {
     if (job['vanguardEnabled'] == true) return true;
-    final protection =
-        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>();
+    final protection = (job['vanguardProtection'] as Map?)
+        ?.cast<String, dynamic>();
     return protection?['enabled'] == true;
   }
 
@@ -6154,8 +6427,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     String riderId,
   ) async {
     final currentFinalWeight = _jobFinalWeight(job);
-    final weightController =
-        TextEditingController(text: currentFinalWeight.toStringAsFixed(1));
+    final weightController = TextEditingController(
+      text: currentFinalWeight.toStringAsFixed(1),
+    );
     final noteController = TextEditingController();
     var option = 'accurate';
     var pickedPhotos = <XFile>[];
@@ -6203,8 +6477,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: weightController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Verified weight in kg',
                     border: OutlineInputBorder(),
@@ -6222,14 +6497,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: () async {
-                    final picked = await ImagePicker()
-                        .pickMultiImage(imageQuality: 80, maxWidth: 1800);
+                    final picked = await ImagePicker().pickMultiImage(
+                      imageQuality: 80,
+                      maxWidth: 1800,
+                    );
                     setDialogState(() => pickedPhotos = picked);
                   },
                   icon: const Icon(Icons.photo_camera),
-                  label: Text(pickedPhotos.isEmpty
-                      ? 'Add evidence photo'
-                      : '${pickedPhotos.length} photo(s) added'),
+                  label: Text(
+                    pickedPhotos.isEmpty
+                        ? 'Add evidence photo'
+                        : '${pickedPhotos.length} photo(s) added',
+                  ),
                 ),
                 if (errorText != null) ...[
                   const SizedBox(height: 8),
@@ -6253,13 +6532,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   return;
                 }
                 if (requiresEvidence && verifiedWeight <= currentFinalWeight) {
-                  setDialogState(() => errorText =
-                      'Corrected weight must be higher than the current paid weight.');
+                  setDialogState(
+                    () => errorText =
+                        'Corrected weight must be higher than the current paid weight.',
+                  );
                   return;
                 }
                 if (requiresEvidence && pickedPhotos.isEmpty) {
                   setDialogState(
-                      () => errorText = 'Add at least one evidence photo.');
+                    () => errorText = 'Add at least one evidence photo.',
+                  );
                   return;
                 }
                 Navigator.pop(context, {
@@ -6303,21 +6585,26 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       riderVerifiedWeightKg: verifiedWeight,
     );
     final distanceMiles = _jobDistanceMiles(job);
-    final vehicle =
-        DeliveryPricing.recommendedVehicleForWeight(finalWeightUsed);
-    final revisedQuote = DeliveryPricing.calculate(DeliveryPricingInput(
-      distanceMiles: distanceMiles,
-      weightKg: finalWeightUsed,
-      vehicleType: vehicle,
-    ));
-    final revisedPayout =
-        DeliveryPricing.riderPayoutFromFare(revisedQuote.total);
-    final revisedPlatformRevenue =
-        DeliveryPricing.platformRevenueFromFare(revisedQuote.total);
+    final vehicle = DeliveryPricing.recommendedVehicleForWeight(
+      finalWeightUsed,
+    );
+    final revisedQuote = DeliveryPricing.calculate(
+      DeliveryPricingInput(
+        distanceMiles: distanceMiles,
+        weightKg: finalWeightUsed,
+        vehicleType: vehicle,
+      ),
+    );
+    final revisedPayout = DeliveryPricing.riderPayoutFromFare(
+      revisedQuote.total,
+    );
+    final revisedPlatformRevenue = DeliveryPricing.platformRevenueFromFare(
+      revisedQuote.total,
+    );
     final heavier = finalWeightUsed > currentFinalWeight + 0.01;
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
 
     if (heavier) {
       await FirebaseFirestore.instance.collection('notifications').add({
@@ -6340,8 +6627,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'finalWeightUsed': finalWeightUsed,
       'finalChargeableWeight': finalWeightUsed,
       'confirmedWeightKg': finalWeightUsed,
-      'confirmedWeightBand':
-          DeliveryPricing.weightBandFor(finalWeightUsed).category,
+      'confirmedWeightBand': DeliveryPricing.weightBandFor(
+        finalWeightUsed,
+      ).category,
       'weightCategory': DeliveryPricing.weightBandFor(finalWeightUsed).category,
       'vehicleType': vehicle,
       'vehicle': vehicle,
@@ -6356,8 +6644,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': revisedQuote.toJson(),
       'weightReviewRequired': optionValue != 'accurate',
-      'weightDisputeStatus':
-          optionValue == 'accurate' ? 'verified' : 'admin_review',
+      'weightDisputeStatus': optionValue == 'accurate'
+          ? 'verified'
+          : 'admin_review',
       'driverWeightDispute': {
         'reported': optionValue != 'accurate',
         'issueType': optionValue,
@@ -6383,8 +6672,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'finalWeightUsed': finalWeightUsed,
         'finalChargeableWeight': finalWeightUsed,
         'confirmedWeightKg': finalWeightUsed,
-        'confirmedWeightBand':
-            DeliveryPricing.weightBandFor(finalWeightUsed).category,
+        'confirmedWeightBand': DeliveryPricing.weightBandFor(
+          finalWeightUsed,
+        ).category,
         'driverPayout': revisedPayout,
         'riderPayout': revisedPayout,
         'platformRevenue': revisedPlatformRevenue,
@@ -6476,19 +6766,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('deliveryRequests')
           .doc(requestId)
           .set({
-        'reportedParcelIssue': issueType != 'weight',
-        'reportedWeightIssue': issueType == 'weight',
-        'driverWeightDispute': {
-          'reported': issueType == 'weight',
-          'issueType': issueType,
-          'reportedBy': user.uid,
-          'reportedAt': FieldValue.serverTimestamp(),
-          'status': 'admin_review',
-        },
-        'weightReviewRequired': true,
-        'weightDisputeStatus': 'admin_review',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'reportedParcelIssue': issueType != 'weight',
+            'reportedWeightIssue': issueType == 'weight',
+            'driverWeightDispute': {
+              'reported': issueType == 'weight',
+              'issueType': issueType,
+              'reportedBy': user.uid,
+              'reportedAt': FieldValue.serverTimestamp(),
+              'status': 'admin_review',
+            },
+            'weightReviewRequired': true,
+            'weightDisputeStatus': 'admin_review',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       if (!mounted) return;
       setState(() => _jobMessage = 'Issue flagged for Circum review.');
     } catch (_) {
@@ -6508,30 +6798,42 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .orderBy('createdAt')
         .limit(80)
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _riderChatMessages
-          ..clear()
-          ..addAll(snapshot.docs.map((doc) {
-            final data = doc.data();
-            final role = '${data['senderRole'] ?? data['senderType'] ?? ''}';
-            return _ChatMessage(
-              fromMe: data['senderId'] == _riderUser?.uid,
-              text: '${data['messageText'] ?? data['message'] ?? ''}',
-              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
-              label: role == 'admin' || role == 'support'
-                  ? 'CIRCUM Support'
-                  : role == 'sender' || role == 'user'
-                      ? 'Sender'
-                      : 'Rider',
-            );
-          }).where((message) => message.text.trim().isNotEmpty));
-      });
-    }, onError: (_) {
-      if (!mounted) return;
-      setState(() => _jobMessage = 'Could not open this chat.');
-    });
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _riderChatMessages
+                ..clear()
+                ..addAll(
+                  snapshot.docs
+                      .map((doc) {
+                        final data = doc.data();
+                        final role =
+                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                        return _ChatMessage(
+                          fromMe: data['senderId'] == _riderUser?.uid,
+                          text:
+                              '${data['messageText'] ?? data['message'] ?? ''}',
+                          time: _formatMessageTime(
+                            data['createdAt'],
+                            data['timeStamp'],
+                          ),
+                          label: role == 'admin' || role == 'support'
+                              ? 'CIRCUM Support'
+                              : role == 'sender' || role == 'user'
+                              ? 'Sender'
+                              : 'Rider',
+                        );
+                      })
+                      .where((message) => message.text.trim().isNotEmpty),
+                );
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _jobMessage = 'Could not open this chat.');
+          },
+        );
     setState(() {
       _activeRiderChatJob = job;
       _riderChatOpen = true;
@@ -6548,8 +6850,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _riderChatInput.clear();
     try {
       await _ensureCircumFirebaseReady();
-      final chatRef =
-          FirebaseFirestore.instance.collection('chats').doc(requestId);
+      final chatRef = FirebaseFirestore.instance
+          .collection('chats')
+          .doc(requestId);
       await chatRef.collection('messages').add({
         'threadId': requestId,
         'bookingId': requestId,
@@ -6632,12 +6935,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _sortCode.text.trim().isEmpty ||
         _accountNumber.text.trim().isEmpty) {
       setState(
-          () => _withdrawMessage = 'Enter the amount and bank details first.');
+        () => _withdrawMessage = 'Enter the amount and bank details first.',
+      );
       return;
     }
     if (amount > _earnings.availableBalance) {
-      setState(() => _withdrawMessage =
-          'The withdrawal amount is higher than your available balance.');
+      setState(
+        () => _withdrawMessage =
+            'The withdrawal amount is higher than your available balance.',
+      );
       return;
     }
 
@@ -6657,8 +6963,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .get();
       if (pending.docs.isNotEmpty) {
         if (!mounted) return;
-        setState(() => _withdrawMessage =
-            'You already have a withdrawal being processed.');
+        setState(
+          () => _withdrawMessage =
+              'You already have a withdrawal being processed.',
+        );
         return;
       }
       final requestRef = db.collection('payoutRequests').doc();
@@ -6681,47 +6989,48 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'status': 'pending',
             'source': 'circum-web',
             'createdAt': Timestamp.now(),
-          }
+          },
         ],
         'source': 'circum-web',
         'createdAt': FieldValue.serverTimestamp(),
       });
-      batch.set(
-          db.collection('riderEarnings').doc(user.uid),
-          {
-            'pendingWithdrawal': FieldValue.increment(amount),
-            'availableBalance': FieldValue.increment(-amount),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
+      batch.set(db.collection('riderEarnings').doc(user.uid), {
+        'pendingWithdrawal': FieldValue.increment(amount),
+        'availableBalance': FieldValue.increment(-amount),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       if (_saveBank) {
         batch.set(
-            db.collection('riderBankAccounts').doc(user.uid),
-            {
-              'riderId': user.uid,
-              'bankName': _bankName.text.trim(),
-              'sortCodeLast2': _sortCode.text.trim().length >= 2
-                  ? _sortCode.text
-                      .trim()
-                      .substring(_sortCode.text.trim().length - 2)
-                  : _sortCode.text.trim(),
-              'accountLast4': _accountNumber.text.trim().length >= 4
-                  ? _accountNumber.text
-                      .trim()
-                      .substring(_accountNumber.text.trim().length - 4)
-                  : _accountNumber.text.trim(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true));
+          db.collection('riderBankAccounts').doc(user.uid),
+          {
+            'riderId': user.uid,
+            'bankName': _bankName.text.trim(),
+            'sortCodeLast2': _sortCode.text.trim().length >= 2
+                ? _sortCode.text.trim().substring(
+                    _sortCode.text.trim().length - 2,
+                  )
+                : _sortCode.text.trim(),
+            'accountLast4': _accountNumber.text.trim().length >= 4
+                ? _accountNumber.text.trim().substring(
+                    _accountNumber.text.trim().length - 4,
+                  )
+                : _accountNumber.text.trim(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
       }
       await batch.commit();
       if (!mounted) return;
-      setState(() => _withdrawMessage =
-          'Withdrawal request sent. Circum will process it to your bank.');
+      setState(
+        () => _withdrawMessage =
+            'Withdrawal request sent. Circum will process it to your bank.',
+      );
     } catch (_) {
       if (!mounted) return;
       setState(
-          () => _withdrawMessage = 'We could not send the request. Try again.');
+        () => _withdrawMessage = 'We could not send the request. Try again.',
+      );
     } finally {
       if (mounted) setState(() => _withdrawSubmitting = false);
     }
@@ -6752,8 +7061,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await storageRef.putData(bytes);
       final downloadUrl = await storageRef.getDownloadURL();
 
-      final documentRef =
-          FirebaseFirestore.instance.collection('riderDocuments').doc();
+      final documentRef = FirebaseFirestore.instance
+          .collection('riderDocuments')
+          .doc();
       await documentRef.set({
         'documentId': documentRef.id,
         'riderId': user.uid,
@@ -6774,13 +7084,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('riderProfiles')
           .doc(user.uid)
           .set({
-        'verificationStatus': 'pending',
-        'lastDocumentUploadedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'verificationStatus': 'pending',
+            'lastDocumentUploadedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       if (!mounted) return;
-      setState(() => _documentMessage =
-          'Document uploaded. Circum will review it before approval.');
+      setState(
+        () => _documentMessage =
+            'Document uploaded. Circum will review it before approval.',
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _documentMessage = 'Upload failed. Please try again.');
@@ -6794,8 +7106,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'email-already-in-use' => 'That email already has a rider account.',
       'user-not-found' => 'No rider account found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'The sign-in details are not right.',
+      'invalid-credential' => 'The sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -7008,65 +7319,69 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 Expanded(
                   child: switch (_riderTab) {
                     _RiderPortalTab.order => _CircumOrderContent(
-                        colors: colors,
-                        onBecomeRider: () => setState(
-                            () => _riderTab = _RiderPortalTab.overview),
-                      ),
+                      colors: colors,
+                      onBecomeRider: () =>
+                          setState(() => _riderTab = _RiderPortalTab.overview),
+                    ),
                     _RiderPortalTab.earnings => _RiderEarningsTab(
-                        colors: colors,
-                        earnings: _earnings,
-                      ),
-                    _RiderPortalTab.referrals =>
-                      _RiderReferralsTab(colors: colors),
-                    _RiderPortalTab.overview => _riderUser == null
-                        ? ListView(
-                            padding: EdgeInsets.fromLTRB(
-                              wide ? 28 : 18,
-                              18,
-                              wide ? 28 : 18,
-                              34,
-                            ),
-                            children: [
-                              _RiderPublicIntro(colors: colors),
-                              const SizedBox(height: 14),
-                              _RiderAccessPanel(
-                                colors: colors,
-                                email: _email,
-                                password: _password,
-                                signupMode: _signupMode,
-                                submitting: _authSubmitting,
-                                user: _riderUser,
-                                message: _authMessage,
-                                onToggleMode: () =>
-                                    setState(() => _signupMode = !_signupMode),
-                                onSubmit: _submitAuth,
-                                onForgotPassword: _sendRiderPasswordReset,
-                                onSignOut: _signOutRider,
+                      colors: colors,
+                      earnings: _earnings,
+                    ),
+                    _RiderPortalTab.referrals => _RiderReferralsTab(
+                      colors: colors,
+                    ),
+                    _RiderPortalTab.overview =>
+                      _riderUser == null
+                          ? ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 28 : 18,
+                                18,
+                                wide ? 28 : 18,
+                                34,
                               ),
-                            ],
-                          )
-                        : !_roleChoiceConfirmed && _availableRoles.length > 1
-                            ? ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  wide ? 28 : 18,
-                                  18,
-                                  wide ? 28 : 18,
-                                  34,
-                                ),
-                                children: [
-                                  _MultiRoleChoicePanel(
-                                    colors: colors,
-                                    roles: _availableRoles,
-                                    onSender: () => widget
-                                        .onRoleSelected(CircumRole.sender),
-                                    onRider: () => setState(
-                                        () => _roleChoiceConfirmed = true),
-                                    onAdmin: () =>
-                                        widget.onRoleSelected(CircumRole.admin),
+                              children: [
+                                _RiderPublicIntro(colors: colors),
+                                const SizedBox(height: 14),
+                                _RiderAccessPanel(
+                                  colors: colors,
+                                  email: _email,
+                                  password: _password,
+                                  signupMode: _signupMode,
+                                  submitting: _authSubmitting,
+                                  user: _riderUser,
+                                  message: _authMessage,
+                                  onToggleMode: () => setState(
+                                    () => _signupMode = !_signupMode,
                                   ),
-                                ],
-                              )
-                            : _buildSignedInRiderContent(colors, wide),
+                                  onSubmit: _submitAuth,
+                                  onForgotPassword: _sendRiderPasswordReset,
+                                  onSignOut: _signOutRider,
+                                ),
+                              ],
+                            )
+                          : !_roleChoiceConfirmed && _availableRoles.length > 1
+                          ? ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 28 : 18,
+                                18,
+                                wide ? 28 : 18,
+                                34,
+                              ),
+                              children: [
+                                _MultiRoleChoicePanel(
+                                  colors: colors,
+                                  roles: _availableRoles,
+                                  onSender: () =>
+                                      widget.onRoleSelected(CircumRole.sender),
+                                  onRider: () => setState(
+                                    () => _roleChoiceConfirmed = true,
+                                  ),
+                                  onAdmin: () =>
+                                      widget.onRoleSelected(CircumRole.admin),
+                                ),
+                              ],
+                            )
+                          : _buildSignedInRiderContent(colors, wide),
                   },
                 ),
               ],
@@ -7182,8 +7497,9 @@ class _RiderAccessPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionTitle(
-              colors: colors,
-              title: signedIn ? 'Rider account' : 'Rider sign in'),
+            colors: colors,
+            title: signedIn ? 'Rider account' : 'Rider sign in',
+          ),
           const SizedBox(height: 10),
           Text(
             signedIn
@@ -7200,10 +7516,11 @@ class _RiderAccessPanel extends StatelessWidget {
             _InputBox(colors: colors, controller: email, hint: 'Email'),
             const SizedBox(height: 10),
             _InputBox(
-                colors: colors,
-                controller: password,
-                hint: 'Password',
-                obscureText: true),
+              colors: colors,
+              controller: password,
+              hint: 'Password',
+              obscureText: true,
+            ),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -7224,11 +7541,13 @@ class _RiderAccessPanel extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.lock_open),
-                    label: Text(submitting
-                        ? 'Please wait...'
-                        : signupMode
-                            ? 'Create account'
-                            : 'Sign in'),
+                    label: Text(
+                      submitting
+                          ? 'Please wait...'
+                          : signupMode
+                          ? 'Create account'
+                          : 'Sign in',
+                    ),
                     style: FilledButton.styleFrom(
                       backgroundColor: colors.text,
                       foregroundColor: colors.inverseText,
@@ -7252,9 +7571,10 @@ class _RiderAccessPanel extends StatelessWidget {
           ],
           if (message != null) ...[
             const SizedBox(height: 10),
-            Text(message!,
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w800)),
+            Text(
+              message!,
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+            ),
           ],
         ],
       ),
@@ -7289,15 +7609,16 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
       _ =>
         'Your rider profile has been created. Circum will review your details and documents before jobs appear here.',
     };
-    final note = [
-      profile['adminMessage'],
-      profile['approvalNote'],
-      profile['rejectionReason'],
-      profile['accountNote'],
-    ]
-        .where((value) => '${value ?? ''}'.trim().isNotEmpty)
-        .map((value) => '$value'.trim())
-        .join('\n');
+    final note =
+        [
+              profile['adminMessage'],
+              profile['approvalNote'],
+              profile['rejectionReason'],
+              profile['accountNote'],
+            ]
+            .where((value) => '${value ?? ''}'.trim().isNotEmpty)
+            .map((value) => '$value'.trim())
+            .join('\n');
 
     return _GlassPanel(
       colors: colors,
@@ -7310,8 +7631,8 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
                 normalized == 'suspended'
                     ? Icons.block
                     : normalized == 'rejected'
-                        ? Icons.report_problem_outlined
-                        : Icons.pending_actions,
+                    ? Icons.report_problem_outlined
+                    : Icons.pending_actions,
                 color: colors.text,
               ),
               const SizedBox(width: 10),
@@ -7464,53 +7785,65 @@ class _RiderEnrollmentForm extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Rider details'),
               const SizedBox(height: 12),
               _InputBox(
-                  colors: colors, controller: fullName, hint: 'Full name'),
+                colors: colors,
+                controller: fullName,
+                hint: 'Full name',
+              ),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors, controller: phone, hint: 'Phone number'),
+                colors: colors,
+                controller: phone,
+                hint: 'Phone number',
+              ),
               const SizedBox(height: 10),
               _InputBox(colors: colors, controller: email, hint: 'Email'),
               const SizedBox(height: 10),
               _InputBox(colors: colors, controller: postcode, hint: 'Postcode'),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors,
-                  controller: vehicle,
-                  hint: 'Vehicle type: bike, e-bike, car, van'),
+                colors: colors,
+                controller: vehicle,
+                hint: 'Vehicle type: bike, e-bike, car, van',
+              ),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors,
-                  controller: vehicleMakeModel,
-                  hint: 'Vehicle make/model'),
+                colors: colors,
+                controller: vehicleMakeModel,
+                hint: 'Vehicle make/model',
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
                     child: _InputBox(
-                        colors: colors,
-                        controller: vehicleColour,
-                        hint: 'Colour'),
+                      colors: colors,
+                      controller: vehicleColour,
+                      hint: 'Colour',
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _InputBox(
-                        colors: colors,
-                        controller: plateNumber,
-                        hint: 'Plate number'),
+                      colors: colors,
+                      controller: plateNumber,
+                      hint: 'Plate number',
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors,
-                  controller: availability,
-                  hint: 'Availability'),
+                colors: colors,
+                controller: availability,
+                hint: 'Availability',
+              ),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors,
-                  controller: notes,
-                  hint: 'Experience / notes',
-                  maxLines: 3),
+                colors: colors,
+                controller: notes,
+                hint: 'Experience / notes',
+                maxLines: 3,
+              ),
             ],
           ),
         ),
@@ -7537,9 +7870,10 @@ class _RiderEnrollmentForm extends StatelessWidget {
         ),
         if (message != null) ...[
           const SizedBox(height: 8),
-          Text(message!,
-              style:
-                  TextStyle(color: colors.text, fontWeight: FontWeight.w800)),
+          Text(
+            message!,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+          ),
         ],
         const SizedBox(height: 14),
         FilledButton.icon(
@@ -7556,8 +7890,9 @@ class _RiderEnrollmentForm extends StatelessWidget {
             backgroundColor: colors.text,
             foregroundColor: colors.inverseText,
             padding: const EdgeInsets.symmetric(vertical: 17),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
         ),
       ],
@@ -7604,7 +7939,7 @@ class _RiderWorkspace extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onRejectJob;
   final ValueChanged<Map<String, dynamic>> onIgnoreJob;
   final void Function(Map<String, dynamic> job, String status)
-      onUpdateJobStatus;
+  onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
   final bool nested;
@@ -7679,7 +8014,48 @@ class _RiderWorkspace extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          _MiniMap(colors: colors, active: true),
+          if (jobMessage != null &&
+              !jobMessage!.toLowerCase().contains('completed')) ...[
+            _GlassPanel(
+              colors: colors,
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: colors.text),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      jobMessage!,
+                      style: TextStyle(
+                        color: colors.text,
+                        height: 1.35,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+          _GlassPanel(
+            colors: colors,
+            child: Row(
+              children: [
+                Icon(Icons.route_outlined, color: colors.text),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No live route at the moment.',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      height: 1.35,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 18),
           _RiderOrderProfileCard(
             colors: colors,
@@ -7710,7 +8086,6 @@ class _RiderWorkspace extends StatelessWidget {
           _AvailableDriverJobsPanel(
             colors: colors,
             jobs: availableJobs,
-            message: jobMessage,
             onAcceptJob: onAcceptJob,
             onRejectJob: onRejectJob,
             onIgnoreJob: onIgnoreJob,
@@ -7817,25 +8192,33 @@ class _RiderWorkspace extends StatelessWidget {
                 _SectionTitle(colors: colors, title: 'Withdraw to bank'),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors, controller: withdrawAmount, hint: 'Amount'),
+                  colors: colors,
+                  controller: withdrawAmount,
+                  hint: 'Amount to withdraw',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors, controller: bankName, hint: 'Bank name'),
+                  colors: colors,
+                  controller: bankName,
+                  hint: 'Bank name',
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: _InputBox(
-                          colors: colors,
-                          controller: sortCode,
-                          hint: 'Sort code'),
+                        colors: colors,
+                        controller: sortCode,
+                        hint: 'Sort code',
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: _InputBox(
-                          colors: colors,
-                          controller: accountNumber,
-                          hint: 'Account number'),
+                        colors: colors,
+                        controller: accountNumber,
+                        hint: 'Account number',
+                      ),
                     ),
                   ],
                 ),
@@ -7847,21 +8230,37 @@ class _RiderWorkspace extends StatelessWidget {
                   title: Text(
                     'Save this bank for future withdrawals',
                     style: TextStyle(
-                        color: colors.text, fontWeight: FontWeight.w700),
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (withdrawMessage != null) ...[
                   const SizedBox(height: 6),
-                  Text(withdrawMessage!,
-                      style: TextStyle(
-                          color: colors.text, fontWeight: FontWeight.w800)),
+                  Text(
+                    withdrawMessage!,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
                     onPressed:
-                        signedIn && !submittingWithdrawal ? onWithdraw : null,
+                        signedIn &&
+                            !submittingWithdrawal &&
+                            _canRequestWithdrawal(
+                              amountText: withdrawAmount.text,
+                              availableBalance: earnings.availableBalance,
+                              bankName: bankName.text,
+                              sortCode: sortCode.text,
+                              accountNumber: accountNumber.text,
+                            )
+                        ? onWithdraw
+                        : null,
                     icon: submittingWithdrawal
                         ? const SizedBox(
                             width: 18,
@@ -7869,9 +8268,11 @@ class _RiderWorkspace extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.account_balance),
-                    label: Text(submittingWithdrawal
-                        ? 'Sending request...'
-                        : 'Request withdrawal'),
+                    label: Text(
+                      submittingWithdrawal
+                          ? 'Sending request...'
+                          : 'Request withdrawal',
+                    ),
                     style: FilledButton.styleFrom(
                       backgroundColor: colors.text,
                       foregroundColor: colors.inverseText,
@@ -7891,45 +8292,41 @@ class _RiderWorkspace extends StatelessWidget {
                 _SectionTitle(colors: colors, title: 'Driver documents'),
                 const SizedBox(height: 8),
                 Text(
-                  'Upload your driving licence, insurance, proof of address, vehicle documents, and profile photo for Circum review.',
+                  'Upload each document for Circum review. Replace a file if support asks for a new copy.',
                   style: TextStyle(
-                      color: colors.mutedText,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600),
+                    color: colors.mutedText,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    'Driving licence',
-                    'Insurance',
-                    'Proof of address',
-                    'Vehicle documents',
-                    'Profile photo',
-                  ].map((type) {
-                    return ActionChip(
-                      label: Text(type),
-                      onPressed: () => documentType.text = type,
-                    );
-                  }).toList(),
+                _RiderDocumentStatusList(
+                  colors: colors,
+                  profile: riderProfile,
+                  onSelectType: (type) => documentType.text = type,
                 ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: documentType,
-                    hint: 'Document type'),
+                  colors: colors,
+                  controller: documentType,
+                  hint: 'Document type',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: documentNotes,
-                    hint: 'Notes for review',
-                    maxLines: 2),
+                  colors: colors,
+                  controller: documentNotes,
+                  hint: 'Notes for review',
+                  maxLines: 2,
+                ),
                 if (documentMessage != null) ...[
                   const SizedBox(height: 8),
-                  Text(documentMessage!,
-                      style: TextStyle(
-                          color: colors.text, fontWeight: FontWeight.w800)),
+                  Text(
+                    documentMessage!,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 12),
                 SizedBox(
@@ -7945,9 +8342,9 @@ class _RiderWorkspace extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.upload_file),
-                    label: Text(submittingDocument
-                        ? 'Uploading...'
-                        : 'Upload document'),
+                    label: Text(
+                      submittingDocument ? 'Uploading...' : 'Upload document',
+                    ),
                   ),
                 ),
               ],
@@ -7987,14 +8384,168 @@ class _RiderWorkspace extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          _AdminDriverQualityPanel(colors: colors),
         ],
       ),
     );
   }
 
   static String _money(double value) => '£${value.toStringAsFixed(2)}';
+
+  static bool _canRequestWithdrawal({
+    required String amountText,
+    required double availableBalance,
+    required String bankName,
+    required String sortCode,
+    required String accountNumber,
+  }) {
+    final amount = double.tryParse(amountText.trim()) ?? 0;
+    return amount > 0 &&
+        amount <= availableBalance &&
+        bankName.trim().isNotEmpty &&
+        sortCode.trim().isNotEmpty &&
+        accountNumber.trim().isNotEmpty;
+  }
+}
+
+class _RiderDocumentStatusList extends StatelessWidget {
+  static const documentTypes = [
+    'Driving licence',
+    'Insurance',
+    'Proof of address',
+    'Vehicle documents',
+    'Profile photo',
+    'Right to work',
+  ];
+
+  final _CircumColors colors;
+  final Map<String, dynamic>? profile;
+  final ValueChanged<String> onSelectType;
+
+  const _RiderDocumentStatusList({
+    required this.colors,
+    required this.profile,
+    required this.onSelectType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: documentTypes.map((type) {
+        final status = _statusFor(type);
+        final rejected = status == 'rejected';
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.field,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _statusIcon(status),
+                color: rejected ? const Color(0xffdc2626) : colors.text,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      type,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _friendlyStatus(status),
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (rejected && _rejectionReason(type).isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _rejectionReason(type),
+                        style: const TextStyle(
+                          color: Color(0xffdc2626),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => onSelectType(type),
+                child: Text(status == 'missing' ? 'Upload' : 'Replace'),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  String _statusFor(String type) {
+    final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final documents =
+        (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
+        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final entry =
+        documents[key] ??
+        documents[type] ??
+        documents[type.toLowerCase()] ??
+        documents[key.replaceAll('_', '')];
+    if (entry is Map) {
+      final status =
+          '${entry['status'] ?? entry['verificationStatus'] ?? 'uploaded'}'
+              .toLowerCase();
+      return status == 'pending' ? 'under_review' : status;
+    }
+    if (entry == true) return 'uploaded';
+    return 'missing';
+  }
+
+  String _rejectionReason(String type) {
+    final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final documents =
+        (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
+        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final entry =
+        documents[key] ?? documents[type] ?? documents[type.toLowerCase()];
+    if (entry is Map) {
+      return '${entry['rejectionReason'] ?? entry['reason'] ?? ''}'.trim();
+    }
+    return '';
+  }
+
+  static IconData _statusIcon(String status) {
+    return switch (status) {
+      'approved' => Icons.verified,
+      'uploaded' || 'under_review' => Icons.hourglass_top,
+      'rejected' => Icons.error_outline,
+      _ => Icons.upload_file,
+    };
+  }
+
+  static String _friendlyStatus(String status) {
+    return switch (status) {
+      'approved' => 'Approved',
+      'uploaded' => 'Uploaded',
+      'under_review' || 'pending' => 'Under review',
+      'rejected' => 'Rejected',
+      _ => 'Missing',
+    };
+  }
 }
 
 class _AccountSecurityPanel extends StatelessWidget {
@@ -8034,7 +8585,7 @@ class _AccountSecurityPanel extends StatelessWidget {
           _SectionTitle(colors: colors, title: title),
           const SizedBox(height: 8),
           Text(
-            'Manage your sign-in details with Firebase Authentication.',
+            'Manage your sign-in details.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.35,
@@ -8133,7 +8684,6 @@ class _AccountSecurityPanel extends StatelessWidget {
 class _AvailableDriverJobsPanel extends StatelessWidget {
   final _CircumColors colors;
   final List<Map<String, dynamic>> jobs;
-  final String? message;
   final ValueChanged<Map<String, dynamic>> onAcceptJob;
   final ValueChanged<Map<String, dynamic>> onRejectJob;
   final ValueChanged<Map<String, dynamic>> onIgnoreJob;
@@ -8143,7 +8693,6 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
   const _AvailableDriverJobsPanel({
     required this.colors,
     required this.jobs,
-    required this.message,
     required this.onAcceptJob,
     required this.onRejectJob,
     required this.onIgnoreJob,
@@ -8168,13 +8717,6 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
               height: 1.35,
             ),
           ),
-          if (message != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              message!,
-              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
-            ),
-          ],
           const SizedBox(height: 12),
           if (jobs.isEmpty)
             Text(
@@ -8182,16 +8724,20 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
               style: TextStyle(color: colors.mutedText),
             )
           else
-            ...jobs.take(8).map((job) => _DriverJobCard(
-                  colors: colors,
-                  job: job,
-                  onAccept: () => onAcceptJob(job),
-                  onReject: () => onRejectJob(job),
-                  onIgnore: () => onIgnoreJob(job),
-                  onReportWeight: () => onReportIssue(job, 'weight'),
-                  onReportParcel: () => onReportIssue(job, 'parcel'),
-                  onOpenChat: () => onOpenChat(job),
-                )),
+            ...jobs
+                .take(8)
+                .map(
+                  (job) => _DriverJobCard(
+                    colors: colors,
+                    job: job,
+                    onAccept: () => onAcceptJob(job),
+                    onReject: () => onRejectJob(job),
+                    onIgnore: () => onIgnoreJob(job),
+                    onReportWeight: () => onReportIssue(job, 'weight'),
+                    onReportParcel: () => onReportIssue(job, 'parcel'),
+                    onOpenChat: () => onOpenChat(job),
+                  ),
+                ),
         ],
       ),
     );
@@ -8205,7 +8751,7 @@ class _RiderJobListPanel extends StatelessWidget {
   final List<Map<String, dynamic>> jobs;
   final bool completed;
   final void Function(Map<String, dynamic> job, String status)
-      onUpdateJobStatus;
+  onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
 
@@ -8232,18 +8778,22 @@ class _RiderJobListPanel extends StatelessWidget {
           if (jobs.isEmpty)
             Text(emptyText, style: TextStyle(color: colors.mutedText))
           else
-            ...jobs.take(8).map((job) => _DriverJobCard(
-                  colors: colors,
-                  job: job,
-                  completed: completed,
-                  onAccept: () => onUpdateJobStatus(job, 'accepted'),
-                  onUpdateStatus: completed
-                      ? null
-                      : (status) => onUpdateJobStatus(job, status),
-                  onReportWeight: () => onReportIssue(job, 'weight'),
-                  onReportParcel: () => onReportIssue(job, 'parcel'),
-                  onOpenChat: () => onOpenChat(job),
-                )),
+            ...jobs
+                .take(8)
+                .map(
+                  (job) => _DriverJobCard(
+                    colors: colors,
+                    job: job,
+                    completed: completed,
+                    onAccept: () => onUpdateJobStatus(job, 'accepted'),
+                    onUpdateStatus: completed
+                        ? null
+                        : (status) => onUpdateJobStatus(job, status),
+                    onReportWeight: () => onReportIssue(job, 'weight'),
+                    onReportParcel: () => onReportIssue(job, 'parcel'),
+                    onOpenChat: () => onOpenChat(job),
+                  ),
+                ),
         ],
       ),
     );
@@ -8279,17 +8829,21 @@ class _DriverJobCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
     final pricing =
         (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final customerWeight =
-        _num(job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg']);
-    final irisWeight =
-        _num(job['irisEstimatedWeight'] ?? job['irisEstimatedWeightKg']);
-    final chargeableWeight = _num(job['finalWeightUsed'] ??
-        job['finalChargeableWeight'] ??
-        job['confirmedWeightKg']);
+        const <String, dynamic>{};
+    final customerWeight = _num(
+      job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg'],
+    );
+    final irisWeight = _num(
+      job['irisEstimatedWeight'] ?? job['irisEstimatedWeightKg'],
+    );
+    final chargeableWeight = _num(
+      job['finalWeightUsed'] ??
+          job['finalChargeableWeight'] ??
+          job['confirmedWeightKg'],
+    );
     final category =
         '${job['weightCategory'] ?? job['confirmedWeightBand'] ?? summary['confirmedWeightBand'] ?? 'Parcel'}';
     final confidence =
@@ -8299,37 +8853,71 @@ class _DriverJobCard extends StatelessWidget {
     final distance = _num(summary['estimatedDistanceMiles']);
     final fare = _num(summary['totalFare'] ?? job['fare'] ?? job['price']);
     final payout = _num(summary['driverPayout'] ?? job['driverPayout']);
-    final tip =
-        _num(job['tipAmount'] ?? job['riderTip'] ?? summary['tipAmount']);
+    final tip = _num(
+      job['tipAmount'] ?? job['riderTip'] ?? summary['tipAmount'],
+    );
     final vehicle =
         '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
     final serviceLevel =
         '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
-    final vanguardEnabled = job['vanguardEnabled'] == true ||
+    final vanguardEnabled =
+        job['vanguardEnabled'] == true ||
         summary['vanguardEnabled'] == true ||
         ((job['vanguardProtection'] as Map?)?['enabled'] == true);
-    final duration = _num(summary['estimatedDurationMinutes'] ??
-        job['estimatedDurationMinutes'] ??
-        job['etaMinutes']);
+    final duration = _num(
+      summary['estimatedDurationMinutes'] ??
+          job['estimatedDurationMinutes'] ??
+          job['etaMinutes'],
+    );
     final dimensions =
         '${summary['packageDimensions'] ?? job['packageDimensions'] ?? job['dimensions'] ?? ''}'
             .trim();
     final warnings = _warnings(chargeableWeight, category, job);
     final showContactDetails = onReject == null && onIgnore == null;
-    final senderName = _contactValue(job, summary, 'senderName',
-        nestedKey: 'senderDetails', nestedName: 'name');
-    final senderPhone = _contactValue(job, summary, 'senderPhone',
-        nestedKey: 'senderDetails', nestedName: 'phone');
-    final receiverName = _contactValue(job, summary, 'receiverName',
-        nestedKey: 'receiverDetails', nestedName: 'name');
-    final receiverPhone = _contactValue(job, summary, 'receiverPhone',
-        nestedKey: 'receiverDetails', nestedName: 'phone');
-    final collectionName = _contactValue(job, summary, 'collectionContactName',
-        nestedKey: 'collectionContact', nestedName: 'name');
+    final senderName = _contactValue(
+      job,
+      summary,
+      'senderName',
+      nestedKey: 'senderDetails',
+      nestedName: 'name',
+    );
+    final senderPhone = _contactValue(
+      job,
+      summary,
+      'senderPhone',
+      nestedKey: 'senderDetails',
+      nestedName: 'phone',
+    );
+    final receiverName = _contactValue(
+      job,
+      summary,
+      'receiverName',
+      nestedKey: 'receiverDetails',
+      nestedName: 'name',
+    );
+    final receiverPhone = _contactValue(
+      job,
+      summary,
+      'receiverPhone',
+      nestedKey: 'receiverDetails',
+      nestedName: 'phone',
+    );
+    final collectionName = _contactValue(
+      job,
+      summary,
+      'collectionContactName',
+      nestedKey: 'collectionContact',
+      nestedName: 'name',
+    );
     final collectionPhone = _contactValue(
-        job, summary, 'collectionContactPhone',
-        nestedKey: 'collectionContact', nestedName: 'phone');
-    final collectionDifferent = (job['collectionContactDifferent'] == true ||
+      job,
+      summary,
+      'collectionContactPhone',
+      nestedKey: 'collectionContact',
+      nestedName: 'phone',
+    );
+    final collectionDifferent =
+        (job['collectionContactDifferent'] == true ||
         summary['collectionContactDifferent'] == true ||
         ((job['collectionContact'] as Map?)?['differentFromSender'] == true));
 
@@ -8417,8 +9005,9 @@ class _DriverJobCard extends StatelessWidget {
               colors: colors,
               icon: Icons.person_pin_circle,
               label: 'Receiver',
-              value:
-                  '${receiverName.isEmpty ? 'Not set' : receiverName}${receiverPhone.isEmpty ? '' : ' • $receiverPhone'}',
+              value: receiverName.isEmpty
+                  ? 'Receiver not provided'
+                  : '$receiverName${receiverPhone.isEmpty ? '' : ' • $receiverPhone'}',
             ),
           ],
           _JobInfoLine(
@@ -8433,8 +9022,9 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.timer,
             label: 'ETA',
-            value:
-                duration > 0 ? '${duration.toStringAsFixed(0)} min' : 'Not set',
+            value: duration > 0
+                ? '${duration.toStringAsFixed(0)} min'
+                : 'Not set',
           ),
           _JobInfoLine(
             colors: colors,
@@ -8502,11 +9092,14 @@ class _DriverJobCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              FilledButton.icon(
-                onPressed: completed ? null : onAccept,
-                icon: Icon(completed ? Icons.done_all : Icons.check_circle),
-                label: Text(completed ? 'Completed' : 'Accept job'),
-              ),
+              if (completed)
+                _HealthChip(label: 'Completed')
+              else
+                FilledButton.icon(
+                  onPressed: onAccept,
+                  icon: const Icon(Icons.check_circle),
+                  label: const Text('Accept job'),
+                ),
               OutlinedButton.icon(
                 onPressed: onOpenChat,
                 icon: const Icon(Icons.chat_bubble_outline),
@@ -8541,16 +9134,18 @@ class _DriverJobCard extends StatelessWidget {
                   icon: const Icon(Icons.visibility_off),
                   label: const Text('Ignore'),
                 ),
-              OutlinedButton.icon(
-                onPressed: onReportWeight,
-                icon: const Icon(Icons.scale),
-                label: const Text('Weight issue'),
-              ),
-              OutlinedButton.icon(
-                onPressed: onReportParcel,
-                icon: const Icon(Icons.report_problem),
-                label: const Text('Parcel issue'),
-              ),
+              if (!completed) ...[
+                OutlinedButton.icon(
+                  onPressed: onReportWeight,
+                  icon: const Icon(Icons.scale),
+                  label: const Text('Weight issue'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onReportParcel,
+                  icon: const Icon(Icons.report_problem),
+                  label: const Text('Parcel issue'),
+                ),
+              ],
             ],
           ),
         ],
@@ -8731,7 +9326,8 @@ class _DriverPerformancePanel extends StatelessWidget {
               if (performance.recentRatingTrend > 0)
                 const _HealthChip(label: 'Improving'),
               if (DriverPerformanceService.shouldFlagLowRatedDriver(
-                  performance))
+                performance,
+              ))
                 const _HealthChip(label: 'Needs review'),
             ],
           ),
@@ -8746,7 +9342,9 @@ class _DriverPerformancePanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...recentRatings.take(3).map(
+          ...recentRatings
+              .take(3)
+              .map(
                 (rating) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _RatingFeedbackRow(colors: colors, rating: rating),
@@ -8786,153 +9384,51 @@ class _RatingFeedbackRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final feedback = rating.hiddenByAdmin
+        ? 'Written feedback hidden by Circum.'
+        : rating.feedbackText.trim().isNotEmpty
+        ? rating.feedbackText.trim()
+        : rating.feedbackTags.isNotEmpty
+        ? rating.feedbackTags.join(', ')
+        : 'No written feedback';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.field,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '★ ${rating.starRating}',
-            style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              rating.hiddenByAdmin
-                  ? 'Written feedback hidden by admin.'
-                  : (rating.feedbackText.isEmpty
-                      ? rating.feedbackTags.join(', ')
-                      : rating.feedbackText),
-              style: TextStyle(
-                color: colors.mutedText,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AdminDriverQualityPanel extends StatelessWidget {
-  final _CircumColors colors;
-
-  const _AdminDriverQualityPanel({required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      colors: colors,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(colors: colors, title: 'Operations view'),
+          Row(
+            children: [
+              Text(
+                '★' * rating.starRating.clamp(0, 5),
+                style: const TextStyle(
+                  color: Color(0xffffb020),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                rating.deliveryId.isEmpty
+                    ? 'Delivery'
+                    : 'Ref ${rating.deliveryId}',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(
-            'Driver quality, poor ratings, complaints, and review status.',
+            feedback,
             style: TextStyle(
               color: colors.mutedText,
               height: 1.35,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('driverPerformanceMetrics')
-                .limit(12)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Text(
-                  'Could not load driver quality right now.',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                );
-              }
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final docs = snapshot.data?.docs ?? const [];
-              if (docs.isEmpty) {
-                return Text(
-                  'No driver quality records yet.',
-                  style: TextStyle(
-                    color: colors.mutedText,
-                    fontWeight: FontWeight.w700,
-                  ),
-                );
-              }
-              return Column(
-                children: docs.map((doc) {
-                  final metric =
-                      DriverPerformanceMetric.fromMap(doc.id, doc.data());
-                  return _AdminDriverRow(colors: colors, metric: metric);
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AdminDriverRow extends StatelessWidget {
-  final _CircumColors colors;
-  final DriverPerformanceMetric metric;
-
-  const _AdminDriverRow({required this.colors, required this.metric});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              metric.driverId,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          Text(
-            '★ ${metric.averageRating.toStringAsFixed(2)}',
-            style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '${metric.completedTrips} trips',
-            style: TextStyle(
-              color: colors.mutedText,
               fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '${metric.qualityScore.toStringAsFixed(0)}%',
-            style: TextStyle(
-              color: DriverPerformanceService.shouldFlagLowRatedDriver(metric)
-                  ? const Color(0xffdc2626)
-                  : colors.success,
-              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -8959,31 +9455,34 @@ class _RiderEarningsSnapshot {
   });
 
   factory _RiderEarningsSnapshot.empty() => const _RiderEarningsSnapshot(
-        availableBalance: 0,
-        pendingWithdrawal: 0,
-        lifetimeEarnings: 0,
-        tipsReceived: 0,
-        withdrawnEarnings: 0,
-        completedJobs: 0,
-      );
+    availableBalance: 0,
+    pendingWithdrawal: 0,
+    lifetimeEarnings: 0,
+    tipsReceived: 0,
+    withdrawnEarnings: 0,
+    completedJobs: 0,
+  );
 
   factory _RiderEarningsSnapshot.fromMap(Map<String, dynamic>? data) {
     if (data == null) return _RiderEarningsSnapshot.empty();
     return _RiderEarningsSnapshot(
-      availableBalance: (data['availableBalance'] as num? ??
-              data['accountBalance'] as num? ??
-              0)
-          .toDouble(),
+      availableBalance:
+          (data['availableBalance'] as num? ??
+                  data['accountBalance'] as num? ??
+                  0)
+              .toDouble(),
       pendingWithdrawal: (data['pendingWithdrawal'] as num? ?? 0).toDouble(),
-      lifetimeEarnings: (data['lifetimeEarnings'] as num? ??
-              data['totalAmountEarned'] as num? ??
-              0)
-          .toDouble(),
+      lifetimeEarnings:
+          (data['lifetimeEarnings'] as num? ??
+                  data['totalAmountEarned'] as num? ??
+                  0)
+              .toDouble(),
       tipsReceived: (data['tipsReceived'] as num? ?? 0).toDouble(),
-      withdrawnEarnings: (data['withdrawnEarnings'] as num? ??
-              data['totalWithdrawn'] as num? ??
-              0)
-          .toDouble(),
+      withdrawnEarnings:
+          (data['withdrawnEarnings'] as num? ??
+                  data['totalWithdrawn'] as num? ??
+                  0)
+              .toDouble(),
       completedJobs:
           (data['completedJobs'] as num? ?? data['totalTrips'] as num? ?? 0)
               .toInt(),
@@ -9013,17 +9512,23 @@ class _RiderStatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(
-                  color: colors.mutedText,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800)),
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value,
-              style: TextStyle(
-                  color: colors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900)),
+          Text(
+            value,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );
@@ -9056,13 +9561,21 @@ class _RiderChecklistRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        color: colors.text, fontWeight: FontWeight.w900)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(value,
-                    style: TextStyle(
-                        color: colors.mutedText, fontWeight: FontWeight.w600)),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -9203,6 +9716,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _firebaseError;
   String? _ratingMessage;
   String? _senderProfileMessage;
+  String? _senderDeliveryLoadError;
   String? _senderSecurityMessage;
   _ValidatedAddress? _validatedPickup;
   _ValidatedAddress? _validatedDropoff;
@@ -9241,9 +9755,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _senderSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _driverProfileSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _driverPerformanceSub;
+  _driverPerformanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _assignedDriverRatingsSub;
+  _assignedDriverRatingsSub;
 
   bool get _matchingHasStarted =>
       _checkoutState == _CheckoutState.matchingRiders ||
@@ -9342,7 +9856,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
+            final desktop =
+                constraints.maxWidth >= _desktopWebBreakpoint &&
                 _step != _SenderStep.healthPlus;
             return Column(
               children: [
@@ -9369,6 +9884,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           firebaseError: _firebaseError,
                           statusIndex: _statusIndex,
                           receivedAt: _activeRequestReceivedAt,
+                          activeDelivery: _activeSenderDelivery,
+                          deliveryLoadError: _senderDeliveryLoadError,
+                          onSendParcel: () =>
+                              setState(() => _step = _SenderStep.details),
+                          onViewHistory: () => setState(() {
+                            _step = _SenderStep.profile;
+                            _senderProfileTab = 1;
+                          }),
                           child: _buildCurrentStep(colors),
                         )
                       : SingleChildScrollView(
@@ -9433,295 +9956,294 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     return switch (_step) {
       _SenderStep.dashboard => _SenderDashboardStep(
-          key: const ValueKey('sender-dashboard'),
-          colors: colors,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          onSendParcel: () => setState(() => _step = _SenderStep.details),
-          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
-          onProfile: () => setState(() => _step = _SenderStep.profile),
-          onSupport: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-        ),
+        key: const ValueKey('sender-dashboard'),
+        colors: colors,
+        profile: _senderProfile,
+        deliveries: _senderDeliveries,
+        onSendParcel: () => setState(() => _step = _SenderStep.details),
+        onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+        onProfile: () => setState(() => _step = _SenderStep.profile),
+        onSupport: () => setState(() {
+          _supportChat = true;
+          _chatOpen = true;
+        }),
+      ),
       _SenderStep.details => _DetailsStep(
-          key: const ValueKey('details'),
-          colors: colors,
-          pickup: _pickup,
-          dropoff: _dropoff,
-          savedAddresses: _senderProfile?.savedAddresses ?? const [],
-          onSavedPickup: _applySavedPickupAddress,
-          onSavedDropoff: _applySavedDropoffAddress,
-          pickupVerified: _pickupAddressVerified,
-          dropoffVerified: _dropoffAddressVerified,
-          locationValidationMessage: _locationValidationMessage,
-          checkoutState: _checkoutState,
-          canSubmit: _canAnalyzeDelivery,
-          senderName: _senderName,
-          senderPhone: _senderPhone,
-          senderDisplayName: _effectiveSenderName,
-          senderDisplayPhone: _effectiveSenderPhone,
-          senderDetailsRequired: _senderDetailsRequired,
-          receiverName: _receiverName,
-          receiverPhone: _receiverPhone,
-          differentCollectionContact: _differentCollectionContact,
-          collectionContactName: _collectionContactName,
-          collectionContactPhone: _collectionContactPhone,
-          contactDetailsReady: _hasRequiredContactDetails,
-          contactValidationMessage: _contactValidationMessage,
-          onDifferentCollectionContact: (value) {
-            setState(() {
-              _differentCollectionContact = value;
-              if (!value) {
-                _collectionContactName.clear();
-                _collectionContactPhone.clear();
-              }
-            });
-          },
-          onPickupSelected: _selectPickupAddress,
-          onDropoffSelected: _selectDropoffAddress,
-          onPickupEdited: _handlePickupEdited,
-          onDropoffEdited: _handleDropoffEdited,
-          description: _description,
-          weight: _weight,
-          irisEstimatedWeightKg: _irisEstimatedWeightKg,
-          irisWeightBand: _irisWeightBand,
-          irisWeightConfidence: _irisWeightConfidence,
-          irisWeightExplanation: _irisWeightExplanation,
-          irisMatchedItemName: _irisMatchedItemName,
-          irisTruthBand: _irisTruthBand(),
-          senderEnteredWeightKg: _senderEnteredWeightKg,
-          pricingWeightKg: _confirmedWeightKg,
-          weightSource: _weightSourceText,
-          pricingReason: _weightPricingReason,
-          verificationRequired: _weightVerificationRequired,
-          weightMessage: _weightMessage,
-          onConfirmIrisWeight: _confirmIrisWeight,
-          parcelPhotoName: _parcelPhoto?.name,
-          parcelPhotoBusy: _parcelPhotoBusy,
-          parcelPhotoMessage: _parcelPhotoMessage,
-          onPickParcelPhoto: _pickParcelPhoto,
-          onRemoveParcelPhoto: () => setState(() {
-            _parcelPhoto = null;
-            _parcelPhotoCapturedAt = null;
-            _parcelPhotoMessage = 'Parcel photo removed.';
-          }),
-          scheduledPickupDate: _scheduledPickupDate,
-          scheduledPickupWindow: _scheduledPickupWindow,
-          scheduledDropoffDate: _scheduledDropoffDate,
-          scheduledDropoffWindow: _scheduledDropoffWindow,
-          analyzing: _analyzing,
-          onSubmit: _analyseRequest,
-        ),
+        key: const ValueKey('details'),
+        colors: colors,
+        pickup: _pickup,
+        dropoff: _dropoff,
+        savedAddresses: _senderProfile?.savedAddresses ?? const [],
+        onSavedPickup: _applySavedPickupAddress,
+        onSavedDropoff: _applySavedDropoffAddress,
+        pickupVerified: _pickupAddressVerified,
+        dropoffVerified: _dropoffAddressVerified,
+        locationValidationMessage: _locationValidationMessage,
+        checkoutState: _checkoutState,
+        canSubmit: _canAnalyzeDelivery,
+        senderName: _senderName,
+        senderPhone: _senderPhone,
+        senderDisplayName: _effectiveSenderName,
+        senderDisplayPhone: _effectiveSenderPhone,
+        senderDetailsRequired: _senderDetailsRequired,
+        receiverName: _receiverName,
+        receiverPhone: _receiverPhone,
+        differentCollectionContact: _differentCollectionContact,
+        collectionContactName: _collectionContactName,
+        collectionContactPhone: _collectionContactPhone,
+        contactDetailsReady: _hasRequiredContactDetails,
+        contactValidationMessage: _contactValidationMessage,
+        onDifferentCollectionContact: (value) {
+          setState(() {
+            _differentCollectionContact = value;
+            if (!value) {
+              _collectionContactName.clear();
+              _collectionContactPhone.clear();
+            }
+          });
+        },
+        onPickupSelected: _selectPickupAddress,
+        onDropoffSelected: _selectDropoffAddress,
+        onPickupEdited: _handlePickupEdited,
+        onDropoffEdited: _handleDropoffEdited,
+        description: _description,
+        weight: _weight,
+        irisEstimatedWeightKg: _irisEstimatedWeightKg,
+        irisWeightBand: _irisWeightBand,
+        irisWeightConfidence: _irisWeightConfidence,
+        irisWeightExplanation: _irisWeightExplanation,
+        irisMatchedItemName: _irisMatchedItemName,
+        irisTruthBand: _irisTruthBand(),
+        senderEnteredWeightKg: _senderEnteredWeightKg,
+        pricingWeightKg: _confirmedWeightKg,
+        weightSource: _weightSourceText,
+        pricingReason: _weightPricingReason,
+        verificationRequired: _weightVerificationRequired,
+        weightMessage: _weightMessage,
+        onConfirmIrisWeight: _confirmIrisWeight,
+        parcelPhotoName: _parcelPhoto?.name,
+        parcelPhotoBusy: _parcelPhotoBusy,
+        parcelPhotoMessage: _parcelPhotoMessage,
+        onPickParcelPhoto: _pickParcelPhoto,
+        onRemoveParcelPhoto: () => setState(() {
+          _parcelPhoto = null;
+          _parcelPhotoCapturedAt = null;
+          _parcelPhotoMessage = 'Parcel photo removed.';
+        }),
+        scheduledPickupDate: _scheduledPickupDate,
+        scheduledPickupWindow: _scheduledPickupWindow,
+        scheduledDropoffDate: _scheduledDropoffDate,
+        scheduledDropoffWindow: _scheduledDropoffWindow,
+        analyzing: _analyzing,
+        onSubmit: _analyseRequest,
+      ),
       _SenderStep.vehicle => _VehicleStep(
-          key: const ValueKey('vehicle'),
-          colors: colors,
-          pickup: _pickup.text,
-          dropoff: _dropoff.text,
-          chargeableWeightKg: _deliveryClassification.finalWeightKg,
-          vehicleSuitability: _vehicleSuitability,
-          selectedVehicle: _effectiveVehicle,
-          selectedSpeed: _selectedSpeed,
-          onVehicle: (vehicle) {
-            final suitability = _vehicleSuitability;
-            if (!DeliveryPricing.vehicleCanCarryDelivery(
-              vehicle.name,
-              suitability,
-            )) {
-              setState(() {
-                _selectedVehicle = _effectiveVehicle;
-                _weightMessage =
-                    'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
-              });
-              return;
-            }
+        key: const ValueKey('vehicle'),
+        colors: colors,
+        pickup: _pickup.text,
+        dropoff: _dropoff.text,
+        chargeableWeightKg: _deliveryClassification.finalWeightKg,
+        vehicleSuitability: _vehicleSuitability,
+        selectedVehicle: _effectiveVehicle,
+        selectedSpeed: _selectedSpeed,
+        onVehicle: (vehicle) {
+          final suitability = _vehicleSuitability;
+          if (!DeliveryPricing.vehicleCanCarryDelivery(
+            vehicle.name,
+            suitability,
+          )) {
             setState(() {
-              _selectedVehicle = vehicle;
-              _checkoutState = _CheckoutState.awaitingPayment;
+              _selectedVehicle = _effectiveVehicle;
+              _weightMessage =
+                  'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
             });
-          },
-          onSpeed: (speed) => setState(() {
-            _selectedSpeed = speed;
+            return;
+          }
+          setState(() {
+            _selectedVehicle = vehicle;
             _checkoutState = _CheckoutState.awaitingPayment;
-          }),
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onContinue: () => setState(() {
-            _checkoutState = _CheckoutState.awaitingPayment;
-            _step = _SenderStep.payment;
-          }),
-        ),
+          });
+        },
+        onSpeed: (speed) => setState(() {
+          _selectedSpeed = speed;
+          _checkoutState = _CheckoutState.awaitingPayment;
+        }),
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onContinue: () => setState(() {
+          _checkoutState = _CheckoutState.awaitingPayment;
+          _step = _SenderStep.payment;
+        }),
+      ),
       _SenderStep.payment => _PaymentStep(
-          key: const ValueKey('payment'),
-          colors: colors,
-          vehicle: _effectiveVehicle,
-          speed: _selectedSpeed,
-          breakdown: _quoteBreakdown,
-          distanceMiles: _confirmedRouteDistanceMiles,
-          locationsConfirmed: _hasValidatedRoute,
-          routeMessage: _locationValidationMessage,
-          irisEstimatedWeightKg: _irisEstimatedWeightKg,
-          senderEnteredWeightKg: _senderEnteredWeightKg,
-          weightKg: _deliveryClassification.finalWeightKg,
-          total: _quoteTotal,
-          checkoutState: _checkoutState,
-          weightConfirmed: _hasConfirmedWeight,
-          weightSource: _weightSourceText,
-          pricingReason: _weightPricingReason,
-          scheduledPickupDate: _scheduledPickupDate.text.trim(),
-          scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
-          scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
-          scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
-          onBack: () => setState(() {
-            if (!_matchingHasStarted) {
-              _checkoutState = _CheckoutState.awaitingPayment;
-            }
-            _step = _SenderStep.vehicle;
-          }),
-          onPay: _confirmPayment,
-        ),
+        key: const ValueKey('payment'),
+        colors: colors,
+        vehicle: _effectiveVehicle,
+        speed: _selectedSpeed,
+        breakdown: _quoteBreakdown,
+        distanceMiles: _confirmedRouteDistanceMiles,
+        locationsConfirmed: _hasValidatedRoute,
+        routeMessage: _locationValidationMessage,
+        irisEstimatedWeightKg: _irisEstimatedWeightKg,
+        senderEnteredWeightKg: _senderEnteredWeightKg,
+        weightKg: _deliveryClassification.finalWeightKg,
+        total: _quoteTotal,
+        checkoutState: _checkoutState,
+        weightConfirmed: _hasConfirmedWeight,
+        weightSource: _weightSourceText,
+        pricingReason: _weightPricingReason,
+        scheduledPickupDate: _scheduledPickupDate.text.trim(),
+        scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
+        scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
+        scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
+        onBack: () => setState(() {
+          if (!_matchingHasStarted) {
+            _checkoutState = _CheckoutState.awaitingPayment;
+          }
+          _step = _SenderStep.vehicle;
+        }),
+        onPay: _confirmPayment,
+      ),
       _SenderStep.tracking => _TrackingStep(
-          key: const ValueKey('tracking'),
-          colors: colors,
-          orderId: _activeOrderId ?? 'CIR-2026',
-          pickup: _pickup.text,
-          dropoff: _dropoff.text,
-          vehicle: _effectiveVehicle,
-          statusIndex: _statusIndex,
-          broadcasting: _broadcasting,
-          checkoutState: _checkoutState,
-          firebaseOnline: _firebaseOnline,
-          firebaseError: _firebaseError,
-          receivedAt: _activeRequestReceivedAt,
-          pickupAddress: _validatedPickup,
-          dropoffAddress: _validatedDropoff,
-          liveLocation: _liveLocationData,
-          vanguardData: _activeVanguardData,
-          assignedDriver: _assignedDriver,
-          assignedDriverMetric: _assignedDriverMetric,
-          ratingStars: _selectedRating,
-          ratingFeedback: _ratingFeedback,
-          selectedRatingTags: _selectedRatingTags,
-          selectedTipAmount: _selectedTipAmount,
-          ratingSubmitting: _ratingSubmitting,
-          ratingSubmitted: _ratingSubmitted,
-          ratingMessage: _ratingMessage,
-          onRatingChanged: (rating) => setState(() => _selectedRating = rating),
-          onRatingTag: _toggleRatingTag,
-          onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
-          onSubmitRating: _submitDriverRating,
-          onChatDriver: () => setState(() {
-            _supportChat = false;
-            _chatOpen = true;
-          }),
-          onChatSupport: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-          onNewOrder: _reset,
-        ),
+        key: const ValueKey('tracking'),
+        colors: colors,
+        orderId: _activeOrderId ?? 'CIR-2026',
+        pickup: _pickup.text,
+        dropoff: _dropoff.text,
+        vehicle: _effectiveVehicle,
+        statusIndex: _statusIndex,
+        broadcasting: _broadcasting,
+        checkoutState: _checkoutState,
+        firebaseOnline: _firebaseOnline,
+        firebaseError: _firebaseError,
+        receivedAt: _activeRequestReceivedAt,
+        pickupAddress: _validatedPickup,
+        dropoffAddress: _validatedDropoff,
+        liveLocation: _liveLocationData,
+        vanguardData: _activeVanguardData,
+        assignedDriver: _assignedDriver,
+        assignedDriverMetric: _assignedDriverMetric,
+        ratingStars: _selectedRating,
+        ratingFeedback: _ratingFeedback,
+        selectedRatingTags: _selectedRatingTags,
+        selectedTipAmount: _selectedTipAmount,
+        ratingSubmitting: _ratingSubmitting,
+        ratingSubmitted: _ratingSubmitted,
+        ratingMessage: _ratingMessage,
+        onRatingChanged: (rating) => setState(() => _selectedRating = rating),
+        onRatingTag: _toggleRatingTag,
+        onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
+        onSubmitRating: _submitDriverRating,
+        onChatDriver: () => setState(() {
+          _supportChat = false;
+          _chatOpen = true;
+        }),
+        onChatSupport: () => setState(() {
+          _supportChat = true;
+          _chatOpen = true;
+        }),
+        onNewOrder: _reset,
+      ),
       _SenderStep.healthPlus => _HealthPlusStep(
-          key: const ValueKey('health-plus'),
-          colors: colors,
-          fullName: _healthName,
-          phone: _healthPhone,
-          email: _healthEmail,
-          pharmacyName: _healthPharmacyName,
-          pharmacyAddress: _healthPharmacy,
-          deliveryAddress: _healthDelivery,
-          notes: _healthNotes,
-          preferredDay: _healthPreferredDay,
-          preferredTime: _healthPreferredTime,
-          customSchedule: _healthCustomSchedule,
-          frequency: _healthFrequency,
-          prescriptionType: _healthPrescriptionType,
-          subscriptionPlan: _healthSubscriptionPlan,
-          consent: _healthConsent,
-          savePayment: _healthSavePayment,
-          submitting: _healthSubmitting,
-          message: _healthMessage,
-          checkoutUrl: _healthCheckoutUrl,
-          quote: _healthQuote,
-          pickups: _healthPickups,
-          payments: _healthPayments,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onFrequency: (frequency) =>
-              setState(() => _healthFrequency = frequency),
-          onPrescriptionType: (type) =>
-              setState(() => _healthPrescriptionType = type),
-          onSubscriptionPlan: (plan) =>
-              setState(() => _healthSubscriptionPlan = plan),
-          onStartSubscription: (plan) {
-            setState(() {
-              _healthSubscriptionPlan = plan;
-              if (_healthFrequency == HealthPlusFrequency.oneOff) {
-                _healthFrequency = HealthPlusFrequency.weekly;
-              }
-            });
-            _bookHealthPlus();
-          },
-          onContinueOneOff: () {
-            setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
-            _bookHealthPlus();
-          },
-          onConsent: (value) => setState(() => _healthConsent = value ?? false),
-          onSavePayment: (value) =>
-              setState(() => _healthSavePayment = value ?? false),
-          onSubmit: _bookHealthPlus,
-          onPauseSchedule: _pauseHealthPlusSchedule,
-          onResumeSchedule: _resumeHealthPlusSchedule,
-          onCancelSchedule: _cancelHealthPlusSchedule,
-          onCancelPickup: _cancelNextHealthPlusPickup,
-          onUpdatePayment: _openHealthPlusCheckout,
-          onAdminStatus: _adminUpdateHealthPlusStatus,
-        ),
+        key: const ValueKey('health-plus'),
+        colors: colors,
+        fullName: _healthName,
+        phone: _healthPhone,
+        email: _healthEmail,
+        pharmacyName: _healthPharmacyName,
+        pharmacyAddress: _healthPharmacy,
+        deliveryAddress: _healthDelivery,
+        notes: _healthNotes,
+        preferredDay: _healthPreferredDay,
+        preferredTime: _healthPreferredTime,
+        customSchedule: _healthCustomSchedule,
+        frequency: _healthFrequency,
+        prescriptionType: _healthPrescriptionType,
+        subscriptionPlan: _healthSubscriptionPlan,
+        consent: _healthConsent,
+        savePayment: _healthSavePayment,
+        submitting: _healthSubmitting,
+        message: _healthMessage,
+        checkoutUrl: _healthCheckoutUrl,
+        quote: _healthQuote,
+        pickups: _healthPickups,
+        payments: _healthPayments,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onFrequency: (frequency) =>
+            setState(() => _healthFrequency = frequency),
+        onPrescriptionType: (type) =>
+            setState(() => _healthPrescriptionType = type),
+        onSubscriptionPlan: (plan) =>
+            setState(() => _healthSubscriptionPlan = plan),
+        onStartSubscription: (plan) {
+          setState(() {
+            _healthSubscriptionPlan = plan;
+            if (_healthFrequency == HealthPlusFrequency.oneOff) {
+              _healthFrequency = HealthPlusFrequency.weekly;
+            }
+          });
+          _bookHealthPlus();
+        },
+        onContinueOneOff: () {
+          setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
+          _bookHealthPlus();
+        },
+        onConsent: (value) => setState(() => _healthConsent = value ?? false),
+        onSavePayment: (value) =>
+            setState(() => _healthSavePayment = value ?? false),
+        onSubmit: _bookHealthPlus,
+        onPauseSchedule: _pauseHealthPlusSchedule,
+        onResumeSchedule: _resumeHealthPlusSchedule,
+        onCancelSchedule: _cancelHealthPlusSchedule,
+        onCancelPickup: _cancelNextHealthPlusPickup,
+        onUpdatePayment: _openHealthPlusCheckout,
+        onAdminStatus: _adminUpdateHealthPlusStatus,
+      ),
       _SenderStep.profile => _SenderProfileStep(
-          key: const ValueKey('sender-profile'),
-          colors: colors,
-          user: _senderUser,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          selectedDelivery: _selectedSenderDelivery,
-          loading: _senderAuthLoading,
-          busy: _senderAuthBusy || _senderProfileSaving,
-          message: _senderProfileMessage,
-          tabIndex: _senderProfileTab,
-          email: _senderEmail,
-          password: _senderPassword,
-          fullName: _senderName,
-          phone: _senderPhone,
-          currentPassword: _senderCurrentPassword,
-          newPassword: _senderNewPassword,
-          confirmNewPassword: _senderConfirmNewPassword,
-          newEmail: _senderNewEmail,
-          emailChangePassword: _senderEmailChangePassword,
-          securitySubmitting: _senderSecurityBusy,
-          securityMessage: _senderSecurityMessage,
-          savedAddressLabel: _savedAddressLabel,
-          savedAddress: _savedAddress,
-          savedAddressType: _savedAddressType,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onTab: (index) => setState(() => _senderProfileTab = index),
-          onSignIn: _signInSender,
-          onSignUp: _signUpSender,
-          onForgotPassword: _sendSenderPasswordReset,
-          onChangePassword: _changeSenderPassword,
-          onChangeEmail: _changeSenderEmail,
-          onSignOut: _signOutSender,
-          onSaveProfile: _saveSenderProfile,
-          onAddAddress: _addSenderAddress,
-          onSavedAddressType: (type) =>
-              setState(() => _savedAddressType = type),
-          onSavedAddressSelected: (address) => setState(() {
-            _validatedSavedAddress = address;
-            _savedAddress.text = address.displayAddress;
-          }),
-          onSavedAddressEdited: (_) =>
-              setState(() => _validatedSavedAddress = null),
-          onSelectDelivery: (delivery) =>
-              setState(() => _selectedSenderDelivery = delivery),
-          onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
-        ),
+        key: const ValueKey('sender-profile'),
+        colors: colors,
+        user: _senderUser,
+        profile: _senderProfile,
+        deliveries: _senderDeliveries,
+        selectedDelivery: _selectedSenderDelivery,
+        loading: _senderAuthLoading,
+        busy: _senderAuthBusy || _senderProfileSaving,
+        message: _senderProfileMessage,
+        tabIndex: _senderProfileTab,
+        email: _senderEmail,
+        password: _senderPassword,
+        fullName: _senderName,
+        phone: _senderPhone,
+        currentPassword: _senderCurrentPassword,
+        newPassword: _senderNewPassword,
+        confirmNewPassword: _senderConfirmNewPassword,
+        newEmail: _senderNewEmail,
+        emailChangePassword: _senderEmailChangePassword,
+        securitySubmitting: _senderSecurityBusy,
+        securityMessage: _senderSecurityMessage,
+        savedAddressLabel: _savedAddressLabel,
+        savedAddress: _savedAddress,
+        savedAddressType: _savedAddressType,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onTab: (index) => setState(() => _senderProfileTab = index),
+        onSignIn: _signInSender,
+        onSignUp: _signUpSender,
+        onForgotPassword: _sendSenderPasswordReset,
+        onChangePassword: _changeSenderPassword,
+        onChangeEmail: _changeSenderEmail,
+        onSignOut: _signOutSender,
+        onSaveProfile: _saveSenderProfile,
+        onAddAddress: _addSenderAddress,
+        onSavedAddressType: (type) => setState(() => _savedAddressType = type),
+        onSavedAddressSelected: (address) => setState(() {
+          _validatedSavedAddress = address;
+          _savedAddress.text = address.displayAddress;
+        }),
+        onSavedAddressEdited: (_) =>
+            setState(() => _validatedSavedAddress = null),
+        onSelectDelivery: (delivery) =>
+            setState(() => _selectedSenderDelivery = delivery),
+        onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
+      ),
     };
   }
 
@@ -9738,7 +10260,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DeliveryClassification get _deliveryClassification {
     return DeliveryPricing.resolveClassification(
       description: _description.text,
-      userEnteredWeightKg: _senderEnteredWeightKg ??
+      userEnteredWeightKg:
+          _senderEnteredWeightKg ??
           DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
       irisEstimateKg: _irisEstimatedWeightKg,
       historicalVerifiedMaxKg: _irisHistoricalVerifiedWeightKg,
@@ -10038,6 +10561,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
   }
 
+  SenderDeliveryRecord? get _activeSenderDelivery {
+    for (final delivery in _senderDeliveries) {
+      if (_isActiveSenderDeliveryStatus(delivery.status)) return delivery;
+    }
+    return null;
+  }
+
   Future<void> _restoreSenderSession() async {
     try {
       await _ensureFirebaseReady();
@@ -10081,24 +10611,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(user.uid)
         .snapshots()
         .listen((snapshot) {
-      final data = snapshot.data() ?? <String, dynamic>{};
-      final profile = SenderProfile.fromMap(user.uid, {
-        'email': user.email,
-        'photoURL': user.photoURL,
-        'phoneNumber': user.phoneNumber,
-        ...data,
-      });
-      if (!mounted) return;
-      setState(() {
-        _senderProfile = profile;
-        if (_senderName.text.trim().isEmpty) {
-          _senderName.text = profile.fullName;
-        }
-        if (_senderPhone.text.trim().isEmpty) {
-          _senderPhone.text = profile.phoneNumber;
-        }
-      });
-    });
+          final data = snapshot.data() ?? <String, dynamic>{};
+          final profile = SenderProfile.fromMap(user.uid, {
+            'email': user.email,
+            'photoURL': user.photoURL,
+            'phoneNumber': user.phoneNumber,
+            ...data,
+          });
+          if (!mounted) return;
+          setState(() {
+            _senderProfile = profile;
+            if (_senderName.text.trim().isEmpty) {
+              _senderName.text = profile.fullName;
+            }
+            if (_senderPhone.text.trim().isEmpty) {
+              _senderPhone.text = profile.phoneNumber;
+            }
+          });
+        });
   }
 
   Future<void> _signInSender() async {
@@ -10116,8 +10646,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final user = credential.user!;
       if (!await _allowSenderUser(user)) {
         await FirebaseAuth.instance.signOut();
-        setState(() => _senderProfileMessage =
-            'This account is not a sender account. Use the rider or admin sign-in instead.');
+        setState(
+          () => _senderProfileMessage =
+              'This account is not a sender account. Use the rider or admin sign-in instead.',
+        );
         return;
       }
       _attachSender(user);
@@ -10138,11 +10670,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       await _ensureFirebaseReady();
-      final credential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _senderEmail.text.trim(),
-        password: _senderPassword.text.trim(),
-      );
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: _senderEmail.text.trim(),
+            password: _senderPassword.text.trim(),
+          );
       final user = credential.user!;
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'fullName': _senderName.text.trim(),
@@ -10182,17 +10714,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _ensureFirebaseReady();
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (!mounted) return;
-      setState(() => _senderProfileMessage =
-          'Password reset sent. Check your email and follow the secure link.');
+      setState(
+        () => _senderProfileMessage =
+            'Password reset sent. Check your email and follow the secure link.',
+      );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
-      setState(() => _senderProfileMessage = switch (error.code) {
-            'invalid-email' => 'Enter a valid email address.',
-            'user-not-found' =>
-              'No Circum sender profile found for that email.',
-            _ =>
-              'We could not send the reset email. Check the address and try again.',
-          });
+      setState(
+        () => _senderProfileMessage = switch (error.code) {
+          'invalid-email' => 'Enter a valid email address.',
+          'user-not-found' => 'No Circum sender profile found for that email.',
+          _ =>
+            'We could not send the reset email. Check the address and try again.',
+        },
+      );
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
@@ -10218,8 +10753,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final next = _senderNewPassword.text.trim();
     final confirm = _senderConfirmNewPassword.text.trim();
     if (current.isEmpty || next.length < 6 || next != confirm) {
-      setState(() => _senderSecurityMessage =
-          'Enter your current password and make sure the new passwords match.');
+      setState(
+        () => _senderSecurityMessage =
+            'Enter your current password and make sure the new passwords match.',
+      );
       return;
     }
     setState(() {
@@ -10229,8 +10766,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       await _ensureFirebaseReady();
       await _reauthenticateSender(current);
-      await (_senderUser ?? FirebaseAuth.instance.currentUser)
-          ?.updatePassword(next);
+      await (_senderUser ?? FirebaseAuth.instance.currentUser)?.updatePassword(
+        next,
+      );
       _senderCurrentPassword.clear();
       _senderNewPassword.clear();
       _senderConfirmNewPassword.clear();
@@ -10239,7 +10777,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(
-          () => _senderSecurityMessage = _friendlySenderAuthMessage(error));
+        () => _senderSecurityMessage = _friendlySenderAuthMessage(error),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _senderSecurityMessage = 'Could not update password.');
@@ -10253,8 +10792,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final nextEmail = _senderNewEmail.text.trim();
     final password = _senderEmailChangePassword.text.trim();
     if (nextEmail.isEmpty || !nextEmail.contains('@') || password.isEmpty) {
-      setState(() => _senderSecurityMessage =
-          'Enter the new email and your current password.');
+      setState(
+        () => _senderSecurityMessage =
+            'Enter the new email and your current password.',
+      );
       return;
     }
     setState(() {
@@ -10276,12 +10817,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderNewEmail.clear();
       _senderEmailChangePassword.clear();
       if (!mounted) return;
-      setState(() => _senderSecurityMessage =
-          'Verification sent. Open the email link to confirm the new address.');
+      setState(
+        () => _senderSecurityMessage =
+            'Verification sent. Open the email link to confirm the new address.',
+      );
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(
-          () => _senderSecurityMessage = _friendlySenderAuthMessage(error));
+        () => _senderSecurityMessage = _friendlySenderAuthMessage(error),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _senderSecurityMessage = 'Could not update email.');
@@ -10340,6 +10884,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderProfile = null;
       _senderDeliveries = const [];
       _selectedSenderDelivery = null;
+      _senderDeliveryLoadError = null;
       _availableRoles = const {};
       _roleChoiceConfirmed = false;
       _step = _SenderStep.dashboard;
@@ -10352,13 +10897,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (user == null) return;
     setState(() => _senderProfileSaving = true);
     try {
-      final profile = _senderProfile ??
+      final profile =
+          _senderProfile ??
           SenderProfile.fromMap(user.uid, {
             'email': user.email,
             'fullName': _senderName.text.trim(),
             'phoneNumber': _senderPhone.text.trim(),
           });
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(
             profile.safeUpdatePatch(
               fullName: _senderName.text.trim(),
               phoneNumber: _senderPhone.text.trim(),
@@ -10382,8 +10931,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final address = _savedAddress.text.trim();
     final validated = _validatedSavedAddress;
     if (user == null || address.isEmpty || validated == null) {
-      setState(() => _senderProfileMessage =
-          'Choose a verified address suggestion before saving.');
+      setState(
+        () => _senderProfileMessage =
+            'Choose a verified address suggestion before saving.',
+      );
       return;
     }
     final next = [
@@ -10405,8 +10956,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     setState(() => _senderProfileSaving = true);
     try {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'savedAddresses':
-            next.map((senderAddress) => senderAddress.toJson()).toList(),
+        'savedAddresses': next
+            .map((senderAddress) => senderAddress.toJson())
+            .toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       _savedAddress.clear();
@@ -10418,28 +10970,46 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<void> _loadSenderDeliveries(String uid) async {
-    final db = FirebaseFirestore.instance;
-    final snapshots = await Future.wait([
-      db.collection('deliveryRequests').where('senderId', isEqualTo: uid).get(),
-      db.collection('deliveryRequests').where('userId', isEqualTo: uid).get(),
-      db.collection('history').where('userId', isEqualTo: uid).get(),
-    ]);
-    final byId = <String, SenderDeliveryRecord>{};
-    for (final snapshot in snapshots) {
-      for (final doc in snapshot.docs) {
-        final record = SenderDeliveryRecord.fromMap(doc.id, doc.data());
-        byId[record.requestId] = record;
+    try {
+      final db = FirebaseFirestore.instance;
+      final snapshots = await Future.wait([
+        db
+            .collection('deliveryRequests')
+            .where('senderId', isEqualTo: uid)
+            .get(),
+        db.collection('deliveryRequests').where('userId', isEqualTo: uid).get(),
+        db.collection('history').where('userId', isEqualTo: uid).get(),
+      ]);
+      final byId = <String, SenderDeliveryRecord>{};
+      for (final snapshot in snapshots) {
+        for (final doc in snapshot.docs) {
+          final record = SenderDeliveryRecord.fromMap(doc.id, doc.data());
+          byId[record.requestId] = record;
+        }
       }
-    }
-    final records = SenderProfileService.ownDeliveries(uid, byId.values)
-        .toList(growable: false)
-      ..sort((a, b) {
-        final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return right.compareTo(left);
+      final records =
+          SenderProfileService.ownDeliveries(
+            uid,
+            byId.values,
+          ).toList(growable: false)..sort((a, b) {
+            final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return right.compareTo(left);
+          });
+      if (!mounted) return;
+      setState(() {
+        _senderDeliveries = records;
+        _senderDeliveryLoadError = null;
       });
-    if (!mounted) return;
-    setState(() => _senderDeliveries = records);
+    } catch (error) {
+      debugPrint('Could not load sender deliveries: $error');
+      if (!mounted) return;
+      setState(() {
+        _senderDeliveries = const [];
+        _senderDeliveryLoadError =
+            'We could not load your delivery status. Please refresh or contact support.';
+      });
+    }
   }
 
   String _friendlySenderAuthMessage(FirebaseAuthException error) {
@@ -10447,8 +11017,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'email-already-in-use' => 'That email already has a Circum profile.',
       'user-not-found' => 'No Circum profile found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'Those sign-in details are not right.',
+      'invalid-credential' => 'Those sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -10476,8 +11045,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
-    final senderWeight =
-        DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
+    final senderWeight = DeliveryPricing.parseWeightKg(
+      _weight.text,
+      fallbackKg: 0,
+    );
     final estimate = await _estimateWeightWithIris();
     final decision = _resolvePricingWeight(
       estimate: estimate,
@@ -10552,10 +11123,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<Map<String, dynamic>> _uploadParcelPhoto(String requestId) async {
     final photo = _parcelPhoto;
     if (photo == null) {
-      return {
-        'hasPhoto': false,
-        'analysisStatus': 'not_provided',
-      };
+      return {'hasPhoto': false, 'analysisStatus': 'not_provided'};
     }
     try {
       final bytes = await photo.readAsBytes();
@@ -10595,11 +11163,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   void _confirmIrisWeight() {
     final estimateWeight = _irisEstimatedWeightKg;
     if (estimateWeight == null || estimateWeight <= 0) return;
-    final senderWeight =
-        DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
+    final senderWeight = DeliveryPricing.parseWeightKg(
+      _weight.text,
+      fallbackKg: 0,
+    );
     final estimate = _IrisWeightEstimate(
       weightKg: estimateWeight,
-      weightBand: _irisWeightBand ??
+      weightBand:
+          _irisWeightBand ??
           DeliveryPricing.weightBandFor(estimateWeight).category,
       confidence: _irisWeightConfidence ?? 'low',
       explanation:
@@ -10672,8 +11243,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _handleWeightChanged() {
     if (_settingWeightFromConfirmation || _confirmedWeightKg == null) return;
-    final typedWeight =
-        DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0);
+    final typedWeight = DeliveryPricing.parseWeightKg(
+      _weight.text,
+      fallbackKg: 0,
+    );
     if ((typedWeight - _confirmedWeightKg!).abs() < 0.01) return;
     if (!mounted) return;
     setState(() {
@@ -10701,11 +11274,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final hasSenderWeight = senderWeightKg != null && senderWeightKg > 0;
     final irisBand = DeliveryPricing.weightBandFor(estimate.weightKg);
-    final senderBand =
-        hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
+    final senderBand = hasSenderWeight
+        ? DeliveryPricing.weightBandFor(senderWeightKg)
+        : null;
     final bandChanged =
         senderBand != null && senderBand.category != irisBand.category;
-    final significantDifference = bandChanged ||
+    final significantDifference =
+        bandChanged ||
         classification.selectedWeightSource == 'keyword_override';
     final mismatchReview = _hasIrisMismatchReview(
       senderWeightKg: senderWeightKg,
@@ -10740,10 +11315,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final source = classification.selectedWeightSource == 'keyword_override'
         ? 'keyword_override'
         : estimate.weightSource == 'known_product_lookup'
-            ? 'repository_match'
-            : estimate.weightKg >= (senderWeightKg ?? 0)
-                ? 'photo_match'
-                : 'customer_declared';
+        ? 'repository_match'
+        : estimate.weightKg >= (senderWeightKg ?? 0)
+        ? 'photo_match'
+        : 'customer_declared';
 
     return _WeightPricingDecision(
       weightKg: higherWeight,
@@ -10752,10 +11327,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       message: mismatchReview
           ? 'Potential mismatch detected — manual review required.'
           : significantDifference
-              ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
-              : 'IRIS has analysed this item and selected the most reliable weight available.',
+          ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
+          : 'IRIS has analysed this item and selected the most reliable weight available.',
       reason: classification.resolutionReason,
-      verificationRequired: mismatchReview ||
+      verificationRequired:
+          mismatchReview ||
           significantDifference ||
           classification.requiresManualReview,
     );
@@ -10863,7 +11439,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             '${data['packageDescription'] ?? data['description'] ?? ''}'
                 .toLowerCase();
         if (!_looksLikeSimilarParcel(text, description)) continue;
-        final verified = _readWeightKg(data['finalVerifiedWeight']) ??
+        final verified =
+            _readWeightKg(data['finalVerifiedWeight']) ??
             _readWeightKg(data['riderVerifiedWeight']) ??
             _readWeightKg(data['driverReportedWeightKg']) ??
             _readWeightKg(data['finalWeightUsed']) ??
@@ -11097,25 +11674,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final batch = db.batch();
       batch.set(db.collection('webSenderRequests').doc(id), request);
       batch.set(db.collection('deliveryRequests').doc(id), request);
-      batch.set(
-          db.collection('chats').doc(id),
-          {
-            'threadId': id,
-            'bookingId': id,
-            'requestId': id,
-            'participants': [senderId, 'circum-support'],
-            'participantRoles': {
-              senderId: 'sender',
-              'circum-support': 'admin',
-            },
-            'lastMessage':
-                'Your request is live. Iris is checking nearby riders now.',
-            'lastMessageTimestamp': FieldValue.serverTimestamp(),
-            'unreadBy': ['admin'],
-            'updatedAt': FieldValue.serverTimestamp(),
-            'source': 'circum-web',
-          },
-          SetOptions(merge: true));
+      batch.set(db.collection('chats').doc(id), {
+        'threadId': id,
+        'bookingId': id,
+        'requestId': id,
+        'participants': [senderId, 'circum-support'],
+        'participantRoles': {senderId: 'sender', 'circum-support': 'admin'},
+        'lastMessage':
+            'Your request is live. Iris is checking nearby riders now.',
+        'lastMessageTimestamp': FieldValue.serverTimestamp(),
+        'unreadBy': ['admin'],
+        'updatedAt': FieldValue.serverTimestamp(),
+        'source': 'circum-web',
+      }, SetOptions(merge: true));
       batch.set(db.collection('chats').doc(id).collection('messages').doc(), {
         'threadId': id,
         'bookingId': id,
@@ -11327,8 +11898,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'savedPaymentMethod': _healthSavePayment,
         'frequency': _healthFrequency.value,
         'subscriptionPlan': _healthSubscriptionPlan,
-        'paymentType':
-            scheduleId == null ? 'one_time_checkout' : 'subscription_checkout',
+        'paymentType': scheduleId == null
+            ? 'one_time_checkout'
+            : 'subscription_checkout',
         'createdAt': FieldValue.serverTimestamp(),
       });
       batch.set(db.collection('healthPlusNotifications').doc(), {
@@ -11385,8 +11957,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       });
 
       if (checkoutUrl != null) {
-        await launchUrl(Uri.parse(checkoutUrl),
-            mode: LaunchMode.externalApplication);
+        await launchUrl(
+          Uri.parse(checkoutUrl),
+          mode: LaunchMode.externalApplication,
+        );
       }
     } catch (_) {
       if (!mounted) return;
@@ -11440,8 +12014,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _openHealthPlusCheckout() async {
     final url = _healthCheckoutUrl;
     if (url == null) {
-      setState(() => _healthMessage =
-          'Payment is not ready yet. Create or refresh the Health+ booking first.');
+      setState(
+        () => _healthMessage =
+            'Payment is not ready yet. Create or refresh the Health+ booking first.',
+      );
       return;
     }
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
@@ -11458,10 +12034,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('recurringPickupSchedules')
         .doc(scheduleId)
         .set({
-      'paused': true,
-      'status': 'paused',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+          'paused': true,
+          'status': 'paused',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'recurring_pickup_paused',
       'profileId': _healthProfileId,
@@ -11484,10 +12060,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('recurringPickupSchedules')
         .doc(scheduleId)
         .set({
-      'paused': false,
-      'status': 'active',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+          'paused': false,
+          'status': 'active',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'recurring_pickup_resumed',
       'profileId': _healthProfileId,
@@ -11510,11 +12086,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('recurringPickupSchedules')
         .doc(scheduleId)
         .set({
-      'paused': true,
-      'status': 'cancelled',
-      'cancelledAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+          'paused': true,
+          'status': 'cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'recurring_pickup_cancelled',
       'profileId': _healthProfileId,
@@ -11535,9 +12111,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('prescriptionPickups')
         .doc(pickupId)
         .set({
-      'status': PickupStatus.cancelled.value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+          'status': PickupStatus.cancelled.value,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'pickup_cancelled',
       'profileId': _healthProfileId,
@@ -11562,10 +12138,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('prescriptionPickups')
         .doc(pickupId)
         .set({
-      'status': status,
-      'adminUpdatedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+          'status': status,
+          'adminUpdatedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'admin_status_updated',
       'profileId': _healthProfileId,
@@ -11590,23 +12166,29 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupAddress = _validatedPickup!;
     final dropoffAddress = _validatedDropoff!;
     final distanceMiles = _confirmedRouteDistanceMiles!;
-    final economyQuote = DeliveryPricing.calculate(DeliveryPricingInput(
-      distanceMiles: distanceMiles,
-      weightKg: classification.finalWeightKg,
-      vehicleType: _effectiveVehicle.name,
-      economy: true,
-    ));
-    final standardQuote = DeliveryPricing.calculate(DeliveryPricingInput(
-      distanceMiles: distanceMiles,
-      weightKg: classification.finalWeightKg,
-      vehicleType: _effectiveVehicle.name,
-    ));
-    final expressQuote = DeliveryPricing.calculate(DeliveryPricingInput(
-      distanceMiles: distanceMiles,
-      weightKg: classification.finalWeightKg,
-      vehicleType: _effectiveVehicle.name,
-      express: true,
-    ));
+    final economyQuote = DeliveryPricing.calculate(
+      DeliveryPricingInput(
+        distanceMiles: distanceMiles,
+        weightKg: classification.finalWeightKg,
+        vehicleType: _effectiveVehicle.name,
+        economy: true,
+      ),
+    );
+    final standardQuote = DeliveryPricing.calculate(
+      DeliveryPricingInput(
+        distanceMiles: distanceMiles,
+        weightKg: classification.finalWeightKg,
+        vehicleType: _effectiveVehicle.name,
+      ),
+    );
+    final expressQuote = DeliveryPricing.calculate(
+      DeliveryPricingInput(
+        distanceMiles: distanceMiles,
+        weightKg: classification.finalWeightKg,
+        vehicleType: _effectiveVehicle.name,
+        express: true,
+      ),
+    );
     final selectedServiceLevel = switch (_selectedSpeed) {
       'Economy' => 'economy',
       'Express' => 'express',
@@ -11641,8 +12223,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final suitability = _vehicleSuitability;
     final safeVehicleName = suitability.recommendedVehicle;
     final driverPayout = DeliveryPricing.riderPayoutFromFare(quote.total);
-    final platformRevenue =
-        DeliveryPricing.platformRevenueFromFare(quote.total);
+    final platformRevenue = DeliveryPricing.platformRevenueFromFare(
+      quote.total,
+    );
     final driverJobSummary = {
       'pickupDisplay': _pickup.text.trim(),
       'dropoffDisplay': _dropoff.text.trim(),
@@ -11721,14 +12304,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
           : vanguardEnabled
-              ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
-              : '',
+          ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
+          : '',
       'vanguardEnabled': vanguardEnabled,
       'serviceType': selectedServiceLevel == 'express'
           ? 'Express Delivery'
           : selectedServiceLevel == 'economy'
-              ? 'Economy Delivery'
-              : 'Normal Delivery',
+          ? 'Economy Delivery'
+          : 'Normal Delivery',
     };
     return {
       'requestId': id,
@@ -11753,8 +12336,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'imageAnalysisStatus': parcelPhotoData['analysisStatus'],
       'parcelPhoto': {
         ...parcelPhotoData,
-        'irisDecisionStatus':
-            hasPhoto ? 'pending_iris_photo_review' : 'not_provided',
+        'irisDecisionStatus': hasPhoto
+            ? 'pending_iris_photo_review'
+            : 'not_provided',
       },
       'weight': _weight.text.trim(),
       'weightKg': classification.finalWeightKg,
@@ -11795,10 +12379,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'confirmedWeightBand': classification.finalWeightBand,
       'declaredWeightKg': _senderEnteredWeightKg,
       'driverReportedWeightKg': null,
-      'driverWeightDispute': {
-        'reported': false,
-        'status': 'none',
-      },
+      'driverWeightDispute': {'reported': false, 'status': 'none'},
       'weightSource': _weightSource,
       'weightConfirmedAt': _weightConfirmedAt == null
           ? null
@@ -11836,8 +12417,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'basePrice': standardQuote.total,
       'finalPrice': quote.total,
       'finalCustomerPrice': quote.total,
-      'serviceLevelSurcharge':
-          serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
+      'serviceLevelSurcharge': serviceLevelSurcharge < 0
+          ? 0
+          : serviceLevelSurcharge,
       'priority': selectedServiceLevel == 'express',
       'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
       'broadcastRank': DeliveryPricing.matchingPriorityRank(
@@ -11879,10 +12461,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'sameAsSender': !collectionContactDifferent,
         'differentFromSender': collectionContactDifferent,
       },
-      'receiverDetails': {
-        'name': receiverName,
-        'phone': receiverPhone,
-      },
+      'receiverDetails': {'name': receiverName, 'phone': receiverPhone},
       'collectionContactName': collectionContactName,
       'collectionContactPhone': collectionContactPhone,
       'collectionContactDifferent': collectionContactDifferent,
@@ -11899,8 +12478,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             : 'distanceFromRider',
         'preferredVehicle': safeVehicleName.toLowerCase(),
         'requiresVerifiedRider': true,
-        'matchingPriority':
-            selectedServiceLevel == 'express' ? 'high' : 'normal',
+        'matchingPriority': selectedServiceLevel == 'express'
+            ? 'high'
+            : 'normal',
       },
       'pickupDetails': {
         'fullname': collectionContactName,
@@ -11956,46 +12536,52 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('deliveryRequests')
         .doc(id)
         .snapshots()
-        .listen((snapshot) {
-      final data = snapshot.data();
-      if (!mounted || data == null) return;
-      final status = '${data['status'] ?? 'requested'}'.toLowerCase();
-      final driverId = _driverIdFromRequest(data);
-      setState(() {
-        final matchingStatus = status == 'requested' || status == 'pending';
-        if (driverId != null || _statusIndexFromFirebase(status) > 0) {
-          _checkoutState = _CheckoutState.riderAssigned;
-        } else if (matchingStatus &&
-            (_checkoutState == _CheckoutState.bookingCreated ||
-                _checkoutState == _CheckoutState.matchingRiders)) {
-          _checkoutState = _CheckoutState.matchingRiders;
-        }
-        _firebaseOnline = true;
-        _firebaseError = null;
-        _broadcasting =
-            _checkoutState == _CheckoutState.matchingRiders && matchingStatus;
-        _statusIndex = _statusIndexFromFirebase(status);
-        _activeVanguardData = data['vanguardEnabled'] == true
-            ? Map<String, dynamic>.from(data)
-            : null;
-        _activeRequestReceivedAt = _jobReceivedDate(data);
-      });
-      if (driverId != null && driverId != _assignedDriverId) {
-        _assignedDriverId = driverId;
-        _listenToAssignedDriver(driverId, data);
-      }
-      if (_statusIndexFromFirebase(status) >= 3) {
-        _checkExistingDriverRating();
-      }
-    }, onError: (Object _) {
-      if (!mounted) return;
-      setState(() {
-        _checkoutState = _CheckoutState.failed;
-        _broadcasting = false;
-        _firebaseOnline = false;
-        _firebaseError = 'Could not listen to this delivery in Firestore.';
-      });
-    });
+        .listen(
+          (snapshot) {
+            final data = snapshot.data();
+            if (!mounted || data == null) return;
+            final status = '${data['status'] ?? 'requested'}'.toLowerCase();
+            final driverId = _driverIdFromRequest(data);
+            setState(() {
+              final matchingStatus =
+                  status == 'requested' || status == 'pending';
+              if (driverId != null || _statusIndexFromFirebase(status) > 0) {
+                _checkoutState = _CheckoutState.riderAssigned;
+              } else if (matchingStatus &&
+                  (_checkoutState == _CheckoutState.bookingCreated ||
+                      _checkoutState == _CheckoutState.matchingRiders)) {
+                _checkoutState = _CheckoutState.matchingRiders;
+              }
+              _firebaseOnline = true;
+              _firebaseError = null;
+              _broadcasting =
+                  _checkoutState == _CheckoutState.matchingRiders &&
+                  matchingStatus;
+              _statusIndex = _statusIndexFromFirebase(status);
+              _activeVanguardData = data['vanguardEnabled'] == true
+                  ? Map<String, dynamic>.from(data)
+                  : null;
+              _activeRequestReceivedAt = _jobReceivedDate(data);
+            });
+            if (driverId != null && driverId != _assignedDriverId) {
+              _assignedDriverId = driverId;
+              _listenToAssignedDriver(driverId, data);
+            }
+            if (_statusIndexFromFirebase(status) >= 3) {
+              _checkExistingDriverRating();
+            }
+          },
+          onError: (Object _) {
+            if (!mounted) return;
+            setState(() {
+              _checkoutState = _CheckoutState.failed;
+              _broadcasting = false;
+              _firebaseOnline = false;
+              _firebaseError =
+                  'Could not listen to this delivery in Firestore.';
+            });
+          },
+        );
   }
 
   void _listenToLiveLocation(String deliveryId) {
@@ -12006,15 +12592,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('tracking')
         .doc('liveLocation')
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _liveLocationData = snapshot.data();
-      });
-    }, onError: (_) {
-      if (!mounted) return;
-      setState(() => _liveLocationData = null);
-    });
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _liveLocationData = snapshot.data();
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _liveLocationData = null);
+          },
+        );
   }
 
   String? _driverIdFromRequest(Map<String, dynamic> data) {
@@ -12039,106 +12628,106 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(driverId)
         .snapshots()
         .listen((snapshot) async {
-      if (!mounted) return;
-      if (snapshot.exists) {
-        setState(() {
-          _assignedDriver = DriverProfile.fromMap(
-            driverId,
-            snapshot.data(),
-            performance: _assignedDriverMetric,
-          );
+          if (!mounted) return;
+          if (snapshot.exists) {
+            setState(() {
+              _assignedDriver = DriverProfile.fromMap(
+                driverId,
+                snapshot.data(),
+                performance: _assignedDriverMetric,
+              );
+            });
+            return;
+          }
+          final riderSnapshot = await FirebaseFirestore.instance
+              .collection('riders')
+              .doc(driverId)
+              .get();
+          if (!mounted || !riderSnapshot.exists) return;
+          setState(() {
+            _assignedDriver = DriverProfile.fromMap(
+              driverId,
+              riderSnapshot.data(),
+              performance: _assignedDriverMetric,
+            );
+          });
         });
-        return;
-      }
-      final riderSnapshot = await FirebaseFirestore.instance
-          .collection('riders')
-          .doc(driverId)
-          .get();
-      if (!mounted || !riderSnapshot.exists) return;
-      setState(() {
-        _assignedDriver = DriverProfile.fromMap(
-          driverId,
-          riderSnapshot.data(),
-          performance: _assignedDriverMetric,
-        );
-      });
-    });
     _driverPerformanceSub = FirebaseFirestore.instance
         .collection('driverPerformanceMetrics')
         .doc(driverId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final metric = DriverPerformanceMetric.fromMap(driverId, snapshot.data());
-      setState(() {
-        _assignedDriverMetric = metric;
-        final profile = _assignedDriver;
-        if (profile != null) {
-          _assignedDriver = DriverProfile.fromMap(
-            profile.driverId,
-            {
-              'fullName': profile.fullName,
-              'photoUrl': profile.photoUrl,
-              'phoneNumber': profile.phoneNumber,
-              'verificationStatus': profile.verificationStatus,
-              'driverStatus': profile.status,
-              'vehicle': profile.vehicle.toJson(),
-            },
-            performance: metric,
-            recentRatings: profile.recentRatings,
+          if (!mounted) return;
+          final metric = DriverPerformanceMetric.fromMap(
+            driverId,
+            snapshot.data(),
           );
-        }
-      });
-    });
+          setState(() {
+            _assignedDriverMetric = metric;
+            final profile = _assignedDriver;
+            if (profile != null) {
+              _assignedDriver = DriverProfile.fromMap(
+                profile.driverId,
+                {
+                  'fullName': profile.fullName,
+                  'photoUrl': profile.photoUrl,
+                  'phoneNumber': profile.phoneNumber,
+                  'verificationStatus': profile.verificationStatus,
+                  'driverStatus': profile.status,
+                  'vehicle': profile.vehicle.toJson(),
+                },
+                performance: metric,
+                recentRatings: profile.recentRatings,
+              );
+            }
+          });
+        });
     _assignedDriverRatingsSub = FirebaseFirestore.instance
         .collection('driverRatings')
         .where('driverId', isEqualTo: driverId)
         .limit(6)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final ratings = snapshot.docs
-          .map((doc) => DriverRating.fromMap(doc.data()))
-          .where((rating) => !rating.hiddenByAdmin)
-          .take(3)
-          .toList();
-      final profile = _assignedDriver;
-      if (profile == null) return;
-      setState(() {
-        _assignedDriver = DriverProfile.fromMap(
-          profile.driverId,
-          {
-            'fullName': profile.fullName,
-            'photoUrl': profile.photoUrl,
-            'phoneNumber': profile.phoneNumber,
-            'verificationStatus': profile.verificationStatus,
-            'driverStatus': profile.status,
-            'vehicle': profile.vehicle.toJson(),
-          },
-          performance: _assignedDriverMetric,
-          recentRatings: ratings,
-        );
-      });
-    });
+          if (!mounted) return;
+          final ratings = snapshot.docs
+              .map((doc) => DriverRating.fromMap(doc.data()))
+              .where((rating) => !rating.hiddenByAdmin)
+              .take(3)
+              .toList();
+          final profile = _assignedDriver;
+          if (profile == null) return;
+          setState(() {
+            _assignedDriver = DriverProfile.fromMap(
+              profile.driverId,
+              {
+                'fullName': profile.fullName,
+                'photoUrl': profile.photoUrl,
+                'phoneNumber': profile.phoneNumber,
+                'verificationStatus': profile.verificationStatus,
+                'driverStatus': profile.status,
+                'vehicle': profile.vehicle.toJson(),
+              },
+              performance: _assignedDriverMetric,
+              recentRatings: ratings,
+            );
+          });
+        });
   }
 
   DriverProfile _driverProfileFromDelivery(
     String driverId,
     Map<String, dynamic> data,
   ) {
-    return DriverProfile.fromMap(
-        driverId,
-        {
-          'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
-          'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
-          'vehicleType':
-              data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
-          'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
-          'vehicleColour': data['vehicleColour'] ?? '',
-          'plateNumber': data['plateNumber'] ?? '',
-          'verificationStatus': data['verificationStatus'] ?? 'verified',
-        },
-        performance: _assignedDriverMetric);
+    return DriverProfile.fromMap(driverId, {
+      'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
+      'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
+      'vehicleType':
+          data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
+      'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
+      'vehicleColour': data['vehicleColour'] ?? '',
+      'plateNumber': data['plateNumber'] ?? '',
+      'verificationStatus': data['verificationStatus'] ?? 'verified',
+    }, performance: _assignedDriverMetric);
   }
 
   Future<void> _checkExistingDriverRating() async {
@@ -12147,10 +12736,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (requestId == null || customerId == null) return;
     final ratingDoc = await FirebaseFirestore.instance
         .collection('driverRatings')
-        .doc(DriverRating.documentId(
-          deliveryId: requestId,
-          customerId: customerId,
-        ))
+        .doc(
+          DriverRating.documentId(
+            deliveryId: requestId,
+            customerId: customerId,
+          ),
+        )
         .get();
     if (!mounted || !ratingDoc.exists) return;
     final rating = DriverRating.fromMap(ratingDoc.data()!);
@@ -12184,8 +12775,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         driverId == null ||
         customerId == null ||
         _statusIndex < 3) {
-      setState(() => _ratingMessage =
-          'You can rate the rider after delivery is complete.');
+      setState(
+        () => _ratingMessage =
+            'You can rate the rider after delivery is complete.',
+      );
       return;
     }
     if (_selectedRating < 1 || _selectedRating > 5) {
@@ -12255,16 +12848,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             },
             SetOptions(merge: true),
           );
-          transaction.set(
-            db.collection('riderEarnings').doc(driverId),
-            {
-              'availableBalance': FieldValue.increment(_selectedTipAmount),
-              'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
-              'tipsReceived': FieldValue.increment(_selectedTipAmount),
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+          transaction.set(db.collection('riderEarnings').doc(driverId), {
+            'availableBalance': FieldValue.increment(_selectedTipAmount),
+            'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
+            'tipsReceived': FieldValue.increment(_selectedTipAmount),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
       });
       await _recalculateDriverPerformance(driverId);
@@ -12282,7 +12871,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     } catch (_) {
       if (!mounted) return;
       setState(
-          () => _ratingMessage = 'We could not save the rating. Try again.');
+        () => _ratingMessage = 'We could not save the rating. Try again.',
+      );
     } finally {
       if (mounted) setState(() => _ratingSubmitting = false);
     }
@@ -12311,16 +12901,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       DriverPerformanceInput(
         driverId: driverId,
         ratings: ratings,
-        completedTrips:
-            completedIds.isEmpty ? ratings.length : completedIds.length,
+        completedTrips: completedIds.isEmpty
+            ? ratings.length
+            : completedIds.length,
         complaints: complaints,
       ),
     );
     await db.collection('driverPerformanceMetrics').doc(driverId).set({
       ...metric.toJson(),
       'updatedAt': FieldValue.serverTimestamp(),
-      'lowRatingFlag':
-          DriverPerformanceService.shouldFlagLowRatedDriver(metric),
+      'lowRatingFlag': DriverPerformanceService.shouldFlagLowRatedDriver(
+        metric,
+      ),
     }, SetOptions(merge: true));
     await db.collection('riderProfiles').doc(driverId).set({
       'averageRating': metric.averageRating,
@@ -12347,61 +12939,68 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .orderBy('createdAt')
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final driverMessages = <_ChatMessage>[];
-      final supportMessages = <_ChatMessage>[];
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final senderType = '${data['senderType'] ?? 'support'}';
-        final senderRole = '${data['senderRole'] ?? senderType}';
-        final message =
-            '${data['messageText'] ?? data['message'] ?? ''}'.trim();
-        if (message.isEmpty) continue;
-        final chatMessage = _ChatMessage(
-          fromMe: data['senderId'] == _senderUser?.uid &&
-              senderRole != 'system' &&
-              senderType != 'support',
-          text: message,
-          time: _formatMessageTime(data['createdAt'], data['timeStamp']),
-          label: senderRole == 'system' ||
-                  senderType == 'support' ||
-                  senderType == 'admin'
-              ? 'CIRCUM Support'
-              : senderType == 'rider' || senderType == 'driver'
+          if (!mounted) return;
+          final driverMessages = <_ChatMessage>[];
+          final supportMessages = <_ChatMessage>[];
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final senderType = '${data['senderType'] ?? 'support'}';
+            final senderRole = '${data['senderRole'] ?? senderType}';
+            final message = '${data['messageText'] ?? data['message'] ?? ''}'
+                .trim();
+            if (message.isEmpty) continue;
+            final chatMessage = _ChatMessage(
+              fromMe:
+                  data['senderId'] == _senderUser?.uid &&
+                  senderRole != 'system' &&
+                  senderType != 'support',
+              text: message,
+              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+              label:
+                  senderRole == 'system' ||
+                      senderType == 'support' ||
+                      senderType == 'admin'
+                  ? 'CIRCUM Support'
+                  : senderType == 'rider' || senderType == 'driver'
                   ? 'Rider'
                   : 'You',
-        );
-        if (senderType == 'rider' || senderType == 'driver') {
-          driverMessages.add(chatMessage);
-        } else {
-          supportMessages.add(chatMessage);
-        }
-      }
-      setState(() {
-        _driverMessages
-          ..clear()
-          ..addAll(driverMessages.isEmpty
-              ? [
-                  const _ChatMessage(
-                    fromMe: false,
-                    text: 'Rider chat will open when someone accepts the job.',
-                    time: 'Now',
-                  )
-                ]
-              : driverMessages);
-        _supportMessages
-          ..clear()
-          ..addAll(supportMessages.isEmpty
-              ? [
-                  const _ChatMessage(
-                    fromMe: false,
-                    text: "Hi, this is Iris. How can we help?",
-                    time: 'Now',
-                  )
-                ]
-              : supportMessages);
-      });
-    });
+            );
+            if (senderType == 'rider' || senderType == 'driver') {
+              driverMessages.add(chatMessage);
+            } else {
+              supportMessages.add(chatMessage);
+            }
+          }
+          setState(() {
+            _driverMessages
+              ..clear()
+              ..addAll(
+                driverMessages.isEmpty
+                    ? [
+                        const _ChatMessage(
+                          fromMe: false,
+                          text:
+                              'Rider chat will open when someone accepts the job.',
+                          time: 'Now',
+                        ),
+                      ]
+                    : driverMessages,
+              );
+            _supportMessages
+              ..clear()
+              ..addAll(
+                supportMessages.isEmpty
+                    ? [
+                        const _ChatMessage(
+                          fromMe: false,
+                          text: "Hi, this is Iris. How can we help?",
+                          time: 'Now',
+                        ),
+                      ]
+                    : supportMessages,
+              );
+          });
+        });
   }
 
   int _statusIndexFromFirebase(String status) {
@@ -12470,7 +13069,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _senderUser?.uid ?? 'web-sender',
           _supportChat
               ? 'circum-support'
-              : (_assignedDriverId ?? 'assigned-rider')
+              : (_assignedDriverId ?? 'assigned-rider'),
         ]),
         'unreadBy': FieldValue.arrayUnion([_supportChat ? 'admin' : 'rider']),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -12478,8 +13077,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }, SetOptions(merge: true));
     } catch (_) {
       if (!mounted) return;
-      setState(() =>
-          _firebaseError = 'Message could not be sent. Please try again.');
+      setState(
+        () => _firebaseError = 'Message could not be sent. Please try again.',
+      );
     }
   }
 
@@ -12528,6 +13128,10 @@ class _DesktopPortalLayout extends StatelessWidget {
   final String? firebaseError;
   final int statusIndex;
   final DateTime? receivedAt;
+  final SenderDeliveryRecord? activeDelivery;
+  final String? deliveryLoadError;
+  final VoidCallback onSendParcel;
+  final VoidCallback onViewHistory;
   final Widget child;
 
   const _DesktopPortalLayout({
@@ -12544,13 +13148,60 @@ class _DesktopPortalLayout extends StatelessWidget {
     required this.firebaseError,
     required this.statusIndex,
     required this.receivedAt,
+    required this.activeDelivery,
+    required this.deliveryLoadError,
+    required this.onSendParcel,
+    required this.onViewHistory,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
-    final status = _trackingStatuses[
-        statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
+    if (step == _SenderStep.dashboard) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: MediaQuery.sizeOf(context).width >= 1100 ? 560 : 430,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(28, 28, 24, 36),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                child: child,
+              ),
+            ),
+          ),
+          Container(width: 1, color: colors.border),
+          Expanded(
+            child: Container(
+              color: colors.field.withOpacity(colors.dark ? 0.22 : 0.38),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(28),
+                child: deliveryLoadError != null
+                    ? _DesktopDeliveryLoadError(
+                        colors: colors,
+                        message: deliveryLoadError!,
+                      )
+                    : activeDelivery == null
+                    ? _DesktopNoActiveDelivery(
+                        colors: colors,
+                        onSendParcel: onSendParcel,
+                        onViewHistory: onViewHistory,
+                      )
+                    : _DesktopActiveDeliveryStatus(
+                        colors: colors,
+                        delivery: activeDelivery!,
+                      ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    final status =
+        _trackingStatuses[statusIndex
+            .clamp(0, _trackingStatuses.length - 1)
+            .toInt()];
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -12598,14 +13249,16 @@ class _DesktopPortalLayout extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _jobReceivedTextFromDate(receivedAt),
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontWeight: FontWeight.w800,
+                  if (receivedAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _jobReceivedTextFromDate(receivedAt),
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 20),
                   _GlassPanel(
                     colors: colors,
@@ -12658,8 +13311,9 @@ class _DesktopPortalLayout extends StatelessWidget {
                           colors: colors,
                           icon: Icons.location_on,
                           label: 'Drop-off',
-                          value:
-                              dropoff.isEmpty ? 'Drop-off location' : dropoff,
+                          value: dropoff.isEmpty
+                              ? 'Drop-off location'
+                              : dropoff,
                           iconColor: const Color(0xff22c55e),
                         ),
                       ],
@@ -12777,6 +13431,272 @@ class _DesktopPortalLayout extends StatelessWidget {
     return weightKg.truncateToDouble() == weightKg
         ? weightKg.toStringAsFixed(0)
         : weightKg.toStringAsFixed(1);
+  }
+}
+
+class _DesktopNoActiveDelivery extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onSendParcel;
+  final VoidCallback onViewHistory;
+
+  const _DesktopNoActiveDelivery({
+    required this.colors,
+    required this.onSendParcel,
+    required this.onViewHistory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.local_shipping_outlined, color: colors.text, size: 32),
+          const SizedBox(height: 14),
+          Text(
+            'No active delivery',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'You do not have a live delivery at the moment. Send a parcel or choose a past delivery to view its status.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: onSendParcel,
+                icon: const Icon(Icons.add_box_outlined),
+                label: const Text('Send a parcel'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onViewHistory,
+                icon: const Icon(Icons.history),
+                label: const Text('View delivery history'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopDeliveryLoadError extends StatelessWidget {
+  final _CircumColors colors;
+  final String message;
+
+  const _DesktopDeliveryLoadError({
+    required this.colors,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, color: colors.warning),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: colors.text,
+                height: 1.4,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopActiveDeliveryStatus extends StatelessWidget {
+  final _CircumColors colors;
+  final SenderDeliveryRecord delivery;
+
+  const _DesktopActiveDeliveryStatus({
+    required this.colors,
+    required this.delivery,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final receivedText = delivery.createdAt == null
+        ? null
+        : _jobReceivedTextFromDate(delivery.createdAt);
+    final hasDriver = delivery.assignedDriverName.trim().isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Delivery Status',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            _StatusPill(
+              colors: colors,
+              label: _displayStatusLabel(delivery.status),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Reference ${delivery.trackingReference.isEmpty ? delivery.requestId : delivery.trackingReference}',
+          style: TextStyle(
+            color: colors.mutedText,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        if (receivedText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            receivedText,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+        const SizedBox(height: 20),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _RouteLine(
+                colors: colors,
+                icon: Icons.radio_button_checked,
+                label: 'Pickup',
+                value: delivery.pickupAddress,
+                iconColor: const Color(0xff2563eb),
+              ),
+              const SizedBox(height: 14),
+              _RouteLine(
+                colors: colors,
+                icon: Icons.location_on,
+                label: 'Drop-off',
+                value: delivery.dropoffAddress,
+                iconColor: const Color(0xff22c55e),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Price'),
+              const SizedBox(height: 8),
+              _PriceLine(
+                colors: colors,
+                label: 'Final price',
+                value: delivery.pricePaid > 0
+                    ? '£${delivery.pricePaid.toStringAsFixed(2)}'
+                    : 'Price not confirmed',
+                strong: true,
+              ),
+              _PriceLine(
+                colors: colors,
+                label: 'Payment',
+                value: delivery.paymentStatus,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _GlassPanel(
+          colors: colors,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                hasDriver ? Icons.verified_user : Icons.person_search,
+                color: colors.text,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasDriver ? 'Rider assigned' : 'Rider not assigned yet',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      hasDriver
+                          ? delivery.assignedDriverName
+                          : 'Circum will show rider details once this delivery has been assigned.',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        height: 1.35,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+
+  const _StatusPill({required this.colors, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.text,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.inverseText,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
   }
 }
 
@@ -12922,14 +13842,23 @@ class _SenderAccessGate extends StatelessWidget {
               const SizedBox(height: 16),
               if (signupMode) ...[
                 _InputBox(
-                    colors: colors, controller: fullName, hint: 'Full name'),
+                  colors: colors,
+                  controller: fullName,
+                  hint: 'Full name',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors, controller: phone, hint: 'Phone number'),
+                  colors: colors,
+                  controller: phone,
+                  hint: 'Phone number',
+                ),
                 const SizedBox(height: 10),
               ],
               _InputBox(
-                  colors: colors, controller: email, hint: 'Email address'),
+                colors: colors,
+                controller: email,
+                hint: 'Email address',
+              ),
               const SizedBox(height: 10),
               _InputBox(
                 colors: colors,
@@ -12962,8 +13891,8 @@ class _SenderAccessGate extends StatelessWidget {
                       onPressed: busy
                           ? null
                           : signupMode
-                              ? onSignUp
-                              : onSignIn,
+                          ? onSignUp
+                          : onSignIn,
                       icon: busy
                           ? const SizedBox(
                               width: 18,
@@ -12975,8 +13904,8 @@ class _SenderAccessGate extends StatelessWidget {
                         busy
                             ? 'Please wait'
                             : signupMode
-                                ? 'Create account'
-                                : 'Sign in',
+                            ? 'Create account'
+                            : 'Sign in',
                       ),
                       style: FilledButton.styleFrom(
                         backgroundColor: colors.text,
@@ -13116,9 +14045,11 @@ class _SavedAddressQuickPick extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final matching = addresses
-        .where((address) => addressType == 'pickup'
-            ? address.addressType != 'dropoff'
-            : address.addressType == 'dropoff')
+        .where(
+          (address) => addressType == 'pickup'
+              ? address.addressType != 'dropoff'
+              : address.addressType == 'dropoff',
+        )
         .toList(growable: false);
     if (matching.isEmpty) return const SizedBox.shrink();
 
@@ -13130,8 +14061,11 @@ class _SavedAddressQuickPick extends StatelessWidget {
         children: matching
             .map(
               (address) => ActionChip(
-                avatar:
-                    Icon(Icons.place_outlined, color: colors.text, size: 16),
+                avatar: Icon(
+                  Icons.place_outlined,
+                  color: colors.text,
+                  size: 16,
+                ),
                 label: Text(address.label),
                 onPressed: () => onSelect(address),
               ),
@@ -13267,8 +14201,10 @@ class _WeightConfirmationPanel extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'Rider will verify weight at pickup.',
-              style:
-                  TextStyle(color: colors.warning, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: colors.warning,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
           if (canConfirm) ...[
@@ -13440,22 +14376,33 @@ class _SenderDashboardStep extends StatelessWidget {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.person_outline, color: colors.text),
-                  title: Text('Profile and saved addresses',
-                      style: TextStyle(
-                          color: colors.text, fontWeight: FontWeight.w900)),
+                  title: Text(
+                    'Profile and saved addresses',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   subtitle: Text(
-                      'Keep pickup details ready for faster booking.',
-                      style: TextStyle(color: colors.mutedText)),
+                    'Keep pickup details ready for faster booking.',
+                    style: TextStyle(color: colors.mutedText),
+                  ),
                   onTap: onProfile,
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.support_agent, color: colors.text),
-                  title: Text('Support',
-                      style: TextStyle(
-                          color: colors.text, fontWeight: FontWeight.w900)),
-                  subtitle: Text('Ask Circum for help with a delivery.',
-                      style: TextStyle(color: colors.mutedText)),
+                  title: Text(
+                    'Support',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Ask Circum for help with a delivery.',
+                    style: TextStyle(color: colors.mutedText),
+                  ),
                   onTap: onSupport,
                 ),
               ],
@@ -13676,8 +14623,9 @@ class _SenderProfileStep extends StatelessWidget {
                 const SizedBox(height: 18),
                 GridView.count(
                   shrinkWrap: true,
-                  crossAxisCount:
-                      MediaQuery.sizeOf(context).width < 720 ? 2 : 4,
+                  crossAxisCount: MediaQuery.sizeOf(context).width < 720
+                      ? 2
+                      : 4,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                   childAspectRatio: 1.55,
@@ -13766,7 +14714,11 @@ class _SenderProfileStep extends StatelessWidget {
         _InputBox(colors: colors, controller: phone, hint: 'Phone number'),
         const SizedBox(height: 10),
         _InputBox(
-            colors: colors, controller: email, hint: 'Email', enabled: false),
+          colors: colors,
+          controller: email,
+          hint: 'Email',
+          enabled: false,
+        ),
         const SizedBox(height: 12),
         Text(
           'Created ${_readableDate(profile?.createdAt)}. ${summary.loyaltyLevel}.',
@@ -13804,8 +14756,10 @@ class _SenderProfileStep extends StatelessWidget {
 
   Widget _historyTab() {
     if (deliveries.isEmpty) {
-      return _empty('No parcels yet',
-          'When you send with Circum, your parcel history will appear here.');
+      return _empty(
+        'No parcels yet',
+        'When you send with Circum, your parcel history will appear here.',
+      );
     }
     return Column(
       children: deliveries
@@ -13834,8 +14788,10 @@ class _SenderProfileStep extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  Text(delivery.status,
-                      style: TextStyle(color: colors.mutedText, fontSize: 12)),
+                  Text(
+                    delivery.status,
+                    style: TextStyle(color: colors.mutedText, fontSize: 12),
+                  ),
                 ],
               ),
               onTap: () => onSelectDelivery(delivery),
@@ -13847,10 +14803,12 @@ class _SenderProfileStep extends StatelessWidget {
 
   Widget _addressesTab() {
     final addresses = profile?.savedAddresses ?? const <SavedSenderAddress>[];
-    final pickupAddresses =
-        addresses.where((address) => address.addressType != 'dropoff');
-    final dropoffAddresses =
-        addresses.where((address) => address.addressType == 'dropoff');
+    final pickupAddresses = addresses.where(
+      (address) => address.addressType != 'dropoff',
+    );
+    final dropoffAddresses = addresses.where(
+      (address) => address.addressType == 'dropoff',
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -13872,7 +14830,8 @@ class _SenderProfileStep extends StatelessWidget {
           style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
           items: const ['Home', 'Work', 'Custom']
               .map(
-                  (label) => DropdownMenuItem(value: label, child: Text(label)))
+                (label) => DropdownMenuItem(value: label, child: Text(label)),
+              )
               .toList(),
           onChanged: (label) {
             if (label != null) savedAddressLabel.text = label;
@@ -13955,8 +14914,10 @@ class _SenderProfileStep extends StatelessWidget {
         address.label,
         style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
       ),
-      subtitle:
-          Text(address.address, style: TextStyle(color: colors.mutedText)),
+      subtitle: Text(
+        address.address,
+        style: TextStyle(color: colors.mutedText),
+      ),
     );
   }
 
@@ -13983,8 +14944,10 @@ class _SenderProfileStep extends StatelessWidget {
   Widget _reviewsTab() {
     final rated = deliveries.where((delivery) => delivery.ratingGiven != null);
     if (rated.isEmpty) {
-      return _empty('No reviews yet',
-          'Ratings you leave after completed deliveries will show here.');
+      return _empty(
+        'No reviews yet',
+        'Ratings you leave after completed deliveries will show here.',
+      );
     }
     return Column(
       children: rated
@@ -13992,11 +14955,17 @@ class _SenderProfileStep extends StatelessWidget {
             (delivery) => ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.star, color: Colors.amber.shade700),
-              title: Text('${delivery.ratingGiven} stars',
-                  style: TextStyle(
-                      color: colors.text, fontWeight: FontWeight.w900)),
-              subtitle: Text(delivery.requestId,
-                  style: TextStyle(color: colors.mutedText)),
+              title: Text(
+                '${delivery.ratingGiven} stars',
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              subtitle: Text(
+                delivery.requestId,
+                style: TextStyle(color: colors.mutedText),
+              ),
             ),
           )
           .toList(),
@@ -14006,16 +14975,20 @@ class _SenderProfileStep extends StatelessWidget {
   Widget _supportTab() {
     final notes = deliveries.expand((delivery) => delivery.supportNotes);
     if (notes.isEmpty) {
-      return _empty('No support notes',
-          'If anything needs attention, Circum support notes will sit here.');
+      return _empty(
+        'No support notes',
+        'If anything needs attention, Circum support notes will sit here.',
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: notes
-          .map((note) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text('$note', style: TextStyle(color: colors.text)),
-              ))
+          .map(
+            (note) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text('$note', style: TextStyle(color: colors.text)),
+            ),
+          )
           .toList(),
     );
   }
@@ -14026,11 +14999,14 @@ class _SenderProfileStep extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: TextStyle(
-                  color: colors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900)),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 6),
           Text(body, style: TextStyle(color: colors.mutedText, height: 1.45)),
         ],
@@ -14073,10 +15049,7 @@ class _SenderDeliveryDetails extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _SectionTitle(
-                colors: colors,
-                title: delivery.requestId,
-              ),
+              child: _SectionTitle(colors: colors, title: delivery.requestId),
             ),
             IconButton(
               tooltip: 'Close',
@@ -14092,22 +15065,31 @@ class _SenderDeliveryDetails extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(row.key.toUpperCase(),
-                    style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900)),
+                Text(
+                  row.key.toUpperCase(),
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(row.value,
-                    style: TextStyle(
-                        color: colors.text, fontWeight: FontWeight.w800)),
+                Text(
+                  row.value,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
           ),
         ),
         if (delivery.proofOfDelivery.isNotEmpty)
-          Text('Proof of delivery is attached.',
-              style: TextStyle(color: colors.mutedText)),
+          Text(
+            'Proof of delivery is attached.',
+            style: TextStyle(color: colors.mutedText),
+          ),
       ],
     );
   }
@@ -14297,20 +15279,21 @@ class _DetailsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final matchingHasStarted = checkoutState == _CheckoutState.matchingRiders ||
+    final matchingHasStarted =
+        checkoutState == _CheckoutState.matchingRiders ||
         checkoutState == _CheckoutState.riderAssigned;
     final validating = analyzing || checkoutState == _CheckoutState.validating;
     final ctaLabel = matchingHasStarted
         ? 'Delivery is connecting'
         : validating
-            ? 'Checking options...'
-            : canSubmit
-                ? 'See delivery options'
-                : !pickupVerified || !dropoffVerified
-                    ? 'Verify addresses before pricing'
-                    : !contactDetailsReady
-                        ? 'Add contact details before pricing'
-                        : 'Confirm route before pricing';
+        ? 'Checking options...'
+        : canSubmit
+        ? 'See delivery options'
+        : !pickupVerified || !dropoffVerified
+        ? 'Verify addresses before pricing'
+        : !contactDetailsReady
+        ? 'Add contact details before pricing'
+        : 'Confirm route before pricing';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -14841,8 +15824,10 @@ class _HealthPlusStep extends StatelessWidget {
                       color: const Color(0xffdcfce7),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.health_and_safety,
-                        color: Color(0xff16a34a)),
+                    child: const Icon(
+                      Icons.health_and_safety,
+                      color: Color(0xff16a34a),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -14895,30 +15880,39 @@ class _HealthPlusStep extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Pharmacy / pickup details'),
               const SizedBox(height: 12),
               _InputBox(
-                  colors: colors, controller: fullName, hint: 'Full name'),
+                colors: colors,
+                controller: fullName,
+                hint: 'Full name',
+              ),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors, controller: phone, hint: 'Phone number'),
+                colors: colors,
+                controller: phone,
+                hint: 'Phone number',
+              ),
               const SizedBox(height: 10),
               _InputBox(colors: colors, controller: email, hint: 'Email'),
               const SizedBox(height: 10),
               _InputBox(
-                  colors: colors,
-                  controller: pharmacyName,
-                  hint: 'Pharmacy name'),
+                colors: colors,
+                controller: pharmacyName,
+                hint: 'Pharmacy name',
+              ),
               const SizedBox(height: 10),
               _AddressField(
-                  colors: colors,
-                  icon: Icons.local_pharmacy,
-                  controller: pharmacyAddress,
-                  label: 'Pharmacy pickup address',
-                  pharmacyMode: true),
+                colors: colors,
+                icon: Icons.local_pharmacy,
+                controller: pharmacyAddress,
+                label: 'Pharmacy pickup address',
+                pharmacyMode: true,
+              ),
               const SizedBox(height: 10),
               _AddressField(
-                  colors: colors,
-                  icon: Icons.home_outlined,
-                  controller: deliveryAddress,
-                  label: 'Delivery address'),
+                colors: colors,
+                icon: Icons.home_outlined,
+                controller: deliveryAddress,
+                label: 'Delivery address',
+              ),
             ],
           ),
         ),
@@ -15008,45 +16002,53 @@ class _HealthPlusStep extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Price breakdown'),
               const SizedBox(height: 10),
               _PriceLine(
-                  colors: colors,
-                  label: 'Base pickup fee',
-                  value: '£${quote.delivery.baseFare.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Base pickup fee',
+                value: '£${quote.delivery.baseFare.toStringAsFixed(2)}',
+              ),
               _PriceLine(
-                  colors: colors,
-                  label: 'Distance estimate',
-                  value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Distance estimate',
+                value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}',
+              ),
               _PriceLine(
-                  colors: colors,
-                  label: 'Health+ care fee',
-                  value: '£${quote.serviceFee.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Health+ care fee',
+                value: '£${quote.serviceFee.toStringAsFixed(2)}',
+              ),
               if (quote.priorityFee > 0)
                 _PriceLine(
-                    colors: colors,
-                    label: 'Priority fee',
-                    value: '£${quote.priorityFee.toStringAsFixed(2)}'),
+                  colors: colors,
+                  label: 'Priority fee',
+                  value: '£${quote.priorityFee.toStringAsFixed(2)}',
+                ),
               if (quote.familySupportFee > 0)
                 _PriceLine(
-                    colors: colors,
-                    label: 'Family support',
-                    value: '£${quote.familySupportFee.toStringAsFixed(2)}'),
+                  colors: colors,
+                  label: 'Family support',
+                  value: '£${quote.familySupportFee.toStringAsFixed(2)}',
+                ),
               if (quote.recurringDiscount > 0)
                 _PriceLine(
-                    colors: colors,
-                    label: 'Recurring discount',
-                    value: '-£${quote.recurringDiscount.toStringAsFixed(2)}'),
+                  colors: colors,
+                  label: 'Recurring discount',
+                  value: '-£${quote.recurringDiscount.toStringAsFixed(2)}',
+                ),
               if (quote.minimumAdjustment > 0)
                 _PriceLine(
-                    colors: colors,
-                    label: 'Health+ minimum adjustment',
-                    value: '£${quote.minimumAdjustment.toStringAsFixed(2)}'),
+                  colors: colors,
+                  label: 'Health+ minimum adjustment',
+                  value: '£${quote.minimumAdjustment.toStringAsFixed(2)}',
+                ),
               Divider(color: colors.border, height: 24),
               _PriceLine(
-                  colors: colors,
-                  label: frequency == HealthPlusFrequency.oneOff
-                      ? 'One-off total'
-                      : 'Recurring pickup total',
-                  value: '£${quote.total.toStringAsFixed(2)}',
-                  strong: true),
+                colors: colors,
+                label: frequency == HealthPlusFrequency.oneOff
+                    ? 'One-off total'
+                    : 'Recurring pickup total',
+                value: '£${quote.total.toStringAsFixed(2)}',
+                strong: true,
+              ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: savePayment,
@@ -15084,10 +16086,7 @@ class _HealthPlusStep extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: Text(
               message!,
-              style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w800,
-              ),
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
             ),
           ),
         SizedBox(
@@ -15101,9 +16100,11 @@ class _HealthPlusStep extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.lock),
-            label: Text(submitting
-                ? 'Setting up Health+...'
-                : 'Pay £${quote.total.toStringAsFixed(2)} securely'),
+            label: Text(
+              submitting
+                  ? 'Setting up Health+...'
+                  : 'Pay £${quote.total.toStringAsFixed(2)} securely',
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
               foregroundColor: colors.inverseText,
@@ -15408,26 +16409,28 @@ class _HealthPlanCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            ...plan.benefits.map((benefit) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.check, color: colors.success, size: 16),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          benefit,
-                          style: TextStyle(
-                            color: colors.mutedText,
-                            fontWeight: FontWeight.w700,
-                            height: 1.3,
-                          ),
+            ...plan.benefits.map(
+              (benefit) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.check, color: colors.success, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        benefit,
+                        style: TextStyle(
+                          color: colors.mutedText,
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
                         ),
                       ),
-                    ],
-                  ),
-                )),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: onStartSubscription,
@@ -15458,7 +16461,7 @@ class _HealthTrustGrid extends StatelessWidget {
       (Icons.medical_information_outlined, 'No medical advice provided'),
       (
         Icons.assignment_turned_in_outlined,
-        'Prescription remains customer/pharmacy responsibility'
+        'Prescription remains customer/pharmacy responsibility',
       ),
     ];
 
@@ -15527,26 +16530,28 @@ class _HealthDisclaimer extends StatelessWidget {
             'Circum does not prescribe medication or provide medical advice.',
             'Users are responsible for ensuring prescriptions are valid and ready for collection.',
             'Riders only collect and deliver sealed pharmacy packages.',
-          ].map((copy) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.check_circle, color: colors.success, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        copy,
-                        style: TextStyle(
-                          color: colors.mutedText,
-                          height: 1.35,
-                          fontWeight: FontWeight.w600,
-                        ),
+          ].map(
+            (copy) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.check_circle, color: colors.success, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      copy,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -15663,15 +16668,20 @@ class _HealthDashboardRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: colors.mutedText, fontWeight: FontWeight.w700)),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           Flexible(
-            child: Text(value,
-                textAlign: TextAlign.right,
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+            ),
           ),
         ],
       ),
@@ -15875,7 +16885,8 @@ class _AddressSuggestion {
       lng: resolvedLng,
       confidence: confidence,
       provider: provider,
-      locationId: placeId ??
+      locationId:
+          placeId ??
           _stableLocationId(displayAddress, resolvedLat, resolvedLng),
       placeId: placeId,
       buildingNumber: components['buildingNumber'],
@@ -15923,31 +16934,31 @@ class _ValidatedAddress {
   bool get hasCoordinates => _coordinatesAreUsable(lat, lng);
 
   Map<String, dynamic> toJson() => {
-        'rawInput': rawInput,
-        'displayAddress': displayAddress,
-        'postcode': postcode,
-        'lat': lat,
-        'lng': lng,
-        'geocodeConfidence': confidence,
-        'provider': provider,
-        'locationId': locationId,
-        if (placeId != null) 'placeId': placeId,
-        if (buildingNumber != null) 'buildingNumber': buildingNumber,
-        if (street != null) 'street': street,
-        if (city != null) 'city': city,
-        if (county != null) 'county': county,
-        if (country != null) 'country': country,
-      };
+    'rawInput': rawInput,
+    'displayAddress': displayAddress,
+    'postcode': postcode,
+    'lat': lat,
+    'lng': lng,
+    'geocodeConfidence': confidence,
+    'provider': provider,
+    'locationId': locationId,
+    if (placeId != null) 'placeId': placeId,
+    if (buildingNumber != null) 'buildingNumber': buildingNumber,
+    if (street != null) 'street': street,
+    if (city != null) 'city': city,
+    if (county != null) 'county': county,
+    if (country != null) 'country': country,
+  };
 
   Map<String, dynamic> toPositionMap() => {
-        'geopoint': GeoPoint(lat, lng),
-        'lat': lat,
-        'lng': lng,
-        'geocodeConfidence': confidence,
-        'locationId': locationId,
-        if (placeId != null) 'placeId': placeId,
-        'provider': provider,
-      };
+    'geopoint': GeoPoint(lat, lng),
+    'lat': lat,
+    'lng': lng,
+    'geocodeConfidence': confidence,
+    'locationId': locationId,
+    if (placeId != null) 'placeId': placeId,
+    'provider': provider,
+  };
 }
 
 extension _SavedSenderAddressValidation on SavedSenderAddress {
@@ -16016,8 +17027,10 @@ String _cleanGoogleAddress(String address) {
 }
 
 String _stableLocationId(String address, double lat, double lng) {
-  final normalized =
-      address.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+  final normalized = address.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]+'),
+    '-',
+  );
   return '${normalized.substring(0, math.min(normalized.length, 48))}'
       '-${lat.toStringAsFixed(4)}-${lng.toStringAsFixed(4)}';
 }
@@ -16077,7 +17090,8 @@ double? _coordinateDistanceMiles(
   final dLng = _degreesToRadians(dropoffLng - pickupLng);
   final lat1 = _degreesToRadians(pickupLat);
   final lat2 = _degreesToRadians(dropoffLat);
-  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+  final a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
       math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   final directMiles = earthRadiusMiles * c;
@@ -16162,9 +17176,10 @@ class _VehicleStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _StepTopBar(
-            colors: colors,
-            title: 'Best fit for this delivery',
-            onBack: onBack),
+          colors: colors,
+          title: 'Best fit for this delivery',
+          onBack: onBack,
+        ),
         const SizedBox(height: 14),
         _GlassPanel(
           colors: colors,
@@ -16340,7 +17355,8 @@ class _PaymentStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSchedule = scheduledPickupDate.isNotEmpty ||
+    final hasSchedule =
+        scheduledPickupDate.isNotEmpty ||
         scheduledPickupWindow.isNotEmpty ||
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
@@ -16448,30 +17464,34 @@ class _PaymentStep extends StatelessWidget {
                 ),
               Divider(color: colors.border, height: 26),
               _PriceLine(
-                  colors: colors,
-                  label: 'Base fare',
-                  value: '£${breakdown.baseFare.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Base fare',
+                value: '£${breakdown.baseFare.toStringAsFixed(2)}',
+              ),
               _PriceLine(
-                  colors: colors,
-                  label: 'Distance fare',
-                  value: '£${breakdown.distanceFare.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Distance fare',
+                value: '£${breakdown.distanceFare.toStringAsFixed(2)}',
+              ),
               _PriceLine(
-                  colors: colors,
-                  label:
-                      '${breakdown.weightCategory} (${weightKg.toStringAsFixed(weightKg.truncateToDouble() == weightKg ? 0 : 1)} kg)',
-                  value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}'),
+                colors: colors,
+                label:
+                    '${breakdown.weightCategory} (${weightKg.toStringAsFixed(weightKg.truncateToDouble() == weightKg ? 0 : 1)} kg)',
+                value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
+              ),
               _PriceLine(
-                  colors: colors,
-                  label: '${vehicle.name} vehicle',
-                  value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}'),
+                colors: colors,
+                label: '${vehicle.name} vehicle',
+                value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
+              ),
               if (breakdown.specialConditions > 0)
                 _PriceLine(
-                    colors: colors,
-                    label: speed == 'Express'
-                        ? 'Express service'
-                        : 'Special conditions',
-                    value:
-                        '£${breakdown.specialConditions.toStringAsFixed(2)}'),
+                  colors: colors,
+                  label: speed == 'Express'
+                      ? 'Express service'
+                      : 'Special conditions',
+                  value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
+                ),
               Divider(color: colors.border, height: 26),
               _PriceLine(
                 colors: colors,
@@ -16512,7 +17532,8 @@ class _PaymentStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: weightConfirmed &&
+            onPressed:
+                weightConfirmed &&
                     locationsConfirmed &&
                     !breakdown.requiresManualQuote &&
                     !processingPayment
@@ -16529,12 +17550,12 @@ class _PaymentStep extends StatelessWidget {
               processingPayment
                   ? 'Processing payment...'
                   : !locationsConfirmed
-                      ? 'Confirm pickup and drop-off before payment'
-                      : breakdown.requiresManualQuote
-                          ? 'Manual review required'
-                          : weightConfirmed
-                              ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
-                              : 'Confirm parcel weight before payment',
+                  ? 'Confirm pickup and drop-off before payment'
+                  : breakdown.requiresManualQuote
+                  ? 'Manual review required'
+                  : weightConfirmed
+                  ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                  : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
@@ -16755,9 +17776,11 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     final riderLat = _num(live?['latitude']);
     final riderLng = _num(live?['longitude']);
     final updatedAt = _dateTimeFromFirestore(live?['updatedAt']);
-    final fresh = updatedAt != null &&
+    final fresh =
+        updatedAt != null &&
         DateTime.now().difference(updatedAt).inSeconds <= 60;
-    final hasLiveTracking = fresh &&
+    final hasLiveTracking =
+        fresh &&
         pickup?.hasCoordinates == true &&
         dropoff?.hasCoordinates == true &&
         riderLat != null &&
@@ -16803,7 +17826,8 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     }
 
     final destination = statusIndex < 2 ? pickup! : dropoff!;
-    final remainingMiles = _coordinateDistanceMiles(
+    final remainingMiles =
+        _coordinateDistanceMiles(
           riderLat,
           riderLng,
           destination.lat,
@@ -16855,10 +17879,8 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
               child: Image.network(
                 mapUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => _Timeline(
-                  colors: colors,
-                  activeIndex: statusIndex,
-                ),
+                errorBuilder: (context, error, stackTrace) =>
+                    _Timeline(colors: colors, activeIndex: statusIndex),
               ),
             ),
           ),
@@ -16946,7 +17968,8 @@ class _FirebaseStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final healthy = online &&
+    final healthy =
+        online &&
         error == null &&
         (checkoutState == _CheckoutState.matchingRiders ||
             checkoutState == _CheckoutState.riderAssigned);
@@ -16979,8 +18002,9 @@ class _FirebaseStatusBanner extends StatelessWidget {
             child: Text(
               healthy ? 'This delivery is saved and live.' : message,
               style: TextStyle(
-                color:
-                    healthy ? const Color(0xff166534) : const Color(0xff9a3412),
+                color: healthy
+                    ? const Color(0xff166534)
+                    : const Color(0xff9a3412),
                 fontSize: 12,
                 height: 1.3,
                 fontWeight: FontWeight.w800,
@@ -16997,24 +18021,21 @@ class _VanguardCustomerPanel extends StatelessWidget {
   final _CircumColors colors;
   final Map<String, dynamic> data;
 
-  const _VanguardCustomerPanel({
-    required this.colors,
-    required this.data,
-  });
+  const _VanguardCustomerPanel({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
     final protection =
         (data['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
     final collectionVerified = data['collectionPinVerified'] == true;
     final deliveryVerified = data['deliveryPinVerified'] == true;
     final collectionPin = '${protection['collectionPin'] ?? ''}'.trim();
     final deliveryPin = '${protection['deliveryPin'] ?? ''}'.trim();
-    final collectionContact =
-        (data['collectionContact'] as Map?)?.cast<String, dynamic>();
-    final receiverDetails =
-        (data['receiverDetails'] as Map?)?.cast<String, dynamic>();
+    final collectionContact = (data['collectionContact'] as Map?)
+        ?.cast<String, dynamic>();
+    final receiverDetails = (data['receiverDetails'] as Map?)
+        ?.cast<String, dynamic>();
     final collectionName =
         '${data['collectionContactName'] ?? collectionContact?['name'] ?? data['senderName'] ?? 'the sender or collection contact'}'
             .trim();
@@ -17163,8 +18184,9 @@ class _ChatSheet extends StatelessWidget {
             height: MediaQuery.sizeOf(context).height * 0.78,
             decoration: BoxDecoration(
               color: colors.appBackground,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
             ),
             child: Column(
               children: [
@@ -17340,7 +18362,7 @@ class _MiniMap extends StatelessWidget {
                       color: Color(0x552563eb),
                       blurRadius: 18,
                       spreadRadius: 4,
-                    )
+                    ),
                   ],
                 ),
                 child: const Icon(
@@ -17385,10 +18407,18 @@ class _MapPainter extends CustomPainter {
 
     final path = Path()
       ..moveTo(size.width * 0.06, size.height * 0.78)
-      ..quadraticBezierTo(size.width * 0.28, size.height * 0.46,
-          size.width * 0.48, size.height * 0.58)
-      ..quadraticBezierTo(size.width * 0.68, size.height * 0.70,
-          size.width * 0.90, size.height * 0.18);
+      ..quadraticBezierTo(
+        size.width * 0.28,
+        size.height * 0.46,
+        size.width * 0.48,
+        size.height * 0.58,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.68,
+        size.height * 0.70,
+        size.width * 0.90,
+        size.height * 0.18,
+      );
     canvas.drawPath(path, road);
 
     final route = Paint()
@@ -17520,7 +18550,8 @@ class _AddressFieldState extends State<_AddressField> {
   }
 
   Future<List<_AddressSuggestion>> _buildAddressSuggestions(
-      String value) async {
+    String value,
+  ) async {
     if (value.length < 3) return const [];
     final clean = value.replaceAll(RegExp(r'\s+'), ' ');
     if (clean.toLowerCase().contains('united kingdom')) return const [];
@@ -17649,9 +18680,11 @@ class _AddressFieldState extends State<_AddressField> {
       final predictions = body['predictions'] as List<dynamic>? ?? const [];
       return predictions
           .whereType<Map<String, dynamic>>()
-          .where((prediction) =>
-              prediction['place_id'] != null &&
-              prediction['description'] != null)
+          .where(
+            (prediction) =>
+                prediction['place_id'] != null &&
+                prediction['description'] != null,
+          )
           .map(
             (prediction) => _AddressSuggestion(
               displayAddress: '${prediction['description']}',
@@ -17676,18 +18709,15 @@ class _AddressFieldState extends State<_AddressField> {
       return suggestion;
     }
     try {
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/place/details/json',
-        {
-          'place_id': placeId,
-          'language': 'en',
-          'fields':
-              'formatted_address,address_components,geometry,place_id,name',
-          'key': _googlePlacesApiKey,
-          'sessiontoken': _placesSessionToken,
-        },
-      );
+      final uri =
+          Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
+            'place_id': placeId,
+            'language': 'en',
+            'fields':
+                'formatted_address,address_components,geometry,place_id,name',
+            'key': _googlePlacesApiKey,
+            'sessiontoken': _placesSessionToken,
+          });
       final response = await http.get(uri).timeout(const Duration(seconds: 4));
       if (response.statusCode != 200) return null;
       final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -17703,7 +18733,8 @@ class _AddressFieldState extends State<_AddressField> {
       );
       return _AddressSuggestion(
         displayAddress: _cleanGoogleAddress(
-            '${result['formatted_address'] ?? suggestion.displayAddress}'),
+          '${result['formatted_address'] ?? suggestion.displayAddress}',
+        ),
         lat: lat,
         lng: lng,
         confidence: 0.99,
@@ -17750,7 +18781,8 @@ class _AddressFieldState extends State<_AddressField> {
       if (lat == null || lng == null) return null;
       return _AddressSuggestion(
         displayAddress: _cleanGoogleAddress(
-            '${result['formatted_address'] ?? suggestion.displayAddress}'),
+          '${result['formatted_address'] ?? suggestion.displayAddress}',
+        ),
         lat: lat,
         lng: lng,
         confidence: 0.98,
@@ -17803,8 +18835,8 @@ class _AddressFieldState extends State<_AddressField> {
     final resolved = suggestion.isPopularPlace
         ? await _resolvePopularPlace(suggestion)
         : suggestion.provider == 'google_places'
-            ? await _googlePlaceDetails(suggestion)
-            : suggestion;
+        ? await _googlePlaceDetails(suggestion)
+        : suggestion;
     if (!mounted) return;
     if (resolved == null || !resolved.toValidatedAddress().hasCoordinates) {
       setState(() {
@@ -17889,8 +18921,8 @@ class _AddressFieldState extends State<_AddressField> {
                             suggestion.isPopularPlace
                                 ? Icons.star_rounded
                                 : widget.pharmacyMode
-                                    ? Icons.local_pharmacy
-                                    : Icons.place_outlined,
+                                ? Icons.local_pharmacy
+                                : Icons.place_outlined,
                             color: colors.text,
                             size: 16,
                           ),
@@ -18297,51 +19329,51 @@ bool _sameSuggestionText(String left, String right) {
 const Map<String, (double, double)> _ukAddressSuggestionSeeds = {
   '10 Downing Street, Westminster, London SW1A 2AA, United Kingdom': (
     51.5034,
-    -0.1276
+    -0.1276,
   ),
   '221B Baker Street, Marylebone, London NW1 6XE, United Kingdom': (
     51.5237,
-    -0.1585
+    -0.1585,
   ),
   '1 Canada Square, Canary Wharf, London E14 5AB, United Kingdom': (
     51.5054,
-    -0.0235
+    -0.0235,
   ),
   'The Shard, 32 London Bridge Street, London SE1 9SG, United Kingdom': (
     51.5045,
-    -0.0865
+    -0.0865,
   ),
   'Westfield London, Ariel Way, London W12 7GF, United Kingdom': (
     51.5074,
-    -0.2217
+    -0.2217,
   ),
   'Selfridges, 400 Oxford Street, London W1A 1AB, United Kingdom': (
     51.5145,
-    -0.1527
+    -0.1527,
   ),
   'King\'s Cross Station, Euston Road, London N1C 4TB, United Kingdom': (
     51.5308,
-    -0.1238
+    -0.1238,
   ),
   'Manchester Piccadilly Station, Manchester M1 2BN, United Kingdom': (
     53.4774,
-    -2.2309
+    -2.2309,
   ),
   'Bullring, Birmingham B5 4BU, United Kingdom': (52.4776, -1.8936),
   'Cabot Circus, Bristol BS1 3BD, United Kingdom': (51.4581, -2.5837),
   'St James Quarter, Edinburgh EH1 3AD, United Kingdom': (55.9547, -3.1882),
   'Cardiff Central Station, Cardiff CF10 1EP, United Kingdom': (
     51.4755,
-    -3.1780
+    -3.1780,
   ),
   'Leeds Station, New Station Street, Leeds LS1 4DY, United Kingdom': (
     53.7947,
-    -1.5479
+    -1.5479,
   ),
   'Liverpool ONE, Liverpool L1 8JQ, United Kingdom': (53.4049, -2.9876),
   'Brighton Station, Queens Road, Brighton BN1 3XP, United Kingdom': (
     50.8290,
-    -0.1413
+    -0.1413,
   ),
   'Oxford City Centre, Oxford OX1 1BX, United Kingdom': (51.7520, -1.2577),
 };
@@ -18456,8 +19488,10 @@ class _InputBox extends StatelessWidget {
         hintStyle: TextStyle(color: colors.mutedText),
         filled: true,
         fillColor: colors.field,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderSide: BorderSide.none,
           borderRadius: BorderRadius.circular(16),
@@ -18569,10 +19603,7 @@ class _CompactSelectBoxState extends State<_CompactSelectBox> {
                   .map(
                     (option) => DropdownMenuItem<String>(
                       value: option,
-                      child: Text(
-                        option,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(option, overflow: TextOverflow.ellipsis),
                     ),
                   )
                   .toList(),
@@ -18686,11 +19717,7 @@ class _RouteRow extends StatelessWidget {
   final String from;
   final String to;
 
-  const _RouteRow({
-    required this.colors,
-    required this.from,
-    required this.to,
-  });
+  const _RouteRow({required this.colors, required this.from, required this.to});
 
   @override
   Widget build(BuildContext context) {
@@ -19077,19 +20104,18 @@ class _DriverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile = driver ??
-        DriverProfile.fromMap(
-            'preview-rider',
-            {
-              'fullName': 'Marcus A.',
-              'vehicleType': vehicle.name,
-              'vehicleMakeModel':
-                  vehicle.name == 'Bike' ? 'E-bike' : 'Toyota Prius',
-              'vehicleColour': 'Blue',
-              'plateNumber': 'CIR 24K',
-              'verificationStatus': 'verified',
-            },
-            performance: metric);
+    final profile =
+        driver ??
+        DriverProfile.fromMap('preview-rider', {
+          'fullName': 'Marcus A.',
+          'vehicleType': vehicle.name,
+          'vehicleMakeModel': vehicle.name == 'Bike'
+              ? 'E-bike'
+              : 'Toyota Prius',
+          'vehicleColour': 'Blue',
+          'plateNumber': 'CIR 24K',
+          'verificationStatus': 'verified',
+        }, performance: metric);
     final performance = metric ?? profile.performance;
     final orderRank = _circumOrderRankForPerformance(performance);
     final rating = performance.averageRating <= 0
@@ -19198,10 +20224,7 @@ class _DriverCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Recent reviews',
-              style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w900,
-              ),
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             ...profile.recentRatings.map(
@@ -19223,8 +20246,8 @@ class _DriverCard extends StatelessWidget {
                         rating.feedbackText.trim().isNotEmpty
                             ? rating.feedbackText.trim()
                             : rating.feedbackTags
-                                .map(_DriverRatingPrompt.labelForTag)
-                                .join(', '),
+                                  .map(_DriverRatingPrompt.labelForTag)
+                                  .join(', '),
                         style: TextStyle(
                           color: colors.mutedText,
                           fontWeight: FontWeight.w700,
@@ -19428,10 +20451,7 @@ class _DriverRatingPrompt extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             'Add a tip',
-            style: TextStyle(
-              color: colors.text,
-              fontWeight: FontWeight.w900,
-            ),
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -19443,7 +20463,8 @@ class _DriverRatingPrompt extends StatelessWidget {
                 selected: selected,
                 onSelected: submitted ? null : (_) => onTipChanged(amount),
                 label: Text(
-                    amount == 0 ? 'No tip' : '+£${amount.toStringAsFixed(0)}'),
+                  amount == 0 ? 'No tip' : '+£${amount.toStringAsFixed(0)}',
+                ),
                 selectedColor: colors.text,
                 labelStyle: TextStyle(
                   color: selected ? colors.inverseText : colors.text,
@@ -19473,11 +20494,13 @@ class _DriverRatingPrompt extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.star),
-              label: Text(submitted
-                  ? 'Rating submitted'
-                  : submitting
-                      ? 'Saving...'
-                      : 'Submit rating'),
+              label: Text(
+                submitted
+                    ? 'Rating submitted'
+                    : submitting
+                    ? 'Saving...'
+                    : 'Submit rating',
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: colors.text,
                 foregroundColor: colors.inverseText,
@@ -19580,7 +20603,7 @@ class _GlassPanel extends StatelessWidget {
             color: colors.adminGlow.withOpacity(colors.dark ? 0.12 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 12),
-          )
+          ),
         ],
       ),
       child: child,
@@ -19730,10 +20753,7 @@ class _PillButton extends StatelessWidget {
         foregroundColor: dark ? Colors.white : Colors.black,
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-        textStyle: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w900,
-        ),
+        textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
       ),
     );
   }
@@ -20128,10 +21148,7 @@ const _trackingStatuses = [
     'Rider assigned',
     'CIRCUM has assigned a rider to this delivery.',
   ),
-  _TrackingStatus(
-    'Package picked up',
-    'Your rider has collected the package.',
-  ),
+  _TrackingStatus('Package picked up', 'Your rider has collected the package.'),
   _TrackingStatus(
     'Delivered',
     'Proof of delivery is saved in your Circum history.',
