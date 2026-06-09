@@ -1,3 +1,4 @@
+import 'package:circum/app/iris/iris_item_repository.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 
 class IrisWeightLookupResult {
@@ -77,6 +78,43 @@ class IrisWeightEstimator {
           handlingNotes: product.handlingNotes,
         );
       }
+    }
+    final repositoryItem = IrisItemRepository.match(description);
+    if (repositoryItem != null) {
+      final band =
+          DeliveryPricing.weightBandFor(repositoryItem.estimatedWeightKg)
+              .category;
+      final dimensions = repositoryItem.typicalDimensionsCm;
+      return IrisWeightLookupResult(
+        matchedItemName: repositoryItem.itemName,
+        weightKg: repositoryItem.estimatedWeightKg,
+        weightBand: band,
+        confidence: repositoryItem.confidenceBaseline >= 0.85
+            ? 'high'
+            : repositoryItem.confidenceBaseline >= 0.65
+                ? 'medium'
+                : 'low',
+        confidenceScore: repositoryItem.confidenceBaseline,
+        explanation:
+            'Iris matched the description to ${repositoryItem.itemName} using the Circum item repository.',
+        packageType: repositoryItem.category,
+        weightSource: 'repository_match',
+        truthBand: repositoryItem.confidenceBaseline >= 0.85
+            ? 'Repository Match'
+            : 'Medium Confidence',
+        requiresVehicleReview: repositoryItem.requiresIRISReview ||
+            repositoryItem.estimatedWeightKg > 10 ||
+            repositoryItem.vehicleSuitability == 'Van',
+        typicalDimensions: ItemDimensionsCm(
+          length: dimensions.lengthCm,
+          width: dimensions.widthCm,
+          height: dimensions.heightCm,
+        ),
+        vehicleSuitability: repositoryItem.vehicleSuitability,
+        fragile: repositoryItem.fragile,
+        stackable: repositoryItem.stackable,
+        handlingNotes: repositoryItem.deliveryNotes,
+      );
     }
     return null;
   }

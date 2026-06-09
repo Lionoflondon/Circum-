@@ -1,9 +1,30 @@
+import 'package:circum/app/iris/iris_item_repository.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('IrisWeightEstimator', () {
+    test('repository contains exactly 1000 structured items', () {
+      expect(IrisItemRepository.items.length,
+          IrisItemRepository.expectedItemCount);
+      expect(
+        IrisItemRepository.items.map((item) => item.itemName).toSet().length,
+        IrisItemRepository.expectedItemCount,
+      );
+      expect(
+        IrisItemRepository.items.every((item) =>
+            item.estimatedWeightKg > 0 &&
+            item.minimumWeightKg > 0 &&
+            item.maximumWeightKg >= item.estimatedWeightKg &&
+            item.aliases.isNotEmpty &&
+            item.category.isNotEmpty &&
+            item.weightClass.isNotEmpty &&
+            item.sizeClass.isNotEmpty),
+        isTrue,
+      );
+    });
+
     test('iPhone 13 description returns known product weight', () {
       final estimate =
           IrisWeightEstimator.knownProductEstimate('Apple iPhone 13 in a box');
@@ -86,7 +107,9 @@ void main() {
 
       expect(estimate, isNull);
       expect(classification.selectedWeightSource, 'customer_declared');
-      expect(DeliveryPricing.weightSourceLabel(classification.selectedWeightSource),
+      expect(
+          DeliveryPricing.weightSourceLabel(
+              classification.selectedWeightSource),
           'Customer Declared');
     });
 
@@ -112,8 +135,21 @@ void main() {
 
       expect(classification.finalWeightKg, 1.2);
       expect(classification.selectedWeightSource, 'driver_verified');
-      expect(DeliveryPricing.weightSourceLabel(classification.selectedWeightSource),
+      expect(
+          DeliveryPricing.weightSourceLabel(
+              classification.selectedWeightSource),
           'Rider Verified');
+    });
+
+    test('expanded repository matches common non-curated items', () {
+      final suitcase =
+          IrisWeightEstimator.knownProductEstimate('large Heathrow suitcase');
+
+      expect(suitcase, isNotNull);
+      expect(suitcase!.weightSource, 'repository_match');
+      expect(suitcase.weightKg, greaterThan(5));
+      expect(suitcase.packageType, 'Airport');
+      expect(suitcase.vehicleSuitability, isNotEmpty);
     });
   });
 }

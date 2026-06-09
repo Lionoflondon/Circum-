@@ -376,9 +376,9 @@ class DeliveryPricing {
       'driver_verified' => 'Rider verified weight is the highest source.',
       'historical_verified' =>
         'Similar completed parcels indicate a higher $band classification.',
-      'iris_estimate' => 'IRIS estimate is the highest reliable weight.',
+      'iris_estimate' => 'IRIS selected the final billing weight.',
       'customer_declared' =>
-        'Customer declared weight is the highest reliable weight.',
+        'IRIS selected the sender supplied weight as the final billing weight.',
       _ => 'Minimum valid parcel weight applied.',
     };
   }

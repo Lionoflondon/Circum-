@@ -16,6 +16,7 @@ import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -9213,6 +9214,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _senderSignupMode = false;
   bool _roleChoiceConfirmed = false;
   bool _differentCollectionContact = false;
+  bool _parcelPhotoBusy = false;
   int _statusIndex = 0;
   int _selectedRating = 0;
   double _selectedTipAmount = 0;
@@ -9225,6 +9227,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DriverPerformanceMetric? _assignedDriverMetric;
   Map<String, dynamic>? _activeVanguardData;
   Map<String, dynamic>? _liveLocationData;
+  XFile? _parcelPhoto;
+  DateTime? _parcelPhotoCapturedAt;
+  String? _parcelPhotoMessage;
   DateTime? _activeRequestReceivedAt;
   Set<String> _selectedRatingTags = {};
   Set<CircumRole> _availableRoles = const {};
@@ -9493,6 +9498,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           verificationRequired: _weightVerificationRequired,
           weightMessage: _weightMessage,
           onConfirmIrisWeight: _confirmIrisWeight,
+          parcelPhotoName: _parcelPhoto?.name,
+          parcelPhotoBusy: _parcelPhotoBusy,
+          parcelPhotoMessage: _parcelPhotoMessage,
+          onPickParcelPhoto: _pickParcelPhoto,
+          onRemoveParcelPhoto: () => setState(() {
+            _parcelPhoto = null;
+            _parcelPhotoCapturedAt = null;
+            _parcelPhotoMessage = 'Parcel photo removed.';
+          }),
           scheduledPickupDate: _scheduledPickupDate,
           scheduledPickupWindow: _scheduledPickupWindow,
           scheduledDropoffDate: _scheduledDropoffDate,
@@ -10506,6 +10520,78 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
+  Future<void> _pickParcelPhoto() async {
+    setState(() {
+      _parcelPhotoBusy = true;
+      _parcelPhotoMessage = null;
+    });
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
+        imageQuality: 82,
+      );
+      if (!mounted) return;
+      setState(() {
+        _parcelPhoto = picked;
+        _parcelPhotoCapturedAt = picked == null ? null : DateTime.now();
+        _parcelPhotoMessage = picked == null
+            ? 'No parcel photo selected.'
+            : 'Parcel photo ready for IRIS review.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _parcelPhotoMessage =
+            'Parcel photo could not be added. You can continue safely.';
+      });
+    } finally {
+      if (mounted) setState(() => _parcelPhotoBusy = false);
+    }
+  }
+
+  Future<Map<String, dynamic>> _uploadParcelPhoto(String requestId) async {
+    final photo = _parcelPhoto;
+    if (photo == null) {
+      return {
+        'hasPhoto': false,
+        'analysisStatus': 'not_provided',
+      };
+    }
+    try {
+      final bytes = await photo.readAsBytes();
+      final safeName = photo.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final storagePath =
+          'parcel_photos/$requestId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      final ref = FirebaseStorage.instance.ref(storagePath);
+      await ref.putData(bytes);
+      final url = await ref.getDownloadURL();
+      return {
+        'hasPhoto': true,
+        'imageUrl': url,
+        'photoUrl': url,
+        'storagePath': storagePath,
+        'capturedAt': _parcelPhotoCapturedAt == null
+            ? null
+            : Timestamp.fromDate(_parcelPhotoCapturedAt!),
+        'uploadedAt': FieldValue.serverTimestamp(),
+        'analysisStatus': 'attached_for_iris_review',
+      };
+    } catch (_) {
+      return {
+        'hasPhoto': true,
+        'imageUrl': null,
+        'photoUrl': null,
+        'storagePath': null,
+        'capturedAt': _parcelPhotoCapturedAt == null
+            ? null
+            : Timestamp.fromDate(_parcelPhotoCapturedAt!),
+        'uploadedAt': null,
+        'analysisStatus': 'upload_failed',
+        'requiresIRISReview': true,
+      };
+    }
+  }
+
   void _confirmIrisWeight() {
     final estimateWeight = _irisEstimatedWeightKg;
     if (estimateWeight == null || estimateWeight <= 0) return;
@@ -11002,7 +11088,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       await _ensureFirebaseReady();
       final db = FirebaseFirestore.instance;
-      final request = _requestPayload(id);
+      final parcelPhotoData = await _uploadParcelPhoto(id);
+      final request = _requestPayload(id, parcelPhotoData);
       _activeVanguardData = request['vanguardEnabled'] == true
           ? Map<String, dynamic>.from(request)
           : null;
@@ -11494,7 +11581,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
   }
 
-  Map<String, dynamic> _requestPayload(String id) {
+  Map<String, dynamic> _requestPayload(
+    String id,
+    Map<String, dynamic> parcelPhotoData,
+  ) {
     final quote = _quoteBreakdown;
     final classification = _deliveryClassification;
     final pickupAddress = _validatedPickup!;
@@ -11545,7 +11635,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       declaredValueGbp: null,
     );
     final vanguardEnabled = vanguardFields['vanguardEnabled'] == true;
-    final hasPhoto = false;
+    final hasPhoto = parcelPhotoData['hasPhoto'] == true;
+    final parcelPhotoUrl =
+        parcelPhotoData['imageUrl'] ?? parcelPhotoData['photoUrl'];
     final suitability = _vehicleSuitability;
     final safeVehicleName = suitability.recommendedVehicle;
     final driverPayout = DeliveryPricing.riderPayoutFromFare(quote.total);
@@ -11585,7 +11677,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'packageType': packageType,
       'packageDescription': _description.text.trim(),
       'hasPhoto': hasPhoto,
-      'photoUrl': null,
+      'photoUrl': parcelPhotoUrl,
       'deliveryInstructions': _description.text.trim(),
       'vehicleType': safeVehicleName,
       'totalFare': quote.total,
@@ -11653,6 +11745,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'routeDistanceConfirmed': true,
       'packageType': packageType,
       'packageDescription': _description.text.trim(),
+      'hasPhoto': hasPhoto,
+      'imageUrl': parcelPhotoUrl,
+      'photoUrl': parcelPhotoUrl,
+      'photoURL': parcelPhotoUrl,
+      'photoStoragePath': parcelPhotoData['storagePath'],
+      'imageAnalysisStatus': parcelPhotoData['analysisStatus'],
+      'parcelPhoto': {
+        ...parcelPhotoData,
+        'irisDecisionStatus':
+            hasPhoto ? 'pending_iris_photo_review' : 'not_provided',
+      },
       'weight': _weight.text.trim(),
       'weightKg': classification.finalWeightKg,
       'deliveryClassification': classification.toJson(),
@@ -14126,6 +14229,11 @@ class _DetailsStep extends StatelessWidget {
   final TextEditingController scheduledPickupWindow;
   final TextEditingController scheduledDropoffDate;
   final TextEditingController scheduledDropoffWindow;
+  final String? parcelPhotoName;
+  final bool parcelPhotoBusy;
+  final String? parcelPhotoMessage;
+  final VoidCallback onPickParcelPhoto;
+  final VoidCallback onRemoveParcelPhoto;
   final bool analyzing;
   final VoidCallback onSubmit;
 
@@ -14178,6 +14286,11 @@ class _DetailsStep extends StatelessWidget {
     required this.scheduledPickupWindow,
     required this.scheduledDropoffDate,
     required this.scheduledDropoffWindow,
+    required this.parcelPhotoName,
+    required this.parcelPhotoBusy,
+    required this.parcelPhotoMessage,
+    required this.onPickParcelPhoto,
+    required this.onRemoveParcelPhoto,
     required this.analyzing,
     required this.onSubmit,
   });
@@ -14505,9 +14618,27 @@ class _DetailsStep extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  _PhotoButton(colors: colors),
+                  _PhotoButton(
+                    colors: colors,
+                    fileName: parcelPhotoName,
+                    busy: parcelPhotoBusy,
+                    onPick: onPickParcelPhoto,
+                    onRemove: onRemoveParcelPhoto,
+                  ),
                 ],
               ),
+              if (parcelPhotoMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  parcelPhotoMessage!,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
               if (weightMessage != null) ...[
                 const SizedBox(height: 12),
                 _WeightConfirmationPanel(
@@ -18459,21 +18590,47 @@ class _CompactSelectBoxState extends State<_CompactSelectBox> {
 
 class _PhotoButton extends StatelessWidget {
   final _CircumColors colors;
+  final String? fileName;
+  final bool busy;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
 
-  const _PhotoButton({required this.colors});
+  const _PhotoButton({
+    required this.colors,
+    required this.fileName,
+    required this.busy,
+    required this.onPick,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final attached = fileName != null && fileName!.trim().isNotEmpty;
     return Tooltip(
-      message: 'Add a photo',
-      child: Container(
-        width: 58,
-        height: 58,
-        decoration: BoxDecoration(
-          color: colors.text,
-          borderRadius: BorderRadius.circular(16),
+      message: attached ? 'Remove parcel photo' : 'Add a parcel photo',
+      child: InkWell(
+        onTap: busy ? null : (attached ? onRemove : onPick),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: attached ? const Color(0xff2563eb) : colors.text,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: busy
+              ? Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colors.inverseText,
+                  ),
+                )
+              : Icon(
+                  attached ? Icons.check_circle : Icons.photo_camera,
+                  color: colors.inverseText,
+                ),
         ),
-        child: Icon(Icons.photo_camera, color: colors.inverseText),
       ),
     );
   }
