@@ -70,10 +70,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
   late _WebAppMode _mode = _initialMode();
   late _SenderStep _senderInitialStep =
       switch (Uri.base.queryParameters['app']) {
-        'health' => _SenderStep.healthPlus,
-        'profile' => _SenderStep.profile,
-        _ => _SenderStep.dashboard,
-      };
+    'health' => _SenderStep.healthPlus,
+    'profile' => _SenderStep.profile,
+    _ => _SenderStep.dashboard,
+  };
 
   @override
   void initState() {
@@ -135,52 +135,54 @@ class _WebSenderAppState extends State<WebSenderApp> {
               duration: const Duration(milliseconds: 260),
               child: switch (_mode) {
                 _WebAppMode.sender => _PhoneStage(
-                  key: const ValueKey('sender-app'),
-                  colors: colors,
-                  child: _CustomerPortal(
-                    darkMode: _darkMode,
+                    key: const ValueKey('sender-app'),
                     colors: colors,
-                    initialStep: _senderInitialStep,
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                    onRoleSelected: _openRole,
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                    child: _CustomerPortal(
+                      darkMode: _darkMode,
+                      colors: colors,
+                      initialStep: _senderInitialStep,
+                      onBack: () => setState(() => _mode = _WebAppMode.landing),
+                      onRoleSelected: _openRole,
+                      onToggleTheme: () =>
+                          setState(() => _darkMode = !_darkMode),
+                    ),
                   ),
-                ),
                 _WebAppMode.rider => _PhoneStage(
-                  key: const ValueKey('rider-app'),
-                  colors: colors,
-                  child: _RiderEnrollmentPortal(
-                    darkMode: _darkMode,
+                    key: const ValueKey('rider-app'),
                     colors: colors,
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                    onRoleSelected: _openRole,
+                    child: _RiderEnrollmentPortal(
+                      darkMode: _darkMode,
+                      colors: colors,
+                      onBack: () => setState(() => _mode = _WebAppMode.landing),
+                      onRoleSelected: _openRole,
+                      onToggleTheme: () =>
+                          setState(() => _darkMode = !_darkMode),
+                    ),
+                  ),
+                _WebAppMode.admin => _AdminOperationsPanel(
+                    key: const ValueKey('admin-ops'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    onBack: _adminHostingTarget
+                        ? () {}
+                        : () => setState(() => _mode = _WebAppMode.landing),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
-                ),
-                _WebAppMode.admin => _AdminOperationsPanel(
-                  key: const ValueKey('admin-ops'),
-                  colors: colors,
-                  darkMode: _darkMode,
-                  onBack: _adminHostingTarget
-                      ? () {}
-                      : () => setState(() => _mode = _WebAppMode.landing),
-                  onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                ),
                 _WebAppMode.landing => _LandingPage(
-                  key: const ValueKey('landing'),
-                  colors: colors,
-                  darkMode: _darkMode,
-                  onStart: () => setState(() {
-                    _senderInitialStep = _SenderStep.dashboard;
-                    _mode = _WebAppMode.sender;
-                  }),
-                  onRider: () => setState(() => _mode = _WebAppMode.rider),
-                  onHealthPlus: () => setState(() {
-                    _senderInitialStep = _SenderStep.healthPlus;
-                    _mode = _WebAppMode.sender;
-                  }),
-                  onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                ),
+                    key: const ValueKey('landing'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    onStart: () => setState(() {
+                      _senderInitialStep = _SenderStep.dashboard;
+                      _mode = _WebAppMode.sender;
+                    }),
+                    onRider: () => setState(() => _mode = _WebAppMode.rider),
+                    onHealthPlus: () => setState(() {
+                      _senderInitialStep = _SenderStep.healthPlus;
+                      _mode = _WebAppMode.sender;
+                    }),
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
               },
             ),
             _CompanyLiveChatButton(colors: colors),
@@ -308,9 +310,8 @@ class _LandingPage extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.mutedText,
-                      fontSize: MediaQuery.sizeOf(context).width < 680
-                          ? 18
-                          : 22,
+                      fontSize:
+                          MediaQuery.sizeOf(context).width < 680 ? 18 : 22,
                       height: 1.45,
                       fontWeight: FontWeight.w600,
                     ),
@@ -485,9 +486,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final emailDoc = email == null || email.isEmpty
         ? null
         : await FirebaseFirestore.instance
-              .collection('adminUsers')
-              .doc(email)
-              .get();
+            .collection('adminUsers')
+            .doc(email)
+            .get();
     final adminRecords = [
       if (adminDoc.exists) adminDoc.data(),
       if (emailDoc?.exists == true) emailDoc?.data(),
@@ -496,8 +497,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final docRoles = inactiveAdmin
         ? <String>[]
         : adminRecords
-              .expand((record) => AdminUserAccess.activeRolesFromRecord(record))
-              .toList();
+            .expand((record) => AdminUserAccess.activeRolesFromRecord(record))
+            .toList();
     final nextRoles = {...claimRoles, ...docRoles}.toList();
     if (inactiveAdmin) nextRoles.clear();
     setState(() {
@@ -707,9 +708,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await _writeAudit(
       AdminAuditEntry(
         adminUserId: _adminUser?.uid ?? 'unknown-admin',
-        actionType: existing == null
-            ? 'admin_user_added'
-            : 'admin_user_updated',
+        actionType:
+            existing == null ? 'admin_user_added' : 'admin_user_updated',
         recordType: 'adminUsers',
         recordId: id,
         oldValue: existing == null
@@ -830,18 +830,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   String _driverWorkflowStatus(Map<String, dynamic> driver) {
-    final raw =
-        [
-              driver['approvalStatus'],
-              driver['driverStatus'],
-              driver['verificationStatus'],
-              driver['status'],
-            ]
-            .where((value) => value != null)
-            .map((value) => '$value'.toLowerCase())
-            .join(' ')
-            .toLowerCase()
-            .trim();
+    final raw = [
+      driver['approvalStatus'],
+      driver['driverStatus'],
+      driver['verificationStatus'],
+      driver['status'],
+    ]
+        .where((value) => value != null)
+        .map((value) => '$value'.toLowerCase())
+        .join(' ')
+        .toLowerCase()
+        .trim();
     if (raw.contains('suspend')) return 'suspended';
     if (raw.contains('reject')) return 'rejected';
     if (raw.contains('active') ||
@@ -873,10 +872,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     if (id.isEmpty) return;
     final previous = _driverWorkflowStatus(driver);
     final action = switch (nextStatus) {
-      'approved' =>
-        previous == 'suspended' || previous == 'rejected'
-            ? 'driver_reactivated'
-            : 'driver_approved',
+      'approved' => previous == 'suspended' || previous == 'rejected'
+          ? 'driver_reactivated'
+          : 'driver_approved',
       'rejected' => 'driver_rejected',
       'suspended' => 'driver_suspended',
       _ => 'driver_status_updated',
@@ -917,9 +915,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ..._selectedDriverProfile!,
           'approvalStatus': nextStatus,
           'driverStatus': driverStatus,
-          'verificationStatus': nextStatus == 'approved'
-              ? 'approved'
-              : nextStatus,
+          'verificationStatus':
+              nextStatus == 'approved' ? 'approved' : nextStatus,
         };
       }
     });
@@ -1108,43 +1105,39 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .limit(100)
         .snapshots()
         .listen(
-          (snapshot) {
-            if (!mounted) return;
-            setState(() {
-              _adminChatMessages
-                ..clear()
-                ..addAll(
-                  snapshot.docs
-                      .map((doc) {
-                        final data = doc.data();
-                        final role =
-                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
-                        return _ChatMessage(
-                          fromMe:
-                              role == 'admin' ||
-                              data['senderId'] == _adminUser?.uid,
-                          text:
-                              '${data['messageText'] ?? data['message'] ?? ''}',
-                          time: _formatMessageTime(
-                            data['createdAt'],
-                            data['timeStamp'],
-                          ),
-                          label: role == 'admin' || role == 'support'
-                              ? 'CIRCUM Support'
-                              : role == 'rider' || role == 'driver'
-                              ? 'Rider'
-                              : 'Sender',
-                        );
-                      })
-                      .where((message) => message.text.trim().isNotEmpty),
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _adminChatMessages
+            ..clear()
+            ..addAll(
+              snapshot.docs.map((doc) {
+                final data = doc.data();
+                final role =
+                    '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                return _ChatMessage(
+                  fromMe:
+                      role == 'admin' || data['senderId'] == _adminUser?.uid,
+                  text: '${data['messageText'] ?? data['message'] ?? ''}',
+                  time: _formatMessageTime(
+                    data['createdAt'],
+                    data['timeStamp'],
+                  ),
+                  label: role == 'admin' || role == 'support'
+                      ? 'CIRCUM Support'
+                      : role == 'rider' || role == 'driver'
+                          ? 'Rider'
+                          : 'Sender',
                 );
-            });
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(() => _message = 'Could not open booking chat.');
-          },
-        );
+              }).where((message) => message.text.trim().isNotEmpty),
+            );
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _message = 'Could not open booking chat.');
+      },
+    );
     setState(() {
       _activeAdminChatId = id;
       _activeAdminChatTitle = 'Booking chat';
@@ -1180,41 +1173,37 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .limit(100)
         .snapshots()
         .listen(
-          (snapshot) {
-            if (!mounted) return;
-            setState(() {
-              _adminChatMessages
-                ..clear()
-                ..addAll(
-                  snapshot.docs
-                      .map((doc) {
-                        final data = doc.data();
-                        final role =
-                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
-                        return _ChatMessage(
-                          fromMe:
-                              role == 'admin' ||
-                              data['senderId'] == _adminUser?.uid,
-                          text:
-                              '${data['messageText'] ?? data['message'] ?? ''}',
-                          time: _formatMessageTime(
-                            data['createdAt'],
-                            data['timeStamp'],
-                          ),
-                          label: role == 'admin' || role == 'support'
-                              ? 'CIRCUM Support'
-                              : 'Driver',
-                        );
-                      })
-                      .where((message) => message.text.trim().isNotEmpty),
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _adminChatMessages
+            ..clear()
+            ..addAll(
+              snapshot.docs.map((doc) {
+                final data = doc.data();
+                final role =
+                    '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                return _ChatMessage(
+                  fromMe:
+                      role == 'admin' || data['senderId'] == _adminUser?.uid,
+                  text: '${data['messageText'] ?? data['message'] ?? ''}',
+                  time: _formatMessageTime(
+                    data['createdAt'],
+                    data['timeStamp'],
+                  ),
+                  label: role == 'admin' || role == 'support'
+                      ? 'CIRCUM Support'
+                      : 'Driver',
                 );
-            });
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(() => _message = 'Could not open driver chat.');
-          },
-        );
+              }).where((message) => message.text.trim().isNotEmpty),
+            );
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _message = 'Could not open driver chat.');
+      },
+    );
     setState(() {
       _activeAdminChatId = chatId;
       _activeAdminChatTitle = 'Driver chat';
@@ -1243,31 +1232,25 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   double _driverTotalEarnings(String driverId) {
-    return _deliveries
-        .where((delivery) {
-          final status =
-              '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
-                  .toLowerCase();
-          return _isDeliveryForDriver(delivery, driverId) &&
-              (status.contains('complete') || status.contains('delivered'));
-        })
-        .fold<double>(0, (total, delivery) {
-          final payout =
-              delivery['driverPayout'] ??
-              delivery['riderPayout'] ??
-              delivery['estimatedDriverPayout'];
-          if (payout is num) return total + payout.toDouble();
-          return total;
-        });
+    return _deliveries.where((delivery) {
+      final status = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+          .toLowerCase();
+      return _isDeliveryForDriver(delivery, driverId) &&
+          (status.contains('complete') || status.contains('delivered'));
+    }).fold<double>(0, (total, delivery) {
+      final payout = delivery['driverPayout'] ??
+          delivery['riderPayout'] ??
+          delivery['estimatedDriverPayout'];
+      if (payout is num) return total + payout.toDouble();
+      return total;
+    });
   }
 
   List<Map<String, dynamic>> _documentsForDriver(String driverId) {
-    return _riderDocuments
-        .where((document) {
-          return '${document['riderId'] ?? document['driverId'] ?? document['uid'] ?? ''}' ==
-              driverId;
-        })
-        .toList(growable: false);
+    return _riderDocuments.where((document) {
+      return '${document['riderId'] ?? document['driverId'] ?? document['uid'] ?? ''}' ==
+          driverId;
+    }).toList(growable: false);
   }
 
   Future<void> _sendAdminChatMessage() async {
@@ -1321,7 +1304,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return switch (error.code) {
       'user-not-found' => 'No employee account found for that email.',
       'wrong-password' ||
-      'invalid-credential' => 'Those sign-in details are not right.',
+      'invalid-credential' =>
+        'Those sign-in details are not right.',
       _ => 'Admin sign in failed. Please check the details.',
     };
   }
@@ -1476,173 +1460,180 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final query = _search.text;
     return switch (_section) {
       _AdminSection.overview => _AdminOverviewSection(
-        colors: colors,
-        metrics: _metrics,
-        issues: _issueRows(),
-      ),
+          colors: colors,
+          metrics: _metrics,
+          issues: _issueRows(),
+        ),
       _AdminSection.adminUsers => _AdminUsersSection(
-        colors: colors,
-        records: adminSearch(_adminUsers, query, ['email', 'role', 'status']),
-        inviteEmail: _adminInviteEmail,
-        inviteNote: _adminInviteNote,
-        selectedRole: _adminInviteRole,
-        canManage: _can(AdminPermission.manageAdmins),
-        currentEmail: _adminUser?.email,
-        onRoleChanged: (role) => setState(() => _adminInviteRole = role),
-        onAdd: () => _saveAdminUser(),
-        onChangeRole: _changeAdminRole,
-        onStatus: (record, status) => _confirmAdminAccessChange(record, status),
-      ),
+          colors: colors,
+          records: adminSearch(_adminUsers, query, ['email', 'role', 'status']),
+          inviteEmail: _adminInviteEmail,
+          inviteNote: _adminInviteNote,
+          selectedRole: _adminInviteRole,
+          canManage: _can(AdminPermission.manageAdmins),
+          currentEmail: _adminUser?.email,
+          onRoleChanged: (role) => setState(() => _adminInviteRole = role),
+          onAdd: () => _saveAdminUser(),
+          onChangeRole: _changeAdminRole,
+          onStatus: (record, status) =>
+              _confirmAdminAccessChange(record, status),
+        ),
       _AdminSection.senders => _AdminDataSection(
-        colors: colors,
-        title: 'Senders',
-        subtitle: 'Customer accounts, delivery history, notes, and value.',
-        records: adminSearch(_senders, query, [
-          'fullName',
-          'name',
-          'email',
-          'phone',
-        ]),
-        columns: const ['Name', 'Email', 'Phone', 'Status', 'Value'],
-        rowBuilder: _senderRow,
-        emptyText: 'No sender records yet.',
-      ),
+          colors: colors,
+          title: 'Senders',
+          subtitle: 'Customer accounts, delivery history, notes, and value.',
+          records: adminSearch(_senders, query, [
+            'fullName',
+            'name',
+            'email',
+            'phone',
+          ]),
+          columns: const ['Name', 'Email', 'Phone', 'Status', 'Value'],
+          rowBuilder: _senderRow,
+          emptyText: 'No sender records yet.',
+        ),
       _AdminSection.drivers => _AdminDataSection(
-        colors: colors,
-        title: 'Drivers',
-        subtitle: 'Vehicle, ratings, verification, earnings, and quality.',
-        records: adminSearch(_drivers, query, [
-          'fullName',
-          'name',
-          'email',
-          'phoneNumber',
-          'plateNumber',
-          'vehicleRegistration',
-          'vehicleType',
-          'approvalStatus',
-          'driverStatus',
-          'verificationStatus',
-        ]),
-        columns: const ['Driver', 'Vehicle', 'Status', 'Rating', 'Actions'],
-        rowBuilder: _driverRow,
-        emptyText: 'No driver profiles yet.',
-      ),
+          colors: colors,
+          title: 'Drivers',
+          subtitle: 'Vehicle, ratings, verification, earnings, and quality.',
+          records: adminSearch(_drivers, query, [
+            'fullName',
+            'name',
+            'email',
+            'phoneNumber',
+            'plateNumber',
+            'vehicleRegistration',
+            'vehicleType',
+            'approvalStatus',
+            'driverStatus',
+            'verificationStatus',
+          ]),
+          columns: const ['Driver', 'Vehicle', 'Status', 'Rating', 'Actions'],
+          rowBuilder: _driverRow,
+          emptyText: 'No driver profiles yet.',
+        ),
       _AdminSection.deliveries => _AdminDataSection(
-        colors: colors,
-        title: 'Deliveries',
-        subtitle:
-            'Track, edit safe fields, duplicate, cancel, and resolve orders.',
-        records: adminSearch(_deliveries, query, [
-          'requestId',
-          'pickupAddress',
-          'dropoffAddress',
-          'senderName',
-          'riderName',
-          'status',
-        ]),
-        columns: const [
-          'ID',
-          'Received',
-          'Route',
-          'Status',
-          'Weight / IRIS',
-          'Price',
-          'Actions',
-        ],
-        rowBuilder: _deliveryRow,
-        emptyText: 'No delivery records yet.',
-      ),
+          colors: colors,
+          title: 'Deliveries',
+          subtitle:
+              'Track, edit safe fields, duplicate, cancel, and resolve orders.',
+          records: adminSearch(_deliveries, query, [
+            'requestId',
+            'pickupAddress',
+            'dropoffAddress',
+            'senderName',
+            'riderName',
+            'status',
+          ]),
+          columns: const [
+            'ID',
+            'Received',
+            'Route',
+            'Status',
+            'Weight / IRIS',
+            'Price',
+            'Actions',
+          ],
+          rowBuilder: _deliveryRow,
+          emptyText: 'No delivery records yet.',
+        ),
       _AdminSection.finance => _AdminDataSection(
-        colors: colors,
-        title: 'Finance',
-        subtitle:
-            'Payments, refunds, driver payouts, and revenue follow-up. CIRCUM retains 35% to operate the platform, support disputes, payments, safety, and system maintenance.',
-        records: adminSearch(_financeRows(), query, [
-          'id',
-          'senderId',
-          'riderId',
-          'status',
-          'type',
-        ]),
-        columns: const ['Type', 'Record', 'Status', 'Amount', 'Notes'],
-        rowBuilder: _financeRow,
-        emptyText: 'No finance records yet.',
-      ),
+          colors: colors,
+          title: 'Finance',
+          subtitle:
+              'Payments, refunds, driver payouts, and revenue follow-up. CIRCUM retains 35% to operate the platform, support disputes, payments, safety, and system maintenance.',
+          records: adminSearch(_financeRows(), query, [
+            'id',
+            'senderId',
+            'riderId',
+            'status',
+            'type',
+          ]),
+          columns: const ['Type', 'Record', 'Status', 'Amount', 'Notes'],
+          rowBuilder: _financeRow,
+          emptyText: 'No finance records yet.',
+        ),
       _AdminSection.healthPlus => _AdminDataSection(
-        colors: colors,
-        title: 'Health+',
-        subtitle:
-            'Prescription pickups, recurring schedules, payment status, and customer notes.',
-        records: adminSearch(_healthPlusRows(), query, [
-          'id',
-          'fullName',
-          'pharmacyAddress',
-          'deliveryAddress',
-          'status',
-          'frequency',
-        ]),
-        columns: const ['Pickup', 'Customer', 'Schedule', 'Status', 'Actions'],
-        rowBuilder: _healthPlusRow,
-        emptyText: 'No Health+ records yet.',
-      ),
+          colors: colors,
+          title: 'Health+',
+          subtitle:
+              'Prescription pickups, recurring schedules, payment status, and customer notes.',
+          records: adminSearch(_healthPlusRows(), query, [
+            'id',
+            'fullName',
+            'pharmacyAddress',
+            'deliveryAddress',
+            'status',
+            'frequency',
+          ]),
+          columns: const [
+            'Pickup',
+            'Customer',
+            'Schedule',
+            'Status',
+            'Actions'
+          ],
+          rowBuilder: _healthPlusRow,
+          emptyText: 'No Health+ records yet.',
+        ),
       _AdminSection.support => _AdminDataSection(
-        colors: colors,
-        title: 'Support',
-        subtitle:
-            'Live chat tickets, refund requests, customer messages, admin assignment, and resolution notes.',
-        records: adminSearch(_supportTickets, query, [
-          'id',
-          'name',
-          'email',
-          'message',
-          'status',
-          'type',
-        ]),
-        columns: const ['Ticket', 'Customer', 'Status', 'Message', 'Actions'],
-        rowBuilder: _supportRow,
-        emptyText: 'No support tickets yet.',
-      ),
+          colors: colors,
+          title: 'Support',
+          subtitle:
+              'Live chat tickets, refund requests, customer messages, admin assignment, and resolution notes.',
+          records: adminSearch(_supportTickets, query, [
+            'id',
+            'name',
+            'email',
+            'message',
+            'status',
+            'type',
+          ]),
+          columns: const ['Ticket', 'Customer', 'Status', 'Message', 'Actions'],
+          rowBuilder: _supportRow,
+          emptyText: 'No support tickets yet.',
+        ),
       _AdminSection.issues => _AdminDataSection(
-        colors: colors,
-        title: 'Troubleshooting',
-        subtitle:
-            'Stuck jobs, failed payments, unassigned requests, complaints, refunds, and low ratings.',
-        records: _issueRows(),
-        columns: const ['Issue', 'Record', 'Priority', 'Status', 'Action'],
-        rowBuilder: _issueRow,
-        emptyText: 'No operational issues found.',
-      ),
+          colors: colors,
+          title: 'Troubleshooting',
+          subtitle:
+              'Stuck jobs, failed payments, unassigned requests, complaints, refunds, and low ratings.',
+          records: _issueRows(),
+          columns: const ['Issue', 'Record', 'Priority', 'Status', 'Action'],
+          rowBuilder: _issueRow,
+          emptyText: 'No operational issues found.',
+        ),
       _AdminSection.visitors => _AdminDataSection(
-        colors: colors,
-        title: 'Website visitors',
-        subtitle:
-            'Recent web visits by route, mode, account status, and timestamp.',
-        records: adminSearch(_websiteVisitors, query, [
-          'url',
-          'appMode',
-          'email',
-          'userId',
-          'source',
-        ]),
-        columns: const ['Visit', 'Mode', 'User', 'When'],
-        rowBuilder: _visitorRow,
-        emptyText: 'No website visits logged yet.',
-      ),
+          colors: colors,
+          title: 'Website visitors',
+          subtitle:
+              'Recent web visits by route, mode, account status, and timestamp.',
+          records: adminSearch(_websiteVisitors, query, [
+            'url',
+            'appMode',
+            'email',
+            'userId',
+            'source',
+          ]),
+          columns: const ['Visit', 'Mode', 'User', 'When'],
+          rowBuilder: _visitorRow,
+          emptyText: 'No website visits logged yet.',
+        ),
       _AdminSection.analytics => _AdminAnalyticsSection(
-        colors: colors,
-        metrics: _metrics,
-        deliveries: _deliveries,
-        payments: _payments,
-      ),
+          colors: colors,
+          metrics: _metrics,
+          deliveries: _deliveries,
+          payments: _payments,
+        ),
       _AdminSection.audit => _AdminDataSection(
-        colors: colors,
-        title: 'Audit trail',
-        subtitle: 'Every important admin action should leave a trace.',
-        records: _auditLogs,
-        columns: const ['Action', 'Record', 'Admin', 'Reason'],
-        rowBuilder: _auditRow,
-        emptyText: 'No audit entries yet.',
-      ),
+          colors: colors,
+          title: 'Audit trail',
+          subtitle: 'Every important admin action should leave a trace.',
+          records: _auditLogs,
+          columns: const ['Action', 'Record', 'Admin', 'Reason'],
+          rowBuilder: _auditRow,
+          emptyText: 'No audit entries yet.',
+        ),
     };
   }
 
@@ -1905,9 +1896,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       }
       if (status.contains('failed') || status.contains('cancel')) {
         issues.add({
-          'title': status.contains('failed')
-              ? 'Failed delivery'
-              : 'Cancelled job',
+          'title':
+              status.contains('failed') ? 'Failed delivery' : 'Cancelled job',
           'recordType': 'deliveryRequests',
           'recordId': id,
           'priority': 'Medium',
@@ -2005,14 +1995,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final learning = item['irisLearningData'] is Map
         ? Map<String, dynamic>.from(item['irisLearningData'] as Map)
         : const <String, dynamic>{};
-    final finalWeight =
-        item['finalWeightUsed'] ??
+    final finalWeight = item['finalWeightUsed'] ??
         item['finalChargeableWeight'] ??
         item['confirmedWeightKg'] ??
         item['weightKg'] ??
         'n/a';
-    final source =
-        item['weightSource'] ??
+    final source = item['weightSource'] ??
         item['irisWeightSource'] ??
         learning['source'] ??
         'unknown';
@@ -2367,8 +2355,7 @@ class _AdminUsersSection extends StatelessWidget {
   DataRow _row(Map<String, dynamic> item) {
     final email = '${item['email'] ?? item['id'] ?? ''}'.trim().toLowerCase();
     final self = email == currentEmail?.trim().toLowerCase();
-    final role =
-        AdminRole.fromString(
+    final role = AdminRole.fromString(
           '${item['role'] ?? (item['roles'] is List && (item['roles'] as List).isNotEmpty ? (item['roles'] as List).first : '')}',
         ) ??
         AdminRole.operationsAdmin;
@@ -3228,9 +3215,8 @@ class _AdminAnalyticsSection extends StatelessWidget {
               _AdminBar(
                 colors: colors,
                 label: 'Driver completion',
-                value: (100 - metrics.failedDeliveryRate)
-                    .clamp(0, 100)
-                    .toDouble(),
+                value:
+                    (100 - metrics.failedDeliveryRate).clamp(0, 100).toDouble(),
               ),
               _AdminBar(
                 colors: colors,
@@ -3410,21 +3396,19 @@ class _AdminStatusCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lower = status.toLowerCase();
-    final good =
-        lower.contains('active') ||
+    final good = lower.contains('active') ||
         lower.contains('complete') ||
         lower.contains('resolved') ||
         lower.contains('verified');
-    final bad =
-        lower.contains('failed') ||
+    final bad = lower.contains('failed') ||
         lower.contains('cancel') ||
         lower.contains('suspend') ||
         lower.contains('reject');
     final color = good
         ? colors.success
         : bad
-        ? const Color(0xffdc2626)
-        : const Color(0xffca8a04);
+            ? const Color(0xffdc2626)
+            : const Color(0xffca8a04);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
@@ -3577,9 +3561,8 @@ class _AdminNavButton extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 7),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: selected
-              ? const LinearGradient(colors: _spectrumGradient)
-              : null,
+          gradient:
+              selected ? const LinearGradient(colors: _spectrumGradient) : null,
           borderRadius: BorderRadius.circular(16),
           boxShadow: selected
               ? [
@@ -3720,8 +3703,8 @@ String _jobReceivedTextFromDate(DateTime? date) {
   final monthIndex = local.month < 1
       ? 0
       : local.month > 12
-      ? 11
-      : local.month - 1;
+          ? 11
+          : local.month - 1;
   final month = _shortMonthNames[monthIndex];
   return 'Received: ${local.day} $month, $hour:$minute';
 }
@@ -4978,8 +4961,7 @@ class _RiderOrderProfileCard extends StatelessWidget {
         : performance.averageRating.toStringAsFixed(2);
     final verificationStatus =
         '${profile?['verificationStatus'] ?? profile?['approvalStatus'] ?? 'pending'}';
-    final verified =
-        verificationStatus.toLowerCase() == 'approved' ||
+    final verified = verificationStatus.toLowerCase() == 'approved' ||
         verificationStatus.toLowerCase() == 'verified';
     final memberSince = _dateFromAny(
       profile?['memberSince'] ?? profile?['createdAt'],
@@ -5381,8 +5363,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   _RiderPortalTab _initialRiderTab() {
-    final section =
-        Uri.base.queryParameters['section'] ??
+    final section = Uri.base.queryParameters['section'] ??
         Uri.base.queryParameters['tab'] ??
         Uri.base.queryParameters['app'];
     return switch (section) {
@@ -5482,9 +5463,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     setState(() {
       _authSubmitting = true;
-      _authMessage = _signupMode
-          ? 'Creating your rider account...'
-          : 'Signing you in...';
+      _authMessage =
+          _signupMode ? 'Creating your rider account...' : 'Signing you in...';
     });
 
     try {
@@ -5524,9 +5504,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _riderUser = user;
         _roleChoiceConfirmed = _availableRoles.length <= 1;
-        _authMessage = _signupMode
-            ? 'Your rider account is ready.'
-            : 'You are signed in.';
+        _authMessage =
+            _signupMode ? 'Your rider account is ready.' : 'You are signed in.';
       });
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
@@ -5653,9 +5632,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('riderProfiles')
           .doc(user.uid)
           .set({
-            'pendingEmail': nextEmail,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        'pendingEmail': nextEmail,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       _newEmail.clear();
       _emailChangePassword.clear();
       if (!mounted) return;
@@ -5716,9 +5695,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return approval;
     }
 
-    final verification = '${profile['verificationStatus'] ?? ''}'
-        .trim()
-        .toLowerCase();
+    final verification =
+        '${profile['verificationStatus'] ?? ''}'.trim().toLowerCase();
     if (verification == 'approved' || verification == 'verified') {
       return 'approved';
     }
@@ -5783,10 +5761,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'completedJobs': FieldValue.increment(0),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await db
-        .collection('driverPerformanceMetrics')
-        .doc(user.uid)
-        .set(
+    await db.collection('driverPerformanceMetrics').doc(user.uid).set(
           DriverPerformanceMetric.empty(user.uid).toJson()
             ..addAll({'updatedAt': FieldValue.serverTimestamp()}),
           SetOptions(merge: true),
@@ -5802,11 +5777,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          setState(() {
-            _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
-          });
-        });
+      if (!mounted) return;
+      setState(() {
+        _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
+      });
+    });
   }
 
   void _listenToRiderPerformance(String riderId) {
@@ -5817,27 +5792,27 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          setState(() {
-            _performance = DriverPerformanceMetric.fromMap(
-              riderId,
-              snapshot.data(),
-            );
-          });
-        });
+      if (!mounted) return;
+      setState(() {
+        _performance = DriverPerformanceMetric.fromMap(
+          riderId,
+          snapshot.data(),
+        );
+      });
+    });
     _ratingSub = FirebaseFirestore.instance
         .collection('driverRatings')
         .where('driverId', isEqualTo: riderId)
         .limit(8)
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          setState(() {
-            _recentRatings = snapshot.docs
-                .map((doc) => DriverRating.fromMap(doc.data()))
-                .toList();
-          });
-        });
+      if (!mounted) return;
+      setState(() {
+        _recentRatings = snapshot.docs
+            .map((doc) => DriverRating.fromMap(doc.data()))
+            .toList();
+      });
+    });
   }
 
   void _listenToAvailableJobs() {
@@ -5848,39 +5823,36 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(20)
         .snapshots()
         .listen(
-          (snapshot) {
-            if (!mounted) return;
-            setState(() {
-              final jobs = snapshot.docs
-                  .map((doc) => {'id': doc.id, ...doc.data()})
-                  .where((job) {
-                    final matchingStatus =
-                        '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
-                    final ignoredBy =
-                        (job['ignoredByRiders'] as List?) ?? const [];
-                    final rejectedBy =
-                        (job['rejectedByRiders'] as List?) ?? const [];
-                    final currentRider = _riderUser?.uid;
-                    if (currentRider != null &&
-                        (ignoredBy.contains(currentRider) ||
-                            rejectedBy.contains(currentRider))) {
-                      return false;
-                    }
-                    return matchingStatus == 'available' ||
-                        matchingStatus == 'requested';
-                  })
-                  .toList();
-              jobs.sort(_compareRiderJobs);
-              _availableJobs = jobs;
-            });
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(
-              () => _jobMessage = 'Could not load available jobs right now.',
-            );
-          },
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          final jobs = snapshot.docs
+              .map((doc) => {'id': doc.id, ...doc.data()})
+              .where((job) {
+            final matchingStatus =
+                '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
+            final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
+            final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
+            final currentRider = _riderUser?.uid;
+            if (currentRider != null &&
+                (ignoredBy.contains(currentRider) ||
+                    rejectedBy.contains(currentRider))) {
+              return false;
+            }
+            return matchingStatus == 'available' ||
+                matchingStatus == 'requested';
+          }).toList();
+          jobs.sort(_compareRiderJobs);
+          _availableJobs = jobs;
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(
+          () => _jobMessage = 'Could not load available jobs right now.',
         );
+      },
+    );
   }
 
   int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
@@ -5894,8 +5866,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final pickupCompare =
         '${a['scheduledPickupDate'] ?? ''} ${a['scheduledPickupWindow'] ?? ''}'
             .compareTo(
-              '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}',
-            );
+      '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}',
+    );
     if (pickupCompare != 0) return pickupCompare;
 
     return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
@@ -5943,13 +5915,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(20)
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          setState(() {
-            _completedJobs = snapshot.docs
-                .map((doc) => {'id': doc.id, ...doc.data()})
-                .toList(growable: false);
-          });
-        });
+      if (!mounted) return;
+      setState(() {
+        _completedJobs = snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList(growable: false);
+      });
+    });
   }
 
   Future<void> _acceptDeliveryJob(Map<String, dynamic> job) async {
@@ -6018,8 +5990,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _stopRiderLiveLocationPublishing(status: 'offline');
       return;
     }
-    final requestId = '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'
-        .trim();
+    final requestId =
+        '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'.trim();
     final status = '${activeJob['status'] ?? 'accepted'}'.toLowerCase();
     if (requestId.isEmpty || requestId == _trackingDeliveryId) return;
     _startRiderLiveLocationPublishing(requestId, user.uid, status);
@@ -6064,10 +6036,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('tracking')
           .doc('liveLocation')
           .set({
-            'riderId': riderId,
-            'status': status,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        'riderId': riderId,
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
   }
 
@@ -6104,15 +6076,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('tracking')
           .doc('liveLocation')
           .set({
-            'riderId': riderId,
-            'latitude': position.latitude,
-            'longitude': position.longitude,
-            'heading': position.heading,
-            'speed': position.speed,
-            'accuracy': position.accuracy,
-            'status': status,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        'riderId': riderId,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'heading': position.heading,
+        'speed': position.speed,
+        'accuracy': position.accuracy,
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     } catch (_) {
       if (mounted) {
         setState(() => _jobMessage = 'Live tracking update could not be sent.');
@@ -6138,15 +6110,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('deliveryRequests')
           .doc(requestId)
           .set({
-            field: FieldValue.arrayUnion([user.uid]),
-            timestampField: FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        field: FieldValue.arrayUnion([user.uid]),
+        timestampField: FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       if (!mounted) return;
       setState(
-        () => _jobMessage = action == 'reject'
-            ? 'Job rejected.'
-            : 'Job hidden for now.',
+        () => _jobMessage =
+            action == 'reject' ? 'Job rejected.' : 'Job hidden for now.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -6214,24 +6185,30 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           final existingWallet = await transaction.get(walletRef);
           transaction.set(deliveryRef, updates, SetOptions(merge: true));
           if (existingWallet.exists) return;
-          transaction.set(walletRef, {
-            'transactionId': txId,
-            'requestId': requestId,
-            'riderId': user.uid,
-            'type': 'job_completed',
-            'deliveryEarning': payout,
-            'tipAmount': tip,
-            'amount': totalCredit,
-            'status': 'available',
-            'createdAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-          transaction.set(earningsRef, {
-            'availableBalance': FieldValue.increment(totalCredit),
-            'lifetimeEarnings': FieldValue.increment(totalCredit),
-            'tipsReceived': FieldValue.increment(tip),
-            'completedJobs': FieldValue.increment(1),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+          transaction.set(
+              walletRef,
+              {
+                'transactionId': txId,
+                'requestId': requestId,
+                'riderId': user.uid,
+                'type': 'job_completed',
+                'deliveryEarning': payout,
+                'tipAmount': tip,
+                'amount': totalCredit,
+                'status': 'available',
+                'createdAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true));
+          transaction.set(
+              earningsRef,
+              {
+                'availableBalance': FieldValue.increment(totalCredit),
+                'lifetimeEarnings': FieldValue.increment(totalCredit),
+                'tipsReceived': FieldValue.increment(tip),
+                'completedJobs': FieldValue.increment(1),
+                'updatedAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true));
         });
       } else {
         await db
@@ -6244,9 +6221,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
       if (!mounted) return;
       setState(
-        () => _jobMessage = status == 'completed'
-            ? 'Delivery completed.'
-            : 'Job updated.',
+        () => _jobMessage =
+            status == 'completed' ? 'Delivery completed.' : 'Job updated.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -6272,11 +6248,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final collectionContact = (job['collectionContact'] as Map?)
-        ?.cast<String, dynamic>();
-    final receiverDetails = (job['receiverDetails'] as Map?)
-        ?.cast<String, dynamic>();
+            const <String, dynamic>{};
+    final collectionContact =
+        (job['collectionContact'] as Map?)?.cast<String, dynamic>();
+    final receiverDetails =
+        (job['receiverDetails'] as Map?)?.cast<String, dynamic>();
     final collectionName =
         '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the sender or collection contact'}'
             .trim();
@@ -6371,11 +6347,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('deliveryRequests')
           .doc(requestId)
           .set({
-            attemptField: check.attemptCount,
-            'vanguardReviewRequired': check.flagForReview,
-            'vanguardLastFailedStage': stage,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        attemptField: check.attemptCount,
+        'vanguardReviewRequired': check.flagForReview,
+        'vanguardLastFailedStage': stage,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       if (!mounted) return null;
       setState(() => _jobMessage = check.errorMessage);
       return null;
@@ -6383,14 +6359,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     final protection =
         (job['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            const <String, dynamic>{};
     final nextProtection = {
       ...protection,
       stage == 'delivery' ? 'deliveryPin' : 'collectionPin': null,
     };
-    final verifiedField = stage == 'delivery'
-        ? 'deliveryPinVerified'
-        : 'collectionPinVerified';
+    final verifiedField =
+        stage == 'delivery' ? 'deliveryPinVerified' : 'collectionPinVerified';
     final verifiedAtField = stage == 'delivery'
         ? 'deliveryPinVerifiedAt'
         : 'collectionPinVerifiedAt';
@@ -6416,8 +6391,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   bool _jobVanguardEnabled(Map<String, dynamic> job) {
     if (job['vanguardEnabled'] == true) return true;
-    final protection = (job['vanguardProtection'] as Map?)
-        ?.cast<String, dynamic>();
+    final protection =
+        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>();
     return protection?['enabled'] == true;
   }
 
@@ -6604,7 +6579,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final heavier = finalWeightUsed > currentFinalWeight + 0.01;
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            const <String, dynamic>{};
 
     if (heavier) {
       await FirebaseFirestore.instance.collection('notifications').add({
@@ -6644,9 +6619,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': revisedQuote.toJson(),
       'weightReviewRequired': optionValue != 'accurate',
-      'weightDisputeStatus': optionValue == 'accurate'
-          ? 'verified'
-          : 'admin_review',
+      'weightDisputeStatus':
+          optionValue == 'accurate' ? 'verified' : 'admin_review',
       'driverWeightDispute': {
         'reported': optionValue != 'accurate',
         'issueType': optionValue,
@@ -6766,19 +6740,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('deliveryRequests')
           .doc(requestId)
           .set({
-            'reportedParcelIssue': issueType != 'weight',
-            'reportedWeightIssue': issueType == 'weight',
-            'driverWeightDispute': {
-              'reported': issueType == 'weight',
-              'issueType': issueType,
-              'reportedBy': user.uid,
-              'reportedAt': FieldValue.serverTimestamp(),
-              'status': 'admin_review',
-            },
-            'weightReviewRequired': true,
-            'weightDisputeStatus': 'admin_review',
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        'reportedParcelIssue': issueType != 'weight',
+        'reportedWeightIssue': issueType == 'weight',
+        'driverWeightDispute': {
+          'reported': issueType == 'weight',
+          'issueType': issueType,
+          'reportedBy': user.uid,
+          'reportedAt': FieldValue.serverTimestamp(),
+          'status': 'admin_review',
+        },
+        'weightReviewRequired': true,
+        'weightDisputeStatus': 'admin_review',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       if (!mounted) return;
       setState(() => _jobMessage = 'Issue flagged for Circum review.');
     } catch (_) {
@@ -6799,41 +6773,38 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(80)
         .snapshots()
         .listen(
-          (snapshot) {
-            if (!mounted) return;
-            setState(() {
-              _riderChatMessages
-                ..clear()
-                ..addAll(
-                  snapshot.docs
-                      .map((doc) {
-                        final data = doc.data();
-                        final role =
-                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
-                        return _ChatMessage(
-                          fromMe: data['senderId'] == _riderUser?.uid,
-                          text:
-                              '${data['messageText'] ?? data['message'] ?? ''}',
-                          time: _formatMessageTime(
-                            data['createdAt'],
-                            data['timeStamp'],
-                          ),
-                          label: role == 'admin' || role == 'support'
-                              ? 'CIRCUM Support'
-                              : role == 'sender' || role == 'user'
-                              ? 'Sender'
-                              : 'Rider',
-                        );
-                      })
-                      .where((message) => message.text.trim().isNotEmpty),
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _riderChatMessages
+            ..clear()
+            ..addAll(
+              snapshot.docs.map((doc) {
+                final data = doc.data();
+                final role =
+                    '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                return _ChatMessage(
+                  fromMe: data['senderId'] == _riderUser?.uid,
+                  text: '${data['messageText'] ?? data['message'] ?? ''}',
+                  time: _formatMessageTime(
+                    data['createdAt'],
+                    data['timeStamp'],
+                  ),
+                  label: role == 'admin' || role == 'support'
+                      ? 'CIRCUM Support'
+                      : role == 'sender' || role == 'user'
+                          ? 'Sender'
+                          : 'Rider',
                 );
-            });
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(() => _jobMessage = 'Could not open this chat.');
-          },
-        );
+              }).where((message) => message.text.trim().isNotEmpty),
+            );
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _jobMessage = 'Could not open this chat.');
+      },
+    );
     setState(() {
       _activeRiderChatJob = job;
       _riderChatOpen = true;
@@ -6850,9 +6821,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _riderChatInput.clear();
     try {
       await _ensureCircumFirebaseReady();
-      final chatRef = FirebaseFirestore.instance
-          .collection('chats')
-          .doc(requestId);
+      final chatRef =
+          FirebaseFirestore.instance.collection('chats').doc(requestId);
       await chatRef.collection('messages').add({
         'threadId': requestId,
         'bookingId': requestId,
@@ -6994,11 +6964,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'source': 'circum-web',
         'createdAt': FieldValue.serverTimestamp(),
       });
-      batch.set(db.collection('riderEarnings').doc(user.uid), {
-        'pendingWithdrawal': FieldValue.increment(amount),
-        'availableBalance': FieldValue.increment(-amount),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      batch.set(
+          db.collection('riderEarnings').doc(user.uid),
+          {
+            'pendingWithdrawal': FieldValue.increment(amount),
+            'availableBalance': FieldValue.increment(-amount),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
       if (_saveBank) {
         batch.set(
           db.collection('riderBankAccounts').doc(user.uid),
@@ -7007,13 +6980,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'bankName': _bankName.text.trim(),
             'sortCodeLast2': _sortCode.text.trim().length >= 2
                 ? _sortCode.text.trim().substring(
-                    _sortCode.text.trim().length - 2,
-                  )
+                      _sortCode.text.trim().length - 2,
+                    )
                 : _sortCode.text.trim(),
             'accountLast4': _accountNumber.text.trim().length >= 4
                 ? _accountNumber.text.trim().substring(
-                    _accountNumber.text.trim().length - 4,
-                  )
+                      _accountNumber.text.trim().length - 4,
+                    )
                 : _accountNumber.text.trim(),
             'updatedAt': FieldValue.serverTimestamp(),
           },
@@ -7061,9 +7034,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await storageRef.putData(bytes);
       final downloadUrl = await storageRef.getDownloadURL();
 
-      final documentRef = FirebaseFirestore.instance
-          .collection('riderDocuments')
-          .doc();
+      final documentRef =
+          FirebaseFirestore.instance.collection('riderDocuments').doc();
       await documentRef.set({
         'documentId': documentRef.id,
         'riderId': user.uid,
@@ -7084,10 +7056,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .collection('riderProfiles')
           .doc(user.uid)
           .set({
-            'verificationStatus': 'pending',
-            'lastDocumentUploadedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        'verificationStatus': 'pending',
+        'lastDocumentUploadedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       if (!mounted) return;
       setState(
         () => _documentMessage =
@@ -7106,7 +7078,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'email-already-in-use' => 'That email already has a rider account.',
       'user-not-found' => 'No rider account found for that email.',
       'wrong-password' ||
-      'invalid-credential' => 'The sign-in details are not right.',
+      'invalid-credential' =>
+        'The sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -7319,69 +7292,68 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 Expanded(
                   child: switch (_riderTab) {
                     _RiderPortalTab.order => _CircumOrderContent(
-                      colors: colors,
-                      onBecomeRider: () =>
-                          setState(() => _riderTab = _RiderPortalTab.overview),
-                    ),
+                        colors: colors,
+                        onBecomeRider: () => setState(
+                            () => _riderTab = _RiderPortalTab.overview),
+                      ),
                     _RiderPortalTab.earnings => _RiderEarningsTab(
-                      colors: colors,
-                      earnings: _earnings,
-                    ),
+                        colors: colors,
+                        earnings: _earnings,
+                      ),
                     _RiderPortalTab.referrals => _RiderReferralsTab(
-                      colors: colors,
-                    ),
-                    _RiderPortalTab.overview =>
-                      _riderUser == null
-                          ? ListView(
-                              padding: EdgeInsets.fromLTRB(
-                                wide ? 28 : 18,
-                                18,
-                                wide ? 28 : 18,
-                                34,
-                              ),
-                              children: [
-                                _RiderPublicIntro(colors: colors),
-                                const SizedBox(height: 14),
-                                _RiderAccessPanel(
-                                  colors: colors,
-                                  email: _email,
-                                  password: _password,
-                                  signupMode: _signupMode,
-                                  submitting: _authSubmitting,
-                                  user: _riderUser,
-                                  message: _authMessage,
-                                  onToggleMode: () => setState(
-                                    () => _signupMode = !_signupMode,
-                                  ),
-                                  onSubmit: _submitAuth,
-                                  onForgotPassword: _sendRiderPasswordReset,
-                                  onSignOut: _signOutRider,
+                        colors: colors,
+                      ),
+                    _RiderPortalTab.overview => _riderUser == null
+                        ? ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              wide ? 28 : 18,
+                              18,
+                              wide ? 28 : 18,
+                              34,
+                            ),
+                            children: [
+                              _RiderPublicIntro(colors: colors),
+                              const SizedBox(height: 14),
+                              _RiderAccessPanel(
+                                colors: colors,
+                                email: _email,
+                                password: _password,
+                                signupMode: _signupMode,
+                                submitting: _authSubmitting,
+                                user: _riderUser,
+                                message: _authMessage,
+                                onToggleMode: () => setState(
+                                  () => _signupMode = !_signupMode,
                                 ),
-                              ],
-                            )
-                          : !_roleChoiceConfirmed && _availableRoles.length > 1
-                          ? ListView(
-                              padding: EdgeInsets.fromLTRB(
-                                wide ? 28 : 18,
-                                18,
-                                wide ? 28 : 18,
-                                34,
+                                onSubmit: _submitAuth,
+                                onForgotPassword: _sendRiderPasswordReset,
+                                onSignOut: _signOutRider,
                               ),
-                              children: [
-                                _MultiRoleChoicePanel(
-                                  colors: colors,
-                                  roles: _availableRoles,
-                                  onSender: () =>
-                                      widget.onRoleSelected(CircumRole.sender),
-                                  onRider: () => setState(
-                                    () => _roleChoiceConfirmed = true,
-                                  ),
-                                  onAdmin: () =>
-                                      widget.onRoleSelected(CircumRole.admin),
+                            ],
+                          )
+                        : !_roleChoiceConfirmed && _availableRoles.length > 1
+                            ? ListView(
+                                padding: EdgeInsets.fromLTRB(
+                                  wide ? 28 : 18,
+                                  18,
+                                  wide ? 28 : 18,
+                                  34,
                                 ),
-                              ],
-                            )
-                          : _buildSignedInRiderContent(colors, wide),
+                                children: [
+                                  _MultiRoleChoicePanel(
+                                    colors: colors,
+                                    roles: _availableRoles,
+                                    onSender: () => widget
+                                        .onRoleSelected(CircumRole.sender),
+                                    onRider: () => setState(
+                                      () => _roleChoiceConfirmed = true,
+                                    ),
+                                    onAdmin: () =>
+                                        widget.onRoleSelected(CircumRole.admin),
+                                  ),
+                                ],
+                              )
+                            : _buildSignedInRiderContent(colors, wide),
                   },
                 ),
               ],
@@ -7545,8 +7517,8 @@ class _RiderAccessPanel extends StatelessWidget {
                       submitting
                           ? 'Please wait...'
                           : signupMode
-                          ? 'Create account'
-                          : 'Sign in',
+                              ? 'Create account'
+                              : 'Sign in',
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: colors.text,
@@ -7609,16 +7581,15 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
       _ =>
         'Your rider profile has been created. Circum will review your details and documents before jobs appear here.',
     };
-    final note =
-        [
-              profile['adminMessage'],
-              profile['approvalNote'],
-              profile['rejectionReason'],
-              profile['accountNote'],
-            ]
-            .where((value) => '${value ?? ''}'.trim().isNotEmpty)
-            .map((value) => '$value'.trim())
-            .join('\n');
+    final note = [
+      profile['adminMessage'],
+      profile['approvalNote'],
+      profile['rejectionReason'],
+      profile['accountNote'],
+    ]
+        .where((value) => '${value ?? ''}'.trim().isNotEmpty)
+        .map((value) => '$value'.trim())
+        .join('\n');
 
     return _GlassPanel(
       colors: colors,
@@ -7631,8 +7602,8 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
                 normalized == 'suspended'
                     ? Icons.block
                     : normalized == 'rejected'
-                    ? Icons.report_problem_outlined
-                    : Icons.pending_actions,
+                        ? Icons.report_problem_outlined
+                        : Icons.pending_actions,
                 color: colors.text,
               ),
               const SizedBox(width: 10),
@@ -7939,7 +7910,7 @@ class _RiderWorkspace extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onRejectJob;
   final ValueChanged<Map<String, dynamic>> onIgnoreJob;
   final void Function(Map<String, dynamic> job, String status)
-  onUpdateJobStatus;
+      onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
   final bool nested;
@@ -8249,8 +8220,7 @@ class _RiderWorkspace extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed:
-                        signedIn &&
+                    onPressed: signedIn &&
                             !submittingWithdrawal &&
                             _canRequestWithdrawal(
                               amountText: withdrawAmount.text,
@@ -8497,10 +8467,9 @@ class _RiderDocumentStatusList extends StatelessWidget {
     final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
-        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final entry =
-        documents[key] ??
+            (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final entry = documents[key] ??
         documents[type] ??
         documents[type.toLowerCase()] ??
         documents[key.replaceAll('_', '')];
@@ -8518,8 +8487,8 @@ class _RiderDocumentStatusList extends StatelessWidget {
     final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
-        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
     final entry =
         documents[key] ?? documents[type] ?? documents[type.toLowerCase()];
     if (entry is Map) {
@@ -8724,9 +8693,7 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
               style: TextStyle(color: colors.mutedText),
             )
           else
-            ...jobs
-                .take(8)
-                .map(
+            ...jobs.take(8).map(
                   (job) => _DriverJobCard(
                     colors: colors,
                     job: job,
@@ -8751,7 +8718,7 @@ class _RiderJobListPanel extends StatelessWidget {
   final List<Map<String, dynamic>> jobs;
   final bool completed;
   final void Function(Map<String, dynamic> job, String status)
-  onUpdateJobStatus;
+      onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
 
@@ -8778,9 +8745,7 @@ class _RiderJobListPanel extends StatelessWidget {
           if (jobs.isEmpty)
             Text(emptyText, style: TextStyle(color: colors.mutedText))
           else
-            ...jobs
-                .take(8)
-                .map(
+            ...jobs.take(8).map(
                   (job) => _DriverJobCard(
                     colors: colors,
                     job: job,
@@ -8829,10 +8794,10 @@ class _DriverJobCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            const <String, dynamic>{};
     final pricing =
         (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            const <String, dynamic>{};
     final customerWeight = _num(
       job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg'],
     );
@@ -8860,8 +8825,7 @@ class _DriverJobCard extends StatelessWidget {
         '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
     final serviceLevel =
         '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
-    final vanguardEnabled =
-        job['vanguardEnabled'] == true ||
+    final vanguardEnabled = job['vanguardEnabled'] == true ||
         summary['vanguardEnabled'] == true ||
         ((job['vanguardProtection'] as Map?)?['enabled'] == true);
     final duration = _num(
@@ -8916,8 +8880,7 @@ class _DriverJobCard extends StatelessWidget {
       nestedKey: 'collectionContact',
       nestedName: 'phone',
     );
-    final collectionDifferent =
-        (job['collectionContactDifferent'] == true ||
+    final collectionDifferent = (job['collectionContactDifferent'] == true ||
         summary['collectionContactDifferent'] == true ||
         ((job['collectionContact'] as Map?)?['differentFromSender'] == true));
 
@@ -9022,9 +8985,8 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.timer,
             label: 'ETA',
-            value: duration > 0
-                ? '${duration.toStringAsFixed(0)} min'
-                : 'Not set',
+            value:
+                duration > 0 ? '${duration.toStringAsFixed(0)} min' : 'Not set',
           ),
           _JobInfoLine(
             colors: colors,
@@ -9342,9 +9304,7 @@ class _DriverPerformancePanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...recentRatings
-              .take(3)
-              .map(
+          ...recentRatings.take(3).map(
                 (rating) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _RatingFeedbackRow(colors: colors, rating: rating),
@@ -9387,10 +9347,10 @@ class _RatingFeedbackRow extends StatelessWidget {
     final feedback = rating.hiddenByAdmin
         ? 'Written feedback hidden by Circum.'
         : rating.feedbackText.trim().isNotEmpty
-        ? rating.feedbackText.trim()
-        : rating.feedbackTags.isNotEmpty
-        ? rating.feedbackTags.join(', ')
-        : 'No written feedback';
+            ? rating.feedbackText.trim()
+            : rating.feedbackTags.isNotEmpty
+                ? rating.feedbackTags.join(', ')
+                : 'No written feedback';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -9455,34 +9415,31 @@ class _RiderEarningsSnapshot {
   });
 
   factory _RiderEarningsSnapshot.empty() => const _RiderEarningsSnapshot(
-    availableBalance: 0,
-    pendingWithdrawal: 0,
-    lifetimeEarnings: 0,
-    tipsReceived: 0,
-    withdrawnEarnings: 0,
-    completedJobs: 0,
-  );
+        availableBalance: 0,
+        pendingWithdrawal: 0,
+        lifetimeEarnings: 0,
+        tipsReceived: 0,
+        withdrawnEarnings: 0,
+        completedJobs: 0,
+      );
 
   factory _RiderEarningsSnapshot.fromMap(Map<String, dynamic>? data) {
     if (data == null) return _RiderEarningsSnapshot.empty();
     return _RiderEarningsSnapshot(
-      availableBalance:
-          (data['availableBalance'] as num? ??
-                  data['accountBalance'] as num? ??
-                  0)
-              .toDouble(),
+      availableBalance: (data['availableBalance'] as num? ??
+              data['accountBalance'] as num? ??
+              0)
+          .toDouble(),
       pendingWithdrawal: (data['pendingWithdrawal'] as num? ?? 0).toDouble(),
-      lifetimeEarnings:
-          (data['lifetimeEarnings'] as num? ??
-                  data['totalAmountEarned'] as num? ??
-                  0)
-              .toDouble(),
+      lifetimeEarnings: (data['lifetimeEarnings'] as num? ??
+              data['totalAmountEarned'] as num? ??
+              0)
+          .toDouble(),
       tipsReceived: (data['tipsReceived'] as num? ?? 0).toDouble(),
-      withdrawnEarnings:
-          (data['withdrawnEarnings'] as num? ??
-                  data['totalWithdrawn'] as num? ??
-                  0)
-              .toDouble(),
+      withdrawnEarnings: (data['withdrawnEarnings'] as num? ??
+              data['totalWithdrawn'] as num? ??
+              0)
+          .toDouble(),
       completedJobs:
           (data['completedJobs'] as num? ?? data['totalTrips'] as num? ?? 0)
               .toInt(),
@@ -9744,6 +9701,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   XFile? _parcelPhoto;
   DateTime? _parcelPhotoCapturedAt;
   String? _parcelPhotoMessage;
+  _IrisImageInsight? _irisImageInsight;
   DateTime? _activeRequestReceivedAt;
   Set<String> _selectedRatingTags = {};
   Set<CircumRole> _availableRoles = const {};
@@ -9755,9 +9713,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _senderSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _driverProfileSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-  _driverPerformanceSub;
+      _driverPerformanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-  _assignedDriverRatingsSub;
+      _assignedDriverRatingsSub;
 
   bool get _matchingHasStarted =>
       _checkoutState == _CheckoutState.matchingRiders ||
@@ -9856,8 +9814,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final desktop =
-                constraints.maxWidth >= _desktopWebBreakpoint &&
+            final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
                 _step != _SenderStep.healthPlus;
             return Column(
               children: [
@@ -9956,294 +9913,296 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     return switch (_step) {
       _SenderStep.dashboard => _SenderDashboardStep(
-        key: const ValueKey('sender-dashboard'),
-        colors: colors,
-        profile: _senderProfile,
-        deliveries: _senderDeliveries,
-        onSendParcel: () => setState(() => _step = _SenderStep.details),
-        onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
-        onProfile: () => setState(() => _step = _SenderStep.profile),
-        onSupport: () => setState(() {
-          _supportChat = true;
-          _chatOpen = true;
-        }),
-      ),
+          key: const ValueKey('sender-dashboard'),
+          colors: colors,
+          profile: _senderProfile,
+          deliveries: _senderDeliveries,
+          onSendParcel: () => setState(() => _step = _SenderStep.details),
+          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+          onProfile: () => setState(() => _step = _SenderStep.profile),
+          onSupport: () => setState(() {
+            _supportChat = true;
+            _chatOpen = true;
+          }),
+        ),
       _SenderStep.details => _DetailsStep(
-        key: const ValueKey('details'),
-        colors: colors,
-        pickup: _pickup,
-        dropoff: _dropoff,
-        savedAddresses: _senderProfile?.savedAddresses ?? const [],
-        onSavedPickup: _applySavedPickupAddress,
-        onSavedDropoff: _applySavedDropoffAddress,
-        pickupVerified: _pickupAddressVerified,
-        dropoffVerified: _dropoffAddressVerified,
-        locationValidationMessage: _locationValidationMessage,
-        checkoutState: _checkoutState,
-        canSubmit: _canAnalyzeDelivery,
-        senderName: _senderName,
-        senderPhone: _senderPhone,
-        senderDisplayName: _effectiveSenderName,
-        senderDisplayPhone: _effectiveSenderPhone,
-        senderDetailsRequired: _senderDetailsRequired,
-        receiverName: _receiverName,
-        receiverPhone: _receiverPhone,
-        differentCollectionContact: _differentCollectionContact,
-        collectionContactName: _collectionContactName,
-        collectionContactPhone: _collectionContactPhone,
-        contactDetailsReady: _hasRequiredContactDetails,
-        contactValidationMessage: _contactValidationMessage,
-        onDifferentCollectionContact: (value) {
-          setState(() {
-            _differentCollectionContact = value;
-            if (!value) {
-              _collectionContactName.clear();
-              _collectionContactPhone.clear();
-            }
-          });
-        },
-        onPickupSelected: _selectPickupAddress,
-        onDropoffSelected: _selectDropoffAddress,
-        onPickupEdited: _handlePickupEdited,
-        onDropoffEdited: _handleDropoffEdited,
-        description: _description,
-        weight: _weight,
-        irisEstimatedWeightKg: _irisEstimatedWeightKg,
-        irisWeightBand: _irisWeightBand,
-        irisWeightConfidence: _irisWeightConfidence,
-        irisWeightExplanation: _irisWeightExplanation,
-        irisMatchedItemName: _irisMatchedItemName,
-        irisTruthBand: _irisTruthBand(),
-        senderEnteredWeightKg: _senderEnteredWeightKg,
-        pricingWeightKg: _confirmedWeightKg,
-        weightSource: _weightSourceText,
-        pricingReason: _weightPricingReason,
-        verificationRequired: _weightVerificationRequired,
-        weightMessage: _weightMessage,
-        onConfirmIrisWeight: _confirmIrisWeight,
-        parcelPhotoName: _parcelPhoto?.name,
-        parcelPhotoBusy: _parcelPhotoBusy,
-        parcelPhotoMessage: _parcelPhotoMessage,
-        onPickParcelPhoto: _pickParcelPhoto,
-        onRemoveParcelPhoto: () => setState(() {
-          _parcelPhoto = null;
-          _parcelPhotoCapturedAt = null;
-          _parcelPhotoMessage = 'Parcel photo removed.';
-        }),
-        scheduledPickupDate: _scheduledPickupDate,
-        scheduledPickupWindow: _scheduledPickupWindow,
-        scheduledDropoffDate: _scheduledDropoffDate,
-        scheduledDropoffWindow: _scheduledDropoffWindow,
-        analyzing: _analyzing,
-        onSubmit: _analyseRequest,
-      ),
-      _SenderStep.vehicle => _VehicleStep(
-        key: const ValueKey('vehicle'),
-        colors: colors,
-        pickup: _pickup.text,
-        dropoff: _dropoff.text,
-        chargeableWeightKg: _deliveryClassification.finalWeightKg,
-        vehicleSuitability: _vehicleSuitability,
-        selectedVehicle: _effectiveVehicle,
-        selectedSpeed: _selectedSpeed,
-        onVehicle: (vehicle) {
-          final suitability = _vehicleSuitability;
-          if (!DeliveryPricing.vehicleCanCarryDelivery(
-            vehicle.name,
-            suitability,
-          )) {
+          key: const ValueKey('details'),
+          colors: colors,
+          pickup: _pickup,
+          dropoff: _dropoff,
+          savedAddresses: _senderProfile?.savedAddresses ?? const [],
+          onSavedPickup: _applySavedPickupAddress,
+          onSavedDropoff: _applySavedDropoffAddress,
+          pickupVerified: _pickupAddressVerified,
+          dropoffVerified: _dropoffAddressVerified,
+          locationValidationMessage: _locationValidationMessage,
+          checkoutState: _checkoutState,
+          canSubmit: _canAnalyzeDelivery,
+          senderName: _senderName,
+          senderPhone: _senderPhone,
+          senderDisplayName: _effectiveSenderName,
+          senderDisplayPhone: _effectiveSenderPhone,
+          senderDetailsRequired: _senderDetailsRequired,
+          receiverName: _receiverName,
+          receiverPhone: _receiverPhone,
+          differentCollectionContact: _differentCollectionContact,
+          collectionContactName: _collectionContactName,
+          collectionContactPhone: _collectionContactPhone,
+          contactDetailsReady: _hasRequiredContactDetails,
+          contactValidationMessage: _contactValidationMessage,
+          onDifferentCollectionContact: (value) {
             setState(() {
-              _selectedVehicle = _effectiveVehicle;
-              _weightMessage =
-                  'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
+              _differentCollectionContact = value;
+              if (!value) {
+                _collectionContactName.clear();
+                _collectionContactPhone.clear();
+              }
             });
-            return;
-          }
-          setState(() {
-            _selectedVehicle = vehicle;
-            _checkoutState = _CheckoutState.awaitingPayment;
-          });
-        },
-        onSpeed: (speed) => setState(() {
-          _selectedSpeed = speed;
-          _checkoutState = _CheckoutState.awaitingPayment;
-        }),
-        onBack: () => setState(() => _step = _SenderStep.dashboard),
-        onContinue: () => setState(() {
-          _checkoutState = _CheckoutState.awaitingPayment;
-          _step = _SenderStep.payment;
-        }),
-      ),
-      _SenderStep.payment => _PaymentStep(
-        key: const ValueKey('payment'),
-        colors: colors,
-        vehicle: _effectiveVehicle,
-        speed: _selectedSpeed,
-        breakdown: _quoteBreakdown,
-        distanceMiles: _confirmedRouteDistanceMiles,
-        locationsConfirmed: _hasValidatedRoute,
-        routeMessage: _locationValidationMessage,
-        irisEstimatedWeightKg: _irisEstimatedWeightKg,
-        senderEnteredWeightKg: _senderEnteredWeightKg,
-        weightKg: _deliveryClassification.finalWeightKg,
-        total: _quoteTotal,
-        checkoutState: _checkoutState,
-        weightConfirmed: _hasConfirmedWeight,
-        weightSource: _weightSourceText,
-        pricingReason: _weightPricingReason,
-        scheduledPickupDate: _scheduledPickupDate.text.trim(),
-        scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
-        scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
-        scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
-        onBack: () => setState(() {
-          if (!_matchingHasStarted) {
-            _checkoutState = _CheckoutState.awaitingPayment;
-          }
-          _step = _SenderStep.vehicle;
-        }),
-        onPay: _confirmPayment,
-      ),
-      _SenderStep.tracking => _TrackingStep(
-        key: const ValueKey('tracking'),
-        colors: colors,
-        orderId: _activeOrderId ?? 'CIR-2026',
-        pickup: _pickup.text,
-        dropoff: _dropoff.text,
-        vehicle: _effectiveVehicle,
-        statusIndex: _statusIndex,
-        broadcasting: _broadcasting,
-        checkoutState: _checkoutState,
-        firebaseOnline: _firebaseOnline,
-        firebaseError: _firebaseError,
-        receivedAt: _activeRequestReceivedAt,
-        pickupAddress: _validatedPickup,
-        dropoffAddress: _validatedDropoff,
-        liveLocation: _liveLocationData,
-        vanguardData: _activeVanguardData,
-        assignedDriver: _assignedDriver,
-        assignedDriverMetric: _assignedDriverMetric,
-        ratingStars: _selectedRating,
-        ratingFeedback: _ratingFeedback,
-        selectedRatingTags: _selectedRatingTags,
-        selectedTipAmount: _selectedTipAmount,
-        ratingSubmitting: _ratingSubmitting,
-        ratingSubmitted: _ratingSubmitted,
-        ratingMessage: _ratingMessage,
-        onRatingChanged: (rating) => setState(() => _selectedRating = rating),
-        onRatingTag: _toggleRatingTag,
-        onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
-        onSubmitRating: _submitDriverRating,
-        onChatDriver: () => setState(() {
-          _supportChat = false;
-          _chatOpen = true;
-        }),
-        onChatSupport: () => setState(() {
-          _supportChat = true;
-          _chatOpen = true;
-        }),
-        onNewOrder: _reset,
-      ),
-      _SenderStep.healthPlus => _HealthPlusStep(
-        key: const ValueKey('health-plus'),
-        colors: colors,
-        fullName: _healthName,
-        phone: _healthPhone,
-        email: _healthEmail,
-        pharmacyName: _healthPharmacyName,
-        pharmacyAddress: _healthPharmacy,
-        deliveryAddress: _healthDelivery,
-        notes: _healthNotes,
-        preferredDay: _healthPreferredDay,
-        preferredTime: _healthPreferredTime,
-        customSchedule: _healthCustomSchedule,
-        frequency: _healthFrequency,
-        prescriptionType: _healthPrescriptionType,
-        subscriptionPlan: _healthSubscriptionPlan,
-        consent: _healthConsent,
-        savePayment: _healthSavePayment,
-        submitting: _healthSubmitting,
-        message: _healthMessage,
-        checkoutUrl: _healthCheckoutUrl,
-        quote: _healthQuote,
-        pickups: _healthPickups,
-        payments: _healthPayments,
-        onBack: () => setState(() => _step = _SenderStep.dashboard),
-        onFrequency: (frequency) =>
-            setState(() => _healthFrequency = frequency),
-        onPrescriptionType: (type) =>
-            setState(() => _healthPrescriptionType = type),
-        onSubscriptionPlan: (plan) =>
-            setState(() => _healthSubscriptionPlan = plan),
-        onStartSubscription: (plan) {
-          setState(() {
-            _healthSubscriptionPlan = plan;
-            if (_healthFrequency == HealthPlusFrequency.oneOff) {
-              _healthFrequency = HealthPlusFrequency.weekly;
+          },
+          onPickupSelected: _selectPickupAddress,
+          onDropoffSelected: _selectDropoffAddress,
+          onPickupEdited: _handlePickupEdited,
+          onDropoffEdited: _handleDropoffEdited,
+          description: _description,
+          weight: _weight,
+          irisEstimatedWeightKg: _irisEstimatedWeightKg,
+          irisWeightBand: _irisWeightBand,
+          irisWeightConfidence: _irisWeightConfidence,
+          irisWeightExplanation: _irisWeightExplanation,
+          irisMatchedItemName: _irisMatchedItemName,
+          irisTruthBand: _irisTruthBand(),
+          senderEnteredWeightKg: _senderEnteredWeightKg,
+          pricingWeightKg: _confirmedWeightKg,
+          weightSource: _weightSourceText,
+          pricingReason: _weightPricingReason,
+          verificationRequired: _weightVerificationRequired,
+          weightMessage: _weightMessage,
+          onConfirmIrisWeight: _confirmIrisWeight,
+          parcelPhotoName: _parcelPhoto?.name,
+          parcelPhotoBusy: _parcelPhotoBusy,
+          parcelPhotoMessage: _parcelPhotoMessage,
+          onPickParcelPhoto: _pickParcelPhoto,
+          onRemoveParcelPhoto: () => setState(() {
+            _parcelPhoto = null;
+            _parcelPhotoCapturedAt = null;
+            _irisImageInsight = null;
+            _parcelPhotoMessage = 'Parcel photo removed.';
+          }),
+          scheduledPickupDate: _scheduledPickupDate,
+          scheduledPickupWindow: _scheduledPickupWindow,
+          scheduledDropoffDate: _scheduledDropoffDate,
+          scheduledDropoffWindow: _scheduledDropoffWindow,
+          analyzing: _analyzing,
+          onSubmit: _analyseRequest,
+        ),
+      _SenderStep.vehicle => _VehicleStep(
+          key: const ValueKey('vehicle'),
+          colors: colors,
+          pickup: _pickup.text,
+          dropoff: _dropoff.text,
+          chargeableWeightKg: _deliveryClassification.finalWeightKg,
+          vehicleSuitability: _vehicleSuitability,
+          selectedVehicle: _effectiveVehicle,
+          selectedSpeed: _selectedSpeed,
+          onVehicle: (vehicle) {
+            final suitability = _vehicleSuitability;
+            if (!DeliveryPricing.vehicleCanCarryDelivery(
+              vehicle.name,
+              suitability,
+            )) {
+              setState(() {
+                _selectedVehicle = _effectiveVehicle;
+                _weightMessage =
+                    'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
+              });
+              return;
             }
-          });
-          _bookHealthPlus();
-        },
-        onContinueOneOff: () {
-          setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
-          _bookHealthPlus();
-        },
-        onConsent: (value) => setState(() => _healthConsent = value ?? false),
-        onSavePayment: (value) =>
-            setState(() => _healthSavePayment = value ?? false),
-        onSubmit: _bookHealthPlus,
-        onPauseSchedule: _pauseHealthPlusSchedule,
-        onResumeSchedule: _resumeHealthPlusSchedule,
-        onCancelSchedule: _cancelHealthPlusSchedule,
-        onCancelPickup: _cancelNextHealthPlusPickup,
-        onUpdatePayment: _openHealthPlusCheckout,
-        onAdminStatus: _adminUpdateHealthPlusStatus,
-      ),
+            setState(() {
+              _selectedVehicle = vehicle;
+              _checkoutState = _CheckoutState.awaitingPayment;
+            });
+          },
+          onSpeed: (speed) => setState(() {
+            _selectedSpeed = speed;
+            _checkoutState = _CheckoutState.awaitingPayment;
+          }),
+          onBack: () => setState(() => _step = _SenderStep.dashboard),
+          onContinue: () => setState(() {
+            _checkoutState = _CheckoutState.awaitingPayment;
+            _step = _SenderStep.payment;
+          }),
+        ),
+      _SenderStep.payment => _PaymentStep(
+          key: const ValueKey('payment'),
+          colors: colors,
+          vehicle: _effectiveVehicle,
+          speed: _selectedSpeed,
+          breakdown: _quoteBreakdown,
+          distanceMiles: _confirmedRouteDistanceMiles,
+          locationsConfirmed: _hasValidatedRoute,
+          routeMessage: _locationValidationMessage,
+          irisEstimatedWeightKg: _irisEstimatedWeightKg,
+          senderEnteredWeightKg: _senderEnteredWeightKg,
+          weightKg: _deliveryClassification.finalWeightKg,
+          total: _quoteTotal,
+          checkoutState: _checkoutState,
+          weightConfirmed: _hasConfirmedWeight,
+          weightSource: _weightSourceText,
+          pricingReason: _weightPricingReason,
+          scheduledPickupDate: _scheduledPickupDate.text.trim(),
+          scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
+          scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
+          scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
+          onBack: () => setState(() {
+            if (!_matchingHasStarted) {
+              _checkoutState = _CheckoutState.awaitingPayment;
+            }
+            _step = _SenderStep.vehicle;
+          }),
+          onPay: _confirmPayment,
+        ),
+      _SenderStep.tracking => _TrackingStep(
+          key: const ValueKey('tracking'),
+          colors: colors,
+          orderId: _activeOrderId ?? 'CIR-2026',
+          pickup: _pickup.text,
+          dropoff: _dropoff.text,
+          vehicle: _effectiveVehicle,
+          statusIndex: _statusIndex,
+          broadcasting: _broadcasting,
+          checkoutState: _checkoutState,
+          firebaseOnline: _firebaseOnline,
+          firebaseError: _firebaseError,
+          receivedAt: _activeRequestReceivedAt,
+          pickupAddress: _validatedPickup,
+          dropoffAddress: _validatedDropoff,
+          liveLocation: _liveLocationData,
+          vanguardData: _activeVanguardData,
+          assignedDriver: _assignedDriver,
+          assignedDriverMetric: _assignedDriverMetric,
+          ratingStars: _selectedRating,
+          ratingFeedback: _ratingFeedback,
+          selectedRatingTags: _selectedRatingTags,
+          selectedTipAmount: _selectedTipAmount,
+          ratingSubmitting: _ratingSubmitting,
+          ratingSubmitted: _ratingSubmitted,
+          ratingMessage: _ratingMessage,
+          onRatingChanged: (rating) => setState(() => _selectedRating = rating),
+          onRatingTag: _toggleRatingTag,
+          onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
+          onSubmitRating: _submitDriverRating,
+          onChatDriver: () => setState(() {
+            _supportChat = false;
+            _chatOpen = true;
+          }),
+          onChatSupport: () => setState(() {
+            _supportChat = true;
+            _chatOpen = true;
+          }),
+          onNewOrder: _reset,
+        ),
+      _SenderStep.healthPlus => _HealthPlusStep(
+          key: const ValueKey('health-plus'),
+          colors: colors,
+          fullName: _healthName,
+          phone: _healthPhone,
+          email: _healthEmail,
+          pharmacyName: _healthPharmacyName,
+          pharmacyAddress: _healthPharmacy,
+          deliveryAddress: _healthDelivery,
+          notes: _healthNotes,
+          preferredDay: _healthPreferredDay,
+          preferredTime: _healthPreferredTime,
+          customSchedule: _healthCustomSchedule,
+          frequency: _healthFrequency,
+          prescriptionType: _healthPrescriptionType,
+          subscriptionPlan: _healthSubscriptionPlan,
+          consent: _healthConsent,
+          savePayment: _healthSavePayment,
+          submitting: _healthSubmitting,
+          message: _healthMessage,
+          checkoutUrl: _healthCheckoutUrl,
+          quote: _healthQuote,
+          pickups: _healthPickups,
+          payments: _healthPayments,
+          onBack: () => setState(() => _step = _SenderStep.dashboard),
+          onFrequency: (frequency) =>
+              setState(() => _healthFrequency = frequency),
+          onPrescriptionType: (type) =>
+              setState(() => _healthPrescriptionType = type),
+          onSubscriptionPlan: (plan) =>
+              setState(() => _healthSubscriptionPlan = plan),
+          onStartSubscription: (plan) {
+            setState(() {
+              _healthSubscriptionPlan = plan;
+              if (_healthFrequency == HealthPlusFrequency.oneOff) {
+                _healthFrequency = HealthPlusFrequency.weekly;
+              }
+            });
+            _bookHealthPlus();
+          },
+          onContinueOneOff: () {
+            setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
+            _bookHealthPlus();
+          },
+          onConsent: (value) => setState(() => _healthConsent = value ?? false),
+          onSavePayment: (value) =>
+              setState(() => _healthSavePayment = value ?? false),
+          onSubmit: _bookHealthPlus,
+          onPauseSchedule: _pauseHealthPlusSchedule,
+          onResumeSchedule: _resumeHealthPlusSchedule,
+          onCancelSchedule: _cancelHealthPlusSchedule,
+          onCancelPickup: _cancelNextHealthPlusPickup,
+          onUpdatePayment: _openHealthPlusCheckout,
+          onAdminStatus: _adminUpdateHealthPlusStatus,
+        ),
       _SenderStep.profile => _SenderProfileStep(
-        key: const ValueKey('sender-profile'),
-        colors: colors,
-        user: _senderUser,
-        profile: _senderProfile,
-        deliveries: _senderDeliveries,
-        selectedDelivery: _selectedSenderDelivery,
-        loading: _senderAuthLoading,
-        busy: _senderAuthBusy || _senderProfileSaving,
-        message: _senderProfileMessage,
-        tabIndex: _senderProfileTab,
-        email: _senderEmail,
-        password: _senderPassword,
-        fullName: _senderName,
-        phone: _senderPhone,
-        currentPassword: _senderCurrentPassword,
-        newPassword: _senderNewPassword,
-        confirmNewPassword: _senderConfirmNewPassword,
-        newEmail: _senderNewEmail,
-        emailChangePassword: _senderEmailChangePassword,
-        securitySubmitting: _senderSecurityBusy,
-        securityMessage: _senderSecurityMessage,
-        savedAddressLabel: _savedAddressLabel,
-        savedAddress: _savedAddress,
-        savedAddressType: _savedAddressType,
-        onBack: () => setState(() => _step = _SenderStep.dashboard),
-        onTab: (index) => setState(() => _senderProfileTab = index),
-        onSignIn: _signInSender,
-        onSignUp: _signUpSender,
-        onForgotPassword: _sendSenderPasswordReset,
-        onChangePassword: _changeSenderPassword,
-        onChangeEmail: _changeSenderEmail,
-        onSignOut: _signOutSender,
-        onSaveProfile: _saveSenderProfile,
-        onAddAddress: _addSenderAddress,
-        onSavedAddressType: (type) => setState(() => _savedAddressType = type),
-        onSavedAddressSelected: (address) => setState(() {
-          _validatedSavedAddress = address;
-          _savedAddress.text = address.displayAddress;
-        }),
-        onSavedAddressEdited: (_) =>
-            setState(() => _validatedSavedAddress = null),
-        onSelectDelivery: (delivery) =>
-            setState(() => _selectedSenderDelivery = delivery),
-        onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
-      ),
+          key: const ValueKey('sender-profile'),
+          colors: colors,
+          user: _senderUser,
+          profile: _senderProfile,
+          deliveries: _senderDeliveries,
+          selectedDelivery: _selectedSenderDelivery,
+          loading: _senderAuthLoading,
+          busy: _senderAuthBusy || _senderProfileSaving,
+          message: _senderProfileMessage,
+          tabIndex: _senderProfileTab,
+          email: _senderEmail,
+          password: _senderPassword,
+          fullName: _senderName,
+          phone: _senderPhone,
+          currentPassword: _senderCurrentPassword,
+          newPassword: _senderNewPassword,
+          confirmNewPassword: _senderConfirmNewPassword,
+          newEmail: _senderNewEmail,
+          emailChangePassword: _senderEmailChangePassword,
+          securitySubmitting: _senderSecurityBusy,
+          securityMessage: _senderSecurityMessage,
+          savedAddressLabel: _savedAddressLabel,
+          savedAddress: _savedAddress,
+          savedAddressType: _savedAddressType,
+          onBack: () => setState(() => _step = _SenderStep.dashboard),
+          onTab: (index) => setState(() => _senderProfileTab = index),
+          onSignIn: _signInSender,
+          onSignUp: _signUpSender,
+          onForgotPassword: _sendSenderPasswordReset,
+          onChangePassword: _changeSenderPassword,
+          onChangeEmail: _changeSenderEmail,
+          onSignOut: _signOutSender,
+          onSaveProfile: _saveSenderProfile,
+          onAddAddress: _addSenderAddress,
+          onSavedAddressType: (type) =>
+              setState(() => _savedAddressType = type),
+          onSavedAddressSelected: (address) => setState(() {
+            _validatedSavedAddress = address;
+            _savedAddress.text = address.displayAddress;
+          }),
+          onSavedAddressEdited: (_) =>
+              setState(() => _validatedSavedAddress = null),
+          onSelectDelivery: (delivery) =>
+              setState(() => _selectedSenderDelivery = delivery),
+          onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
+        ),
     };
   }
 
@@ -10260,8 +10219,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DeliveryClassification get _deliveryClassification {
     return DeliveryPricing.resolveClassification(
       description: _description.text,
-      userEnteredWeightKg:
-          _senderEnteredWeightKg ??
+      userEnteredWeightKg: _senderEnteredWeightKg ??
           DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
       irisEstimateKg: _irisEstimatedWeightKg,
       historicalVerifiedMaxKg: _irisHistoricalVerifiedWeightKg,
@@ -10611,24 +10569,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(user.uid)
         .snapshots()
         .listen((snapshot) {
-          final data = snapshot.data() ?? <String, dynamic>{};
-          final profile = SenderProfile.fromMap(user.uid, {
-            'email': user.email,
-            'photoURL': user.photoURL,
-            'phoneNumber': user.phoneNumber,
-            ...data,
-          });
-          if (!mounted) return;
-          setState(() {
-            _senderProfile = profile;
-            if (_senderName.text.trim().isEmpty) {
-              _senderName.text = profile.fullName;
-            }
-            if (_senderPhone.text.trim().isEmpty) {
-              _senderPhone.text = profile.phoneNumber;
-            }
-          });
-        });
+      final data = snapshot.data() ?? <String, dynamic>{};
+      final profile = SenderProfile.fromMap(user.uid, {
+        'email': user.email,
+        'photoURL': user.photoURL,
+        'phoneNumber': user.phoneNumber,
+        ...data,
+      });
+      if (!mounted) return;
+      setState(() {
+        _senderProfile = profile;
+        if (_senderName.text.trim().isEmpty) {
+          _senderName.text = profile.fullName;
+        }
+        if (_senderPhone.text.trim().isEmpty) {
+          _senderPhone.text = profile.phoneNumber;
+        }
+      });
+    });
   }
 
   Future<void> _signInSender() async {
@@ -10670,11 +10628,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       await _ensureFirebaseReady();
-      final credential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: _senderEmail.text.trim(),
-            password: _senderPassword.text.trim(),
-          );
+      final credential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _senderEmail.text.trim(),
+        password: _senderPassword.text.trim(),
+      );
       final user = credential.user!;
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'fullName': _senderName.text.trim(),
@@ -10897,17 +10855,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (user == null) return;
     setState(() => _senderProfileSaving = true);
     try {
-      final profile =
-          _senderProfile ??
+      final profile = _senderProfile ??
           SenderProfile.fromMap(user.uid, {
             'email': user.email,
             'fullName': _senderName.text.trim(),
             'phoneNumber': _senderPhone.text.trim(),
           });
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set(
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
             profile.safeUpdatePatch(
               fullName: _senderName.text.trim(),
               phoneNumber: _senderPhone.text.trim(),
@@ -10956,9 +10910,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     setState(() => _senderProfileSaving = true);
     try {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'savedAddresses': next
-            .map((senderAddress) => senderAddress.toJson())
-            .toList(),
+        'savedAddresses':
+            next.map((senderAddress) => senderAddress.toJson()).toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       _savedAddress.clear();
@@ -10987,15 +10940,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           byId[record.requestId] = record;
         }
       }
-      final records =
-          SenderProfileService.ownDeliveries(
-            uid,
-            byId.values,
-          ).toList(growable: false)..sort((a, b) {
-            final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            return right.compareTo(left);
-          });
+      final records = SenderProfileService.ownDeliveries(
+        uid,
+        byId.values,
+      ).toList(growable: false)
+        ..sort((a, b) {
+          final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return right.compareTo(left);
+        });
       if (!mounted) return;
       setState(() {
         _senderDeliveries = records;
@@ -11017,7 +10970,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'email-already-in-use' => 'That email already has a Circum profile.',
       'user-not-found' => 'No Circum profile found for that email.',
       'wrong-password' ||
-      'invalid-credential' => 'Those sign-in details are not right.',
+      'invalid-credential' =>
+        'Those sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -11042,6 +10996,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _checkoutState = _CheckoutState.validating;
       _analyzing = true;
       _broadcasting = false;
+      if (_parcelPhoto != null) {
+        _parcelPhotoMessage = 'IRIS is reviewing your item...';
+      }
     });
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
@@ -11049,7 +11006,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weight.text,
       fallbackKg: 0,
     );
-    final estimate = await _estimateWeightWithIris();
+    final estimate = await _estimateWeightWithIris(_irisImageInsight);
     final decision = _resolvePricingWeight(
       estimate: estimate,
       senderWeightKg: senderWeight > 0 ? senderWeight : null,
@@ -11073,6 +11030,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weightVerificationRequired = decision.verificationRequired;
       _weightPricingReason = decision.reason;
       _analyzing = false;
+      if (_parcelPhoto != null) {
+        _parcelPhotoMessage = estimate.weightSource == 'photo_match'
+            ? 'IRIS reviewed the photo and item details.'
+            : 'IRIS used the photo with your item details.';
+      }
       _checkoutState = decision.weightKg == null
           ? _CheckoutState.draft
           : _CheckoutState.optionsReady;
@@ -11102,12 +11064,26 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         imageQuality: 82,
       );
       if (!mounted) return;
+      if (picked != null && !await _parcelPhotoIsSafe(picked)) {
+        setState(() {
+          _parcelPhoto = null;
+          _parcelPhotoCapturedAt = null;
+          _irisImageInsight = null;
+          _parcelPhotoMessage =
+              'Choose a JPG, PNG, WebP, or HEIC image under 10MB.';
+        });
+        return;
+      }
+      final insight =
+          picked == null ? null : await _analyseParcelPhotoForIris(picked);
+      if (!mounted) return;
       setState(() {
         _parcelPhoto = picked;
         _parcelPhotoCapturedAt = picked == null ? null : DateTime.now();
+        _irisImageInsight = insight;
         _parcelPhotoMessage = picked == null
             ? 'No parcel photo selected.'
-            : 'Parcel photo ready for IRIS review.';
+            : 'Parcel photo added. IRIS will use it with your item details.';
       });
     } catch (_) {
       if (!mounted) return;
@@ -11117,6 +11093,120 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       });
     } finally {
       if (mounted) setState(() => _parcelPhotoBusy = false);
+    }
+  }
+
+  Future<bool> _parcelPhotoIsSafe(XFile photo) async {
+    final name = photo.name.toLowerCase();
+    final allowedExtension = name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.heic') ||
+        name.endsWith('.heif');
+    final mime = (photo.mimeType ?? '').toLowerCase();
+    final allowedMime = mime.isEmpty ||
+        mime.startsWith('image/') ||
+        mime == 'application/octet-stream';
+    final length = await photo.length();
+    return allowedExtension && allowedMime && length <= 10 * 1024 * 1024;
+  }
+
+  Future<_IrisImageInsight> _analyseParcelPhotoForIris(XFile photo) async {
+    try {
+      final sizeBytes = await photo.length();
+      final name = photo.name.toLowerCase();
+      final details = '${_description.text} $name'.toLowerCase();
+      var inferredItem = 'Parcel photo';
+      var category = 'Parcel';
+      var weightKg = 2.0;
+      var confidence = 0.45;
+      var fragilityRisk = 'medium';
+      var valueRisk = 'low';
+      var handlingNotes = 'Photo attached for rider handling context.';
+      var riderGuidance = 'Check parcel size and condition at pickup.';
+      var needsReview = false;
+
+      final repository = _knownProductWeightEstimate(details);
+      if (repository != null) {
+        inferredItem = repository.matchedItemName ?? repository.packageType;
+        category = repository.packageType;
+        weightKg = repository.weightKg;
+        confidence = (repository.confidenceScore ?? 0.7).clamp(0.0, 1.0);
+        fragilityRisk = repository.fragile ? 'high' : 'medium';
+        valueRisk = _looksHighValue(details, repository.packageType)
+            ? 'high'
+            : 'medium';
+        handlingNotes =
+            repository.handlingNotes ?? 'Handle according to item type.';
+        riderGuidance =
+            'Photo and item details suggest $inferredItem. Verify condition and weight at pickup.';
+      } else if (_containsAny(details, const [
+        'phone',
+        'iphone',
+        'ipad',
+        'laptop',
+        'macbook',
+        'camera',
+        'watch',
+        'console',
+      ])) {
+        inferredItem = 'Consumer electronics';
+        category = 'Electronics';
+        weightKg = 2.5;
+        confidence = 0.58;
+        fragilityRisk = 'high';
+        valueRisk = 'high';
+        handlingNotes = 'Likely fragile or high-value electronics.';
+        riderGuidance = 'Keep sealed, avoid stacking, and verify handover.';
+        needsReview = true;
+      } else if (_containsAny(details, const [
+        'sofa',
+        'chair',
+        'table',
+        'tv',
+        'furniture',
+        'mattress',
+        'bike',
+      ])) {
+        inferredItem = 'Large item';
+        category = 'Large item';
+        weightKg = 15;
+        confidence = 0.55;
+        fragilityRisk = details.contains('tv') ? 'high' : 'medium';
+        valueRisk = 'medium';
+        handlingNotes = 'Bulky item; check vehicle suitability.';
+        riderGuidance = 'Confirm dimensions and safe loading before pickup.';
+        needsReview = true;
+      } else if (sizeBytes > 7 * 1024 * 1024) {
+        inferredItem = 'Detailed parcel photo';
+        category = 'Parcel';
+        weightKg = 5;
+        confidence = 0.42;
+        fragilityRisk = 'medium';
+        valueRisk = 'low';
+        handlingNotes = 'Photo quality is high, but item type is unclear.';
+        riderGuidance = 'Use the photo to confirm parcel condition at pickup.';
+        needsReview = true;
+      }
+
+      final band = DeliveryPricing.weightBandFor(weightKg).category;
+      return _IrisImageInsight(
+        inferredItemName: inferredItem,
+        inferredCategory: category,
+        estimatedWeightKg: weightKg,
+        weightClass: band,
+        confidenceScore: confidence,
+        fragilityRisk: fragilityRisk,
+        valueRisk: valueRisk,
+        handlingNotes: handlingNotes,
+        riderGuidance: riderGuidance,
+        needsHumanReview: needsReview || confidence < 0.5,
+        fileName: photo.name,
+        fileSizeBytes: sizeBytes,
+      );
+    } catch (_) {
+      return _IrisImageInsight.fallback(photo.name);
     }
   }
 
@@ -11169,8 +11259,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final estimate = _IrisWeightEstimate(
       weightKg: estimateWeight,
-      weightBand:
-          _irisWeightBand ??
+      weightBand: _irisWeightBand ??
           DeliveryPricing.weightBandFor(estimateWeight).category,
       confidence: _irisWeightConfidence ?? 'low',
       explanation:
@@ -11274,13 +11363,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final hasSenderWeight = senderWeightKg != null && senderWeightKg > 0;
     final irisBand = DeliveryPricing.weightBandFor(estimate.weightKg);
-    final senderBand = hasSenderWeight
-        ? DeliveryPricing.weightBandFor(senderWeightKg)
-        : null;
+    final senderBand =
+        hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
     final bandChanged =
         senderBand != null && senderBand.category != irisBand.category;
-    final significantDifference =
-        bandChanged ||
+    final significantDifference = bandChanged ||
         classification.selectedWeightSource == 'keyword_override';
     final mismatchReview = _hasIrisMismatchReview(
       senderWeightKg: senderWeightKg,
@@ -11315,10 +11402,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final source = classification.selectedWeightSource == 'keyword_override'
         ? 'keyword_override'
         : estimate.weightSource == 'known_product_lookup'
-        ? 'repository_match'
-        : estimate.weightKg >= (senderWeightKg ?? 0)
-        ? 'photo_match'
-        : 'customer_declared';
+            ? 'repository_match'
+            : estimate.weightKg >= (senderWeightKg ?? 0)
+                ? 'photo_match'
+                : 'customer_declared';
 
     return _WeightPricingDecision(
       weightKg: higherWeight,
@@ -11327,11 +11414,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       message: mismatchReview
           ? 'Potential mismatch detected — manual review required.'
           : significantDifference
-          ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
-          : 'IRIS has analysed this item and selected the most reliable weight available.',
+              ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
+              : 'IRIS has analysed this item and selected the most reliable weight available.',
       reason: classification.resolutionReason,
-      verificationRequired:
-          mismatchReview ||
+      verificationRequired: mismatchReview ||
           significantDifference ||
           classification.requiresManualReview,
     );
@@ -11348,7 +11434,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
   }
 
-  Future<_IrisWeightEstimate> _estimateWeightWithIris() async {
+  Future<_IrisWeightEstimate> _estimateWeightWithIris(
+    _IrisImageInsight? imageInsight,
+  ) async {
     final text = '${_description.text} ${_pickup.text} ${_dropoff.text}'
         .trim()
         .toLowerCase();
@@ -11416,7 +11504,56 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       weightSource: 'category_fallback',
       confidenceScore: _scoreForIrisConfidence(confidence),
     );
-    return _applyVerifiedParcelLearning(estimateResult, text);
+    return _applyVerifiedParcelLearning(
+      _mergeImageInsightWithTextEstimate(estimateResult, imageInsight),
+      text,
+    );
+  }
+
+  _IrisWeightEstimate _mergeImageInsightWithTextEstimate(
+    _IrisWeightEstimate textEstimate,
+    _IrisImageInsight? imageInsight,
+  ) {
+    if (imageInsight == null) return textEstimate;
+    final imageBand = DeliveryPricing.weightBandFor(
+      imageInsight.estimatedWeightKg,
+    ).category;
+    final textBand = DeliveryPricing.weightBandFor(textEstimate.weightKg);
+    final imageBandRank = DeliveryPricing.weightBandFor(
+          imageInsight.estimatedWeightKg,
+        ).maxKg ??
+        double.infinity;
+    final textBandRank = textBand.maxKg ?? double.infinity;
+    final strongImage = imageInsight.confidenceScore >= 0.55;
+    final shouldUseImage = strongImage &&
+        (imageBandRank > textBandRank || textEstimate.confidence == 'low');
+    if (!shouldUseImage) {
+      return textEstimate.copyWith(
+        explanation:
+            '${textEstimate.explanation} IRIS also reviewed the photo for handling context.',
+        handlingNotes: textEstimate.handlingNotes ?? imageInsight.handlingNotes,
+        fragile: textEstimate.fragile || imageInsight.fragilityRisk == 'high',
+        requiresVehicleReview:
+            textEstimate.requiresVehicleReview || imageInsight.needsHumanReview,
+      );
+    }
+    return textEstimate.copyWith(
+      weightKg: math.max(textEstimate.weightKg, imageInsight.estimatedWeightKg),
+      weightBand: imageBand,
+      confidence: imageInsight.confidenceScore >= 0.75 ? 'high' : 'medium',
+      explanation:
+          'IRIS reviewed the parcel photo and item details, then selected the safest visible weight class.',
+      packageType: imageInsight.inferredCategory,
+      requiresVehicleReview:
+          imageInsight.needsHumanReview || imageInsight.estimatedWeightKg > 10,
+      weightSource: 'photo_match',
+      truthBand: 'Photo Match',
+      matchedItemName: imageInsight.inferredItemName,
+      confidenceScore: imageInsight.confidenceScore,
+      fragile: imageInsight.fragilityRisk == 'high',
+      stackable: imageInsight.fragilityRisk != 'high',
+      handlingNotes: imageInsight.handlingNotes,
+    );
   }
 
   Future<_IrisWeightEstimate> _applyVerifiedParcelLearning(
@@ -11439,8 +11576,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             '${data['packageDescription'] ?? data['description'] ?? ''}'
                 .toLowerCase();
         if (!_looksLikeSimilarParcel(text, description)) continue;
-        final verified =
-            _readWeightKg(data['finalVerifiedWeight']) ??
+        final verified = _readWeightKg(data['finalVerifiedWeight']) ??
             _readWeightKg(data['riderVerifiedWeight']) ??
             _readWeightKg(data['driverReportedWeightKg']) ??
             _readWeightKg(data['finalWeightUsed']) ??
@@ -11600,6 +11736,30 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     };
   }
 
+  bool _containsAny(String text, Iterable<String> needles) {
+    return needles.any(text.contains);
+  }
+
+  bool _looksHighValue(String text, String category) {
+    final combined = '$text $category'.toLowerCase();
+    return _containsAny(combined, const [
+      'iphone',
+      'phone',
+      'macbook',
+      'laptop',
+      'camera',
+      'watch',
+      'jewellery',
+      'jewelry',
+      'console',
+      'playstation',
+      'xbox',
+      'designer',
+      'gold',
+      'diamond',
+    ]);
+  }
+
   String _formatWeight(double weightKg) {
     return weightKg.truncateToDouble() == weightKg
         ? weightKg.toStringAsFixed(0)
@@ -11674,19 +11834,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final batch = db.batch();
       batch.set(db.collection('webSenderRequests').doc(id), request);
       batch.set(db.collection('deliveryRequests').doc(id), request);
-      batch.set(db.collection('chats').doc(id), {
-        'threadId': id,
-        'bookingId': id,
-        'requestId': id,
-        'participants': [senderId, 'circum-support'],
-        'participantRoles': {senderId: 'sender', 'circum-support': 'admin'},
-        'lastMessage':
-            'Your request is live. Iris is checking nearby riders now.',
-        'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        'unreadBy': ['admin'],
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'circum-web',
-      }, SetOptions(merge: true));
+      batch.set(
+          db.collection('chats').doc(id),
+          {
+            'threadId': id,
+            'bookingId': id,
+            'requestId': id,
+            'participants': [senderId, 'circum-support'],
+            'participantRoles': {senderId: 'sender', 'circum-support': 'admin'},
+            'lastMessage':
+                'Your request is live. Iris is checking nearby riders now.',
+            'lastMessageTimestamp': FieldValue.serverTimestamp(),
+            'unreadBy': ['admin'],
+            'updatedAt': FieldValue.serverTimestamp(),
+            'source': 'circum-web',
+          },
+          SetOptions(merge: true));
       batch.set(db.collection('chats').doc(id).collection('messages').doc(), {
         'threadId': id,
         'bookingId': id,
@@ -11898,9 +12061,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'savedPaymentMethod': _healthSavePayment,
         'frequency': _healthFrequency.value,
         'subscriptionPlan': _healthSubscriptionPlan,
-        'paymentType': scheduleId == null
-            ? 'one_time_checkout'
-            : 'subscription_checkout',
+        'paymentType':
+            scheduleId == null ? 'one_time_checkout' : 'subscription_checkout',
         'createdAt': FieldValue.serverTimestamp(),
       });
       batch.set(db.collection('healthPlusNotifications').doc(), {
@@ -12034,10 +12196,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('recurringPickupSchedules')
         .doc(scheduleId)
         .set({
-          'paused': true,
-          'status': 'paused',
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      'paused': true,
+      'status': 'paused',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'recurring_pickup_paused',
       'profileId': _healthProfileId,
@@ -12060,10 +12222,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('recurringPickupSchedules')
         .doc(scheduleId)
         .set({
-          'paused': false,
-          'status': 'active',
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      'paused': false,
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'recurring_pickup_resumed',
       'profileId': _healthProfileId,
@@ -12086,11 +12248,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('recurringPickupSchedules')
         .doc(scheduleId)
         .set({
-          'paused': true,
-          'status': 'cancelled',
-          'cancelledAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      'paused': true,
+      'status': 'cancelled',
+      'cancelledAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'recurring_pickup_cancelled',
       'profileId': _healthProfileId,
@@ -12111,9 +12273,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('prescriptionPickups')
         .doc(pickupId)
         .set({
-          'status': PickupStatus.cancelled.value,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      'status': PickupStatus.cancelled.value,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'pickup_cancelled',
       'profileId': _healthProfileId,
@@ -12138,10 +12300,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .collection('prescriptionPickups')
         .doc(pickupId)
         .set({
-          'status': status,
-          'adminUpdatedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      'status': status,
+      'adminUpdatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
       'type': 'admin_status_updated',
       'profileId': _healthProfileId,
@@ -12261,6 +12423,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'packageDescription': _description.text.trim(),
       'hasPhoto': hasPhoto,
       'photoUrl': parcelPhotoUrl,
+      'irisImageAnalysis': _irisImageInsight?.toJson(),
+      'imageAnalysisStatus': _irisImageInsight == null
+          ? parcelPhotoData['analysisStatus']
+          : 'analysed_by_iris',
       'deliveryInstructions': _description.text.trim(),
       'vehicleType': safeVehicleName,
       'totalFare': quote.total,
@@ -12303,15 +12469,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisConfidenceScore': _irisConfidenceScore(),
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
-          : vanguardEnabled
-          ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
-          : '',
+          : _irisImageInsight?.riderGuidance ??
+              (vanguardEnabled
+                  ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
+                  : ''),
       'vanguardEnabled': vanguardEnabled,
       'serviceType': selectedServiceLevel == 'express'
           ? 'Express Delivery'
           : selectedServiceLevel == 'economy'
-          ? 'Economy Delivery'
-          : 'Normal Delivery',
+              ? 'Economy Delivery'
+              : 'Normal Delivery',
     };
     return {
       'requestId': id,
@@ -12333,11 +12500,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'photoUrl': parcelPhotoUrl,
       'photoURL': parcelPhotoUrl,
       'photoStoragePath': parcelPhotoData['storagePath'],
-      'imageAnalysisStatus': parcelPhotoData['analysisStatus'],
+      'imageAnalysisStatus': _irisImageInsight == null
+          ? parcelPhotoData['analysisStatus']
+          : 'analysed_by_iris',
+      'irisImageAnalysis': _irisImageInsight?.toJson(),
       'parcelPhoto': {
         ...parcelPhotoData,
+        'irisImageAnalysis': _irisImageInsight?.toJson(),
         'irisDecisionStatus': hasPhoto
-            ? 'pending_iris_photo_review'
+            ? (_irisImageInsight == null
+                ? 'photo_attached_text_fallback'
+                : 'photo_used_in_iris_analysis')
             : 'not_provided',
       },
       'weight': _weight.text.trim(),
@@ -12374,6 +12547,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisWeightBand': _irisWeightBand,
       'irisWeightConfidence': _irisWeightConfidence,
       'irisWeightExplanation': _irisWeightExplanation,
+      'irisPhotoInsight': _irisImageInsight?.toJson(),
+      'irisImageConfidenceScore': _irisImageInsight?.confidenceScore,
+      'irisImageNeedsHumanReview': _irisImageInsight?.needsHumanReview,
+      'irisImageHandlingNotes': _irisImageInsight?.handlingNotes,
+      'irisImageRiderGuidance': _irisImageInsight?.riderGuidance,
       'senderEnteredWeightKg': _senderEnteredWeightKg,
       'confirmedWeightKg': classification.finalWeightKg,
       'confirmedWeightBand': classification.finalWeightBand,
@@ -12417,9 +12595,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'basePrice': standardQuote.total,
       'finalPrice': quote.total,
       'finalCustomerPrice': quote.total,
-      'serviceLevelSurcharge': serviceLevelSurcharge < 0
-          ? 0
-          : serviceLevelSurcharge,
+      'serviceLevelSurcharge':
+          serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
       'priority': selectedServiceLevel == 'express',
       'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
       'broadcastRank': DeliveryPricing.matchingPriorityRank(
@@ -12478,9 +12655,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             : 'distanceFromRider',
         'preferredVehicle': safeVehicleName.toLowerCase(),
         'requiresVerifiedRider': true,
-        'matchingPriority': selectedServiceLevel == 'express'
-            ? 'high'
-            : 'normal',
+        'matchingPriority':
+            selectedServiceLevel == 'express' ? 'high' : 'normal',
       },
       'pickupDetails': {
         'fullname': collectionContactName,
@@ -12537,51 +12713,48 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(id)
         .snapshots()
         .listen(
-          (snapshot) {
-            final data = snapshot.data();
-            if (!mounted || data == null) return;
-            final status = '${data['status'] ?? 'requested'}'.toLowerCase();
-            final driverId = _driverIdFromRequest(data);
-            setState(() {
-              final matchingStatus =
-                  status == 'requested' || status == 'pending';
-              if (driverId != null || _statusIndexFromFirebase(status) > 0) {
-                _checkoutState = _CheckoutState.riderAssigned;
-              } else if (matchingStatus &&
-                  (_checkoutState == _CheckoutState.bookingCreated ||
-                      _checkoutState == _CheckoutState.matchingRiders)) {
-                _checkoutState = _CheckoutState.matchingRiders;
-              }
-              _firebaseOnline = true;
-              _firebaseError = null;
-              _broadcasting =
-                  _checkoutState == _CheckoutState.matchingRiders &&
-                  matchingStatus;
-              _statusIndex = _statusIndexFromFirebase(status);
-              _activeVanguardData = data['vanguardEnabled'] == true
-                  ? Map<String, dynamic>.from(data)
-                  : null;
-              _activeRequestReceivedAt = _jobReceivedDate(data);
-            });
-            if (driverId != null && driverId != _assignedDriverId) {
-              _assignedDriverId = driverId;
-              _listenToAssignedDriver(driverId, data);
-            }
-            if (_statusIndexFromFirebase(status) >= 3) {
-              _checkExistingDriverRating();
-            }
-          },
-          onError: (Object _) {
-            if (!mounted) return;
-            setState(() {
-              _checkoutState = _CheckoutState.failed;
-              _broadcasting = false;
-              _firebaseOnline = false;
-              _firebaseError =
-                  'Could not listen to this delivery in Firestore.';
-            });
-          },
-        );
+      (snapshot) {
+        final data = snapshot.data();
+        if (!mounted || data == null) return;
+        final status = '${data['status'] ?? 'requested'}'.toLowerCase();
+        final driverId = _driverIdFromRequest(data);
+        setState(() {
+          final matchingStatus = status == 'requested' || status == 'pending';
+          if (driverId != null || _statusIndexFromFirebase(status) > 0) {
+            _checkoutState = _CheckoutState.riderAssigned;
+          } else if (matchingStatus &&
+              (_checkoutState == _CheckoutState.bookingCreated ||
+                  _checkoutState == _CheckoutState.matchingRiders)) {
+            _checkoutState = _CheckoutState.matchingRiders;
+          }
+          _firebaseOnline = true;
+          _firebaseError = null;
+          _broadcasting =
+              _checkoutState == _CheckoutState.matchingRiders && matchingStatus;
+          _statusIndex = _statusIndexFromFirebase(status);
+          _activeVanguardData = data['vanguardEnabled'] == true
+              ? Map<String, dynamic>.from(data)
+              : null;
+          _activeRequestReceivedAt = _jobReceivedDate(data);
+        });
+        if (driverId != null && driverId != _assignedDriverId) {
+          _assignedDriverId = driverId;
+          _listenToAssignedDriver(driverId, data);
+        }
+        if (_statusIndexFromFirebase(status) >= 3) {
+          _checkExistingDriverRating();
+        }
+      },
+      onError: (Object _) {
+        if (!mounted) return;
+        setState(() {
+          _checkoutState = _CheckoutState.failed;
+          _broadcasting = false;
+          _firebaseOnline = false;
+          _firebaseError = 'Could not listen to this delivery in Firestore.';
+        });
+      },
+    );
   }
 
   void _listenToLiveLocation(String deliveryId) {
@@ -12593,17 +12766,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc('liveLocation')
         .snapshots()
         .listen(
-          (snapshot) {
-            if (!mounted) return;
-            setState(() {
-              _liveLocationData = snapshot.data();
-            });
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(() => _liveLocationData = null);
-          },
-        );
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _liveLocationData = snapshot.data();
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _liveLocationData = null);
+      },
+    );
   }
 
   String? _driverIdFromRequest(Map<String, dynamic> data) {
@@ -12628,106 +12801,109 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(driverId)
         .snapshots()
         .listen((snapshot) async {
-          if (!mounted) return;
-          if (snapshot.exists) {
-            setState(() {
-              _assignedDriver = DriverProfile.fromMap(
-                driverId,
-                snapshot.data(),
-                performance: _assignedDriverMetric,
-              );
-            });
-            return;
-          }
-          final riderSnapshot = await FirebaseFirestore.instance
-              .collection('riders')
-              .doc(driverId)
-              .get();
-          if (!mounted || !riderSnapshot.exists) return;
-          setState(() {
-            _assignedDriver = DriverProfile.fromMap(
-              driverId,
-              riderSnapshot.data(),
-              performance: _assignedDriverMetric,
-            );
-          });
+      if (!mounted) return;
+      if (snapshot.exists) {
+        setState(() {
+          _assignedDriver = DriverProfile.fromMap(
+            driverId,
+            snapshot.data(),
+            performance: _assignedDriverMetric,
+          );
         });
+        return;
+      }
+      final riderSnapshot = await FirebaseFirestore.instance
+          .collection('riders')
+          .doc(driverId)
+          .get();
+      if (!mounted || !riderSnapshot.exists) return;
+      setState(() {
+        _assignedDriver = DriverProfile.fromMap(
+          driverId,
+          riderSnapshot.data(),
+          performance: _assignedDriverMetric,
+        );
+      });
+    });
     _driverPerformanceSub = FirebaseFirestore.instance
         .collection('driverPerformanceMetrics')
         .doc(driverId)
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          final metric = DriverPerformanceMetric.fromMap(
-            driverId,
-            snapshot.data(),
+      if (!mounted) return;
+      final metric = DriverPerformanceMetric.fromMap(
+        driverId,
+        snapshot.data(),
+      );
+      setState(() {
+        _assignedDriverMetric = metric;
+        final profile = _assignedDriver;
+        if (profile != null) {
+          _assignedDriver = DriverProfile.fromMap(
+            profile.driverId,
+            {
+              'fullName': profile.fullName,
+              'photoUrl': profile.photoUrl,
+              'phoneNumber': profile.phoneNumber,
+              'verificationStatus': profile.verificationStatus,
+              'driverStatus': profile.status,
+              'vehicle': profile.vehicle.toJson(),
+            },
+            performance: metric,
+            recentRatings: profile.recentRatings,
           );
-          setState(() {
-            _assignedDriverMetric = metric;
-            final profile = _assignedDriver;
-            if (profile != null) {
-              _assignedDriver = DriverProfile.fromMap(
-                profile.driverId,
-                {
-                  'fullName': profile.fullName,
-                  'photoUrl': profile.photoUrl,
-                  'phoneNumber': profile.phoneNumber,
-                  'verificationStatus': profile.verificationStatus,
-                  'driverStatus': profile.status,
-                  'vehicle': profile.vehicle.toJson(),
-                },
-                performance: metric,
-                recentRatings: profile.recentRatings,
-              );
-            }
-          });
-        });
+        }
+      });
+    });
     _assignedDriverRatingsSub = FirebaseFirestore.instance
         .collection('driverRatings')
         .where('driverId', isEqualTo: driverId)
         .limit(6)
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          final ratings = snapshot.docs
-              .map((doc) => DriverRating.fromMap(doc.data()))
-              .where((rating) => !rating.hiddenByAdmin)
-              .take(3)
-              .toList();
-          final profile = _assignedDriver;
-          if (profile == null) return;
-          setState(() {
-            _assignedDriver = DriverProfile.fromMap(
-              profile.driverId,
-              {
-                'fullName': profile.fullName,
-                'photoUrl': profile.photoUrl,
-                'phoneNumber': profile.phoneNumber,
-                'verificationStatus': profile.verificationStatus,
-                'driverStatus': profile.status,
-                'vehicle': profile.vehicle.toJson(),
-              },
-              performance: _assignedDriverMetric,
-              recentRatings: ratings,
-            );
-          });
-        });
+      if (!mounted) return;
+      final ratings = snapshot.docs
+          .map((doc) => DriverRating.fromMap(doc.data()))
+          .where((rating) => !rating.hiddenByAdmin)
+          .take(3)
+          .toList();
+      final profile = _assignedDriver;
+      if (profile == null) return;
+      setState(() {
+        _assignedDriver = DriverProfile.fromMap(
+          profile.driverId,
+          {
+            'fullName': profile.fullName,
+            'photoUrl': profile.photoUrl,
+            'phoneNumber': profile.phoneNumber,
+            'verificationStatus': profile.verificationStatus,
+            'driverStatus': profile.status,
+            'vehicle': profile.vehicle.toJson(),
+          },
+          performance: _assignedDriverMetric,
+          recentRatings: ratings,
+        );
+      });
+    });
   }
 
   DriverProfile _driverProfileFromDelivery(
     String driverId,
     Map<String, dynamic> data,
   ) {
-    return DriverProfile.fromMap(driverId, {
-      'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
-      'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
-      'vehicleType':
-          data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
-      'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
-      'vehicleColour': data['vehicleColour'] ?? '',
-      'plateNumber': data['plateNumber'] ?? '',
-      'verificationStatus': data['verificationStatus'] ?? 'verified',
-    }, performance: _assignedDriverMetric);
+    return DriverProfile.fromMap(
+        driverId,
+        {
+          'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
+          'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
+          'vehicleType':
+              data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
+          'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
+          'vehicleColour': data['vehicleColour'] ?? '',
+          'plateNumber': data['plateNumber'] ?? '',
+          'verificationStatus': data['verificationStatus'] ?? 'verified',
+        },
+        performance: _assignedDriverMetric);
   }
 
   Future<void> _checkExistingDriverRating() async {
@@ -12848,12 +13024,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             },
             SetOptions(merge: true),
           );
-          transaction.set(db.collection('riderEarnings').doc(driverId), {
-            'availableBalance': FieldValue.increment(_selectedTipAmount),
-            'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
-            'tipsReceived': FieldValue.increment(_selectedTipAmount),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+          transaction.set(
+              db.collection('riderEarnings').doc(driverId),
+              {
+                'availableBalance': FieldValue.increment(_selectedTipAmount),
+                'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
+                'tipsReceived': FieldValue.increment(_selectedTipAmount),
+                'updatedAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true));
         }
       });
       await _recalculateDriverPerformance(driverId);
@@ -12901,9 +13080,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       DriverPerformanceInput(
         driverId: driverId,
         ratings: ratings,
-        completedTrips: completedIds.isEmpty
-            ? ratings.length
-            : completedIds.length,
+        completedTrips:
+            completedIds.isEmpty ? ratings.length : completedIds.length,
         complaints: complaints,
       ),
     );
@@ -12939,68 +13117,66 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .orderBy('createdAt')
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          final driverMessages = <_ChatMessage>[];
-          final supportMessages = <_ChatMessage>[];
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-            final senderType = '${data['senderType'] ?? 'support'}';
-            final senderRole = '${data['senderRole'] ?? senderType}';
-            final message = '${data['messageText'] ?? data['message'] ?? ''}'
-                .trim();
-            if (message.isEmpty) continue;
-            final chatMessage = _ChatMessage(
-              fromMe:
-                  data['senderId'] == _senderUser?.uid &&
-                  senderRole != 'system' &&
-                  senderType != 'support',
-              text: message,
-              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
-              label:
-                  senderRole == 'system' ||
-                      senderType == 'support' ||
-                      senderType == 'admin'
-                  ? 'CIRCUM Support'
-                  : senderType == 'rider' || senderType == 'driver'
+      if (!mounted) return;
+      final driverMessages = <_ChatMessage>[];
+      final supportMessages = <_ChatMessage>[];
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final senderType = '${data['senderType'] ?? 'support'}';
+        final senderRole = '${data['senderRole'] ?? senderType}';
+        final message =
+            '${data['messageText'] ?? data['message'] ?? ''}'.trim();
+        if (message.isEmpty) continue;
+        final chatMessage = _ChatMessage(
+          fromMe: data['senderId'] == _senderUser?.uid &&
+              senderRole != 'system' &&
+              senderType != 'support',
+          text: message,
+          time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+          label: senderRole == 'system' ||
+                  senderType == 'support' ||
+                  senderType == 'admin'
+              ? 'CIRCUM Support'
+              : senderType == 'rider' || senderType == 'driver'
                   ? 'Rider'
                   : 'You',
-            );
-            if (senderType == 'rider' || senderType == 'driver') {
-              driverMessages.add(chatMessage);
-            } else {
-              supportMessages.add(chatMessage);
-            }
-          }
-          setState(() {
-            _driverMessages
-              ..clear()
-              ..addAll(
-                driverMessages.isEmpty
-                    ? [
-                        const _ChatMessage(
-                          fromMe: false,
-                          text:
-                              'Rider chat will open when someone accepts the job.',
-                          time: 'Now',
-                        ),
-                      ]
-                    : driverMessages,
-              );
-            _supportMessages
-              ..clear()
-              ..addAll(
-                supportMessages.isEmpty
-                    ? [
-                        const _ChatMessage(
-                          fromMe: false,
-                          text: "Hi, this is Iris. How can we help?",
-                          time: 'Now',
-                        ),
-                      ]
-                    : supportMessages,
-              );
-          });
-        });
+        );
+        if (senderType == 'rider' || senderType == 'driver') {
+          driverMessages.add(chatMessage);
+        } else {
+          supportMessages.add(chatMessage);
+        }
+      }
+      setState(() {
+        _driverMessages
+          ..clear()
+          ..addAll(
+            driverMessages.isEmpty
+                ? [
+                    const _ChatMessage(
+                      fromMe: false,
+                      text:
+                          'Rider chat will open when someone accepts the job.',
+                      time: 'Now',
+                    ),
+                  ]
+                : driverMessages,
+          );
+        _supportMessages
+          ..clear()
+          ..addAll(
+            supportMessages.isEmpty
+                ? [
+                    const _ChatMessage(
+                      fromMe: false,
+                      text: "Hi, this is Iris. How can we help?",
+                      time: 'Now',
+                    ),
+                  ]
+                : supportMessages,
+          );
+      });
+    });
   }
 
   int _statusIndexFromFirebase(String status) {
@@ -13183,25 +13359,23 @@ class _DesktopPortalLayout extends StatelessWidget {
                         message: deliveryLoadError!,
                       )
                     : activeDelivery == null
-                    ? _DesktopNoActiveDelivery(
-                        colors: colors,
-                        onSendParcel: onSendParcel,
-                        onViewHistory: onViewHistory,
-                      )
-                    : _DesktopActiveDeliveryStatus(
-                        colors: colors,
-                        delivery: activeDelivery!,
-                      ),
+                        ? _DesktopNoActiveDelivery(
+                            colors: colors,
+                            onSendParcel: onSendParcel,
+                            onViewHistory: onViewHistory,
+                          )
+                        : _DesktopActiveDeliveryStatus(
+                            colors: colors,
+                            delivery: activeDelivery!,
+                          ),
               ),
             ),
           ),
         ],
       );
     }
-    final status =
-        _trackingStatuses[statusIndex
-            .clamp(0, _trackingStatuses.length - 1)
-            .toInt()];
+    final status = _trackingStatuses[
+        statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -13311,9 +13485,8 @@ class _DesktopPortalLayout extends StatelessWidget {
                           colors: colors,
                           icon: Icons.location_on,
                           label: 'Drop-off',
-                          value: dropoff.isEmpty
-                              ? 'Drop-off location'
-                              : dropoff,
+                          value:
+                              dropoff.isEmpty ? 'Drop-off location' : dropoff,
                           iconColor: const Color(0xff22c55e),
                         ),
                       ],
@@ -13891,8 +14064,8 @@ class _SenderAccessGate extends StatelessWidget {
                       onPressed: busy
                           ? null
                           : signupMode
-                          ? onSignUp
-                          : onSignIn,
+                              ? onSignUp
+                              : onSignIn,
                       icon: busy
                           ? const SizedBox(
                               width: 18,
@@ -13904,8 +14077,8 @@ class _SenderAccessGate extends StatelessWidget {
                         busy
                             ? 'Please wait'
                             : signupMode
-                            ? 'Create account'
-                            : 'Sign in',
+                                ? 'Create account'
+                                : 'Sign in',
                       ),
                       style: FilledButton.styleFrom(
                         backgroundColor: colors.text,
@@ -14623,9 +14796,8 @@ class _SenderProfileStep extends StatelessWidget {
                 const SizedBox(height: 18),
                 GridView.count(
                   shrinkWrap: true,
-                  crossAxisCount: MediaQuery.sizeOf(context).width < 720
-                      ? 2
-                      : 4,
+                  crossAxisCount:
+                      MediaQuery.sizeOf(context).width < 720 ? 2 : 4,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                   childAspectRatio: 1.55,
@@ -15279,21 +15451,20 @@ class _DetailsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final matchingHasStarted =
-        checkoutState == _CheckoutState.matchingRiders ||
+    final matchingHasStarted = checkoutState == _CheckoutState.matchingRiders ||
         checkoutState == _CheckoutState.riderAssigned;
     final validating = analyzing || checkoutState == _CheckoutState.validating;
     final ctaLabel = matchingHasStarted
         ? 'Delivery is connecting'
         : validating
-        ? 'Checking options...'
-        : canSubmit
-        ? 'See delivery options'
-        : !pickupVerified || !dropoffVerified
-        ? 'Verify addresses before pricing'
-        : !contactDetailsReady
-        ? 'Add contact details before pricing'
-        : 'Confirm route before pricing';
+            ? 'Checking options...'
+            : canSubmit
+                ? 'See delivery options'
+                : !pickupVerified || !dropoffVerified
+                    ? 'Verify addresses before pricing'
+                    : !contactDetailsReady
+                        ? 'Add contact details before pricing'
+                        : 'Confirm route before pricing';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -16829,6 +17000,70 @@ class _IrisWeightEstimate {
   }
 }
 
+class _IrisImageInsight {
+  final String inferredItemName;
+  final String inferredCategory;
+  final double estimatedWeightKg;
+  final String weightClass;
+  final double confidenceScore;
+  final String fragilityRisk;
+  final String valueRisk;
+  final String handlingNotes;
+  final String riderGuidance;
+  final bool needsHumanReview;
+  final String fileName;
+  final int fileSizeBytes;
+
+  const _IrisImageInsight({
+    required this.inferredItemName,
+    required this.inferredCategory,
+    required this.estimatedWeightKg,
+    required this.weightClass,
+    required this.confidenceScore,
+    required this.fragilityRisk,
+    required this.valueRisk,
+    required this.handlingNotes,
+    required this.riderGuidance,
+    required this.needsHumanReview,
+    required this.fileName,
+    required this.fileSizeBytes,
+  });
+
+  factory _IrisImageInsight.fallback(String fileName) {
+    return _IrisImageInsight(
+      inferredItemName: 'Parcel photo',
+      inferredCategory: 'Parcel',
+      estimatedWeightKg: 2,
+      weightClass: DeliveryPricing.weightBandFor(2).category,
+      confidenceScore: 0.25,
+      fragilityRisk: 'medium',
+      valueRisk: 'low',
+      handlingNotes:
+          'IRIS could not fully analyse the photo, so item details were used.',
+      riderGuidance: 'Use the photo to verify condition at pickup.',
+      needsHumanReview: true,
+      fileName: fileName,
+      fileSizeBytes: 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'inferredItemName': inferredItemName,
+        'inferredCategory': inferredCategory,
+        'estimatedWeightKg': estimatedWeightKg,
+        'weightClass': weightClass,
+        'confidenceScore': confidenceScore,
+        'fragilityRisk': fragilityRisk,
+        'valueRisk': valueRisk,
+        'handlingNotes': handlingNotes,
+        'riderGuidance': riderGuidance,
+        'needsHumanReview': needsHumanReview,
+        'fileName': fileName,
+        'fileSizeBytes': fileSizeBytes,
+        'source': 'parcel_photo_and_item_details',
+      };
+}
+
 class _WeightPricingDecision {
   final double? weightKg;
   final String? weightBand;
@@ -16885,8 +17120,7 @@ class _AddressSuggestion {
       lng: resolvedLng,
       confidence: confidence,
       provider: provider,
-      locationId:
-          placeId ??
+      locationId: placeId ??
           _stableLocationId(displayAddress, resolvedLat, resolvedLng),
       placeId: placeId,
       buildingNumber: components['buildingNumber'],
@@ -16934,31 +17168,31 @@ class _ValidatedAddress {
   bool get hasCoordinates => _coordinatesAreUsable(lat, lng);
 
   Map<String, dynamic> toJson() => {
-    'rawInput': rawInput,
-    'displayAddress': displayAddress,
-    'postcode': postcode,
-    'lat': lat,
-    'lng': lng,
-    'geocodeConfidence': confidence,
-    'provider': provider,
-    'locationId': locationId,
-    if (placeId != null) 'placeId': placeId,
-    if (buildingNumber != null) 'buildingNumber': buildingNumber,
-    if (street != null) 'street': street,
-    if (city != null) 'city': city,
-    if (county != null) 'county': county,
-    if (country != null) 'country': country,
-  };
+        'rawInput': rawInput,
+        'displayAddress': displayAddress,
+        'postcode': postcode,
+        'lat': lat,
+        'lng': lng,
+        'geocodeConfidence': confidence,
+        'provider': provider,
+        'locationId': locationId,
+        if (placeId != null) 'placeId': placeId,
+        if (buildingNumber != null) 'buildingNumber': buildingNumber,
+        if (street != null) 'street': street,
+        if (city != null) 'city': city,
+        if (county != null) 'county': county,
+        if (country != null) 'country': country,
+      };
 
   Map<String, dynamic> toPositionMap() => {
-    'geopoint': GeoPoint(lat, lng),
-    'lat': lat,
-    'lng': lng,
-    'geocodeConfidence': confidence,
-    'locationId': locationId,
-    if (placeId != null) 'placeId': placeId,
-    'provider': provider,
-  };
+        'geopoint': GeoPoint(lat, lng),
+        'lat': lat,
+        'lng': lng,
+        'geocodeConfidence': confidence,
+        'locationId': locationId,
+        if (placeId != null) 'placeId': placeId,
+        'provider': provider,
+      };
 }
 
 extension _SavedSenderAddressValidation on SavedSenderAddress {
@@ -17028,9 +17262,9 @@ String _cleanGoogleAddress(String address) {
 
 String _stableLocationId(String address, double lat, double lng) {
   final normalized = address.toLowerCase().replaceAll(
-    RegExp(r'[^a-z0-9]+'),
-    '-',
-  );
+        RegExp(r'[^a-z0-9]+'),
+        '-',
+      );
   return '${normalized.substring(0, math.min(normalized.length, 48))}'
       '-${lat.toStringAsFixed(4)}-${lng.toStringAsFixed(4)}';
 }
@@ -17090,8 +17324,7 @@ double? _coordinateDistanceMiles(
   final dLng = _degreesToRadians(dropoffLng - pickupLng);
   final lat1 = _degreesToRadians(pickupLat);
   final lat2 = _degreesToRadians(dropoffLat);
-  final a =
-      math.sin(dLat / 2) * math.sin(dLat / 2) +
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
       math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   final directMiles = earthRadiusMiles * c;
@@ -17355,8 +17588,7 @@ class _PaymentStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSchedule =
-        scheduledPickupDate.isNotEmpty ||
+    final hasSchedule = scheduledPickupDate.isNotEmpty ||
         scheduledPickupWindow.isNotEmpty ||
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
@@ -17532,8 +17764,7 @@ class _PaymentStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed:
-                weightConfirmed &&
+            onPressed: weightConfirmed &&
                     locationsConfirmed &&
                     !breakdown.requiresManualQuote &&
                     !processingPayment
@@ -17550,12 +17781,12 @@ class _PaymentStep extends StatelessWidget {
               processingPayment
                   ? 'Processing payment...'
                   : !locationsConfirmed
-                  ? 'Confirm pickup and drop-off before payment'
-                  : breakdown.requiresManualQuote
-                  ? 'Manual review required'
-                  : weightConfirmed
-                  ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
-                  : 'Confirm parcel weight before payment',
+                      ? 'Confirm pickup and drop-off before payment'
+                      : breakdown.requiresManualQuote
+                          ? 'Manual review required'
+                          : weightConfirmed
+                              ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                              : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
@@ -17776,11 +18007,9 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     final riderLat = _num(live?['latitude']);
     final riderLng = _num(live?['longitude']);
     final updatedAt = _dateTimeFromFirestore(live?['updatedAt']);
-    final fresh =
-        updatedAt != null &&
+    final fresh = updatedAt != null &&
         DateTime.now().difference(updatedAt).inSeconds <= 60;
-    final hasLiveTracking =
-        fresh &&
+    final hasLiveTracking = fresh &&
         pickup?.hasCoordinates == true &&
         dropoff?.hasCoordinates == true &&
         riderLat != null &&
@@ -17826,8 +18055,7 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     }
 
     final destination = statusIndex < 2 ? pickup! : dropoff!;
-    final remainingMiles =
-        _coordinateDistanceMiles(
+    final remainingMiles = _coordinateDistanceMiles(
           riderLat,
           riderLng,
           destination.lat,
@@ -17968,8 +18196,7 @@ class _FirebaseStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final healthy =
-        online &&
+    final healthy = online &&
         error == null &&
         (checkoutState == _CheckoutState.matchingRiders ||
             checkoutState == _CheckoutState.riderAssigned);
@@ -18002,9 +18229,8 @@ class _FirebaseStatusBanner extends StatelessWidget {
             child: Text(
               healthy ? 'This delivery is saved and live.' : message,
               style: TextStyle(
-                color: healthy
-                    ? const Color(0xff166534)
-                    : const Color(0xff9a3412),
+                color:
+                    healthy ? const Color(0xff166534) : const Color(0xff9a3412),
                 fontSize: 12,
                 height: 1.3,
                 fontWeight: FontWeight.w800,
@@ -18027,15 +18253,15 @@ class _VanguardCustomerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final protection =
         (data['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+            const <String, dynamic>{};
     final collectionVerified = data['collectionPinVerified'] == true;
     final deliveryVerified = data['deliveryPinVerified'] == true;
     final collectionPin = '${protection['collectionPin'] ?? ''}'.trim();
     final deliveryPin = '${protection['deliveryPin'] ?? ''}'.trim();
-    final collectionContact = (data['collectionContact'] as Map?)
-        ?.cast<String, dynamic>();
-    final receiverDetails = (data['receiverDetails'] as Map?)
-        ?.cast<String, dynamic>();
+    final collectionContact =
+        (data['collectionContact'] as Map?)?.cast<String, dynamic>();
+    final receiverDetails =
+        (data['receiverDetails'] as Map?)?.cast<String, dynamic>();
     final collectionName =
         '${data['collectionContactName'] ?? collectionContact?['name'] ?? data['senderName'] ?? 'the sender or collection contact'}'
             .trim();
@@ -18711,13 +18937,12 @@ class _AddressFieldState extends State<_AddressField> {
     try {
       final uri =
           Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
-            'place_id': placeId,
-            'language': 'en',
-            'fields':
-                'formatted_address,address_components,geometry,place_id,name',
-            'key': _googlePlacesApiKey,
-            'sessiontoken': _placesSessionToken,
-          });
+        'place_id': placeId,
+        'language': 'en',
+        'fields': 'formatted_address,address_components,geometry,place_id,name',
+        'key': _googlePlacesApiKey,
+        'sessiontoken': _placesSessionToken,
+      });
       final response = await http.get(uri).timeout(const Duration(seconds: 4));
       if (response.statusCode != 200) return null;
       final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -18835,8 +19060,8 @@ class _AddressFieldState extends State<_AddressField> {
     final resolved = suggestion.isPopularPlace
         ? await _resolvePopularPlace(suggestion)
         : suggestion.provider == 'google_places'
-        ? await _googlePlaceDetails(suggestion)
-        : suggestion;
+            ? await _googlePlaceDetails(suggestion)
+            : suggestion;
     if (!mounted) return;
     if (resolved == null || !resolved.toValidatedAddress().hasCoordinates) {
       setState(() {
@@ -18921,8 +19146,8 @@ class _AddressFieldState extends State<_AddressField> {
                             suggestion.isPopularPlace
                                 ? Icons.star_rounded
                                 : widget.pharmacyMode
-                                ? Icons.local_pharmacy
-                                : Icons.place_outlined,
+                                    ? Icons.local_pharmacy
+                                    : Icons.place_outlined,
                             color: colors.text,
                             size: 16,
                           ),
@@ -20104,18 +20329,19 @@ class _DriverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile =
-        driver ??
-        DriverProfile.fromMap('preview-rider', {
-          'fullName': 'Marcus A.',
-          'vehicleType': vehicle.name,
-          'vehicleMakeModel': vehicle.name == 'Bike'
-              ? 'E-bike'
-              : 'Toyota Prius',
-          'vehicleColour': 'Blue',
-          'plateNumber': 'CIR 24K',
-          'verificationStatus': 'verified',
-        }, performance: metric);
+    final profile = driver ??
+        DriverProfile.fromMap(
+            'preview-rider',
+            {
+              'fullName': 'Marcus A.',
+              'vehicleType': vehicle.name,
+              'vehicleMakeModel':
+                  vehicle.name == 'Bike' ? 'E-bike' : 'Toyota Prius',
+              'vehicleColour': 'Blue',
+              'plateNumber': 'CIR 24K',
+              'verificationStatus': 'verified',
+            },
+            performance: metric);
     final performance = metric ?? profile.performance;
     final orderRank = _circumOrderRankForPerformance(performance);
     final rating = performance.averageRating <= 0
@@ -20246,8 +20472,8 @@ class _DriverCard extends StatelessWidget {
                         rating.feedbackText.trim().isNotEmpty
                             ? rating.feedbackText.trim()
                             : rating.feedbackTags
-                                  .map(_DriverRatingPrompt.labelForTag)
-                                  .join(', '),
+                                .map(_DriverRatingPrompt.labelForTag)
+                                .join(', '),
                         style: TextStyle(
                           color: colors.mutedText,
                           fontWeight: FontWeight.w700,
@@ -20498,8 +20724,8 @@ class _DriverRatingPrompt extends StatelessWidget {
                 submitted
                     ? 'Rating submitted'
                     : submitting
-                    ? 'Saving...'
-                    : 'Submit rating',
+                        ? 'Saving...'
+                        : 'Submit rating',
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: colors.text,
