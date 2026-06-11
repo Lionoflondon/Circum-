@@ -42,7 +42,7 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, admin }
+enum _WebAppMode { landing, sender, rider, gifts, admin }
 
 bool _isPublicHostingHost() {
   final host = Uri.base.host.toLowerCase();
@@ -88,6 +88,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
+      'gifts' => _WebAppMode.gifts,
       _ => _WebAppMode.landing,
     };
   }
@@ -168,6 +169,11 @@ class _WebSenderAppState extends State<WebSenderApp> {
                         : () => setState(() => _mode = _WebAppMode.landing),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
+                _WebAppMode.gifts => _GiftsComingSoonPage(
+                    key: const ValueKey('gifts-coming-soon'),
+                    colors: colors,
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                  ),
                 _WebAppMode.landing => _LandingPage(
                     key: const ValueKey('landing'),
                     colors: colors,
@@ -181,6 +187,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       _senderInitialStep = _SenderStep.healthPlus;
                       _mode = _WebAppMode.sender;
                     }),
+                    onGifts: () => setState(() => _mode = _WebAppMode.gifts),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
               },
@@ -210,6 +217,7 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
   final VoidCallback onToggleTheme;
 
   const _LandingPage({
@@ -219,6 +227,7 @@ class _LandingPage extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
+    required this.onGifts,
     required this.onToggleTheme,
   });
 
@@ -233,6 +242,7 @@ class _LandingPage extends StatelessWidget {
             onStart: onStart,
             onRider: onRider,
             onHealthPlus: onHealthPlus,
+            onGifts: onGifts,
             onToggleTheme: onToggleTheme,
           ),
           Container(
@@ -3765,6 +3775,7 @@ class _LandingNav extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
   final VoidCallback onToggleTheme;
 
   const _LandingNav({
@@ -3773,6 +3784,7 @@ class _LandingNav extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
+    required this.onGifts,
     required this.onToggleTheme,
   });
 
@@ -3823,6 +3835,24 @@ class _LandingNav extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                ),
+              if (MediaQuery.sizeOf(context).width >= 760)
+                TextButton.icon(
+                  onPressed: onGifts,
+                  icon: const Icon(Icons.card_giftcard, size: 18),
+                  label: Text(
+                    'Gifts',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else
+                IconButton(
+                  tooltip: 'Gifts',
+                  onPressed: onGifts,
+                  icon: Icon(Icons.card_giftcard, color: colors.text),
                 ),
               const SizedBox(width: 8),
               FilledButton(
@@ -21903,6 +21933,268 @@ class _LandingFooter extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftsComingSoonPage extends StatefulWidget {
+  final _CircumColors colors;
+  final VoidCallback onBack;
+
+  const _GiftsComingSoonPage({
+    super.key,
+    required this.colors,
+    required this.onBack,
+  });
+
+  @override
+  State<_GiftsComingSoonPage> createState() => _GiftsComingSoonPageState();
+}
+
+class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  bool _saving = false;
+  String? _message;
+
+  static const _occasions = [
+    'Birthdays',
+    'Anniversaries',
+    'Graduations',
+    'Thank You Gifts',
+    'Christmas',
+    'New Baby',
+    'Just Because',
+  ];
+  static const _interests = [
+    'Travel',
+    'Technology',
+    'Fitness',
+    'Coffee',
+    'Books',
+    'Gaming',
+    'Aviation',
+  ];
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _joinWaitlist() async {
+    final name = _name.text.trim();
+    final email = _email.text.trim().toLowerCase();
+    if (name.isEmpty ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      setState(() => _message = 'Enter your name and a valid email address.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      await _ensureCircumFirebaseReady();
+      await FirebaseFirestore.instance.collection('giftsWaitlist').add({
+        'name': name,
+        'email': email,
+        'source': 'gifts-coming-soon',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      _name.clear();
+      _email.clear();
+      setState(() => _message = 'You’re on the Gifts waitlist.');
+    } catch (error) {
+      debugPrint('Gifts waitlist error: $error');
+      if (mounted) {
+        setState(() => _message =
+            'We could not add you just now. Please try again shortly.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final narrow = MediaQuery.sizeOf(context).width < 700;
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: SafeArea(
+        child: ListView(
+          padding:
+              EdgeInsets.fromLTRB(narrow ? 18 : 28, 16, narrow ? 18 : 28, 42),
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Back to Circum',
+                    onPressed: widget.onBack,
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 8),
+                  Image.asset(
+                    'assets/images/circum_wordmark.png',
+                    width: 126,
+                    height: 30,
+                    fit: BoxFit.contain,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 900),
+                child: Column(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      height: narrow ? 270 : 360,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: colors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xff7c9cff).withValues(alpha: 0.2),
+                            blurRadius: 40,
+                            offset: const Offset(0, 18),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Image.asset(
+                        'assets/images/gifts_by_circum.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Coming Soon',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: narrow ? 38 : 56,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Thoughtful gifting, handled by Circum.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: narrow ? 18 : 22,
+                        height: 1.4,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 9,
+                      runSpacing: 9,
+                      children: _occasions
+                          .map((label) => Chip(label: Text(label)))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 9,
+                      runSpacing: 9,
+                      children: _interests
+                          .map((label) => Chip(
+                                avatar:
+                                    const Icon(Icons.auto_awesome, size: 16),
+                                label: Text(label),
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 34),
+                    _GlassPanel(
+                      colors: colors,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Join the waitlist',
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Be notified when Gifts launches.',
+                            style: TextStyle(color: colors.mutedText),
+                          ),
+                          const SizedBox(height: 18),
+                          TextField(
+                            controller: _name,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Name',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            onSubmitted: (_) =>
+                                _saving ? null : _joinWaitlist(),
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                          ),
+                          if (_message != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _message!,
+                              style: TextStyle(
+                                color: _message!.startsWith('You’re')
+                                    ? Colors.greenAccent.shade400
+                                    : colors.mutedText,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _joinWaitlist,
+                            icon: _saving
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.card_giftcard),
+                            label:
+                                Text(_saving ? 'Joining...' : 'Join waitlist'),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 17),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
