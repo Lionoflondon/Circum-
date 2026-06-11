@@ -3,6 +3,8 @@ import 'package:circum/pricing/delivery_pricing.dart';
 
 class IrisWeightLookupResult {
   final String matchedItemName;
+  final int quantity;
+  final double singleItemWeightKg;
   final double weightKg;
   final String weightBand;
   final String confidence;
@@ -20,6 +22,8 @@ class IrisWeightLookupResult {
 
   const IrisWeightLookupResult({
     required this.matchedItemName,
+    required this.quantity,
+    required this.singleItemWeightKg,
     required this.weightKg,
     required this.weightBand,
     required this.confidence,
@@ -53,24 +57,38 @@ class ItemDimensionsCm {
 }
 
 class IrisWeightEstimator {
+  static int extractQuantity(String description) {
+    final text = description.trim().toLowerCase();
+    if (text.isEmpty) return 1;
+    final leading = RegExp(r'^\s*(\d+)\s*(?:[x×]\s*)?').firstMatch(text);
+    final suffix = RegExp(r'\b[x×]\s*(\d+)\b').firstMatch(text);
+    final parsed = int.tryParse(leading?.group(1) ?? suffix?.group(1) ?? '1');
+    return parsed == null || parsed < 1 ? 1 : parsed;
+  }
+
   static IrisWeightLookupResult? knownProductEstimate(String description) {
     final text = description.trim().toLowerCase();
+    final quantity = extractQuantity(description);
     for (final product in _knownProducts) {
       if (product.patterns.any(text.contains)) {
-        final band = DeliveryPricing.weightBandFor(product.weightKg).category;
+        final totalWeightKg = product.weightKg * quantity;
+        final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
         return IrisWeightLookupResult(
           matchedItemName: product.name,
-          weightKg: product.weightKg,
+          quantity: quantity,
+          singleItemWeightKg: product.weightKg,
+          weightKg: totalWeightKg,
           weightBand: band,
           confidence: product.confidence,
           confidenceScore: product.confidenceScore,
-          explanation:
-              'Iris matched the description to ${product.name} using Circum known-product data.',
+          explanation: quantity == 1
+              ? 'Iris matched the description to ${product.name} using Circum known-product data.'
+              : 'Iris matched $quantity × ${product.name} using Circum known-product data.',
           packageType: product.packageType,
           weightSource: 'known_product_lookup',
           truthBand: product.truthBand,
           requiresVehicleReview:
-              product.weightKg > 10 || product.vehicleSuitability == 'Van',
+              totalWeightKg > 10 || product.vehicleSuitability == 'Van',
           typicalDimensions: product.typicalDimensions,
           vehicleSuitability: product.vehicleSuitability,
           fragile: product.fragile,
@@ -81,13 +99,14 @@ class IrisWeightEstimator {
     }
     final repositoryItem = IrisItemRepository.match(description);
     if (repositoryItem != null) {
-      final band =
-          DeliveryPricing.weightBandFor(repositoryItem.estimatedWeightKg)
-              .category;
+      final totalWeightKg = repositoryItem.estimatedWeightKg * quantity;
+      final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
       final dimensions = repositoryItem.typicalDimensionsCm;
       return IrisWeightLookupResult(
         matchedItemName: repositoryItem.itemName,
-        weightKg: repositoryItem.estimatedWeightKg,
+        quantity: quantity,
+        singleItemWeightKg: repositoryItem.estimatedWeightKg,
+        weightKg: totalWeightKg,
         weightBand: band,
         confidence: repositoryItem.confidenceBaseline >= 0.85
             ? 'high'
@@ -95,15 +114,16 @@ class IrisWeightEstimator {
                 ? 'medium'
                 : 'low',
         confidenceScore: repositoryItem.confidenceBaseline,
-        explanation:
-            'Iris matched the description to ${repositoryItem.itemName} using the Circum item repository.',
+        explanation: quantity == 1
+            ? 'Iris matched the description to ${repositoryItem.itemName} using the Circum item repository.'
+            : 'Iris matched $quantity × ${repositoryItem.itemName} using the Circum item repository.',
         packageType: repositoryItem.category,
         weightSource: 'repository_match',
         truthBand: repositoryItem.confidenceBaseline >= 0.85
             ? 'Repository Match'
             : 'Medium Confidence',
         requiresVehicleReview: repositoryItem.requiresIRISReview ||
-            repositoryItem.estimatedWeightKg > 10 ||
+            totalWeightKg > 10 ||
             repositoryItem.vehicleSuitability == 'Van',
         typicalDimensions: ItemDimensionsCm(
           length: dimensions.lengthCm,
@@ -187,7 +207,7 @@ class IrisWeightEstimator {
       handlingNotes: 'Small fragile electronics package.',
     ),
     _KnownIrisProduct(
-      patterns: ['macbook air 13', 'macbook air'],
+      patterns: ['macbook air 13', 'macbook air', 'macbook'],
       name: 'MacBook Air 13',
       weightKg: 1.24,
       packageType: 'Laptop',

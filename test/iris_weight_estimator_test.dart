@@ -151,5 +151,43 @@ void main() {
       expect(suitcase.packageType, 'Airport');
       expect(suitcase.vehicleSuitability, isNotEmpty);
     });
+
+    test('quantity parser supports common sender formats and safe defaults',
+        () {
+      expect(IrisWeightEstimator.extractQuantity('Sofa'), 1);
+      expect(IrisWeightEstimator.extractQuantity('1 Sofa'), 1);
+      expect(IrisWeightEstimator.extractQuantity('3 Sofas'), 3);
+      expect(IrisWeightEstimator.extractQuantity('5 MacBooks'), 5);
+      expect(IrisWeightEstimator.extractQuantity('MacBook x5'), 5);
+      expect(IrisWeightEstimator.extractQuantity('5 x MacBook'), 5);
+      expect(IrisWeightEstimator.extractQuantity('12 boxes of books'), 12);
+      expect(IrisWeightEstimator.extractQuantity('iPhone 15'), 1);
+      expect(IrisWeightEstimator.extractQuantity('15 iPhones'), 15);
+      expect(IrisWeightEstimator.extractQuantity('0 Sofas'), 1);
+      expect(IrisWeightEstimator.extractQuantity(''), 1);
+    });
+
+    test('repository weight is multiplied by detected quantity', () {
+      final sofas = IrisWeightEstimator.knownProductEstimate('3 Sofas');
+      final macBooks = IrisWeightEstimator.knownProductEstimate('MacBook x5');
+
+      expect(sofas, isNotNull);
+      expect(sofas!.quantity, 3);
+      expect(sofas.singleItemWeightKg, 12);
+      expect(sofas.weightKg, 36);
+      expect(
+        sofas.weightBand,
+        DeliveryPricing.weightBandFor(36).category,
+      );
+
+      expect(macBooks, isNotNull);
+      expect(macBooks!.quantity, 5);
+      expect(macBooks.singleItemWeightKg, closeTo(1.24, 0.001));
+      expect(macBooks.weightKg, closeTo(6.2, 0.001));
+      expect(
+        macBooks.weightBand,
+        DeliveryPricing.weightBandFor(6.2).category,
+      );
+    });
   });
 }

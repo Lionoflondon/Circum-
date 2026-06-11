@@ -9756,6 +9756,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _irisWeightExplanation;
   String? _irisWeightSource;
   String? _irisMatchedItemName;
+  int _irisQuantity = 1;
+  double? _irisSingleItemWeightKg;
   double? _irisWeightConfidenceScore;
   double? _irisHistoricalVerifiedWeightKg;
   String? _irisLearningReason;
@@ -10097,6 +10099,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           irisWeightConfidence: _irisWeightConfidence,
           irisWeightExplanation: _irisWeightExplanation,
           irisMatchedItemName: _irisMatchedItemName,
+          irisQuantity: _irisQuantity,
           irisTruthBand: _irisTruthBand(),
           senderEnteredWeightKg: _senderEnteredWeightKg,
           pricingWeightKg: _confirmedWeightKg,
@@ -10208,6 +10211,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           liveLocation: _liveLocationData,
           vanguardData: _activeVanguardData,
           irisItemName: _irisMatchedItemName,
+          irisQuantity: _irisQuantity,
           irisConfidence: _irisWeightConfidence,
           irisWeightKg: _deliveryClassification.finalWeightKg,
           irisWeightBand: _deliveryClassification.finalWeightBand,
@@ -11203,6 +11207,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _irisWeightExplanation = estimate.explanation;
       _irisWeightSource = estimate.weightSource;
       _irisMatchedItemName = estimate.matchedItemName;
+      _irisQuantity = estimate.quantity;
+      _irisSingleItemWeightKg = estimate.singleItemWeightKg;
       _irisWeightConfidenceScore = estimate.confidenceScore;
       _irisHistoricalVerifiedWeightKg = estimate.historicalVerifiedWeightKg;
       _irisLearningReason = estimate.learningReason;
@@ -11630,6 +11636,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
 
     double estimate = 2;
+    final quantity = IrisWeightEstimator.extractQuantity(_description.text);
     var confidence = 'low';
     var packageType = 'Parcel';
     var vehicleReview = false;
@@ -11678,15 +11685,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'The item may be oversized or heavy, so sender confirmation is required.';
     }
 
+    final totalEstimate = estimate * quantity;
     final estimateResult = _IrisWeightEstimate(
-      weightKg: estimate,
-      weightBand: DeliveryPricing.weightBandFor(estimate).category,
+      weightKg: totalEstimate,
+      weightBand: DeliveryPricing.weightBandFor(totalEstimate).category,
       confidence: confidence,
       explanation: explanation,
       packageType: packageType,
       requiresVehicleReview: vehicleReview,
       weightSource: 'category_fallback',
       confidenceScore: _scoreForIrisConfidence(confidence),
+      quantity: quantity,
+      singleItemWeightKg: estimate,
     );
     return _applyVerifiedParcelLearning(
       _mergeImageInsightWithTextEstimate(estimateResult, imageInsight),
@@ -11699,12 +11709,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _IrisImageInsight? imageInsight,
   ) {
     if (imageInsight == null) return textEstimate;
+    final imageTotalWeight =
+        imageInsight.estimatedWeightKg * textEstimate.quantity;
     final imageBand = DeliveryPricing.weightBandFor(
-      imageInsight.estimatedWeightKg,
+      imageTotalWeight,
     ).category;
     final textBand = DeliveryPricing.weightBandFor(textEstimate.weightKg);
     final imageBandRank =
-        DeliveryPricing.weightBandFor(imageInsight.estimatedWeightKg).maxKg ??
+        DeliveryPricing.weightBandFor(imageTotalWeight).maxKg ??
             double.infinity;
     final textBandRank = textBand.maxKg ?? double.infinity;
     final strongImage = imageInsight.confidenceScore >= 0.55;
@@ -11721,14 +11733,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       );
     }
     return textEstimate.copyWith(
-      weightKg: math.max(textEstimate.weightKg, imageInsight.estimatedWeightKg),
+      weightKg: math.max(textEstimate.weightKg, imageTotalWeight),
       weightBand: imageBand,
       confidence: imageInsight.confidenceScore >= 0.75 ? 'high' : 'medium',
       explanation:
           'IRIS reviewed the parcel photo and item details, then selected the safest visible weight class.',
       packageType: imageInsight.inferredCategory,
       requiresVehicleReview:
-          imageInsight.needsHumanReview || imageInsight.estimatedWeightKg > 10,
+          imageInsight.needsHumanReview || imageTotalWeight > 10,
       weightSource: 'photo_match',
       truthBand: 'Photo Match',
       matchedItemName: imageInsight.inferredItemName,
@@ -11854,6 +11866,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       fragile: product.fragile,
       stackable: product.stackable,
       handlingNotes: product.handlingNotes,
+      quantity: product.quantity,
+      singleItemWeightKg: product.singleItemWeightKg,
     );
   }
 
@@ -12605,6 +12619,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'requiresManualReview': classification.requiresManualReview,
       'packageType': packageType,
       'packageDescription': _description.text.trim(),
+      'originalDescription': _description.text.trim(),
+      'quantity': _irisQuantity < 1 ? 1 : _irisQuantity,
+      'normalizedItemName': _irisMatchedItemName,
+      'singleItemWeightKg': _irisSingleItemWeightKg,
+      'totalEstimatedWeightKg': _irisEstimatedWeightKg,
+      'weightClass': _irisWeightBand,
+      'irisRecommendedVehicle': safeVehicleName,
       'hasPhoto': hasPhoto,
       'photoUrl': parcelPhotoUrl,
       'irisImageAnalysis': _irisImageInsight?.toJson(),
@@ -12679,6 +12700,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'routeDistanceConfirmed': true,
       'packageType': packageType,
       'packageDescription': _description.text.trim(),
+      'originalDescription': _description.text.trim(),
+      'quantity': _irisQuantity < 1 ? 1 : _irisQuantity,
+      'normalizedItemName': _irisMatchedItemName,
+      'singleItemWeightKg': _irisSingleItemWeightKg,
+      'totalEstimatedWeightKg': _irisEstimatedWeightKg,
+      'weightClass': _irisWeightBand,
+      'irisRecommendedVehicle': safeVehicleName,
       'hasPhoto': hasPhoto,
       'imageUrl': parcelPhotoUrl,
       'photoUrl': parcelPhotoUrl,
@@ -14441,6 +14469,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
   final String? confidence;
   final String? explanation;
   final String? matchedItemName;
+  final int quantity;
   final String truthBand;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
@@ -14457,6 +14486,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
     required this.confidence,
     required this.explanation,
     required this.matchedItemName,
+    required this.quantity,
     required this.truthBand,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
@@ -14497,7 +14527,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
               matchedItemName!.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              'Matched item: $matchedItemName · $truthBand',
+              'Matched item: $matchedItemName · Quantity: $quantity · $truthBand',
               style: TextStyle(
                 color: colors.text,
                 height: 1.35,
@@ -15556,6 +15586,7 @@ class _DetailsStep extends StatelessWidget {
   final String? irisWeightConfidence;
   final String? irisWeightExplanation;
   final String? irisMatchedItemName;
+  final int irisQuantity;
   final String irisTruthBand;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
@@ -15615,6 +15646,7 @@ class _DetailsStep extends StatelessWidget {
     required this.irisWeightConfidence,
     required this.irisWeightExplanation,
     required this.irisMatchedItemName,
+    required this.irisQuantity,
     required this.irisTruthBand,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
@@ -15967,7 +15999,7 @@ class _DetailsStep extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    'Package details',
+                    'Describe Your Item & Quantity',
                     style: TextStyle(
                       color: colors.text,
                       fontSize: 18,
@@ -15982,7 +16014,8 @@ class _DetailsStep extends StatelessWidget {
               _InputBox(
                 colors: colors,
                 controller: description,
-                hint: 'Describe your item',
+                hint:
+                    'Examples: 1 Sofa, 3 Dining Chairs, 5 MacBooks, 2 Suitcases, 12 Boxes of Books',
                 maxLines: 4,
               ),
               const SizedBox(height: 12),
@@ -16026,6 +16059,7 @@ class _DetailsStep extends StatelessWidget {
                   confidence: irisWeightConfidence,
                   explanation: irisWeightExplanation,
                   matchedItemName: irisMatchedItemName,
+                  quantity: irisQuantity,
                   truthBand: irisTruthBand,
                   senderEnteredWeightKg: senderEnteredWeightKg,
                   pricingWeightKg: pricingWeightKg,
@@ -17144,6 +17178,8 @@ class _HealthAdminPanel extends StatelessWidget {
 
 class _IrisWeightEstimate {
   final double weightKg;
+  final int quantity;
+  final double? singleItemWeightKg;
   final String weightBand;
   final String confidence;
   final String explanation;
@@ -17163,6 +17199,8 @@ class _IrisWeightEstimate {
 
   const _IrisWeightEstimate({
     required this.weightKg,
+    this.quantity = 1,
+    this.singleItemWeightKg,
     required this.weightBand,
     required this.confidence,
     required this.explanation,
@@ -17183,6 +17221,8 @@ class _IrisWeightEstimate {
 
   _IrisWeightEstimate copyWith({
     double? weightKg,
+    int? quantity,
+    double? singleItemWeightKg,
     String? weightBand,
     String? confidence,
     String? explanation,
@@ -17202,6 +17242,8 @@ class _IrisWeightEstimate {
   }) {
     return _IrisWeightEstimate(
       weightKg: weightKg ?? this.weightKg,
+      quantity: quantity ?? this.quantity,
+      singleItemWeightKg: singleItemWeightKg ?? this.singleItemWeightKg,
       weightBand: weightBand ?? this.weightBand,
       confidence: confidence ?? this.confidence,
       explanation: explanation ?? this.explanation,
@@ -18044,6 +18086,7 @@ class _TrackingStep extends StatelessWidget {
   final Map<String, dynamic>? liveLocation;
   final Map<String, dynamic>? vanguardData;
   final String? irisItemName;
+  final int irisQuantity;
   final String? irisConfidence;
   final double irisWeightKg;
   final String irisWeightBand;
@@ -18087,6 +18130,7 @@ class _TrackingStep extends StatelessWidget {
     required this.liveLocation,
     required this.vanguardData,
     required this.irisItemName,
+    required this.irisQuantity,
     required this.irisConfidence,
     required this.irisWeightKg,
     required this.irisWeightBand,
@@ -18212,6 +18256,7 @@ class _TrackingStep extends StatelessWidget {
           _IrisDeliveryAnalysisCard(
             colors: colors,
             itemName: analysedItemName!,
+            quantity: irisQuantity,
             pricingWeightKg: irisWeightKg,
             weightBand: irisWeightBand,
             repositoryMatched: irisRepositoryMatched,
@@ -21295,6 +21340,7 @@ class _DriverRatingPrompt extends StatelessWidget {
 class _IrisDeliveryAnalysisCard extends StatelessWidget {
   final _CircumColors colors;
   final String itemName;
+  final int quantity;
   final double pricingWeightKg;
   final String weightBand;
   final bool repositoryMatched;
@@ -21306,6 +21352,7 @@ class _IrisDeliveryAnalysisCard extends StatelessWidget {
   const _IrisDeliveryAnalysisCard({
     required this.colors,
     required this.itemName,
+    required this.quantity,
     required this.pricingWeightKg,
     required this.weightBand,
     required this.repositoryMatched,
@@ -21326,7 +21373,11 @@ class _IrisDeliveryAnalysisCard extends StatelessWidget {
           _SectionTitle(colors: colors, title: 'IRIS Delivery Analysis'),
           const SizedBox(height: 10),
           _AnalysisLine(colors: colors, label: 'Item', value: itemName),
-          _AnalysisLine(colors: colors, label: 'Quantity', value: '1'),
+          _AnalysisLine(
+            colors: colors,
+            label: 'Quantity',
+            value: '$quantity',
+          ),
           _AnalysisLine(
             colors: colors,
             label: 'Pricing weight',
