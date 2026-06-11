@@ -1505,7 +1505,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminSection.drivers => _AdminDataSection(
           colors: colors,
           title: 'Drivers',
-          subtitle: 'Vehicle, ratings, verification, earnings, and quality.',
+          subtitle:
+              'Vehicle, ratings, verification, earnings, and quality. Search Bike, Car, or Van to filter by vehicle.',
           records: adminSearch(_drivers, query, [
             'fullName',
             'name',
@@ -5945,7 +5946,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             }
             final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}';
             final requiredVehicle =
-                '${job['irisRecommendedVehicle'] ?? job['vehicleType'] ?? ''}';
+                '${job['vehicleType'] ?? job['irisRecommendedVehicle'] ?? ''}';
             if (riderVehicle.isNotEmpty &&
                 requiredVehicle.isNotEmpty &&
                 !DeliveryPricing.vehicleMeetsMinimum(
@@ -7886,10 +7887,20 @@ class _RiderEnrollmentForm extends StatelessWidget {
               const SizedBox(height: 10),
               _InputBox(colors: colors, controller: postcode, hint: 'Postcode'),
               const SizedBox(height: 10),
-              _InputBox(
+              _CompactSelectBox(
                 colors: colors,
                 controller: vehicle,
-                hint: 'Vehicle type: bike, e-bike, car, van',
+                label: 'Vehicle type',
+                options: const ['Bike', 'Car', 'Van'],
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Choose Bike Rider, Car Driver, or Van Driver.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 10),
               _InputBox(

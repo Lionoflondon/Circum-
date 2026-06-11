@@ -423,5 +423,46 @@ void main() {
         'Too small for this parcel',
       );
     });
+
+    test('document deliveries always retain Bike eligibility', () {
+      for (final description in [
+        'Legal documents',
+        'Passport',
+        'Signed contract',
+        'Government paperwork',
+        'Small document folder',
+      ]) {
+        final suitability = DeliveryPricing.resolveVehicleSuitability(
+          weightKg: 1,
+          description: description,
+          itemCategory: 'Documents',
+          repositoryVehicleSuitability: 'Bike',
+          fragile: true,
+        );
+        expect(suitability.recommendedVehicle, 'Bike');
+        expect(
+            suitability.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
+        expect(DeliveryPricing.vehicleCanCarryDelivery('Bike', suitability),
+            isTrue);
+      }
+    });
+
+    test('small electronics can use Bike but medium parcels cannot', () {
+      final phone = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 0.8,
+        description: 'Small phone package',
+        itemCategory: 'Electronics',
+        repositoryVehicleSuitability: 'Bike',
+        fragile: true,
+      );
+      final medium = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 7,
+        description: 'Medium parcel',
+      );
+
+      expect(phone.allows('Bike'), isTrue);
+      expect(medium.allows('Bike'), isFalse);
+      expect(medium.recommendedVehicle, 'Car');
+    });
   });
 }

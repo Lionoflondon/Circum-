@@ -416,6 +416,7 @@ class DeliveryPricing {
     String? handlingNotes,
   }) {
     final text = description.toLowerCase();
+    final categoryText = itemCategory?.toLowerCase().trim() ?? '';
     final factors = <String>['Weight'];
     if (dimensions != null) factors.add('Dimensions');
     if ((itemCategory ?? '').trim().isNotEmpty) factors.add('Item type');
@@ -448,6 +449,26 @@ class DeliveryPricing {
       'suitcase',
       'luggage',
       'travel bag',
+    ].any(text.contains);
+    final documentDelivery = categoryText.contains('document') ||
+        [
+          'document',
+          'letter',
+          'contract',
+          'legal paper',
+          'passport',
+          'certificate',
+          'envelope',
+          'document folder',
+          'government paperwork',
+        ].any(text.contains);
+    final compactBikeItem = [
+      'keys',
+      'key set',
+      'phone',
+      'iphone',
+      'small electronics',
+      'lightweight gift',
     ].any(text.contains);
     final quantity = _quantityFromDescription(text);
     final flatPacked = text.contains('flat pack') || text.contains('flat-pack');
@@ -498,6 +519,21 @@ class DeliveryPricing {
       allowed = {'Car', 'Van'};
       recommended = 'Car';
       score = max(score, 65);
+    }
+
+    // Documents are a core Bike use case. Repository fragility or Vanguard
+    // protection does not remove Bike eligibility for sealed paperwork.
+    if (documentDelivery) {
+      allowed = {'Bike', 'Car', 'Van'};
+      recommended = 'Bike';
+      score = max(score, 95);
+    } else if (weightKg <= 5 &&
+        !bulkyByKeyword &&
+        !oversizedDimensions &&
+        (repo == 'bike' || compactBikeItem)) {
+      allowed = {'Bike', 'Car', 'Van'};
+      recommended = 'Bike';
+      score = max(score, 78);
     }
 
     return VehicleSuitability(
