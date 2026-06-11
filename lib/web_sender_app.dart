@@ -10078,6 +10078,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           dropoffAddress: _validatedDropoff,
           liveLocation: _liveLocationData,
           vanguardData: _activeVanguardData,
+          irisItemName: _irisMatchedItemName,
+          irisConfidence: _irisWeightConfidence,
+          irisWeightKg: _deliveryClassification.finalWeightKg,
+          irisWeightBand: _deliveryClassification.finalWeightBand,
+          irisRepositoryMatched: _irisMatchedItemName != null,
+          irisCorrected: _weightSource == 'sender_confirmed' ||
+              _weightSource == 'manual_sender_entry',
+          recommendedVehicle: _vehicleSuitability.recommendedVehicle,
+          breakdown: _quoteBreakdown,
           assignedDriver: _assignedDriver,
           assignedDriverMetric: _assignedDriverMetric,
           ratingStars: _selectedRating,
@@ -10100,6 +10109,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _chatOpen = true;
           }),
           onNewOrder: _reset,
+          onViewHistory: () => setState(() {
+            _step = _SenderStep.profile;
+            _senderProfileTab = 1;
+          }),
         ),
       _SenderStep.healthPlus => _HealthPlusStep(
           key: const ValueKey('health-plus'),
@@ -11519,10 +11532,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       imageInsight.estimatedWeightKg,
     ).category;
     final textBand = DeliveryPricing.weightBandFor(textEstimate.weightKg);
-    final imageBandRank = DeliveryPricing.weightBandFor(
-          imageInsight.estimatedWeightKg,
-        ).maxKg ??
-        double.infinity;
+    final imageBandRank =
+        DeliveryPricing.weightBandFor(imageInsight.estimatedWeightKg).maxKg ??
+            double.infinity;
     final textBandRank = textBand.maxKg ?? double.infinity;
     final strongImage = imageInsight.confidenceScore >= 0.55;
     final shouldUseImage = strongImage &&
@@ -17819,6 +17831,14 @@ class _TrackingStep extends StatelessWidget {
   final _ValidatedAddress? dropoffAddress;
   final Map<String, dynamic>? liveLocation;
   final Map<String, dynamic>? vanguardData;
+  final String? irisItemName;
+  final String? irisConfidence;
+  final double irisWeightKg;
+  final String irisWeightBand;
+  final bool irisRepositoryMatched;
+  final bool irisCorrected;
+  final String recommendedVehicle;
+  final DeliveryPricingBreakdown breakdown;
   final DriverProfile? assignedDriver;
   final DriverPerformanceMetric? assignedDriverMetric;
   final int ratingStars;
@@ -17835,6 +17855,7 @@ class _TrackingStep extends StatelessWidget {
   final VoidCallback onChatDriver;
   final VoidCallback onChatSupport;
   final VoidCallback onNewOrder;
+  final VoidCallback onViewHistory;
 
   const _TrackingStep({
     super.key,
@@ -17853,6 +17874,14 @@ class _TrackingStep extends StatelessWidget {
     required this.dropoffAddress,
     required this.liveLocation,
     required this.vanguardData,
+    required this.irisItemName,
+    required this.irisConfidence,
+    required this.irisWeightKg,
+    required this.irisWeightBand,
+    required this.irisRepositoryMatched,
+    required this.irisCorrected,
+    required this.recommendedVehicle,
+    required this.breakdown,
     required this.assignedDriver,
     required this.assignedDriverMetric,
     required this.ratingStars,
@@ -17869,10 +17898,12 @@ class _TrackingStep extends StatelessWidget {
     required this.onChatDriver,
     required this.onChatSupport,
     required this.onNewOrder,
+    required this.onViewHistory,
   });
 
   @override
   Widget build(BuildContext context) {
+    final analysedItemName = irisItemName?.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -17964,6 +17995,36 @@ class _TrackingStep extends StatelessWidget {
         ],
         const SizedBox(height: 14),
         _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
+        if (statusIndex >= 3 && analysedItemName?.isNotEmpty == true) ...[
+          const SizedBox(height: 14),
+          _IrisDeliveryAnalysisCard(
+            colors: colors,
+            itemName: analysedItemName!,
+            pricingWeightKg: irisWeightKg,
+            weightBand: irisWeightBand,
+            repositoryMatched: irisRepositoryMatched,
+            confidence: irisConfidence,
+            recommendedVehicle: recommendedVehicle,
+            selectedVehicle: vehicle.name,
+            corrected: irisCorrected,
+          ),
+        ],
+        if (statusIndex >= 3) ...[
+          const SizedBox(height: 14),
+          _CompletedPriceSummary(
+            colors: colors,
+            breakdown: breakdown,
+            weightKg: irisWeightKg,
+            vehicleName: vehicle.name,
+            tipAmount: selectedTipAmount,
+          ),
+          const SizedBox(height: 14),
+          _CompletedDeliveryActions(
+            colors: colors,
+            onBookAgain: onNewOrder,
+            onViewHistory: onViewHistory,
+          ),
+        ],
         const SizedBox(height: 14),
         SizedBox(
           width: double.infinity,
@@ -18256,6 +18317,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
             const <String, dynamic>{};
     final collectionVerified = data['collectionPinVerified'] == true;
     final deliveryVerified = data['deliveryPinVerified'] == true;
+    final handoffCompleted = collectionVerified && deliveryVerified;
     final collectionPin = '${protection['collectionPin'] ?? ''}'.trim();
     final deliveryPin = '${protection['deliveryPin'] ?? ''}'.trim();
     final collectionContact =
@@ -18279,7 +18341,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Circum Vanguard Protection',
+                  'Vanguard Protection',
                   style: TextStyle(
                     color: colors.text,
                     fontWeight: FontWeight.w900,
@@ -18291,7 +18353,9 @@ class _VanguardCustomerPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Vanguard Protection Activated\n\nThis item qualifies for enhanced delivery protection.\n\n✓ Collection PIN required\n✓ Receiver delivery PIN required\n✓ Chain of custody enabled\n✓ Vanguard verification active\n\nGive this collection PIN to the rider only when ${collectionName.isEmpty ? 'the sender or collection contact' : collectionName} hands over the sealed parcel.',
+            handoffCompleted
+                ? '✓ PIN verified\n✓ Recipient confirmed\n✓ Secure handoff completed'
+                : 'Vanguard Protection Activated\n\nThis item qualifies for enhanced delivery protection.\n\n${collectionVerified ? '✓ Collection PIN verified' : '• PIN pending'}\n${deliveryVerified ? '✓ Recipient confirmed' : '• Awaiting recipient verification'}\n${deliveryVerified ? '✓ Secure handoff completed' : '• Handoff not yet completed'}\n\nGive this collection PIN to the rider only when ${collectionName.isEmpty ? 'the sender or collection contact' : collectionName} hands over the sealed parcel.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.35,
@@ -20512,7 +20576,8 @@ class _RiderRankPresentation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final plate = vehiclePlate.trim().isEmpty ? 'Plate pending' : vehiclePlate;
+    final plate = vehiclePlate.trim();
+    final progress = _rankProgress(rank, tripCount);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -20547,8 +20612,14 @@ class _RiderRankPresentation extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(
-          '$rankTitle\n$tripCount Deliveries Completed\n$rating Rating\n$plate',
-          maxLines: 4,
+          [
+            rankTitle,
+            '$tripCount Deliveries Completed',
+            '$rating Rating',
+            if (progress != null) progress,
+            if (plate.isNotEmpty) 'Vehicle plate: $plate',
+          ].join('\n'),
+          maxLines: 6,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: colors.mutedText,
@@ -20559,6 +20630,17 @@ class _RiderRankPresentation extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static String? _rankProgress(String rank, int trips) {
+    return switch (rank.trim().toLowerCase()) {
+      'agent' => '$trips / 50 deliveries to Sentinel',
+      'sentinel' => '$trips / 200 deliveries to Warden',
+      'warden' => '$trips / 500 deliveries to Knight',
+      'knight' => '$trips / 1000 deliveries to Veteran',
+      'veteran' => 'Top Circum trust rank',
+      _ => null,
+    };
   }
 }
 
@@ -20740,6 +20822,252 @@ class _DriverRatingPrompt extends StatelessWidget {
   }
 }
 
+class _IrisDeliveryAnalysisCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String itemName;
+  final double pricingWeightKg;
+  final String weightBand;
+  final bool repositoryMatched;
+  final String? confidence;
+  final String recommendedVehicle;
+  final String selectedVehicle;
+  final bool corrected;
+
+  const _IrisDeliveryAnalysisCard({
+    required this.colors,
+    required this.itemName,
+    required this.pricingWeightKg,
+    required this.weightBand,
+    required this.repositoryMatched,
+    required this.confidence,
+    required this.recommendedVehicle,
+    required this.selectedVehicle,
+    required this.corrected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final confidenceText = confidence?.trim();
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'IRIS Delivery Analysis'),
+          const SizedBox(height: 10),
+          _AnalysisLine(colors: colors, label: 'Item', value: itemName),
+          _AnalysisLine(colors: colors, label: 'Quantity', value: '1'),
+          _AnalysisLine(
+            colors: colors,
+            label: 'Pricing weight',
+            value: '${_formatDisplayWeight(pricingWeightKg)} · $weightBand',
+          ),
+          _AnalysisLine(
+            colors: colors,
+            label: 'Repository match',
+            value: repositoryMatched ? 'Yes' : 'No',
+          ),
+          if (confidenceText != null && confidenceText.isNotEmpty)
+            _AnalysisLine(
+              colors: colors,
+              label: 'Confidence',
+              value: confidenceText,
+            ),
+          _AnalysisLine(
+            colors: colors,
+            label: 'Recommended vehicle',
+            value: recommendedVehicle,
+          ),
+          _AnalysisLine(
+            colors: colors,
+            label: 'Selected vehicle',
+            value: selectedVehicle,
+          ),
+          if (corrected)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'User correction applied',
+                style: TextStyle(
+                  color: colors.success,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _formatDisplayWeight(double value) {
+    final digits = value.truncateToDouble() == value ? 0 : 1;
+    return '${value.toStringAsFixed(digits)} kg';
+  }
+}
+
+class _AnalysisLine extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+
+  const _AnalysisLine({
+    required this.colors,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.check_circle, color: colors.success, size: 17),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(color: colors.mutedText, height: 1.3),
+                children: [
+                  TextSpan(
+                    text: '$label: ',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  TextSpan(text: value),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompletedPriceSummary extends StatelessWidget {
+  final _CircumColors colors;
+  final DeliveryPricingBreakdown breakdown;
+  final double weightKg;
+  final String vehicleName;
+  final double tipAmount;
+
+  const _CompletedPriceSummary({
+    required this.colors,
+    required this.breakdown,
+    required this.weightKg,
+    required this.vehicleName,
+    required this.tipAmount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final totalCharged = breakdown.total + tipAmount;
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Price breakdown'),
+          const SizedBox(height: 10),
+          _PriceLine(
+            colors: colors,
+            label: 'Base fare',
+            value: '£${breakdown.baseFare.toStringAsFixed(2)}',
+          ),
+          if (breakdown.distanceFare > 0)
+            _PriceLine(
+              colors: colors,
+              label: 'Distance fare',
+              value: '£${breakdown.distanceFare.toStringAsFixed(2)}',
+            ),
+          _PriceLine(
+            colors: colors,
+            label:
+                '${breakdown.weightCategory} (${_IrisDeliveryAnalysisCard._formatDisplayWeight(weightKg)})',
+            value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
+          ),
+          if (breakdown.vehicleSurcharge > 0)
+            _PriceLine(
+              colors: colors,
+              label: '$vehicleName vehicle',
+              value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
+            ),
+          if (breakdown.specialConditions > 0)
+            _PriceLine(
+              colors: colors,
+              label: 'Surcharge',
+              value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
+            ),
+          if (tipAmount > 0)
+            _PriceLine(
+              colors: colors,
+              label: 'Tip',
+              value: '£${tipAmount.toStringAsFixed(2)}',
+            ),
+          Divider(color: colors.border, height: 24),
+          _PriceLine(
+            colors: colors,
+            label: 'Total charged',
+            value: '£${totalCharged.toStringAsFixed(2)}',
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompletedDeliveryActions extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onBookAgain;
+  final VoidCallback onViewHistory;
+
+  const _CompletedDeliveryActions({
+    required this.colors,
+    required this.onBookAgain,
+    required this.onViewHistory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: onBookAgain,
+            icon: const Icon(Icons.add_box_outlined),
+            label: const Text('Book another delivery'),
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.text,
+              foregroundColor: colors.inverseText,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onViewHistory,
+            icon: const Icon(Icons.history),
+            label: const Text('View delivery history'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colors.text,
+              side: BorderSide(color: colors.border),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _Timeline extends StatelessWidget {
   final _CircumColors colors;
   final int activeIndex;
@@ -20752,7 +21080,8 @@ class _Timeline extends StatelessWidget {
       colors: colors,
       child: Column(
         children: List.generate(_trackingStatuses.length, (index) {
-          final active = index <= activeIndex;
+          final completed = index < activeIndex || activeIndex >= 3;
+          final current = index == activeIndex && !completed;
           final status = _trackingStatuses[index];
           return Padding(
             padding: EdgeInsets.only(
@@ -20761,8 +21090,16 @@ class _Timeline extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  active ? Icons.check_circle : Icons.circle_outlined,
-                  color: active ? colors.success : colors.mutedText,
+                  completed
+                      ? Icons.check_circle
+                      : current
+                          ? Icons.radio_button_checked
+                          : Icons.circle_outlined,
+                  color: completed
+                      ? colors.success
+                      : current
+                          ? colors.adminAccent
+                          : colors.mutedText,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
