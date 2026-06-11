@@ -358,5 +358,34 @@ void main() {
         isFalse,
       );
     });
+
+    test('heavy luggage uses car unless quantity or size requires a van', () {
+      final suitcase = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 23,
+        description: '23 KG SUITCASE',
+        itemCategory: 'Luggage',
+        repositoryVehicleSuitability: 'Car',
+      );
+      final twoSuitcases = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 46,
+        description: '2 large suitcases 23kg each',
+        itemCategory: 'Luggage',
+      );
+      final fiveSuitcases = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 115,
+        description: '5 large suitcases 23kg each',
+        itemCategory: 'Luggage',
+      );
+      final wardrobe = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 23,
+        description: '23kg wardrobe',
+      );
+
+      expect(suitcase.recommendedVehicle, 'Car');
+      expect(suitcase.handlingNotes, contains('confirm they can lift safely'));
+      expect(twoSuitcases.recommendedVehicle, 'Car');
+      expect(fiveSuitcases.recommendedVehicle, 'Van');
+      expect(wardrobe.recommendedVehicle, 'Van');
+    });
   });
 }

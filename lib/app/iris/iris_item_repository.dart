@@ -50,6 +50,28 @@ class IrisRepositoryItem {
 
 class IrisItemRepository {
   static const int expectedItemCount = 1000;
+  static const IrisRepositoryItem _genericSuitcase = IrisRepositoryItem(
+    id: 'canonical_suitcase',
+    itemName: 'Suitcase',
+    aliases: ['suitcase', 'luggage', 'travel bag'],
+    category: 'Luggage',
+    estimatedWeightKg: 23,
+    minimumWeightKg: 1,
+    maximumWeightKg: 32,
+    weightClass: 'Heavy',
+    sizeClass: 'large',
+    fragile: false,
+    highValue: false,
+    requiresVanguard: false,
+    requiresIRISReview: false,
+    deliveryNotes:
+        'Heavy item - rider must confirm they can lift safely. Recommended vehicle: Car.',
+    confidenceBaseline: 0.82,
+    typicalDimensionsCm:
+        IrisRepositoryDimensions(lengthCm: 75, widthCm: 50, heightCm: 30),
+    vehicleSuitability: 'Car',
+    stackable: false,
+  );
   static const List<IrisRepositoryItem> items = [
     IrisRepositoryItem(
       id: "documents_single_passport_1",
@@ -25950,6 +25972,12 @@ class IrisItemRepository {
   static IrisRepositoryItem? match(String description) {
     final text = description.trim().toLowerCase();
     if (text.isEmpty) return null;
+    final isLuggage =
+        RegExp(r'\b(suitcase|luggage|travel bag)s?\b').hasMatch(text);
+    final hasAirportQualifier = RegExp(
+      r'\b(heathrow|gatwick|airport|terminal|cabin|carry on|checked luggage)\b',
+    ).hasMatch(text);
+    if (isLuggage && !hasAirportQualifier) return _genericSuitcase;
     IrisRepositoryItem? best;
     int bestScore = 0;
     for (final item in items) {

@@ -152,6 +152,17 @@ void main() {
       expect(suitcase.vehicleSuitability, isNotEmpty);
     });
 
+    test('generic luggage uses a neutral repository match', () {
+      final suitcase = IrisWeightEstimator.knownProductEstimate(
+        '23 KG SUITCASE',
+      );
+
+      expect(suitcase, isNotNull);
+      expect(suitcase!.matchedItemName, 'Suitcase');
+      expect(suitcase.packageType, 'Luggage');
+      expect(suitcase.vehicleSuitability, 'Car');
+    });
+
     test('quantity parser supports common sender formats and safe defaults',
         () {
       expect(IrisWeightEstimator.extractQuantity('Sofa'), 1);

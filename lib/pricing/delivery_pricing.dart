@@ -444,9 +444,19 @@ class DeliveryPricing {
       'shoebox',
       'small parcel',
     ].any(text.contains);
+    final compactLuggage = [
+      'suitcase',
+      'luggage',
+      'travel bag',
+    ].any(text.contains);
+    final quantity = _quantityFromDescription(text);
     final flatPacked = text.contains('flat pack') || text.contains('flat-pack');
     final oversizedDimensions = dimensions != null &&
         (dimensions.longestSideCm > 120 || dimensions.volumeCm3 > 180000);
+    final luggageFitsCar = compactLuggage &&
+        quantity <= 2 &&
+        weightKg <= 50 &&
+        !oversizedDimensions;
 
     var allowed = <String>{'Bike'};
     var recommended = 'Bike';
@@ -457,10 +467,15 @@ class DeliveryPricing {
       recommended = 'Car';
       score = 60;
     }
-    if (weightKg > 15 || bulkyByKeyword || oversizedDimensions) {
+    if (weightKg > 50 || bulkyByKeyword || oversizedDimensions) {
       allowed = {'Van'};
       recommended = 'Van';
       score = 88;
+    }
+    if (luggageFitsCar) {
+      allowed = {'Car', 'Van'};
+      recommended = 'Car';
+      score = max(score, 76);
     }
     if (flatPacked && weightKg <= 25 && !oversizedDimensions) {
       allowed = {'Car', 'Van'};
@@ -469,7 +484,7 @@ class DeliveryPricing {
     }
 
     final repo = repositoryVehicleSuitability?.toLowerCase().trim() ?? '';
-    if (repo == 'van') {
+    if (repo == 'van' && !luggageFitsCar) {
       allowed = {'Van'};
       recommended = 'Van';
       score = max(score, 90);
@@ -490,20 +505,29 @@ class DeliveryPricing {
       factors: factors,
       explanation:
           'Vehicle recommendation based on ${factors.map((factor) => factor.toLowerCase()).join(', ')}.',
-      handlingNotes: handlingNotes?.trim().isNotEmpty == true
-          ? handlingNotes!.trim()
-          : stackable
-              ? 'Stackable item.'
-              : 'Do not stack this item.',
+      handlingNotes: compactLuggage && weightKg > 20
+          ? 'Heavy item - rider must confirm they can lift safely.'
+          : handlingNotes?.trim().isNotEmpty == true
+              ? handlingNotes!.trim()
+              : stackable
+                  ? 'Stackable item.'
+                  : 'Do not stack this item.',
       fragile: fragile,
       stackable: stackable,
     );
   }
 
+  static int _quantityFromDescription(String description) {
+    final leading = RegExp(r'^\s*(\d+)\s*(?:x\s*)?').firstMatch(description);
+    final trailing = RegExp(r'\bx\s*(\d+)\b').firstMatch(description);
+    final parsed = int.tryParse(leading?.group(1) ?? trailing?.group(1) ?? '1');
+    return parsed == null || parsed < 1 ? 1 : parsed;
+  }
+
   static bool vehicleCanCarryWeight(String? vehicleType, double weightKg) {
     final vehicle = vehicleType?.trim().toLowerCase();
     if (vehicle == 'van') return true;
-    if (vehicle == 'car') return weightKg <= 10;
+    if (vehicle == 'car') return weightKg <= 50;
     if (vehicle == 'bike' || vehicle == 'bicycle') return weightKg <= 5;
     return weightKg <= 5;
   }
