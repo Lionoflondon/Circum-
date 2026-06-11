@@ -412,6 +412,8 @@ class DeliveryPricing {
     DeliveryItemDimensions? dimensions,
     String? repositoryVehicleSuitability,
     bool fragile = false,
+    bool highValue = false,
+    bool vanguardRequired = false,
     bool stackable = true,
     String? handlingNotes,
   }) {
@@ -435,6 +437,9 @@ class DeliveryPricing {
       'bicycle',
       'bike',
       'piano',
+      'multi-box',
+      'multiple boxes',
+      'liquid',
     ].any(text.contains);
     final compactByType = [
       'microwave',
@@ -473,7 +478,13 @@ class DeliveryPricing {
     final quantity = _quantityFromDescription(text);
     final flatPacked = text.contains('flat pack') || text.contains('flat-pack');
     final oversizedDimensions = dimensions != null &&
-        (dimensions.longestSideCm > 120 || dimensions.volumeCm3 > 180000);
+        (dimensions.longestSideCm > 110 || dimensions.volumeCm3 > 250000);
+    final bikeSafeDimensions = dimensions == null ||
+        (dimensions.longestSideCm <= 60 && dimensions.volumeCm3 <= 45000);
+    final normalPrinter = text.contains('printer') &&
+        quantity == 1 &&
+        weightKg <= 15 &&
+        !oversizedDimensions;
     final luggageFitsCar = compactLuggage &&
         quantity <= 2 &&
         weightKg <= 50 &&
@@ -485,7 +496,11 @@ class DeliveryPricing {
     var recommended = 'Bike';
     var score = 30;
 
-    if (weightKg > 5 || compactByType || fragile) {
+    if (weightKg > 10 ||
+        compactByType ||
+        fragile ||
+        highValue ||
+        vanguardRequired) {
       allowed = {'Car', 'Van'};
       recommended = 'Car';
       score = 60;
@@ -507,7 +522,7 @@ class DeliveryPricing {
     }
 
     final repo = repositoryVehicleSuitability?.toLowerCase().trim() ?? '';
-    if (repo == 'van' && !luggageFitsCar) {
+    if (repo == 'van' && !luggageFitsCar && !normalPrinter) {
       allowed = {'Van'};
       recommended = 'Van';
       score = max(score, 90);
@@ -521,13 +536,27 @@ class DeliveryPricing {
       score = max(score, 65);
     }
 
-    // Documents are a core Bike use case. Repository fragility or Vanguard
-    // protection does not remove Bike eligibility for sealed paperwork.
-    if (documentDelivery) {
+    if (normalPrinter) {
+      allowed = {'Car', 'Van'};
+      recommended = 'Car';
+      score = max(score, 82);
+    }
+
+    // Documents are a core Bike use case when they remain within the normal
+    // courier safety, value, and protection limits.
+    if (documentDelivery &&
+        weightKg <= 10 &&
+        bikeSafeDimensions &&
+        !highValue &&
+        !vanguardRequired) {
       allowed = {'Bike', 'Car', 'Van'};
       recommended = 'Bike';
       score = max(score, 95);
-    } else if (weightKg <= 5 &&
+    } else if (weightKg <= 10 &&
+        bikeSafeDimensions &&
+        !fragile &&
+        !highValue &&
+        !vanguardRequired &&
         !bulkyByKeyword &&
         !oversizedDimensions &&
         (repo == 'bike' || compactBikeItem)) {
@@ -541,8 +570,11 @@ class DeliveryPricing {
       allowedVehicles: allowed.toList(growable: false),
       score: score,
       factors: factors,
-      explanation:
-          'Vehicle recommendation based on ${factors.map((factor) => factor.toLowerCase()).join(', ')}.',
+      explanation: recommended == 'Van'
+          ? 'Recommended because this item may be bulky or needs extra loading space.'
+          : recommended == 'Car'
+              ? 'Recommended because this item fits safely in a car.'
+              : 'Recommended as a faster option for this small, lightweight delivery.',
       handlingNotes: compactLuggage && weightKg > 20
           ? 'Heavy item - rider must confirm they can lift safely.'
           : handlingNotes?.trim().isNotEmpty == true

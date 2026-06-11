@@ -447,13 +447,14 @@ void main() {
       }
     });
 
-    test('small electronics can use Bike but medium parcels cannot', () {
+    test('small electronics and courier-safe parcels up to 10kg can use Bike',
+        () {
       final phone = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 0.8,
         description: 'Small phone package',
         itemCategory: 'Electronics',
         repositoryVehicleSuitability: 'Bike',
-        fragile: true,
+        fragile: false,
       );
       final medium = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 7,
@@ -461,8 +462,56 @@ void main() {
       );
 
       expect(phone.allows('Bike'), isTrue);
-      expect(medium.allows('Bike'), isFalse);
-      expect(medium.recommendedVehicle, 'Car');
+      expect(medium.allows('Bike'), isTrue);
+      expect(medium.recommendedVehicle, 'Bike');
+    });
+
+    test('printer uses car unless dimensions require a van', () {
+      final printer = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 9,
+        description: 'Printer',
+        itemCategory: 'Business equipment',
+        fragile: true,
+        repositoryVehicleSuitability: 'Van',
+      );
+      final bulkyPrinter = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 9,
+        description: 'Printer',
+        itemCategory: 'Business equipment',
+        fragile: true,
+        dimensions: const DeliveryItemDimensions(
+          lengthCm: 130,
+          widthCm: 70,
+          heightCm: 60,
+        ),
+      );
+
+      expect(printer.recommendedVehicle, 'Car');
+      expect(printer.allowedVehicles, containsAll(['Car', 'Van']));
+      expect(bulkyPrinter.recommendedVehicle, 'Van');
+    });
+
+    test('fragile or Vanguard small items are not Bike eligible', () {
+      final fragile = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 1,
+        description: 'Glass ornament',
+        fragile: true,
+      );
+      final vanguard = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 1,
+        description: 'High value watch',
+        highValue: true,
+        vanguardRequired: true,
+      );
+
+      expect(fragile.allows('Bike'), isFalse);
+      expect(vanguard.allows('Bike'), isFalse);
+    });
+
+    test('vehicle surcharge follows the selected vehicle', () {
+      expect(DeliveryPricing.calculateVehicleSurcharge('Bike'), 0);
+      expect(DeliveryPricing.calculateVehicleSurcharge('Car'), 2);
+      expect(DeliveryPricing.calculateVehicleSurcharge('Van'), 10);
     });
   });
 }

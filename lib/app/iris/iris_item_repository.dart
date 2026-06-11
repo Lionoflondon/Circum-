@@ -10980,7 +10980,7 @@ class IrisItemRepository {
     ),
     IrisRepositoryItem(
       id: "business_urgent_printer_421",
-      itemName: "urgent Printer",
+      itemName: "Printer",
       aliases: ["printer", "urgent", "printer parcel", "urgent printer"],
       category: "Business",
       estimatedWeightKg: 9,

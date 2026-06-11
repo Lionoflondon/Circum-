@@ -9816,6 +9816,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   ItemDimensionsCm? _irisTypicalDimensions;
   String? _irisVehicleSuitability;
   bool _irisFragile = false;
+  bool _irisValueSensitive = false;
+  bool _irisVanguardRecommended = false;
   bool _irisStackable = true;
   String? _irisHandlingNotes;
   double? _senderEnteredWeightKg;
@@ -10188,6 +10190,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           vehicleSuitability: _vehicleSuitability,
           selectedVehicle: _effectiveVehicle,
           selectedSpeed: _selectedSpeed,
+          locationsConfirmed: _hasValidatedRoute,
+          priceReady: _quoteTotal > 0 && !_quoteBreakdown.requiresManualQuote,
+          weightReady: _deliveryClassification.finalWeightKg > 0,
           onVehicle: (vehicle) {
             final suitability = _vehicleSuitability;
             if (!DeliveryPricing.vehicleCanCarryDelivery(
@@ -10624,6 +10629,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             ),
       repositoryVehicleSuitability: _irisVehicleSuitability,
       fragile: _irisFragile,
+      highValue: _irisValueSensitive,
+      vanguardRequired: _irisVanguardRecommended,
       stackable: _irisStackable,
       handlingNotes: _irisHandlingNotes,
     );
@@ -11273,6 +11280,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _irisTypicalDimensions = estimate.typicalDimensions;
       _irisVehicleSuitability = estimate.vehicleSuitability;
       _irisFragile = estimate.fragile;
+      _irisValueSensitive = estimate.valueSensitive;
+      _irisVanguardRecommended = estimate.vanguardRecommended;
       _irisStackable = estimate.stackable;
       _irisHandlingNotes = estimate.handlingNotes;
       _weightVerificationRequired = decision.verificationRequired;
@@ -11996,6 +12005,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       typicalDimensions: product.typicalDimensions,
       vehicleSuitability: product.vehicleSuitability,
       fragile: product.fragile,
+      valueSensitive: product.valueSensitive,
+      vanguardRecommended: product.vanguardRecommended,
       stackable: product.stackable,
       handlingNotes: product.handlingNotes,
       quantity: product.quantity,
@@ -14668,7 +14679,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
               matchedItemName!.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              'Matched item: $matchedItemName · Quantity: $quantity · $truthBand',
+              'Matched item: ${_cleanMatchedItemName(matchedItemName!)} · Quantity: $quantity · $truthBand',
               style: TextStyle(
                 color: colors.text,
                 height: 1.35,
@@ -14749,6 +14760,13 @@ class _WeightConfirmationPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _cleanMatchedItemName(String value) {
+    return value
+        .replaceFirst(
+            RegExp(r'^(urgent|sealed|return)\s+', caseSensitive: false), '')
+        .trim();
   }
 
   String _confidenceDisplayText() {
@@ -17335,6 +17353,8 @@ class _IrisWeightEstimate {
   final ItemDimensionsCm? typicalDimensions;
   final String? vehicleSuitability;
   final bool fragile;
+  final bool valueSensitive;
+  final bool vanguardRecommended;
   final bool stackable;
   final String? handlingNotes;
 
@@ -17356,6 +17376,8 @@ class _IrisWeightEstimate {
     this.typicalDimensions,
     this.vehicleSuitability,
     this.fragile = false,
+    this.valueSensitive = false,
+    this.vanguardRecommended = false,
     this.stackable = true,
     this.handlingNotes,
   });
@@ -17378,6 +17400,8 @@ class _IrisWeightEstimate {
     ItemDimensionsCm? typicalDimensions,
     String? vehicleSuitability,
     bool? fragile,
+    bool? valueSensitive,
+    bool? vanguardRecommended,
     bool? stackable,
     String? handlingNotes,
   }) {
@@ -17401,6 +17425,8 @@ class _IrisWeightEstimate {
       typicalDimensions: typicalDimensions ?? this.typicalDimensions,
       vehicleSuitability: vehicleSuitability ?? this.vehicleSuitability,
       fragile: fragile ?? this.fragile,
+      valueSensitive: valueSensitive ?? this.valueSensitive,
+      vanguardRecommended: vanguardRecommended ?? this.vanguardRecommended,
       stackable: stackable ?? this.stackable,
       handlingNotes: handlingNotes ?? this.handlingNotes,
     );
@@ -17785,6 +17811,9 @@ class _VehicleStep extends StatelessWidget {
   final VehicleSuitability vehicleSuitability;
   final _VehicleOption selectedVehicle;
   final String selectedSpeed;
+  final bool locationsConfirmed;
+  final bool priceReady;
+  final bool weightReady;
   final ValueChanged<_VehicleOption> onVehicle;
   final ValueChanged<String> onSpeed;
   final VoidCallback onBack;
@@ -17799,6 +17828,9 @@ class _VehicleStep extends StatelessWidget {
     required this.vehicleSuitability,
     required this.selectedVehicle,
     required this.selectedSpeed,
+    required this.locationsConfirmed,
+    required this.priceReady,
+    required this.weightReady,
     required this.onVehicle,
     required this.onSpeed,
     required this.onBack,
@@ -17808,10 +17840,26 @@ class _VehicleStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recommendedVehicleName = vehicleSuitability.recommendedVehicle;
-    final canContinue = DeliveryPricing.vehicleCanCarryDelivery(
+    final vehicleValid = DeliveryPricing.vehicleCanCarryDelivery(
       selectedVehicle.name,
       vehicleSuitability,
     );
+    final canContinue = vehicleValid &&
+        selectedSpeed.trim().isNotEmpty &&
+        locationsConfirmed &&
+        weightReady &&
+        priceReady;
+    final disabledReason = !vehicleValid
+        ? 'Choose a safe vehicle for this parcel.'
+        : selectedSpeed.trim().isEmpty
+            ? 'Choose a delivery speed.'
+            : !locationsConfirmed
+                ? 'Confirm pickup and drop-off addresses.'
+                : !weightReady
+                    ? 'Confirm the parcel weight.'
+                    : !priceReady
+                        ? 'Pricing is not ready yet.'
+                        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -17842,7 +17890,7 @@ class _VehicleStep extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      '${vehicleSuitability.explanation}\nRecommended vehicle: $recommendedVehicleName.',
+                      vehicleSuitability.explanation,
                       style: TextStyle(
                         color: colors.mutedText,
                         height: 1.35,
@@ -17919,7 +17967,7 @@ class _VehicleStep extends StatelessWidget {
           selected: selectedSpeed,
           onChanged: onSpeed,
         ),
-        if (!canContinue) ...[
+        if (disabledReason != null) ...[
           const SizedBox(height: 12),
           _GlassPanel(
             colors: colors,
@@ -17930,7 +17978,7 @@ class _VehicleStep extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: $recommendedVehicleName.',
+                    disabledReason,
                     style: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w800,
@@ -18690,7 +18738,7 @@ class _FirebaseStatusBanner extends StatelessWidget {
       _CheckoutState.matchingRiders => 'Connecting this delivery...',
       _CheckoutState.riderAssigned => 'Rider assigned. Tracking is live.',
       _CheckoutState.failed => error ?? 'This delivery could not be started.',
-      _ => error ?? 'Delivery has not started matching yet.',
+      _ => error ?? 'Estimated rider availability',
     };
     return Container(
       width: double.infinity,
@@ -18711,7 +18759,12 @@ class _FirebaseStatusBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              healthy ? 'This delivery is saved and live.' : message,
+              healthy
+                  ? 'This delivery is saved and live.'
+                  : checkoutState.index < _CheckoutState.bookingCreated.index &&
+                          error == null
+                      ? '$message\nRider matching starts after payment and booking confirmation.'
+                      : message,
               style: TextStyle(
                 color:
                     healthy ? const Color(0xff166534) : const Color(0xff9a3412),
@@ -20776,6 +20829,16 @@ class _VehicleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = disabledReason == null;
+    final surcharge = DeliveryPricing.calculateVehicleSurcharge(vehicle.name);
+    final priceLabel = switch (vehicle.name) {
+      'Bike' => 'No surcharge',
+      'Car' => surcharge == 0
+          ? 'Standard vehicle'
+          : 'Standard vehicle · +£${surcharge.toStringAsFixed(2)}',
+      'Van' => '+£${surcharge.toStringAsFixed(2)} surcharge',
+      _ =>
+        surcharge == 0 ? 'No surcharge' : '+£${surcharge.toStringAsFixed(2)}',
+    };
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: enabled ? onTap : null,
@@ -20832,9 +20895,7 @@ class _VehicleTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  DeliveryPricing.calculateVehicleSurcharge(vehicle.name) == 0
-                      ? 'No surcharge'
-                      : '+£${DeliveryPricing.calculateVehicleSurcharge(vehicle.name).toStringAsFixed(2)}',
+                  priceLabel,
                   style: TextStyle(
                     color: selected
                         ? colors.inverseText.withOpacity(0.72)
