@@ -215,6 +215,27 @@ void main() {
       expect(washingMachine.vanOnly, isTrue);
     });
 
+    test('iPhone 16 ignores extreme historical matches for final pricing', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('iPhone 16');
+      expect(estimate, isNotNull);
+
+      final decision = IrisWeightEstimator.resolveTrustedKnownItemPricing(
+        description: 'iPhone 16',
+        quantity: 1,
+        userWeightKg: 0.2,
+        trustedItemWeightKg: estimate!.weightKg,
+        historicalMatches: const [0.2, 0.5, 9],
+      );
+
+      expect(decision.pricingWeightKg, inInclusiveRange(0.2, 0.6));
+      expect(
+        DeliveryPricing.weightBandFor(decision.pricingWeightKg).category,
+        'Small Parcel',
+      );
+      expect(decision.ignoredHistoricalOutliers, contains(9));
+      expect(decision.explanation, contains('ignored unusually high'));
+    });
+
     test('quantity parser supports common sender formats and safe defaults',
         () {
       expect(IrisWeightEstimator.extractQuantity('Sofa'), 1);

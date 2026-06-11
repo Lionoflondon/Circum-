@@ -11575,6 +11575,32 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required _IrisWeightEstimate estimate,
     required double? senderWeightKg,
   }) {
+    final trustedKnownItem = estimate.confidence == 'high' &&
+        (estimate.weightSource == 'known_product_lookup' ||
+            estimate.weightSource == 'repository_match');
+    if (trustedKnownItem) {
+      final trustedDecision =
+          IrisWeightEstimator.resolveTrustedKnownItemPricing(
+        description: _description.text,
+        quantity: estimate.quantity,
+        userWeightKg: senderWeightKg ?? 0,
+        trustedItemWeightKg: estimate.weightKg,
+        historicalMatches: estimate.historicalVerifiedWeightKg == null
+            ? const []
+            : [estimate.historicalVerifiedWeightKg!],
+      );
+      final pricingWeight = trustedDecision.pricingWeightKg;
+      return _WeightPricingDecision(
+        weightKg: pricingWeight,
+        weightBand: DeliveryPricing.weightBandFor(pricingWeight).category,
+        source: 'repository_match',
+        message: trustedDecision.explanation ??
+            'IRIS used the verified item weight with a packaging allowance.',
+        reason: trustedDecision.explanation ??
+            'Verified catalogue weight used for pricing.',
+        verificationRequired: true,
+      );
+    }
     final knownItemDecision = senderWeightKg != null && senderWeightKg > 0
         ? IrisWeightEstimator.resolveKnownItemWeight(
             description: _description.text,
@@ -11830,6 +11856,37 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       matches.sort();
       final high = matches.last;
       final low = matches.first;
+      final trustedKnownItem = base.confidence == 'high' &&
+          (base.weightSource == 'known_product_lookup' ||
+              base.weightSource == 'repository_match');
+      if (trustedKnownItem) {
+        final outliers = matches
+            .where((weight) => weight > base.weightKg * 5)
+            .toList(growable: false);
+        if (outliers.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('irisLearningOutliers')
+              .add({
+            'senderId': user.uid,
+            'description': _description.text.trim(),
+            'matchedItemName': base.matchedItemName,
+            'trustedWeightKg': base.weightKg,
+            'outlierWeightsKg': outliers,
+            'reason': 'historical_weight_above_5x_catalogue_weight',
+            'status': 'pending_review',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+        return base.copyWith(
+          historicalVerifiedWeightKg: high,
+          learningReason: outliers.isNotEmpty
+              ? 'IRIS ignored unusually high historical matches because this item has a verified catalogue weight.'
+              : 'Historical matches support the verified catalogue estimate.',
+          explanation: outliers.isNotEmpty
+              ? '${base.explanation} IRIS ignored unusually high historical matches because this item has a verified catalogue weight.'
+              : base.explanation,
+        );
+      }
       final baseBand = DeliveryPricing.weightBandFor(base.weightKg).category;
       final learnedBand = DeliveryPricing.weightBandFor(high).category;
       if (high <= base.weightKg || learnedBand == baseBand) {

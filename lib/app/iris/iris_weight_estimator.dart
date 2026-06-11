@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:circum/app/iris/iris_item_repository.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 
@@ -148,6 +150,77 @@ class IrisWeightEstimator {
     return null;
   }
 
+  static IrisTrustedPricingDecision resolveTrustedKnownItemPricing({
+    required String description,
+    required int quantity,
+    required double userWeightKg,
+    required double trustedItemWeightKg,
+    List<double> historicalMatches = const [],
+  }) {
+    final text = description.trim().toLowerCase();
+    final knownElectronics = [
+      'iphone',
+      'phone',
+      'macbook',
+      'laptop',
+      'ipad',
+      'tablet',
+      'watch',
+      'airpods',
+      'earbuds',
+      'headphones',
+      'playstation',
+      'ps5',
+      'xbox',
+      'console',
+      'camera',
+    ].any(text.contains);
+    if (!knownElectronics) {
+      return IrisTrustedPricingDecision(
+        pricingWeightKg: math.max(userWeightKg, trustedItemWeightKg),
+      );
+    }
+
+    final safeQuantity = quantity < 1 ? 1 : quantity;
+    final packagingAllowanceKg = _electronicsPackagingAllowanceKg(text);
+    final trustedPackagedWeight =
+        trustedItemWeightKg + (packagingAllowanceKg * safeQuantity);
+    final userWeightOutlier = userWeightKg > trustedPackagedWeight * 5;
+    final outliers = historicalMatches
+        .where((weight) => weight > trustedPackagedWeight * 5)
+        .toList(growable: false);
+    return IrisTrustedPricingDecision(
+      pricingWeightKg: userWeightOutlier
+          ? trustedPackagedWeight
+          : math.max(userWeightKg, trustedPackagedWeight),
+      ignoredHistoricalOutliers: outliers,
+      explanation: outliers.isEmpty && !userWeightOutlier
+          ? null
+          : userWeightOutlier
+              ? 'IRIS ignored an unusually high entered weight because this item has a verified catalogue weight.'
+              : 'IRIS ignored unusually high historical matches because this item has a verified catalogue weight.',
+    );
+  }
+
+  static double _electronicsPackagingAllowanceKg(String text) {
+    if (text.contains('iphone') || text.contains('phone')) return 0.15;
+    if (text.contains('airpods') ||
+        text.contains('earbuds') ||
+        text.contains('headphones')) {
+      return 0.12;
+    }
+    if (text.contains('watch')) return 0.12;
+    if (text.contains('ipad') || text.contains('tablet')) return 0.25;
+    if (text.contains('macbook') || text.contains('laptop')) return 0.4;
+    if (text.contains('console') ||
+        text.contains('playstation') ||
+        text.contains('ps5') ||
+        text.contains('xbox')) {
+      return 0.75;
+    }
+    return 0.25;
+  }
+
   static IrisKnownItemWeightDecision resolveKnownItemWeight({
     required String description,
     required double senderWeightKg,
@@ -213,6 +286,18 @@ class IrisWeightEstimator {
   }
 
   static const List<_KnownIrisProduct> _knownProducts = [
+    _KnownIrisProduct(
+      patterns: ['iphone 16', 'apple iphone 16'],
+      name: 'Apple iPhone 16',
+      weightKg: 0.199,
+      packageType: 'Electronics',
+      truthBand: 'Exact Match',
+      typicalDimensions: ItemDimensionsCm(length: 15, width: 8, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Small fragile electronics package.',
+    ),
     _KnownIrisProduct(
       patterns: ['iphone 13', 'apple iphone 13'],
       name: 'Apple iPhone 13',
@@ -468,6 +553,18 @@ class IrisWeightEstimator {
       vanOnly: true,
     ),
   ];
+}
+
+class IrisTrustedPricingDecision {
+  final double pricingWeightKg;
+  final List<double> ignoredHistoricalOutliers;
+  final String? explanation;
+
+  const IrisTrustedPricingDecision({
+    required this.pricingWeightKg,
+    this.ignoredHistoricalOutliers = const [],
+    this.explanation,
+  });
 }
 
 class IrisKnownItemWeightDecision {
