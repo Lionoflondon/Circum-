@@ -17885,19 +17885,22 @@ class _VehicleStep extends StatelessWidget {
         _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
         const SizedBox(height: 14),
         ..._vehicles.map(
-          (vehicle) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _VehicleTile(
-              colors: colors,
-              vehicle: vehicle,
-              selected: vehicle.name == selectedVehicle.name,
-              enabled: DeliveryPricing.vehicleCanCarryDelivery(
-                vehicle.name,
-                vehicleSuitability,
+          (vehicle) {
+            final disabledReason = DeliveryPricing.vehicleDisabledReason(
+              vehicle.name,
+              vehicleSuitability,
+            );
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _VehicleTile(
+                colors: colors,
+                vehicle: vehicle,
+                selected: vehicle.name == selectedVehicle.name,
+                disabledReason: disabledReason,
+                onTap: () => onVehicle(vehicle),
               ),
-              onTap: () => onVehicle(vehicle),
-            ),
-          ),
+            );
+          },
         ),
         const SizedBox(height: 8),
         _SpeedToggle(
@@ -20748,19 +20751,20 @@ class _VehicleTile extends StatelessWidget {
   final _CircumColors colors;
   final _VehicleOption vehicle;
   final bool selected;
-  final bool enabled;
+  final String? disabledReason;
   final VoidCallback onTap;
 
   const _VehicleTile({
     required this.colors,
     required this.vehicle,
     required this.selected,
-    this.enabled = true,
+    this.disabledReason,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final enabled = disabledReason == null;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: enabled ? onTap : null,
@@ -20787,14 +20791,14 @@ class _VehicleTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    enabled ? vehicle.name : '${vehicle.name} - unavailable',
+                    vehicle.name,
                     style: TextStyle(
                       color: selected ? colors.inverseText : colors.text,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                   Text(
-                    vehicle.caption,
+                    disabledReason ?? vehicle.caption,
                     style: TextStyle(
                       color: selected
                           ? colors.inverseText.withOpacity(0.72)

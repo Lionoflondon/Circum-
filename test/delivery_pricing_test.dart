@@ -413,6 +413,15 @@ void main() {
       expect(DeliveryPricing.vehicleWasUpgraded('Van', 'Car'), isTrue);
       expect(DeliveryPricing.vehicleWasUpgraded('Bike', 'Car'), isFalse);
       expect(DeliveryPricing.vehicleMeetsMinimum('E-bike', 'Bike'), isTrue);
+      expect(DeliveryPricing.vehicleDisabledReason('Bike', small), isNull);
+      expect(
+        DeliveryPricing.vehicleDisabledReason('Bike', suitcase),
+        'Too small for this parcel',
+      );
+      expect(
+        DeliveryPricing.vehicleDisabledReason('Bike', wardrobe),
+        'Too small for this parcel',
+      );
     });
   });
 }

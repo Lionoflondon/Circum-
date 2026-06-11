@@ -65,6 +65,10 @@ class PricingConstants {
     'van': 10,
     'luton van': 0,
   };
+
+  // Vehicle selection is based on parcel safety, not current rider supply.
+  // Add a normalized vehicle name here only when operations disables it.
+  static const Set<String> disabledVehicleTypes = {};
 }
 
 class WeightBand {

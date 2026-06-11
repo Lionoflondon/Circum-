@@ -538,7 +538,29 @@ class DeliveryPricing {
     String? vehicleType,
     VehicleSuitability suitability,
   ) {
-    return suitability.allows(vehicleType);
+    final normalized = vehicleType?.trim().toLowerCase();
+    return normalized != null &&
+        !PricingConstants.disabledVehicleTypes.contains(normalized) &&
+        suitability.allows(vehicleType);
+  }
+
+  static String? vehicleDisabledReason(
+    String? vehicleType,
+    VehicleSuitability suitability,
+  ) {
+    final normalized = vehicleType?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return 'Not safe for this item';
+    }
+    if (PricingConstants.disabledVehicleTypes.contains(normalized)) {
+      return 'Disabled by admin';
+    }
+    if (suitability.allows(vehicleType)) return null;
+    if (suitability.fragile) return 'Not safe for this item';
+    if (!vehicleMeetsMinimum(vehicleType, suitability.recommendedVehicle)) {
+      return 'Too small for this parcel';
+    }
+    return 'Not safe for this item';
   }
 
   static bool vehicleWasUpgraded(
