@@ -5011,7 +5011,8 @@ class _RiderOrderProfileCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _HealthChip(label: 'The Circum Order'),
+              if (MediaQuery.sizeOf(context).width >= 430)
+                _HealthChip(label: 'The Circum Order'),
             ],
           ),
           const SizedBox(height: 14),
@@ -5040,33 +5041,30 @@ class _RiderOrderProfileCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.8,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
-              Expanded(
-                child: _RiderStatTile(
-                  colors: colors,
-                  label: 'Deliveries',
-                  value: '${performance.completedTrips}',
-                ),
+              _RiderStatTile(
+                colors: colors,
+                label: 'Deliveries',
+                value: '${performance.completedTrips}',
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _RiderStatTile(
-                  colors: colors,
-                  label: 'Rating',
-                  value: rating,
-                ),
+              _RiderStatTile(
+                colors: colors,
+                label: 'Rating',
+                value: rating,
               ),
-              if (memberSince != null) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _RiderStatTile(
-                    colors: colors,
-                    label: 'Member since',
-                    value: _adminDateText(memberSince),
-                  ),
+              if (memberSince != null)
+                _RiderStatTile(
+                  colors: colors,
+                  label: 'Member since',
+                  value: _adminDateText(memberSince),
                 ),
-              ],
             ],
           ),
         ],
@@ -5110,9 +5108,9 @@ class _RiderPortalTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       decoration: BoxDecoration(
-        color: colors.background,
+        color: const Color(0xff030712),
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SingleChildScrollView(
@@ -5125,13 +5123,20 @@ class _RiderPortalTabs extends StatelessWidget {
                 avatar: Icon(_riderTabIcon(tab), size: 18),
                 label: Text(_riderTabLabel(tab)),
                 onSelected: (_) => onSelected(tab),
-                selectedColor: colors.text,
-                backgroundColor: colors.field,
+                selectedColor: const Color(0xff2563eb),
+                backgroundColor: const Color(0xff111827),
                 labelStyle: TextStyle(
-                  color: selected == tab ? colors.inverseText : colors.text,
+                  color: Colors.white,
                   fontWeight: FontWeight.w900,
                 ),
-                side: BorderSide(color: colors.border),
+                side: BorderSide(
+                  color: selected == tab
+                      ? const Color(0xff60a5fa)
+                      : const Color(0xff253047),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               const SizedBox(width: 8),
             ],
@@ -5153,62 +5158,96 @@ class _RiderEarningsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
       children: [
-        _GlassPanel(
-          colors: colors,
+        Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xff2563eb), Color(0xff4f46e5)],
+            ),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x552563eb),
+                blurRadius: 30,
+                offset: Offset(0, 14),
+              ),
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(colors: colors, title: 'Rider earnings'),
-              const SizedBox(height: 10),
-              Text(
-                'Drivers earn 65% of each completed delivery. Track completed jobs, available balance, pending withdrawals, tips, and lifetime earnings from your rider dashboard.',
+              const Text(
+                'AVAILABLE TO WITHDRAW',
                 style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.4,
+                  color: Color(0xffdbeafe),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _RiderWorkspace._money(earnings.availableBalance),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 40,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Your cleared delivery earnings are ready when you are.',
+                style: TextStyle(
+                  color: Color(0xffdbeafe),
+                  height: 1.35,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _RiderStatTile(
-                      colors: colors,
-                      label: 'Available',
-                      value: _RiderWorkspace._money(earnings.availableBalance),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _RiderStatTile(
-                      colors: colors,
-                      label: 'Tips',
-                      value: _RiderWorkspace._money(earnings.tipsReceived),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _RiderStatTile(
-                      colors: colors,
-                      label: 'Lifetime',
-                      value: _RiderWorkspace._money(earnings.lifetimeEarnings),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _RiderStatTile(
-                      colors: colors,
-                      label: 'Completed',
-                      value: '${earnings.completedJobs}',
-                    ),
-                  ),
-                ],
-              ),
             ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.55,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _RiderStatTile(
+              colors: colors,
+              label: 'Tips',
+              value: _RiderWorkspace._money(earnings.tipsReceived),
+            ),
+            _RiderStatTile(
+              colors: colors,
+              label: 'Pending',
+              value: _RiderWorkspace._money(earnings.pendingWithdrawal),
+            ),
+            _RiderStatTile(
+              colors: colors,
+              label: 'Jobs',
+              value: '${earnings.completedJobs}',
+            ),
+            _RiderStatTile(
+              colors: colors,
+              label: 'Withdrawn',
+              value: _RiderWorkspace._money(earnings.withdrawnEarnings),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _GlassPanel(
+          colors: colors,
+          child: Text(
+            'Drivers earn 65% of each completed delivery. Withdrawal requests and bank details remain available in your rider overview.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
@@ -5234,22 +5273,57 @@ class _RiderReferralsTab extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Referrals'),
               const SizedBox(height: 10),
               Text(
-                'Invite reliable operators into the Circum network. Referral rewards, eligibility rules, and progress tracking can be attached here when the referral programme launches.',
+                'Earn £10 for every verified rider you refer.',
                 style: TextStyle(
-                  color: colors.mutedText,
+                  color: colors.text,
+                  fontSize: 21,
                   height: 1.45,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: const [
-                  _HealthChip(label: 'Future rewards'),
-                  _HealthChip(label: 'Trusted operators'),
-                  _HealthChip(label: 'Network growth'),
-                ],
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xff0b1730),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xff2563eb)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'YOUR REFERRAL CODE',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Available after rider verification',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.ios_share),
+                  label: const Text('Share referral link'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
               ),
             ],
           ),
@@ -7270,7 +7344,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = widget.colors;
+    const colors = _CircumColors(true);
     return Stack(
       children: [
         LayoutBuilder(
@@ -7649,9 +7723,9 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colors.field,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: colors.border),
+                color: const Color(0xff0f172a),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xff26334d)),
               ),
               child: Text(
                 note,
@@ -7962,9 +8036,15 @@ class _RiderWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final signedIn = user != null;
+    final compact = MediaQuery.sizeOf(context).width < 600;
     return Container(
-      color: colors.band,
-      padding: const EdgeInsets.all(28),
+      color: const Color(0xff030712),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 16 : 28,
+        compact ? 18 : 28,
+        compact ? 16 : 28,
+        34,
+      ),
       child: ListView(
         shrinkWrap: nested,
         physics: nested ? const NeverScrollableScrollPhysics() : null,
@@ -7976,7 +8056,7 @@ class _RiderWorkspace extends StatelessWidget {
                   'Rider dashboard',
                   style: TextStyle(
                     color: colors.text,
-                    fontSize: 30,
+                    fontSize: compact ? 28 : 34,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -8092,13 +8172,46 @@ class _RiderWorkspace extends StatelessWidget {
               children: [
                 _SectionTitle(colors: colors, title: 'Earnings'),
                 const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xff2563eb), Color(0xff4f46e5)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'AVAILABLE TO WITHDRAW',
+                        style: TextStyle(
+                          color: Color(0xffdbeafe),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _money(earnings.availableBalance),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: _RiderStatTile(
                         colors: colors,
-                        label: 'Available',
-                        value: _money(earnings.availableBalance),
+                        label: 'Tips',
+                        value: _money(earnings.tipsReceived),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -8132,24 +8245,10 @@ class _RiderWorkspace extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _RiderStatTile(
-                        colors: colors,
-                        label: 'Tips',
-                        value: _money(earnings.tipsReceived),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _RiderStatTile(
-                        colors: colors,
-                        label: 'Withdrawn',
-                        value: _money(earnings.withdrawnEarnings),
-                      ),
-                    ),
-                  ],
+                _RiderStatTile(
+                  colors: colors,
+                  label: 'Withdrawn',
+                  value: _money(earnings.withdrawnEarnings),
                 ),
               ],
             ),
@@ -8407,15 +8506,21 @@ class _RiderDocumentStatusList extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: colors.field,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: colors.border),
+            color: const Color(0xff0f172a),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xff26334d)),
           ),
           child: Row(
             children: [
               Icon(
                 _statusIcon(status),
-                color: rejected ? const Color(0xffdc2626) : colors.text,
+                color: rejected
+                    ? const Color(0xfff97316)
+                    : status == 'approved'
+                        ? const Color(0xff22c55e)
+                        : status == 'missing'
+                            ? const Color(0xff60a5fa)
+                            : const Color(0xfff59e0b),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -8454,6 +8559,13 @@ class _RiderDocumentStatusList extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () => onSelectType(type),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xff60a5fa),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                ),
                 child: Text(status == 'missing' ? 'Upload' : 'Replace'),
               ),
             ],
@@ -8991,9 +9103,8 @@ class _DriverJobCard extends StatelessWidget {
           _JobInfoLine(
             colors: colors,
             icon: Icons.schedule,
-            label: 'Pickup window',
-            value:
-                '${summary['scheduledPickupDate'] ?? job['scheduledPickupDate'] ?? 'Flexible'} ${summary['scheduledPickupWindow'] ?? job['scheduledPickupWindow'] ?? ''}',
+            label: 'Delivery timing',
+            value: _deliveryTimingLabel(summary, job),
           ),
           _JobInfoLine(
             colors: colors,
@@ -9113,6 +9224,20 @@ class _DriverJobCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _deliveryTimingLabel(
+    Map<String, dynamic> summary,
+    Map<String, dynamic> job,
+  ) {
+    final type =
+        '${summary['deliveryTimingType'] ?? job['deliveryTimingType'] ?? ''}'
+            .toLowerCase();
+    if (type == 'asap') return 'Immediate Delivery';
+    if (type == 'today') {
+      return 'Today Delivery · ${summary['scheduledPickupWindow'] ?? job['scheduledPickupWindow'] ?? 'Flexible'}';
+    }
+    return '${summary['scheduledPickupDate'] ?? job['scheduledPickupDate'] ?? 'Scheduled'} · ${summary['scheduledPickupWindow'] ?? job['scheduledPickupWindow'] ?? 'Flexible'}';
   }
 
   static double _num(Object? value) {
@@ -9463,8 +9588,9 @@ class _RiderStatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xff111827),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xff253047)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9594,6 +9720,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _scheduledPickupWindow = TextEditingController();
   final _scheduledDropoffDate = TextEditingController();
   final _scheduledDropoffWindow = TextEditingController();
+  String? _deliveryTimingType;
   final _chatInput = TextEditingController();
   final _healthName = TextEditingController();
   final _healthPhone = TextEditingController();
@@ -9992,6 +10119,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           scheduledPickupWindow: _scheduledPickupWindow,
           scheduledDropoffDate: _scheduledDropoffDate,
           scheduledDropoffWindow: _scheduledDropoffWindow,
+          deliveryTimingType: _deliveryTimingType,
+          onDeliveryTimingChanged: _setDeliveryTimingType,
           analyzing: _analyzing,
           onSubmit: _analyseRequest,
         ),
@@ -10252,7 +10381,49 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool get _dropoffAddressVerified => _validatedDropoff?.hasCoordinates == true;
 
   bool get _canAnalyzeDelivery {
-    return _hasValidatedRoute && _hasRequiredContactDetails && !_analyzing;
+    return _hasValidatedRoute &&
+        _hasRequiredContactDetails &&
+        _hasValidDeliveryTiming &&
+        !_analyzing;
+  }
+
+  bool get _hasValidDeliveryTiming {
+    return switch (_deliveryTimingType) {
+      'asap' => true,
+      'today' => _scheduledPickupWindow.text.trim().isNotEmpty &&
+          _scheduledDropoffWindow.text.trim().isNotEmpty,
+      'scheduled' => _scheduledPickupDate.text.trim().isNotEmpty &&
+          _scheduledDropoffDate.text.trim().isNotEmpty &&
+          _scheduledPickupWindow.text.trim().isNotEmpty &&
+          _scheduledDropoffWindow.text.trim().isNotEmpty,
+      _ => false,
+    };
+  }
+
+  void _setDeliveryTimingType(String value) {
+    final today = _dateInputValue(DateTime.now());
+    setState(() {
+      _deliveryTimingType = value;
+      _scheduledPickupDate.clear();
+      _scheduledPickupWindow.clear();
+      _scheduledDropoffDate.clear();
+      _scheduledDropoffWindow.clear();
+      if (value == 'asap') {
+        _scheduledPickupDate.text = today;
+        _scheduledPickupWindow.text = 'ASAP';
+        _scheduledDropoffDate.text = today;
+        _scheduledDropoffWindow.text = 'ASAP';
+      } else if (value == 'today') {
+        _scheduledPickupDate.text = today;
+        _scheduledDropoffDate.text = today;
+      }
+    });
+  }
+
+  static String _dateInputValue(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
   }
 
   String get _effectiveSenderName {
@@ -12409,6 +12580,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
       'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
       'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
+      'deliveryTimingType': _deliveryTimingType,
       'confirmedWeightKg': classification.finalWeightKg,
       'confirmedWeightBand': classification.finalWeightBand,
       'deliveryClassification': {
@@ -12592,6 +12764,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
       'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
       'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
+      'deliveryTimingType': _deliveryTimingType,
       'weightCategory': classification.finalWeightBand,
       'vehicle': safeVehicleName,
       'selectedVehicle': safeVehicleName,
@@ -15395,6 +15568,8 @@ class _DetailsStep extends StatelessWidget {
   final TextEditingController scheduledPickupWindow;
   final TextEditingController scheduledDropoffDate;
   final TextEditingController scheduledDropoffWindow;
+  final String? deliveryTimingType;
+  final ValueChanged<String> onDeliveryTimingChanged;
   final String? parcelPhotoName;
   final bool parcelPhotoBusy;
   final String? parcelPhotoMessage;
@@ -15452,6 +15627,8 @@ class _DetailsStep extends StatelessWidget {
     required this.scheduledPickupWindow,
     required this.scheduledDropoffDate,
     required this.scheduledDropoffWindow,
+    required this.deliveryTimingType,
+    required this.onDeliveryTimingChanged,
     required this.parcelPhotoName,
     required this.parcelPhotoBusy,
     required this.parcelPhotoMessage,
@@ -15476,7 +15653,9 @@ class _DetailsStep extends StatelessWidget {
                     ? 'Verify addresses before pricing'
                     : !contactDetailsReady
                         ? 'Add contact details before pricing'
-                        : 'Confirm route before pricing';
+                        : deliveryTimingType == null
+                            ? 'Choose delivery timing'
+                            : 'Complete delivery timing';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -15688,61 +15867,94 @@ class _DetailsStep extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(colors: colors, title: 'Schedule'),
+              _SectionTitle(colors: colors, title: 'When do you need this?'),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _CompactSelectBox(
-                      colors: colors,
-                      controller: scheduledPickupDate,
-                      label: 'Pickup date',
-                      options: _scheduleDateOptions,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _CompactSelectBox(
-                      colors: colors,
-                      controller: scheduledPickupWindow,
-                      label: 'Pickup window',
-                      options: _pickupWindowOptions,
-                    ),
-                  ),
-                ],
+              _DeliveryTimingChoices(
+                colors: colors,
+                selected: deliveryTimingType,
+                onSelected: onDeliveryTimingChanged,
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _CompactSelectBox(
-                      colors: colors,
-                      controller: scheduledDropoffDate,
-                      label: 'Delivery date',
-                      options: _scheduleDateOptions,
+              if (deliveryTimingType == 'today') ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CompactSelectBox(
+                        colors: colors,
+                        controller: scheduledPickupWindow,
+                        label: 'Pickup window',
+                        options: _todayWindowOptions,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _CompactSelectBox(
-                      colors: colors,
-                      controller: scheduledDropoffWindow,
-                      label: 'Delivery window',
-                      options: _deliveryWindowOptions,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CompactSelectBox(
+                        colors: colors,
+                        controller: scheduledDropoffWindow,
+                        label: 'Delivery window',
+                        options: _todayWindowOptions,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Pick the times that work best for collection and delivery.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  fontSize: 12,
-                  height: 1.35,
-                  fontWeight: FontWeight.w600,
+                  ],
                 ),
-              ),
+              ],
+              if (deliveryTimingType == 'scheduled') ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ScheduleDateButton(
+                        colors: colors,
+                        controller: scheduledPickupDate,
+                        label: 'Pickup date',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CompactSelectBox(
+                        colors: colors,
+                        controller: scheduledPickupWindow,
+                        label: 'Pickup window',
+                        options: _todayWindowOptions,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ScheduleDateButton(
+                        colors: colors,
+                        controller: scheduledDropoffDate,
+                        label: 'Delivery date',
+                        minimumDateController: scheduledPickupDate,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CompactSelectBox(
+                        colors: colors,
+                        controller: scheduledDropoffWindow,
+                        label: 'Delivery window',
+                        options: _todayWindowOptions,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (deliveryTimingType == 'asap') ...[
+                const SizedBox(height: 12),
+                Text(
+                  'We will show delivery options now. Rider matching starts after payment and booking confirmation.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -19790,29 +20002,287 @@ class _InputBox extends StatelessWidget {
   }
 }
 
-const _scheduleDateOptions = [
-  'Today',
-  'Tomorrow',
-  'Next 2 days',
-  'This week',
-  'Choose later',
-];
+const _todayWindowOptions = ['Morning', 'Afternoon', 'Evening'];
 
-const _pickupWindowOptions = [
-  'ASAP',
-  'Morning',
-  'Afternoon',
-  'Evening',
-  'Flexible',
-];
+class _DeliveryTimingChoices extends StatelessWidget {
+  final _CircumColors colors;
+  final String? selected;
+  final ValueChanged<String> onSelected;
 
-const _deliveryWindowOptions = [
-  'Same day',
-  'Morning',
-  'Afternoon',
-  'Evening',
-  'Flexible',
-];
+  const _DeliveryTimingChoices({
+    required this.colors,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const choices = [
+      ('asap', Icons.bolt, 'ASAP', 'Book now', 'FAST'),
+      ('today', Icons.schedule, 'Today', 'Pick a window', ''),
+      ('scheduled', Icons.calendar_month, 'Schedule', 'Any day', ''),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 560;
+        final cards = choices
+            .map(
+              (choice) => _DeliveryTimingCard(
+                colors: colors,
+                value: choice.$1,
+                icon: choice.$2,
+                title: choice.$3,
+                subtitle: choice.$4,
+                badge: choice.$5,
+                selected: selected == choice.$1,
+                onTap: () => onSelected(choice.$1),
+              ),
+            )
+            .toList();
+        if (stacked) {
+          return Column(
+            children: [
+              for (var index = 0; index < cards.length; index++) ...[
+                cards[index],
+                if (index < cards.length - 1) const SizedBox(height: 10),
+              ],
+            ],
+          );
+        }
+        return Row(
+          children: [
+            for (var index = 0; index < cards.length; index++) ...[
+              Expanded(child: cards[index]),
+              if (index < cards.length - 1) const SizedBox(width: 10),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DeliveryTimingCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String value;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String badge;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DeliveryTimingCard({
+    required this.colors,
+    required this.value,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$title, $subtitle',
+      child: InkWell(
+        key: ValueKey('delivery-timing-$value'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          constraints: const BoxConstraints(minHeight: 102),
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xff2563eb).withOpacity(0.16)
+                : colors.field,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? const Color(0xff60a5fa) : colors.border,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  gradient: selected
+                      ? const LinearGradient(colors: _spectrumGradient)
+                      : null,
+                  color: selected ? null : colors.panel,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: selected ? Colors.white : colors.text),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        if (badge.isNotEmpty) ...[
+                          const SizedBox(width: 7),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xff22c55e),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              badge,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected ? Icons.check_circle : Icons.chevron_right,
+                color: selected ? colors.success : colors.mutedText,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleDateButton extends StatefulWidget {
+  final _CircumColors colors;
+  final TextEditingController controller;
+  final TextEditingController? minimumDateController;
+  final String label;
+
+  const _ScheduleDateButton({
+    required this.colors,
+    required this.controller,
+    required this.label,
+    this.minimumDateController,
+  });
+
+  @override
+  State<_ScheduleDateButton> createState() => _ScheduleDateButtonState();
+}
+
+class _ScheduleDateButtonState extends State<_ScheduleDateButton> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final minimum = DateTime.tryParse(widget.minimumDateController?.text ?? '');
+    final firstDate = minimum != null && minimum.isAfter(now) ? minimum : now;
+    final current = DateTime.tryParse(widget.controller.text);
+    final selected = await showDatePicker(
+      context: context,
+      initialDate:
+          current != null && !current.isBefore(firstDate) ? current : firstDate,
+      firstDate: firstDate,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (selected == null) return;
+    final month = selected.month.toString().padLeft(2, '0');
+    final day = selected.day.toString().padLeft(2, '0');
+    widget.controller.text = '${selected.year}-$month-$day';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.controller.text.trim();
+    return InkWell(
+      onTap: _pickDate,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+        decoration: BoxDecoration(
+          color: widget.colors.field,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_month, color: widget.colors.text, size: 20),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: widget.colors.mutedText,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value.isEmpty ? 'Choose date' : value,
+                    style: TextStyle(
+                      color: widget.colors.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _CompactSelectBox extends StatefulWidget {
   final _CircumColors colors;
