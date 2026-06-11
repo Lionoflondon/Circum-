@@ -22113,26 +22113,37 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                 constraints: const BoxConstraints(maxWidth: 900),
                 child: Column(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      height: narrow ? 270 : 360,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(color: colors.border),
-                        boxShadow: [
-                          BoxShadow(
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: Container(
+                        width: narrow ? double.infinity : 620,
+                        constraints: const BoxConstraints(maxWidth: 620),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          color: Colors.black,
+                          border: Border.all(
                             color:
-                                const Color(0xff7c9cff).withValues(alpha: 0.2),
-                            blurRadius: 40,
-                            offset: const Offset(0, 18),
+                                const Color(0xff70f5d0).withValues(alpha: 0.24),
                           ),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Image.asset(
-                        'assets/images/gifts_by_circum.png',
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xff9b72ff)
+                                  .withValues(alpha: 0.24),
+                              blurRadius: 46,
+                              offset: const Offset(0, 18),
+                            ),
+                          ],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Semantics(
+                          image: true,
+                          label: 'Gifts by Circum logo',
+                          child: Image.asset(
+                            'assets/images/gifts_by_circum_logo.jpg',
+                            fit: BoxFit.contain,
+                            semanticLabel: 'Gifts by Circum logo',
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 28),
