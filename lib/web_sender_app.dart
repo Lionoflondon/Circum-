@@ -5943,6 +5943,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     rejectedBy.contains(currentRider))) {
               return false;
             }
+            final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}';
+            final requiredVehicle =
+                '${job['irisRecommendedVehicle'] ?? job['vehicleType'] ?? ''}';
+            if (riderVehicle.isNotEmpty &&
+                requiredVehicle.isNotEmpty &&
+                !DeliveryPricing.vehicleMeetsMinimum(
+                  riderVehicle,
+                  requiredVehicle,
+                )) {
+              return false;
+            }
             return matchingStatus == 'available' ||
                 matchingStatus == 'requested';
           }).toList();
@@ -10565,7 +10576,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final quote = _quoteBreakdown;
     return classification.finalWeightKg > 0 &&
         classification.finalWeightBand == quote.weightCategory &&
-        _vehicleSuitability.recommendedVehicle == _effectiveVehicle.name &&
         DeliveryPricing.vehicleCanCarryDelivery(
           _effectiveVehicle.name,
           _vehicleSuitability,
@@ -10575,6 +10585,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   _VehicleOption get _effectiveVehicle {
+    if (DeliveryPricing.vehicleCanCarryDelivery(
+      _selectedVehicle.name,
+      _vehicleSuitability,
+    )) {
+      return _selectedVehicle;
+    }
     final recommendedVehicleName = _vehicleSuitability.recommendedVehicle;
     return _vehicles.firstWhere(
       (vehicle) => vehicle.name == recommendedVehicleName,
@@ -12685,7 +12701,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final parcelPhotoUrl =
         parcelPhotoData['imageUrl'] ?? parcelPhotoData['photoUrl'];
     final suitability = _vehicleSuitability;
-    final safeVehicleName = suitability.recommendedVehicle;
+    final safeVehicleName = _effectiveVehicle.name;
+    final irisRecommendedVehicle = suitability.recommendedVehicle;
+    final vehicleWasUpgraded = DeliveryPricing.vehicleWasUpgraded(
+      safeVehicleName,
+      irisRecommendedVehicle,
+    );
     final driverPayout = DeliveryPricing.riderPayoutFromFare(quote.total);
     final platformRevenue = DeliveryPricing.platformRevenueFromFare(
       quote.total,
@@ -12730,7 +12751,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'singleItemWeightKg': _irisSingleItemWeightKg,
       'totalEstimatedWeightKg': _irisEstimatedWeightKg,
       'weightClass': _irisWeightBand,
-      'irisRecommendedVehicle': safeVehicleName,
+      'irisRecommendedVehicle': irisRecommendedVehicle,
+      'userSelectedVehicle': safeVehicleName,
+      'vehicleWasUpgraded': vehicleWasUpgraded,
       'hasPhoto': hasPhoto,
       'photoUrl': parcelPhotoUrl,
       'irisImageAnalysis': _irisImageInsight?.toJson(),
@@ -12811,7 +12834,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'singleItemWeightKg': _irisSingleItemWeightKg,
       'totalEstimatedWeightKg': _irisEstimatedWeightKg,
       'weightClass': _irisWeightBand,
-      'irisRecommendedVehicle': safeVehicleName,
+      'irisRecommendedVehicle': irisRecommendedVehicle,
+      'userSelectedVehicle': safeVehicleName,
+      'vehicleWasUpgraded': vehicleWasUpgraded,
       'hasPhoto': hasPhoto,
       'imageUrl': parcelPhotoUrl,
       'photoUrl': parcelPhotoUrl,
@@ -17839,6 +17864,24 @@ class _VehicleStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
+        Text(
+          'Choose your vehicle',
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          'IRIS recommends the smallest safe vehicle. You can choose a larger vehicle if preferred.',
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.35,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
         _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
         const SizedBox(height: 14),
         ..._vehicles.map(
@@ -17848,6 +17891,10 @@ class _VehicleStep extends StatelessWidget {
               colors: colors,
               vehicle: vehicle,
               selected: vehicle.name == selectedVehicle.name,
+              enabled: DeliveryPricing.vehicleCanCarryDelivery(
+                vehicle.name,
+                vehicleSuitability,
+              ),
               onTap: () => onVehicle(vehicle),
             ),
           ),
@@ -20701,12 +20748,14 @@ class _VehicleTile extends StatelessWidget {
   final _CircumColors colors;
   final _VehicleOption vehicle;
   final bool selected;
+  final bool enabled;
   final VoidCallback onTap;
 
   const _VehicleTile({
     required this.colors,
     required this.vehicle,
     required this.selected,
+    this.enabled = true,
     required this.onTap,
   });
 
@@ -20714,7 +20763,7 @@ class _VehicleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(15),
@@ -20728,14 +20777,17 @@ class _VehicleTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(vehicle.emoji, style: const TextStyle(fontSize: 27)),
+            Opacity(
+              opacity: enabled ? 1 : 0.38,
+              child: Text(vehicle.emoji, style: const TextStyle(fontSize: 27)),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    vehicle.name,
+                    enabled ? vehicle.name : '${vehicle.name} - unavailable',
                     style: TextStyle(
                       color: selected ? colors.inverseText : colors.text,
                       fontWeight: FontWeight.w900,

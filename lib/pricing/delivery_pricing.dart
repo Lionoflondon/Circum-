@@ -458,7 +458,9 @@ class DeliveryPricing {
         weightKg <= 50 &&
         !oversizedDimensions;
 
-    var allowed = <String>{'Bike'};
+    // The recommendation is the minimum safe vehicle. Larger vehicles remain
+    // valid sender upgrades.
+    var allowed = <String>{'Bike', 'Car', 'Van'};
     var recommended = 'Bike';
     var score = 30;
 
@@ -537,6 +539,36 @@ class DeliveryPricing {
     VehicleSuitability suitability,
   ) {
     return suitability.allows(vehicleType);
+  }
+
+  static bool vehicleWasUpgraded(
+    String? selectedVehicle,
+    String? recommendedVehicle,
+  ) {
+    final selected = _vehicleCapabilityRank(selectedVehicle);
+    final recommended = _vehicleCapabilityRank(recommendedVehicle);
+    return selected != null && recommended != null && selected > recommended;
+  }
+
+  static bool vehicleMeetsMinimum(
+    String? selectedVehicle,
+    String? recommendedVehicle,
+  ) {
+    final selected = _vehicleCapabilityRank(selectedVehicle);
+    final recommended = _vehicleCapabilityRank(recommendedVehicle);
+    return selected != null && recommended != null && selected >= recommended;
+  }
+
+  static int? _vehicleCapabilityRank(String? vehicleType) {
+    const order = {
+      'bike': 0,
+      'bicycle': 0,
+      'e-bike': 0,
+      'ebike': 0,
+      'car': 1,
+      'van': 2,
+    };
+    return order[vehicleType?.trim().toLowerCase()];
   }
 
   static String _normalizeVehicle(String? vehicleType) {

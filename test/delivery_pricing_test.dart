@@ -387,5 +387,32 @@ void main() {
       expect(fiveSuitcases.recommendedVehicle, 'Van');
       expect(wardrobe.recommendedVehicle, 'Van');
     });
+
+    test('sender can upgrade but cannot downgrade the safe vehicle', () {
+      final small = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 1,
+        description: 'Small envelope',
+      );
+      final suitcase = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 23,
+        description: '23kg suitcase',
+      );
+      final wardrobe = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 23,
+        description: 'Wardrobe',
+      );
+
+      expect(small.recommendedVehicle, 'Bike');
+      expect(small.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
+      expect(suitcase.recommendedVehicle, 'Car');
+      expect(suitcase.allows('Bike'), isFalse);
+      expect(suitcase.allows('Car'), isTrue);
+      expect(suitcase.allows('Van'), isTrue);
+      expect(wardrobe.recommendedVehicle, 'Van');
+      expect(wardrobe.allowedVehicles, ['Van']);
+      expect(DeliveryPricing.vehicleWasUpgraded('Van', 'Car'), isTrue);
+      expect(DeliveryPricing.vehicleWasUpgraded('Bike', 'Car'), isFalse);
+      expect(DeliveryPricing.vehicleMeetsMinimum('E-bike', 'Bike'), isTrue);
+    });
   });
 }

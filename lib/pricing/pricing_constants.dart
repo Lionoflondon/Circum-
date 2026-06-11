@@ -58,7 +58,7 @@ class PricingConstants {
   static const Map<String, double> vehicleSurchargesGbp = {
     'bike': 0,
     'bicycle': 0,
-    'car': 0,
+    'car': 2,
     'estate': 5,
     'suv': 5,
     'estate/suv': 5,
