@@ -10365,7 +10365,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DeliveryClassification get _deliveryClassification {
     return DeliveryPricing.resolveClassification(
       description: _description.text,
-      userEnteredWeightKg: _senderEnteredWeightKg ??
+      userEnteredWeightKg: _confirmedWeightKg ??
+          _senderEnteredWeightKg ??
           DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
       irisEstimateKg: _irisEstimatedWeightKg,
       historicalVerifiedMaxKg: _irisHistoricalVerifiedWeightKg,
@@ -11544,6 +11545,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required _IrisWeightEstimate estimate,
     required double? senderWeightKg,
   }) {
+    final knownItemDecision = senderWeightKg != null && senderWeightKg > 0
+        ? IrisWeightEstimator.resolveKnownItemWeight(
+            description: _description.text,
+            senderWeightKg: senderWeightKg,
+          )
+        : null;
+    if (knownItemDecision?.unusual == true && estimate.confidence == 'high') {
+      final pricingWeight = knownItemDecision!.pricingWeightKg;
+      return _WeightPricingDecision(
+        weightKg: pricingWeight,
+        weightBand: DeliveryPricing.weightBandFor(pricingWeight).category,
+        source: 'repository_match',
+        message: knownItemDecision.warning!,
+        reason: knownItemDecision.warning!,
+        verificationRequired: true,
+      );
+    }
     final classification = DeliveryPricing.resolveClassification(
       description: _description.text,
       userEnteredWeightKg: senderWeightKg,

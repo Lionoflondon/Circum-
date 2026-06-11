@@ -163,6 +163,58 @@ void main() {
       expect(suitcase.vehicleSuitability, 'Car');
     });
 
+    test('known item discrepancies use expected weight and metadata', () {
+      final iphoneNine = IrisWeightEstimator.resolveKnownItemWeight(
+        description: 'iPhone 15',
+        senderWeightKg: 9,
+      );
+      final iphoneThree = IrisWeightEstimator.resolveKnownItemWeight(
+        description: 'iPhone',
+        senderWeightKg: 3,
+      );
+      final boxedPhone = IrisWeightEstimator.resolveKnownItemWeight(
+        description: 'boxed iPhone',
+        senderWeightKg: 0.8,
+      );
+      final macBook = IrisWeightEstimator.resolveKnownItemWeight(
+        description: 'MacBook',
+        senderWeightKg: 3,
+      );
+      final heavyMacBook = IrisWeightEstimator.resolveKnownItemWeight(
+        description: 'MacBook',
+        senderWeightKg: 20,
+      );
+
+      expect(iphoneNine.unusual, isTrue);
+      expect(iphoneNine.pricingWeightKg, lessThan(2));
+      expect(iphoneNine.warning, contains('Weight looks unusual'));
+      expect(iphoneThree.unusual, isTrue);
+      expect(boxedPhone.unusual, isFalse);
+      expect(boxedPhone.pricingWeightKg, 0.8);
+      expect(macBook.unusual, isFalse);
+      expect(macBook.category, 'Electronics');
+      expect(macBook.fragile, isTrue);
+      expect(macBook.valueSensitive, isTrue);
+      expect(macBook.vanguardRecommended, isTrue);
+      expect(heavyMacBook.unusual, isTrue);
+    });
+
+    test('generic parcels are not overridden and bulky lows are flagged', () {
+      final generic = IrisWeightEstimator.resolveKnownItemWeight(
+        description: 'generic parcel box',
+        senderWeightKg: 9,
+      );
+      final washingMachine = IrisWeightEstimator.resolveKnownItemWeight(
+        description: 'washing machine',
+        senderWeightKg: 5,
+      );
+
+      expect(generic.unusual, isFalse);
+      expect(generic.pricingWeightKg, 9);
+      expect(washingMachine.unusual, isTrue);
+      expect(washingMachine.vanOnly, isTrue);
+    });
+
     test('quantity parser supports common sender formats and safe defaults',
         () {
       expect(IrisWeightEstimator.extractQuantity('Sofa'), 1);

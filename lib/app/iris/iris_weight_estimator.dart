@@ -17,6 +17,8 @@ class IrisWeightLookupResult {
   final ItemDimensionsCm? typicalDimensions;
   final String vehicleSuitability;
   final bool fragile;
+  final bool valueSensitive;
+  final bool vanguardRecommended;
   final bool stackable;
   final String handlingNotes;
 
@@ -36,6 +38,8 @@ class IrisWeightLookupResult {
     required this.typicalDimensions,
     required this.vehicleSuitability,
     required this.fragile,
+    required this.valueSensitive,
+    required this.vanguardRecommended,
     required this.stackable,
     required this.handlingNotes,
   });
@@ -71,6 +75,7 @@ class IrisWeightEstimator {
     final quantity = extractQuantity(description);
     for (final product in _knownProducts) {
       if (product.patterns.any(text.contains)) {
+        final electronics = product.packageType == 'Electronics';
         final totalWeightKg = product.weightKg * quantity;
         final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
         return IrisWeightLookupResult(
@@ -92,6 +97,8 @@ class IrisWeightEstimator {
           typicalDimensions: product.typicalDimensions,
           vehicleSuitability: product.vehicleSuitability,
           fragile: product.fragile,
+          valueSensitive: electronics,
+          vanguardRecommended: electronics,
           stackable: product.stackable,
           handlingNotes: product.handlingNotes,
         );
@@ -132,12 +139,59 @@ class IrisWeightEstimator {
         ),
         vehicleSuitability: repositoryItem.vehicleSuitability,
         fragile: repositoryItem.fragile,
+        valueSensitive: repositoryItem.highValue,
+        vanguardRecommended: repositoryItem.requiresVanguard,
         stackable: repositoryItem.stackable,
         handlingNotes: repositoryItem.deliveryNotes,
       );
     }
     return null;
   }
+
+  static IrisKnownItemWeightDecision resolveKnownItemWeight({
+    required String description,
+    required double senderWeightKg,
+  }) {
+    final text = description.trim().toLowerCase();
+    final rule = _knownItemRules.cast<_KnownItemRule?>().firstWhere(
+          (candidate) =>
+              candidate!.patterns.any((pattern) => text.contains(pattern)),
+          orElse: () => null,
+        );
+    if (rule == null) {
+      return IrisKnownItemWeightDecision(
+        senderWeightKg: senderWeightKg,
+        pricingWeightKg: senderWeightKg,
+      );
+    }
+
+    final unusuallyHigh = senderWeightKg >= rule.maximumKg * 3;
+    final unusuallyLow =
+        rule.heavyOrBulky && senderWeightKg < rule.minimumKg * 0.4;
+    final unusual = unusuallyHigh || unusuallyLow;
+    final expectedWeightKg = rule.expectedWeightKg;
+    return IrisKnownItemWeightDecision(
+      senderWeightKg: senderWeightKg,
+      expectedWeightKg: expectedWeightKg,
+      pricingWeightKg: unusual
+          ? expectedWeightKg
+          : senderWeightKg > expectedWeightKg
+              ? senderWeightKg
+              : expectedWeightKg,
+      unusual: unusual,
+      warning: unusual
+          ? 'Weight looks unusual for this item. You entered ${_formatKg(senderWeightKg)}, but IRIS expects this item to be around ${_formatKg(expectedWeightKg)}. We’ll price using the IRIS estimate unless confirmed during review.'
+          : null,
+      category: rule.category,
+      fragile: rule.fragile,
+      valueSensitive: rule.valueSensitive,
+      vanguardRecommended: rule.vanguardRecommended,
+      vanOnly: rule.vanOnly,
+    );
+  }
+
+  static String _formatKg(double value) =>
+      '${value.toStringAsFixed(value < 1 ? 1 : 0)}kg';
 
   static bool potentialMismatchDetected({
     required String description,
@@ -163,7 +217,7 @@ class IrisWeightEstimator {
       patterns: ['iphone 13', 'apple iphone 13'],
       name: 'Apple iPhone 13',
       weightKg: 0.174,
-      packageType: 'Phone',
+      packageType: 'Electronics',
       truthBand: 'Exact Match',
       typicalDimensions: ItemDimensionsCm(length: 15, width: 8, height: 2),
       vehicleSuitability: 'Bike',
@@ -175,7 +229,7 @@ class IrisWeightEstimator {
       patterns: ['iphone 15', 'apple iphone 15'],
       name: 'Apple iPhone 15',
       weightKg: 0.171,
-      packageType: 'Phone',
+      packageType: 'Electronics',
       truthBand: 'Exact Match',
       typicalDimensions: ItemDimensionsCm(length: 15, width: 8, height: 2),
       vehicleSuitability: 'Bike',
@@ -187,7 +241,7 @@ class IrisWeightEstimator {
       patterns: ['airpods pro', 'apple airpods pro'],
       name: 'AirPods Pro',
       weightKg: 0.056,
-      packageType: 'Earphones',
+      packageType: 'Electronics',
       truthBand: 'Exact Match',
       typicalDimensions: ItemDimensionsCm(length: 7, width: 6, height: 3),
       vehicleSuitability: 'Bike',
@@ -199,7 +253,7 @@ class IrisWeightEstimator {
       patterns: ['iphone 14', 'apple iphone 14'],
       name: 'Apple iPhone 14',
       weightKg: 0.172,
-      packageType: 'Phone',
+      packageType: 'Electronics',
       typicalDimensions: ItemDimensionsCm(length: 15, width: 8, height: 2),
       vehicleSuitability: 'Bike',
       fragile: true,
@@ -210,7 +264,7 @@ class IrisWeightEstimator {
       patterns: ['macbook air 13', 'macbook air', 'macbook'],
       name: 'MacBook Air 13',
       weightKg: 1.24,
-      packageType: 'Laptop',
+      packageType: 'Electronics',
       typicalDimensions: ItemDimensionsCm(length: 31, width: 22, height: 2),
       vehicleSuitability: 'Bike',
       fragile: true,
@@ -221,7 +275,7 @@ class IrisWeightEstimator {
       patterns: ['playstation 5', 'ps5'],
       name: 'PlayStation 5',
       weightKg: 4.5,
-      packageType: 'Games console',
+      packageType: 'Electronics',
       typicalDimensions: ItemDimensionsCm(length: 39, width: 26, height: 11),
       vehicleSuitability: 'Car',
       fragile: true,
@@ -232,7 +286,7 @@ class IrisWeightEstimator {
       patterns: ['standard laptop', 'laptop'],
       name: 'Standard laptop',
       weightKg: 2,
-      packageType: 'Laptop',
+      packageType: 'Electronics',
       confidence: 'medium',
       confidenceScore: 0.7,
       typicalDimensions: ItemDimensionsCm(length: 36, width: 25, height: 3),
@@ -324,6 +378,148 @@ class IrisWeightEstimator {
       handlingNotes: 'Small general parcel.',
     ),
   ];
+
+  static const List<_KnownItemRule> _knownItemRules = [
+    _KnownItemRule(
+      patterns: ['iphone', 'mobile phone', 'smartphone'],
+      minimumKg: 0.3,
+      maximumKg: 1,
+      expectedWeightKg: 0.7,
+      category: 'Electronics',
+      fragile: true,
+      valueSensitive: true,
+      vanguardRecommended: true,
+    ),
+    _KnownItemRule(
+      patterns: ['macbook', 'laptop'],
+      minimumKg: 1,
+      maximumKg: 4,
+      expectedWeightKg: 2,
+      category: 'Electronics',
+      fragile: true,
+      valueSensitive: true,
+      vanguardRecommended: true,
+    ),
+    _KnownItemRule(
+      patterns: ['ipad', 'tablet'],
+      minimumKg: 0.5,
+      maximumKg: 1.5,
+      expectedWeightKg: 1,
+      category: 'Electronics',
+      fragile: true,
+      valueSensitive: true,
+      vanguardRecommended: true,
+    ),
+    _KnownItemRule(
+      patterns: ['airpods', 'earbuds'],
+      minimumKg: 0.1,
+      maximumKg: 0.5,
+      expectedWeightKg: 0.3,
+      category: 'Electronics',
+      fragile: true,
+      valueSensitive: true,
+      vanguardRecommended: true,
+    ),
+    _KnownItemRule(
+      patterns: ['playstation', 'ps5', 'xbox'],
+      minimumKg: 4,
+      maximumKg: 8,
+      expectedWeightKg: 5,
+      category: 'Electronics',
+      fragile: true,
+      valueSensitive: true,
+      vanguardRecommended: true,
+    ),
+    _KnownItemRule(
+      patterns: ['camera'],
+      minimumKg: 0.3,
+      maximumKg: 5,
+      expectedWeightKg: 1.5,
+      category: 'Electronics',
+      fragile: true,
+      valueSensitive: true,
+      vanguardRecommended: true,
+    ),
+    _KnownItemRule(
+      patterns: ['washing machine'],
+      minimumKg: 50,
+      maximumKg: 90,
+      expectedWeightKg: 70,
+      category: 'White goods',
+      heavyOrBulky: true,
+      vanOnly: true,
+    ),
+    _KnownItemRule(
+      patterns: ['wardrobe'],
+      minimumKg: 20,
+      maximumKg: 100,
+      expectedWeightKg: 40,
+      category: 'Furniture',
+      heavyOrBulky: true,
+      vanOnly: true,
+    ),
+    _KnownItemRule(
+      patterns: ['fridge', 'freezer'],
+      minimumKg: 30,
+      maximumKg: 120,
+      expectedWeightKg: 60,
+      category: 'White goods',
+      heavyOrBulky: true,
+      vanOnly: true,
+    ),
+  ];
+}
+
+class IrisKnownItemWeightDecision {
+  final double senderWeightKg;
+  final double? expectedWeightKg;
+  final double pricingWeightKg;
+  final bool unusual;
+  final String? warning;
+  final String? category;
+  final bool fragile;
+  final bool valueSensitive;
+  final bool vanguardRecommended;
+  final bool vanOnly;
+
+  const IrisKnownItemWeightDecision({
+    required this.senderWeightKg,
+    this.expectedWeightKg,
+    required this.pricingWeightKg,
+    this.unusual = false,
+    this.warning,
+    this.category,
+    this.fragile = false,
+    this.valueSensitive = false,
+    this.vanguardRecommended = false,
+    this.vanOnly = false,
+  });
+}
+
+class _KnownItemRule {
+  final List<String> patterns;
+  final double minimumKg;
+  final double maximumKg;
+  final double expectedWeightKg;
+  final String category;
+  final bool fragile;
+  final bool valueSensitive;
+  final bool vanguardRecommended;
+  final bool heavyOrBulky;
+  final bool vanOnly;
+
+  const _KnownItemRule({
+    required this.patterns,
+    required this.minimumKg,
+    required this.maximumKg,
+    required this.expectedWeightKg,
+    required this.category,
+    this.fragile = false,
+    this.valueSensitive = false,
+    this.vanguardRecommended = false,
+    this.heavyOrBulky = false,
+    this.vanOnly = false,
+  });
 }
 
 class _KnownIrisProduct {
