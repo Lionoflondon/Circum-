@@ -22146,6 +22146,18 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Thoughtful gifting, delivered by Circum',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: narrow ? 17 : 21,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     Text(
                       'Coming Soon',
@@ -22153,17 +22165,6 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                         color: colors.text,
                         fontSize: narrow ? 38 : 56,
                         fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Thoughtful gifting, handled by Circum.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: narrow ? 18 : 22,
-                        height: 1.4,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 24),
