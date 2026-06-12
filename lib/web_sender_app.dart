@@ -10212,7 +10212,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           selectedVehicle: _effectiveVehicle,
           selectedSpeed: _selectedSpeed,
           locationsConfirmed: _hasValidatedRoute,
-          priceReady: _quoteTotal > 0 && !_quoteBreakdown.requiresManualQuote,
+          priceReady: _quoteTotal > 0,
           weightReady: _deliveryClassification.finalWeightKg > 0,
           onVehicle: (vehicle) {
             final suitability = _vehicleSuitability;
@@ -10658,6 +10658,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       highValue: _irisValueSensitive,
       vanguardRequired: _irisVanguardRecommended,
       stackable: _irisStackable,
+      quantity: _irisQuantity,
+      singleItemWeightKg: _irisSingleItemWeightKg,
       handlingNotes: _irisHandlingNotes,
     );
   }
@@ -10671,6 +10673,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         distanceMiles: distanceMiles,
         weightKg: chargeableWeightKg,
         vehicleType: _effectiveVehicle.name,
+        quantity: _irisQuantity,
+        singleItemWeightKg: _irisSingleItemWeightKg,
+        stackable: _irisStackable,
         economy: _selectedSpeed == 'Economy',
         express: _selectedSpeed == 'Express',
       ),
@@ -12167,16 +12172,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         return;
       }
     }
-    if (_quoteBreakdown.requiresManualQuote ||
-        _deliveryClassification.requiresManualReview) {
-      setState(() {
-        _checkoutState = _CheckoutState.failed;
-        _firebaseError =
-            'This delivery needs manual review because the item is heavy or specialist.';
-        _step = _SenderStep.payment;
-      });
-      return;
-    }
     final id =
         'CIR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     setState(() {
@@ -12699,6 +12694,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         distanceMiles: distanceMiles,
         weightKg: classification.finalWeightKg,
         vehicleType: _effectiveVehicle.name,
+        quantity: _irisQuantity,
+        singleItemWeightKg: _irisSingleItemWeightKg,
+        stackable: _irisStackable,
         economy: true,
       ),
     );
@@ -12707,6 +12705,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         distanceMiles: distanceMiles,
         weightKg: classification.finalWeightKg,
         vehicleType: _effectiveVehicle.name,
+        quantity: _irisQuantity,
+        singleItemWeightKg: _irisSingleItemWeightKg,
+        stackable: _irisStackable,
       ),
     );
     final expressQuote = DeliveryPricing.calculate(
@@ -12714,6 +12715,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         distanceMiles: distanceMiles,
         weightKg: classification.finalWeightKg,
         vehicleType: _effectiveVehicle.name,
+        quantity: _irisQuantity,
+        singleItemWeightKg: _irisSingleItemWeightKg,
+        stackable: _irisStackable,
         express: true,
       ),
     );
@@ -13012,7 +13016,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': quote.toJson(),
       ...vanguardFields,
-      'requiresManualQuote': quote.requiresManualQuote,
       'currency': 'GBP',
       'status': 'requested',
       'dispatchStatus': 'requested',
@@ -13954,9 +13957,7 @@ class _DesktopPortalLayout extends StatelessWidget {
                         _PriceLine(
                           colors: colors,
                           label: 'Total',
-                          value: breakdown.requiresManualQuote
-                              ? 'Manual quote'
-                              : '£${breakdown.total.toStringAsFixed(2)}',
+                          value: '£${breakdown.total.toStringAsFixed(2)}',
                           strong: true,
                         ),
                       ],
@@ -18281,10 +18282,8 @@ class _PaymentStep extends StatelessWidget {
               Divider(color: colors.border, height: 26),
               _PriceLine(
                 colors: colors,
-                label: breakdown.requiresManualQuote ? 'Total' : 'Total',
-                value: breakdown.requiresManualQuote
-                    ? 'Manual quote'
-                    : '£${total.toStringAsFixed(2)}',
+                label: 'Total',
+                value: '£${total.toStringAsFixed(2)}',
                 strong: true,
               ),
               const SizedBox(height: 14),
@@ -18318,12 +18317,10 @@ class _PaymentStep extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: weightConfirmed &&
-                    locationsConfirmed &&
-                    !breakdown.requiresManualQuote &&
-                    !processingPayment
-                ? onPay
-                : null,
+            onPressed:
+                weightConfirmed && locationsConfirmed && !processingPayment
+                    ? onPay
+                    : null,
             icon: processingPayment
                 ? const SizedBox(
                     width: 18,
@@ -18336,11 +18333,9 @@ class _PaymentStep extends StatelessWidget {
                   ? 'Processing payment...'
                   : !locationsConfirmed
                       ? 'Confirm pickup and drop-off before payment'
-                      : breakdown.requiresManualQuote
-                          ? 'Manual review required'
-                          : weightConfirmed
-                              ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
-                              : 'Confirm parcel weight before payment',
+                      : weightConfirmed
+                          ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                          : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,

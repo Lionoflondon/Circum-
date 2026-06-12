@@ -8,6 +8,8 @@ class PricingConstants {
   static const double fixedExpressSurchargeGbp = 2.99;
   static const double expressMultiplier = 1.2;
   static const double economyDiscountGbp = 1.5;
+  static const double heavyDutySurchargeGbp = 25;
+  static const double twoPersonThresholdKg = 40;
 
   static const Map<String, double> specialConditionFeesGbp = {
     'oversized': 10,
@@ -50,8 +52,7 @@ class PricingConstants {
       category: 'Extra Heavy',
       minKg: 40,
       maxKg: null,
-      surchargeGbp: 0,
-      requiresManualQuote: true,
+      surchargeGbp: heavyDutySurchargeGbp,
     ),
   ];
 
@@ -76,14 +77,12 @@ class WeightBand {
   final double minKg;
   final double? maxKg;
   final double surchargeGbp;
-  final bool requiresManualQuote;
 
   const WeightBand({
     required this.category,
     required this.minKg,
     required this.maxKg,
     required this.surchargeGbp,
-    this.requiresManualQuote = false,
   });
 
   bool contains(double weightKg) {

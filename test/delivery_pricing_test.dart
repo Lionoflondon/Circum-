@@ -41,14 +41,20 @@ void main() {
       expect(large.weightSurcharge, 15);
     });
 
-    test('flags parcels above 40kg for manual quote', () {
+    test('prices parcels above 40kg with Heavy Duty handling', () {
       final quote = DeliveryPricing.calculate(
-        const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 41),
+        const DeliveryPricingInput(
+          distanceMiles: 4.8,
+          weightKg: 41,
+          vehicleType: 'Van',
+        ),
       );
 
       expect(quote.weightCategory, 'Extra Heavy');
-      expect(quote.requiresManualQuote, isTrue);
-      expect(quote.total, 0);
+      expect(quote.weightSurcharge, 25);
+      expect(quote.specialConditions, 25);
+      expect(quote.vehicleSurcharge, 10);
+      expect(quote.total, 72.2);
     });
 
     test('uses config-driven special condition fees', () {
@@ -386,6 +392,93 @@ void main() {
       expect(twoSuitcases.recommendedVehicle, 'Car');
       expect(fiveSuitcases.recommendedVehicle, 'Van');
       expect(wardrobe.recommendedVehicle, 'Van');
+    });
+
+    test('four stackable suitcases remain a car delivery', () {
+      final suitability = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 92,
+        description: '4 medium suitcases 23kg each',
+        itemCategory: 'Luggage',
+        dimensions: const DeliveryItemDimensions(
+          lengthCm: 65,
+          widthCm: 40,
+          heightCm: 25,
+        ),
+        repositoryVehicleSuitability: 'Car or Van',
+        stackable: true,
+        quantity: 4,
+        singleItemWeightKg: 23,
+      );
+      final quote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 4.8,
+          weightKg: 92,
+          vehicleType: 'Car',
+          quantity: 4,
+          singleItemWeightKg: 23,
+          stackable: true,
+        ),
+      );
+
+      expect(suitability.recommendedVehicle, 'Car');
+      expect(suitability.allows('Car'), isTrue);
+      expect(quote.vehicleSurcharge, 2);
+      expect(quote.weightSurcharge, 0);
+      expect(quote.specialConditions, 0);
+      expect(quote.total, greaterThan(0));
+    });
+
+    test('stackable laptops remain car eligible when aggregate volume fits',
+        () {
+      final suitability = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 30,
+        description: '20 laptops',
+        itemCategory: 'Electronics',
+        dimensions: const DeliveryItemDimensions(
+          lengthCm: 35,
+          widthCm: 25,
+          heightCm: 3,
+        ),
+        repositoryVehicleSuitability: 'Van',
+        stackable: true,
+        quantity: 20,
+        singleItemWeightKg: 1.5,
+      );
+
+      expect(suitability.recommendedVehicle, 'Car');
+      expect(suitability.allows('Car'), isTrue);
+    });
+
+    test('bulky single items retain van handling', () {
+      final sofa = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 25,
+        description: 'Sofa',
+        stackable: false,
+        quantity: 1,
+        singleItemWeightKg: 25,
+      );
+      final washingMachine = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 70,
+        description: 'Washing machine',
+        stackable: false,
+        quantity: 1,
+        singleItemWeightKg: 70,
+      );
+      final washingMachineQuote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 4.8,
+          weightKg: 70,
+          vehicleType: 'Van',
+          quantity: 1,
+          singleItemWeightKg: 70,
+          stackable: false,
+        ),
+      );
+
+      expect(sofa.recommendedVehicle, 'Van');
+      expect(washingMachine.recommendedVehicle, 'Van');
+      expect(washingMachineQuote.specialConditions, 25);
+      expect(washingMachineQuote.total, greaterThan(0));
     });
 
     test('sender can upgrade but cannot downgrade the safe vehicle', () {

@@ -319,7 +319,6 @@ function calculatePrice({distanceMiles = 0, weightKg = 0, handlingFlags = [], ex
     surgeMultiplier: 1,
     total,
     weightCategory: weightBand.label,
-    requiresManualQuote: false,
   };
 }
 
@@ -328,7 +327,12 @@ function serviceabilityFor({complianceStatus, weightKg, handlingFlags}) {
     return {status: "manual_review", reasonCodes: ["not_allowed_for_dispatch"], customerMessage: "This request needs review before dispatch."};
   }
   if (weightKg > 50) {
-    return {status: "manual_review", reasonCodes: ["heavy_duty_freight"], customerMessage: "This request needs manual review before dispatch."};
+    return {
+      status: "serviceable",
+      reasonCodes: ["heavy_duty_verification_required"],
+      verificationRequired: true,
+      customerMessage: null,
+    };
   }
   return {status: "serviceable", reasonCodes: [], customerMessage: null};
 }

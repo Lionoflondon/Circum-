@@ -14,6 +14,9 @@ class DeliveryPricingInput {
   final bool priority;
   final bool express;
   final bool economy;
+  final int quantity;
+  final double? singleItemWeightKg;
+  final bool stackable;
   final int waitingMinutes;
   final double surgeMultiplier;
 
@@ -29,6 +32,9 @@ class DeliveryPricingInput {
     this.priority = false,
     this.express = false,
     this.economy = false,
+    this.quantity = 1,
+    this.singleItemWeightKg,
+    this.stackable = false,
     this.waitingMinutes = 0,
     this.surgeMultiplier = 1,
   });
@@ -45,7 +51,6 @@ class DeliveryPricingBreakdown {
   final double surgeMultiplier;
   final double total;
   final String weightCategory;
-  final bool requiresManualQuote;
 
   const DeliveryPricingBreakdown({
     required this.baseFare,
@@ -58,7 +63,6 @@ class DeliveryPricingBreakdown {
     required this.surgeMultiplier,
     required this.total,
     required this.weightCategory,
-    required this.requiresManualQuote,
   });
 
   Map<String, dynamic> toJson() => {
@@ -73,7 +77,6 @@ class DeliveryPricingBreakdown {
         'surgeMultiplier': surgeMultiplier,
         'total': total,
         'weightCategory': weightCategory,
-        'requiresManualQuote': requiresManualQuote,
       };
 }
 
@@ -189,19 +192,30 @@ class DeliveryPricing {
 
   static DeliveryPricingBreakdown calculate(DeliveryPricingInput input) {
     final weightBand = weightBandFor(input.weightKg);
+    final distributedStackableLoad = input.quantity > 1 &&
+        input.stackable &&
+        (input.singleItemWeightKg ?? input.weightKg) <=
+            PricingConstants.twoPersonThresholdKg;
+    final weightSurcharge =
+        distributedStackableLoad && weightBand.category == 'Extra Heavy'
+            ? 0.0
+            : weightBand.surchargeGbp;
     final distanceFare = calculateDistanceFare(input.distanceMiles);
     final vehicleSurcharge = calculateVehicleSurcharge(input.vehicleType);
     final baseSpecialConditions = calculateSpecialConditions(
       oversized: input.oversized,
       fragile: input.fragile,
-      twoPersonHandling: input.twoPersonHandling,
+      twoPersonHandling: input.twoPersonHandling ||
+          (!distributedStackableLoad &&
+              (input.singleItemWeightKg ?? input.weightKg) >
+                  PricingConstants.twoPersonThresholdKg),
       stairsFloors: input.stairsFloors,
       noLift: input.noLift,
       waitingMinutes: input.waitingMinutes,
     );
     final preServiceSubtotal = PricingConstants.baseFareGbp +
         distanceFare +
-        weightBand.surchargeGbp +
+        weightSurcharge +
         vehicleSurcharge +
         baseSpecialConditions;
     final serviceLevelSurcharge = calculateServiceLevelSurcharge(
@@ -215,18 +229,16 @@ class DeliveryPricing {
     );
     final subtotal = PricingConstants.baseFareGbp +
         distanceFare +
-        weightBand.surchargeGbp +
+        weightSurcharge +
         vehicleSurcharge +
         specialConditions;
     final surgeMultiplier = max(input.surgeMultiplier, 1.0).toDouble();
-    final total = weightBand.requiresManualQuote
-        ? 0.0
-        : _roundMoney(subtotal * surgeMultiplier);
+    final total = _roundMoney(subtotal * surgeMultiplier);
 
     return DeliveryPricingBreakdown(
       baseFare: PricingConstants.baseFareGbp,
       distanceFare: _roundMoney(distanceFare),
-      weightSurcharge: weightBand.surchargeGbp,
+      weightSurcharge: weightSurcharge,
       vehicleSurcharge: vehicleSurcharge,
       specialConditions: specialConditions,
       serviceLevelSurcharge: serviceLevelSurcharge,
@@ -238,7 +250,6 @@ class DeliveryPricing {
       surgeMultiplier: surgeMultiplier,
       total: total,
       weightCategory: weightBand.category,
-      requiresManualQuote: weightBand.requiresManualQuote,
     );
   }
 
@@ -343,8 +354,9 @@ class DeliveryPricing {
     }
 
     final band = weightBandFor(finalWeight);
-    final manualReview = band.requiresManualQuote ||
-        selectedSource == 'keyword_override' && finalWeight >= 40 ||
+    final manualReview = selectedSource == 'keyword_override' &&
+            finalWeight >= PricingConstants.twoPersonThresholdKg ||
+        confidence.toLowerCase() == 'low' ||
         (historicalVerifiedMinKg != null &&
             historicalVerifiedMaxKg != null &&
             historicalVerifiedMaxKg > historicalVerifiedMinKg);
@@ -415,6 +427,8 @@ class DeliveryPricing {
     bool highValue = false,
     bool vanguardRequired = false,
     bool stackable = true,
+    int? quantity,
+    double? singleItemWeightKg,
     String? handlingNotes,
   }) {
     final text = description.toLowerCase();
@@ -475,20 +489,35 @@ class DeliveryPricing {
       'small electronics',
       'lightweight gift',
     ].any(text.contains);
-    final quantity = _quantityFromDescription(text);
+    final resolvedQuantity = max(1, quantity ?? _quantityFromDescription(text));
+    final largestItemWeightKg = singleItemWeightKg ??
+        (resolvedQuantity > 1 ? weightKg / resolvedQuantity : weightKg);
     final flatPacked = text.contains('flat pack') || text.contains('flat-pack');
     final oversizedDimensions = dimensions != null &&
         (dimensions.longestSideCm > 110 || dimensions.volumeCm3 > 250000);
     final bikeSafeDimensions = dimensions == null ||
         (dimensions.longestSideCm <= 60 && dimensions.volumeCm3 <= 45000);
     final normalPrinter = text.contains('printer') &&
-        quantity == 1 &&
+        resolvedQuantity == 1 &&
         weightKg <= 15 &&
         !oversizedDimensions;
     final luggageFitsCar = compactLuggage &&
-        quantity <= 2 &&
-        weightKg <= 50 &&
+        resolvedQuantity <= 4 &&
+        largestItemWeightKg <= 25 &&
         !oversizedDimensions;
+    final aggregateVolumeCm3 =
+        dimensions == null ? null : dimensions.volumeCm3 * resolvedQuantity;
+    final compactStackableLoad = stackable &&
+        resolvedQuantity > 1 &&
+        !bulkyByKeyword &&
+        !oversizedDimensions &&
+        largestItemWeightKg <= 25 &&
+        (!compactLuggage || resolvedQuantity <= 4) &&
+        (aggregateVolumeCm3 == null || aggregateVolumeCm3 <= 800000) &&
+        (compactLuggage ||
+            categoryText.contains('electronics') ||
+            text.contains('laptop') ||
+            text.contains('macbook'));
 
     // The recommendation is the minimum safe vehicle. Larger vehicles remain
     // valid sender upgrades.
@@ -515,6 +544,11 @@ class DeliveryPricing {
       recommended = 'Car';
       score = max(score, 76);
     }
+    if (compactStackableLoad) {
+      allowed = {'Car', 'Van'};
+      recommended = 'Car';
+      score = max(score, 80);
+    }
     if (flatPacked && weightKg <= 25 && !oversizedDimensions) {
       allowed = {'Car', 'Van'};
       recommended = 'Car';
@@ -522,7 +556,10 @@ class DeliveryPricing {
     }
 
     final repo = repositoryVehicleSuitability?.toLowerCase().trim() ?? '';
-    if (repo == 'van' && !luggageFitsCar && !normalPrinter) {
+    if (repo == 'van' &&
+        !luggageFitsCar &&
+        !compactStackableLoad &&
+        !normalPrinter) {
       allowed = {'Van'};
       recommended = 'Van';
       score = max(score, 90);
