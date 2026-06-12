@@ -13311,6 +13311,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'assistedFee': quote.assistedFee,
       'heavyDutyFee': quote.heavyDutyFee,
       'twoPersonFee': quote.twoPersonFee,
+      'heavyHandlingSurcharge': quote.heavyHandlingSurcharge,
+      'twoPersonRecommended': quote.twoPersonRecommended,
+      'twoPersonRequiredByWeight': quote.twoPersonRequiredByWeight,
+      'multiTripReviewRequired': quote.multiTripReviewRequired,
+      'heavyHandlingAdminReviewRequired':
+          quote.heavyHandlingAdminReviewRequired,
       'riderBaseShare': quote.riderBaseShare,
       'riderLabourShare': quote.riderLabourShare,
       'totalRiderEarnings': quote.totalRiderEarnings,
@@ -13496,6 +13502,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'assistedFee': quote.assistedFee,
       'heavyDutyFee': quote.heavyDutyFee,
       'twoPersonFee': quote.twoPersonFee,
+      'heavyHandlingSurcharge': quote.heavyHandlingSurcharge,
+      'twoPersonRecommended': quote.twoPersonRecommended,
+      'twoPersonRequiredByWeight': quote.twoPersonRequiredByWeight,
+      'multiTripReviewRequired': quote.multiTripReviewRequired,
+      'heavyHandlingAdminReviewRequired':
+          quote.heavyHandlingAdminReviewRequired,
       'pickupAccess': _pickupAccess.name,
       'dropoffAccess': _dropoffAccess.name,
       'specialHandlingClass': handling.handlingClass.name,
@@ -14451,6 +14463,13 @@ class _DesktopPortalLayout extends StatelessWidget {
                           value:
                               '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
                         ),
+                        if (breakdown.heavyHandlingSurcharge > 0)
+                          _PriceLine(
+                            colors: colors,
+                            label: 'Heavy Handling Surcharge',
+                            value:
+                                '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
+                          ),
                         if (breakdown.specialConditions > 0)
                           _PriceLine(
                             colors: colors,
@@ -18806,6 +18825,13 @@ class _PaymentStep extends StatelessWidget {
                   label: 'Two Person Required',
                   value: '£${breakdown.twoPersonFee.toStringAsFixed(2)}',
                 ),
+              if (breakdown.heavyHandlingSurcharge > 0)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Heavy Handling Surcharge',
+                  value:
+                      '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
+                ),
               if (specialHandling.labourPremium > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -18902,6 +18928,13 @@ class _PaymentStep extends StatelessWidget {
                 label: '${vehicle.name} vehicle',
                 value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
               ),
+              if (breakdown.heavyHandlingSurcharge > 0)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Heavy Handling Surcharge',
+                  value:
+                      '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
+                ),
               if (breakdown.specialConditions > 0)
                 _PriceLine(
                   colors: colors,
@@ -22539,6 +22572,12 @@ class _CompletedPriceSummary extends StatelessWidget {
               colors: colors,
               label: '$vehicleName vehicle',
               value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
+            ),
+          if (breakdown.heavyHandlingSurcharge > 0)
+            _PriceLine(
+              colors: colors,
+              label: 'Heavy Handling Surcharge',
+              value: '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
             ),
           if (breakdown.specialConditions > 0)
             _PriceLine(

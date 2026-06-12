@@ -54,6 +54,11 @@ class DeliveryPricingBreakdown {
   final double assistedFee;
   final double heavyDutyFee;
   final double twoPersonFee;
+  final double heavyHandlingSurcharge;
+  final bool twoPersonRecommended;
+  final bool twoPersonRequiredByWeight;
+  final bool multiTripReviewRequired;
+  final bool heavyHandlingAdminReviewRequired;
   final double riderBaseShare;
   final double riderLabourShare;
   final double circumBaseShare;
@@ -75,6 +80,11 @@ class DeliveryPricingBreakdown {
     this.assistedFee = 0,
     this.heavyDutyFee = 0,
     this.twoPersonFee = 0,
+    this.heavyHandlingSurcharge = 0,
+    this.twoPersonRecommended = false,
+    this.twoPersonRequiredByWeight = false,
+    this.multiTripReviewRequired = false,
+    this.heavyHandlingAdminReviewRequired = false,
     this.riderBaseShare = 0,
     this.riderLabourShare = 0,
     this.circumBaseShare = 0,
@@ -98,6 +108,11 @@ class DeliveryPricingBreakdown {
         'assistedFee': assistedFee,
         'heavyDutyFee': heavyDutyFee,
         'twoPersonFee': twoPersonFee,
+        'heavyHandlingSurcharge': heavyHandlingSurcharge,
+        'twoPersonRecommended': twoPersonRecommended,
+        'twoPersonRequiredByWeight': twoPersonRequiredByWeight,
+        'multiTripReviewRequired': multiTripReviewRequired,
+        'heavyHandlingAdminReviewRequired': heavyHandlingAdminReviewRequired,
         'riderBaseShare': riderBaseShare,
         'riderLabourShare': riderLabourShare,
         'circumBaseShare': circumBaseShare,
@@ -189,6 +204,22 @@ class VehicleSuitability {
   }
 }
 
+class HeavyHandlingAssessment {
+  final double surchargeGbp;
+  final bool twoPersonRecommended;
+  final bool twoPersonRequired;
+  final bool multiTripReviewRequired;
+  final bool adminReviewRequired;
+
+  const HeavyHandlingAssessment({
+    required this.surchargeGbp,
+    required this.twoPersonRecommended,
+    required this.twoPersonRequired,
+    required this.multiTripReviewRequired,
+    required this.adminReviewRequired,
+  });
+}
+
 class DeliveryPricing {
   static const double riderDeliveryFareShare = 0.65;
   static const double platformDeliveryFareShare = 0.35;
@@ -260,7 +291,9 @@ class DeliveryPricing {
         vehicleSurcharge +
         specialConditions;
     final surgeMultiplier = max(input.surgeMultiplier, 1.0).toDouble();
-    final total = _roundMoney(subtotal * surgeMultiplier);
+    final existingTotal = _roundMoney(subtotal * surgeMultiplier);
+    final heavyHandling = heavyHandlingFor(input.weightKg);
+    final total = _roundMoney(existingTotal + heavyHandling.surchargeGbp);
 
     return DeliveryPricingBreakdown(
       baseFare: PricingConstants.baseFareGbp,
@@ -277,6 +310,31 @@ class DeliveryPricing {
       surgeMultiplier: surgeMultiplier,
       total: total,
       weightCategory: weightBand.category,
+      heavyHandlingSurcharge: heavyHandling.surchargeGbp,
+      twoPersonRecommended: heavyHandling.twoPersonRecommended,
+      twoPersonRequiredByWeight: heavyHandling.twoPersonRequired,
+      multiTripReviewRequired: heavyHandling.multiTripReviewRequired,
+      heavyHandlingAdminReviewRequired: heavyHandling.adminReviewRequired,
+    );
+  }
+
+  static HeavyHandlingAssessment heavyHandlingFor(double weightKg) {
+    final weight = max(0.0, weightKg);
+    final surcharge = weight <= 50
+        ? 0.0
+        : weight <= 150
+            ? 5.0
+            : weight <= 300
+                ? 10.0
+                : weight <= 500
+                    ? 20.0
+                    : 40.0;
+    return HeavyHandlingAssessment(
+      surchargeGbp: surcharge,
+      twoPersonRecommended: weight > 150,
+      twoPersonRequired: weight > 300,
+      multiTripReviewRequired: weight > 750,
+      adminReviewRequired: weight >= 1000,
     );
   }
 

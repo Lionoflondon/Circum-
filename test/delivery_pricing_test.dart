@@ -147,6 +147,38 @@ void main() {
       expect(DeliveryPricing.platformRevenueFromFare(quote.total), 4.27);
     });
 
+    test('adds heavy handling surcharge at configured boundaries', () {
+      expect(DeliveryPricing.heavyHandlingFor(50).surchargeGbp, 0);
+      expect(DeliveryPricing.heavyHandlingFor(50.01).surchargeGbp, 5);
+      expect(DeliveryPricing.heavyHandlingFor(150).surchargeGbp, 5);
+      expect(DeliveryPricing.heavyHandlingFor(150.01).surchargeGbp, 10);
+      expect(DeliveryPricing.heavyHandlingFor(300).surchargeGbp, 10);
+      expect(DeliveryPricing.heavyHandlingFor(300.01).surchargeGbp, 20);
+      expect(DeliveryPricing.heavyHandlingFor(500).surchargeGbp, 20);
+      expect(DeliveryPricing.heavyHandlingFor(500.01).surchargeGbp, 40);
+      expect(
+        DeliveryPricing.heavyHandlingFor(1000).adminReviewRequired,
+        isTrue,
+      );
+    });
+
+    test('adds operational flags without changing vehicle logic', () {
+      final recommended = DeliveryPricing.heavyHandlingFor(151);
+      final required = DeliveryPricing.heavyHandlingFor(301);
+      final multiTrip = DeliveryPricing.heavyHandlingFor(751);
+
+      expect(recommended.twoPersonRecommended, isTrue);
+      expect(recommended.twoPersonRequired, isFalse);
+      expect(required.twoPersonRequired, isTrue);
+      expect(multiTrip.multiTripReviewRequired, isTrue);
+
+      final quote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 151),
+      );
+      expect(quote.heavyHandlingSurcharge, 10);
+      expect(quote.twoPersonRecommended, isTrue);
+    });
+
     test('parses gram entries as kilograms', () {
       expect(DeliveryPricing.parseWeightKg('178g'), closeTo(0.178, 0.0001));
       expect(
