@@ -14,6 +14,7 @@ import 'package:circum/app/rider_marketplace/rider_marketplace_rules.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
+import 'package:circum/pricing/special_handling_engine.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -7106,19 +7107,29 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final vehicle = DeliveryPricing.recommendedVehicleForWeight(
       finalWeightUsed,
     );
-    final revisedQuote = DeliveryPricing.calculate(
+    DeliveryAccess accessValue(Object? value) {
+      return switch ('$value') {
+        'stairs' => DeliveryAccess.stairs,
+        'liftAvailable' => DeliveryAccess.liftAvailable,
+        _ => DeliveryAccess.groundFloor,
+      };
+    }
+
+    final revisedHandling = SpecialHandlingEngine.evaluate(
+      description: '${job['packageDescription'] ?? ''}',
+      itemName: '${job['normalizedItemName'] ?? ''}',
+      pickupAccess: accessValue(job['pickupAccess']),
+      dropoffAccess: accessValue(job['dropoffAccess']),
+    );
+    final revisedQuote = revisedHandling.applyTo(DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: distanceMiles,
         weightKg: finalWeightUsed,
         vehicleType: vehicle,
       ),
-    );
-    final revisedPayout = DeliveryPricing.riderPayoutFromFare(
-      revisedQuote.total,
-    );
-    final revisedPlatformRevenue = DeliveryPricing.platformRevenueFromFare(
-      revisedQuote.total,
-    );
+    ));
+    final revisedPayout = revisedQuote.totalRiderEarnings;
+    final revisedPlatformRevenue = revisedQuote.totalCircumRevenue;
     final heavier = finalWeightUsed > currentFinalWeight + 0.01;
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
@@ -7158,6 +7169,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'driverPayout': revisedPayout,
       'riderPayout': revisedPayout,
       'platformRevenue': revisedPlatformRevenue,
+      'riderBaseShare': revisedQuote.riderBaseShare,
+      'riderLabourShare': revisedQuote.riderLabourShare,
+      'circumBaseShare': revisedQuote.circumBaseShare,
+      'circumLabourShare': revisedQuote.circumLabourShare,
       'platformShare': DeliveryPricing.platformDeliveryFareShare,
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': revisedQuote.toJson(),
@@ -9411,6 +9426,25 @@ class _DriverJobCard extends StatelessWidget {
     final distance = _num(summary['estimatedDistanceMiles']);
     final fare = _num(summary['totalFare'] ?? job['fare'] ?? job['price']);
     final payout = _num(summary['driverPayout'] ?? job['driverPayout']);
+    final riderBaseShare = _num(
+      summary['riderBaseShare'] ??
+          job['riderBaseShare'] ??
+          pricing['riderBaseShare'],
+    );
+    final riderLabourShare = _num(
+      summary['riderLabourShare'] ??
+          job['riderLabourShare'] ??
+          pricing['riderLabourShare'],
+    );
+    final assistedFee = _num(
+      summary['assistedFee'] ?? job['assistedFee'] ?? pricing['assistedFee'],
+    );
+    final heavyDutyFee = _num(
+      summary['heavyDutyFee'] ?? job['heavyDutyFee'] ?? pricing['heavyDutyFee'],
+    );
+    final twoPersonFee = _num(
+      summary['twoPersonFee'] ?? job['twoPersonFee'] ?? pricing['twoPersonFee'],
+    );
     final tip = _num(
       job['tipAmount'] ?? job['riderTip'] ?? summary['tipAmount'],
     );
@@ -9510,6 +9544,18 @@ class _DriverJobCard extends StatelessWidget {
                 _HealthChip(label: 'Vanguard'),
                 const SizedBox(width: 8),
               ],
+              if (assistedFee > 0) ...[
+                _HealthChip(label: 'Assisted Delivery'),
+                const SizedBox(width: 8),
+              ],
+              if (heavyDutyFee > 0) ...[
+                _HealthChip(label: 'Heavy Duty'),
+                const SizedBox(width: 8),
+              ],
+              if (twoPersonFee > 0) ...[
+                _HealthChip(label: 'Two Person Required'),
+                const SizedBox(width: 8),
+              ],
               _HealthChip(label: vehicle),
             ],
           ),
@@ -9522,6 +9568,14 @@ class _DriverJobCard extends StatelessWidget {
                 ? 'Express priority'
                 : 'Standard',
           ),
+          if (assistedFee > 0 || heavyDutyFee > 0 || twoPersonFee > 0)
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.handyman,
+              label: 'Special handling earnings',
+              value:
+                  'Base ${_money(riderBaseShare)}${assistedFee > 0 ? ' • Assisted bonus ${_money(assistedFee * 0.80)}' : ''}${heavyDutyFee > 0 ? ' • Heavy Duty bonus ${_money(heavyDutyFee * 0.80)}' : ''}${twoPersonFee > 0 ? ' • Two Person bonus ${_money(twoPersonFee * 0.80)}' : ''} • Total ${_money(riderBaseShare + riderLabourShare)}',
+            ),
           _JobInfoLine(
             colors: colors,
             icon: Icons.schedule,
@@ -10266,6 +10320,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   late _SenderStep _step = widget.initialStep;
   _VehicleOption _selectedVehicle = _vehicles.first;
   String _selectedSpeed = 'Standard';
+  DeliveryAccess _pickupAccess = DeliveryAccess.groundFloor;
+  DeliveryAccess _dropoffAccess = DeliveryAccess.groundFloor;
   HealthPlusFrequency _healthFrequency = HealthPlusFrequency.oneOff;
   _CheckoutState _checkoutState = _CheckoutState.draft;
   bool _analyzing = false;
@@ -10626,6 +10682,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           locationsConfirmed: _hasValidatedRoute,
           priceReady: _quoteTotal > 0,
           weightReady: _deliveryClassification.finalWeightKg > 0,
+          specialHandling: _specialHandling,
+          pickupAccess: _pickupAccess,
+          dropoffAccess: _dropoffAccess,
+          onPickupAccess: (value) => setState(() => _pickupAccess = value),
+          onDropoffAccess: (value) => setState(() => _dropoffAccess = value),
           onVehicle: (vehicle) {
             final suitability = _vehicleSuitability;
             if (!DeliveryPricing.vehicleCanCarryDelivery(
@@ -10671,6 +10732,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           weightConfirmed: _hasConfirmedWeight,
           weightSource: _weightSourceText,
           pricingReason: _weightPricingReason,
+          specialHandling: _specialHandling,
           scheduledPickupDate: _scheduledPickupDate.text.trim(),
           scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
           scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
@@ -11080,7 +11142,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final classification = _deliveryClassification;
     final chargeableWeightKg = classification.finalWeightKg;
     final distanceMiles = _confirmedRouteDistanceMiles ?? 0;
-    return DeliveryPricing.calculate(
+    final baseQuote = DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: distanceMiles,
         weightKg: chargeableWeightKg,
@@ -11092,7 +11154,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         express: _selectedSpeed == 'Express',
       ),
     );
+    return _specialHandling.applyTo(baseQuote);
   }
+
+  SpecialHandlingResult get _specialHandling => SpecialHandlingEngine.evaluate(
+        description: _description.text,
+        itemName: _irisMatchedItemName,
+        pickupAccess: _pickupAccess,
+        dropoffAccess: _dropoffAccess,
+      );
 
   void _selectPickupAddress(_ValidatedAddress address) {
     if (!address.hasCoordinates) {
@@ -13101,7 +13171,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupAddress = _validatedPickup!;
     final dropoffAddress = _validatedDropoff!;
     final distanceMiles = _confirmedRouteDistanceMiles!;
-    final economyQuote = DeliveryPricing.calculate(
+    final handling = _specialHandling;
+    final economyQuote = handling.applyTo(DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: distanceMiles,
         weightKg: classification.finalWeightKg,
@@ -13111,8 +13182,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         stackable: _irisStackable,
         economy: true,
       ),
-    );
-    final standardQuote = DeliveryPricing.calculate(
+    ));
+    final standardQuote = handling.applyTo(DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: distanceMiles,
         weightKg: classification.finalWeightKg,
@@ -13121,8 +13192,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         singleItemWeightKg: _irisSingleItemWeightKg,
         stackable: _irisStackable,
       ),
-    );
-    final expressQuote = DeliveryPricing.calculate(
+    ));
+    final expressQuote = handling.applyTo(DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: distanceMiles,
         weightKg: classification.finalWeightKg,
@@ -13132,7 +13203,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         stackable: _irisStackable,
         express: true,
       ),
-    );
+    ));
     final selectedServiceLevel = switch (_selectedSpeed) {
       'Economy' => 'economy',
       'Express' => 'express',
@@ -13171,10 +13242,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       safeVehicleName,
       irisRecommendedVehicle,
     );
-    final driverPayout = DeliveryPricing.riderPayoutFromFare(quote.total);
-    final platformRevenue = DeliveryPricing.platformRevenueFromFare(
-      quote.total,
-    );
+    final driverPayout = quote.totalRiderEarnings;
+    final platformRevenue = quote.totalCircumRevenue;
     final driverJobSummary = {
       'pickupDisplay': pickupAddress.compactDisplay,
       'dropoffDisplay': dropoffAddress.compactDisplay,
@@ -13238,6 +13307,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'totalFare': quote.total,
       'driverPayout': driverPayout,
       'riderPayout': driverPayout,
+      'baseFare': quote.total - handling.labourPremium,
+      'assistedFee': quote.assistedFee,
+      'heavyDutyFee': quote.heavyDutyFee,
+      'twoPersonFee': quote.twoPersonFee,
+      'riderBaseShare': quote.riderBaseShare,
+      'riderLabourShare': quote.riderLabourShare,
+      'totalRiderEarnings': quote.totalRiderEarnings,
+      'specialHandlingClass': handling.handlingClass.name,
+      'specialHandlingBadges': [
+        if (quote.assistedFee > 0) 'Assisted Delivery',
+        if (quote.heavyDutyFee > 0) 'Heavy Duty',
+        if (quote.twoPersonFee > 0) 'Two Person Required',
+      ],
       'platformRevenue': platformRevenue,
       'serviceLevel': selectedServiceLevel,
       'selectedServiceLevel': selectedServiceLevel,
@@ -13411,6 +13493,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'basePrice': standardQuote.total,
       'finalPrice': quote.total,
       'finalCustomerPrice': quote.total,
+      'assistedFee': quote.assistedFee,
+      'heavyDutyFee': quote.heavyDutyFee,
+      'twoPersonFee': quote.twoPersonFee,
+      'pickupAccess': _pickupAccess.name,
+      'dropoffAccess': _dropoffAccess.name,
+      'specialHandlingClass': handling.handlingClass.name,
+      'specialHandlingExplanation': handling.explanation,
+      'riderBaseShare': quote.riderBaseShare,
+      'riderLabourShare': quote.riderLabourShare,
+      'circumBaseShare': quote.circumBaseShare,
+      'circumLabourShare': quote.circumLabourShare,
+      'totalRiderEarnings': quote.totalRiderEarnings,
+      'totalCircumRevenue': quote.totalCircumRevenue,
       'serviceLevelSurcharge':
           serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
       'priority': selectedServiceLevel == 'express',
@@ -18301,6 +18396,11 @@ class _VehicleStep extends StatelessWidget {
   final bool locationsConfirmed;
   final bool priceReady;
   final bool weightReady;
+  final SpecialHandlingResult specialHandling;
+  final DeliveryAccess pickupAccess;
+  final DeliveryAccess dropoffAccess;
+  final ValueChanged<DeliveryAccess> onPickupAccess;
+  final ValueChanged<DeliveryAccess> onDropoffAccess;
   final ValueChanged<_VehicleOption> onVehicle;
   final ValueChanged<String> onSpeed;
   final VoidCallback onBack;
@@ -18318,6 +18418,11 @@ class _VehicleStep extends StatelessWidget {
     required this.locationsConfirmed,
     required this.priceReady,
     required this.weightReady,
+    required this.specialHandling,
+    required this.pickupAccess,
+    required this.dropoffAccess,
+    required this.onPickupAccess,
+    required this.onDropoffAccess,
     required this.onVehicle,
     required this.onSpeed,
     required this.onBack,
@@ -18454,6 +18559,48 @@ class _VehicleStep extends StatelessWidget {
           selected: selectedSpeed,
           onChanged: onSpeed,
         ),
+        if (specialHandling.requiresAccessQuestions) ...[
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Access details',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  specialHandling.explanation,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _AccessDropdown(
+                  colors: colors,
+                  label: 'Pickup access',
+                  value: pickupAccess,
+                  onChanged: onPickupAccess,
+                ),
+                const SizedBox(height: 10),
+                _AccessDropdown(
+                  colors: colors,
+                  label: 'Drop-off access',
+                  value: dropoffAccess,
+                  onChanged: onDropoffAccess,
+                ),
+              ],
+            ),
+          ),
+        ],
         if (disabledReason != null) ...[
           const SizedBox(height: 12),
           _GlassPanel(
@@ -18498,6 +18645,46 @@ class _VehicleStep extends StatelessWidget {
   }
 }
 
+class _AccessDropdown extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final DeliveryAccess value;
+  final ValueChanged<DeliveryAccess> onChanged;
+
+  const _AccessDropdown({
+    required this.colors,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<DeliveryAccess>(
+      initialValue: value,
+      decoration: InputDecoration(labelText: label),
+      dropdownColor: colors.panel,
+      items: const [
+        DropdownMenuItem(
+          value: DeliveryAccess.groundFloor,
+          child: Text('Ground floor'),
+        ),
+        DropdownMenuItem(
+          value: DeliveryAccess.liftAvailable,
+          child: Text('Lift available'),
+        ),
+        DropdownMenuItem(
+          value: DeliveryAccess.stairs,
+          child: Text('Stairs'),
+        ),
+      ],
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+    );
+  }
+}
+
 class _PaymentStep extends StatelessWidget {
   final _CircumColors colors;
   final _VehicleOption vehicle;
@@ -18514,6 +18701,7 @@ class _PaymentStep extends StatelessWidget {
   final bool weightConfirmed;
   final String weightSource;
   final String? pricingReason;
+  final SpecialHandlingResult specialHandling;
   final String scheduledPickupDate;
   final String scheduledPickupWindow;
   final String scheduledDropoffDate;
@@ -18538,6 +18726,7 @@ class _PaymentStep extends StatelessWidget {
     required this.weightConfirmed,
     required this.weightSource,
     required this.pricingReason,
+    required this.specialHandling,
     required this.scheduledPickupDate,
     required this.scheduledPickupWindow,
     required this.scheduledDropoffDate,
@@ -18599,6 +18788,36 @@ class _PaymentStep extends StatelessWidget {
                 value: routeMessage,
                 strong: locationsConfirmed,
               ),
+              if (breakdown.assistedFee > 0)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Assisted Delivery',
+                  value: '£${breakdown.assistedFee.toStringAsFixed(2)}',
+                ),
+              if (breakdown.heavyDutyFee > 0)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Heavy Duty',
+                  value: '£${breakdown.heavyDutyFee.toStringAsFixed(2)}',
+                ),
+              if (breakdown.twoPersonFee > 0)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Two Person Required',
+                  value: '£${breakdown.twoPersonFee.toStringAsFixed(2)}',
+                ),
+              if (specialHandling.labourPremium > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    specialHandling.explanation,
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               Divider(color: colors.border, height: 26),
               if (hasSchedule) ...[
                 _PriceLine(

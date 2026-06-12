@@ -51,6 +51,15 @@ class DeliveryPricingBreakdown {
   final double surgeMultiplier;
   final double total;
   final String weightCategory;
+  final double assistedFee;
+  final double heavyDutyFee;
+  final double twoPersonFee;
+  final double riderBaseShare;
+  final double riderLabourShare;
+  final double circumBaseShare;
+  final double circumLabourShare;
+  final double totalRiderEarnings;
+  final double totalCircumRevenue;
 
   const DeliveryPricingBreakdown({
     required this.baseFare,
@@ -63,6 +72,15 @@ class DeliveryPricingBreakdown {
     required this.surgeMultiplier,
     required this.total,
     required this.weightCategory,
+    this.assistedFee = 0,
+    this.heavyDutyFee = 0,
+    this.twoPersonFee = 0,
+    this.riderBaseShare = 0,
+    this.riderLabourShare = 0,
+    this.circumBaseShare = 0,
+    this.circumLabourShare = 0,
+    this.totalRiderEarnings = 0,
+    this.totalCircumRevenue = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -77,6 +95,15 @@ class DeliveryPricingBreakdown {
         'surgeMultiplier': surgeMultiplier,
         'total': total,
         'weightCategory': weightCategory,
+        'assistedFee': assistedFee,
+        'heavyDutyFee': heavyDutyFee,
+        'twoPersonFee': twoPersonFee,
+        'riderBaseShare': riderBaseShare,
+        'riderLabourShare': riderLabourShare,
+        'circumBaseShare': circumBaseShare,
+        'circumLabourShare': circumLabourShare,
+        'totalRiderEarnings': totalRiderEarnings,
+        'totalCircumRevenue': totalCircumRevenue,
       };
 }
 
