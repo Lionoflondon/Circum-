@@ -10,6 +10,7 @@ import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
+import 'package:circum/app/rider_marketplace/rider_marketplace_rules.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
@@ -424,6 +425,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _healthPlusPickups = const [];
   List<Map<String, dynamic>> _recurringPickupSchedules = const [];
   List<Map<String, dynamic>> _payoutRequests = const [];
+  List<Map<String, dynamic>> _riderWallets = const [];
+  List<Map<String, dynamic>> _walletTransactions = const [];
   List<Map<String, dynamic>> _adminUsers = const [];
   List<Map<String, dynamic>> _auditLogs = const [];
   List<Map<String, dynamic>> _websiteVisitors = const [];
@@ -606,6 +609,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _can(AdminPermission.viewFinance)
           ? _readCollection(db.collection('payoutRequests').limit(80))
           : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(db.collection('riderEarnings').limit(120))
+          : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(
+              db
+                  .collection('riderWalletTransactions')
+                  .orderBy('createdAt', descending: true)
+                  .limit(120),
+            )
+          : Future.value(<Map<String, dynamic>>[]),
       _readCollection(
         db
             .collection('websiteVisitors')
@@ -631,8 +645,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final healthPickups = results[8];
     final schedules = results[9];
     final payouts = results[10];
-    final visitors = results[11];
-    final riderDocuments = results[12];
+    final riderWallets = results[11];
+    final walletTransactions = results[12];
+    final visitors = results[13];
+    final riderDocuments = results[14];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -645,9 +661,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _healthPlusPickups = healthPickups;
       _recurringPickupSchedules = schedules;
       _payoutRequests = payouts;
+      _riderWallets = riderWallets;
+      _walletTransactions = walletTransactions;
       _websiteVisitors = visitors;
       _riderDocuments = riderDocuments;
-      _auditLogs = results[13];
+      _auditLogs = results[15];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -1435,6 +1453,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               _AdminDriverProfileDrawer(
                 colors: colors,
                 driver: _selectedDriverProfile!,
+                wallet: _walletForRider(
+                  _driverId(_selectedDriverProfile!),
+                ),
+                walletTransactions: _walletTransactions
+                    .where(
+                      (item) =>
+                          '${item['riderId'] ?? ''}' ==
+                          _driverId(_selectedDriverProfile!),
+                    )
+                    .take(6)
+                    .toList(),
                 documents: _documentsForDriver(
                   _driverId(_selectedDriverProfile!),
                 ),
@@ -1548,11 +1577,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rowBuilder: _deliveryRow,
           emptyText: 'No delivery records yet.',
         ),
-      _AdminSection.finance => _AdminDataSection(
+      _AdminSection.finance => _AdminFinanceSection(
           colors: colors,
-          title: 'Finance',
-          subtitle:
-              'Payments, refunds, driver payouts, and revenue follow-up. CIRCUM retains 35% to operate the platform, support disputes, payments, safety, and system maintenance.',
           records: adminSearch(_financeRows(), query, [
             'id',
             'senderId',
@@ -1560,9 +1586,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'status',
             'type',
           ]),
-          columns: const ['Type', 'Record', 'Status', 'Amount', 'Notes'],
+          wallets: _riderWallets,
+          totalOwed:
+              _walletTotal('availableBalance') + _walletTotal('pendingBalance'),
+          available: _walletTotal('availableBalance'),
+          pending: _walletTotal('pendingBalance'),
+          withdrawn: _walletTotal('totalWithdrawn'),
+          lifetime: _walletTotal('lifetimeEarnings'),
           rowBuilder: _financeRow,
-          emptyText: 'No finance records yet.',
         ),
       _AdminSection.healthPlus => _AdminDataSection(
           colors: colors,
@@ -1749,8 +1780,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   List<Widget> _financeRow(Map<String, dynamic> item) {
+    final recordType = '${item['recordType'] ?? 'payment'}';
+    final transactionType = '${item['type'] ?? ''}';
+    final isPendingEarning = recordType == 'wallet_transaction' &&
+        '${item['status']}' == 'pending' &&
+        transactionType == 'earning' &&
+        '${item['deliveryId'] ?? item['requestId'] ?? ''}'.isNotEmpty;
+    final isWithdrawal = recordType == 'driver_payout';
     return [
-      _AdminCell.primary('${item['type'] ?? 'payment'}'),
+      _AdminCell.primary(
+        recordType == 'wallet_transaction' ? transactionType : recordType,
+      ),
       _AdminCell(
         '${item['id'] ?? item['paymentId'] ?? item['payoutId'] ?? ''}',
       ),
@@ -1759,8 +1799,30 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         status: '${item['status'] ?? 'pending'}',
       ),
       _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
-      _AdminCell(
-        '${item['senderId'] ?? item['riderId'] ?? item['userId'] ?? ''}',
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          if (isPendingEarning)
+            _AdminAction(
+              label: 'Make available',
+              enabled: _can(AdminPermission.viewFinance),
+              onTap: () => _settleEarning(item),
+            ),
+          if (isWithdrawal)
+            _AdminAction(
+              label: 'Approve',
+              enabled: _can(AdminPermission.viewFinance) &&
+                  ['requested', 'pending'].contains('${item['status']}'),
+              onTap: () => _processWithdrawal(item, 'approved'),
+            ),
+          if (isWithdrawal)
+            _AdminAction(
+              label: 'Reject',
+              enabled: _can(AdminPermission.viewFinance) &&
+                  ['requested', 'pending'].contains('${item['status']}'),
+              onTap: () => _processWithdrawal(item, 'rejected'),
+            ),
+        ],
       ),
     ];
   }
@@ -1975,15 +2037,190 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Map<String, dynamic>> _financeRows() {
     return [
-      ..._payments.map((item) => {'type': 'payment', ...item}),
-      ..._healthPlusPayments.map(
-        (item) => {'type': 'health_plus_payment', ...item},
+      ..._walletTransactions.map(
+        (item) => {'recordType': 'wallet_transaction', ...item},
       ),
-      ..._payoutRequests.map((item) => {'type': 'driver_payout', ...item}),
+      ..._payments.map((item) => {'recordType': 'payment', ...item}),
+      ..._healthPlusPayments.map(
+        (item) => {'recordType': 'health_plus_payment', ...item},
+      ),
+      ..._payoutRequests.map(
+        (item) => {'recordType': 'driver_payout', ...item},
+      ),
       ..._supportTickets
           .where((ticket) => '${ticket['type']}'.contains('refund'))
-          .map((item) => {'type': 'refund_request', ...item}),
+          .map((item) => {'recordType': 'refund_request', ...item}),
     ];
+  }
+
+  double _walletTotal(String field) => _riderWallets.fold<double>(
+        0,
+        (total, wallet) => total + ((wallet[field] as num?)?.toDouble() ?? 0),
+      );
+
+  Map<String, dynamic> _walletForRider(String riderId) {
+    return _riderWallets.firstWhere(
+      (wallet) => '${wallet['riderId'] ?? wallet['id'] ?? ''}' == riderId,
+      orElse: () => const <String, dynamic>{},
+    );
+  }
+
+  bool _riderCanWithdraw(String riderId, String riderEmail) {
+    if (riderEmail.trim().toLowerCase() == RoleAccessPolicy.superAdminEmail) {
+      return true;
+    }
+    final rider = _drivers.firstWhere(
+      (driver) => _driverId(driver) == riderId,
+      orElse: () => const <String, dynamic>{},
+    );
+    final status =
+        '${rider['approvalStatus'] ?? rider['verificationStatus'] ?? ''}'
+            .trim()
+            .toLowerCase();
+    return status == 'approved' || status == 'verified';
+  }
+
+  Future<void> _settleEarning(Map<String, dynamic> item) async {
+    if (!_can(AdminPermission.viewFinance) || item['status'] != 'pending') {
+      return;
+    }
+    final riderId = '${item['riderId'] ?? ''}';
+    final transactionId = '${item['id'] ?? item['transactionId'] ?? ''}';
+    final amount = (item['amount'] as num?)?.toDouble() ?? 0;
+    if (riderId.isEmpty || transactionId.isEmpty || amount <= 0) return;
+    final db = FirebaseFirestore.instance;
+    await db.runTransaction((transaction) async {
+      final ledgerRef =
+          db.collection('riderWalletTransactions').doc(transactionId);
+      final walletRef = db.collection('riderEarnings').doc(riderId);
+      final ledger = await transaction.get(ledgerRef);
+      if (!ledger.exists || ledger.data()?['status'] != 'pending') return;
+      transaction.set(
+          ledgerRef,
+          {
+            'status': 'available',
+            'updatedAt': FieldValue.serverTimestamp(),
+            'settledBy': _adminUser?.uid,
+          },
+          SetOptions(merge: true));
+      transaction.set(
+          walletRef,
+          {
+            'pendingBalance': FieldValue.increment(-amount),
+            'availableBalance': FieldValue.increment(amount),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? '',
+      actionType: 'rider_earning_made_available',
+      recordType: 'riderWalletTransactions',
+      recordId: transactionId,
+      newValue: {'riderId': riderId, 'amount': amount, 'status': 'available'},
+    ));
+    await _loadAdminData();
+  }
+
+  Future<void> _processWithdrawal(
+    Map<String, dynamic> item,
+    String nextStatus,
+  ) async {
+    if (!_can(AdminPermission.viewFinance)) return;
+    final requestId = '${item['id'] ?? item['requestId'] ?? ''}';
+    final riderId = '${item['riderId'] ?? ''}';
+    final amount = (item['amount'] as num?)?.toDouble() ?? 0;
+    if (requestId.isEmpty || riderId.isEmpty || amount <= 0) return;
+    if (nextStatus == 'approved' &&
+        !_riderCanWithdraw(riderId, '${item['riderEmail'] ?? ''}')) {
+      setState(
+        () => _message =
+            'Withdrawal blocked: this rider has incomplete onboarding.',
+      );
+      return;
+    }
+    final db = FirebaseFirestore.instance;
+    await db.runTransaction((transaction) async {
+      final requestRef = db.collection('payoutRequests').doc(requestId);
+      final walletRef = db.collection('riderEarnings').doc(riderId);
+      final request = await transaction.get(requestRef);
+      final wallet = await transaction.get(walletRef);
+      final currentStatus = '${request.data()?['status'] ?? ''}';
+      if (!request.exists ||
+          !['requested', 'pending'].contains(currentStatus)) {
+        return;
+      }
+      if (nextStatus == 'rejected') {
+        transaction.set(
+            requestRef,
+            {
+              'status': 'rejected',
+              'processedAt': FieldValue.serverTimestamp(),
+              'processedBy': _adminUser?.uid,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true));
+        transaction.set(
+            walletRef,
+            {
+              'pendingWithdrawal': FieldValue.increment(-amount),
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true));
+        return;
+      }
+      final available =
+          (wallet.data()?['availableBalance'] as num?)?.toDouble() ?? 0;
+      if (available < amount) {
+        throw StateError('Withdrawal exceeds available rider balance.');
+      }
+      final ledgerId = 'withdrawal_$requestId';
+      transaction.set(
+        db.collection('riderWalletTransactions').doc(ledgerId),
+        {
+          'id': ledgerId,
+          'riderId': riderId,
+          'deliveryId': null,
+          'withdrawalRequestId': requestId,
+          'type': 'withdrawal',
+          'amount': -amount,
+          'status': 'paid',
+          'notes': 'Manual rider withdrawal approved by Circum.',
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: false),
+      );
+      transaction.set(
+          requestRef,
+          {
+            'status': 'approved',
+            'processedAt': FieldValue.serverTimestamp(),
+            'processedBy': _adminUser?.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+      transaction.set(
+          walletRef,
+          {
+            'availableBalance': FieldValue.increment(-amount),
+            'pendingWithdrawal': FieldValue.increment(-amount),
+            'totalWithdrawn': FieldValue.increment(amount),
+            'withdrawnEarnings': FieldValue.increment(amount),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? '',
+      actionType: nextStatus == 'rejected'
+          ? 'rider_withdrawal_rejected'
+          : 'rider_withdrawal_approved',
+      recordType: 'payoutRequests',
+      recordId: requestId,
+      newValue: {'riderId': riderId, 'amount': amount, 'status': nextStatus},
+    ));
+    await _loadAdminData();
   }
 
   List<Map<String, dynamic>> _healthPlusRows() {
@@ -2897,9 +3134,89 @@ class _AdminDataSection extends StatelessWidget {
   }
 }
 
+class _AdminFinanceSection extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> wallets;
+  final double totalOwed;
+  final double available;
+  final double pending;
+  final double withdrawn;
+  final double lifetime;
+  final List<Widget> Function(Map<String, dynamic>) rowBuilder;
+
+  const _AdminFinanceSection({
+    required this.colors,
+    required this.records,
+    required this.wallets,
+    required this.totalOwed,
+    required this.available,
+    required this.pending,
+    required this.withdrawn,
+    required this.lifetime,
+    required this.rowBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Total Owed To Riders',
+                value: _adminMoneyText(totalOwed),
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Available For Withdrawal',
+                value: _adminMoneyText(available),
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Pending Settlement',
+                value: _adminMoneyText(pending),
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Withdrawn',
+                value: _adminMoneyText(withdrawn),
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Lifetime Rider Earnings',
+                value: _adminMoneyText(lifetime),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _AdminDataSection(
+            colors: colors,
+            title: 'Rider wallets and withdrawals',
+            subtitle:
+                '${wallets.length} rider wallet(s). Settle completed-job earnings and process manual withdrawal requests here.',
+            records: records,
+            columns: const ['Type', 'Record', 'Status', 'Amount', 'Actions'],
+            rowBuilder: rowBuilder,
+            emptyText: 'No rider wallet or finance records yet.',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _AdminDriverProfileDrawer extends StatelessWidget {
   final _CircumColors colors;
   final Map<String, dynamic> driver;
+  final Map<String, dynamic> wallet;
+  final List<Map<String, dynamic>> walletTransactions;
   final List<Map<String, dynamic>> documents;
   final String statusLabel;
   final String signupDate;
@@ -2913,6 +3230,8 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
   const _AdminDriverProfileDrawer({
     required this.colors,
     required this.driver,
+    required this.wallet,
+    required this.walletTransactions,
     required this.documents,
     required this.statusLabel,
     required this.signupDate,
@@ -3012,6 +3331,73 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (wallet.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _GlassPanel(
+                      colors: colors,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rider wallet',
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _profileRow(
+                            'Available For Withdrawal',
+                            _adminMoneyText(
+                              (wallet['availableBalance'] as num?)
+                                      ?.toDouble() ??
+                                  0,
+                            ),
+                          ),
+                          _profileRow(
+                            'Pending Settlement',
+                            _adminMoneyText(
+                              (wallet['pendingBalance'] as num?)?.toDouble() ??
+                                  0,
+                            ),
+                          ),
+                          _profileRow(
+                            'Withdrawn',
+                            _adminMoneyText(
+                              (wallet['totalWithdrawn'] as num?)?.toDouble() ??
+                                  0,
+                            ),
+                          ),
+                          _profileRow(
+                            'Lifetime Earnings',
+                            _adminMoneyText(
+                              (wallet['lifetimeEarnings'] as num?)
+                                      ?.toDouble() ??
+                                  0,
+                            ),
+                          ),
+                          if (walletTransactions.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              'Recent transactions',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ...walletTransactions.map(
+                              (item) => _profileRow(
+                                '${item['type'] ?? 'transaction'} · ${item['status'] ?? ''}',
+                                '${_adminMoneyText((item['amount'] as num?)?.toDouble() ?? 0)}\n${item['deliveryId'] ?? item['requestId'] ?? ''}',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   _GlassPanel(
                     colors: colors,
@@ -5276,7 +5662,7 @@ class _RiderEarningsTab extends StatelessWidget {
             _RiderStatTile(
               colors: colors,
               label: 'Pending',
-              value: _RiderWorkspace._money(earnings.pendingWithdrawal),
+              value: _RiderWorkspace._money(earnings.pendingBalance),
             ),
             _RiderStatTile(
               colors: colors,
@@ -5460,6 +5846,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   List<Map<String, dynamic>> _completedJobs = const [];
   Map<String, dynamic>? _riderProfile;
   Set<CircumRole> _availableRoles = const {};
+  bool _superAdminRiderBypass = false;
   late _RiderPortalTab _riderTab = _initialRiderTab();
   String? _jobMessage;
   bool _riderChatOpen = false;
@@ -5793,6 +6180,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final userDoc = await db.collection('users').doc(user.uid).get();
     final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
     final adminDoc = await db.collection('adminUsers').doc(user.uid).get();
+    _superAdminRiderBypass = RoleAccessPolicy.isSuperAdmin(
+      email: user.email,
+      claims: claims,
+      adminUser: adminDoc.data() ?? const {},
+    );
     return RoleAccessPolicy.resolveRoles(
       claims: claims,
       user: userDoc.data() ?? const {},
@@ -5811,6 +6203,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   String _riderApprovalStatus() {
+    if (_superAdminRiderBypass) return 'approved';
     final profile = _riderProfile;
     if (profile == null) return 'missing';
     final approval = '${profile['approvalStatus'] ?? ''}'.trim().toLowerCase();
@@ -5881,8 +6274,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     await db.collection('riderEarnings').doc(user.uid).set({
       'riderId': user.uid,
       'availableBalance': FieldValue.increment(0),
+      'pendingBalance': FieldValue.increment(0),
       'pendingWithdrawal': FieldValue.increment(0),
       'lifetimeEarnings': FieldValue.increment(0),
+      'totalWithdrawn': FieldValue.increment(0),
       'tipsReceived': FieldValue.increment(0),
       'completedJobs': FieldValue.increment(0),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -5968,7 +6363,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}';
             final requiredVehicle =
                 '${job['vehicleType'] ?? job['irisRecommendedVehicle'] ?? ''}';
-            if (riderVehicle.isNotEmpty &&
+            if (!_superAdminRiderBypass &&
+                riderVehicle.isNotEmpty &&
                 requiredVehicle.isNotEmpty &&
                 !DeliveryPricing.vehicleMeetsMinimum(
                   riderVehicle,
@@ -6314,7 +6710,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         final payout = _jobPayout(job);
         final tip = _jobTip(job);
         final totalCredit = payout + tip;
-        final txId = '${requestId}_${user.uid}_completion';
+        final txId = RiderMarketplaceRules.earningTransactionId(
+          deliveryId: requestId,
+          riderId: user.uid,
+        );
         final deliveryRef = db.collection('deliveryRequests').doc(requestId);
         final walletRef = db.collection('riderWalletTransactions').doc(txId);
         final earningsRef = db.collection('riderEarnings').doc(user.uid);
@@ -6325,22 +6724,29 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           transaction.set(
               walletRef,
               {
+                'id': txId,
                 'transactionId': txId,
+                'deliveryId': requestId,
                 'requestId': requestId,
                 'riderId': user.uid,
-                'type': 'job_completed',
+                'type': 'earning',
                 'deliveryEarning': payout,
                 'tipAmount': tip,
                 'amount': totalCredit,
-                'status': 'available',
+                'status': 'pending',
+                'notes': 'Completed delivery awaiting admin settlement.',
                 'createdAt': FieldValue.serverTimestamp(),
+                'updatedAt': FieldValue.serverTimestamp(),
               },
               SetOptions(merge: true));
           transaction.set(
               earningsRef,
               {
-                'availableBalance': FieldValue.increment(totalCredit),
+                'riderId': user.uid,
+                'availableBalance': FieldValue.increment(0),
+                'pendingBalance': FieldValue.increment(totalCredit),
                 'lifetimeEarnings': FieldValue.increment(totalCredit),
+                'totalWithdrawn': FieldValue.increment(0),
                 'tipsReceived': FieldValue.increment(tip),
                 'completedJobs': FieldValue.increment(1),
                 'updatedAt': FieldValue.serverTimestamp(),
@@ -7065,7 +7471,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final pending = await db
           .collection('payoutRequests')
           .where('riderId', isEqualTo: user.uid)
-          .where('status', whereIn: ['pending', 'processing'])
+          .where('status', whereIn: ['requested', 'approved', 'pending'])
           .limit(1)
           .get();
       if (pending.docs.isNotEmpty) {
@@ -7087,25 +7493,27 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'sortCode': _sortCode.text.trim(),
         'accountNumber': _accountNumber.text.trim(),
         'saveAccountDetails': _saveBank,
-        'status': 'pending',
+        'status': 'requested',
+        'notes': '',
         'auditTrail': [
           {
             'type': 'withdrawal_requested',
             'riderId': user.uid,
             'amount': amount,
-            'status': 'pending',
+            'status': 'requested',
             'source': 'circum-web',
             'createdAt': Timestamp.now(),
           },
         ],
         'source': 'circum-web',
+        'requestedAt': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
       batch.set(
           db.collection('riderEarnings').doc(user.uid),
           {
             'pendingWithdrawal': FieldValue.increment(amount),
-            'availableBalance': FieldValue.increment(-amount),
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true));
@@ -7374,7 +7782,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Widget _buildSignedInRiderContent(_CircumColors colors, bool wide) {
-    if (_riderProfile == null) {
+    if (_riderProfile == null && !_superAdminRiderBypass) {
       final children = [
         _buildRiderAccessPanel(colors),
         const SizedBox(height: 14),
@@ -8292,7 +8700,7 @@ class _RiderWorkspace extends StatelessWidget {
                       child: _RiderStatTile(
                         colors: colors,
                         label: 'Pending',
-                        value: _money(earnings.pendingWithdrawal),
+                        value: _money(earnings.pendingBalance),
                       ),
                     ),
                   ],
@@ -9597,6 +10005,7 @@ class _RatingFeedbackRow extends StatelessWidget {
 
 class _RiderEarningsSnapshot {
   final double availableBalance;
+  final double pendingBalance;
   final double pendingWithdrawal;
   final double lifetimeEarnings;
   final double tipsReceived;
@@ -9605,6 +10014,7 @@ class _RiderEarningsSnapshot {
 
   const _RiderEarningsSnapshot({
     required this.availableBalance,
+    required this.pendingBalance,
     required this.pendingWithdrawal,
     required this.lifetimeEarnings,
     required this.tipsReceived,
@@ -9614,6 +10024,7 @@ class _RiderEarningsSnapshot {
 
   factory _RiderEarningsSnapshot.empty() => const _RiderEarningsSnapshot(
         availableBalance: 0,
+        pendingBalance: 0,
         pendingWithdrawal: 0,
         lifetimeEarnings: 0,
         tipsReceived: 0,
@@ -9628,6 +10039,7 @@ class _RiderEarningsSnapshot {
               data['accountBalance'] as num? ??
               0)
           .toDouble(),
+      pendingBalance: (data['pendingBalance'] as num? ?? 0).toDouble(),
       pendingWithdrawal: (data['pendingWithdrawal'] as num? ?? 0).toDouble(),
       lifetimeEarnings: (data['lifetimeEarnings'] as num? ??
               data['totalAmountEarned'] as num? ??

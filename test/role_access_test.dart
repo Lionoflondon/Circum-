@@ -36,15 +36,34 @@ void main() {
       expect(RoleAccessPolicy.rolesCanAccessAdmin(roles), isTrue);
     });
 
-    test('lets super admins also continue as senders', () {
+    test('lets super admins continue as senders and riders', () {
       final roles = RoleAccessPolicy.resolveRoles(claims: {
         'roles': ['super_admin'],
       });
 
       expect(roles, contains(CircumRole.admin));
       expect(roles, contains(CircumRole.sender));
+      expect(roles, contains(CircumRole.rider));
       expect(RoleAccessPolicy.rolesCanAccessSender(roles), isTrue);
+      expect(RoleAccessPolicy.rolesCanAccessRider(roles), isTrue);
       expect(RoleAccessPolicy.rolesCanAccessAdmin(roles), isTrue);
+    });
+
+    test('super admin rider bypass requires the configured account and role', () {
+      expect(
+        RoleAccessPolicy.isSuperAdmin(
+          email: 'ayojason600@gmail.com',
+          claims: const {'roles': ['super_admin']},
+        ),
+        isTrue,
+      );
+      expect(
+        RoleAccessPolicy.isSuperAdmin(
+          email: 'normal@example.com',
+          claims: const {'roles': ['super_admin']},
+        ),
+        isFalse,
+      );
     });
 
     test('supports accounts with sender and rider roles', () {

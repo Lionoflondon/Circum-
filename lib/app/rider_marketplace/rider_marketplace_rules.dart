@@ -51,6 +51,21 @@ class RiderMarketplaceRules {
     return double.parse((deliveryEarning + tipAmount).toStringAsFixed(2));
   }
 
+  static String earningTransactionId({
+    required String deliveryId,
+    required String riderId,
+  }) {
+    return '${deliveryId}_${riderId}_completion';
+  }
+
+  static double totalRiderLiability(Iterable<Map<String, dynamic>> wallets) {
+    return wallets.fold<double>(0, (total, wallet) {
+      final pending = (wallet['pendingBalance'] as num?)?.toDouble() ?? 0;
+      final available = (wallet['availableBalance'] as num?)?.toDouble() ?? 0;
+      return total + pending + available;
+    });
+  }
+
   static bool canRequestWithdrawal({
     required double amount,
     required double availableBalance,

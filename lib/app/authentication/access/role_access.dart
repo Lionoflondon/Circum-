@@ -15,6 +15,24 @@ const adminRoleNames = {
 };
 
 class RoleAccessPolicy {
+  static const superAdminEmail = 'ayojason600@gmail.com';
+
+  static bool isSuperAdmin({
+    String? email,
+    Map<String, dynamic> claims = const {},
+    Map<String, dynamic> adminUser = const {},
+  }) {
+    final roles = <String>{
+      ..._roleValues(claims['adminRole']),
+      ..._roleValues(claims['role']),
+      ..._roleValues(claims['roles']),
+      ..._roleValues(adminUser['role']),
+      ..._roleValues(adminUser['roles']),
+    };
+    return email?.trim().toLowerCase() == superAdminEmail &&
+        roles.contains('super_admin');
+  }
+
   static CircumRole resolve({
     Map<String, dynamic> claims = const {},
     Map<String, dynamic> user = const {},
@@ -60,6 +78,7 @@ class RoleAccessPolicy {
     }
     if (roles.contains('super_admin')) {
       resolvedRoles.add(CircumRole.sender);
+      resolvedRoles.add(CircumRole.rider);
     }
     if (roles.any((role) => role == 'rider' || role == 'driver')) {
       resolvedRoles.add(CircumRole.rider);

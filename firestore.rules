@@ -35,7 +35,10 @@ service cloud.firestore {
     }
 
     function isRiderAccount() {
-      return signedIn() && exists(/databases/$(database)/documents/riderProfiles/$(request.auth.uid));
+      return signedIn() && (
+        hasRole('super_admin') ||
+        exists(/databases/$(database)/documents/riderProfiles/$(request.auth.uid))
+      );
     }
 
     function isOwnDelivery(deliveryId) {
@@ -414,6 +417,15 @@ service cloud.firestore {
     match /riderEarnings/{riderId} {
       allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
       allow create, update: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderWalletTransactions/{transactionId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 

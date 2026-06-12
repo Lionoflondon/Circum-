@@ -80,5 +80,36 @@ void main() {
         isFalse,
       );
     });
+
+    test('earning transaction id is deterministic for idempotency', () {
+      expect(
+        RiderMarketplaceRules.earningTransactionId(
+          deliveryId: 'delivery-1',
+          riderId: 'rider-1',
+        ),
+        'delivery-1_rider-1_completion',
+      );
+    });
+
+    test('total owed equals pending plus available balances', () {
+      expect(
+        RiderMarketplaceRules.totalRiderLiability(const [
+          {'pendingBalance': 12.5, 'availableBalance': 7.5},
+          {'pendingBalance': 3, 'availableBalance': 2},
+        ]),
+        25,
+      );
+    });
+
+    test('withdrawal cannot exceed available balance', () {
+      expect(
+        RiderMarketplaceRules.canRequestWithdrawal(
+          amount: 30,
+          availableBalance: 25,
+          hasPendingWithdrawal: false,
+        ),
+        isFalse,
+      );
+    });
   });
 }
