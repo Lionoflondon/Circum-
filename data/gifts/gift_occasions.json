@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "count": 14,
+  "occasions": [
+    {
+      "id": "occasion_birthday",
+      "name": "Birthday",
+      "seasonality": false,
+      "default_tone": "celebratory",
+      "priority": 1,
+      "active": true
+    },
+    {
+      "id": "occasion_christmas",
+      "name": "Christmas",
+      "seasonality": true,
+      "default_tone": "celebratory",
+      "priority": 2,
+      "active": true
+    },
+    {
+      "id": "occasion_anniversary",
+      "name": "Anniversary",
+      "seasonality": false,
+      "default_tone": "romantic",
+      "priority": 3,
+      "active": true
+    },
+    {
+      "id": "occasion_graduation",
+      "name": "Graduation",
+      "seasonality": false,
+      "default_tone": "celebratory",
+      "priority": 4,
+      "active": true
+    },
+    {
+      "id": "occasion_promotion",
+      "name": "Promotion",
+      "seasonality": false,
+      "default_tone": "celebratory",
+      "priority": 5,
+      "active": true
+    },
+    {
+      "id": "occasion_retirement",
+      "name": "Retirement",
+      "seasonality": false,
+      "default_tone": "celebratory",
+      "priority": 6,
+      "active": true
+    },
+    {
+      "id": "occasion_wedding",
+      "name": "Wedding",
+      "seasonality": false,
+      "default_tone": "romantic",
+      "priority": 7,
+      "active": true
+    },
+    {
+      "id": "occasion_new_baby",
+      "name": "New Baby",
+      "seasonality": false,
+      "default_tone": "celebratory",
+      "priority": 8,
+      "active": true
+    },
+    {
+      "id": "occasion_mothers_day",
+      "name": "Mother's Day",
+      "seasonality": true,
+      "default_tone": "celebratory",
+      "priority": 9,
+      "active": true
+    },
+    {
+      "id": "occasion_fathers_day",
+      "name": "Father's Day",
+      "seasonality": true,
+      "default_tone": "celebratory",
+      "priority": 10,
+      "active": true
+    },
+    {
+      "id": "occasion_valentines_day",
+      "name": "Valentine's Day",
+      "seasonality": true,
+      "default_tone": "romantic",
+      "priority": 11,
+      "active": true
+    },
+    {
+      "id": "occasion_eid",
+      "name": "Eid",
+      "seasonality": true,
+      "default_tone": "celebratory",
+      "priority": 12,
+      "active": true
+    },
+    {
+      "id": "occasion_easter",
+      "name": "Easter",
+      "seasonality": true,
+      "default_tone": "celebratory",
+      "priority": 13,
+      "active": true
+    },
+    {
+      "id": "occasion_new_year",
+      "name": "New Year",
+      "seasonality": true,
+      "default_tone": "celebratory",
+      "priority": 14,
+      "active": true
+    }
+  ]
+}

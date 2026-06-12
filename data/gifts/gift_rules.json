@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "currency": "GBP",
+  "strategy": "weighted_filter_then_rank",
+  "hard_filters": {
+    "active_item": true,
+    "active_retailer": true,
+    "uk_delivery_required": true,
+    "budget_must_cover_item_price": true,
+    "delivery_lead_days_must_fit_deadline": true,
+    "age_must_be_within_item_range": true
+  },
+  "scoring_weights": {
+    "interests": 0.3,
+    "occasion": 0.2,
+    "relationship": 0.18,
+    "budget_fit": 0.12,
+    "retailer_reliability": 0.08,
+    "uniqueness": 0.07,
+    "delivery_confidence": 0.05
+  },
+  "optional_inputs": [
+    "gender"
+  ],
+  "required_inputs": [
+    "budget",
+    "relationship",
+    "occasion",
+    "interests",
+    "age",
+    "delivery_deadline"
+  ],
+  "fallback_order": [
+    "interest_and_occasion",
+    "occasion_and_relationship",
+    "interest_and_budget",
+    "reliable_budget_fit"
+  ],
+  "budget_rules": {
+    "reserve_delivery_cost": true,
+    "maximum_item_price_ratio": 0.85,
+    "minimum_remaining_buffer_gbp": 5
+  },
+  "deadline_rules": {
+    "same_day_max_lead_days": 0,
+    "next_day_max_lead_days": 1,
+    "exclude_late_items": true
+  },
+  "learning_rules": {
+    "record_impression": true,
+    "record_shortlist": true,
+    "record_admin_approval": true,
+    "record_purchase": true,
+    "record_recipient_feedback": true,
+    "minimum_outcomes_before_personalisation": 20,
+    "never_override_hard_filters": true
+  },
+  "governance": {
+    "recommendations_require_active_inventory": true,
+    "no_exact_item_promise_before_procurement": true,
+    "admin_approval_workflow_unchanged": true,
+    "stripe_logic_unchanged": true,
+    "circum_gift_card_logic_unchanged": true
+  }
+}

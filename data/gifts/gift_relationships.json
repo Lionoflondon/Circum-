@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "count": 14,
+  "relationships": [
+    {
+      "id": "relationship_partner",
+      "name": "Partner",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_husband",
+      "name": "Husband",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_wife",
+      "name": "Wife",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_mother",
+      "name": "Mother",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_father",
+      "name": "Father",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_son",
+      "name": "Son",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_daughter",
+      "name": "Daughter",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_brother",
+      "name": "Brother",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_sister",
+      "name": "Sister",
+      "intimacy_level": "close",
+      "safe_gift_tone": [
+        "personal",
+        "thoughtful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_friend",
+      "name": "Friend",
+      "intimacy_level": "personal",
+      "safe_gift_tone": [
+        "appropriate",
+        "useful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_colleague",
+      "name": "Colleague",
+      "intimacy_level": "professional",
+      "safe_gift_tone": [
+        "appropriate",
+        "useful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_mentor",
+      "name": "Mentor",
+      "intimacy_level": "professional",
+      "safe_gift_tone": [
+        "appropriate",
+        "useful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_client",
+      "name": "Client",
+      "intimacy_level": "professional",
+      "safe_gift_tone": [
+        "appropriate",
+        "useful"
+      ],
+      "active": true
+    },
+    {
+      "id": "relationship_teacher",
+      "name": "Teacher",
+      "intimacy_level": "professional",
+      "safe_gift_tone": [
+        "appropriate",
+        "useful"
+      ],
+      "active": true
+    }
+  ]
+}
