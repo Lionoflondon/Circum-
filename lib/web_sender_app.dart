@@ -1685,11 +1685,32 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Widget> _deliveryRow(Map<String, dynamic> item) {
     final id = '${item['id'] ?? item['requestId'] ?? ''}';
+    final pickupCanonical = item['pickupAddressCanonical'] as Map?;
+    final dropoffCanonical = item['dropoffAddressCanonical'] as Map?;
+    String addressSummary(String fallback, Map? canonical) {
+      if (canonical == null) return fallback;
+      final address = '${canonical['displayAddress'] ?? fallback}';
+      final lat = canonical['lat'];
+      final lng = canonical['lng'];
+      final source =
+          '${canonical['addressSource'] ?? canonical['provider'] ?? ''}';
+      final verified = '${canonical['validationStatus'] ?? ''}' == 'verified' ||
+          (canonical['geocodeConfidence'] is num &&
+              (canonical['geocodeConfidence'] as num) >= 0.8);
+      final details = <String>[
+        if (verified) 'Verified',
+        if (source.isNotEmpty) source,
+        if (lat is num && lng is num)
+          '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
+      ];
+      return details.isEmpty ? address : '$address\n${details.join(' • ')}';
+    }
+
     return [
       _AdminCell.primary('${item['requestId'] ?? id}'),
       _AdminCell(_jobReceivedText(item)),
       _AdminCell(
-        '${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}\n→ ${item['dropoffAddress'] ?? ''}',
+        '${addressSummary('${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}', pickupCanonical)}\n→ ${addressSummary('${item['dropoffAddress'] ?? ''}', dropoffCanonical)}',
       ),
       _AdminStatusCell(
         colors: widget.colors,
@@ -10438,9 +10459,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _confirmedRouteDistanceMiles! > 0;
   }
 
-  bool get _pickupAddressVerified => _validatedPickup?.hasCoordinates == true;
+  bool get _pickupAddressVerified => _validatedPickup?.isVerified == true;
 
-  bool get _dropoffAddressVerified => _validatedDropoff?.hasCoordinates == true;
+  bool get _dropoffAddressVerified => _validatedDropoff?.isVerified == true;
 
   bool get _canAnalyzeDelivery {
     return _hasValidatedRoute &&
@@ -10554,6 +10575,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     if (!_dropoffAddressVerified) {
       return 'Choose a verified drop-off address from the suggestions.';
+    }
+    final pickup = _validatedPickup!;
+    final dropoff = _validatedDropoff!;
+    if (_coordinatesAreSame(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)) {
+      return 'Pickup and drop-off cannot be the same place.';
     }
     if (_confirmedRouteDistanceMiles == null) {
       return 'Route distance not confirmed';
@@ -12734,8 +12760,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       quote.total,
     );
     final driverJobSummary = {
-      'pickupDisplay': _pickup.text.trim(),
-      'dropoffDisplay': _dropoff.text.trim(),
+      'pickupDisplay': pickupAddress.compactDisplay,
+      'dropoffDisplay': dropoffAddress.compactDisplay,
+      'pickupAddress': pickupAddress.toJson(),
+      'dropoffAddress': dropoffAddress.toJson(),
+      'pickupCoordinates': pickupAddress.toPositionMap(),
+      'dropoffCoordinates': dropoffAddress.toPositionMap(),
+      'addressValidationStatus': 'verified',
+      'addressSource': {
+        'pickup': pickupAddress.provider,
+        'dropoff': dropoffAddress.provider,
+      },
       'estimatedDistanceMiles': distanceMiles,
       'estimatedDurationMinutes': 28,
       'scheduledPickupDate': _scheduledPickupDate.text.trim(),
@@ -13036,6 +13071,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'rawAddress': pickupAddress.rawInput,
         'postcode': pickupAddress.postcode,
         'geocodeConfidence': pickupAddress.confidence,
+        'validationStatus': 'verified',
+        'addressSource': pickupAddress.provider,
+        'placeId': pickupAddress.placeId,
+        'locationId': pickupAddress.locationId,
+        'coordinates': {'lat': pickupAddress.lat, 'lng': pickupAddress.lng},
         'subAddress': '',
         'locality': 'London',
         'moreInformation': _description.text.trim(),
@@ -13052,6 +13092,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'rawAddress': dropoffAddress.rawInput,
         'postcode': dropoffAddress.postcode,
         'geocodeConfidence': dropoffAddress.confidence,
+        'validationStatus': 'verified',
+        'addressSource': dropoffAddress.provider,
+        'placeId': dropoffAddress.placeId,
+        'locationId': dropoffAddress.locationId,
+        'coordinates': {'lat': dropoffAddress.lat, 'lng': dropoffAddress.lng},
         'subAddress': '',
         'locality': 'London',
         'moreInformation': '',
@@ -17600,6 +17645,32 @@ class _ValidatedAddress {
 
   bool get hasCoordinates => _coordinatesAreUsable(lat, lng);
 
+  bool get isVerified => hasCoordinates && confidence >= 0.8;
+
+  String get confidenceBand {
+    if (confidence >= 0.98) return 'exact_match';
+    if (confidence >= 0.9) return 'high';
+    if (confidence >= 0.8) return 'medium';
+    return 'low';
+  }
+
+  String get compactDisplay {
+    final primary = [buildingNumber, street]
+        .whereType<String>()
+        .where((value) => value.trim().isNotEmpty)
+        .join(' ');
+    final locality = [city, postcode]
+        .whereType<String>()
+        .where((value) => value.trim().isNotEmpty)
+        .join(' ');
+    if (primary.isNotEmpty && locality.isNotEmpty) return '$primary\n$locality';
+    if (street?.trim().isNotEmpty == true &&
+        postcode?.trim().isNotEmpty == true) {
+      return '${street!.trim()}\n${postcode!.trim()}';
+    }
+    return displayAddress;
+  }
+
   Map<String, dynamic> toJson() => {
         'rawInput': rawInput,
         'displayAddress': displayAddress,
@@ -17607,6 +17678,9 @@ class _ValidatedAddress {
         'lat': lat,
         'lng': lng,
         'geocodeConfidence': confidence,
+        'confidenceBand': confidenceBand,
+        'validationStatus': isVerified ? 'verified' : 'requires_confirmation',
+        'addressSource': provider,
         'provider': provider,
         'locationId': locationId,
         if (placeId != null) 'placeId': placeId,
@@ -19274,6 +19348,7 @@ class _AddressField extends StatefulWidget {
 
 class _AddressFieldState extends State<_AddressField> {
   List<_AddressSuggestion> _suggestions = const [];
+  final FocusNode _focusNode = FocusNode();
   bool _selectingSuggestion = false;
   bool _loadingSuggestions = false;
   bool _resolvingSuggestion = false;
@@ -19286,12 +19361,49 @@ class _AddressFieldState extends State<_AddressField> {
   void initState() {
     super.initState();
     widget.controller.addListener(_updateSuggestions);
+    _focusNode.addListener(_handleFocusChanged);
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_updateSuggestions);
+    _focusNode.removeListener(_handleFocusChanged);
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  void _handleFocusChanged() {
+    if (!_focusNode.hasFocus || widget.controller.text.trim().isNotEmpty) {
+      return;
+    }
+    setState(() => _suggestions = _initialPopularSuggestions());
+  }
+
+  List<_AddressSuggestion> _initialPopularSuggestions() {
+    final places = widget.pharmacyMode
+        ? _circumPopularPlaces.where(
+            (place) => const {'hospital', 'pharmacy', 'nhs facility'}
+                .contains(place.category),
+          )
+        : _circumPopularPlaces.where(
+            (place) => const {'station', 'airport', 'landmark'}
+                .contains(place.category),
+          );
+    return places
+        .take(4)
+        .map(
+          (place) => _AddressSuggestion(
+            displayAddress: place.displayName,
+            lat: place.lat,
+            lng: place.lng,
+            confidence: 0.98,
+            provider: 'circum_popular_place',
+            sourceInput: place.displayName,
+            searchText: place.formattedAddress,
+            category: place.category,
+          ),
+        )
+        .toList(growable: false);
   }
 
   void _updateSuggestions() {
@@ -19299,7 +19411,13 @@ class _AddressFieldState extends State<_AddressField> {
     final value = widget.controller.text.trim();
     final requestId = ++_suggestionRequest;
     if (value.length < 3) {
-      if (mounted) setState(() => _suggestions = const []);
+      if (mounted) {
+        setState(
+          () => _suggestions = value.isEmpty && _focusNode.hasFocus
+              ? _initialPopularSuggestions()
+              : const [],
+        );
+      }
       return;
     }
     setState(() {
@@ -19632,6 +19750,7 @@ class _AddressFieldState extends State<_AddressField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
+          focusNode: _focusNode,
           controller: widget.controller,
           onChanged: (value) {
             if (!_selectingSuggestion) widget.onEdited?.call(value);
@@ -19709,7 +19828,7 @@ class _AddressFieldState extends State<_AddressField> {
                                   Text(
                                     _resolvingSuggestion
                                         ? 'Verifying with Google Places...'
-                                        : 'Popular place',
+                                        : 'Popular place${suggestion.category == null ? '' : ' • ${suggestion.category}'}',
                                     style: TextStyle(
                                       color: colors.mutedText,
                                       fontSize: 11,
@@ -20076,6 +20195,51 @@ const List<_PopularPlace> _circumPopularPlaces = [
     lat: 51.6043,
     lng: -0.0664,
     category: 'stadium',
+  ),
+  _PopularPlace(
+    displayName: 'Guy\'s Hospital',
+    searchAliases: ['guys hospital', 'guys nhs', 'london bridge hospital'],
+    formattedAddress:
+        'Guy\'s Hospital, Great Maze Pond, London SE1 9RT, United Kingdom',
+    lat: 51.5031,
+    lng: -0.0870,
+    category: 'hospital',
+  ),
+  _PopularPlace(
+    displayName: 'St Thomas\' Hospital',
+    searchAliases: ['st thomas hospital', 'saint thomas nhs'],
+    formattedAddress:
+        'St Thomas\' Hospital, Westminster Bridge Road, London SE1 7EH, United Kingdom',
+    lat: 51.4989,
+    lng: -0.1187,
+    category: 'hospital',
+  ),
+  _PopularPlace(
+    displayName: 'University College Hospital',
+    searchAliases: ['uch', 'uclh', 'university college hospital'],
+    formattedAddress:
+        'University College Hospital, 235 Euston Road, London NW1 2BU, United Kingdom',
+    lat: 51.5247,
+    lng: -0.1361,
+    category: 'hospital',
+  ),
+  _PopularPlace(
+    displayName: 'Boots Pharmacy, Oxford Street',
+    searchAliases: ['boots oxford street', 'boots pharmacy oxford street'],
+    formattedAddress:
+        'Boots Pharmacy, 361 Oxford Street, London W1C 2JL, United Kingdom',
+    lat: 51.5148,
+    lng: -0.1488,
+    category: 'pharmacy',
+  ),
+  _PopularPlace(
+    displayName: 'King\'s College Hospital',
+    searchAliases: ['kings college hospital', 'kch', 'denmark hill hospital'],
+    formattedAddress:
+        'King\'s College Hospital, Denmark Hill, London SE5 9RS, United Kingdom',
+    lat: 51.4681,
+    lng: -0.0937,
+    category: 'nhs facility',
   ),
 ];
 
