@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('IrisWeightEstimator', () {
-    test('repository contains exactly 1000 structured items', () {
+    test('repository contains the core catalogue and curated expansions', () {
       expect(IrisItemRepository.items.length,
           IrisItemRepository.expectedItemCount);
       expect(
@@ -19,10 +19,90 @@ void main() {
             item.maximumWeightKg >= item.estimatedWeightKg &&
             item.aliases.isNotEmpty &&
             item.category.isNotEmpty &&
+            (item.subcategory.isNotEmpty ||
+                !item.id.startsWith('beauty_fashion_')) &&
             item.weightClass.isNotEmpty &&
             item.sizeClass.isNotEmpty),
         isTrue,
       );
+    });
+
+    test('beauty and fashion expansion is complete and non-duplicated', () {
+      final expanded = IrisItemRepository.items
+          .where((item) => item.id.startsWith('beauty_fashion_'))
+          .toList();
+
+      expect(expanded.length, irisBeautyFashionItemCount);
+      expect(expanded.map((item) => item.itemName).toSet().length,
+          irisBeautyFashionItemCount);
+      expect(
+        expanded.every((item) =>
+            item.subcategory.isNotEmpty &&
+            item.estimatedWeightKg > 0 &&
+            item.minimumWeightKg > 0 &&
+            item.maximumWeightKg >= item.estimatedWeightKg &&
+            item.aliases.isNotEmpty &&
+            item.weightClass.isNotEmpty &&
+            item.sizeClass.isNotEmpty),
+        isTrue,
+      );
+    });
+
+    test('beauty aliases resolve to realistic repository items', () {
+      expect(IrisItemRepository.match('nail varnish')?.itemName, 'Nail Polish');
+      expect(IrisItemRepository.match('brazilian hair')?.itemName,
+          'Brazilian Human Hair Wig');
+      expect(
+          IrisItemRepository.match('spa gift hamper')?.itemName, 'Spa Hamper');
+    });
+
+    test('Vanguard and review flags distinguish normal and luxury items', () {
+      final synthetic = IrisItemRepository.match('synthetic wig')!;
+      final luxuryWig = IrisItemRepository.match('luxury wig over £500')!;
+      final jewellery = IrisItemRepository.match('gold necklace')!;
+      final watch = IrisItemRepository.match('luxury watch')!;
+      final handbag = IrisItemRepository.match('designer handbag')!;
+      final perfume = IrisItemRepository.match('perfume 50ml')!;
+      final dress = IrisItemRepository.match("women's dress")!;
+
+      expect(synthetic.requiresVanguard, isFalse);
+      expect(luxuryWig.requiresVanguard, isTrue);
+      expect(luxuryWig.requiresIRISReview, isTrue);
+      expect(jewellery.requiresVanguard, isTrue);
+      expect(watch.requiresVanguard, isTrue);
+      expect(handbag.requiresVanguard, isTrue);
+      expect(perfume.fragile, isTrue);
+      expect(dress.fragile, isFalse);
+    });
+
+    test('high value beauty and fashion items remain car-suitable', () {
+      for (final description in [
+        'Designer Handbag',
+        'Luxury Watch',
+        'Luxury Human Hair Wig',
+      ]) {
+        final item = IrisItemRepository.items
+            .singleWhere((item) => item.itemName == description);
+        expect(item.highValue, isTrue);
+        expect(item.vehicleSuitability, 'Car');
+      }
+      expect(
+        IrisItemRepository.items
+            .singleWhere((item) => item.itemName == 'Gift Hamper')
+            .requiresIRISReview,
+        isTrue,
+      );
+    });
+
+    test('gift intelligence tags expose beauty fashion and hair context', () {
+      expect(IrisItemRepository.match('lipstick')!.giftSignals,
+          contains('beautyInterest'));
+      expect(IrisItemRepository.match('designer heels')!.giftSignals,
+          containsAll(['fashionInterest', 'footwearInterest']));
+      expect(IrisItemRepository.match('hd lace')!.giftSignals,
+          contains('hairInterest'));
+      expect(IrisItemRepository.match('abaya')!.giftSignals,
+          contains('modestFashionInterest'));
     });
 
     test('iPhone 13 description returns known product weight', () {
