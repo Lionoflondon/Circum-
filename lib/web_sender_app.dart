@@ -12,6 +12,7 @@ import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/rider_marketplace/rider_marketplace_rules.dart';
+import 'package:circum/app/rider_marketplace/rider_onboarding_policy.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
@@ -860,6 +861,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   String _driverWorkflowStatus(Map<String, dynamic> driver) {
+    if (driver.containsKey('onboardingStatus')) {
+      return switch (RiderOnboardingPolicy.status(driver)) {
+        'approved' => 'approved',
+        'rejected' => 'rejected',
+        'suspended' => 'suspended',
+        _ => 'pending',
+      };
+    }
     final raw = [
       driver['approvalStatus'],
       driver['driverStatus'],
@@ -915,10 +924,31 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'suspended' => 'suspended',
       _ => nextStatus,
     };
+    String rejectionReason = '';
+    if (nextStatus == 'rejected') {
+      rejectionReason = await _requestDriverRejectionReason() ?? '';
+      if (rejectionReason.isEmpty) return;
+    }
+    final reviewPatch = nextStatus == 'approved' || nextStatus == 'rejected'
+        ? RiderOnboardingPolicy.adminReviewPatch(
+            approved: nextStatus == 'approved',
+            rejectionReason: rejectionReason,
+          )
+        : <String, dynamic>{
+            'approvalStatus': nextStatus,
+            'verificationStatus': nextStatus,
+          };
+    final reviewedAt = FieldValue.serverTimestamp();
     await FirebaseFirestore.instance.collection('riderProfiles').doc(id).set({
-      'approvalStatus': nextStatus,
+      ...reviewPatch,
       'driverStatus': driverStatus,
-      'verificationStatus': nextStatus == 'approved' ? 'approved' : nextStatus,
+      if (nextStatus == 'approved' &&
+          '${driver['riderRank'] ?? ''}'.trim().isEmpty)
+        'riderRank': 'agent',
+      'onboardingReviewedAt': reviewedAt,
+      'onboardingReviewedBy': _adminUser?.uid ?? _adminUser?.email,
+      if (nextStatus == 'rejected') 'rejectionReason': rejectionReason,
+      if (nextStatus == 'approved') 'rejectionReason': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     await _writeAudit(
@@ -934,7 +964,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           'action': action,
           'driverId': id,
         },
-        reason: 'Driver management workflow action',
+        reason: rejectionReason.isEmpty
+            ? 'Driver management workflow action'
+            : rejectionReason,
       ),
     );
     setState(() {
@@ -943,6 +975,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           _driverId(_selectedDriverProfile!) == id) {
         _selectedDriverProfile = {
           ..._selectedDriverProfile!,
+          'onboardingStatus': nextStatus,
           'approvalStatus': nextStatus,
           'driverStatus': driverStatus,
           'verificationStatus':
@@ -951,6 +984,37 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       }
     });
     await _loadAdminData();
+  }
+
+  Future<String?> _requestDriverRejectionReason() async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject rider application?'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Reason',
+            hintText: 'Tell the rider what needs attention.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return reason;
   }
 
   List<_AdminAction> _driverWorkflowActions(Map<String, dynamic> driver) {
@@ -1547,6 +1611,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'vehicleRegistration',
             'vehicleType',
             'approvalStatus',
+            'onboardingStatus',
             'driverStatus',
             'verificationStatus',
           ]),
@@ -5957,8 +6022,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       });
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
-      _listenToAvailableJobs();
-      _listenToRiderJobs(user.uid);
+      if (RiderOnboardingPolicy.canViewJobs(
+        email: user.email,
+        profile: riderProfile,
+        verifiedSuperAdmin: _superAdminRiderBypass,
+      )) {
+        _listenToAvailableJobs();
+        _listenToRiderJobs(user.uid);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _authMessage = 'Sign in to manage rider earnings.');
@@ -6014,8 +6085,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
-      _listenToAvailableJobs();
-      _listenToRiderJobs(user.uid);
+      if (RiderOnboardingPolicy.canViewJobs(
+        email: user.email,
+        profile: _riderProfile,
+        verifiedSuperAdmin: _superAdminRiderBypass,
+      )) {
+        _listenToAvailableJobs();
+        _listenToRiderJobs(user.uid);
+      }
       if (!mounted) return;
       setState(() {
         _riderUser = user;
@@ -6207,24 +6284,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   String _riderApprovalStatus() {
     if (_superAdminRiderBypass) return 'approved';
-    final profile = _riderProfile;
-    if (profile == null) return 'missing';
-    final approval = '${profile['approvalStatus'] ?? ''}'.trim().toLowerCase();
-    if (approval == 'pending' ||
-        approval == 'approved' ||
-        approval == 'rejected' ||
-        approval == 'suspended') {
-      return approval;
-    }
-
-    final verification =
-        '${profile['verificationStatus'] ?? ''}'.trim().toLowerCase();
-    if (verification == 'approved' || verification == 'verified') {
-      return 'approved';
-    }
-    if (verification == 'rejected') return 'rejected';
-    if (verification == 'suspended') return 'suspended';
-    return 'pending';
+    return RiderOnboardingPolicy.status(_riderProfile);
   }
 
   Future<void> _saveRiderProfile(User user) async {
@@ -6243,6 +6303,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'vehicleColour': _vehicleColour.text.trim(),
       'plateNumber': _plateNumber.text.trim(),
       'vehicleRegistration': _plateNumber.text.trim(),
+      'profilePhotoUrl': '',
       'vehicle': DriverVehicle(
         type: _vehicle.text.trim(),
         makeModel: _vehicleMakeModel.text.trim(),
@@ -6251,7 +6312,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       ).toJson(),
       'availability': _availability.text.trim(),
       'approvalStatus': 'pending',
+      'onboardingStatus': 'not_started',
       'verificationStatus': 'pending',
+      'riderRank': 'agent',
       'driverStatus': 'active',
       'role': 'rider',
       'roles': ['rider'],
@@ -6464,6 +6527,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final user = _riderUser;
     if (user == null) {
       setState(() => _jobMessage = 'Sign in before accepting a job.');
+      return;
+    }
+    if (!RiderOnboardingPolicy.canAcceptJobs(
+      email: user.email,
+      profile: _riderProfile,
+      verifiedSuperAdmin: _superAdminRiderBypass,
+    )) {
+      setState(() => _jobMessage =
+          'Your rider account must be approved before accepting jobs.');
       return;
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
@@ -7459,6 +7531,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() => _withdrawMessage = 'Sign in before requesting a payout.');
       return;
     }
+    if (!RiderOnboardingPolicy.canWithdraw(
+      email: user.email,
+      profile: _riderProfile,
+      verifiedSuperAdmin: _superAdminRiderBypass,
+    )) {
+      setState(() => _withdrawMessage =
+          'Your rider account must be approved before requesting a withdrawal.');
+      return;
+    }
     final amount = double.tryParse(_withdrawAmount.text.trim()) ?? 0;
     if (amount <= 0 ||
         _bankName.text.trim().isEmpty ||
@@ -7598,17 +7679,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
       final documentRef =
           FirebaseFirestore.instance.collection('riderDocuments').doc();
+      final documentType = _riderDocumentType(_documentType.text);
       await documentRef.set({
         'documentId': documentRef.id,
         'riderId': user.uid,
         'riderEmail': user.email,
-        'type': _documentType.text.trim().isEmpty
-            ? 'Rider document'
-            : _documentType.text.trim(),
+        'type': documentType,
         'notes': _documentNotes.text.trim(),
         'fileName': picked.name,
         'storagePath': path,
         'downloadUrl': downloadUrl,
+        'fileUrl': downloadUrl,
+        'uploadedAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
         'verificationStatus': 'pending',
         'source': 'circum-web',
         'createdAt': FieldValue.serverTimestamp(),
@@ -7617,11 +7700,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await FirebaseFirestore.instance
           .collection('riderProfiles')
           .doc(user.uid)
-          .set({
+          .update({
         'verificationStatus': 'pending',
+        'verificationDocuments.$documentType': {
+          'type': documentType,
+          'fileUrl': downloadUrl,
+          'uploadedAt': FieldValue.serverTimestamp(),
+          'status': 'pending',
+        },
         'lastDocumentUploadedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
+      _riderProfile = await _loadRiderProfile(user.uid);
       if (!mounted) return;
       setState(
         () => _documentMessage =
@@ -7633,6 +7723,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     } finally {
       if (mounted) setState(() => _documentSubmitting = false);
     }
+  }
+
+  String _riderDocumentType(String input) {
+    final normalized = input.trim().toLowerCase();
+    if (normalized.contains('licence') || normalized.contains('license')) {
+      return 'driving_licence';
+    }
+    if (normalized.contains('address')) return 'proof_of_address';
+    if (normalized.contains('insurance')) return 'vehicle_insurance';
+    if (normalized.contains('right') && normalized.contains('work')) {
+      return 'right_to_work';
+    }
+    return normalized.replaceAll(RegExp(r'[^a-z0-9]+'), '_');
   }
 
   String _friendlyAuthMessage(FirebaseAuthException error) {
@@ -7649,10 +7752,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<void> _submit() async {
     if (_submitting) return;
+    if (_fullName.text.trim().isEmpty ||
+        _phone.text.trim().isEmpty ||
+        _vehicle.text.trim().isEmpty ||
+        _plateNumber.text.trim().isEmpty) {
+      setState(() {
+        _message = 'Add your name, phone, vehicle type, and registration.';
+      });
+      return;
+    }
     if (!_rightToWork || !_sealedPackageConsent) {
       setState(() {
         _message =
-            'Please confirm the two checks before sending your application.';
+            'Accept the rider terms and confirm your details are accurate.';
       });
       return;
     }
@@ -7686,6 +7798,25 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
       batch.set(db.collection('riderApplications').doc(id), application);
+      if (_riderUser != null) {
+        batch.set(
+          db.collection('riderProfiles').doc(_riderUser!.uid),
+          {
+            'fullName': _fullName.text.trim(),
+            'email': _riderUser!.email ?? _email.text.trim(),
+            'phoneNumber': _phone.text.trim(),
+            'vehicleType': _vehicle.text.trim().toLowerCase(),
+            'vehicleRegistration': _plateNumber.text.trim(),
+            'onboardingStatus': 'pending_review',
+            'approvalStatus': 'pending',
+            'riderRank': 'agent',
+            'onboardingSubmittedAt': FieldValue.serverTimestamp(),
+            'termsAcceptedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
       batch.set(db.collection('riderOnboardingEvents').doc(), {
         'applicationId': id,
         'type': 'rider_application_submitted',
@@ -7694,6 +7825,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'createdAt': FieldValue.serverTimestamp(),
       });
       await batch.commit();
+      if (_riderUser != null) {
+        _riderProfile = await _loadRiderProfile(_riderUser!.uid);
+      }
       if (!mounted) return;
       setState(() {
         _applicationId = id;
@@ -7812,6 +7946,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
 
     final approvalStatus = _riderApprovalStatus();
+    if (approvalStatus == 'not_started') {
+      return ListView(
+        padding: EdgeInsets.fromLTRB(wide ? 28 : 18, 18, wide ? 28 : 18, 34),
+        children: [
+          _buildRiderAccessPanel(colors),
+          const SizedBox(height: 14),
+          _buildRiderEnrollmentForm(colors),
+        ],
+      );
+    }
     if (approvalStatus != 'approved') {
       return ListView(
         padding: EdgeInsets.fromLTRB(wide ? 28 : 18, 18, wide ? 28 : 18, 34),
@@ -7823,11 +7967,70 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             status: approvalStatus,
             profile: _riderProfile!,
           ),
+          const SizedBox(height: 14),
+          _buildPendingDocumentUpload(colors),
         ],
       );
     }
 
     return _buildRiderWorkspace(colors, nested: !wide);
+  }
+
+  Widget _buildPendingDocumentUpload(_CircumColors colors) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Required documents'),
+          const SizedBox(height: 8),
+          Text(
+            'Upload your driving licence, proof of address, vehicle insurance, and right to work evidence.',
+            style: TextStyle(color: colors.mutedText, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          _RiderDocumentStatusList(
+            colors: colors,
+            profile: _riderProfile,
+            onSelectType: (type) => setState(() => _documentType.text = type),
+          ),
+          const SizedBox(height: 10),
+          _InputBox(
+            colors: colors,
+            controller: _documentType,
+            hint: 'Document type',
+          ),
+          const SizedBox(height: 10),
+          _InputBox(
+            colors: colors,
+            controller: _documentNotes,
+            hint: 'Notes for review',
+            maxLines: 2,
+          ),
+          if (_documentMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(_documentMessage!, style: TextStyle(color: colors.text)),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _documentSubmitting ? null : _uploadRiderDocument,
+              icon: _documentSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload_file),
+              label: Text(
+                _documentSubmitting ? 'Uploading...' : 'Upload document',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -8397,7 +8600,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
           value: rightToWork,
           onChanged: onRightToWork,
           title: Text(
-            'I have the right to work and can provide documents if asked.',
+            'I accept the Circum rider terms.',
             style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
           ),
         ),
@@ -8407,7 +8610,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
           value: sealedPackageConsent,
           onChanged: onSealedPackageConsent,
           title: Text(
-            'I will only collect sealed pharmacy bags and will not open or inspect them.',
+            'I confirm the information and documents I provide are accurate.',
             style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
           ),
         ),
