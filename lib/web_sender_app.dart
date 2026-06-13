@@ -11657,15 +11657,26 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   DeliveryClassification get _deliveryClassification {
-    return DeliveryPricing.resolveClassification(
-      description: _description.text,
-      userEnteredWeightKg: _confirmedWeightKg ??
-          _senderEnteredWeightKg ??
+    final pricingWeightKg = DeliveryPricing.checkoutPricingWeightKg(
+      userEnteredWeightKg: _senderEnteredWeightKg ??
           DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
-      irisEstimateKg: _irisEstimatedWeightKg,
-      historicalVerifiedMaxKg: _irisHistoricalVerifiedWeightKg,
+      irisEstimatedWeightKg: _irisEstimatedWeightKg,
+      matchedCatalogueWeightKg: _matchedCatalogueWeightKg,
+    );
+    return DeliveryPricing.resolveClassification(
+      description: '',
+      userEnteredWeightKg: pricingWeightKg,
+      irisEstimateKg: null,
+      historicalVerifiedMaxKg: null,
       confidence: _irisWeightConfidence ?? 'unknown',
     );
+  }
+
+  double? get _matchedCatalogueWeightKg {
+    final singleWeight = _irisSingleItemWeightKg;
+    if (singleWeight == null || singleWeight <= 0) return null;
+    final quantity = _irisQuantity < 1 ? 1 : _irisQuantity;
+    return singleWeight * quantity;
   }
 
   bool get _hasValidatedRoute {
@@ -11897,6 +11908,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       ),
     );
     return _specialHandling.applyTo(baseQuote);
+  }
+
+  void _logCheckoutPricing() {
+    if (!kDebugMode) return;
+    final classification = _deliveryClassification;
+    final quote = _quoteBreakdown;
+    debugPrint('[CIRCUM pricing] itemName=${_description.text.trim()}');
+    debugPrint('[CIRCUM pricing] quantity=$_irisQuantity');
+    debugPrint('[CIRCUM pricing] userEnteredWeight=$_senderEnteredWeightKg');
+    debugPrint('[CIRCUM pricing] irisEstimatedWeight=$_irisEstimatedWeightKg');
+    debugPrint(
+        '[CIRCUM pricing] matchedCatalogueWeight=$_matchedCatalogueWeightKg');
+    debugPrint(
+        '[CIRCUM pricing] finalPricingWeightKg=${classification.finalWeightKg}');
+    debugPrint(
+        '[CIRCUM pricing] pricingWeightKg=${classification.finalWeightKg}');
+    debugPrint('[CIRCUM pricing] weightBand=${quote.weightCategory}');
+    debugPrint('[CIRCUM pricing] vehicleType=${_effectiveVehicle.name}');
+    debugPrint('[CIRCUM pricing] finalCheckoutPrice=${quote.total}');
   }
 
   SpecialHandlingResult get _specialHandling => SpecialHandlingEngine.evaluate(
@@ -12755,7 +12785,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     setState(() {
       _senderEnteredWeightKg = senderWeight > 0 ? senderWeight : null;
-      _irisEstimatedWeightKg = estimate.weightKg;
+      _irisEstimatedWeightKg =
+          decision.source == 'repository_match' && decision.weightKg != null
+              ? math.max(estimate.weightKg, decision.weightKg!)
+              : estimate.weightKg;
       _irisWeightBand = estimate.weightBand;
       _irisWeightConfidence = estimate.confidence;
       _irisWeightExplanation = estimate.explanation;
@@ -12796,6 +12829,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         reason: decision.reason,
         verificationRequired: decision.verificationRequired,
       );
+      _logCheckoutPricing();
     }
   }
 
@@ -13422,15 +13456,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         );
       }
       return base.copyWith(
-        weightKg: high,
-        weightBand: learnedBand,
         confidence: base.confidence == 'low' ? 'medium' : base.confidence,
         confidenceScore: base.confidenceScore == null
             ? 0.7
             : base.confidenceScore!.clamp(0.7, 0.9).toDouble(),
         explanation:
-            'Similar completed parcels were verified at ${_formatWeight(low)}–${_formatWeight(high)}kg.',
-        weightSource: 'verified_parcel_history',
+            '${base.explanation} Similar completed parcels were verified at ${_formatWeight(low)}–${_formatWeight(high)}kg.',
         truthBand: 'High Confidence',
         historicalVerifiedWeightKg: high,
         learningReason:

@@ -377,6 +377,20 @@ class DeliveryPricing {
     );
   }
 
+  /// Checkout uses one weight resolved from raw sender, IRIS, and catalogue
+  /// totals. Each source must already include quantity exactly once.
+  static double checkoutPricingWeightKg({
+    double? userEnteredWeightKg,
+    double? irisEstimatedWeightKg,
+    double? matchedCatalogueWeightKg,
+  }) {
+    return [
+      userEnteredWeightKg ?? 0,
+      irisEstimatedWeightKg ?? 0,
+      matchedCatalogueWeightKg ?? 0,
+    ].reduce(max);
+  }
+
   static double chargeableWeightKg({
     required double senderWeightKg,
     double? irisWeightKg,

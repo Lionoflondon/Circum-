@@ -278,6 +278,41 @@ void main() {
       );
     });
 
+    test('checkout pricing weight uses each source once', () {
+      expect(
+        DeliveryPricing.checkoutPricingWeightKg(
+          userEnteredWeightKg: 0.7,
+          irisEstimatedWeightKg: 0.7,
+          matchedCatalogueWeightKg: 0.7,
+        ),
+        0.7,
+      );
+      expect(
+        DeliveryPricing.checkoutPricingWeightKg(
+          userEnteredWeightKg: 1.2,
+          irisEstimatedWeightKg: 1.64,
+          matchedCatalogueWeightKg: 1.24,
+        ),
+        1.64,
+      );
+      expect(
+        DeliveryPricing.checkoutPricingWeightKg(
+          userEnteredWeightKg: 1.2,
+          irisEstimatedWeightKg: 6.2,
+          matchedCatalogueWeightKg: 6.2,
+        ),
+        6.2,
+      );
+      expect(
+        DeliveryPricing.checkoutPricingWeightKg(
+          userEnteredWeightKg: 23,
+          irisEstimatedWeightKg: 18,
+          matchedCatalogueWeightKg: 20,
+        ),
+        23,
+      );
+    });
+
     test('weight band boundaries are stable', () {
       expect(DeliveryPricing.weightBandFor(0).category, 'Small Parcel');
       expect(DeliveryPricing.weightBandFor(5).category, 'Small Parcel');
