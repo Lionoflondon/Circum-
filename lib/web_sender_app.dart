@@ -1568,6 +1568,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           colors: colors,
           metrics: _metrics,
           issues: _issueRows(),
+          deliveries: _deliveries,
+          auditLogs: _auditLogs,
+          supportTickets: _supportTickets,
         ),
       _AdminSection.adminUsers => _AdminUsersSection(
           colors: colors,
@@ -2953,120 +2956,130 @@ class _AdminOverviewSection extends StatelessWidget {
   final _CircumColors colors;
   final AdminMetricSnapshot metrics;
   final List<Map<String, dynamic>> issues;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> auditLogs;
+  final List<Map<String, dynamic>> supportTickets;
 
   const _AdminOverviewSection({
     required this.colors,
     required this.metrics,
     required this.issues,
+    required this.deliveries,
+    required this.auditLogs,
+    required this.supportTickets,
   });
 
   @override
   Widget build(BuildContext context) {
+    final completionRate = metrics.totalDeliveries == 0
+        ? 0.0
+        : (metrics.completedDeliveries / metrics.totalDeliveries) * 100;
+    final iris = _irisMetrics();
+    final activity = _liveActivity();
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Total deliveries',
-              value: '${metrics.totalDeliveries}',
+        // Mission Control status hero: uses the existing overview snapshot only.
+        _AdminStatusHero(
+          colors: colors,
+          marketplaceHealthy: issues.isEmpty,
+          activeDeliveries: metrics.activeDeliveries,
+          activeRiders: metrics.activeDrivers,
+          pendingDrivers: metrics.pendingDrivers,
+          completionRate: completionRate,
+          driverRating: metrics.averageDriverRating,
+        ),
+        const SizedBox(height: 18),
+        _AdminMetricGroup(
+          colors: colors,
+          title: 'Operations',
+          icon: Icons.route_outlined,
+          metrics: [
+            ('Total deliveries', '${metrics.totalDeliveries}'),
+            ('Active deliveries', '${metrics.activeDeliveries}'),
+            ('Completed', '${metrics.completedDeliveries}'),
+            ('Failed', '${metrics.failedDeliveries}'),
+            ('Cancelled', '${metrics.cancelledDeliveries}'),
+          ],
+        ),
+        _AdminMetricGroup(
+          colors: colors,
+          title: 'Users',
+          icon: Icons.groups_outlined,
+          metrics: [
+            ('Total senders', '${metrics.totalSenders}'),
+            ('Active senders', '${metrics.activeSenders}'),
+            ('Total riders', '${metrics.totalDrivers}'),
+            ('Active riders', '${metrics.activeDrivers}'),
+            ('Pending drivers', '${metrics.pendingDrivers}'),
+          ],
+        ),
+        _AdminMetricGroup(
+          colors: colors,
+          title: 'Revenue',
+          icon: Icons.payments_outlined,
+          metrics: [
+            ('Today', _adminMoneyText(metrics.revenueToday)),
+            ('This week', _adminMoneyText(metrics.revenueThisWeek)),
+            ('This month', _adminMoneyText(metrics.revenueThisMonth)),
+            ('Average order', _adminMoneyText(metrics.averageDeliveryValue)),
+          ],
+        ),
+        _AdminMetricGroup(
+          colors: colors,
+          title: 'Quality',
+          icon: Icons.insights_outlined,
+          metrics: [
+            ('Driver rating', metrics.averageDriverRating.toStringAsFixed(2)),
+            (
+              'Satisfaction',
+              '${metrics.customerSatisfactionScore.toStringAsFixed(0)}%'
             ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Active deliveries',
-              value: '${metrics.activeDeliveries}',
+            (
+              'Cancellation rate',
+              '${metrics.cancellationRate.toStringAsFixed(1)}%'
             ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Completed',
-              value: '${metrics.completedDeliveries}',
+            (
+              'Failed delivery rate',
+              '${metrics.failedDeliveryRate.toStringAsFixed(1)}%'
             ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Failed',
-              value: '${metrics.failedDeliveries}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Cancelled',
-              value: '${metrics.cancelledDeliveries}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Total senders',
-              value: '${metrics.totalSenders}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Active senders',
-              value: '${metrics.activeSenders}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Total drivers',
-              value: '${metrics.totalDrivers}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Active drivers',
-              value: '${metrics.activeDrivers}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Pending drivers',
-              value: '${metrics.pendingDrivers}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Revenue today',
-              value: _adminMoneyText(metrics.revenueToday),
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Revenue this week',
-              value: _adminMoneyText(metrics.revenueThisWeek),
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Revenue this month',
-              value: _adminMoneyText(metrics.revenueThisMonth),
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Average order',
-              value: _adminMoneyText(metrics.averageDeliveryValue),
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Driver rating',
-              value: metrics.averageDriverRating.toStringAsFixed(2),
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Satisfaction',
-              value: '${metrics.customerSatisfactionScore.toStringAsFixed(0)}%',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Complaints',
-              value: '${metrics.complaintsCount}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Refund requests',
-              value: '${metrics.refundRequests}',
-            ),
-            _AdminMetricCard(
-              colors: colors,
-              label: 'Open support',
-              value: '${metrics.unresolvedSupportIssues}',
+            (
+              'Repeat customer rate',
+              '${metrics.repeatCustomerRate.toStringAsFixed(1)}%'
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        _AdminMetricGroup(
+          colors: colors,
+          title: 'Support',
+          icon: Icons.support_agent_outlined,
+          metrics: [
+            ('Complaints', '${metrics.complaintsCount}'),
+            ('Refund requests', '${metrics.refundRequests}'),
+            ('Open support', '${metrics.unresolvedSupportIssues}'),
+            ('Refund rate', '${metrics.refundRate.toStringAsFixed(1)}%'),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // IRIS intelligence is derived from fields already present on deliveries.
+        _AdminMetricGroup(
+          colors: colors,
+          title: 'IRIS Intelligence',
+          icon: Icons.auto_awesome_outlined,
+          metrics: [
+            ('Parcels analysed', '${iris.$1}'),
+            ('Weight corrections', '${iris.$2}'),
+            ('Pricing adjustments', '${iris.$3}'),
+            ('Fraud flags', '${iris.$4}'),
+            ('Revenue protected', _adminMoneyText(iris.$5)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _AdminLiveActivityPanel(
+          colors: colors,
+          events: activity,
+        ),
+        const SizedBox(height: 14),
         _GlassPanel(
           colors: colors,
           child: Column(
@@ -3075,34 +3088,28 @@ class _AdminOverviewSection extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Operational pulse'),
               const SizedBox(height: 12),
               _AdminBar(
-                colors: colors,
-                label: 'Cancellation rate',
-                value: metrics.cancellationRate,
-              ),
+                  colors: colors,
+                  label: 'Cancellation rate',
+                  value: metrics.cancellationRate),
               _AdminBar(
-                colors: colors,
-                label: 'Failed delivery rate',
-                value: metrics.failedDeliveryRate,
-              ),
+                  colors: colors,
+                  label: 'Failed delivery rate',
+                  value: metrics.failedDeliveryRate),
               _AdminBar(
-                colors: colors,
-                label: 'Repeat customer rate',
-                value: metrics.repeatCustomerRate,
-              ),
+                  colors: colors,
+                  label: 'Repeat customer rate',
+                  value: metrics.repeatCustomerRate),
               _AdminBar(
-                colors: colors,
-                label: 'Refund rate',
-                value: metrics.refundRate,
-              ),
+                  colors: colors,
+                  label: 'Refund rate',
+                  value: metrics.refundRate),
               const SizedBox(height: 12),
               Text(
                 issues.isEmpty
                     ? 'No urgent marketplace issues detected.'
                     : '${issues.length} operational issue(s) need review.',
-                style: TextStyle(
-                  color: colors.text,
-                  fontWeight: FontWeight.w900,
-                ),
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900),
               ),
             ],
           ),
@@ -3110,6 +3117,324 @@ class _AdminOverviewSection extends StatelessWidget {
       ],
     );
   }
+
+  (int, int, int, int, double) _irisMetrics() {
+    var analysed = 0;
+    var corrections = 0;
+    var adjustments = 0;
+    var fraudFlags = 0;
+    var protectedRevenue = 0.0;
+    for (final delivery in deliveries) {
+      final iris = delivery['irisAnalysis'];
+      if (iris is Map ||
+          delivery['irisEstimatedWeightKg'] != null ||
+          delivery['irisWeight'] != null) {
+        analysed++;
+      }
+      if (delivery['riderVerifiedWeight'] != null ||
+          delivery['driverReportedWeightKg'] != null ||
+          delivery['weightCorrectionApplied'] == true) {
+        corrections++;
+      }
+      if (delivery['pricingAdjusted'] == true ||
+          delivery['revisedCustomerPrice'] != null ||
+          delivery['weightAdjustmentAmount'] != null) {
+        adjustments++;
+      }
+      if (delivery['weightReviewRequired'] == true ||
+          delivery['fraudFlag'] == true ||
+          delivery['riskFlag'] == true) {
+        fraudFlags++;
+      }
+      final protected = delivery['revenueProtected'] ??
+          delivery['weightAdjustmentAmount'] ??
+          delivery['pricingAdjustmentAmount'];
+      if (protected is num && protected > 0) {
+        protectedRevenue += protected.toDouble();
+      }
+    }
+    return (analysed, corrections, adjustments, fraudFlags, protectedRevenue);
+  }
+
+  List<Map<String, dynamic>> _liveActivity() {
+    final events = <Map<String, dynamic>>[
+      ...auditLogs.map((item) => {
+            'title': '${item['actionType'] ?? 'Admin action'}',
+            'detail':
+                '${item['recordType'] ?? ''} ${item['recordId'] ?? ''}'.trim(),
+            'time': item['createdAt'],
+            'icon': Icons.admin_panel_settings_outlined,
+          }),
+      ...supportTickets.map((item) => {
+            'title': 'Support: ${item['status'] ?? 'open'}',
+            'detail': '${item['message'] ?? item['type'] ?? 'Support ticket'}',
+            'time': item['updatedAt'] ?? item['createdAt'],
+            'icon': Icons.support_agent_outlined,
+          }),
+      ...deliveries.take(12).map((item) => {
+            'title': 'Delivery ${item['status'] ?? 'received'}',
+            'detail': '${item['requestId'] ?? item['id'] ?? ''}',
+            'time': item['updatedAt'] ?? item['createdAt'],
+            'icon': Icons.local_shipping_outlined,
+          }),
+    ];
+    events.sort(
+        (a, b) => _activityDate(b['time']).compareTo(_activityDate(a['time'])));
+    return events.take(8).toList(growable: false);
+  }
+
+  DateTime _activityDate(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return DateTime.tryParse('$value') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+}
+
+class _AdminStatusHero extends StatelessWidget {
+  final _CircumColors colors;
+  final bool marketplaceHealthy;
+  final int activeDeliveries;
+  final int activeRiders;
+  final int pendingDrivers;
+  final double completionRate;
+  final double driverRating;
+
+  const _AdminStatusHero({
+    required this.colors,
+    required this.marketplaceHealthy,
+    required this.activeDeliveries,
+    required this.activeRiders,
+    required this.pendingDrivers,
+    required this.completionRate,
+    required this.driverRating,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xff12213d), Color(0xff20164a), Color(0xff083b42)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0x667dd3fc)),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x334f46e5), blurRadius: 30, offset: Offset(0, 14)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('CIRCUM STATUS',
+              style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                    color: marketplaceHealthy
+                        ? const Color(0xff34d399)
+                        : const Color(0xfff59e0b),
+                    shape: BoxShape.circle)),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text(
+                    marketplaceHealthy
+                        ? 'Marketplace healthy'
+                        : 'Marketplace needs attention',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900))),
+          ]),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 24,
+            runSpacing: 16,
+            children: [
+              _AdminHeroStat(
+                  label: 'Active deliveries', value: '$activeDeliveries'),
+              _AdminHeroStat(label: 'Active riders', value: '$activeRiders'),
+              _AdminHeroStat(
+                  label: 'Pending drivers', value: '$pendingDrivers'),
+              _AdminHeroStat(
+                  label: 'Completion rate',
+                  value: '${completionRate.toStringAsFixed(1)}%'),
+              _AdminHeroStat(
+                  label: 'Driver rating',
+                  value: driverRating.toStringAsFixed(2)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminHeroStat extends StatelessWidget {
+  final String label;
+  final String value;
+  const _AdminHeroStat({required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 150,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 3),
+          Text(label,
+              style: const TextStyle(
+                  color: Color(0xffcbd5e1),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
+        ]),
+      );
+}
+
+class _AdminMetricGroup extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final IconData icon;
+  final List<(String, String)> metrics;
+  const _AdminMetricGroup(
+      {required this.colors,
+      required this.title,
+      required this.icon,
+      required this.metrics});
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: _GlassPanel(
+          colors: colors,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(icon, color: colors.adminAccent),
+              const SizedBox(width: 9),
+              _SectionTitle(colors: colors, title: title)
+            ]),
+            const SizedBox(height: 14),
+            LayoutBuilder(builder: (context, constraints) {
+              final width = constraints.maxWidth < 520
+                  ? constraints.maxWidth
+                  : constraints.maxWidth < 900
+                      ? (constraints.maxWidth - 12) / 2
+                      : (constraints.maxWidth - 36) / 4;
+              return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: metrics
+                      .map((metric) => SizedBox(
+                          width: width,
+                          child: _AdminCompactMetric(
+                              colors: colors,
+                              label: metric.$1,
+                              value: metric.$2)))
+                      .toList());
+            }),
+          ]),
+        ),
+      );
+}
+
+class _AdminCompactMetric extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+  const _AdminCompactMetric(
+      {required this.colors, required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+            color: colors.field.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: colors.border)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value,
+              style: TextStyle(
+                  color: colors.text,
+                  fontSize: 25,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(label,
+              style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800)),
+        ]),
+      );
+}
+
+class _AdminLiveActivityPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> events;
+  const _AdminLiveActivityPanel({required this.colors, required this.events});
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _SectionTitle(colors: colors, title: 'Live Activity'),
+          const SizedBox(height: 12),
+          if (events.isEmpty)
+            Text(
+                'Live operational events will appear here as activity is recorded.',
+                style: TextStyle(color: colors.mutedText, height: 1.4))
+          else
+            ...events.map((event) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                                color: colors.field,
+                                borderRadius: BorderRadius.circular(12)),
+                            child: Icon(
+                                event['icon'] as IconData? ?? Icons.bolt,
+                                size: 19,
+                                color: colors.adminAccent)),
+                        const SizedBox(width: 11),
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text('${event['title']}',
+                                  style: TextStyle(
+                                      color: colors.text,
+                                      fontWeight: FontWeight.w900)),
+                              if ('${event['detail'] ?? ''}'.trim().isNotEmpty)
+                                Text('${event['detail']}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        color: colors.mutedText,
+                                        fontSize: 12,
+                                        height: 1.35)),
+                            ])),
+                        Text(_adminDateText(event['time']),
+                            style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                      ]),
+                )),
+        ]),
+      );
 }
 
 class _AdminDataSection extends StatelessWidget {
