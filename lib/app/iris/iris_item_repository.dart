@@ -1,4 +1,6 @@
 // Generated core catalogue plus focused, curated repository expansions.
+import 'dart:developer' as developer;
+
 part 'iris_beauty_fashion_items.dart';
 
 class IrisRepositoryDimensions {
@@ -30,6 +32,9 @@ class IrisRepositoryItem {
   final String vehicleSuitability;
   final bool stackable;
   final Set<String> giftSignals;
+  final List<String> allowedVehicles;
+  final bool requiresVan;
+  final List<String> confidenceBoostTerms;
   const IrisRepositoryItem(
       {required this.id,
       required this.itemName,
@@ -50,7 +55,27 @@ class IrisRepositoryItem {
       required this.typicalDimensionsCm,
       required this.vehicleSuitability,
       required this.stackable,
-      this.giftSignals = const {}});
+      this.giftSignals = const {},
+      this.allowedVehicles = const [],
+      this.requiresVan = false,
+      this.confidenceBoostTerms = const []});
+
+  String get name => itemName;
+  double get typicalWeightKg => estimatedWeightKg;
+  double get minKg => minimumWeightKg;
+  double get maxKg => maximumWeightKg;
+}
+
+class IrisCategoryDetection {
+  final String category;
+  final String? subcategory;
+  final double confidence;
+
+  const IrisCategoryDetection({
+    required this.category,
+    this.subcategory,
+    required this.confidence,
+  });
 }
 
 class IrisItemRepository {
@@ -25980,35 +26005,212 @@ class IrisItemRepository {
     ..._coreItems,
     ...irisBeautyFashionItems,
   ]);
-  static IrisRepositoryItem? match(String description) {
+  static IrisCategoryDetection? detectCategory(
+    String description, {
+    Iterable<String> photoLabels = const [],
+  }) {
+    final text =
+        '${description.toLowerCase()} ${photoLabels.join(' ').toLowerCase()}';
+    if (_containsAny(text, const [
+      'wig',
+      'wigs',
+      'lace front',
+      'frontal wig',
+      'closure wig',
+      'hair bundle',
+      'hair bundles',
+      'hair extension',
+      'weave',
+      'hd lace'
+    ])) {
+      final extensions = _containsAny(text, const [
+        'bundle',
+        'extension',
+        'weave',
+        'braiding hair',
+        'crochet hair'
+      ]);
+      return IrisCategoryDetection(
+        category: 'Wigs & Hair',
+        subcategory: extensions ? 'Hair Extensions' : 'Wigs',
+        confidence: 0.98,
+      );
+    }
+    if (_containsAny(text, const [
+      'makeup',
+      'cosmetic',
+      'skincare',
+      'serum',
+      'moisturiser',
+      'cleanser',
+      'toner',
+      'lipstick',
+      'mascara',
+      'perfume',
+      'fragrance',
+      'nail polish'
+    ])) {
+      return const IrisCategoryDetection(category: 'Beauty', confidence: 0.94);
+    }
+    if (_containsAny(text, const [
+      'handbag',
+      'purse',
+      'clothing',
+      'clothes',
+      'dress',
+      'shirt',
+      'jeans',
+      'shoes',
+      'trainers',
+      'heels',
+      'boots',
+      'fashion',
+      'abaya',
+      'headscarf'
+    ])) {
+      return const IrisCategoryDetection(category: 'Fashion', confidence: 0.92);
+    }
+    if (_containsAny(text,
+        const ['suitcase', 'luggage', 'travel bag', 'cabin bag', 'carry on'])) {
+      return const IrisCategoryDetection(category: 'Luggage', confidence: 0.98);
+    }
+    if (_containsAny(text, const [
+      'iphone',
+      'phone',
+      'smartphone',
+      'macbook',
+      'laptop',
+      'tablet',
+      'ipad',
+      'playstation',
+      'ps5',
+      'xbox',
+      'computer',
+      'monitor',
+      'camera'
+    ])) {
+      return const IrisCategoryDetection(
+          category: 'Electronics', confidence: 0.96);
+    }
+    if (_containsAny(text, const [
+      'document',
+      'documents',
+      'letter',
+      'contract',
+      'passport',
+      'certificate',
+      'legal papers',
+      'paperwork',
+      'envelope'
+    ])) {
+      return const IrisCategoryDetection(
+          category: 'Documents', confidence: 0.96);
+    }
+    if (_containsAny(text, const [
+      'piano',
+      'wardrobe',
+      'sofa',
+      'couch',
+      'washing machine',
+      'fridge',
+      'freezer',
+      'furniture',
+      'mattress',
+      'cabinet'
+    ])) {
+      return const IrisCategoryDetection(
+          category: 'Household', confidence: 0.93);
+    }
+    return null;
+  }
+
+  static IrisRepositoryItem? match(
+    String description, {
+    Iterable<String> photoLabels = const [],
+  }) {
     final text = description.trim().toLowerCase();
     if (text.isEmpty) return null;
+    final detection = detectCategory(description, photoLabels: photoLabels);
     final isLuggage =
         RegExp(r'\b(suitcase|luggage|travel bag)s?\b').hasMatch(text);
     final hasAirportQualifier = RegExp(
       r'\b(heathrow|gatwick|airport|terminal|cabin|carry on|checked luggage)\b',
     ).hasMatch(text);
     if (isLuggage && !hasAirportQualifier) return _genericSuitcase;
+    final candidates = detection == null
+        ? items
+        : items.where((item) => _categoryMatches(item, detection));
+    final rejectedCrossCategory = detection == null
+        ? 0
+        : items.where((item) => !_categoryMatches(item, detection)).length;
     IrisRepositoryItem? best;
     int bestScore = 0;
-    for (final item in items) {
+    for (final item in candidates) {
       final terms = [
         item.itemName.toLowerCase(),
         ...item.aliases.map((alias) => alias.toLowerCase())
       ];
       for (final term in terms) {
-        if (term.isEmpty) continue;
-        final score = text == term
-            ? term.length + 100
-            : text.contains(term)
-                ? term.length
-                : 0;
+        if (term.length < 3) continue;
+        final score = _termScore(text, term) +
+            (item.confidenceBoostTerms.any(text.contains) ? 20 : 0);
         if (score > bestScore) {
           best = item;
           bestScore = score;
         }
       }
     }
+    assert(() {
+      developer.log(
+          '[IRIS repository] raw="$description" '
+          'category=${detection?.category ?? 'undetected'} '
+          'subcategory=${detection?.subcategory ?? '-'} '
+          'selected=${best?.itemName ?? 'none'} '
+          'confidence=${best?.confidenceBaseline ?? 0} '
+          'rejectedCrossCategory=$rejectedCrossCategory '
+          'estimatedWeightKg=${best?.estimatedWeightKg ?? 0} '
+          'vehicleReason=${best?.deliveryNotes ?? 'no repository match'}',
+          name: 'circum.iris');
+      return true;
+    }());
     return best;
   }
+
+  static bool _categoryMatches(
+    IrisRepositoryItem item,
+    IrisCategoryDetection detection,
+  ) {
+    final itemCategory = item.category.toLowerCase();
+    final detectedCategory = detection.category.toLowerCase();
+    final airportLuggage =
+        detectedCategory == 'luggage' && itemCategory == 'airport';
+    if (itemCategory != detectedCategory && !airportLuggage) {
+      return false;
+    }
+    return detection.subcategory == null ||
+        item.subcategory.toLowerCase() == detection.subcategory!.toLowerCase();
+  }
+
+  static int _termScore(String text, String term) {
+    final normalizedText = _normalize(text);
+    final normalizedTerm = _normalize(term);
+    if (normalizedText == normalizedTerm) return normalizedTerm.length + 120;
+    final singularText = normalizedText.endsWith('s')
+        ? normalizedText.substring(0, normalizedText.length - 1)
+        : normalizedText;
+    final singularTerm = normalizedTerm.endsWith('s')
+        ? normalizedTerm.substring(0, normalizedTerm.length - 1)
+        : normalizedTerm;
+    if (singularText == singularTerm) return normalizedTerm.length + 110;
+    return normalizedText.contains(normalizedTerm) ? normalizedTerm.length : 0;
+  }
+
+  static String _normalize(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim()
+      .replaceAll(RegExp(r'\s+'), ' ');
+
+  static bool _containsAny(String text, Iterable<String> terms) =>
+      terms.any((term) => text.contains(term));
 }

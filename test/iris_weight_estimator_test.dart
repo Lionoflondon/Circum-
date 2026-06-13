@@ -353,5 +353,62 @@ void main() {
         DeliveryPricing.weightBandFor(6.2).category,
       );
     });
+
+    test('category-first matching prevents wig and luggage drift', () {
+      final category = IrisItemRepository.detectCategory('wigs');
+      final match = IrisItemRepository.match('wigs');
+      final estimate = IrisWeightEstimator.knownProductEstimate('wigs');
+
+      expect(category?.category, 'Wigs & Hair');
+      expect(category?.subcategory, 'Wigs');
+      expect(match?.itemName, 'Wig');
+      expect(match?.itemName, isNot(contains('Suitcase')));
+      expect(estimate?.packageType, 'Wigs & Hair');
+      expect(estimate?.weightKg, inInclusiveRange(0.3, 1.5));
+      expect(estimate?.vehicleSuitability, isNot('Van'));
+    });
+
+    test('wig quantity scales within the hair category', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('5 wigs');
+
+      expect(estimate, isNotNull);
+      expect(estimate!.matchedItemName, 'Wig');
+      expect(estimate.quantity, 5);
+      expect(estimate.weightKg, closeTo(3.5, 0.001));
+      expect(estimate.packageType, 'Wigs & Hair');
+    });
+
+    test('beauty electronics and documents remain category-safe', () {
+      final makeup = IrisWeightEstimator.knownProductEstimate('makeup kit');
+      final phone = IrisWeightEstimator.knownProductEstimate('iPhone 13');
+      final documents =
+          IrisWeightEstimator.knownProductEstimate('documents for solicitor');
+
+      expect(makeup?.packageType, 'Beauty');
+      expect(makeup?.matchedItemName, 'Makeup Kit');
+      expect(phone?.matchedItemName, 'Apple iPhone 13');
+      expect(phone?.matchedItemName, isNot(contains('Suitcase')));
+      expect(documents?.packageType, 'Documents');
+      expect(documents?.vehicleSuitability, 'Bike');
+    });
+
+    test('bulky known items use realistic weights and quantity', () {
+      final piano = IrisWeightEstimator.knownProductEstimate('piano');
+      final wardrobes = IrisWeightEstimator.knownProductEstimate('7 wardrobes');
+
+      expect(piano?.weightKg, isNot(20));
+      expect(piano?.weightKg, greaterThan(20));
+      expect(wardrobes?.quantity, 7);
+      expect(wardrobes?.weightKg, 280);
+    });
+
+    test('unrelated repository additions cannot win a detected category', () {
+      final category = IrisItemRepository.detectCategory('lace front wig');
+      final match = IrisItemRepository.match('lace front wig');
+
+      expect(category?.category, 'Wigs & Hair');
+      expect(match?.category, 'Wigs & Hair');
+      expect(match?.subcategory, 'Wigs');
+    });
   });
 }

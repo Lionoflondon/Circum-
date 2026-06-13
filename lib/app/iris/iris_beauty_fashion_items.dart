@@ -1,6 +1,6 @@
 part of 'iris_item_repository.dart';
 
-const int irisBeautyFashionItemCount = 133;
+const int irisBeautyFashionItemCount = 138;
 
 String _expandedWeightClass(double weightKg) {
   if (weightKg <= 2) return 'Small Parcel';
@@ -57,6 +57,9 @@ IrisRepositoryItem _expandedIrisItem({
     vehicleSuitability: 'Car',
     stackable: category != 'Gifts',
     giftSignals: giftSignals.toSet(),
+    allowedVehicles: const ['Bike', 'Car'],
+    requiresVan: false,
+    confidenceBoostTerms: aliases,
   );
 }
 
@@ -2399,4 +2402,74 @@ final List<IrisRepositoryItem> irisBeautyFashionItems = List.unmodifiable([
       requiresVanguard: false,
       requiresReview: false,
       giftSignals: const ["occasionGiftSuitable", "beautyInterest"]),
+  _expandedIrisItem(
+      id: "beauty_fashion_134_generic_wig",
+      itemName: "Wig",
+      aliases: const ["wig", "wigs", "wig unit"],
+      category: "Wigs & Hair",
+      subcategory: "Wigs",
+      estimated: 0.7,
+      minimum: 0.3,
+      maximum: 1.5,
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresReview: false,
+      giftSignals: const ["hairInterest", "beautyInterest"]),
+  _expandedIrisItem(
+      id: "beauty_fashion_135_makeup_kit",
+      itemName: "Makeup Kit",
+      aliases: const ["makeup kit", "makeup box", "cosmetics kit"],
+      category: "Beauty",
+      subcategory: "Makeup",
+      estimated: 4,
+      minimum: 2,
+      maximum: 8,
+      fragile: true,
+      highValue: false,
+      requiresVanguard: false,
+      requiresReview: false,
+      giftSignals: const ["beautyInterest"]),
+  _expandedIrisItem(
+      id: "beauty_fashion_136_skincare_box",
+      itemName: "Skincare Box",
+      aliases: const ["skincare box", "skin care box"],
+      category: "Beauty",
+      subcategory: "Skincare",
+      estimated: 2,
+      minimum: 0.5,
+      maximum: 4,
+      fragile: true,
+      highValue: false,
+      requiresVanguard: false,
+      requiresReview: false,
+      giftSignals: const ["beautyInterest", "skincareInterest"]),
+  _expandedIrisItem(
+      id: "beauty_fashion_137_shoes",
+      itemName: "Shoes",
+      aliases: const ["shoes", "pair of shoes", "womens shoes"],
+      category: "Fashion",
+      subcategory: "Footwear",
+      estimated: 1.5,
+      minimum: 1,
+      maximum: 4,
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresReview: false,
+      giftSignals: const ["fashionInterest", "footwearInterest"]),
+  _expandedIrisItem(
+      id: "beauty_fashion_138_clothing_bag",
+      itemName: "Clothing Bag",
+      aliases: const ["clothing bag", "clothes bag", "bag of clothes"],
+      category: "Fashion",
+      subcategory: "Womenswear",
+      estimated: 4,
+      minimum: 1,
+      maximum: 8,
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresReview: false,
+      giftSignals: const ["fashionInterest"]),
 ]);

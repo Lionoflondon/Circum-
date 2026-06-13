@@ -72,7 +72,10 @@ class IrisWeightEstimator {
     return parsed == null || parsed < 1 ? 1 : parsed;
   }
 
-  static IrisWeightLookupResult? knownProductEstimate(String description) {
+  static IrisWeightLookupResult? knownProductEstimate(
+    String description, {
+    Iterable<String> photoLabels = const [],
+  }) {
     final text = description.trim().toLowerCase();
     final quantity = extractQuantity(description);
     for (final product in _knownProducts) {
@@ -106,7 +109,10 @@ class IrisWeightEstimator {
         );
       }
     }
-    final repositoryItem = IrisItemRepository.match(description);
+    final repositoryItem = IrisItemRepository.match(
+      description,
+      photoLabels: photoLabels,
+    );
     if (repositoryItem != null) {
       final totalWeightKg = repositoryItem.estimatedWeightKg * quantity;
       final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
@@ -435,6 +441,48 @@ class IrisWeightEstimator {
       fragile: false,
       stackable: false,
       handlingNotes: 'Large item by dimensions; van recommended.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['piano'],
+      name: 'Piano',
+      weightKg: 100,
+      packageType: 'Household',
+      confidence: 'medium',
+      confidenceScore: 0.78,
+      truthBand: 'Category Match',
+      typicalDimensions: ItemDimensionsCm(length: 150, width: 65, height: 120),
+      vehicleSuitability: 'Van',
+      fragile: true,
+      stackable: false,
+      handlingNotes: 'Heavy, bulky instrument requiring specialist handling.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['wardrobe'],
+      name: 'Wardrobe',
+      weightKg: 40,
+      packageType: 'Household',
+      confidence: 'medium',
+      confidenceScore: 0.76,
+      truthBand: 'Category Match',
+      typicalDimensions: ItemDimensionsCm(length: 100, width: 55, height: 190),
+      vehicleSuitability: 'Van',
+      fragile: false,
+      stackable: false,
+      handlingNotes: 'Bulky furniture requiring van loading space.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['documents', 'document bundle', 'paperwork'],
+      name: 'Documents',
+      weightKg: 0.5,
+      packageType: 'Documents',
+      confidence: 'medium',
+      confidenceScore: 0.72,
+      truthBand: 'Category Match',
+      typicalDimensions: ItemDimensionsCm(length: 32, width: 24, height: 5),
+      vehicleSuitability: 'Bike',
+      fragile: false,
+      stackable: true,
+      handlingNotes: 'Keep documents dry and sealed in transit.',
     ),
     _KnownIrisProduct(
       patterns: ['shoebox', 'shoe box'],
