@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:circum/app/admin/admin_operations.dart';
 import 'package:circum/app/authentication/access/role_access.dart';
 import 'package:circum/app/delivery_security/vanguard_protection.dart';
+import 'package:circum/app/delivery/booking_cancellation.dart';
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
@@ -4150,6 +4151,7 @@ bool _isActiveSenderDeliveryStatus(String status) {
     'complete',
     'delivered',
     'cancelled',
+    'cancelled_by_sender',
     'canceled',
     'failed',
     'refunded',
@@ -10521,6 +10523,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                             _step = _SenderStep.profile;
                             _senderProfileTab = 1;
                           }),
+                          onCancelBooking: _cancelSenderBooking,
                           child: _buildCurrentStep(colors),
                         )
                       : SingleChildScrollView(
@@ -10900,6 +10903,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onSelectDelivery: (delivery) =>
               setState(() => _selectedSenderDelivery = delivery),
           onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
+          onCancelBooking: _cancelSenderBooking,
         ),
     };
   }
@@ -11728,6 +11732,72 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderDeliveryLoadError =
             'We could not load your delivery status. Please refresh or contact support.';
       });
+    }
+  }
+
+  Future<void> _cancelSenderBooking(SenderDeliveryRecord delivery) async {
+    final user = _senderUser;
+    if (user == null ||
+        !BookingCancellationPolicy.canSenderCancel(delivery.status)) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel this booking?'),
+        content: const Text(
+          'The booking will remain in your history and Circum admin records.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep booking'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Cancel Booking'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final reference = FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(delivery.id);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(reference);
+        final data = snapshot.data();
+        if (data == null) throw StateError('Booking no longer exists.');
+        final ownerId = '${data['senderId'] ?? data['userId'] ?? ''}';
+        if (ownerId != user.uid) {
+          throw StateError('You cannot cancel this booking.');
+        }
+        final currentStatus = '${data['status'] ?? ''}';
+        if (!BookingCancellationPolicy.canSenderCancel(currentStatus)) {
+          throw StateError(
+              'This booking has already started and cannot be cancelled.');
+        }
+        transaction.update(reference, {
+          'status': 'cancelled_by_sender',
+          'matchingStatus': 'cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+          'cancelledBy': user.uid,
+          'cancelledByEmail': user.email,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+      await _loadSenderDeliveries(user.uid);
+      if (!mounted) return;
+      setState(() {
+        _selectedSenderDelivery = null;
+        _senderProfileMessage = 'Booking cancelled.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() =>
+          _senderProfileMessage = '$error'.replaceFirst('Bad state: ', ''));
     }
   }
 
@@ -14240,6 +14310,7 @@ class _DesktopPortalLayout extends StatelessWidget {
   final String? deliveryLoadError;
   final VoidCallback onSendParcel;
   final VoidCallback onViewHistory;
+  final ValueChanged<SenderDeliveryRecord> onCancelBooking;
   final Widget child;
 
   const _DesktopPortalLayout({
@@ -14260,6 +14331,7 @@ class _DesktopPortalLayout extends StatelessWidget {
     required this.deliveryLoadError,
     required this.onSendParcel,
     required this.onViewHistory,
+    required this.onCancelBooking,
     required this.child,
   });
 
@@ -14299,6 +14371,7 @@ class _DesktopPortalLayout extends StatelessWidget {
                         : _DesktopActiveDeliveryStatus(
                             colors: colors,
                             delivery: activeDelivery!,
+                            onCancelBooking: onCancelBooking,
                           ),
               ),
             ),
@@ -14641,10 +14714,12 @@ class _DesktopDeliveryLoadError extends StatelessWidget {
 class _DesktopActiveDeliveryStatus extends StatelessWidget {
   final _CircumColors colors;
   final SenderDeliveryRecord delivery;
+  final ValueChanged<SenderDeliveryRecord> onCancelBooking;
 
   const _DesktopActiveDeliveryStatus({
     required this.colors,
     required this.delivery,
+    required this.onCancelBooking,
   });
 
   @override
@@ -14779,6 +14854,14 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
             ],
           ),
         ),
+        if (BookingCancellationPolicy.canSenderCancel(delivery.status)) ...[
+          const SizedBox(height: 18),
+          OutlinedButton.icon(
+            onPressed: () => onCancelBooking(delivery),
+            icon: const Icon(Icons.cancel_outlined),
+            label: const Text('Cancel Booking'),
+          ),
+        ],
       ],
     );
   }
@@ -15572,6 +15655,7 @@ class _SenderProfileStep extends StatelessWidget {
   final ValueChanged<String> onSavedAddressEdited;
   final ValueChanged<SenderDeliveryRecord> onSelectDelivery;
   final VoidCallback onCloseDelivery;
+  final ValueChanged<SenderDeliveryRecord> onCancelBooking;
 
   const _SenderProfileStep({
     super.key,
@@ -15613,6 +15697,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onSavedAddressEdited,
     required this.onSelectDelivery,
     required this.onCloseDelivery,
+    required this.onCancelBooking,
   });
 
   @override
@@ -15809,6 +15894,7 @@ class _SenderProfileStep extends StatelessWidget {
         colors: colors,
         delivery: selectedDelivery!,
         onClose: onCloseDelivery,
+        onCancelBooking: onCancelBooking,
       );
     }
     return switch (tabIndex) {
@@ -16137,11 +16223,13 @@ class _SenderDeliveryDetails extends StatelessWidget {
   final _CircumColors colors;
   final SenderDeliveryRecord delivery;
   final VoidCallback onClose;
+  final ValueChanged<SenderDeliveryRecord> onCancelBooking;
 
   const _SenderDeliveryDetails({
     required this.colors,
     required this.delivery,
     required this.onClose,
+    required this.onCancelBooking,
   });
 
   @override
@@ -16208,6 +16296,14 @@ class _SenderDeliveryDetails extends StatelessWidget {
             'Proof of delivery is attached.',
             style: TextStyle(color: colors.mutedText),
           ),
+        if (BookingCancellationPolicy.canSenderCancel(delivery.status)) ...[
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => onCancelBooking(delivery),
+            icon: const Icon(Icons.cancel_outlined),
+            label: const Text('Cancel Booking'),
+          ),
+        ],
       ],
     );
   }
