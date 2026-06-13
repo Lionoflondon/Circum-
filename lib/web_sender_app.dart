@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:circum/app/admin/admin_operations.dart';
 import 'package:circum/app/authentication/access/role_access.dart';
 import 'package:circum/app/delivery_security/vanguard_protection.dart';
@@ -17,6 +18,7 @@ import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/pricing/special_handling_engine.dart';
+import 'package:circum/env/env.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -25,6 +27,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
@@ -2347,9 +2350,23 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final vanguard = item['vanguardEnabled'] == true
         ? '\nVanguard: collection ${item['collectionPinVerified'] == true ? 'passed' : 'pending'}, delivery ${item['deliveryPinVerified'] == true ? 'passed' : 'pending'}'
         : '';
+    final discrepancy = item['loadDiscrepancy'] is Map
+        ? Map<String, dynamic>.from(item['loadDiscrepancy'] as Map)
+        : const <String, dynamic>{};
+    final discrepancyText = discrepancy.isEmpty
+        ? ''
+        : '\nLoad discrepancy: ${discrepancy['riderReason'] ?? 'reported'}'
+            '\nOriginal £${_adminMoneyValue(discrepancy['originalQuote'])} → revised £${_adminMoneyValue(discrepancy['revisedQuote'])}'
+            '\nAdditional £${_adminMoneyValue(discrepancy['additionalAmount'])} • Sender: ${discrepancy['senderDecision'] ?? 'pending'}'
+            '\nEvidence: ${(discrepancy['evidencePhotos'] as List?)?.length ?? 0} photo(s)';
     return reason.isEmpty
-        ? '$finalWeight kg\n$source$vanguard'
-        : '$finalWeight kg\n$source\n$reason$vanguard';
+        ? '$finalWeight kg\n$source$vanguard$discrepancyText'
+        : '$finalWeight kg\n$source\n$reason$vanguard$discrepancyText';
+  }
+
+  String _adminMoneyValue(Object? value) {
+    final amount = value is num ? value.toDouble() : double.tryParse('$value');
+    return (amount ?? 0).toStringAsFixed(2);
   }
 }
 
@@ -7691,31 +7708,220 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
-    setState(() => _jobMessage = 'Reporting issue for $requestId...');
+    final reason = await _showLoadDiscrepancyDialog(job);
+    if (reason == null) return;
+    setState(() => _jobMessage = 'Recalculating this booking...');
     try {
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(requestId)
-          .set({
-        'reportedParcelIssue': issueType != 'weight',
-        'reportedWeightIssue': issueType == 'weight',
-        'driverWeightDispute': {
-          'reported': issueType == 'weight',
-          'issueType': issueType,
-          'reportedBy': user.uid,
-          'reportedAt': FieldValue.serverTimestamp(),
-          'status': 'admin_review',
-        },
-        'weightReviewRequired': true,
-        'weightDisputeStatus': 'admin_review',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instance
+          .httpsCallable('reportLoadDiscrepancy')
+          .call(reason);
       if (!mounted) return;
-      setState(() => _jobMessage = 'Issue flagged for Circum review.');
-    } catch (_) {
+      setState(() => _jobMessage =
+          'Discrepancy reported. Collection is paused for the sender.');
+    } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _jobMessage = 'Could not report this issue. Try again.');
+      setState(() => _jobMessage =
+          error.message ?? 'Could not report this discrepancy. Try again.');
     }
+  }
+
+  Future<Map<String, dynamic>?> _showLoadDiscrepancyDialog(
+    Map<String, dynamic> job,
+  ) async {
+    final user = _riderUser;
+    if (user == null) return null;
+    final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
+    var reason = 'weight_exceeded';
+    String? observedVehicleType;
+    final weight = TextEditingController();
+    final description = TextEditingController();
+    final dimensions = TextEditingController();
+    final notes = TextEditingController();
+    final photos = <XFile>[];
+    var uploading = false;
+    String? error;
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Report Load Discrepancy'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: reason,
+                    decoration: const InputDecoration(labelText: 'Reason'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'weight_exceeded',
+                          child: Text('Weight exceeded')),
+                      DropdownMenuItem(
+                          value: 'dimensions_exceeded',
+                          child: Text('Dimensions exceeded')),
+                      DropdownMenuItem(
+                          value: 'additional_undeclared_items',
+                          child: Text('Additional undeclared items')),
+                      DropdownMenuItem(
+                          value: 'item_differs_from_booking',
+                          child: Text('Item differs from booking')),
+                    ],
+                    onChanged: (value) =>
+                        setDialogState(() => reason = value ?? reason),
+                  ),
+                  const SizedBox(height: 12),
+                  if (reason == 'weight_exceeded')
+                    TextField(
+                      controller: weight,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'Observed weight (kg)'),
+                    ),
+                  if (reason == 'dimensions_exceeded')
+                    TextField(
+                      controller: dimensions,
+                      decoration: const InputDecoration(
+                          labelText: 'Observed dimensions'),
+                    ),
+                  if (reason == 'dimensions_exceeded' ||
+                      reason == 'item_differs_from_booking') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: observedVehicleType,
+                      decoration: const InputDecoration(
+                          labelText: 'Vehicle now required'),
+                      items: const [
+                        DropdownMenuItem(value: 'bike', child: Text('Bike')),
+                        DropdownMenuItem(value: 'car', child: Text('Car')),
+                        DropdownMenuItem(value: 'van', child: Text('Van')),
+                      ],
+                      onChanged: (value) =>
+                          setDialogState(() => observedVehicleType = value),
+                    ),
+                  ],
+                  if (reason == 'item_differs_from_booking' ||
+                      reason == 'additional_undeclared_items')
+                    TextField(
+                      controller: description,
+                      decoration: const InputDecoration(
+                          labelText: 'What is actually present?'),
+                    ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notes,
+                    maxLines: 2,
+                    decoration:
+                        const InputDecoration(labelText: 'Optional note'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: uploading
+                        ? null
+                        : () async {
+                            final selected = await ImagePicker().pickMultiImage(
+                              imageQuality: 75,
+                              limit: 4,
+                            );
+                            setDialogState(() => photos
+                              ..clear()
+                              ..addAll(selected));
+                          },
+                    icon: const Icon(Icons.add_a_photo_outlined),
+                    label: Text(photos.isEmpty
+                        ? 'Add evidence photo'
+                        : '${photos.length} photo(s) selected'),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(error!,
+                        style: const TextStyle(color: Colors.redAccent)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed:
+                  uploading ? null : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Back'),
+            ),
+            FilledButton(
+              onPressed: uploading
+                  ? null
+                  : () async {
+                      final observedWeight =
+                          double.tryParse(weight.text.trim());
+                      if (photos.isEmpty) {
+                        setDialogState(
+                            () => error = 'Add at least one evidence photo.');
+                        return;
+                      }
+                      if (reason == 'weight_exceeded' &&
+                          (observedWeight == null || observedWeight <= 0)) {
+                        setDialogState(
+                            () => error = 'Enter the observed weight.');
+                        return;
+                      }
+                      if (reason == 'dimensions_exceeded' &&
+                          observedVehicleType == null) {
+                        setDialogState(() => error =
+                            'Select the vehicle now required for this load.');
+                        return;
+                      }
+                      setDialogState(() {
+                        uploading = true;
+                        error = null;
+                      });
+                      try {
+                        final urls = <String>[];
+                        for (var index = 0; index < photos.length; index++) {
+                          final photo = photos[index];
+                          final ref = FirebaseStorage.instance.ref(
+                            'delivery-discrepancies/$requestId/${user.uid}/${DateTime.now().millisecondsSinceEpoch}-$index.jpg',
+                          );
+                          await ref.putData(await photo.readAsBytes(),
+                              SettableMetadata(contentType: photo.mimeType));
+                          urls.add(await ref.getDownloadURL());
+                        }
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop({
+                          'requestId': requestId,
+                          'reason': reason,
+                          'evidencePhotos': urls,
+                          if (observedWeight != null)
+                            'observedWeightKg': observedWeight,
+                          if (description.text.trim().isNotEmpty)
+                            'observedDescription': description.text.trim(),
+                          if (dimensions.text.trim().isNotEmpty)
+                            'dimensions': dimensions.text.trim(),
+                          if (observedVehicleType != null)
+                            'observedVehicleType': observedVehicleType,
+                          if (notes.text.trim().isNotEmpty)
+                            'riderNotes': notes.text.trim(),
+                        });
+                      } catch (_) {
+                        setDialogState(() {
+                          uploading = false;
+                          error = 'Evidence upload failed. Try again.';
+                        });
+                      }
+                    },
+              child: Text(uploading ? 'Uploading...' : 'Submit report'),
+            ),
+          ],
+        ),
+      ),
+    );
+    weight.dispose();
+    description.dispose();
+    dimensions.dispose();
+    notes.dispose();
+    return result;
   }
 
   void _openRiderChat(Map<String, dynamic> job) {
@@ -9838,8 +10044,8 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
                     onAccept: () => onAcceptJob(job),
                     onReject: () => onRejectJob(job),
                     onIgnore: () => onIgnoreJob(job),
-                    onReportWeight: () => onReportIssue(job, 'weight'),
-                    onReportParcel: () => onReportIssue(job, 'parcel'),
+                    onReportDiscrepancy: () =>
+                        onReportIssue(job, 'discrepancy'),
                     onOpenChat: () => onOpenChat(job),
                   ),
                 ),
@@ -9892,8 +10098,8 @@ class _RiderJobListPanel extends StatelessWidget {
                     onUpdateStatus: completed
                         ? null
                         : (status) => onUpdateJobStatus(job, status),
-                    onReportWeight: () => onReportIssue(job, 'weight'),
-                    onReportParcel: () => onReportIssue(job, 'parcel'),
+                    onReportDiscrepancy: () =>
+                        onReportIssue(job, 'discrepancy'),
                     onOpenChat: () => onOpenChat(job),
                   ),
                 ),
@@ -9910,8 +10116,7 @@ class _DriverJobCard extends StatelessWidget {
   final VoidCallback? onReject;
   final VoidCallback? onIgnore;
   final void Function(String status)? onUpdateStatus;
-  final VoidCallback onReportWeight;
-  final VoidCallback onReportParcel;
+  final VoidCallback onReportDiscrepancy;
   final VoidCallback onOpenChat;
   final bool completed;
 
@@ -9922,8 +10127,7 @@ class _DriverJobCard extends StatelessWidget {
     this.onReject,
     this.onIgnore,
     this.onUpdateStatus,
-    required this.onReportWeight,
-    required this.onReportParcel,
+    required this.onReportDiscrepancy,
     required this.onOpenChat,
     this.completed = false,
   });
@@ -10040,6 +10244,13 @@ class _DriverJobCard extends StatelessWidget {
     final collectionDifferent = (job['collectionContactDifferent'] == true ||
         summary['collectionContactDifferent'] == true ||
         ((job['collectionContact'] as Map?)?['differentFromSender'] == true));
+    final jobStatus = '${job['status'] ?? ''}'.toLowerCase();
+    final canReportDiscrepancy = const {
+      'accepted',
+      'rider_assigned',
+      'en_route_to_pickup',
+      'arrived_at_pickup',
+    }.contains(jobStatus);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -10272,16 +10483,11 @@ class _DriverJobCard extends StatelessWidget {
                   icon: const Icon(Icons.visibility_off),
                   label: const Text('Ignore'),
                 ),
-              if (!completed) ...[
+              if (!completed && canReportDiscrepancy) ...[
                 OutlinedButton.icon(
-                  onPressed: onReportWeight,
-                  icon: const Icon(Icons.scale),
-                  label: const Text('Weight issue'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onReportParcel,
+                  onPressed: onReportDiscrepancy,
                   icon: const Icon(Icons.report_problem),
-                  label: const Text('Parcel issue'),
+                  label: const Text('Report Load Discrepancy'),
                 ),
               ],
             ],
@@ -10918,6 +11124,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _driverPerformanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _assignedDriverRatingsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _deliveryAdjustmentSub;
+  String? _visibleAdjustmentId;
 
   bool get _matchingHasStarted =>
       _checkoutState == _CheckoutState.matchingRiders ||
@@ -11002,6 +11211,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _driverProfileSub?.cancel();
     _driverPerformanceSub?.cancel();
     _assignedDriverRatingsSub?.cancel();
+    _deliveryAdjustmentSub?.cancel();
     super.dispose();
   }
 
@@ -11885,7 +12095,174 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         }
       });
     });
+    _listenForDeliveryAdjustments(user.uid);
   }
+
+  void _listenForDeliveryAdjustments(String senderId) {
+    _deliveryAdjustmentSub?.cancel();
+    _deliveryAdjustmentSub = FirebaseFirestore.instance
+        .collection('deliveryAdjustments')
+        .where('senderId', isEqualTo: senderId)
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      final pending = snapshot.docs.where((doc) {
+        final status = '${doc.data()['status'] ?? ''}';
+        return status == 'awaiting_sender_payment';
+      }).toList();
+      if (pending.isEmpty) return;
+      pending.sort((a, b) => _timestampMillis(b.data()['createdAt'])
+          .compareTo(_timestampMillis(a.data()['createdAt'])));
+      final doc = pending.first;
+      if (_visibleAdjustmentId == doc.id) return;
+      _visibleAdjustmentId = doc.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSenderAdjustmentDialog(doc.id, doc.data());
+      });
+    }, onError: (error) {
+      debugPrint('Could not load delivery adjustment: $error');
+    });
+  }
+
+  static int _timestampMillis(Object? value) {
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    return 0;
+  }
+
+  Future<void> _showSenderAdjustmentDialog(
+    String adjustmentId,
+    Map<String, dynamic> adjustment,
+  ) async {
+    var busy = false;
+    String? error;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Booking update required'),
+          content: SizedBox(
+            width: 430,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_discrepancyReasonLabel(
+                    '${adjustment['riderReason'] ?? ''}')),
+                const SizedBox(height: 16),
+                _adjustmentPriceRow(
+                    'Original quote', adjustment['originalQuote']),
+                _adjustmentPriceRow(
+                    'Revised quote', adjustment['revisedQuote']),
+                _adjustmentPriceRow(
+                    'Additional amount', adjustment['additionalAmount'],
+                    emphasized: true),
+                if (error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(error!, style: const TextStyle(color: Colors.redAccent)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      setDialogState(() => busy = true);
+                      try {
+                        await FirebaseFunctions.instance
+                            .httpsCallable('cancelAdjustedCollection')
+                            .call({'adjustmentId': adjustmentId});
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                      } on FirebaseFunctionsException catch (exception) {
+                        setDialogState(() {
+                          busy = false;
+                          error = exception.message ??
+                              'Could not cancel this collection.';
+                        });
+                      }
+                    },
+              child: const Text('Cancel Collection'),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        busy = true;
+                        error = null;
+                      });
+                      try {
+                        Stripe.publishableKey = Env.publishableLiveKey;
+                        await Stripe.instance.applySettings();
+                        final payment = await FirebaseFunctions.instance
+                            .httpsCallable('createDeliveryAdjustmentPayment')
+                            .call({'adjustmentId': adjustmentId});
+                        final data =
+                            Map<String, dynamic>.from(payment.data as Map);
+                        await Stripe.instance.initPaymentSheet(
+                          paymentSheetParameters: SetupPaymentSheetParameters(
+                            paymentIntentClientSecret:
+                                '${data['clientSecret']}',
+                            merchantDisplayName: 'Circum',
+                            style: ThemeMode.dark,
+                          ),
+                        );
+                        await Stripe.instance.presentPaymentSheet();
+                        await FirebaseFunctions.instance
+                            .httpsCallable('finalizeDeliveryAdjustmentPayment')
+                            .call({'adjustmentId': adjustmentId});
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                        final uid = _senderUser?.uid;
+                        if (uid != null) await _loadSenderDeliveries(uid);
+                      } catch (exception) {
+                        setDialogState(() {
+                          busy = false;
+                          error = exception is FirebaseFunctionsException
+                              ? exception.message
+                              : 'Payment was not completed. Please try again.';
+                        });
+                      }
+                    },
+              child: Text(busy ? 'Please wait...' : 'Pay & Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _adjustmentPriceRow(String label, Object? value,
+      {bool emphasized = false}) {
+    final amount = value is num ? value.toDouble() : double.tryParse('$value');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text('£${(amount ?? 0).toStringAsFixed(2)}',
+              style: TextStyle(
+                  fontWeight: emphasized ? FontWeight.w900 : FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  static String _discrepancyReasonLabel(String reason) => switch (reason) {
+        'weight_exceeded' => 'The collected parcel is heavier than booked.',
+        'dimensions_exceeded' =>
+          'The parcel dimensions exceed the booking details.',
+        'additional_undeclared_items' =>
+          'Additional undeclared items were presented.',
+        'item_differs_from_booking' =>
+          'The item differs from the original booking.',
+        _ => 'The rider reported a material load discrepancy.',
+      };
 
   Future<void> _signInSender() async {
     if (_senderAuthBusy) return;
@@ -12134,6 +12511,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _signOutSender() async {
     await FirebaseAuth.instance.signOut();
     await _senderSub?.cancel();
+    await _deliveryAdjustmentSub?.cancel();
     if (!mounted) return;
     setState(() {
       _senderUser = null;

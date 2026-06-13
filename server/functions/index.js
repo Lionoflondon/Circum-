@@ -14,6 +14,7 @@ const sendMessage = require("./send-message");
 const sendRiderUpdate = require("./send-rider-update");
 const healthPlus = require("./health-plus");
 const iris = require("./iris");
+const deliveryAdjustments = require("./delivery-adjustments");
 
 initializeApp();
 
@@ -27,6 +28,10 @@ exports.createHealthPlusCheckoutSession = healthPlus.createHealthPlusCheckoutSes
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 exports.analyseIris = iris.analyseIris;
 exports.adjudicateIris = iris.adjudicateIris;
+exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;
+exports.cancelAdjustedCollection = deliveryAdjustments.cancelAdjustedCollection;
+exports.createDeliveryAdjustmentPayment = deliveryAdjustments.createDeliveryAdjustmentPayment;
+exports.finalizeDeliveryAdjustmentPayment = deliveryAdjustments.finalizeDeliveryAdjustmentPayment;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

@@ -229,6 +229,13 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    match /deliveryAdjustments/{adjustmentId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
     match /payments/{paymentId} {
       allow read: if isFinanceAdmin();
       allow write: if isFinanceAdmin();

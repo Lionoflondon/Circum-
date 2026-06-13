@@ -4,6 +4,7 @@
   "scripts": {
     "lint": "eslint .",
     "test:iris": "node --test iris-core.test.js iris-security.test.js",
+    "test:adjustments": "node --test delivery-adjustment-core.test.js",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",
