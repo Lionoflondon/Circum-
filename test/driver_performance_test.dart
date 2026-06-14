@@ -34,8 +34,7 @@ void main() {
       );
     });
 
-    test('dispatch visibility follows rider rank and protected service rules',
-        () {
+    test('rank never hides jobs and only changes backup priority', () {
       final now = DateTime(2026, 6, 14, 12);
       final newStandard = {
         'createdAt': now.subtract(const Duration(minutes: 1)),
@@ -54,7 +53,7 @@ void main() {
           job: newStandard,
           now: now,
         ),
-        isFalse,
+        isTrue,
       );
       expect(
         RiderDispatchPolicy.canViewJob(
@@ -110,11 +109,11 @@ void main() {
       );
       expect(
         RiderDispatchPolicy.canViewJob(
-          riderRank: 'knight',
-          job: {'vanguardEnabled': true},
+          riderRank: 'agent',
+          job: {'vanguardEnabled': true, 'highTrust': true},
           now: now,
         ),
-        isFalse,
+        isTrue,
       );
       expect(
         RiderDispatchPolicy.canViewJob(
@@ -123,6 +122,22 @@ void main() {
           now: now,
         ),
         isTrue,
+      );
+      expect(
+        RiderDispatchPolicy.priorityScore(
+          riderRank: 'sentinel',
+          job: newStandard,
+          now: now,
+        ),
+        0,
+      );
+      expect(
+        RiderDispatchPolicy.priorityScore(
+          riderRank: 'sentinel',
+          job: {'createdAt': now.subtract(const Duration(minutes: 5))},
+          now: now,
+        ),
+        1,
       );
     });
 

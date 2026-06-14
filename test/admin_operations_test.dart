@@ -198,7 +198,7 @@ void main() {
       expect(RiderRankPolicy.canManage(const ['support_agent']), isFalse);
       expect(
         RiderDispatchPolicy.explanation('veteran'),
-        contains('Vanguard'),
+        contains('backbone priority'),
       );
     });
 

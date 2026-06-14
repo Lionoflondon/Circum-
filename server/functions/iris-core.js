@@ -579,31 +579,18 @@ function normalizeRiderRank(value) {
 }
 
 function riderCanViewDispatch(rider, request, now = Date.now()) {
-  const rank = normalizeRiderRank(rider.rank || rider.riderRank);
-  const allowedRanks = Array.isArray(request.dispatchAllowedRanks) ?
-    request.dispatchAllowedRanks.map(normalizeRiderRank) : [];
-  if (request.dispatchRankOverrideEnabled === true && allowedRanks.includes(rank)) return true;
-  const type = normalize(request.serviceType || request.deliveryType);
-  const trust = normalize(request.trustLevel || request.dispatchTier);
-  const veteranOnly = request.vanguardEnabled === true ||
-    request.healthPlus === true || request.healthPlusEnabled === true ||
-    request.giftDelivery === true || request.giftsEnabled === true ||
-    request.critical === true || trust === "critical" ||
-    type.includes("vanguard") || type.includes("health+") ||
-    type.includes("health_plus") || type.includes("gift");
-  if (veteranOnly) return rank === "veteran";
-  const highTrust = request.highTrust === true ||
-    request.highTrustRequired === true || trust === "high" || trust === "high_trust";
-  if (highTrust) return rank === "knight" || rank === "veteran";
+  return true;
+}
 
-  if (rank === "agent") return true;
+function riderDispatchPriority(rider, request, now = Date.now()) {
+  const rank = normalizeRiderRank(rider.rank || rider.riderRank);
   const rawCreatedAt = request.createdAt || request.requestedAt || request.timestamp || request.timeStamp;
   const createdAt = rawCreatedAt && typeof rawCreatedAt.toMillis === "function" ?
     rawCreatedAt.toMillis() : new Date(rawCreatedAt).getTime();
-  if (!Number.isFinite(createdAt)) return false;
+  if (!Number.isFinite(createdAt)) return 0;
   const elapsedMinutes = Math.floor((now - createdAt) / 60000);
-  const thresholds = {sentinel: 5, warden: 10, knight: 15, veteran: 20};
-  return elapsedMinutes >= thresholds[rank];
+  const thresholds = {agent: 0, sentinel: 5, warden: 10, knight: 15, veteran: 20};
+  return elapsedMinutes >= thresholds[rank] ? 1 : 0;
 }
 
 module.exports = {
@@ -624,4 +611,5 @@ module.exports = {
   dispatchPriority,
   normalizeRiderRank,
   riderCanViewDispatch,
+  riderDispatchPriority,
 };

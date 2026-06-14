@@ -10,6 +10,7 @@ const {
   dispatchPriority,
   normalizeRiderRank,
   riderCanViewDispatch,
+  riderDispatchPriority,
 } = require("./iris-core");
 
 test("weight band boundaries match Iris v1", () => {
@@ -116,23 +117,25 @@ test("express jobs receive dispatch priority", () => {
   assert.ok(express.recommendation.estimatedPrice > standard.recommendation.estimatedPrice);
 });
 
-test("rider rank controls dispatch visibility and safely defaults to agent", () => {
+test("rider rank never hides jobs and only changes backup priority", () => {
   const now = Date.parse("2026-06-14T12:00:00Z");
   assert.equal(normalizeRiderRank(), "agent");
   assert.equal(riderCanViewDispatch({}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), false);
+  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
   assert.equal(riderCanViewDispatch({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), true);
   assert.equal(riderCanViewDispatch({rank: "warden"}, {createdAt: "2026-06-14T11:50:00Z"}, now), true);
   assert.equal(riderCanViewDispatch({rank: "knight"}, {createdAt: "2026-06-14T11:45:00Z"}, now), true);
   assert.equal(riderCanViewDispatch({rank: "veteran"}, {createdAt: "2026-06-14T11:40:00Z"}, now), true);
   assert.equal(riderCanViewDispatch({rank: "knight"}, {highTrust: true}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "knight"}, {vanguardEnabled: true}, now), false);
+  assert.equal(riderCanViewDispatch({rank: "agent"}, {vanguardEnabled: true, highTrust: true}, now), true);
   assert.equal(riderCanViewDispatch({rank: "veteran"}, {healthPlusEnabled: true}, now), true);
   assert.equal(riderCanViewDispatch({rank: "sentinel"}, {
     vanguardEnabled: true,
     dispatchRankOverrideEnabled: true,
     dispatchAllowedRanks: ["sentinel"],
   }, now), true);
+  assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), 0);
+  assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), 1);
 });
 
 test("rider mismatch is evidence, not final truth", () => {

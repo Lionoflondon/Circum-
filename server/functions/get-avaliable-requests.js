@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
-const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
+const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
 
 const getNearbyRequests = functions.https.onCall(async (data, context) => {
   try {
@@ -94,7 +94,8 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     // Filter out null values and get 5 closest requests
     const nearestRequests = requestsWithDistances
         .filter((request) => request !== null)
-        .sort((a, b) => dispatchPriority(b) - dispatchPriority(a) ||
+        .sort((a, b) => riderDispatchPriority(riderData, b) - riderDispatchPriority(riderData, a) ||
+          dispatchPriority(b) - dispatchPriority(a) ||
           a.distanceFromRider - b.distanceFromRider)
         .slice(0, 5);
 

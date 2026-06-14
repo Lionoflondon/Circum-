@@ -6961,6 +6961,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final riderRank =
+        _riderProfile?['rank'] ?? _riderProfile?['riderRank'] ?? 'agent';
+    final rankPriority = RiderDispatchPolicy.priorityScore(
+      riderRank: riderRank,
+      job: b,
+    ).compareTo(RiderDispatchPolicy.priorityScore(
+      riderRank: riderRank,
+      job: a,
+    ));
+    if (rankPriority != 0) return rankPriority;
     final serviceA = '${a['selectedServiceLevel'] ?? a['serviceLevel'] ?? ''}';
     final serviceB = '${b['selectedServiceLevel'] ?? b['serviceLevel'] ?? ''}';
     final priorityCompare = DeliveryPricing.matchingPriorityRank(

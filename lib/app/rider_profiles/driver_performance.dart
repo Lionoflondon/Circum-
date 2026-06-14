@@ -97,12 +97,11 @@ String _driverRank(Object? value) {
 
 class RiderDispatchPolicy {
   static const rankUnlocks = {
-    'agent': 'Brand-new standard jobs',
-    'sentinel': 'Standard jobs after 5 minutes unclaimed',
-    'warden': 'Standard jobs after 10 minutes unclaimed',
-    'knight': 'High-trust jobs and standard jobs after 15 minutes unclaimed',
-    'veteran':
-        'Critical, Vanguard, Health+, Gifts, and standard jobs after 20 minutes unclaimed',
+    'agent': 'All suitable jobs, with priority on brand-new standard work',
+    'sentinel': 'All suitable jobs, with backup priority after 5 minutes',
+    'warden': 'All suitable jobs, with backup priority after 10 minutes',
+    'knight': 'All suitable jobs, with backup priority after 15 minutes',
+    'veteran': 'All suitable jobs, with backbone priority after 20 minutes',
   };
 
   static String normalizeRank(Object? value) => _driverRank(value);
@@ -115,61 +114,27 @@ class RiderDispatchPolicy {
     required Map<String, dynamic> job,
     DateTime? now,
   }) {
+    return true;
+  }
+
+  static int priorityScore({
+    required Object? riderRank,
+    required Map<String, dynamic> job,
+    DateTime? now,
+  }) {
     final rank = normalizeRank(riderRank);
-    if (_hasAdminOverride(job, rank)) return true;
-    final access = _jobAccess(job);
-    if (access == 'veteran') return rank == 'veteran';
-    if (access == 'high_trust') {
-      return rank == 'knight' || rank == 'veteran';
-    }
-    if (rank == 'agent') return true;
     final createdAt = _jobCreatedAt(job);
-    if (createdAt == null) return false;
+    if (createdAt == null) return 0;
     final elapsed = (now ?? DateTime.now()).difference(createdAt).inMinutes;
-    final requiredMinutes = switch (rank) {
+    final threshold = switch (rank) {
+      'agent' => 0,
       'sentinel' => 5,
       'warden' => 10,
       'knight' => 15,
       'veteran' => 20,
-      _ => 1 << 30,
+      _ => 0,
     };
-    return elapsed >= requiredMinutes;
-  }
-
-  static String _jobAccess(Map<String, dynamic> job) {
-    final type = '${job['serviceType'] ?? job['deliveryType'] ?? ''}'
-        .trim()
-        .toLowerCase();
-    final trust = '${job['trustLevel'] ?? job['dispatchTier'] ?? ''}'
-        .trim()
-        .toLowerCase();
-    if (job['vanguardEnabled'] == true ||
-        job['healthPlus'] == true ||
-        job['healthPlusEnabled'] == true ||
-        job['giftDelivery'] == true ||
-        job['giftsEnabled'] == true ||
-        job['critical'] == true ||
-        trust == 'critical' ||
-        type.contains('vanguard') ||
-        type.contains('health+') ||
-        type.contains('health_plus') ||
-        type.contains('gift')) {
-      return 'veteran';
-    }
-    if (job['highTrust'] == true ||
-        job['highTrustRequired'] == true ||
-        trust == 'high' ||
-        trust == 'high_trust') {
-      return 'high_trust';
-    }
-    return 'standard';
-  }
-
-  static bool _hasAdminOverride(Map<String, dynamic> job, String rank) {
-    final allowed = job['dispatchAllowedRanks'];
-    return job['dispatchRankOverrideEnabled'] == true &&
-        allowed is List &&
-        allowed.map(normalizeRank).contains(rank);
+    return elapsed >= threshold ? 1 : 0;
   }
 
   static DateTime? _jobCreatedAt(Map<String, dynamic> job) {
