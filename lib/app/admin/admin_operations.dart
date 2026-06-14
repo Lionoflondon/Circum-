@@ -25,6 +25,7 @@ enum AdminPermission {
   viewDrivers,
   editDrivers,
   approveDrivers,
+  manageDriverRanks,
   viewDeliveries,
   editDeliveries,
   duplicateDeliveries,
@@ -77,6 +78,7 @@ class AdminAccessPolicy {
       AdminPermission.viewDrivers,
       AdminPermission.editDrivers,
       AdminPermission.approveDrivers,
+      AdminPermission.manageDriverRanks,
       AdminPermission.viewDeliveries,
       AdminPermission.viewHealthPlus,
       AdminPermission.viewSupport,
@@ -98,6 +100,44 @@ class AdminAccessPolicy {
       }
     }
     return false;
+  }
+}
+
+class RiderRankPolicy {
+  static const ranks = ['agent', 'sentinel', 'warden', 'knight', 'veteran'];
+
+  static String normalize(Object? value) {
+    final rank = '$value'.trim().toLowerCase();
+    return ranks.contains(rank) ? rank : 'agent';
+  }
+
+  static String fromProfile(Map<String, dynamic> profile) {
+    return normalize(profile['rank'] ?? profile['riderRank']);
+  }
+
+  static bool canManage(Iterable<String> roles) {
+    return roles.contains(AdminRole.superAdmin.value) ||
+        roles.contains(AdminRole.driverManager.value);
+  }
+
+  static Map<String, dynamic> updatePatch({
+    required String rank,
+    required Object updatedAt,
+    required String updatedBy,
+    required String reason,
+  }) {
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A rank change reason is required.');
+    }
+    final normalized = normalize(rank);
+    return {
+      'rank': normalized,
+      'riderRank': normalized,
+      'rankUpdatedAt': updatedAt,
+      'rankUpdatedBy': updatedBy,
+      'rankReason': reason.trim(),
+      'updatedAt': updatedAt,
+    };
   }
 }
 

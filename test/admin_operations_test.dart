@@ -189,6 +189,37 @@ void main() {
       expect(audit['reason'], 'Customer asked to send again');
     });
 
+    test('rider rank defaults and permissions are safe', () {
+      expect(RiderRankPolicy.normalize(null), 'agent');
+      expect(RiderRankPolicy.normalize('unknown'), 'agent');
+      expect(RiderRankPolicy.normalize('Knight'), 'knight');
+      expect(RiderRankPolicy.canManage(const ['driver_manager']), isTrue);
+      expect(RiderRankPolicy.canManage(const ['support_agent']), isFalse);
+    });
+
+    test('rank update patch requires a reason and records metadata', () {
+      final changedAt = DateTime(2026, 6, 14);
+      final patch = RiderRankPolicy.updatePatch(
+        rank: 'veteran',
+        updatedAt: changedAt,
+        updatedBy: 'admin-1',
+        reason: 'Excellent completion history',
+      );
+      expect(patch['rank'], 'veteran');
+      expect(patch['riderRank'], 'veteran');
+      expect(patch['rankUpdatedBy'], 'admin-1');
+      expect(patch['rankReason'], 'Excellent completion history');
+      expect(
+        () => RiderRankPolicy.updatePatch(
+          rank: 'warden',
+          updatedAt: changedAt,
+          updatedBy: 'admin-1',
+          reason: '',
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('creates support ticket status patches for admin queue', () {
       final patch = AdminSupportTools.statusPatch(
         status: 'resolved',

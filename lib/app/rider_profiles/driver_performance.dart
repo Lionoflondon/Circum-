@@ -43,6 +43,7 @@ class DriverProfile {
   final String phoneNumber;
   final String verificationStatus;
   final String status;
+  final String rank;
   final DriverVehicle vehicle;
   final DriverPerformanceMetric performance;
   final List<DriverRating> recentRatings;
@@ -54,6 +55,7 @@ class DriverProfile {
     required this.phoneNumber,
     required this.verificationStatus,
     required this.status,
+    this.rank = 'agent',
     required this.vehicle,
     required this.performance,
     this.recentRatings = const [],
@@ -75,6 +77,7 @@ class DriverProfile {
       verificationStatus:
           _readString(map, ['verificationStatus'], fallback: 'pending'),
       status: _readString(map, ['driverStatus', 'status'], fallback: 'active'),
+      rank: _driverRank(map['rank'] ?? map['riderRank']),
       vehicle: DriverVehicle.fromMap({
         ...map,
         if (map['vehicle'] is Map<String, dynamic>)
@@ -84,6 +87,12 @@ class DriverProfile {
       recentRatings: recentRatings,
     );
   }
+}
+
+String _driverRank(Object? value) {
+  const ranks = {'agent', 'sentinel', 'warden', 'knight', 'veteran'};
+  final rank = '$value'.trim().toLowerCase();
+  return ranks.contains(rank) ? rank : 'agent';
 }
 
 class DriverRating {

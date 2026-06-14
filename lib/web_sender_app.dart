@@ -1020,6 +1020,120 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return reason;
   }
 
+  Future<void> _changeDriverRank(Map<String, dynamic> driver) async {
+    if (!_can(AdminPermission.manageDriverRanks)) {
+      setState(() => _message = 'Your role cannot change rider ranks.');
+      return;
+    }
+    final riderId = _driverId(driver);
+    if (riderId.isEmpty) return;
+    final previousRank = RiderRankPolicy.fromProfile(driver);
+    var selectedRank = previousRank;
+    final reasonController = TextEditingController();
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Bestow rider rank'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: selectedRank,
+                  decoration: const InputDecoration(labelText: 'Rank'),
+                  items: RiderRankPolicy.ranks
+                      .map((rank) => DropdownMenuItem(
+                            value: rank,
+                            child: Text(_riderRankLabel(rank)),
+                          ))
+                      .toList(),
+                  onChanged: (rank) => setDialogState(
+                    () => selectedRank = rank ?? selectedRank,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: reasonController,
+                  autofocus: true,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason',
+                    hintText: 'Why is this rank being changed?',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty || selectedRank == previousRank) return;
+                Navigator.pop(dialogContext, {
+                  'rank': selectedRank,
+                  'reason': reason,
+                });
+              },
+              child: const Text('Update rank'),
+            ),
+          ],
+        ),
+      ),
+    );
+    reasonController.dispose();
+    if (result == null) return;
+    final newRank = RiderRankPolicy.normalize(result['rank']);
+    final reason = result['reason']!.trim();
+    final changedBy = _adminUser?.uid ?? _adminUser?.email ?? 'unknown-admin';
+    final timestamp = FieldValue.serverTimestamp();
+    final db = FirebaseFirestore.instance;
+    await db.collection('riderProfiles').doc(riderId).set(
+          RiderRankPolicy.updatePatch(
+            rank: newRank,
+            updatedAt: timestamp,
+            updatedBy: changedBy,
+            reason: reason,
+          ),
+          SetOptions(merge: true),
+        );
+    await db.collection('adminAuditLogs').add({
+      'adminUserId': changedBy,
+      'actionType': 'rider_rank_changed',
+      'recordType': 'riderProfiles',
+      'recordId': riderId,
+      'riderId': riderId,
+      'previousRank': previousRank,
+      'newRank': newRank,
+      'changedBy': changedBy,
+      'changedAt': timestamp,
+      'reason': reason,
+      'oldValue': {'rank': previousRank},
+      'newValue': {'rank': newRank},
+      'createdAt': timestamp,
+    });
+    if (!mounted) return;
+    setState(() {
+      _message =
+          '${driver['fullName'] ?? driver['name'] ?? 'Rider'} is now ${_riderRankLabel(newRank)}.';
+      if (_selectedDriverProfile != null &&
+          _driverId(_selectedDriverProfile!) == riderId) {
+        _selectedDriverProfile = {
+          ..._selectedDriverProfile!,
+          'rank': newRank,
+          'riderRank': newRank,
+          'rankReason': reason,
+        };
+      }
+    });
+    await _loadAdminData();
+  }
+
   List<_AdminAction> _driverWorkflowActions(Map<String, dynamic> driver) {
     final status = _driverWorkflowStatus(driver);
     final canApprove = _can(AdminPermission.approveDrivers);
@@ -1073,6 +1187,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         ),
       );
     }
+    actions.add(
+      _AdminAction(
+        label: 'Change Rank',
+        enabled: _can(AdminPermission.manageDriverRanks),
+        onTap: () => _changeDriverRank(driver),
+      ),
+    );
     actions.add(
       _AdminAction(
         label: 'View Profile',
@@ -1556,6 +1677,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   _driverId(_selectedDriverProfile!),
                 ),
                 actions: _driverWorkflowActions(_selectedDriverProfile!),
+                rank: RiderRankPolicy.fromProfile(_selectedDriverProfile!),
+                canManageRank: _can(AdminPermission.manageDriverRanks),
+                onChangeRank: () => _changeDriverRank(_selectedDriverProfile!),
                 onClose: () => setState(() => _driverProfileOpen = false),
               ),
           ],
@@ -1773,8 +1897,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   List<Widget> _driverRow(Map<String, dynamic> item) {
+    final rank = RiderRankPolicy.fromProfile(item);
     return [
-      _AdminCell.primary('${item['fullName'] ?? item['name'] ?? 'Driver'}'),
+      _AdminCell.primary(
+        '${item['fullName'] ?? item['name'] ?? 'Driver'}\n${_riderRankLabel(rank)}',
+      ),
       _AdminCell(
         '${item['vehicleColour'] ?? ''} ${item['vehicleMakeModel'] ?? item['vehicleType'] ?? ''}\n${item['plateNumber'] ?? item['vehicleRegistration'] ?? ''}',
       ),
@@ -3634,6 +3761,9 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
   final int activeJobs;
   final double totalEarnings;
   final List<_AdminAction> actions;
+  final String rank;
+  final bool canManageRank;
+  final VoidCallback onChangeRank;
   final VoidCallback onClose;
 
   const _AdminDriverProfileDrawer({
@@ -3649,6 +3779,9 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     required this.activeJobs,
     required this.totalEarnings,
     required this.actions,
+    required this.rank,
+    required this.canManageRank,
+    required this.onChangeRank,
     required this.onClose,
   });
 
@@ -3700,6 +3833,19 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _AdminStatusCell(colors: colors, status: statusLabel),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _RiderRankBadge(rank: rank),
+                      const Spacer(),
+                      if (canManageRank)
+                        TextButton.icon(
+                          onPressed: onChangeRank,
+                          icon: const Icon(Icons.workspace_premium_outlined),
+                          label: const Text('Change rank'),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 18),
                   _GlassPanel(
                     colors: colors,
@@ -24548,6 +24694,43 @@ class _VehicleOption {
     required this.caption,
     required this.eta,
   });
+}
+
+String _riderRankLabel(String rank) {
+  final normalized = RiderRankPolicy.normalize(rank);
+  return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
+}
+
+class _RiderRankBadge extends StatelessWidget {
+  final String rank;
+
+  const _RiderRankBadge({required this.rank});
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = RiderRankPolicy.normalize(rank);
+    final colors = switch (normalized) {
+      'sentinel' => const [Color(0xff2563eb), Color(0xff38bdf8)],
+      'warden' => const [Color(0xffb7791f), Color(0xfff6c453)],
+      'knight' => const [Color(0xff7c3aed), Color(0xffc084fc)],
+      'veteran' => const [Color(0xff8b5cf6), Color(0xff5eead4)],
+      _ => const [Color(0xff64748b), Color(0xffe2e8f0)],
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        _riderRankLabel(normalized).toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
 }
 
 class _TrackingStatus {

@@ -28,3 +28,14 @@ test("Firestore rules restrict rider private writes to verification.rider", () =
 test("Firestore rules keep referrals admin-only", () => {
   assert.match(rules, /match \/irisReferrals\/\{referralId\}[\s\S]*allow read, write: if isAdmin\(\);/);
 });
+
+test("Firestore rules reserve rider rank changes for driver managers", () => {
+  assert.match(
+      rules,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow update: if isDriverManager\(\)/,
+  );
+  assert.match(
+      rules,
+      /changedKeys\(\)\.hasAny\(\[[\s\S]*'rank'[\s\S]*'riderRank'[\s\S]*'rankUpdatedBy'/,
+  );
+});

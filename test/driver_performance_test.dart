@@ -20,6 +20,18 @@ void main() {
       expect(profile.vehicle.makeModel, 'Toyota Prius');
       expect(profile.vehicle.colour, 'Black');
       expect(profile.vehicle.plateNumber, 'CIR 24K');
+      expect(profile.rank, 'agent');
+    });
+
+    test('reads valid rider ranks and safely defaults unknown values', () {
+      expect(
+        DriverProfile.fromMap('driver-1', const {'rank': 'Knight'}).rank,
+        'knight',
+      );
+      expect(
+        DriverProfile.fromMap('driver-2', const {'riderRank': 'invalid'}).rank,
+        'agent',
+      );
     });
 
     test('models a five-star driver rating linked to a delivery', () {

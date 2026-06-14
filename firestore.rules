@@ -251,8 +251,19 @@ service cloud.firestore {
 
     match /riderProfiles/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create, update: if isDriverManager() ||
-        (signedIn() && request.auth.uid == driverId);
+      allow create: if isDriverManager() ||
+        (signedIn() && request.auth.uid == driverId &&
+          (!('rank' in request.resource.data) || request.resource.data.rank == 'agent') &&
+          (!('riderRank' in request.resource.data) || request.resource.data.riderRank == 'agent'));
+      allow update: if isDriverManager() ||
+        (signedIn() && request.auth.uid == driverId &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny([
+            'rank',
+            'riderRank',
+            'rankUpdatedAt',
+            'rankUpdatedBy',
+            'rankReason'
+          ]));
       allow delete: if hasRole('super_admin');
     }
 
