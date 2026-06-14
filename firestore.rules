@@ -214,6 +214,14 @@ service cloud.firestore {
           (signedIn() && request.resource.data.userId == request.auth.uid));
     }
 
+    match /notifications/{notificationId} {
+      allow read, update: if isAdmin() ||
+        (signedIn() && resource.data.recipientId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (signedIn() && request.resource.data.recipientId is string);
+      allow delete: if hasRole('super_admin');
+    }
+
     match /giftsWaitlist/{entryId} {
       allow create: if request.resource.data.source == 'gifts-coming-soon' &&
         request.resource.data.name is string &&

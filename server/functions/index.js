@@ -15,6 +15,7 @@ const sendRiderUpdate = require("./send-rider-update");
 const healthPlus = require("./health-plus");
 const iris = require("./iris");
 const deliveryAdjustments = require("./delivery-adjustments");
+const platformNotifications = require("./platform-notifications");
 
 initializeApp();
 
@@ -32,6 +33,14 @@ exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;
 exports.cancelAdjustedCollection = deliveryAdjustments.cancelAdjustedCollection;
 exports.createDeliveryAdjustmentPayment = deliveryAdjustments.createDeliveryAdjustmentPayment;
 exports.finalizeDeliveryAdjustmentPayment = deliveryAdjustments.finalizeDeliveryAdjustmentPayment;
+exports.onDeliveryCreated = platformNotifications.onDeliveryCreated;
+exports.onDeliveryUpdated = platformNotifications.onDeliveryUpdated;
+exports.onChatMessageCreated = platformNotifications.onChatMessageCreated;
+exports.onSupportTicketCreated = platformNotifications.onSupportTicketCreated;
+exports.onDisputeCreated = platformNotifications.onDisputeCreated;
+exports.onRiderProfileUpdated = platformNotifications.onRiderProfileUpdated;
+exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
+exports.escalateUnclaimedDeliveries = platformNotifications.escalateUnclaimedDeliveries;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

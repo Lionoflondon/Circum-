@@ -21,6 +21,7 @@ import 'package:circum/pricing/special_handling_engine.dart';
 import 'package:circum/env/env.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -199,6 +200,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                   ),
               },
             ),
+            _PlatformNotificationCenter(colors: colors, mode: _mode),
             _CompanyLiveChatButton(colors: colors),
           ],
         ),
@@ -215,6 +217,302 @@ class _WebSenderAppState extends State<WebSenderApp> {
         CircumRole.unknown => _WebAppMode.landing,
       };
     });
+  }
+}
+
+class _PlatformNotificationCenter extends StatefulWidget {
+  final _CircumColors colors;
+  final _WebAppMode mode;
+
+  const _PlatformNotificationCenter({required this.colors, required this.mode});
+
+  @override
+  State<_PlatformNotificationCenter> createState() =>
+      _PlatformNotificationCenterState();
+}
+
+class _PlatformNotificationCenterState
+    extends State<_PlatformNotificationCenter> {
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
+  StreamSubscription<User?>? _authSubscription;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _items = const [];
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _listen();
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((_) {
+      _listen();
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _PlatformNotificationCenter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.mode != widget.mode) _listen();
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _listen() async {
+    await _subscription?.cancel();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _items = const []);
+      return;
+    }
+    Query<Map<String, dynamic>> query =
+        FirebaseFirestore.instance.collection('notifications').limit(80);
+    query = widget.mode == _WebAppMode.admin
+        ? query.where('recipientRole', isEqualTo: 'admin')
+        : query.where('recipientId', isEqualTo: user.uid);
+    _subscription = query.snapshots().listen((snapshot) {
+      final docs = snapshot.docs.toList(growable: false)
+        ..sort((a, b) {
+          final left = a.data()['createdAt'];
+          final right = b.data()['createdAt'];
+          final leftDate = left is Timestamp ? left.toDate() : DateTime(1970);
+          final rightDate =
+              right is Timestamp ? right.toDate() : DateTime(1970);
+          return rightDate.compareTo(leftDate);
+        });
+      if (mounted) setState(() => _items = docs);
+    });
+    await _registerToken(user);
+  }
+
+  Future<void> _registerToken(User user) async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission(provisional: true);
+      final token = await messaging.getToken();
+      if (token == null) return;
+      final collection = switch (widget.mode) {
+        _WebAppMode.admin => 'adminUsers',
+        _WebAppMode.rider => 'riderProfiles',
+        _ => 'users',
+      };
+      await FirebaseFirestore.instance
+          .collection(collection)
+          .doc(user.uid)
+          .set({
+        'fcmToken': token,
+        'notificationTokenUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // In-app notification history remains available if push is unavailable.
+    }
+  }
+
+  Future<void> _markRead(
+    QueryDocumentSnapshot<Map<String, dynamic>> item,
+  ) async {
+    if (item.data()['read'] == true) return;
+    await item.reference.set({
+      'read': true,
+      'readAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _markAllRead() async {
+    final unread = _items.where((item) => item.data()['read'] != true).toList();
+    if (unread.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final item in unread) {
+      batch.set(
+          item.reference,
+          {
+            'read': true,
+            'readAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = _items.where((item) => item.data()['read'] != true).length;
+    if (FirebaseAuth.instance.currentUser == null) {
+      return const SizedBox.shrink();
+    }
+    if (_open) return _panel(context, unread);
+    return Positioned(
+      right: 18,
+      bottom: 82,
+      child: SafeArea(
+        child: Badge(
+          isLabelVisible: unread > 0,
+          label: Text(unread > 99 ? '99+' : '$unread'),
+          child: Tooltip(
+            message: 'Notifications',
+            child: IconButton.filled(
+              onPressed: () => setState(() => _open = true),
+              icon: const Icon(Icons.notifications_none_rounded),
+              style: IconButton.styleFrom(
+                fixedSize: const Size(48, 48),
+                backgroundColor: widget.colors.panel,
+                foregroundColor: widget.colors.text,
+                side: BorderSide(color: widget.colors.border),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _panel(BuildContext context, int unread) {
+    final desktop = MediaQuery.sizeOf(context).width >= 720;
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.46),
+        child: Align(
+          alignment: desktop ? Alignment.centerRight : Alignment.bottomCenter,
+          child: SafeArea(
+            child: Container(
+              width: desktop ? 420 : double.infinity,
+              height: desktop
+                  ? MediaQuery.sizeOf(context).height
+                  : MediaQuery.sizeOf(context).height * 0.9,
+              decoration: BoxDecoration(
+                color: widget.colors.appBackground,
+                borderRadius: desktop
+                    ? const BorderRadius.horizontal(left: Radius.circular(24))
+                    : const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border.all(color: widget.colors.border),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 8, 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.notifications_rounded,
+                            color: widget.colors.text),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Notifications${unread > 0 ? ' · $unread unread' : ''}',
+                            style: TextStyle(
+                              color: widget.colors.text,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: unread == 0 ? null : _markAllRead,
+                          child: const Text('Mark all read'),
+                        ),
+                        IconButton(
+                          tooltip: 'Close notifications',
+                          onPressed: () => setState(() => _open = false),
+                          icon: Icon(Icons.close, color: widget.colors.text),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(color: widget.colors.border, height: 1),
+                  Expanded(
+                    child: _items.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No notifications yet.',
+                              style: TextStyle(color: widget.colors.mutedText),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(14),
+                            itemCount: _items.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final item = _items[index];
+                              final data = item.data();
+                              final isUnread = data['read'] != true;
+                              return InkWell(
+                                onTap: () => _markRead(item),
+                                borderRadius: BorderRadius.circular(14),
+                                child: Container(
+                                  padding: const EdgeInsets.all(13),
+                                  decoration: BoxDecoration(
+                                    color: isUnread
+                                        ? widget.colors.field
+                                        : widget.colors.panel,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isUnread
+                                          ? widget.colors.adminAccent
+                                              .withValues(alpha: 0.45)
+                                          : widget.colors.border,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        isUnread
+                                            ? Icons.notifications_active
+                                            : Icons.notifications_none,
+                                        color: isUnread
+                                            ? widget.colors.adminAccent
+                                            : widget.colors.mutedText,
+                                      ),
+                                      const SizedBox(width: 11),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${data['title'] ?? 'Circum update'}',
+                                              style: TextStyle(
+                                                color: widget.colors.text,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              '${data['message'] ?? ''}',
+                                              style: TextStyle(
+                                                color: widget.colors.mutedText,
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 5),
+                                            Text(
+                                              _adminDateText(data['createdAt']),
+                                              style: TextStyle(
+                                                color: widget.colors.mutedText,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1447,6 +1745,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           'messageText': initialText,
           'message': initialText,
           'attachments': const [],
+          'initialSupportRequest': true,
           'readBy': const [],
           'createdAt': ticket['createdAt'] ?? FieldValue.serverTimestamp(),
         });
@@ -3303,6 +3602,17 @@ class _AdminOverviewSection extends StatelessWidget {
         const SizedBox(height: 18),
         _AdminMetricGroup(
           colors: colors,
+          title: 'Notification panel',
+          icon: Icons.notifications_active_outlined,
+          metrics: [
+            ('Active alerts', '${issues.length}'),
+            ('Unclaimed jobs', '${_unclaimedDeliveries()}'),
+            ('Support queue', '${_openSupportTickets()}'),
+            ('Verification queue', '${metrics.pendingDrivers}'),
+          ],
+        ),
+        _AdminMetricGroup(
+          colors: colors,
           title: 'Operations',
           icon: Icons.route_outlined,
           metrics: [
@@ -3466,6 +3776,23 @@ class _AdminOverviewSection extends StatelessWidget {
     }
     return (analysed, corrections, adjustments, fraudFlags, protectedRevenue);
   }
+
+  int _openSupportTickets() => supportTickets
+      .where((ticket) =>
+          '${ticket['status'] ?? 'open'}'.toLowerCase() != 'resolved')
+      .length;
+
+  int _unclaimedDeliveries() => deliveries.where((delivery) {
+        final status = '${delivery['status'] ?? ''}'.toLowerCase();
+        return const {
+          'requested',
+          'pending',
+          'broadcast',
+          'broadcasted',
+          'awaiting_rider',
+          'finding_rider',
+        }.contains(status);
+      }).length;
 
   List<Map<String, dynamic>> _liveActivity() {
     final events = <Map<String, dynamic>>[
@@ -24898,6 +25225,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
           'messageText': message,
           'message': message,
           'attachments': const [],
+          'initialSupportRequest': true,
           'readBy': [user.uid],
           'createdAt': FieldValue.serverTimestamp(),
         });

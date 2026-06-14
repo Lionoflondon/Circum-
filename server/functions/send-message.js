@@ -1,6 +1,5 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
-const {getMessaging} = require("firebase-admin/messaging");
 
 const sendMessage = functions.https.onCall(async (data, context) => {
   try {
@@ -21,10 +20,10 @@ const sendMessage = functions.https.onCall(async (data, context) => {
     const timestamp = new Date();
 
     // Determine if sender is rider or user by checking collections
-    const [riderDoc, userDoc] = await Promise.all([
-      getFirestore().collection("riders").doc(senderId).get(),
-      getFirestore().collection("users").doc(senderId).get(),
-    ]);
+    const riderDoc = await getFirestore()
+        .collection("riders")
+        .doc(senderId)
+        .get();
 
     const senderType = riderDoc.exists ? "rider" : "user";
     const senderRole = senderType === "rider" ? "rider" : "shipper";
@@ -40,9 +39,6 @@ const sendMessage = functions.https.onCall(async (data, context) => {
     if (!recipientDoc.exists) {
       throw new functions.https.HttpsError("not-found", "Recipient not found");
     }
-
-    const recipientData = recipientDoc.data();
-    const fcmToken = recipientData.fcmToken;
 
     // Create message document
     const messageData = {
@@ -86,51 +82,6 @@ const sendMessage = functions.https.onCall(async (data, context) => {
       updatedAt: timestamp,
       unreadBy: [recipientId],
     }, {merge: true});
-
-    // Send push notification if FCM token exists
-    if (fcmToken) {
-      const senderData = senderType === "rider" ?
-        riderDoc.data() :
-        userDoc.data();
-      const senderName = (senderData.name || senderData.username || "Circum")
-          .split(" ")[0];
-
-      const notificationMessage = {
-        data: {
-          type: "message",
-          data: JSON.stringify({
-            requestId,
-            senderName,
-            senderId,
-            senderType,
-            message,
-            timeStamp: timestamp.toISOString(),
-          }),
-        },
-        android: {
-          priority: "high",
-        },
-        apns: {
-          headers: {
-            "apns-priority": "10",
-            "apns-push-type": "background",
-          },
-          payload: {
-            aps: {
-              sound: "default",
-              contentAvailable: true,
-            },
-          },
-        },
-        token: fcmToken,
-      };
-
-      try {
-        await getMessaging().send(notificationMessage);
-      } catch (error) {
-        console.error("Error sending notification:", error);
-      }
-    }
 
     return {
       success: true,
