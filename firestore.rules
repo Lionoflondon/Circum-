@@ -249,6 +249,18 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    match /giftRequests/{giftRequestId} {
+      allow create: if signedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.status == 'submitted' &&
+        request.resource.data.grossBudget is number &&
+        request.resource.data.grossBudget >= 50;
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /irisLearningOutliers/{outlierId} {
       allow create: if signedIn() &&
         request.resource.data.senderId == request.auth.uid &&

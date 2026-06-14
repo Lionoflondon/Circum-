@@ -23,6 +23,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:circum/app/gifts/gift_request_policy.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -74,6 +75,10 @@ class WebSenderApp extends StatefulWidget {
 }
 
 class _WebSenderAppState extends State<WebSenderApp> {
+  static const _publicGiftsEnabled = bool.fromEnvironment(
+    'CIRCUM_PUBLIC_GIFTS_ENABLED',
+    defaultValue: false,
+  );
   bool _darkMode = true;
   late _WebAppMode _mode = _initialMode();
   late _SenderStep _senderInitialStep =
@@ -96,7 +101,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
-      'gifts' => _WebAppMode.gifts,
+      'gifts' when _publicGiftsEnabled => _WebAppMode.gifts,
       _ => _WebAppMode.landing,
     };
   }
@@ -177,8 +182,8 @@ class _WebSenderAppState extends State<WebSenderApp> {
                         : () => setState(() => _mode = _WebAppMode.landing),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
-                _WebAppMode.gifts => _GiftsComingSoonPage(
-                    key: const ValueKey('gifts-coming-soon'),
+                _WebAppMode.gifts => _GiftsRequestPage(
+                    key: const ValueKey('gifts-request'),
                     colors: colors,
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
                   ),
@@ -195,7 +200,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       _senderInitialStep = _SenderStep.healthPlus;
                       _mode = _WebAppMode.sender;
                     }),
-                    onGifts: () => setState(() => _mode = _WebAppMode.gifts),
+                    onGifts: _publicGiftsEnabled
+                        ? () => setState(() => _mode = _WebAppMode.gifts)
+                        : null,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
               },
@@ -522,7 +529,7 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
-  final VoidCallback onGifts;
+  final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
 
   const _LandingPage({
@@ -532,7 +539,7 @@ class _LandingPage extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
-    required this.onGifts,
+    this.onGifts,
     required this.onToggleTheme,
   });
 
@@ -677,6 +684,7 @@ enum _AdminSection {
   senders,
   drivers,
   deliveries,
+  gifts,
   finance,
   healthPlus,
   support,
@@ -720,6 +728,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   String? _message;
   AdminMetricSnapshot _metrics = AdminMetricSnapshot.empty();
   List<Map<String, dynamic>> _deliveries = const [];
+  List<Map<String, dynamic>> _giftRequests = const [];
   List<Map<String, dynamic>> _senders = const [];
   List<Map<String, dynamic>> _drivers = const [];
   List<Map<String, dynamic>> _payments = const [];
@@ -937,6 +946,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _readCollection(db.collection('riderDocuments').limit(120)),
       _readCollection(
         db
+            .collection('giftRequests')
+            .orderBy('createdAt', descending: true)
+            .limit(80),
+      ),
+      _readCollection(
+        db
             .collection('adminAuditLogs')
             .orderBy('createdAt', descending: true)
             .limit(40),
@@ -957,6 +972,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final walletTransactions = results[12];
     final visitors = results[13];
     final riderDocuments = results[14];
+    final giftRequests = results[15];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -973,7 +989,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _walletTransactions = walletTransactions;
       _websiteVisitors = visitors;
       _riderDocuments = riderDocuments;
-      _auditLogs = results[15];
+      _giftRequests = giftRequests;
+      _auditLogs = results[16];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -2226,6 +2243,30 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rowBuilder: _deliveryRow,
           emptyText: 'No delivery records yet.',
         ),
+      _AdminSection.gifts => _AdminDataSection(
+          colors: colors,
+          title: 'Gifts by Circum',
+          subtitle:
+              'Private manual fulfilment queue. Exact gift plans and internal notes remain hidden from senders.',
+          records: adminSearch(_giftRequests, query, [
+            'senderName',
+            'senderEmail',
+            'recipientName',
+            'occasion',
+            'relationship',
+            'status',
+          ]),
+          columns: const [
+            'Sender',
+            'Recipient',
+            'Occasion',
+            'Budget',
+            'Status',
+            'Actions',
+          ],
+          rowBuilder: _giftRequestRow,
+          emptyText: 'No gift requests yet.',
+        ),
       _AdminSection.finance => _AdminFinanceSection(
           colors: colors,
           records: adminSearch(_financeRows(), query, [
@@ -2352,6 +2393,147 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           : '—'),
       _AdminCell('£${value.toStringAsFixed(2)}'),
     ];
+  }
+
+  List<Widget> _giftRequestRow(Map<String, dynamic> item) {
+    final budget = (item['grossBudget'] as num?)?.toDouble() ?? 0;
+    return [
+      _AdminCell.primary(
+          '${item['senderName'] ?? 'Sender'}\n${item['senderEmail'] ?? ''}'),
+      _AdminCell(
+          '${item['recipientName'] ?? 'Recipient'}\n${item['relationship'] ?? ''}'),
+      _AdminCell(
+          '${item['occasion'] ?? ''}\n${_adminDateText(item['deliveryDate'])}'),
+      _AdminCell('£${budget.toStringAsFixed(2)}'),
+      _AdminStatusCell(
+          colors: widget.colors, status: '${item['status'] ?? 'submitted'}'),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Open',
+            enabled: true,
+            onTap: () => _openGiftRequest(item),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Future<void> _openGiftRequest(Map<String, dynamic> item) async {
+    final notes = TextEditingController(text: '${item['internalNotes'] ?? ''}');
+    final decision =
+        TextEditingController(text: '${item['adminDecision'] ?? ''}');
+    final plan = TextEditingController(text: '${item['manualGiftPlan'] ?? ''}');
+    String status = '${item['status'] ?? 'submitted'}';
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Gift request · ${item['recipientName'] ?? ''}'),
+          content: SizedBox(
+            width: 660,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                      'Sender: ${item['senderName']} · ${item['senderEmail']}'),
+                  Text(
+                      'Recipient: ${item['recipientName']} · ${item['recipientContact'] ?? ''}'),
+                  Text(
+                      'Relationship / occasion: ${item['relationship']} · ${item['occasion']}'),
+                  Text(
+                      'Budget: £${((item['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}'),
+                  Text('Delivery: ${item['deliveryAddress']}'),
+                  Text(
+                      'Window: ${_adminDateText(item['deliveryDate'])} · ${item['deliveryTimeWindow']}'),
+                  Text(
+                      'Interests: ${(item['interests'] as List?)?.join(', ') ?? ''}'),
+                  Text('Message: ${item['personalMessage'] ?? ''}'),
+                  Text('Notes from sender: ${item['notes'] ?? ''}'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    decoration: const InputDecoration(labelText: 'Status'),
+                    items: const [
+                      'submitted',
+                      'reviewing',
+                      'approved',
+                      'procuring',
+                      'packed',
+                      'out_for_delivery',
+                      'delivered',
+                      'cancelled'
+                    ]
+                        .map((value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(_displayStatusLabel(value))))
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => status = value ?? status),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: plan,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'Manual gift plan')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: decision,
+                      maxLines: 2,
+                      decoration:
+                          const InputDecoration(labelText: 'Admin decision')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: notes,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'Internal notes')),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                final interests = (item['interests'] as List?)?.join(', ') ??
+                    'their interests';
+                plan.text =
+                    '${item['occasion']} gift for a ${item['relationship']} with a £${item['grossBudget']} budget, guided by: $interests.';
+              },
+              child: const Text('Generate Gift Idea'),
+            ),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close')),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'status': status,
+                'manualGiftPlan': plan.text.trim(),
+                'adminDecision': decision.text.trim(),
+                'internalNotes': notes.text.trim(),
+              }),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    notes.dispose();
+    decision.dispose();
+    plan.dispose();
+    if (result == null) return;
+    await FirebaseFirestore.instance
+        .collection('giftRequests')
+        .doc('${item['id']}')
+        .update({
+      ...result,
+      'assignedAdminId': _adminUser?.uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await _loadAdminData();
   }
 
   List<Map<String, dynamic>> _senderAdminRecords(String query) {
@@ -5129,6 +5311,7 @@ String _adminSectionLabel(_AdminSection section) {
     _AdminSection.senders => 'Senders',
     _AdminSection.drivers => 'Drivers',
     _AdminSection.deliveries => 'Deliveries',
+    _AdminSection.gifts => 'Gifts',
     _AdminSection.finance => 'Finance',
     _AdminSection.healthPlus => 'Health+',
     _AdminSection.support => 'Support',
@@ -5146,6 +5329,7 @@ IconData _adminSectionIcon(_AdminSection section) {
     _AdminSection.senders => Icons.people,
     _AdminSection.drivers => Icons.two_wheeler,
     _AdminSection.deliveries => Icons.local_shipping,
+    _AdminSection.gifts => Icons.card_giftcard,
     _AdminSection.finance => Icons.payments,
     _AdminSection.healthPlus => Icons.health_and_safety,
     _AdminSection.support => Icons.support_agent,
@@ -5270,7 +5454,7 @@ class _LandingNav extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
-  final VoidCallback onGifts;
+  final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
 
   const _LandingNav({
@@ -5279,7 +5463,7 @@ class _LandingNav extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
-    required this.onGifts,
+    this.onGifts,
     required this.onToggleTheme,
   });
 
@@ -5331,7 +5515,7 @@ class _LandingNav extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (MediaQuery.sizeOf(context).width >= 760)
+              if (onGifts != null && MediaQuery.sizeOf(context).width >= 760)
                 TextButton.icon(
                   onPressed: onGifts,
                   icon: const Icon(Icons.card_giftcard, size: 18),
@@ -5343,7 +5527,7 @@ class _LandingNav extends StatelessWidget {
                     ),
                   ),
                 )
-              else
+              else if (onGifts != null)
                 IconButton(
                   tooltip: 'Gifts',
                   onPressed: onGifts,
@@ -24878,6 +25062,507 @@ class _LandingFooter extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GiftsRequestPage extends StatefulWidget {
+  final _CircumColors colors;
+  final VoidCallback onBack;
+
+  const _GiftsRequestPage({
+    super.key,
+    required this.colors,
+    required this.onBack,
+  });
+
+  @override
+  State<_GiftsRequestPage> createState() => _GiftsRequestPageState();
+}
+
+class _GiftsRequestPageState extends State<_GiftsRequestPage> {
+  final _senderName = TextEditingController();
+  final _senderEmail = TextEditingController();
+  final _recipientName = TextEditingController();
+  final _recipientContact = TextEditingController();
+  final _deliveryAddress = TextEditingController();
+  final _budget = TextEditingController();
+  final _personalMessage = TextEditingController();
+  final _notes = TextEditingController();
+  String _relationship = 'Friend';
+  String _occasion = 'Birthday';
+  String _timeWindow = 'Afternoon';
+  DateTime? _deliveryDate;
+  final Set<String> _interests = {};
+  XFile? _photo;
+  bool _saving = false;
+  String? _message;
+  List<Map<String, dynamic>> _requests = const [];
+
+  static const _relationships = [
+    'Partner',
+    'Husband',
+    'Wife',
+    'Mother',
+    'Father',
+    'Son',
+    'Daughter',
+    'Brother',
+    'Sister',
+    'Friend',
+    'Colleague',
+    'Mentor',
+    'Client',
+    'Teacher'
+  ];
+  static const _occasions = [
+    'Birthday',
+    'Anniversary',
+    'Graduation',
+    'Thank You',
+    'New Baby',
+    'Christmas',
+    'Just Because',
+    'Apology',
+    'Congratulations',
+    'Get Well Soon'
+  ];
+  static const _interestOptions = [
+    'Fashion',
+    'Beauty',
+    'Tech',
+    'Gaming',
+    'Gym',
+    'Travel',
+    'Books',
+    'Food',
+    'Christian',
+    'Aviation',
+    'Music',
+    'Luxury',
+    'Minimalist',
+    'Home Decor',
+    'Fragrance',
+    'Art',
+    'Sports'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccountAndRequests();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [
+      _senderName,
+      _senderEmail,
+      _recipientName,
+      _recipientContact,
+      _deliveryAddress,
+      _budget,
+      _personalMessage,
+      _notes
+    ]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadAccountAndRequests() async {
+    await _ensureCircumFirebaseReady();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _senderEmail.text = user.email ?? '';
+    _senderName.text = user.displayName ?? '';
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('giftRequests')
+          .where('senderId', isEqualTo: user.uid)
+          .limit(20)
+          .get();
+      if (!mounted) return;
+      setState(() => _requests = snapshot.docs
+          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+          .toList());
+    } catch (error) {
+      debugPrint('Gift request history error: $error');
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 82,
+      maxWidth: 1800,
+    );
+    if (photo != null && mounted) setState(() => _photo = photo);
+  }
+
+  Future<void> _submit() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() =>
+          _message = 'Sign in as a sender before submitting a gift request.');
+      return;
+    }
+    final grossBudget = double.tryParse(_budget.text.trim());
+    final validation = GiftRequestPolicy.validate(
+      senderEmail: _senderEmail.text,
+      recipientName: _recipientName.text,
+      relationship: _relationship,
+      occasion: _occasion,
+      deliveryAddress: _deliveryAddress.text,
+      deliveryDate: _deliveryDate,
+      grossBudget: grossBudget,
+    );
+    if (validation != null) {
+      setState(() => _message = validation);
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _message = null;
+    });
+    try {
+      final doc = FirebaseFirestore.instance.collection('giftRequests').doc();
+      final photoUrls = <String>[];
+      if (_photo != null) {
+        final bytes = await _photo!.readAsBytes();
+        if (bytes.length > 8 * 1024 * 1024) {
+          throw StateError('Photo must be smaller than 8 MB.');
+        }
+        final ref = FirebaseStorage.instance
+            .ref('gift_requests/${user.uid}/${doc.id}.jpg');
+        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        photoUrls.add(await ref.getDownloadURL());
+      }
+      await doc.set({
+        'senderId': user.uid,
+        'senderName': _senderName.text.trim(),
+        'senderEmail': _senderEmail.text.trim().toLowerCase(),
+        'recipientName': _recipientName.text.trim(),
+        'recipientContact': _recipientContact.text.trim(),
+        'relationship': _relationship,
+        'occasion': _occasion,
+        'deliveryAddress': _deliveryAddress.text.trim(),
+        'deliveryDate': Timestamp.fromDate(_deliveryDate!),
+        'deliveryTimeWindow': _timeWindow,
+        'budget': grossBudget,
+        'grossBudget': grossBudget,
+        'estimatedNetGiftBudget':
+            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget!),
+        'budgetStatus': 'pending_allocation',
+        'personalMessage': _personalMessage.text.trim(),
+        'interests': _interests.toList(),
+        'photoUrls': photoUrls,
+        'notes': _notes.text.trim(),
+        'status': 'submitted',
+        'assignedAdminId': null,
+        'irisSuggestion': 'Pending IRIS gift recommendation',
+        'adminDecision': '',
+        'internalNotes': '',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      setState(() {
+        _message =
+            'Your gift request has been submitted. The Circum Gifts Team will review it and prepare a thoughtful gift experience.';
+        _recipientName.clear();
+        _recipientContact.clear();
+        _deliveryAddress.clear();
+        _budget.clear();
+        _personalMessage.clear();
+        _notes.clear();
+        _interests.clear();
+        _photo = null;
+        _deliveryDate = null;
+      });
+      await _loadAccountAndRequests();
+    } catch (error) {
+      debugPrint('Gift request submit error: $error');
+      if (mounted)
+        setState(() => _message = error is StateError
+            ? error.message
+            : 'We could not submit this request. Please try again.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    final signedIn = FirebaseAuth.instance.currentUser != null;
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: SafeArea(
+        child: ListView(
+          padding:
+              EdgeInsets.fromLTRB(narrow ? 16 : 28, 16, narrow ? 16 : 28, 48),
+          children: [
+            Row(children: [
+              IconButton(
+                  onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
+              Image.asset('assets/images/circum_wordmark.png', width: 126),
+            ]),
+            const SizedBox(height: 22),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 980),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                          child: Image.asset(
+                              'assets/images/gifts_by_circum_logo.jpg',
+                              width: narrow ? 280 : 390,
+                              semanticLabel: 'Gifts by Circum logo')),
+                      const SizedBox(height: 12),
+                      Text('Thoughtful gifting, delivered by Circum',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: colors.mutedText,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 28),
+                      Text(
+                          'Tell us the occasion, the person, and your budget. Circum creates and delivers a thoughtful gift experience.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: colors.text,
+                              fontSize: narrow ? 25 : 34,
+                              height: 1.2,
+                              fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 24),
+                      if (!signedIn)
+                        _AdminNotice(
+                            colors: colors,
+                            message:
+                                'This private preview is ready. Sign in as a sender when public access is enabled to submit a request.'),
+                      const SizedBox(height: 16),
+                      _GlassPanel(
+                          colors: colors,
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text('Send a Gift',
+                                    style: TextStyle(
+                                        color: colors.text,
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w900)),
+                                const SizedBox(height: 16),
+                                _giftField(_senderName, 'Sender name',
+                                    Icons.person_outline),
+                                _giftField(_senderEmail, 'Sender email',
+                                    Icons.email_outlined,
+                                    type: TextInputType.emailAddress),
+                                _giftField(_recipientName, 'Recipient name',
+                                    Icons.redeem_outlined),
+                                _giftField(
+                                    _recipientContact,
+                                    'Recipient phone or email (optional)',
+                                    Icons.contact_phone_outlined),
+                                Row(children: [
+                                  Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                          initialValue: _relationship,
+                                          decoration: const InputDecoration(
+                                              labelText: 'Relationship'),
+                                          items: _relationships
+                                              .map((v) => DropdownMenuItem(
+                                                  value: v, child: Text(v)))
+                                              .toList(),
+                                          onChanged: (v) => setState(() =>
+                                              _relationship =
+                                                  v ?? _relationship))),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                          initialValue: _occasion,
+                                          decoration: const InputDecoration(
+                                              labelText: 'Occasion'),
+                                          items: _occasions
+                                              .map((v) => DropdownMenuItem(
+                                                  value: v, child: Text(v)))
+                                              .toList(),
+                                          onChanged: (v) => setState(() =>
+                                              _occasion = v ?? _occasion))),
+                                ]),
+                                const SizedBox(height: 12),
+                                _giftField(_deliveryAddress, 'Delivery address',
+                                    Icons.location_on_outlined),
+                                Row(children: [
+                                  Expanded(
+                                      child: OutlinedButton.icon(
+                                          onPressed: () async {
+                                            final date = await showDatePicker(
+                                                context: context,
+                                                firstDate: DateTime.now(),
+                                                lastDate: DateTime.now().add(
+                                                    const Duration(days: 365)),
+                                                initialDate: _deliveryDate ??
+                                                    DateTime.now().add(
+                                                        const Duration(
+                                                            days: 2)));
+                                            if (date != null)
+                                              setState(
+                                                  () => _deliveryDate = date);
+                                          },
+                                          icon:
+                                              const Icon(Icons.calendar_month),
+                                          label: Text(_deliveryDate == null
+                                              ? 'Preferred delivery date'
+                                              : _adminDateText(
+                                                  _deliveryDate)))),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                          initialValue: _timeWindow,
+                                          decoration: const InputDecoration(
+                                              labelText: 'Time window'),
+                                          items: const [
+                                            'Morning',
+                                            'Afternoon',
+                                            'Evening'
+                                          ]
+                                              .map((v) => DropdownMenuItem(
+                                                  value: v, child: Text(v)))
+                                              .toList(),
+                                          onChanged: (v) => setState(() =>
+                                              _timeWindow = v ?? _timeWindow))),
+                                ]),
+                                const SizedBox(height: 12),
+                                _giftField(_budget, 'Gift budget (minimum £50)',
+                                    Icons.payments_outlined,
+                                    type: const TextInputType.numberWithOptions(
+                                        decimal: true)),
+                                Text('Occasion and interests',
+                                    style: TextStyle(
+                                        color: colors.text,
+                                        fontWeight: FontWeight.w800)),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: _interestOptions
+                                        .map((interest) => FilterChip(
+                                            label: Text(interest),
+                                            selected:
+                                                _interests.contains(interest),
+                                            onSelected: (selected) => setState(
+                                                () => selected
+                                                    ? _interests.add(interest)
+                                                    : _interests
+                                                        .remove(interest))))
+                                        .toList()),
+                                const SizedBox(height: 12),
+                                _giftField(_personalMessage, 'Personal message',
+                                    Icons.chat_bubble_outline,
+                                    lines: 3),
+                                _giftField(_notes, 'Extra notes (optional)',
+                                    Icons.notes,
+                                    lines: 3),
+                                OutlinedButton.icon(
+                                    onPressed: _pickPhoto,
+                                    icon:
+                                        const Icon(Icons.add_a_photo_outlined),
+                                    label: Text(_photo == null
+                                        ? 'Add optional recipient photo'
+                                        : 'Photo selected · Replace')),
+                                if (_photo != null)
+                                  Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                          onPressed: () =>
+                                              setState(() => _photo = null),
+                                          icon: const Icon(Icons.close),
+                                          label: const Text('Remove photo'))),
+                                if (_message != null)
+                                  Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: Text(_message!,
+                                          style: TextStyle(
+                                              color: colors.text,
+                                              fontWeight: FontWeight.w700))),
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                    onPressed: _saving ? null : _submit,
+                                    icon: _saving
+                                        ? const SizedBox.square(
+                                            dimension: 18,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2))
+                                        : const Icon(Icons.card_giftcard),
+                                    label: Text(_saving
+                                        ? 'Submitting...'
+                                        : 'Submit gift request'),
+                                    style: FilledButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 17))),
+                                const SizedBox(height: 8),
+                                Text(
+                                    'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        color: colors.mutedText, fontSize: 12)),
+                              ])),
+                      if (_requests.isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        Text('Your gift requests',
+                            style: TextStyle(
+                                color: colors.text,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 10),
+                        ..._requests.map(
+                          (request) => Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: colors.field,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: ListTile(
+                              leading: const Icon(Icons.card_giftcard),
+                              title: Text(
+                                '${request['occasion']} for ${request['recipientName']}',
+                              ),
+                              subtitle: Text(
+                                GiftRequestPolicy.senderStatus(
+                                  '${request['status']}',
+                                ),
+                              ),
+                              trailing: Text(
+                                '£${((request['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _giftField(
+      TextEditingController controller, String label, IconData icon,
+      {TextInputType? type, int lines = 1}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+          controller: controller,
+          keyboardType: type,
+          maxLines: lines,
+          decoration:
+              InputDecoration(labelText: label, prefixIcon: Icon(icon))),
     );
   }
 }
