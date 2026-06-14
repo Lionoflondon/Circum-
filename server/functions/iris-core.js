@@ -580,6 +580,9 @@ function normalizeRiderRank(value) {
 
 function riderCanViewDispatch(rider, request, now = Date.now()) {
   const rank = normalizeRiderRank(rider.rank || rider.riderRank);
+  const allowedRanks = Array.isArray(request.dispatchAllowedRanks) ?
+    request.dispatchAllowedRanks.map(normalizeRiderRank) : [];
+  if (request.dispatchRankOverrideEnabled === true && allowedRanks.includes(rank)) return true;
   const type = normalize(request.serviceType || request.deliveryType);
   const trust = normalize(request.trustLevel || request.dispatchTier);
   const veteranOnly = request.vanguardEnabled === true ||
@@ -593,11 +596,7 @@ function riderCanViewDispatch(rider, request, now = Date.now()) {
     request.highTrustRequired === true || trust === "high" || trust === "high_trust";
   if (highTrust) return rank === "knight" || rank === "veteran";
 
-  const priority = normalize(request.matchingPriority || request.dispatchStatus);
-  const escalationEligible = request.dispatchEscalationEnabled === true ||
-    request.escalationEligible === true || priority === "escalated";
-  if (!escalationEligible) return true;
-  if (rank === "agent") return false;
+  if (rank === "agent") return true;
   const rawCreatedAt = request.createdAt || request.requestedAt || request.timestamp || request.timeStamp;
   const createdAt = rawCreatedAt && typeof rawCreatedAt.toMillis === "function" ?
     rawCreatedAt.toMillis() : new Date(rawCreatedAt).getTime();

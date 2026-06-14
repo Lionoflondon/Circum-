@@ -97,13 +97,12 @@ String _driverRank(Object? value) {
 
 class RiderDispatchPolicy {
   static const rankUnlocks = {
-    'agent': 'Standard visible jobs',
-    'sentinel': 'Standard jobs and escalation-eligible jobs after 5 minutes',
-    'warden': 'Standard jobs and escalation-eligible jobs after 10 minutes',
-    'knight':
-        'Standard and high-trust jobs, plus escalation-eligible jobs after 15 minutes',
+    'agent': 'Brand-new standard jobs',
+    'sentinel': 'Standard jobs after 5 minutes unclaimed',
+    'warden': 'Standard jobs after 10 minutes unclaimed',
+    'knight': 'High-trust jobs and standard jobs after 15 minutes unclaimed',
     'veteran':
-        'All jobs, including critical, Vanguard, Health+, Gifts, and escalations after 20 minutes',
+        'Critical, Vanguard, Health+, Gifts, and standard jobs after 20 minutes unclaimed',
   };
 
   static String normalizeRank(Object? value) => _driverRank(value);
@@ -117,13 +116,13 @@ class RiderDispatchPolicy {
     DateTime? now,
   }) {
     final rank = normalizeRank(riderRank);
+    if (_hasAdminOverride(job, rank)) return true;
     final access = _jobAccess(job);
     if (access == 'veteran') return rank == 'veteran';
     if (access == 'high_trust') {
       return rank == 'knight' || rank == 'veteran';
     }
-    if (!_isEscalationEligible(job)) return true;
-    if (rank == 'agent') return false;
+    if (rank == 'agent') return true;
     final createdAt = _jobCreatedAt(job);
     if (createdAt == null) return false;
     final elapsed = (now ?? DateTime.now()).difference(createdAt).inMinutes;
@@ -166,13 +165,11 @@ class RiderDispatchPolicy {
     return 'standard';
   }
 
-  static bool _isEscalationEligible(Map<String, dynamic> job) {
-    final priority = '${job['matchingPriority'] ?? job['dispatchStatus'] ?? ''}'
-        .trim()
-        .toLowerCase();
-    return job['dispatchEscalationEnabled'] == true ||
-        job['escalationEligible'] == true ||
-        priority == 'escalated';
+  static bool _hasAdminOverride(Map<String, dynamic> job, String rank) {
+    final allowed = job['dispatchAllowedRanks'];
+    return job['dispatchRankOverrideEnabled'] == true &&
+        allowed is List &&
+        allowed.map(normalizeRank).contains(rank);
   }
 
   static DateTime? _jobCreatedAt(Map<String, dynamic> job) {

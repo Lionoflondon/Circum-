@@ -37,23 +37,21 @@ void main() {
     test('dispatch visibility follows rider rank and protected service rules',
         () {
       final now = DateTime(2026, 6, 14, 12);
-      final standard = {'createdAt': now.subtract(const Duration(minutes: 1))};
-      final escalated = {
-        'createdAt': now.subtract(const Duration(minutes: 12)),
-        'escalationEligible': true,
+      final newStandard = {
+        'createdAt': now.subtract(const Duration(minutes: 1)),
       };
       expect(
         RiderDispatchPolicy.canViewJob(
           riderRank: null,
-          job: standard,
+          job: newStandard,
           now: now,
         ),
         isTrue,
       );
       expect(
         RiderDispatchPolicy.canViewJob(
-          riderRank: 'agent',
-          job: escalated,
+          riderRank: 'sentinel',
+          job: newStandard,
           now: now,
         ),
         isFalse,
@@ -61,7 +59,7 @@ void main() {
       expect(
         RiderDispatchPolicy.canViewJob(
           riderRank: 'sentinel',
-          job: escalated,
+          job: {'createdAt': now.subtract(const Duration(minutes: 5))},
           now: now,
         ),
         isTrue,
@@ -69,7 +67,7 @@ void main() {
       expect(
         RiderDispatchPolicy.canViewJob(
           riderRank: 'warden',
-          job: escalated,
+          job: {'createdAt': now.subtract(const Duration(minutes: 10))},
           now: now,
         ),
         isTrue,
@@ -77,18 +75,15 @@ void main() {
       expect(
         RiderDispatchPolicy.canViewJob(
           riderRank: 'knight',
-          job: escalated,
+          job: {'createdAt': now.subtract(const Duration(minutes: 15))},
           now: now,
         ),
-        isFalse,
+        isTrue,
       );
       expect(
         RiderDispatchPolicy.canViewJob(
           riderRank: 'veteran',
-          job: {
-            ...escalated,
-            'createdAt': now.subtract(const Duration(minutes: 20)),
-          },
+          job: {'createdAt': now.subtract(const Duration(minutes: 20))},
           now: now,
         ),
         isTrue,
@@ -97,6 +92,18 @@ void main() {
         RiderDispatchPolicy.canViewJob(
           riderRank: 'knight',
           job: {'highTrust': true},
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'sentinel',
+          job: {
+            'vanguardEnabled': true,
+            'dispatchRankOverrideEnabled': true,
+            'dispatchAllowedRanks': ['sentinel'],
+          },
           now: now,
         ),
         isTrue,
