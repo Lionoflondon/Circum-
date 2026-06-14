@@ -1,4 +1,5 @@
 import 'package:circum/app/admin/admin_operations.dart';
+import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -195,6 +196,10 @@ void main() {
       expect(RiderRankPolicy.normalize('Knight'), 'knight');
       expect(RiderRankPolicy.canManage(const ['driver_manager']), isTrue);
       expect(RiderRankPolicy.canManage(const ['support_agent']), isFalse);
+      expect(
+        RiderDispatchPolicy.explanation('veteran'),
+        contains('Vanguard'),
+      );
     });
 
     test('rank update patch requires a reason and records metadata', () {

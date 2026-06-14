@@ -95,6 +95,102 @@ String _driverRank(Object? value) {
   return ranks.contains(rank) ? rank : 'agent';
 }
 
+class RiderDispatchPolicy {
+  static const rankUnlocks = {
+    'agent': 'Standard visible jobs',
+    'sentinel': 'Standard jobs and escalation-eligible jobs after 5 minutes',
+    'warden': 'Standard jobs and escalation-eligible jobs after 10 minutes',
+    'knight':
+        'Standard and high-trust jobs, plus escalation-eligible jobs after 15 minutes',
+    'veteran':
+        'All jobs, including critical, Vanguard, Health+, Gifts, and escalations after 20 minutes',
+  };
+
+  static String normalizeRank(Object? value) => _driverRank(value);
+
+  static String explanation(Object? value) =>
+      rankUnlocks[normalizeRank(value)]!;
+
+  static bool canViewJob({
+    required Object? riderRank,
+    required Map<String, dynamic> job,
+    DateTime? now,
+  }) {
+    final rank = normalizeRank(riderRank);
+    final access = _jobAccess(job);
+    if (access == 'veteran') return rank == 'veteran';
+    if (access == 'high_trust') {
+      return rank == 'knight' || rank == 'veteran';
+    }
+    if (!_isEscalationEligible(job)) return true;
+    if (rank == 'agent') return false;
+    final createdAt = _jobCreatedAt(job);
+    if (createdAt == null) return false;
+    final elapsed = (now ?? DateTime.now()).difference(createdAt).inMinutes;
+    final requiredMinutes = switch (rank) {
+      'sentinel' => 5,
+      'warden' => 10,
+      'knight' => 15,
+      'veteran' => 20,
+      _ => 1 << 30,
+    };
+    return elapsed >= requiredMinutes;
+  }
+
+  static String _jobAccess(Map<String, dynamic> job) {
+    final type = '${job['serviceType'] ?? job['deliveryType'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    final trust = '${job['trustLevel'] ?? job['dispatchTier'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    if (job['vanguardEnabled'] == true ||
+        job['healthPlus'] == true ||
+        job['healthPlusEnabled'] == true ||
+        job['giftDelivery'] == true ||
+        job['giftsEnabled'] == true ||
+        job['critical'] == true ||
+        trust == 'critical' ||
+        type.contains('vanguard') ||
+        type.contains('health+') ||
+        type.contains('health_plus') ||
+        type.contains('gift')) {
+      return 'veteran';
+    }
+    if (job['highTrust'] == true ||
+        job['highTrustRequired'] == true ||
+        trust == 'high' ||
+        trust == 'high_trust') {
+      return 'high_trust';
+    }
+    return 'standard';
+  }
+
+  static bool _isEscalationEligible(Map<String, dynamic> job) {
+    final priority = '${job['matchingPriority'] ?? job['dispatchStatus'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    return job['dispatchEscalationEnabled'] == true ||
+        job['escalationEligible'] == true ||
+        priority == 'escalated';
+  }
+
+  static DateTime? _jobCreatedAt(Map<String, dynamic> job) {
+    final value = job['createdAt'] ??
+        job['requestedAt'] ??
+        job['timestamp'] ??
+        job['timeStamp'];
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    if (value is String) return DateTime.tryParse(value);
+    try {
+      return (value as dynamic)?.toDate() as DateTime?;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 class DriverRating {
   static const complaintTags = {
     'late',

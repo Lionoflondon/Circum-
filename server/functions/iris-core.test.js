@@ -8,6 +8,8 @@ const {
   privateIris,
   weightBandFor,
   dispatchPriority,
+  normalizeRiderRank,
+  riderCanViewDispatch,
 } = require("./iris-core");
 
 test("weight band boundaries match Iris v1", () => {
@@ -112,6 +114,24 @@ test("express jobs receive dispatch priority", () => {
   assert.equal(dispatchPriority({iris: standard, speed: "Standard"}), 0);
   assert.equal(dispatchPriority({iris: express, speed: "Express"}), 1);
   assert.ok(express.recommendation.estimatedPrice > standard.recommendation.estimatedPrice);
+});
+
+test("rider rank controls dispatch visibility and safely defaults to agent", () => {
+  const now = Date.parse("2026-06-14T12:00:00Z");
+  const escalated = {createdAt: "2026-06-14T11:48:00Z", escalationEligible: true};
+  assert.equal(normalizeRiderRank(), "agent");
+  assert.equal(riderCanViewDispatch({}, {serviceType: "standard"}, now), true);
+  assert.equal(riderCanViewDispatch({rank: "agent"}, escalated, now), false);
+  assert.equal(riderCanViewDispatch({rank: "sentinel"}, escalated, now), true);
+  assert.equal(riderCanViewDispatch({rank: "warden"}, escalated, now), true);
+  assert.equal(riderCanViewDispatch({rank: "knight"}, escalated, now), false);
+  assert.equal(riderCanViewDispatch({rank: "veteran"}, {
+    ...escalated,
+    createdAt: "2026-06-14T11:40:00Z",
+  }, now), true);
+  assert.equal(riderCanViewDispatch({rank: "knight"}, {highTrust: true}, now), true);
+  assert.equal(riderCanViewDispatch({rank: "knight"}, {vanguardEnabled: true}, now), false);
+  assert.equal(riderCanViewDispatch({rank: "veteran"}, {healthPlusEnabled: true}, now), true);
 });
 
 test("rider mismatch is evidence, not final truth", () => {

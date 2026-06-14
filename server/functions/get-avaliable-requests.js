@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
-const {dispatchPriority, isDispatchable, riderMatchesIris} = require("./iris-core");
+const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 
 const getNearbyRequests = functions.https.onCall(async (data, context) => {
   try {
@@ -23,7 +23,11 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError("not-found", "Rider not found");
     }
 
-    const riderData = riderDoc.data();
+    const riderProfileDoc = await getFirestore().collection("riderProfiles").doc(riderId).get();
+    const riderData = {
+      ...riderDoc.data(),
+      ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
+    };
     if (!riderData.position.geopoint.latitude || !riderData.position.geopoint.longitude) {
       throw new functions.https.HttpsError("failed-precondition", "Rider position not available");
     }
@@ -57,6 +61,7 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
                 if (privateDoc.exists) {
                   requestData.irisPrivate = privateDoc.data();
                 }
+                if (!riderCanViewDispatch(riderData, requestData)) return null;
                 if (!riderMatchesIris(riderData, requestData)) return null;
                 const pickupLocation = requestData.pickupPosition.geopoint;
 

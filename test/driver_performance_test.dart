@@ -34,6 +34,91 @@ void main() {
       );
     });
 
+    test('dispatch visibility follows rider rank and protected service rules',
+        () {
+      final now = DateTime(2026, 6, 14, 12);
+      final standard = {'createdAt': now.subtract(const Duration(minutes: 1))};
+      final escalated = {
+        'createdAt': now.subtract(const Duration(minutes: 12)),
+        'escalationEligible': true,
+      };
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: null,
+          job: standard,
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'agent',
+          job: escalated,
+          now: now,
+        ),
+        isFalse,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'sentinel',
+          job: escalated,
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'warden',
+          job: escalated,
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'knight',
+          job: escalated,
+          now: now,
+        ),
+        isFalse,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'veteran',
+          job: {
+            ...escalated,
+            'createdAt': now.subtract(const Duration(minutes: 20)),
+          },
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'knight',
+          job: {'highTrust': true},
+          now: now,
+        ),
+        isTrue,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'knight',
+          job: {'vanguardEnabled': true},
+          now: now,
+        ),
+        isFalse,
+      );
+      expect(
+        RiderDispatchPolicy.canViewJob(
+          riderRank: 'veteran',
+          job: {'healthPlusEnabled': true},
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+
     test('models a five-star driver rating linked to a delivery', () {
       final rating = DriverRating(
         driverId: 'driver-1',

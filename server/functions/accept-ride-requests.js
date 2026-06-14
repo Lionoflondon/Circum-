@@ -2,7 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {isDispatchable, riderMatchesIris} = require("./iris-core");
+const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -105,6 +105,10 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     }
     if (!isDispatchable(deliveryRequest)) {
       throw new functions.https.HttpsError("failed-precondition", "Delivery request is not dispatchable by Iris.");
+    }
+
+    if (!riderCanViewDispatch(rider, deliveryRequest)) {
+      throw new functions.https.HttpsError("permission-denied", "This delivery is not available to the rider's current rank.");
     }
 
     if (!riderMatchesIris(rider, deliveryRequest)) {

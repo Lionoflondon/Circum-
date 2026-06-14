@@ -571,6 +571,42 @@ function dispatchPriority(request) {
   return priority === "express" || normalize(request.speed) === "express" ? 1 : 0;
 }
 
+const RIDER_RANKS = new Set(["agent", "sentinel", "warden", "knight", "veteran"]);
+
+function normalizeRiderRank(value) {
+  const rank = normalize(value);
+  return RIDER_RANKS.has(rank) ? rank : "agent";
+}
+
+function riderCanViewDispatch(rider, request, now = Date.now()) {
+  const rank = normalizeRiderRank(rider.rank || rider.riderRank);
+  const type = normalize(request.serviceType || request.deliveryType);
+  const trust = normalize(request.trustLevel || request.dispatchTier);
+  const veteranOnly = request.vanguardEnabled === true ||
+    request.healthPlus === true || request.healthPlusEnabled === true ||
+    request.giftDelivery === true || request.giftsEnabled === true ||
+    request.critical === true || trust === "critical" ||
+    type.includes("vanguard") || type.includes("health+") ||
+    type.includes("health_plus") || type.includes("gift");
+  if (veteranOnly) return rank === "veteran";
+  const highTrust = request.highTrust === true ||
+    request.highTrustRequired === true || trust === "high" || trust === "high_trust";
+  if (highTrust) return rank === "knight" || rank === "veteran";
+
+  const priority = normalize(request.matchingPriority || request.dispatchStatus);
+  const escalationEligible = request.dispatchEscalationEnabled === true ||
+    request.escalationEligible === true || priority === "escalated";
+  if (!escalationEligible) return true;
+  if (rank === "agent") return false;
+  const rawCreatedAt = request.createdAt || request.requestedAt || request.timestamp || request.timeStamp;
+  const createdAt = rawCreatedAt && typeof rawCreatedAt.toMillis === "function" ?
+    rawCreatedAt.toMillis() : new Date(rawCreatedAt).getTime();
+  if (!Number.isFinite(createdAt)) return false;
+  const elapsedMinutes = Math.floor((now - createdAt) / 60000);
+  const thresholds = {sentinel: 5, warden: 10, knight: 15, veteran: 20};
+  return elapsedMinutes >= thresholds[rank];
+}
+
 module.exports = {
   CATEGORIES,
   WEIGHT_BANDS,
@@ -587,4 +623,6 @@ module.exports = {
   isDispatchable,
   riderMatchesIris,
   dispatchPriority,
+  normalizeRiderRank,
+  riderCanViewDispatch,
 };

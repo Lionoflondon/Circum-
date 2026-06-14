@@ -3846,6 +3846,14 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                         ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    RiderDispatchPolicy.explanation(rank),
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 18),
                   _GlassPanel(
                     colors: colors,
@@ -6923,6 +6931,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 !DeliveryPricing.vehicleMeetsMinimum(
                   riderVehicle,
                   requiredVehicle,
+                )) {
+              return false;
+            }
+            final riderRank = _riderProfile?['rank'] ??
+                _riderProfile?['riderRank'] ??
+                'agent';
+            if (!_superAdminRiderBypass &&
+                !RiderDispatchPolicy.canViewJob(
+                  riderRank: riderRank,
+                  job: job,
                 )) {
               return false;
             }
