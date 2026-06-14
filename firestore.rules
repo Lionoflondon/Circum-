@@ -513,9 +513,7 @@ service cloud.firestore {
 
     match /{document=**} {
       allow read: if isAdmin();
-      allow write: if isAdmin() &&
-        !document.matches('users/.*') &&
-        document != 'platformStats/legends';
+      allow write: if hasRole('super_admin');
     }
   }
 }
