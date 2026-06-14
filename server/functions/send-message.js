@@ -27,7 +27,9 @@ const sendMessage = functions.https.onCall(async (data, context) => {
     ]);
 
     const senderType = riderDoc.exists ? "rider" : "user";
+    const senderRole = senderType === "rider" ? "rider" : "shipper";
     const recipientType = senderType === "rider" ? "user" : "rider";
+    const recipientRole = recipientType === "rider" ? "rider" : "shipper";
 
     // Get recipient's FCM token
     const recipientDoc = await getFirestore()
@@ -46,10 +48,16 @@ const sendMessage = functions.https.onCall(async (data, context) => {
     const messageData = {
       senderId,
       senderType,
+      senderRole,
       recipientId,
       recipientType,
+      messageText: message,
       message,
       requestId,
+      bookingId: requestId,
+      attachments: [],
+      readBy: [senderId],
+      createdAt: timestamp,
       timeStamp: timestamp.toISOString(),
       status: "sent",
     };
@@ -67,7 +75,16 @@ const sendMessage = functions.https.onCall(async (data, context) => {
       lastMessage: message,
       lastMessageTimestamp: timestamp,
       participants: [senderId, recipientId],
+      participantRoles: {
+        [senderId]: senderRole,
+        [recipientId]: recipientRole,
+      },
+      type: "delivery",
+      status: "open",
+      bookingId: requestId,
       requestId,
+      updatedAt: timestamp,
+      unreadBy: [recipientId],
     }, {merge: true});
 
     // Send push notification if FCM token exists

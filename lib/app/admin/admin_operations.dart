@@ -428,6 +428,13 @@ class AdminDeliveryTools {
 }
 
 class AdminSupportTools {
+  static bool isResolved(Object? status) =>
+      '${status ?? ''}'.trim().toLowerCase() == 'resolved';
+
+  static List<String> actionsForStatus(Object? status) => isResolved(status)
+      ? const ['Reopen', 'View Chat']
+      : const ['Assign', 'Resolve', 'Open Chat'];
+
   static Map<String, dynamic> statusPatch({
     required String status,
     String? assignedTo,

@@ -4,6 +4,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Admin operations', () {
+    test('support ticket actions reflect resolved status', () {
+      expect(
+        AdminSupportTools.actionsForStatus('open'),
+        ['Assign', 'Resolve', 'Open Chat'],
+      );
+      expect(
+        AdminSupportTools.actionsForStatus('resolved'),
+        ['Reopen', 'View Chat'],
+      );
+    });
+
     test('blocks unauthorised users and checks role permissions', () {
       expect(AdminAccessPolicy.hasAnyAdminRole(['customer']), isFalse);
       expect(AdminAccessPolicy.hasAnyAdminRole(['support_agent']), isTrue);

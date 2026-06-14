@@ -439,11 +439,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _riderDocuments = const [];
   bool _adminChatOpen = false;
   String? _activeAdminChatId;
+  String? _activeAdminTicketId;
   String _activeAdminChatTitle = 'Booking chat';
   bool _driverProfileOpen = false;
   Map<String, dynamic>? _selectedDriverProfile;
   final List<_ChatMessage> _adminChatMessages = [];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _adminChatSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _supportTicketsSub;
 
   @override
   void initState() {
@@ -460,6 +462,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     _adminInviteNote.dispose();
     _adminChatInput.dispose();
     _adminChatSub?.cancel();
+    _supportTicketsSub?.cancel();
     super.dispose();
   }
 
@@ -574,6 +577,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   Future<void> _signOut() async {
     await _adminChatSub?.cancel();
+    await _supportTicketsSub?.cancel();
     await FirebaseAuth.instance.signOut();
     setState(() {
       _adminUser = null;
@@ -681,6 +685,34 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         supportTickets: tickets,
         healthPlusPayments: healthPayments,
       );
+    });
+    _startSupportTicketListener();
+  }
+
+  void _startSupportTicketListener() {
+    _supportTicketsSub?.cancel();
+    if (!_can(AdminPermission.viewSupport)) return;
+    _supportTicketsSub = FirebaseFirestore.instance
+        .collection('supportTickets')
+        .limit(80)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      final tickets = snapshot.docs
+          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+          .toList(growable: false);
+      setState(() {
+        _supportTickets = tickets;
+        _metrics = AdminMetricSnapshot.fromData(
+          deliveries: _deliveries,
+          senders: _senders,
+          drivers: _drivers,
+          payments: _payments,
+          ratings: _ratings,
+          supportTickets: tickets,
+          healthPlusPayments: _healthPlusPayments,
+        );
+      });
     });
   }
 
@@ -1227,6 +1259,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .collection('supportTickets')
         .doc(id)
         .set(patch, SetOptions(merge: true));
+    final chatId = '${ticket['chatId'] ?? ''}'.trim();
+    if (chatId.isNotEmpty) {
+      await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
+        'status': status == 'resolved' ? 'resolved' : 'open',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
     await _writeAudit(
       AdminAuditEntry(
         adminUserId: _adminUser?.uid ?? 'unknown-admin',
@@ -1358,9 +1397,106 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     );
     setState(() {
       _activeAdminChatId = id;
+      _activeAdminTicketId = null;
       _activeAdminChatTitle = 'Booking chat';
       _adminChatOpen = true;
     });
+  }
+
+  Future<void> _openSupportTicketChat(Map<String, dynamic> ticket) async {
+    final ticketId = '${ticket['id'] ?? ''}'.trim();
+    if (ticketId.isEmpty) return;
+    final chatId = '${ticket['chatId'] ?? 'support_$ticketId'}'.trim();
+    final customerId = '${ticket['userId'] ?? ticket['senderId'] ?? ''}'.trim();
+    final participants = <String>{'circum-support'};
+    if (customerId.isNotEmpty) participants.add(customerId);
+    final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
+    await chatRef.set({
+      'threadId': chatId,
+      'type': 'support',
+      'ticketId': ticketId,
+      'participants': FieldValue.arrayUnion(participants.toList()),
+      'participantRoles': {
+        'circum-support': 'admin',
+        if (customerId.isNotEmpty) customerId: 'shipper',
+      },
+      'status':
+          AdminSupportTools.isResolved(ticket['status']) ? 'resolved' : 'open',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'source': 'circum-admin',
+    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance
+        .collection('supportTickets')
+        .doc(ticketId)
+        .set({
+      'chatId': chatId,
+      'adminUnreadCount': 0,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    final initialText = '${ticket['message'] ?? ''}'.trim();
+    if (initialText.isNotEmpty) {
+      final initialRef = chatRef.collection('messages').doc('ticket_initial');
+      final initial = await initialRef.get();
+      if (!initial.exists) {
+        await initialRef.set({
+          'threadId': chatId,
+          'ticketId': ticketId,
+          'senderId': customerId.isEmpty ? 'support-guest' : customerId,
+          'senderRole': 'shipper',
+          'messageText': initialText,
+          'message': initialText,
+          'attachments': const [],
+          'readBy': const [],
+          'createdAt': ticket['createdAt'] ?? FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    _listenToAdminChat(chatId, errorMessage: 'Could not open support chat.');
+    setState(() {
+      _activeAdminChatId = chatId;
+      _activeAdminTicketId = ticketId;
+      _activeAdminChatTitle = 'Support ticket $ticketId';
+      _adminChatOpen = true;
+    });
+  }
+
+  void _listenToAdminChat(String chatId, {required String errorMessage}) {
+    _adminChatSub?.cancel();
+    _adminChatSub = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .limit(100)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _adminChatMessages
+            ..clear()
+            ..addAll(snapshot.docs.map((doc) {
+              final data = doc.data();
+              final role = '${data['senderRole'] ?? data['senderType'] ?? ''}';
+              return _ChatMessage(
+                fromMe: role == 'admin' || data['senderId'] == _adminUser?.uid,
+                text: '${data['messageText'] ?? data['message'] ?? ''}',
+                time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+                label: role == 'admin' || role == 'support'
+                    ? 'CIRCUM Support'
+                    : role == 'rider' || role == 'driver'
+                        ? 'Rider'
+                        : 'Shipper',
+              );
+            }).where((message) => message.text.trim().isNotEmpty));
+        });
+      },
+      onError: (_) {
+        if (mounted) setState(() => _message = errorMessage);
+      },
+    );
   }
 
   void _openDriverProfile(Map<String, dynamic> driver) {
@@ -1424,6 +1560,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     );
     setState(() {
       _activeAdminChatId = chatId;
+      _activeAdminTicketId = null;
       _activeAdminChatTitle = 'Driver chat';
       _adminChatOpen = true;
     });
@@ -1502,6 +1639,18 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'updatedAt': FieldValue.serverTimestamp(),
       'source': 'circum-admin',
     }, SetOptions(merge: true));
+    final ticketId = _activeAdminTicketId;
+    if (ticketId != null) {
+      await FirebaseFirestore.instance
+          .collection('supportTickets')
+          .doc(ticketId)
+          .set({
+        'lastMessage': text,
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'adminUnreadCount': 0,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
   }
 
   String _formatMessageTime(dynamic timestamp, dynamic fallback) {
@@ -2076,26 +2225,44 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   List<Widget> _supportRow(Map<String, dynamic> item) {
+    final resolved = AdminSupportTools.isResolved(item['status']);
+    final latest =
+        '${item['lastMessage'] ?? item['message'] ?? item['type'] ?? ''}';
+    final unread = (item['adminUnreadCount'] as num?)?.toInt() ?? 0;
     return [
       _AdminCell.primary('${item['id'] ?? 'ticket'}'),
       _AdminCell('${item['name'] ?? 'Customer'}\n${item['email'] ?? ''}'),
       _AdminStatusCell(
         colors: widget.colors,
-        status: '${item['status'] ?? 'open'}',
+        status: unread > 0
+            ? '${item['status'] ?? 'open'} · $unread unread'
+            : '${item['status'] ?? 'open'}',
       ),
-      _AdminCell('${item['message'] ?? item['type'] ?? ''}'),
+      _AdminCell(latest),
       _AdminActions(
         colors: widget.colors,
         actions: [
+          if (!resolved) ...[
+            _AdminAction(
+              label: 'Assign',
+              enabled: _can(AdminPermission.manageIssues),
+              onTap: () => _updateSupportTicket(item, 'assigned'),
+            ),
+            _AdminAction(
+              label: 'Resolve',
+              enabled: _can(AdminPermission.manageIssues),
+              onTap: () => _updateSupportTicket(item, 'resolved'),
+            ),
+          ] else
+            _AdminAction(
+              label: 'Reopen',
+              enabled: _can(AdminPermission.manageIssues),
+              onTap: () => _updateSupportTicket(item, 'open'),
+            ),
           _AdminAction(
-            label: 'Assign',
-            enabled: _can(AdminPermission.manageIssues),
-            onTap: () => _updateSupportTicket(item, 'assigned'),
-          ),
-          _AdminAction(
-            label: 'Resolve',
-            enabled: _can(AdminPermission.manageIssues),
-            onTap: () => _updateSupportTicket(item, 'resolved'),
+            label: resolved ? 'View Chat' : 'Open Chat',
+            enabled: _can(AdminPermission.viewSupport),
+            onTap: () => _openSupportTicketChat(item),
           ),
         ],
       ),
@@ -20881,18 +21048,23 @@ class _ChatSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final desktop = MediaQuery.sizeOf(context).width >= 720;
     return Positioned.fill(
       child: Material(
         color: Colors.black.withOpacity(0.45),
         child: Align(
-          alignment: Alignment.bottomCenter,
+          alignment: desktop ? Alignment.centerRight : Alignment.bottomCenter,
           child: Container(
-            height: MediaQuery.sizeOf(context).height * 0.78,
+            width: desktop ? 420 : double.infinity,
+            height: desktop
+                ? MediaQuery.sizeOf(context).height
+                : MediaQuery.sizeOf(context).height * 0.92,
             decoration: BoxDecoration(
               color: colors.appBackground,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
+              borderRadius: desktop
+                  ? const BorderRadius.horizontal(left: Radius.circular(28))
+                  : const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: colors.border),
             ),
             child: Column(
               children: [
@@ -24462,146 +24634,208 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
+    if (_open) {
+      return Positioned.fill(
+        child: Material(
+          color: Colors.black.withValues(alpha: 0.46),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _open = false),
+                ),
+              ),
+              _panel(context, colors),
+            ],
+          ),
+        ),
+      );
+    }
     return Positioned(
       right: 18,
       bottom: 18,
       child: SafeArea(
-        minimum: const EdgeInsets.only(left: 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_open) _panel(context, colors),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'company-live-chat',
-              onPressed: () => setState(() => _open = !_open),
-              backgroundColor: colors.text,
-              foregroundColor: colors.inverseText,
-              icon: Icon(_open ? Icons.close : Icons.chat_bubble_outline),
-              label: Text(_open ? 'Close' : 'Live chat'),
+        minimum: const EdgeInsets.only(bottom: 4),
+        child: Tooltip(
+          message: 'Live chat',
+          child: Semantics(
+            button: true,
+            label: 'Open live chat',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => setState(() => _open = true),
+                customBorder: const CircleBorder(),
+                child: Ink(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(colors: _spectrumGradient),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.28),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xff6558f5).withValues(alpha: 0.24),
+                        blurRadius: 16,
+                        offset: const Offset(0, 7),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    color: Colors.white,
+                    size: 23,
+                  ),
+                ),
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _panel(BuildContext context, _CircumColors colors) {
-    final compact = MediaQuery.sizeOf(context).width < 480;
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: compact ? MediaQuery.sizeOf(context).width - 36 : 360,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: colors.panel,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: colors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: colors.dark ? 0.34 : 0.16),
-              blurRadius: 28,
-              offset: const Offset(0, 16),
-            ),
-          ],
+    final size = MediaQuery.sizeOf(context);
+    final compact = size.width < 720;
+    return Align(
+      alignment: compact ? Alignment.bottomCenter : Alignment.centerRight,
+      child: SafeArea(
+        minimum: EdgeInsets.only(
+          left: compact ? 10 : 0,
+          right: compact ? 10 : 0,
+          bottom: compact ? 10 : 0,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: _spectrumGradient),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.support_agent, color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Talk to Circum',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        'Send us a note and the team will pick it up.',
-                        style: TextStyle(
-                          color: colors.mutedText,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: compact ? double.infinity : 400,
+            height: compact ? size.height * 0.92 : double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: colors.panel,
+              borderRadius: compact
+                  ? BorderRadius.circular(24)
+                  : const BorderRadius.horizontal(left: Radius.circular(24)),
+              border: Border.all(color: colors.border),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      Colors.black.withValues(alpha: colors.dark ? 0.34 : 0.16),
+                  blurRadius: 28,
+                  offset: const Offset(0, 16),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            _LiveChatField(
-              colors: colors,
-              controller: _name,
-              label: 'Name',
-              icon: Icons.person_outline,
-            ),
-            const SizedBox(height: 10),
-            _LiveChatField(
-              colors: colors,
-              controller: _email,
-              label: 'Email or phone',
-              icon: Icons.alternate_email,
-            ),
-            const SizedBox(height: 10),
-            _LiveChatField(
-              colors: colors,
-              controller: _message,
-              label: 'How can we help?',
-              icon: Icons.message_outlined,
-              minLines: 3,
-              maxLines: 5,
-            ),
-            if (_note != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _note!,
-                style: TextStyle(
-                  color: _note!.startsWith('Sent')
-                      ? colors.success
-                      : const Color(0xffef4444),
-                  fontWeight: FontWeight.w800,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        gradient:
+                            const LinearGradient(colors: _spectrumGradient),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child:
+                          const Icon(Icons.support_agent, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Talk to Circum',
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            'Send us a note and the team will pick it up.',
+                            style: TextStyle(
+                              color: colors.mutedText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close live chat',
+                      onPressed: () => setState(() => _open = false),
+                      icon: Icon(Icons.close, color: colors.text),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _sending ? null : _send,
-                icon: _sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send),
-                label: Text(_sending ? 'Sending' : 'Send message'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.text,
-                  foregroundColor: colors.inverseText,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                const SizedBox(height: 14),
+                _LiveChatField(
+                  colors: colors,
+                  controller: _name,
+                  label: 'Name',
+                  icon: Icons.person_outline,
                 ),
-              ),
+                const SizedBox(height: 10),
+                _LiveChatField(
+                  colors: colors,
+                  controller: _email,
+                  label: 'Email or phone',
+                  icon: Icons.alternate_email,
+                ),
+                const SizedBox(height: 10),
+                _LiveChatField(
+                  colors: colors,
+                  controller: _message,
+                  label: 'How can we help?',
+                  icon: Icons.message_outlined,
+                  minLines: 3,
+                  maxLines: 5,
+                ),
+                if (_note != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _note!,
+                    style: TextStyle(
+                      color: _note!.startsWith('Sent')
+                          ? colors.success
+                          : const Color(0xffef4444),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _sending ? null : _send,
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send),
+                    label: Text(_sending ? 'Sending' : 'Send message'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.text,
+                      foregroundColor: colors.inverseText,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                if (!compact) const Spacer(),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -24620,17 +24854,54 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
     });
     try {
       await _ensureCircumFirebaseReady();
-      await FirebaseFirestore.instance.collection('supportTickets').add({
+      final db = FirebaseFirestore.instance;
+      final ticketRef = db.collection('supportTickets').doc();
+      final user = FirebaseAuth.instance.currentUser;
+      final chatId = 'support_${ticketRef.id}';
+      await ticketRef.set({
         'channel': 'web_live_chat',
         'status': 'open',
         'priority': 'normal',
         'name': _name.text.trim(),
         'email': contact,
         'message': message,
+        'lastMessage': message,
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'adminUnreadCount': 1,
         'pageUrl': Uri.base.toString(),
+        'chatId': chatId,
+        if (user != null) 'userId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      if (user != null) {
+        final chatRef = db.collection('chats').doc(chatId);
+        await chatRef.set({
+          'threadId': chatId,
+          'type': 'support',
+          'ticketId': ticketRef.id,
+          'participants': [user.uid, 'circum-support'],
+          'participantRoles': {
+            user.uid: 'shipper',
+            'circum-support': 'admin',
+          },
+          'status': 'open',
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastMessage': message,
+        });
+        await chatRef.collection('messages').add({
+          'threadId': chatId,
+          'ticketId': ticketRef.id,
+          'senderId': user.uid,
+          'senderRole': 'shipper',
+          'messageText': message,
+          'message': message,
+          'attachments': const [],
+          'readBy': [user.uid],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
       _message.clear();
       setState(() => _note = 'Sent. Circum support has your message.');
     } catch (_) {

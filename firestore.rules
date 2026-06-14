@@ -199,10 +199,19 @@ service cloud.firestore {
           'name',
           'email',
           'message',
+          'lastMessage',
+          'lastMessageAt',
+          'adminUnreadCount',
           'pageUrl',
+          'chatId',
+          'userId',
           'createdAt',
           'updatedAt'
-        ]);
+        ]) &&
+        (!request.resource.data.keys().hasAny(['chatId']) ||
+          request.resource.data.chatId is string) &&
+        (!request.resource.data.keys().hasAny(['userId']) ||
+          (signedIn() && request.resource.data.userId == request.auth.uid));
     }
 
     match /giftsWaitlist/{entryId} {
