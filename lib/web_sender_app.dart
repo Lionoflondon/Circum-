@@ -2164,14 +2164,18 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminSection.senders => _AdminDataSection(
           colors: colors,
           title: 'Senders',
-          subtitle: 'Customer accounts, delivery history, notes, and value.',
-          records: adminSearch(_senders, query, [
-            'fullName',
-            'name',
-            'email',
-            'phone',
-          ]),
-          columns: const ['Name', 'Email', 'Phone', 'Status', 'Value'],
+          subtitle:
+              'Customer accounts, delivery history, and Legends. Search “Legend” to filter founding members.',
+          records: _senderAdminRecords(query),
+          columns: const [
+            'Name',
+            'Email',
+            'Phone',
+            'Status',
+            'Legend',
+            'Awarded',
+            'Value',
+          ],
           rowBuilder: _senderRow,
           emptyText: 'No sender records yet.',
         ),
@@ -2340,8 +2344,33 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         colors: widget.colors,
         status: '${item['status'] ?? 'active'}',
       ),
+      _AdminCell(item['isLegend'] == true
+          ? 'Legend #${item['legendNumber'] ?? ''}'
+          : '—'),
+      _AdminCell(item['isLegend'] == true
+          ? '${_adminDateText(item['legendAwardedAt'])}\n${item['legendDeliveryId'] ?? ''}'
+          : '—'),
       _AdminCell('£${value.toStringAsFixed(2)}'),
     ];
+  }
+
+  List<Map<String, dynamic>> _senderAdminRecords(String query) {
+    if (query.trim().toLowerCase() == 'legend') {
+      final legends = _senders
+          .where((sender) => sender['isLegend'] == true)
+          .toList(growable: false);
+      legends.sort((a, b) => ((a['legendNumber'] as num?)?.toInt() ?? 9999)
+          .compareTo((b['legendNumber'] as num?)?.toInt() ?? 9999));
+      return legends;
+    }
+    return adminSearch(_senders, query, [
+      'fullName',
+      'name',
+      'email',
+      'phone',
+      'legendNumber',
+      'legendDeliveryId',
+    ]);
   }
 
   List<Widget> _driverRow(Map<String, dynamic> item) {
@@ -11768,6 +11797,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   int _senderProfileTab = 0;
   User? _senderUser;
   SenderProfile? _senderProfile;
+  bool _legendCelebrationShowing = false;
   List<SenderDeliveryRecord> _senderDeliveries = const [];
   SenderDeliveryRecord? _selectedSenderDelivery;
   DriverProfile? _assignedDriver;
@@ -12792,8 +12822,43 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _senderPhone.text = profile.phoneNumber;
         }
       });
+      if (profile.isLegend &&
+          profile.legendNumber != null &&
+          profile.legendCelebrationSeenAt == null &&
+          !_legendCelebrationShowing) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _showLegendCelebration(profile),
+        );
+      }
     });
     _listenForDeliveryAdjustments(user.uid);
+  }
+
+  Future<void> _showLegendCelebration(SenderProfile profile) async {
+    if (!mounted || _legendCelebrationShowing) return;
+    _legendCelebrationShowing = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: _LegendCard(
+            colors: widget.colors,
+            name: profile.fullName.isEmpty ? 'Circum member' : profile.fullName,
+            number: profile.legendNumber!,
+            awardedAt: profile.legendAwardedAt,
+            celebratory: true,
+            onClose: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+    await FirebaseFirestore.instance.collection('users').doc(profile.id).set({
+      'legendCelebrationSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    _legendCelebrationShowing = false;
   }
 
   void _listenForDeliveryAdjustments(String senderId) {
@@ -17221,6 +17286,149 @@ class _SenderDashboardStep extends StatelessWidget {
   }
 }
 
+class _LegendBadge extends StatelessWidget {
+  final int number;
+
+  const _LegendBadge({required this.number});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xffa78bfa), Color(0xff38bdf8), Color(0xff5eead4)],
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'LEGEND #$number',
+          style: const TextStyle(
+            color: Colors.black,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+}
+
+class _LegendCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String name;
+  final int number;
+  final DateTime? awardedAt;
+  final bool celebratory;
+  final VoidCallback? onClose;
+
+  const _LegendCard({
+    required this.colors,
+    required this.name,
+    required this.number,
+    this.awardedAt,
+    this.celebratory = false,
+    this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: const Color(0xff070b17),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xff7dd3fc)),
+          boxShadow: const [
+            BoxShadow(color: Color(0x5538bdf8), blurRadius: 30),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome, color: Color(0xff5eead4)),
+                const SizedBox(width: 9),
+                const Expanded(
+                  child: Text(
+                    'CIRCUM LEGEND',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                ),
+                if (onClose != null)
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+              ],
+            ),
+            if (celebratory) ...[
+              const SizedBox(height: 14),
+              const Text(
+                'You’re officially a Circum Legend.',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 21,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 7),
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [
+                  Color(0xffc084fc),
+                  Color(0xff38bdf8),
+                  Color(0xff5eead4)
+                ],
+              ).createShader(bounds),
+              child: Text(
+                'Legend #$number',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'Awarded ${_readableDate(awardedAt)}',
+              style: const TextStyle(color: Color(0xffcbd5e1)),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Legend status is a recognition badge and may unlock future Circum perks. It does not represent shares, equity, ownership, or financial rights.',
+              style: TextStyle(color: Color(0xff94a3b8), height: 1.4),
+            ),
+            if (celebratory) ...[
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: onClose,
+                  child: const Text('View my Legend card'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+}
+
 class _SenderProfileStep extends StatelessWidget {
   final _CircumColors colors;
   final User? user;
@@ -17419,6 +17627,11 @@ class _SenderProfileStep extends StatelessWidget {
                             '${profile?.verificationStatus ?? 'unverified'} account',
                             style: TextStyle(color: colors.mutedText),
                           ),
+                          if (profile?.isLegend == true &&
+                              profile?.legendNumber != null) ...[
+                            const SizedBox(height: 7),
+                            _LegendBadge(number: profile!.legendNumber!),
+                          ],
                         ],
                       ),
                     ),
@@ -17516,6 +17729,16 @@ class _SenderProfileStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (profile?.isLegend == true && profile?.legendNumber != null) ...[
+          _LegendCard(
+            colors: colors,
+            name:
+                profile!.fullName.isEmpty ? 'Circum member' : profile!.fullName,
+            number: profile!.legendNumber!,
+            awardedAt: profile!.legendAwardedAt,
+          ),
+          const SizedBox(height: 16),
+        ],
         _SectionTitle(colors: colors, title: 'Profile details'),
         const SizedBox(height: 12),
         _InputBox(colors: colors, controller: fullName, hint: 'Full name'),

@@ -12,6 +12,10 @@ class SenderProfile {
   final List<SavedRecipient> savedRecipients;
   final Map<String, dynamic> communicationPreferences;
   final String? paymentCustomerReference;
+  final bool isLegend;
+  final int? legendNumber;
+  final DateTime? legendAwardedAt;
+  final DateTime? legendCelebrationSeenAt;
 
   const SenderProfile({
     required this.id,
@@ -25,6 +29,10 @@ class SenderProfile {
     this.savedRecipients = const [],
     this.communicationPreferences = const {},
     this.paymentCustomerReference,
+    this.isLegend = false,
+    this.legendNumber,
+    this.legendAwardedAt,
+    this.legendCelebrationSeenAt,
   });
 
   factory SenderProfile.fromMap(String id, Map<String, dynamic> data) {
@@ -52,6 +60,10 @@ class SenderProfile {
           ? null
           : SenderProfileService.sanitizedPaymentReference(
               '${data['customerId']}'),
+      isLegend: data['isLegend'] == true,
+      legendNumber: (data['legendNumber'] as num?)?.toInt(),
+      legendAwardedAt: parseDate(data['legendAwardedAt']),
+      legendCelebrationSeenAt: parseDate(data['legendCelebrationSeenAt']),
     );
   }
 
@@ -111,8 +123,7 @@ class SavedSenderAddress {
       lng: (data['lng'] as num?)?.toDouble(),
       placeId: data['placeId'] == null ? null : '${data['placeId']}',
       provider: data['provider'] == null ? null : '${data['provider']}',
-      locationId:
-          data['locationId'] == null ? null : '${data['locationId']}',
+      locationId: data['locationId'] == null ? null : '${data['locationId']}',
     );
   }
 

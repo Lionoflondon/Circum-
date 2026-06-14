@@ -34,6 +34,16 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function changesLegendFields() {
+      return request.resource.data.diff(resource.data).changedKeys().hasAny([
+        'isLegend',
+        'legendNumber',
+        'legendAwardedAt',
+        'legendSource',
+        'legendDeliveryId'
+      ]);
+    }
+
     function isRiderAccount() {
       return signedIn() && (
         hasRole('super_admin') ||
@@ -369,8 +379,22 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAdmin() || ownsSenderRecord(userId);
-      allow create, update: if isAdmin() || ownsSenderRecord(userId);
+      allow create: if (isAdmin() || ownsSenderRecord(userId)) &&
+        !request.resource.data.keys().hasAny([
+          'isLegend',
+          'legendNumber',
+          'legendAwardedAt',
+          'legendSource',
+          'legendDeliveryId'
+        ]);
+      allow update: if hasRole('super_admin') ||
+        ((isAdmin() || ownsSenderRecord(userId)) && !changesLegendFields());
       allow delete: if hasRole('super_admin');
+    }
+
+    match /platformStats/legends {
+      allow read: if isAdmin();
+      allow write: if hasRole('super_admin');
     }
 
     match /senders/{senderId} {
@@ -488,7 +512,10 @@ service cloud.firestore {
     }
 
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if isAdmin() &&
+        !document.matches('users/.*') &&
+        document != 'platformStats/legends';
     }
   }
 }

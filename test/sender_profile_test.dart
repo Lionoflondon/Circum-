@@ -3,6 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Sender profile', () {
+    test('reads permanent Legend recognition fields', () {
+      final profile = SenderProfile.fromMap('legend-1', {
+        'fullName': 'Ayo Jason',
+        'isLegend': true,
+        'legendNumber': 42,
+        'legendAwardedAt': DateTime(2026, 6, 14),
+      });
+
+      expect(profile.isLegend, isTrue);
+      expect(profile.legendNumber, 42);
+      expect(profile.legendAwardedAt, DateTime(2026, 6, 14));
+    });
+
     test('parses the shared mobile users document shape', () {
       final profile = SenderProfile.fromMap('sender-1', {
         'fullname': 'Jane Smith',

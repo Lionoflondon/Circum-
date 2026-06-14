@@ -16,6 +16,7 @@ const healthPlus = require("./health-plus");
 const iris = require("./iris");
 const deliveryAdjustments = require("./delivery-adjustments");
 const platformNotifications = require("./platform-notifications");
+const legends = require("./legends");
 
 initializeApp();
 
@@ -41,6 +42,7 @@ exports.onDisputeCreated = platformNotifications.onDisputeCreated;
 exports.onRiderProfileUpdated = platformNotifications.onRiderProfileUpdated;
 exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
 exports.escalateUnclaimedDeliveries = platformNotifications.escalateUnclaimedDeliveries;
+exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
