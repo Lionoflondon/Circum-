@@ -24,6 +24,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:circum/app/gifts/gift_request_policy.dart';
+import 'package:circum/app/gifts/gifts_social_policy.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -729,6 +730,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   AdminMetricSnapshot _metrics = AdminMetricSnapshot.empty();
   List<Map<String, dynamic>> _deliveries = const [];
   List<Map<String, dynamic>> _giftRequests = const [];
+  List<Map<String, dynamic>> _giftBrands = const [];
+  List<Map<String, dynamic>> _giftCampaignParticipants = const [];
   List<Map<String, dynamic>> _senders = const [];
   List<Map<String, dynamic>> _drivers = const [];
   List<Map<String, dynamic>> _payments = const [];
@@ -950,6 +953,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             .orderBy('createdAt', descending: true)
             .limit(80),
       ),
+      _readCollection(db.collection('giftBrands').limit(100)),
+      _readCollection(db.collection('giftCampaignParticipants').limit(100)),
       _readCollection(
         db
             .collection('adminAuditLogs')
@@ -973,6 +978,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final visitors = results[13];
     final riderDocuments = results[14];
     final giftRequests = results[15];
+    final giftBrands = results[16];
+    final giftCampaignParticipants = results[17];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -990,7 +997,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _websiteVisitors = visitors;
       _riderDocuments = riderDocuments;
       _giftRequests = giftRequests;
-      _auditLogs = results[16];
+      _giftBrands = giftBrands;
+      _giftCampaignParticipants = giftCampaignParticipants;
+      _auditLogs = results[18];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -2243,12 +2252,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rowBuilder: _deliveryRow,
           emptyText: 'No delivery records yet.',
         ),
-      _AdminSection.gifts => _AdminDataSection(
+      _AdminSection.gifts => _AdminGiftsSection(
           colors: colors,
-          title: 'Gifts by Circum',
-          subtitle:
-              'Private manual fulfilment queue. Exact gift plans and internal notes remain hidden from senders.',
-          records: adminSearch(_giftRequests, query, [
+          requests: adminSearch(_giftRequests, query, [
             'senderName',
             'senderEmail',
             'recipientName',
@@ -2256,16 +2262,20 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'relationship',
             'status',
           ]),
-          columns: const [
-            'Sender',
-            'Recipient',
-            'Occasion',
-            'Budget',
-            'Status',
-            'Actions',
-          ],
-          rowBuilder: _giftRequestRow,
-          emptyText: 'No gift requests yet.',
+          participants: adminSearch(_giftCampaignParticipants, query, [
+            'displayName',
+            'boroughOrArea',
+            'matchStatus',
+            'matchReason',
+          ]),
+          brands: adminSearch(_giftBrands, query, [
+            'brandName',
+            'category',
+            'partnershipStatus',
+          ]),
+          requestRowBuilder: _giftRequestRow,
+          participantRowBuilder: _giftCampaignParticipantRow,
+          brandRowBuilder: _giftBrandRow,
         ),
       _AdminSection.finance => _AdminFinanceSection(
           colors: colors,
@@ -2420,13 +2430,188 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     ];
   }
 
+  List<Widget> _giftCampaignParticipantRow(Map<String, dynamic> item) {
+    final suggested = '${item['suggestedParticipantId'] ?? ''}'.isNotEmpty;
+    final matched = item['matchStatus'] == 'matched';
+    return [
+      _AdminCell.primary('${item['displayName'] ?? 'Participant'}'),
+      _AdminCell('${item['boroughOrArea'] ?? ''}'),
+      _AdminCell((item['interests'] as List?)?.join(', ') ?? ''),
+      _AdminStatusCell(
+          colors: widget.colors,
+          status: '${item['matchStatus'] ?? 'unmatched'}'),
+      _AdminCell(
+          '${item['matchScore'] ?? item['suggestedMatchScore'] ?? '—'}\n${item['matchReason'] ?? item['suggestedMatchReason'] ?? ''}'),
+      _AdminActions(colors: widget.colors, actions: [
+        _AdminAction(
+          label: matched
+              ? 'Locked'
+              : suggested
+                  ? 'Approve'
+                  : 'Suggest match',
+          enabled: !matched,
+          onTap: suggested
+              ? () => _approveCampaignMatch(item)
+              : () => _suggestCampaignMatch(item),
+        ),
+      ]),
+    ];
+  }
+
+  List<Widget> _giftBrandRow(Map<String, dynamic> item) {
+    return [
+      _AdminCell.primary('${item['brandName'] ?? 'Brand'}'),
+      _AdminCell('${item['category'] ?? ''}'),
+      _AdminStatusCell(
+          colors: widget.colors,
+          status: '${item['partnershipStatus'] ?? 'none'}'),
+      _AdminCell('${item['timesFeatured'] ?? 0}'),
+      _AdminCell('${item['totalViews'] ?? 0}'),
+      _AdminCell('${item['totalEngagement'] ?? 0}'),
+    ];
+  }
+
+  Future<void> _suggestCampaignMatch(Map<String, dynamic> participant) async {
+    Map<String, dynamic>? best;
+    double bestScore = 0;
+    String bestReason = '';
+    for (final candidate in _giftCampaignParticipants) {
+      if (candidate['id'] == participant['id'] ||
+          candidate['matchStatus'] != 'unmatched') {
+        continue;
+      }
+      final result = GiftsSocialPolicy.scoreMatch(participant, candidate);
+      if (result.score > bestScore) {
+        best = candidate;
+        bestScore = result.score;
+        bestReason = result.reason;
+      }
+    }
+    if (best == null || bestScore <= 0) {
+      setState(() => _message = 'No safe eligible campaign match found.');
+      return;
+    }
+    await FirebaseFirestore.instance
+        .collection('giftCampaignParticipants')
+        .doc('${participant['id']}')
+        .update({
+      'suggestedParticipantId': best['id'],
+      'suggestedMatchScore': bestScore,
+      'suggestedMatchReason': bestReason,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await _loadAdminData();
+  }
+
+  Future<void> _approveCampaignMatch(Map<String, dynamic> participant) async {
+    final otherId = '${participant['suggestedParticipantId'] ?? ''}';
+    if (otherId.isEmpty) return;
+    Map<String, dynamic>? other;
+    for (final record in _giftCampaignParticipants) {
+      if (record['id'] == otherId) {
+        other = record;
+        break;
+      }
+    }
+    if (other == null) return;
+    final db = FirebaseFirestore.instance;
+    final matchId = db.collection('giftCampaignMatches').doc().id;
+    final batch = db.batch();
+    final reason = '${participant['suggestedMatchReason'] ?? ''}';
+    final score = participant['suggestedMatchScore'] ?? 0;
+    for (final pair in [(participant, other), (other, participant)]) {
+      batch.update(
+          db.collection('giftCampaignParticipants').doc('${pair.$1['id']}'), {
+        'matchStatus': 'matched',
+        'matchedParticipantId': pair.$2['id'],
+        'matchId': matchId,
+        'matchScore': score,
+        'matchReason': reason,
+        'matchLockedAt': FieldValue.serverTimestamp(),
+        'matchApprovedBy': _adminUser?.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      final gift = db.collection('giftRequests').doc();
+      batch.set(gift, {
+        'senderId': pair.$1['userId'],
+        'senderName': pair.$1['displayName'],
+        'recipientName': pair.$2['displayName'],
+        'giftMode': 'anonymous_gift',
+        'anonymousGiftType': 'campaign',
+        'senderRevealMode': 'anonymous_until_consent',
+        'senderRevealConsent': 'not_requested',
+        'recipientRevealRequestStatus': 'none',
+        'campaignId': participant['campaignId'],
+        'campaignName': 'Bringing London Closer',
+        'campaignTagline': '100 Londoners. 100 gifts. 100 stories.',
+        'campaignType': 'anonymous_gifting',
+        'matchId': matchId,
+        'status': 'draft',
+        'budgetStatus': 'pending_allocation',
+        'recipientContentConsent': 'pending',
+        'senderContentConsent': 'pending',
+        'allowCircumSocialUse': false,
+        'allowBrandTagging': false,
+        'allowReactionRecording': false,
+        'allowPublicPosting': false,
+        'allowAnonymousPosting': false,
+        'contentUsageScope': 'private',
+        'anonymousByDefault': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    batch.set(db.collection('giftCampaignMatches').doc(matchId), {
+      'campaignId': participant['campaignId'],
+      'participantIds': [participant['id'], other['id']],
+      'matchScore': score,
+      'matchReason': reason,
+      'status': 'approved',
+      'approvedBy': _adminUser?.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    await _loadAdminData();
+  }
+
   Future<void> _openGiftRequest(Map<String, dynamic> item) async {
     final notes = TextEditingController(text: '${item['internalNotes'] ?? ''}');
     final decision =
         TextEditingController(text: '${item['adminDecision'] ?? ''}');
     final plan = TextEditingController(text: '${item['manualGiftPlan'] ?? ''}');
+    final caption =
+        TextEditingController(text: '${item['captionDraft'] ?? ''}');
+    final approvedCaption =
+        TextEditingController(text: '${item['approvedCaption'] ?? ''}');
+    final contentUrl =
+        TextEditingController(text: '${item['reactionContentUrl'] ?? ''}');
+    final tiktok =
+        TextEditingController(text: '${item['postedTikTokUrl'] ?? ''}');
+    final instagram =
+        TextEditingController(text: '${item['postedInstagramUrl'] ?? ''}');
+    final youtube =
+        TextEditingController(text: '${item['postedYouTubeShortsUrl'] ?? ''}');
+    final brandName = TextEditingController(text: '${item['brandName'] ?? ''}');
+    final brandTags = TextEditingController(
+        text: (item['brandTags'] as List?)?.join(', ') ?? '');
+    final metrics = <String, int>{
+      'views': (item['views'] as num?)?.toInt() ?? 0,
+      'likes': (item['likes'] as num?)?.toInt() ?? 0,
+      'comments': (item['comments'] as num?)?.toInt() ?? 0,
+      'shares': (item['shares'] as num?)?.toInt() ?? 0,
+      'saves': (item['saves'] as num?)?.toInt() ?? 0,
+    };
     String status = '${item['status'] ?? 'submitted'}';
-    final result = await showDialog<Map<String, String>>(
+    String recipientConsent = '${item['recipientContentConsent'] ?? 'pending'}';
+    String senderConsent = '${item['senderContentConsent'] ?? 'pending'}';
+    String contentStatus = '${item['contentStatus'] ?? 'not_started'}';
+    bool allowSocial = item['allowCircumSocialUse'] == true;
+    bool allowBrandTagging = item['allowBrandTagging'] == true;
+    bool allowRecording = item['allowReactionRecording'] == true;
+    bool allowPublicPosting = item['allowPublicPosting'] == true;
+    bool allowAnonymousPosting = item['allowAnonymousPosting'] == true;
+    bool brandTagApproved = item['brandTagApproved'] == true;
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -2491,6 +2676,163 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       maxLines: 3,
                       decoration:
                           const InputDecoration(labelText: 'Internal notes')),
+                  const SizedBox(height: 22),
+                  const Divider(),
+                  const Text('Social / Brand Exposure',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Recording is optional. A recipient may decline filming and still receive their gift.',
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: recipientConsent,
+                        decoration: const InputDecoration(
+                            labelText: 'Recipient content consent'),
+                        items: const ['pending', 'granted', 'declined']
+                            .map((value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(_displayStatusLabel(value))))
+                            .toList(),
+                        onChanged: (value) => setDialogState(
+                            () => recipientConsent = value ?? recipientConsent),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: senderConsent,
+                        decoration: const InputDecoration(
+                            labelText: 'Sender content consent'),
+                        items: const ['pending', 'granted', 'declined']
+                            .map((value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(_displayStatusLabel(value))))
+                            .toList(),
+                        onChanged: (value) => setDialogState(
+                            () => senderConsent = value ?? senderConsent),
+                      ),
+                    ),
+                  ]),
+                  SwitchListTile(
+                    value: allowRecording,
+                    onChanged: (value) =>
+                        setDialogState(() => allowRecording = value),
+                    title: const Text('Allow reaction recording'),
+                  ),
+                  SwitchListTile(
+                    value: allowSocial,
+                    onChanged: (value) =>
+                        setDialogState(() => allowSocial = value),
+                    title: const Text('Allow Circum social use'),
+                  ),
+                  SwitchListTile(
+                    value: allowPublicPosting,
+                    onChanged: (value) =>
+                        setDialogState(() => allowPublicPosting = value),
+                    title: const Text('Allow public posting'),
+                  ),
+                  SwitchListTile(
+                    value: allowAnonymousPosting,
+                    onChanged: (value) =>
+                        setDialogState(() => allowAnonymousPosting = value),
+                    title: const Text('Allow anonymous posting'),
+                  ),
+                  SwitchListTile(
+                    value: allowBrandTagging,
+                    onChanged: (value) =>
+                        setDialogState(() => allowBrandTagging = value),
+                    title: const Text('Allow approved brand tagging'),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: contentStatus,
+                    decoration:
+                        const InputDecoration(labelText: 'Content status'),
+                    items: const [
+                      'not_started',
+                      'consent_pending',
+                      'ready_to_edit',
+                      'approved',
+                      'posted',
+                      'archived'
+                    ]
+                        .map((value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(_displayStatusLabel(value))))
+                        .toList(),
+                    onChanged: (value) => setDialogState(
+                        () => contentStatus = value ?? contentStatus),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: contentUrl,
+                      decoration: const InputDecoration(
+                          labelText: 'Reaction photo/video link')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: caption,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'Caption draft')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: approvedCaption,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'Approved caption')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: brandName,
+                      decoration:
+                          const InputDecoration(labelText: 'Featured brand')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: brandTags,
+                      decoration: const InputDecoration(
+                          labelText: 'Brand social tags (comma separated)')),
+                  SwitchListTile(
+                    value: brandTagApproved,
+                    onChanged: allowBrandTagging
+                        ? (value) =>
+                            setDialogState(() => brandTagApproved = value)
+                        : null,
+                    title: const Text('Brand tags approved'),
+                  ),
+                  TextField(
+                      controller: tiktok,
+                      decoration:
+                          const InputDecoration(labelText: 'TikTok URL')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: instagram,
+                      decoration:
+                          const InputDecoration(labelText: 'Instagram URL')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: youtube,
+                      decoration: const InputDecoration(
+                          labelText: 'YouTube Shorts URL')),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: metrics.keys
+                        .map((key) => SizedBox(
+                              width: 115,
+                              child: TextFormField(
+                                initialValue: '${metrics[key]}',
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                    labelText: _displayStatusLabel(key)),
+                                onChanged: (value) => metrics[key] =
+                                    int.tryParse(value.trim()) ?? 0,
+                              ),
+                            ))
+                        .toList(),
+                  ),
                 ],
               ),
             ),
@@ -2509,12 +2851,64 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Close')),
             FilledButton(
-              onPressed: () => Navigator.pop(context, {
-                'status': status,
-                'manualGiftPlan': plan.text.trim(),
-                'adminDecision': decision.text.trim(),
-                'internalNotes': notes.text.trim(),
-              }),
+              onPressed: () {
+                final candidate = <String, dynamic>{
+                  ...item,
+                  'recipientContentConsent': recipientConsent,
+                  'allowCircumSocialUse': allowSocial,
+                  'allowPublicPosting': allowPublicPosting,
+                  'allowBrandTagging': allowBrandTagging,
+                };
+                if (contentStatus == 'posted' &&
+                    !GiftsSocialPolicy.canPostPublicly(candidate)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Public consent is required before content can be marked posted.'),
+                  ));
+                  return;
+                }
+                if (brandTagApproved &&
+                    !GiftsSocialPolicy.canApproveBrandTags(candidate)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Brand tagging consent is required before tags can be approved.'),
+                  ));
+                  return;
+                }
+                Navigator.pop(context, {
+                  'status': status,
+                  'manualGiftPlan': plan.text.trim(),
+                  'adminDecision': decision.text.trim(),
+                  'internalNotes': notes.text.trim(),
+                  'recipientContentConsent': recipientConsent,
+                  'senderContentConsent': senderConsent,
+                  'allowCircumSocialUse': allowSocial,
+                  'allowBrandTagging': allowBrandTagging,
+                  'allowReactionRecording': allowRecording,
+                  'allowPublicPosting': allowPublicPosting,
+                  'allowAnonymousPosting': allowAnonymousPosting,
+                  'contentUsageScope': allowPublicPosting
+                      ? 'social_media'
+                      : allowSocial
+                          ? 'circum_marketing'
+                          : 'private',
+                  'contentStatus': contentStatus,
+                  'reactionContentUrl': contentUrl.text.trim(),
+                  'captionDraft': caption.text.trim(),
+                  'approvedCaption': approvedCaption.text.trim(),
+                  'brandName': brandName.text.trim(),
+                  'brandTags': brandTags.text
+                      .split(',')
+                      .map((tag) => tag.trim())
+                      .where((tag) => tag.isNotEmpty)
+                      .toList(),
+                  'brandTagApproved': brandTagApproved,
+                  'postedTikTokUrl': tiktok.text.trim(),
+                  'postedInstagramUrl': instagram.text.trim(),
+                  'postedYouTubeShortsUrl': youtube.text.trim(),
+                  ...metrics,
+                });
+              },
               child: const Text('Save'),
             ),
           ],
@@ -2524,16 +2918,80 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     notes.dispose();
     decision.dispose();
     plan.dispose();
+    caption.dispose();
+    approvedCaption.dispose();
+    contentUrl.dispose();
+    tiktok.dispose();
+    instagram.dispose();
+    youtube.dispose();
+    brandName.dispose();
+    brandTags.dispose();
     if (result == null) return;
+    final nowPosted = result['contentStatus'] == 'posted';
+    final wasPosted = item['contentStatus'] == 'posted';
     await FirebaseFirestore.instance
         .collection('giftRequests')
         .doc('${item['id']}')
         .update({
       ...result,
       'assignedAdminId': _adminUser?.uid,
+      if (recipientConsent != 'pending')
+        'consentCapturedAt': FieldValue.serverTimestamp(),
+      'consentVersion': 'gifts-social-v1',
+      if (nowPosted && !wasPosted) ...{
+        'postedAt': FieldValue.serverTimestamp(),
+        'postedBy': _adminUser?.uid,
+      },
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? '',
+      actionType: nowPosted && !wasPosted
+          ? 'Gift content posted'
+          : 'Gift social record updated',
+      recordType: 'giftRequest',
+      recordId: '${item['id']}',
+      oldValue: item,
+      newValue: result,
+      reason: nowPosted && !wasPosted
+          ? 'Gift content posted to an approved social channel.'
+          : 'Consent, caption, brand, or exposure details updated.',
+    ));
+    if (nowPosted && '${result['brandName'] ?? ''}'.trim().isNotEmpty) {
+      await _recordGiftBrandExposure('${item['id']}', result);
+    }
     await _loadAdminData();
+  }
+
+  Future<void> _recordGiftBrandExposure(
+    String giftOrderId,
+    Map<String, dynamic> social,
+  ) async {
+    final name = '${social['brandName']}'.trim();
+    final id = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    final engagement = (social['likes'] as num? ?? 0).toInt() +
+        (social['comments'] as num? ?? 0).toInt() +
+        (social['shares'] as num? ?? 0).toInt() +
+        (social['saves'] as num? ?? 0).toInt();
+    await FirebaseFirestore.instance.collection('giftBrands').doc(id).set({
+      'brandName': name,
+      'partnershipStatus': 'tagged',
+      'timesFeatured': FieldValue.increment(1),
+      'totalViews':
+          FieldValue.increment((social['views'] as num? ?? 0).toInt()),
+      'totalEngagement': FieldValue.increment(engagement),
+      'featuredGiftOrderIds': FieldValue.arrayUnion([giftOrderId]),
+      'contentLinks': FieldValue.arrayUnion([
+        if ('${social['postedTikTokUrl'] ?? ''}'.isNotEmpty)
+          social['postedTikTokUrl'],
+        if ('${social['postedInstagramUrl'] ?? ''}'.isNotEmpty)
+          social['postedInstagramUrl'],
+        if ('${social['postedYouTubeShortsUrl'] ?? ''}'.isNotEmpty)
+          social['postedYouTubeShortsUrl'],
+      ]),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   List<Map<String, dynamic>> _senderAdminRecords(String query) {
@@ -4284,6 +4742,103 @@ class _AdminLiveActivityPanel extends StatelessWidget {
                 )),
         ]),
       );
+}
+
+class _AdminGiftsSection extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> requests;
+  final List<Map<String, dynamic>> participants;
+  final List<Map<String, dynamic>> brands;
+  final List<Widget> Function(Map<String, dynamic>) requestRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) participantRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) brandRowBuilder;
+
+  const _AdminGiftsSection({
+    required this.colors,
+    required this.requests,
+    required this.participants,
+    required this.brands,
+    required this.requestRowBuilder,
+    required this.participantRowBuilder,
+    required this.brandRowBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          Material(
+            color: colors.adminChrome,
+            child: const TabBar(
+              isScrollable: true,
+              tabs: [
+                Tab(text: 'Gift requests'),
+                Tab(text: 'Campaign matching'),
+                Tab(text: 'Partner brands'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(children: [
+              _AdminDataSection(
+                colors: colors,
+                title: 'Gifts by Circum',
+                subtitle:
+                    'Private fulfilment, consent, social content, and exposure management.',
+                records: requests,
+                columns: const [
+                  'Sender',
+                  'Recipient',
+                  'Occasion',
+                  'Budget',
+                  'Status',
+                  'Actions'
+                ],
+                rowBuilder: requestRowBuilder,
+                emptyText: 'No gift requests yet.',
+              ),
+              _AdminDataSection(
+                colors: colors,
+                title: 'Bringing London Closer',
+                subtitle:
+                    'Anonymous campaign matching. Direct contact details remain private.',
+                records: participants,
+                columns: const [
+                  'Participant',
+                  'Area',
+                  'Interests',
+                  'Status',
+                  'Match',
+                  'Actions'
+                ],
+                rowBuilder: participantRowBuilder,
+                emptyText: 'No campaign participants yet.',
+              ),
+              _AdminDataSection(
+                colors: colors,
+                title: 'Partner brand exposure',
+                subtitle:
+                    'Approved tags and manually entered social performance only.',
+                records: brands,
+                columns: const [
+                  'Brand',
+                  'Category',
+                  'Status',
+                  'Featured',
+                  'Views',
+                  'Engagement'
+                ],
+                rowBuilder: brandRowBuilder,
+                emptyText: 'No featured brands yet.',
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AdminDataSection extends StatelessWidget {
@@ -25092,6 +25647,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   String _relationship = 'Friend';
   String _occasion = 'Birthday';
   String _timeWindow = 'Afternoon';
+  String _giftMode = 'gift_someone';
+  String _anonymousGiftType = 'direct';
+  String _senderRevealMode = 'anonymous_until_consent';
+  String _selfGiftFrequency = 'one_off';
   DateTime? _deliveryDate;
   final Set<String> _interests = {};
   XFile? _photo;
@@ -25246,6 +25805,17 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'recipientContact': _recipientContact.text.trim(),
         'relationship': _relationship,
         'occasion': _occasion,
+        'giftMode': _giftMode,
+        'anonymousGiftType':
+            _giftMode == 'anonymous_gift' ? _anonymousGiftType : null,
+        'senderRevealMode': _giftMode == 'anonymous_gift'
+            ? _senderRevealMode
+            : 'reveal_immediately',
+        'senderRevealConsent':
+            _giftMode == 'anonymous_gift' ? 'not_requested' : 'granted',
+        'recipientRevealRequestStatus': 'none',
+        'selfGiftFrequency':
+            _giftMode == 'gift_myself' ? _selfGiftFrequency : null,
         'deliveryAddress': _deliveryAddress.text.trim(),
         'deliveryDate': Timestamp.fromDate(_deliveryDate!),
         'deliveryTimeWindow': _timeWindow,
@@ -25263,6 +25833,32 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'irisSuggestion': 'Pending IRIS gift recommendation',
         'adminDecision': '',
         'internalNotes': '',
+        'recipientContentConsent': 'pending',
+        'senderContentConsent': 'pending',
+        'consentCapturedAt': null,
+        'consentVersion': 'gifts-social-v1',
+        'consentNotes': '',
+        'allowCircumSocialUse': false,
+        'allowBrandTagging': false,
+        'allowReactionRecording': false,
+        'allowPublicPosting': false,
+        'allowAnonymousPosting': false,
+        'contentUsageScope': 'private',
+        'contentConsentWithdrawnAt': null,
+        'contentStatus': 'not_started',
+        'campaignId':
+            _anonymousGiftType == 'campaign' ? 'bringing-london-closer' : null,
+        'campaignName':
+            _anonymousGiftType == 'campaign' ? 'Bringing London Closer' : null,
+        'campaignTagline': _anonymousGiftType == 'campaign'
+            ? '100 Londoners. 100 gifts. 100 stories.'
+            : null,
+        'campaignType':
+            _anonymousGiftType == 'campaign' ? 'anonymous_gifting' : null,
+        'participantConsentRequired': _anonymousGiftType == 'campaign',
+        'recordingConsentRequired': _anonymousGiftType == 'campaign',
+        'mutualRevealAllowed': _anonymousGiftType == 'campaign',
+        'anonymousByDefault': _giftMode == 'anonymous_gift',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -25355,6 +25951,96 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                         fontSize: 26,
                                         fontWeight: FontWeight.w900)),
                                 const SizedBox(height: 16),
+                                DropdownButtonFormField<String>(
+                                  initialValue: _giftMode,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Gift mode'),
+                                  items: const {
+                                    'gift_someone': 'Gift someone',
+                                    'gift_myself': 'Gift myself',
+                                    'anonymous_gift': 'Anonymous gift',
+                                  }
+                                      .entries
+                                      .map((entry) => DropdownMenuItem(
+                                          value: entry.key,
+                                          child: Text(entry.value)))
+                                      .toList(),
+                                  onChanged: (value) => setState(
+                                      () => _giftMode = value ?? _giftMode),
+                                ),
+                                if (_giftMode == 'anonymous_gift') ...[
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _anonymousGiftType,
+                                    decoration: const InputDecoration(
+                                        labelText: 'Anonymous gift type'),
+                                    items: const {
+                                      'direct': 'Direct anonymous gift',
+                                      'campaign':
+                                          'Campaign · Bringing London Closer',
+                                    }
+                                        .entries
+                                        .map((entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value)))
+                                        .toList(),
+                                    onChanged: (value) => setState(() =>
+                                        _anonymousGiftType =
+                                            value ?? _anonymousGiftType),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _senderRevealMode,
+                                    decoration: const InputDecoration(
+                                        labelText: 'Identity reveal'),
+                                    items: const {
+                                      'anonymous_forever': 'Anonymous forever',
+                                      'reveal_after_delivery':
+                                          'Reveal after delivery',
+                                      'anonymous_until_consent':
+                                          'Reveal only with later consent',
+                                      'reveal_immediately':
+                                          'Reveal immediately',
+                                    }
+                                        .entries
+                                        .map((entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value)))
+                                        .toList(),
+                                    onChanged: (value) => setState(() =>
+                                        _senderRevealMode =
+                                            value ?? _senderRevealMode),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
+                                    style: TextStyle(
+                                        color: colors.mutedText, fontSize: 12),
+                                  ),
+                                ],
+                                if (_giftMode == 'gift_myself') ...[
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _selfGiftFrequency,
+                                    decoration: const InputDecoration(
+                                        labelText: 'Self-gift frequency'),
+                                    items: const {
+                                      'one_off': 'One-off',
+                                      'monthly': 'Monthly',
+                                      'quarterly': 'Quarterly',
+                                      'custom': 'Custom',
+                                    }
+                                        .entries
+                                        .map((entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value)))
+                                        .toList(),
+                                    onChanged: (value) => setState(() =>
+                                        _selfGiftFrequency =
+                                            value ?? _selfGiftFrequency),
+                                  ),
+                                ],
+                                const SizedBox(height: 12),
                                 _giftField(_senderName, 'Sender name',
                                     Icons.person_outline),
                                 _giftField(_senderEmail, 'Sender email',
@@ -25509,6 +26195,13 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                         color: colors.mutedText, fontSize: 12)),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      color: colors.mutedText, fontSize: 12),
+                                ),
                               ])),
                       if (_requests.isNotEmpty) ...[
                         const SizedBox(height: 22),

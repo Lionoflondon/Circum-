@@ -261,6 +261,34 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /giftBrands/{brandId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /giftCampaignParticipants/{participantId} {
+      allow create: if signedIn() &&
+        request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny([
+            'matchedParticipantId',
+            'matchScore',
+            'matchReason',
+            'matchStatus',
+            'matchLockedAt',
+            'matchApprovedBy'
+          ]));
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /giftCampaignMatches/{matchId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /irisLearningOutliers/{outlierId} {
       allow create: if signedIn() &&
         request.resource.data.senderId == request.auth.uid &&
