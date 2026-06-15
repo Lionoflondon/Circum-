@@ -17,6 +17,7 @@ const iris = require("./iris");
 const deliveryAdjustments = require("./delivery-adjustments");
 const platformNotifications = require("./platform-notifications");
 const legends = require("./legends");
+const giftsPayment = require("./gifts-payment");
 
 initializeApp();
 
@@ -43,6 +44,8 @@ exports.onRiderProfileUpdated = platformNotifications.onRiderProfileUpdated;
 exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
 exports.escalateUnclaimedDeliveries = platformNotifications.escalateUnclaimedDeliveries;
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
+exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
+exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

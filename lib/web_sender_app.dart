@@ -2588,6 +2588,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final brandName = TextEditingController(text: '${item['brandName'] ?? ''}');
     final brandTags = TextEditingController(
         text: (item['brandTags'] as List?)?.join(', ') ?? '');
+    final procurementTitle =
+        TextEditingController(text: '${item['procurementItemTitle'] ?? ''}');
+    final procurementSupplier =
+        TextEditingController(text: '${item['procurementSupplier'] ?? ''}');
+    final procurementEstimatedCost = TextEditingController(
+        text: '${item['procurementEstimatedCost'] ?? ''}');
+    final procurementActualCost =
+        TextEditingController(text: '${item['procurementActualCost'] ?? ''}');
+    final procurementNotes =
+        TextEditingController(text: '${item['procurementNotes'] ?? ''}');
+    final isCampaignGift = '${item['giftType'] ?? 'standard'}' == 'campaign';
     final metrics = <String, int>{
       'views': (item['views'] as num?)?.toInt() ?? 0,
       'likes': (item['likes'] as num?)?.toInt() ?? 0,
@@ -2624,6 +2635,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       'Relationship / occasion: ${item['relationship']} · ${item['occasion']}'),
                   Text(
                       'Budget: £${((item['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}'),
+                  Text(
+                      'Payment: ${_displayStatusLabel('${item['paymentStatus'] ?? 'payment_pending'}')}'),
+                  Text(
+                      'Net after payment fee: £${((item['netGiftBudgetAfterFees'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}'),
                   Text('Delivery: ${item['deliveryAddress']}'),
                   Text(
                       'Window: ${_adminDateText(item['deliveryDate'])} · ${item['deliveryTimeWindow']}'),
@@ -2636,6 +2651,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     initialValue: status,
                     decoration: const InputDecoration(labelText: 'Status'),
                     items: const [
+                      'draft',
+                      'submitted_for_review',
                       'submitted',
                       'reviewing',
                       'approved',
@@ -2656,8 +2673,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   TextField(
                       controller: plan,
                       maxLines: 3,
-                      decoration:
-                          const InputDecoration(labelText: 'Manual gift plan')),
+                      decoration: const InputDecoration(
+                          labelText: 'Recommended Experience')),
                   const SizedBox(height: 12),
                   TextField(
                       controller: decision,
@@ -2672,161 +2689,199 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                           const InputDecoration(labelText: 'Internal notes')),
                   const SizedBox(height: 22),
                   const Divider(),
-                  const Text('Social / Brand Exposure',
+                  const Text('Procurement Plan',
                       style:
                           TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Recording is optional. A recipient may decline filming and still receive their gift.',
-                  ),
-                  const SizedBox(height: 12),
+                  TextField(
+                      controller: procurementTitle,
+                      decoration: const InputDecoration(
+                          labelText: 'Internal item title / description')),
+                  const SizedBox(height: 10),
+                  TextField(
+                      controller: procurementSupplier,
+                      decoration: const InputDecoration(labelText: 'Supplier')),
+                  const SizedBox(height: 10),
                   Row(children: [
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: recipientConsent,
-                        decoration: const InputDecoration(
-                            labelText: 'Recipient content consent'),
-                        items: const ['pending', 'granted', 'declined']
-                            .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(_displayStatusLabel(value))))
-                            .toList(),
-                        onChanged: (value) => setDialogState(
-                            () => recipientConsent = value ?? recipientConsent),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
+                        child: TextField(
+                            controller: procurementEstimatedCost,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                                labelText: 'Estimated cost'))),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: senderConsent,
-                        decoration: const InputDecoration(
-                            labelText: 'Sender content consent'),
-                        items: const ['pending', 'granted', 'declined']
-                            .map((value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(_displayStatusLabel(value))))
-                            .toList(),
-                        onChanged: (value) => setDialogState(
-                            () => senderConsent = value ?? senderConsent),
-                      ),
-                    ),
+                        child: TextField(
+                            controller: procurementActualCost,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                                labelText: 'Actual cost')))
                   ]),
-                  SwitchListTile(
-                    value: allowRecording,
-                    onChanged: (value) =>
-                        setDialogState(() => allowRecording = value),
-                    title: const Text('Allow reaction recording'),
-                  ),
-                  SwitchListTile(
-                    value: allowSocial,
-                    onChanged: (value) =>
-                        setDialogState(() => allowSocial = value),
-                    title: const Text('Allow Circum social use'),
-                  ),
-                  SwitchListTile(
-                    value: allowPublicPosting,
-                    onChanged: (value) =>
-                        setDialogState(() => allowPublicPosting = value),
-                    title: const Text('Allow public posting'),
-                  ),
-                  SwitchListTile(
-                    value: allowAnonymousPosting,
-                    onChanged: (value) =>
-                        setDialogState(() => allowAnonymousPosting = value),
-                    title: const Text('Allow anonymous posting'),
-                  ),
-                  SwitchListTile(
-                    value: allowBrandTagging,
-                    onChanged: (value) =>
-                        setDialogState(() => allowBrandTagging = value),
-                    title: const Text('Allow approved brand tagging'),
-                  ),
-                  DropdownButtonFormField<String>(
-                    initialValue: contentStatus,
-                    decoration:
-                        const InputDecoration(labelText: 'Content status'),
-                    items: const [
-                      'not_started',
-                      'consent_pending',
-                      'ready_to_edit',
-                      'approved',
-                      'posted',
-                      'archived'
-                    ]
-                        .map((value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(_displayStatusLabel(value))))
-                        .toList(),
-                    onChanged: (value) => setDialogState(
-                        () => contentStatus = value ?? contentStatus),
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   TextField(
-                      controller: contentUrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Reaction photo/video link')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: caption,
+                      controller: procurementNotes,
                       maxLines: 3,
-                      decoration:
-                          const InputDecoration(labelText: 'Caption draft')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: approvedCaption,
-                      maxLines: 3,
-                      decoration:
-                          const InputDecoration(labelText: 'Approved caption')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: brandName,
-                      decoration:
-                          const InputDecoration(labelText: 'Featured brand')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: brandTags,
                       decoration: const InputDecoration(
-                          labelText: 'Brand social tags (comma separated)')),
-                  SwitchListTile(
-                    value: brandTagApproved,
-                    onChanged: allowBrandTagging
-                        ? (value) =>
-                            setDialogState(() => brandTagApproved = value)
-                        : null,
-                    title: const Text('Brand tags approved'),
-                  ),
-                  TextField(
-                      controller: tiktok,
+                          labelText: 'Procurement internal notes')),
+                  if (isCampaignGift) ...[
+                    const SizedBox(height: 22),
+                    const Divider(),
+                    const Text('Social / Brand Exposure',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Recording is optional. A recipient may decline filming and still receive their gift.',
+                    ),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: recipientConsent,
+                          decoration: const InputDecoration(
+                              labelText: 'Recipient content consent'),
+                          items: const ['pending', 'granted', 'declined']
+                              .map((value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(_displayStatusLabel(value))))
+                              .toList(),
+                          onChanged: (value) => setDialogState(() =>
+                              recipientConsent = value ?? recipientConsent),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: senderConsent,
+                          decoration: const InputDecoration(
+                              labelText: 'Sender content consent'),
+                          items: const ['pending', 'granted', 'declined']
+                              .map((value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(_displayStatusLabel(value))))
+                              .toList(),
+                          onChanged: (value) => setDialogState(
+                              () => senderConsent = value ?? senderConsent),
+                        ),
+                      ),
+                    ]),
+                    SwitchListTile(
+                      value: allowRecording,
+                      onChanged: (value) =>
+                          setDialogState(() => allowRecording = value),
+                      title: const Text('Allow reaction recording'),
+                    ),
+                    SwitchListTile(
+                      value: allowSocial,
+                      onChanged: (value) =>
+                          setDialogState(() => allowSocial = value),
+                      title: const Text('Allow Circum social use'),
+                    ),
+                    SwitchListTile(
+                      value: allowPublicPosting,
+                      onChanged: (value) =>
+                          setDialogState(() => allowPublicPosting = value),
+                      title: const Text('Allow public posting'),
+                    ),
+                    SwitchListTile(
+                      value: allowAnonymousPosting,
+                      onChanged: (value) =>
+                          setDialogState(() => allowAnonymousPosting = value),
+                      title: const Text('Allow anonymous posting'),
+                    ),
+                    SwitchListTile(
+                      value: allowBrandTagging,
+                      onChanged: (value) =>
+                          setDialogState(() => allowBrandTagging = value),
+                      title: const Text('Allow approved brand tagging'),
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: contentStatus,
                       decoration:
-                          const InputDecoration(labelText: 'TikTok URL')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: instagram,
-                      decoration:
-                          const InputDecoration(labelText: 'Instagram URL')),
-                  const SizedBox(height: 12),
-                  TextField(
-                      controller: youtube,
-                      decoration: const InputDecoration(
-                          labelText: 'YouTube Shorts URL')),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: metrics.keys
-                        .map((key) => SizedBox(
-                              width: 115,
-                              child: TextFormField(
-                                initialValue: '${metrics[key]}',
-                                keyboardType: TextInputType.number,
-                                decoration: InputDecoration(
-                                    labelText: _displayStatusLabel(key)),
-                                onChanged: (value) => metrics[key] =
-                                    int.tryParse(value.trim()) ?? 0,
-                              ),
-                            ))
-                        .toList(),
-                  ),
+                          const InputDecoration(labelText: 'Content status'),
+                      items: const [
+                        'not_started',
+                        'consent_pending',
+                        'ready_to_edit',
+                        'approved',
+                        'posted',
+                        'archived'
+                      ]
+                          .map((value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(_displayStatusLabel(value))))
+                          .toList(),
+                      onChanged: (value) => setDialogState(
+                          () => contentStatus = value ?? contentStatus),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: contentUrl,
+                        decoration: const InputDecoration(
+                            labelText: 'Reaction photo/video link')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: caption,
+                        maxLines: 3,
+                        decoration:
+                            const InputDecoration(labelText: 'Caption draft')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: approvedCaption,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                            labelText: 'Approved caption')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: brandName,
+                        decoration:
+                            const InputDecoration(labelText: 'Featured brand')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: brandTags,
+                        decoration: const InputDecoration(
+                            labelText: 'Brand social tags (comma separated)')),
+                    SwitchListTile(
+                      value: brandTagApproved,
+                      onChanged: allowBrandTagging
+                          ? (value) =>
+                              setDialogState(() => brandTagApproved = value)
+                          : null,
+                      title: const Text('Brand tags approved'),
+                    ),
+                    TextField(
+                        controller: tiktok,
+                        decoration:
+                            const InputDecoration(labelText: 'TikTok URL')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: instagram,
+                        decoration:
+                            const InputDecoration(labelText: 'Instagram URL')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: youtube,
+                        decoration: const InputDecoration(
+                            labelText: 'YouTube Shorts URL')),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: metrics.keys
+                          .map((key) => SizedBox(
+                                width: 115,
+                                child: TextFormField(
+                                  initialValue: '${metrics[key]}',
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                      labelText: _displayStatusLabel(key)),
+                                  onChanged: (value) => metrics[key] =
+                                      int.tryParse(value.trim()) ?? 0,
+                                ),
+                              ))
+                          .toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -2839,7 +2894,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 plan.text =
                     '${item['occasion']} gift for a ${item['relationship']} with a £${item['grossBudget']} budget, guided by: $interests.';
               },
-              child: const Text('Generate Gift Idea'),
+              child: const Text('Generate Recommended Experience'),
             ),
             TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -2874,6 +2929,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   'manualGiftPlan': plan.text.trim(),
                   'adminDecision': decision.text.trim(),
                   'internalNotes': notes.text.trim(),
+                  'procurementItemTitle': procurementTitle.text.trim(),
+                  'procurementSupplier': procurementSupplier.text.trim(),
+                  'procurementEstimatedCost':
+                      double.tryParse(procurementEstimatedCost.text.trim()),
+                  'procurementActualCost':
+                      double.tryParse(procurementActualCost.text.trim()),
+                  'procurementNotes': procurementNotes.text.trim(),
                   'recipientContentConsent': recipientConsent,
                   'senderContentConsent': senderConsent,
                   'allowCircumSocialUse': allowSocial,
@@ -2920,6 +2982,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     youtube.dispose();
     brandName.dispose();
     brandTags.dispose();
+    procurementTitle.dispose();
+    procurementSupplier.dispose();
+    procurementEstimatedCost.dispose();
+    procurementActualCost.dispose();
+    procurementNotes.dispose();
     if (result == null) return;
     final nowPosted = result['contentStatus'] == 'posted';
     final wasPosted = item['contentStatus'] == 'posted';
@@ -25635,11 +25702,21 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   final _senderName = TextEditingController();
   final _senderEmail = TextEditingController();
   final _recipientName = TextEditingController();
-  final _recipientContact = TextEditingController();
+  final _recipientPhone = TextEditingController();
+  final _recipientEmail = TextEditingController();
   final _deliveryAddress = TextEditingController();
   final _budget = TextEditingController();
   final _personalMessage = TextEditingController();
   final _notes = TextEditingController();
+  final _clothingSize = TextEditingController();
+  final _shoeSize = TextEditingController();
+  final _ringSize = TextEditingController();
+  final _height = TextEditingController();
+  final _favouriteColours = TextEditingController();
+  final _likedBrands = TextEditingController();
+  final _dislikedBrands = TextEditingController();
+  String _preferredFit = 'Regular';
+  _ValidatedAddress? _validatedGiftAddress;
   String _relationship = 'Friend';
   String _occasion = 'Birthday';
   String _timeWindow = 'Afternoon';
@@ -25674,25 +25751,55 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   static const _occasions = [
     'Birthday',
     'Anniversary',
+    'Wedding',
+    'Engagement',
     'Graduation',
-    'Thank You',
     'New Baby',
+    'Baby Shower',
+    'Christening',
+    'Baptism',
+    'Confirmation',
     'Christmas',
-    'Just Because',
-    'Apology',
+    'Easter',
+    'Eid',
+    'Diwali',
+    'Hanukkah',
+    "Mother's Day",
+    "Father's Day",
+    "Valentine's Day",
+    'Retirement',
+    'Promotion',
+    'New Job',
+    'Housewarming',
+    'Thank You',
     'Congratulations',
-    'Get Well Soon'
+    'Get Well Soon',
+    'Sympathy',
+    'Apology',
+    'Just Because',
+    'Bank Holiday Surprise',
+    'Leaving Gift',
+    'Achievement Reward'
   ];
   static const _interestOptions = [
     'Fashion',
     'Beauty',
+    'Makeup',
+    'Skincare',
     'Tech',
     'Gaming',
     'Gym',
     'Travel',
     'Books',
     'Food',
+    'Cooking',
+    'Coffee',
+    'Tea',
     'Christian',
+    'Muslim',
+    'Jewish',
+    'Spiritual',
+    'Charity',
     'Aviation',
     'Music',
     'Luxury',
@@ -25700,7 +25807,26 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Home Decor',
     'Fragrance',
     'Art',
-    'Sports'
+    'Design',
+    'Architecture',
+    'Gardening',
+    'Film',
+    'Theatre',
+    'Sports',
+    'Football',
+    'Running',
+    'Cycling',
+    'Swimming',
+    'Photography',
+    'Cars',
+    'Motorcycles',
+    'Jewellery',
+    'Watches',
+    'Writing',
+    'Animals',
+    'Nature',
+    'Sustainability',
+    'Collectibles'
   ];
 
   @override
@@ -25715,11 +25841,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _senderName,
       _senderEmail,
       _recipientName,
-      _recipientContact,
+      _recipientPhone,
+      _recipientEmail,
       _deliveryAddress,
       _budget,
       _personalMessage,
       _notes,
+      _clothingSize,
+      _shoeSize,
+      _ringSize,
+      _height,
+      _favouriteColours,
+      _likedBrands,
+      _dislikedBrands,
       _previewEmail,
       _previewPassword
     ]) {
@@ -25822,6 +25956,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     final validation = GiftRequestPolicy.validate(
       senderEmail: _senderEmail.text,
       recipientName: _recipientName.text,
+      recipientPhone: _recipientPhone.text,
+      recipientEmail: _recipientEmail.text,
       relationship: _relationship,
       occasion: _occasion,
       deliveryAddress: _deliveryAddress.text,
@@ -25832,6 +25968,43 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       setState(() => _message = validation);
       return;
     }
+    if (_validatedGiftAddress == null) {
+      setState(() => _message =
+          'Please select a verified address from the suggestions, or confirm the manual address.');
+      return;
+    }
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Review your gift experience'),
+        content: SingleChildScrollView(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Occasion: $_occasion'),
+            Text('Recipient: ${_recipientName.text.trim()}'),
+            Text(
+                'Contact: ${_recipientPhone.text.trim()} · ${_recipientEmail.text.trim()}'),
+            Text('Delivery: ${_deliveryAddress.text.trim()}'),
+            Text('Date: ${_adminDateText(_deliveryDate)} · $_timeWindow'),
+            Text('Gift budget: £${grossBudget!.toStringAsFixed(2)}'),
+            if (_personalMessage.text.trim().isNotEmpty)
+              Text('Message: ${_personalMessage.text.trim()}'),
+            const SizedBox(height: 12),
+            const Text(
+                'Gift contents remain confidential before delivery. No products, brands, retailers or basket details are shown.'),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Back')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Proceed to Payment')),
+        ],
+      ),
+    );
+    if (proceed != true) return;
     setState(() {
       _saving = true;
       _message = null;
@@ -25854,7 +26027,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'senderName': _senderName.text.trim(),
         'senderEmail': _senderEmail.text.trim().toLowerCase(),
         'recipientName': _recipientName.text.trim(),
-        'recipientContact': _recipientContact.text.trim(),
+        'recipientPhone': _recipientPhone.text.trim(),
+        'recipientEmail': _recipientEmail.text.trim().toLowerCase(),
+        'recipientContact':
+            '${_recipientPhone.text.trim()} · ${_recipientEmail.text.trim().toLowerCase()}',
         'relationship': _relationship,
         'occasion': _occasion,
         'giftMode': _giftMode,
@@ -25869,10 +26045,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'selfGiftFrequency':
             _giftMode == 'gift_myself' ? _selfGiftFrequency : null,
         'deliveryAddress': _deliveryAddress.text.trim(),
+        'deliveryAddressData': _validatedGiftAddress!.toJson(),
+        'deliveryPostcode': _validatedGiftAddress!.postcode,
+        'deliveryCity': _validatedGiftAddress!.city,
+        'deliveryCountry': _validatedGiftAddress!.country,
         'deliveryDate': Timestamp.fromDate(_deliveryDate!),
         'deliveryTimeWindow': _timeWindow,
         'budget': grossBudget,
         'grossBudget': grossBudget,
+        'grossGiftBudget': grossBudget,
+        'estimatedStripeFee':
+            GiftRequestPolicy.estimatedStripeFee(grossBudget!),
+        'netGiftBudgetAfterFees':
+            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget),
         'estimatedNetGiftBudget':
             GiftRequestPolicy.estimatedNetGiftBudget(grossBudget!),
         'budgetStatus': 'pending_allocation',
@@ -25880,7 +26065,20 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'interests': _interests.toList(),
         'photoUrls': photoUrls,
         'notes': _notes.text.trim(),
-        'status': 'submitted',
+        'sizesAndPreferences': {
+          'clothingSize': _clothingSize.text.trim(),
+          'shoeSize': _shoeSize.text.trim(),
+          'ringSize': _ringSize.text.trim(),
+          'preferredFit': _preferredFit,
+          'height': _height.text.trim(),
+          'favouriteColours': _favouriteColours.text.trim(),
+          'brandsLiked': _likedBrands.text.trim(),
+          'brandsDisliked': _dislikedBrands.text.trim(),
+        },
+        'giftType': _anonymousGiftType == 'campaign' ? 'campaign' : 'standard',
+        'paymentStatus': 'payment_pending',
+        'giftStatus': 'draft',
+        'status': 'draft',
         'assignedAdminId': null,
         'irisSuggestion': 'Pending IRIS gift recommendation',
         'adminDecision': '',
@@ -25914,12 +26112,30 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      Stripe.publishableKey = Env.publishableLiveKey;
+      await Stripe.instance.applySettings();
+      final payment = await FirebaseFunctions.instance
+          .httpsCallable('createGiftPayment')
+          .call({'giftRequestId': doc.id});
+      final paymentData = Map<String, dynamic>.from(payment.data as Map);
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: '${paymentData['clientSecret']}',
+          merchantDisplayName: 'Gifts by Circum',
+          style: ThemeMode.dark,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+      await FirebaseFunctions.instance
+          .httpsCallable('finalizeGiftPayment')
+          .call({'giftRequestId': doc.id});
       if (!mounted) return;
       setState(() {
         _message =
-            'Your gift request has been submitted. The Circum Gifts Team will review it and prepare a thoughtful gift experience.';
+            'Payment received. Your gift experience is now submitted for review.';
         _recipientName.clear();
-        _recipientContact.clear();
+        _recipientPhone.clear();
+        _recipientEmail.clear();
         _deliveryAddress.clear();
         _budget.clear();
         _personalMessage.clear();
@@ -25927,6 +26143,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         _interests.clear();
         _photo = null;
         _deliveryDate = null;
+        _validatedGiftAddress = null;
       });
       await _loadAccountAndRequests();
     } catch (error) {
@@ -25934,7 +26151,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       if (mounted)
         setState(() => _message = error is StateError
             ? error.message
-            : 'We could not submit this request. Please try again.');
+            : 'Payment was not completed. Your gift remains pending and has not been confirmed.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -26061,11 +26278,38 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                         ),
                       if (signedIn) ...[
                         _GlassPanel(
+                          colors: colors,
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('How Gifts Works',
+                                    style: TextStyle(
+                                        color: colors.text,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900)),
+                                const SizedBox(height: 10),
+                                ...const [
+                                  '1. Tell us about the recipient.',
+                                  '2. Set your budget.',
+                                  '3. IRIS creates private recommendations.',
+                                  '4. The Gifts Team reviews and approves the experience.',
+                                  '5. We source, prepare and deliver.',
+                                  '6. The recipient discovers the surprise.',
+                                ].map((step) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Text(step))),
+                                const SizedBox(height: 8),
+                                const Text(
+                                    'Gift contents are intentionally kept confidential before delivery. Gifts by Circum is a curated gifting experience, not a traditional online shop.'),
+                              ]),
+                        ),
+                        const SizedBox(height: 14),
+                        _GlassPanel(
                             colors: colors,
                             child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Text('Send a Gift',
+                                  Text('Create the experience',
                                       style: TextStyle(
                                           color: colors.text,
                                           fontSize: 26,
@@ -26163,6 +26407,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                     ),
                                   ],
                                   const SizedBox(height: 12),
+                                  Text('Who is receiving?',
+                                      style: TextStyle(
+                                          color: colors.text,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 10),
                                   _giftField(_senderName, 'Sender name',
                                       Icons.person_outline),
                                   _giftField(_senderEmail, 'Sender email',
@@ -26170,10 +26420,17 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                       type: TextInputType.emailAddress),
                                   _giftField(_recipientName, 'Recipient name',
                                       Icons.redeem_outlined),
-                                  _giftField(
-                                      _recipientContact,
-                                      'Recipient phone or email (optional)',
+                                  _giftField(_recipientPhone, 'Recipient phone',
                                       Icons.contact_phone_outlined),
+                                  _giftField(_recipientEmail, 'Recipient email',
+                                      Icons.email_outlined,
+                                      type: TextInputType.emailAddress),
+                                  Text('Tell us about them',
+                                      style: TextStyle(
+                                          color: colors.text,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 10),
                                   Row(children: [
                                     Expanded(
                                         child: DropdownButtonFormField<String>(
@@ -26201,10 +26458,75 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                                 _occasion = v ?? _occasion))),
                                   ]),
                                   const SizedBox(height: 12),
+                                  Text('Sizes and preferences',
+                                      style: TextStyle(
+                                          color: colors.text,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 10),
+                                  Wrap(spacing: 10, runSpacing: 10, children: [
+                                    SizedBox(
+                                        width: 180,
+                                        child: _giftField(_clothingSize,
+                                            'Clothing size', Icons.checkroom)),
+                                    SizedBox(
+                                        width: 180,
+                                        child: _giftField(_shoeSize,
+                                            'Shoe size', Icons.hiking)),
+                                    SizedBox(
+                                        width: 180,
+                                        child: _giftField(
+                                            _ringSize,
+                                            'Ring size',
+                                            Icons.circle_outlined)),
+                                    SizedBox(
+                                        width: 180,
+                                        child: _giftField(
+                                            _height, 'Height', Icons.height)),
+                                  ]),
+                                  DropdownButtonFormField<String>(
+                                      initialValue: _preferredFit,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Preferred fit'),
+                                      items: const [
+                                        'Slim',
+                                        'Regular',
+                                        'Relaxed',
+                                        'Oversized'
+                                      ]
+                                          .map((v) => DropdownMenuItem(
+                                              value: v, child: Text(v)))
+                                          .toList(),
+                                      onChanged: (v) => setState(() =>
+                                          _preferredFit = v ?? _preferredFit)),
                                   _giftField(
-                                      _deliveryAddress,
-                                      'Delivery address',
-                                      Icons.location_on_outlined),
+                                      _favouriteColours,
+                                      'Favourite colours',
+                                      Icons.palette_outlined),
+                                  _giftField(_likedBrands, 'Brands they like',
+                                      Icons.favorite_border),
+                                  _giftField(_dislikedBrands,
+                                      'Brands they dislike', Icons.block),
+                                  Text('Delivery details',
+                                      style: TextStyle(
+                                          color: colors.text,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 10),
+                                  _AddressField(
+                                      colors: colors,
+                                      icon: Icons.location_on_outlined,
+                                      label: 'Delivery address',
+                                      controller: _deliveryAddress,
+                                      verified:
+                                          _validatedGiftAddress?.isVerified ==
+                                              true,
+                                      onSelected: (address) => setState(() =>
+                                          _validatedGiftAddress = address),
+                                      onEdited: (_) => setState(
+                                          () => _validatedGiftAddress = null),
+                                      verifiedMessage:
+                                          'Verified delivery address selected'),
                                   Row(children: [
                                     Expanded(
                                         child: OutlinedButton.icon(
@@ -26248,6 +26570,24 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                                     v ?? _timeWindow))),
                                   ]),
                                   const SizedBox(height: 12),
+                                  Text('Gift budget',
+                                      style: TextStyle(
+                                          color: colors.text,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [50, 100, 250, 500, 1000, 1500]
+                                          .map((value) => ChoiceChip(
+                                              label: Text('£$value'),
+                                              selected:
+                                                  _budget.text == '$value',
+                                              onSelected: (_) => setState(() =>
+                                                  _budget.text = '$value')))
+                                          .toList()),
+                                  const SizedBox(height: 8),
                                   _giftField(
                                       _budget,
                                       'Gift budget (minimum £50)',
@@ -26255,7 +26595,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                       type:
                                           const TextInputType.numberWithOptions(
                                               decimal: true)),
-                                  Text('Occasion and interests',
+                                  Text('Interests',
                                       style: TextStyle(
                                           color: colors.text,
                                           fontWeight: FontWeight.w800)),
@@ -26275,14 +26615,25 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                                           .remove(interest))))
                                           .toList()),
                                   const SizedBox(height: 12),
+                                  Text('Additional information',
+                                      style: TextStyle(
+                                          color: colors.text,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 8),
                                   _giftField(
                                       _personalMessage,
                                       'Personal message',
                                       Icons.chat_bubble_outline,
                                       lines: 3),
-                                  _giftField(_notes, 'Extra notes (optional)',
+                                  _giftField(_notes, 'Additional Information',
                                       Icons.notes,
                                       lines: 3),
+                                  Text(
+                                      'Record allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
+                                      style: TextStyle(
+                                          color: colors.mutedText,
+                                          fontSize: 12)),
                                   OutlinedButton.icon(
                                       onPressed: _pickPhoto,
                                       icon: const Icon(
@@ -26315,8 +26666,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                                   strokeWidth: 2))
                                           : const Icon(Icons.card_giftcard),
                                       label: Text(_saving
-                                          ? 'Submitting...'
-                                          : 'Submit gift request'),
+                                          ? 'Preparing payment...'
+                                          : 'Create Gift Experience'),
                                       style: FilledButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(
                                               vertical: 17))),

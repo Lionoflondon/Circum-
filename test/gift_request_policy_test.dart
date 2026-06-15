@@ -18,6 +18,8 @@ void main() {
       GiftRequestPolicy.validate(
         senderEmail: 'sender@example.com',
         recipientName: 'Ayo',
+        recipientPhone: '07123456789',
+        recipientEmail: 'recipient@example.com',
         relationship: 'Friend',
         occasion: 'Birthday',
         deliveryAddress: 'London',
@@ -29,7 +31,43 @@ void main() {
   });
 
   test('net gift budget reserves operational costs', () {
-    expect(GiftRequestPolicy.estimatedNetGiftBudget(100), 70);
+    expect(GiftRequestPolicy.estimatedStripeFee(100), 1.7);
+    expect(GiftRequestPolicy.estimatedNetGiftBudget(100), 98.3);
+  });
+
+  test('recipient phone and valid email are required before payment', () {
+    final common = DateTime(2026, 7, 1);
+    expect(
+        GiftRequestPolicy.validate(
+            senderEmail: 'sender@example.com',
+            recipientName: 'Ayo',
+            recipientEmail: 'recipient@example.com',
+            relationship: 'Friend',
+            occasion: 'Birthday',
+            deliveryAddress: 'London',
+            deliveryDate: common,
+            grossBudget: 100),
+        'Enter the recipient phone number.');
+    expect(
+        GiftRequestPolicy.validate(
+            senderEmail: 'sender@example.com',
+            recipientName: 'Ayo',
+            recipientPhone: '07123456789',
+            recipientEmail: 'invalid',
+            relationship: 'Friend',
+            occasion: 'Birthday',
+            deliveryAddress: 'London',
+            deliveryDate: common,
+            grossBudget: 100),
+        'Enter a valid recipient email address.');
+  });
+
+  test('unpaid gifts remain payment pending', () {
+    expect(GiftRequestPolicy.senderStatus('draft'), 'Payment pending');
+    expect(
+        GiftRequestPolicy.senderStatus('payment_pending'), 'Payment pending');
+    expect(GiftRequestPolicy.senderStatus('submitted_for_review'),
+        'Request submitted');
   });
 
   test('sender statuses hide internal fulfilment detail', () {

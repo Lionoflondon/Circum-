@@ -254,7 +254,9 @@ service cloud.firestore {
         (signedIn() &&
           request.auth.token.email == 'ayojason600@gmail.com' &&
           request.resource.data.senderId == request.auth.uid &&
-          request.resource.data.status == 'submitted' &&
+          request.resource.data.status == 'draft' &&
+          request.resource.data.paymentStatus == 'payment_pending' &&
+          request.resource.data.giftType in ['standard', 'campaign'] &&
           request.resource.data.grossBudget is number &&
           request.resource.data.grossBudget >= 50);
       allow read: if isAdmin() ||

@@ -8,12 +8,19 @@ class GiftRequestPolicy {
 
   static double estimatedNetGiftBudget(double grossBudget) {
     if (grossBudget <= 0) return 0;
-    return grossBudget * 0.70;
+    return grossBudget - estimatedStripeFee(grossBudget);
+  }
+
+  static double estimatedStripeFee(double grossBudget) {
+    if (grossBudget <= 0) return 0;
+    return (grossBudget * 0.015) + 0.20;
   }
 
   static String? validate({
     required String senderEmail,
     required String recipientName,
+    String recipientPhone = '',
+    String recipientEmail = '',
     required String relationship,
     required String occasion,
     required String deliveryAddress,
@@ -24,6 +31,12 @@ class GiftRequestPolicy {
       return 'Enter a valid sender email address.';
     }
     if (recipientName.trim().isEmpty) return 'Enter the recipient name.';
+    if (recipientPhone.trim().isEmpty)
+      return 'Enter the recipient phone number.';
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+        .hasMatch(recipientEmail.trim())) {
+      return 'Enter a valid recipient email address.';
+    }
     if (relationship.trim().isEmpty) return 'Select a relationship.';
     if (occasion.trim().isEmpty) return 'Select an occasion.';
     if (deliveryAddress.trim().isEmpty) return 'Enter the delivery address.';
@@ -36,7 +49,8 @@ class GiftRequestPolicy {
 
   static String senderStatus(String status) {
     return switch (status.trim().toLowerCase()) {
-      'submitted' || 'draft' => 'Request submitted',
+      'draft' || 'payment_pending' => 'Payment pending',
+      'paid' || 'submitted' || 'submitted_for_review' => 'Request submitted',
       'reviewing' => 'Under review',
       'approved' => 'Approved',
       'procuring' || 'packed' => 'Being prepared',
