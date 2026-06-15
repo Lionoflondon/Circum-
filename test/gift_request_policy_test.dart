@@ -2,17 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:circum/app/gifts/gift_request_policy.dart';
 
 void main() {
-  test('only the approved account can access Gifts private preview', () {
-    expect(
-      GiftRequestPolicy.canAccessPrivatePreview('ayojason600@gmail.com'),
-      isTrue,
-    );
-    expect(
-      GiftRequestPolicy.canAccessPrivatePreview('someone@example.com'),
-      isFalse,
-    );
-  });
-
   test('gift request enforces the minimum budget', () {
     expect(
       GiftRequestPolicy.validate(

@@ -1,11 +1,5 @@
 class GiftRequestPolicy {
   static const double minimumBudget = 50;
-  static const String privatePreviewEmail = 'ayojason600@gmail.com';
-
-  static bool canAccessPrivatePreview(String? email) {
-    return email?.trim().toLowerCase() == privatePreviewEmail;
-  }
-
   static double estimatedNetGiftBudget(double grossBudget) {
     if (grossBudget <= 0) return 0;
     return grossBudget - estimatedStripeFee(grossBudget);

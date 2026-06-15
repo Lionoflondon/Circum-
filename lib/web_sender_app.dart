@@ -25866,14 +25866,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     await _ensureCircumFirebaseReady();
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    if (!GiftRequestPolicy.canAccessPrivatePreview(user.email)) {
-      await FirebaseAuth.instance.signOut();
-      if (mounted) {
-        setState(() =>
-            _message = 'Gifts by Circum is currently in private preview.');
-      }
-      return;
-    }
     _senderEmail.text = user.email ?? '';
     _senderName.text = user.displayName ?? '';
     try {
@@ -25886,6 +25878,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       setState(() => _requests = snapshot.docs
           .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
           .toList());
+      await _handleGiftPaymentReturn();
     } catch (error) {
       debugPrint('Gift request history error: $error');
     }
@@ -25894,27 +25887,18 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   Future<void> _signInToPreview() async {
     if (_signingIn) return;
     final email = _previewEmail.text.trim().toLowerCase();
-    if (!GiftRequestPolicy.canAccessPrivatePreview(email)) {
-      setState(
-          () => _message = 'Gifts by Circum is currently in private preview.');
-      return;
-    }
     setState(() {
       _signingIn = true;
       _message = null;
     });
     try {
       await _ensureCircumFirebaseReady();
-      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: _previewPassword.text,
       );
-      if (!GiftRequestPolicy.canAccessPrivatePreview(credential.user?.email)) {
-        await FirebaseAuth.instance.signOut();
-        throw const FormatException('Private preview account required.');
-      }
       await _loadAccountAndRequests();
-      if (mounted) setState(() => _message = 'Private preview unlocked.');
+      if (mounted) setState(() => _message = 'Signed in.');
     } on FirebaseAuthException catch (error) {
       if (mounted) {
         setState(() => _message = switch (error.code) {
@@ -25925,13 +25909,44 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               _ => 'We could not sign you in. Please try again.',
             });
       }
-    } catch (_) {
-      if (mounted) {
-        setState(() =>
-            _message = 'Gifts by Circum is currently in private preview.');
-      }
+    } catch (error) {
+      debugPrint('Gifts sign-in error: $error');
+      if (mounted)
+        setState(
+            () => _message = 'We could not sign you in. Please try again.');
     } finally {
       if (mounted) setState(() => _signingIn = false);
+    }
+  }
+
+  Future<void> _handleGiftPaymentReturn() async {
+    final result = Uri.base.queryParameters['gift_payment'];
+    if (result == 'cancelled') {
+      if (mounted)
+        setState(() => _message =
+            'Payment was cancelled. Your gift has not been submitted.');
+      return;
+    }
+    if (result != 'success') return;
+    final giftDraftId = Uri.base.queryParameters['giftDraftId'];
+    final sessionId = Uri.base.queryParameters['session_id'];
+    if (giftDraftId == null || sessionId == null) return;
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('finalizeGiftPayment')
+          .call({
+        'giftDraftId': giftDraftId,
+        'sessionId': sessionId,
+      });
+      if (mounted)
+        setState(() => _message =
+            'Payment received. Your gift experience is now submitted for review.');
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+          'Gift payment finalization error: ${error.code} ${error.message}');
+      if (mounted)
+        setState(() => _message = error.message ??
+            'We could not confirm payment yet. Please refresh shortly.');
     }
   }
 
@@ -25946,10 +25961,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
 
   Future<void> _submit() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null ||
-        !GiftRequestPolicy.canAccessPrivatePreview(user.email)) {
-      setState(
-          () => _message = 'Gifts by Circum is currently in private preview.');
+    if (user == null) {
+      setState(() => _message = 'Sign in to create a gift experience.');
       return;
     }
     final grossBudget = double.tryParse(_budget.text.trim());
@@ -26010,7 +26023,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _message = null;
     });
     try {
-      final doc = FirebaseFirestore.instance.collection('giftRequests').doc();
+      final doc =
+          FirebaseFirestore.instance.collection('giftPaymentDrafts').doc();
       final photoUrls = <String>[];
       if (_photo != null) {
         final bytes = await _photo!.readAsBytes();
@@ -26075,7 +26089,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           'brandsLiked': _likedBrands.text.trim(),
           'brandsDisliked': _dislikedBrands.text.trim(),
         },
-        'giftType': _anonymousGiftType == 'campaign' ? 'campaign' : 'standard',
+        'giftType':
+            _giftMode == 'anonymous_gift' && _anonymousGiftType == 'campaign'
+                ? 'campaign'
+                : 'standard',
         'paymentStatus': 'payment_pending',
         'giftStatus': 'draft',
         'status': 'draft',
@@ -26112,46 +26129,30 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      Stripe.publishableKey = Env.publishableLiveKey;
-      await Stripe.instance.applySettings();
       final payment = await FirebaseFunctions.instance
           .httpsCallable('createGiftPayment')
-          .call({'giftRequestId': doc.id});
+          .call({'giftDraftId': doc.id});
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: '${paymentData['clientSecret']}',
-          merchantDisplayName: 'Gifts by Circum',
-          style: ThemeMode.dark,
-        ),
-      );
-      await Stripe.instance.presentPaymentSheet();
-      await FirebaseFunctions.instance
-          .httpsCallable('finalizeGiftPayment')
-          .call({'giftRequestId': doc.id});
-      if (!mounted) return;
-      setState(() {
-        _message =
-            'Payment received. Your gift experience is now submitted for review.';
-        _recipientName.clear();
-        _recipientPhone.clear();
-        _recipientEmail.clear();
-        _deliveryAddress.clear();
-        _budget.clear();
-        _personalMessage.clear();
-        _notes.clear();
-        _interests.clear();
-        _photo = null;
-        _deliveryDate = null;
-        _validatedGiftAddress = null;
-      });
-      await _loadAccountAndRequests();
+      final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
+      if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
+        throw StateError(
+            'Stripe Checkout could not be opened. Please try again.');
+      }
+      setState(
+          () => _message = 'Complete payment to submit your gift request.');
+      final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+      if (!opened)
+        throw StateError(
+            'Stripe Checkout could not be opened. Please try again.');
     } catch (error) {
       debugPrint('Gift request submit error: $error');
       if (mounted)
         setState(() => _message = error is StateError
             ? error.message
-            : 'Payment was not completed. Your gift remains pending and has not been confirmed.');
+            : error is FirebaseFunctionsException
+                ? (error.message ??
+                    'Could not start Stripe Checkout. Please try again.')
+                : 'Could not start Stripe Checkout. Please try again.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -26161,9 +26162,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   Widget build(BuildContext context) {
     final colors = widget.colors;
     final narrow = MediaQuery.sizeOf(context).width < 760;
-    final signedIn = GiftRequestPolicy.canAccessPrivatePreview(
-      FirebaseAuth.instance.currentUser?.email,
-    );
+    final signedIn = FirebaseAuth.instance.currentUser != null;
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
@@ -26208,7 +26207,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                       Center(
                         child: Chip(
                           avatar: const Icon(Icons.lock_clock, size: 18),
-                          label: const Text('Coming Soon · Private Preview'),
+                          label: const Text('Early Access Beta'),
                           backgroundColor:
                               colors.adminAccent.withValues(alpha: 0.16),
                         ),
@@ -26221,7 +26220,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
-                                'Private Preview',
+                                'Sign in to Gifts',
                                 style: TextStyle(
                                   color: colors.text,
                                   fontSize: 24,
@@ -26230,7 +26229,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Gifts is visible, but not fully launched. Sign in with the approved preview account to continue.',
+                                'Sign in to create and pay for a curated gift experience.',
                                 style: TextStyle(
                                   color: colors.mutedText,
                                   height: 1.4,
@@ -26271,7 +26270,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                     : const Icon(Icons.lock_open),
                                 label: Text(_signingIn
                                     ? 'Signing in...'
-                                    : 'Enter private preview'),
+                                    : 'Sign in and continue'),
                               ),
                             ],
                           ),
