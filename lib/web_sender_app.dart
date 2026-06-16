@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -52,21 +51,6 @@ const _spectrumGradient = [
   Color(0xff0023ff),
   Color(0xff19a0ff),
 ];
-
-class _CircumDesignV2 {
-  static const deepBlack = Color(0xff0D0D0D);
-  static const pearlWhite = Color(0xffffffff);
-  static const softAqua = Color(0xffA5F3FC);
-  static const softLavender = Color(0xffD8B4FE);
-  static const softPink = Color(0xffFBCFE8);
-  static const silver = Color(0xffE5E7EB);
-  static const blurSigma = 14.0;
-  static const cardRadius = 24.0;
-  static const panelRadius = 28.0;
-  static const pageMaxWidth = 1180.0;
-
-  static const iridescent = [softAqua, softLavender, softPink];
-}
 
 enum _WebAppMode { landing, sender, rider, gifts, admin }
 
@@ -149,69 +133,15 @@ class _WebSenderAppState extends State<WebSenderApp> {
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Helvetica',
-        scaffoldBackgroundColor: colors.background,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: _CircumDesignV2.softAqua,
+          seedColor: const Color(0xff2563eb),
           brightness: _darkMode ? Brightness.dark : Brightness.light,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: colors.field,
-          labelStyle: TextStyle(color: colors.mutedText),
-          hintStyle: TextStyle(color: colors.mutedText),
-          prefixIconColor: colors.mutedText,
-          suffixIconColor: colors.mutedText,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: colors.border),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: colors.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: colors.adminAccent, width: 1.4),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: Color(0xfffb7185)),
-          ),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            textStyle: const TextStyle(fontWeight: FontWeight.w900),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: colors.text,
-            side: BorderSide(color: colors.border),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-          ),
-        ),
-        chipTheme: ChipThemeData(
-          backgroundColor: colors.field,
-          selectedColor: colors.adminAccent.withValues(alpha: 0.18),
-          side: BorderSide(color: colors.border),
-          labelStyle:
-              TextStyle(color: colors.text, fontWeight: FontWeight.w700),
         ),
       ),
       home: Scaffold(
         backgroundColor: colors.background,
         body: Stack(
           children: [
-            _V2AmbientBackground(colors: colors, mode: _mode),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
               child: switch (_mode) {
@@ -25515,300 +25445,42 @@ class _Timeline extends StatelessWidget {
   }
 }
 
-class _V2AmbientBackground extends StatelessWidget {
-  final _CircumColors colors;
-  final _WebAppMode mode;
-
-  const _V2AmbientBackground({required this.colors, required this.mode});
-
-  @override
-  Widget build(BuildContext context) {
-    final rich = mode == _WebAppMode.gifts;
-    return IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: rich ? const Alignment(0.25, -0.55) : Alignment.topRight,
-            radius: rich ? 1.15 : 0.85,
-            colors: [
-              (rich ? _CircumDesignV2.softLavender : colors.adminAccent)
-                  .withValues(alpha: colors.dark ? 0.18 : 0.10),
-              _CircumDesignV2.deepBlack.withValues(alpha: 0),
-            ],
-          ),
-        ),
-        child: const SizedBox.expand(),
-      ),
-    );
-  }
-}
-
-class _ResponsiveScaffold extends StatelessWidget {
+class _GlassPanel extends StatelessWidget {
   final _CircumColors colors;
   final Widget child;
-  final double maxWidth;
-  final EdgeInsetsGeometry padding;
 
-  const _ResponsiveScaffold({
-    required this.colors,
-    required this.child,
-    this.maxWidth = _CircumDesignV2.pageMaxWidth,
-    this.padding = const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
-  });
+  const _GlassPanel({super.key, required this.colors, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: colors.background.withValues(alpha: 0.92),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: Padding(padding: padding, child: child),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassCard extends StatelessWidget {
-  final _CircumColors colors;
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final bool iridescent;
-
-  const _GlassCard({
-    required this.colors,
-    required this.child,
-    this.padding = const EdgeInsets.all(16),
-    this.iridescent = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _V2GlassSurface(
-      colors: colors,
-      radius: _CircumDesignV2.cardRadius,
-      padding: padding,
-      iridescent: iridescent,
-      child: child,
-    );
-  }
-}
-
-class _V2GlassSurface extends StatelessWidget {
-  final _CircumColors colors;
-  final Widget child;
-  final double radius;
-  final EdgeInsetsGeometry padding;
-  final bool iridescent;
-
-  const _V2GlassSurface({
-    required this.colors,
-    required this.child,
-    required this.radius,
-    required this.padding,
-    this.iridescent = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = iridescent
-        ? _CircumDesignV2.softLavender.withValues(alpha: 0.34)
-        : colors.border.withValues(alpha: colors.dark ? 0.80 : 1);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: _CircumDesignV2.blurSigma,
-          sigmaY: _CircumDesignV2.blurSigma,
-        ),
-        child: Container(
-          width: double.infinity,
-          padding: padding,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: iridescent
-                  ? [
-                      colors.panel.withValues(alpha: colors.dark ? 0.90 : 0.96),
-                      _CircumDesignV2.softAqua.withValues(alpha: 0.12),
-                      _CircumDesignV2.softLavender.withValues(alpha: 0.12),
-                      colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
-                    ]
-                  : [
-                      colors.panel.withValues(alpha: colors.dark ? 0.88 : 0.96),
-                      colors.field.withValues(alpha: colors.dark ? 0.56 : 0.70),
-                    ],
-            ),
-            border: Border.all(color: borderColor),
-            borderRadius: BorderRadius.circular(radius),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    Colors.black.withValues(alpha: colors.dark ? 0.22 : 0.06),
-                blurRadius: 26,
-                offset: const Offset(0, 14),
-              ),
-              if (iridescent)
-                BoxShadow(
-                  color: _CircumDesignV2.softAqua.withValues(alpha: 0.14),
-                  blurRadius: 38,
-                  offset: const Offset(0, 18),
-                ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final _CircumColors colors;
-  final String title;
-  final String? subtitle;
-  final Widget? action;
-
-  const _SectionHeader({
-    required this.colors,
-    required this.title,
-    this.subtitle,
-    this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 22,
-                  height: 1.05,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  subtitle!,
-                  style: TextStyle(color: colors.mutedText, height: 1.35),
-                ),
-              ],
-            ],
-          ),
-        ),
-        if (action != null) action!,
-      ],
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final _CircumColors colors;
-  final String label;
-  final Color? color;
-  final IconData? icon;
-
-  const _StatusBadge({
-    required this.colors,
-    required this.label,
-    this.color,
-    this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tint = color ?? colors.adminAccent;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.14),
-        border: Border.all(color: tint.withValues(alpha: 0.42)),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 15, color: tint),
-            const SizedBox(width: 6),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoBanner extends StatelessWidget {
-  final _CircumColors colors;
-  final String message;
-  final IconData icon;
-
-  const _InfoBanner({
-    required this.colors,
-    required this.message,
-    this.icon = Icons.info_outline,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassCard(
-      colors: colors,
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: colors.adminAccent, size: 19),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GlassPanel extends StatelessWidget {
-  final _CircumColors colors;
-  final Widget child;
-  final bool iridescent;
-
-  const _GlassPanel({
-    super.key,
-    required this.colors,
-    required this.child,
-    this.iridescent = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _V2GlassSurface(
-      colors: colors,
-      radius: _CircumDesignV2.panelRadius,
       padding: const EdgeInsets.all(16),
-      iridescent: iridescent,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.panel.withOpacity(colors.dark ? 0.92 : 0.96),
+            colors.adminAccent.withOpacity(colors.dark ? 0.10 : 0.06),
+            colors.panel.withOpacity(colors.dark ? 0.86 : 0.94),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colors.adminAccent.withOpacity(0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(colors.dark ? 0.18 : 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: colors.adminGlow.withOpacity(colors.dark ? 0.12 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
       child: child,
     );
   }
@@ -26544,7 +26216,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                       if (!signedIn)
                         _GlassPanel(
                           colors: colors,
-                          iridescent: true,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -26607,7 +26278,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                       if (signedIn) ...[
                         _GlassPanel(
                           colors: colors,
-                          iridescent: true,
                           child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -26635,7 +26305,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                         const SizedBox(height: 14),
                         _GlassPanel(
                             colors: colors,
-                            iridescent: true,
                             child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -27271,7 +26940,6 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                     const SizedBox(height: 34),
                     _GlassPanel(
                       colors: colors,
-                      iridescent: true,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -27705,25 +27373,25 @@ class _CircumColors {
 
   const _CircumColors(this.dark);
 
-  Color get background => dark ? _CircumDesignV2.deepBlack : Colors.white;
-  Color get appBackground => dark ? const Color(0xff070A12) : Colors.white;
-  Color get stage => dark ? const Color(0xff0B1020) : const Color(0xfff3f4f6);
-  Color get band => dark ? const Color(0xff101827) : const Color(0xfff8fafc);
+  Color get background => dark ? Colors.black : Colors.white;
+  Color get appBackground => dark ? const Color(0xff030712) : Colors.white;
+  Color get stage => dark ? const Color(0xff111827) : const Color(0xfff3f4f6);
+  Color get band => dark ? const Color(0xff0f172a) : const Color(0xfff8fafc);
   Color get panel => dark ? const Color(0xff111827) : Colors.white;
-  Color get field => dark ? const Color(0xff182132) : const Color(0xfff3f4f6);
-  Color get border => dark ? const Color(0xff263247) : _CircumDesignV2.silver;
-  Color get text => dark ? _CircumDesignV2.pearlWhite : Colors.black;
+  Color get field => dark ? const Color(0xff1f2937) : const Color(0xfff3f4f6);
+  Color get border => dark ? const Color(0xff1f2937) : const Color(0xffe5e7eb);
+  Color get text => dark ? Colors.white : Colors.black;
   Color get inverseText => dark ? Colors.black : Colors.white;
   Color get mutedText =>
-      dark ? const Color(0xffA8B3C7) : const Color(0xff6b7280);
+      dark ? const Color(0xff9ca3af) : const Color(0xff6b7280);
   Color get success => const Color(0xff16a34a);
   Color get warning => const Color(0xfff59e0b);
   Color get adminChrome =>
-      dark ? const Color(0xff08111F) : const Color(0xfff8fbff);
+      dark ? const Color(0xff07111f) : const Color(0xfff8fbff);
   Color get adminAccent =>
-      dark ? _CircumDesignV2.softAqua : const Color(0xff2563eb);
+      dark ? const Color(0xff38bdf8) : const Color(0xff2563eb);
   Color get adminGlow =>
-      dark ? _CircumDesignV2.softLavender : const Color(0xff38bdf8);
+      dark ? const Color(0xffa855f7) : const Color(0xff38bdf8);
 }
 
 class _VehicleOption {
