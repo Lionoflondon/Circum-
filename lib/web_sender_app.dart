@@ -68,6 +68,8 @@ class _CircumDesignV2 {
   static const iridescent = [softAqua, softLavender, softPink];
 }
 
+enum _V2SurfaceTone { core, gifts, iris, health, vanguard, rider, admin }
+
 enum _WebAppMode { landing, sender, rider, gifts, admin }
 
 bool _isPublicHostingHost() {
@@ -455,11 +457,23 @@ class _PlatformNotificationCenterState
                   ? MediaQuery.sizeOf(context).height
                   : MediaQuery.sizeOf(context).height * 0.9,
               decoration: BoxDecoration(
-                color: widget.colors.appBackground,
+                gradient: LinearGradient(
+                  colors: [
+                    widget.colors.appBackground.withValues(alpha: 0.96),
+                    widget.colors.panel.withValues(alpha: 0.94),
+                  ],
+                ),
                 borderRadius: desktop
                     ? const BorderRadius.horizontal(left: Radius.circular(24))
                     : const BorderRadius.vertical(top: Radius.circular(24)),
                 border: Border.all(color: widget.colors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 30,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
@@ -513,20 +527,10 @@ class _PlatformNotificationCenterState
                               return InkWell(
                                 onTap: () => _markRead(item),
                                 borderRadius: BorderRadius.circular(14),
-                                child: Container(
+                                child: _GlassCard(
+                                  colors: widget.colors,
                                   padding: const EdgeInsets.all(13),
-                                  decoration: BoxDecoration(
-                                    color: isUnread
-                                        ? widget.colors.field
-                                        : widget.colors.panel,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: isUnread
-                                          ? widget.colors.adminAccent
-                                              .withValues(alpha: 0.45)
-                                          : widget.colors.border,
-                                    ),
-                                  ),
+                                  iridescent: isUnread,
                                   child: Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -4503,6 +4507,7 @@ class _AdminOverviewSection extends StatelessWidget {
         const SizedBox(height: 14),
         _GlassPanel(
           colors: colors,
+          tone: _V2SurfaceTone.admin,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -4650,21 +4655,12 @@ class _AdminStatusHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return _V2GlassSurface(
+      colors: colors,
+      tone: _V2SurfaceTone.admin,
+      iridescent: true,
+      radius: 28,
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xff12213d), Color(0xff20164a), Color(0xff083b42)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0x667dd3fc)),
-        boxShadow: const [
-          BoxShadow(
-              color: Color(0x334f46e5), blurRadius: 30, offset: Offset(0, 14)),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4689,8 +4685,8 @@ class _AdminStatusHero extends StatelessWidget {
                     marketplaceHealthy
                         ? 'Marketplace healthy'
                         : 'Marketplace needs attention',
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: colors.text,
                         fontSize: 25,
                         fontWeight: FontWeight.w900))),
           ]),
@@ -4998,6 +4994,7 @@ class _AdminDataSection extends StatelessWidget {
       children: [
         _GlassPanel(
           colors: colors,
+          tone: _V2SurfaceTone.admin,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -5028,29 +5025,43 @@ class _AdminDataSection extends StatelessWidget {
                   ),
                 )
               else
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingTextStyle: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w900,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.field.withValues(alpha: 0.42),
+                      border: Border.all(color: colors.border),
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                    dataTextStyle: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: WidgetStatePropertyAll(
+                          colors.adminChrome.withValues(alpha: 0.74),
+                        ),
+                        dividerThickness: 0.7,
+                        headingTextStyle: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        dataTextStyle: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        columns: columns
+                            .map((column) => DataColumn(label: Text(column)))
+                            .toList(),
+                        rows: records
+                            .map(
+                              (record) => DataRow(
+                                cells: rowBuilder(
+                                  record,
+                                ).map((child) => DataCell(child)).toList(),
+                              ),
+                            )
+                            .toList(),
+                      ),
                     ),
-                    columns: columns
-                        .map((column) => DataColumn(label: Text(column)))
-                        .toList(),
-                    rows: records
-                        .map(
-                          (record) => DataRow(
-                            cells: rowBuilder(
-                              record,
-                            ).map((child) => DataCell(child)).toList(),
-                          ),
-                        )
-                        .toList(),
                   ),
                 ),
             ],
@@ -6487,26 +6498,28 @@ class _PhoneStage extends StatelessWidget {
       return Container(
         width: double.infinity,
         height: double.infinity,
-        color: colors.stage,
         padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colors.stage,
+              colors.appBackground,
+              colors.stage.withValues(alpha: 0.92),
+            ],
+          ),
+        ),
         child: Center(
-          child: Container(
-            width: double.infinity,
+          child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1180),
-            decoration: BoxDecoration(
-              color: colors.appBackground,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: colors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x22000000),
-                  blurRadius: 32,
-                  offset: Offset(0, 18),
-                ),
-              ],
+            child: _V2GlassSurface(
+              colors: colors,
+              tone: _V2SurfaceTone.core,
+              radius: 28,
+              padding: EdgeInsets.zero,
+              child: SizedBox(width: double.infinity, child: child),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: child,
           ),
         ),
       );
@@ -6515,7 +6528,13 @@ class _PhoneStage extends StatelessWidget {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: colors.stage,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [colors.stage, colors.background],
+        ),
+      ),
       padding: EdgeInsets.symmetric(
         horizontal: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
         vertical: MediaQuery.sizeOf(context).width < 520 ? 0 : 22,
@@ -7242,6 +7261,8 @@ class _CircumOrderCharterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _GlassPanel(
       colors: colors,
+      tone: _V2SurfaceTone.iris,
+      iridescent: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -7363,6 +7384,8 @@ class _RiderOrderProfileCard extends StatelessWidget {
     );
     return _GlassPanel(
       colors: colors,
+      tone: _V2SurfaceTone.vanguard,
+      iridescent: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -10077,6 +10100,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   Widget _buildPendingDocumentUpload(_CircumColors colors) {
     return _GlassPanel(
       colors: colors,
+      tone: _V2SurfaceTone.rider,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -10247,6 +10271,7 @@ class _RiderPublicIntro extends StatelessWidget {
   Widget build(BuildContext context) {
     return _GlassPanel(
       colors: colors,
+      tone: _V2SurfaceTone.core,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -11819,14 +11844,11 @@ class _DriverJobCard extends StatelessWidget {
       'arrived_at_pickup',
     }.contains(jobStatus);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+    return _GlassCard(
+      colors: colors,
+      tone: _V2SurfaceTone.rider,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.panel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border),
-      ),
+      iridescent: vanguardEnabled,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -12427,13 +12449,10 @@ class _RiderStatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return _GlassCard(
+      colors: colors,
+      tone: _V2SurfaceTone.rider,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xff111827),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xff253047)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -19033,42 +19052,51 @@ class _PortalHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-        decoration: BoxDecoration(
-          color: colors.appBackground.withOpacity(0.95),
-          border: Border(bottom: BorderSide(color: colors.border)),
-        ),
-        child: Row(
-          children: [
-            IconButton(
-              tooltip: 'Back',
-              onPressed: onBack,
-              icon: Icon(Icons.arrow_back, color: colors.text),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(22)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+            decoration: BoxDecoration(
+              color: colors.appBackground.withValues(alpha: 0.86),
+              border: Border(bottom: BorderSide(color: colors.border)),
             ),
-            const SizedBox(width: 8),
-            Image.asset(
-              'assets/images/circum_wordmark.png',
-              width: 116,
-              height: 28,
-              fit: BoxFit.contain,
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Back',
+                  onPressed: onBack,
+                  icon: Icon(Icons.arrow_back, color: colors.text),
+                ),
+                const SizedBox(width: 8),
+                Image.asset(
+                  'assets/images/circum_wordmark.png',
+                  width: 116,
+                  height: 28,
+                  fit: BoxFit.contain,
+                ),
+                const Spacer(),
+                if (onProfile != null)
+                  IconButton(
+                    tooltip: 'Profile',
+                    onPressed: onProfile,
+                    icon: Icon(
+                      Icons.account_circle_outlined,
+                      color: colors.text,
+                    ),
+                  ),
+                IconButton(
+                  tooltip: darkMode ? 'Light mode' : 'Dark mode',
+                  onPressed: onToggleTheme,
+                  icon: Icon(
+                    darkMode ? Icons.light_mode : Icons.dark_mode,
+                    color: colors.text,
+                  ),
+                ),
+              ],
             ),
-            const Spacer(),
-            if (onProfile != null)
-              IconButton(
-                tooltip: 'Profile',
-                onPressed: onProfile,
-                icon: Icon(Icons.account_circle_outlined, color: colors.text),
-              ),
-            IconButton(
-              tooltip: darkMode ? 'Light mode' : 'Dark mode',
-              onPressed: onToggleTheme,
-              icon: Icon(
-                darkMode ? Icons.light_mode : Icons.dark_mode,
-                color: colors.text,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -20112,12 +20140,14 @@ class _HealthChip extends StatelessWidget {
     return Chip(
       label: Text(label),
       visualDensity: VisualDensity.compact,
-      backgroundColor: const Color(0xffecfdf5),
+      backgroundColor: const Color(0xff10b981).withValues(alpha: 0.14),
       labelStyle: const TextStyle(
-        color: Color(0xff166534),
+        color: Color(0xff6ee7b7),
         fontWeight: FontWeight.w800,
       ),
-      side: BorderSide.none,
+      side: BorderSide(
+        color: const Color(0xff6ee7b7).withValues(alpha: 0.32),
+      ),
     );
   }
 }
@@ -20326,23 +20356,11 @@ class _HealthPlanCard extends StatelessWidget {
     return InkWell(
       onTap: onSelect,
       borderRadius: BorderRadius.circular(18),
-      child: Container(
+      child: _GlassCard(
+        colors: colors,
+        tone: _V2SurfaceTone.health,
+        iridescent: selected,
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colors.field.withAlpha(209),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? const Color(0xff38bdf8) : colors.border,
-            width: selected ? 1.6 : 1,
-          ),
-          gradient: selected
-              ? LinearGradient(
-                  colors: _spectrumGradient
-                      .map((color) => color.withAlpha(41))
-                      .toList(),
-                )
-              : null,
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -20421,6 +20439,7 @@ class _HealthTrustGrid extends StatelessWidget {
 
     return _GlassPanel(
       colors: colors,
+      tone: _V2SurfaceTone.health,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -20474,6 +20493,7 @@ class _HealthDisclaimer extends StatelessWidget {
   Widget build(BuildContext context) {
     return _GlassPanel(
       colors: colors,
+      tone: _V2SurfaceTone.health,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -21187,13 +21207,27 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: TextStyle(
-        color: colors.text,
-        fontSize: 18,
-        fontWeight: FontWeight.w900,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 3,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: _spectrumGradient),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          title,
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -22412,9 +22446,13 @@ class _VanguardPinRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: colors.field,
+        color: colors.field.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: verified
+              ? colors.success.withValues(alpha: 0.42)
+              : _CircumDesignV2.silver.withValues(alpha: 0.30),
+        ),
       ),
       child: Row(
         children: [
@@ -22480,11 +22518,23 @@ class _ChatSheet extends StatelessWidget {
                 ? MediaQuery.sizeOf(context).height
                 : MediaQuery.sizeOf(context).height * 0.92,
             decoration: BoxDecoration(
-              color: colors.appBackground,
+              gradient: LinearGradient(
+                colors: [
+                  colors.appBackground.withValues(alpha: 0.98),
+                  colors.panel.withValues(alpha: 0.94),
+                ],
+              ),
               borderRadius: desktop
                   ? const BorderRadius.horizontal(left: Radius.circular(28))
                   : const BorderRadius.vertical(top: Radius.circular(28)),
               border: Border.all(color: colors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.30),
+                  blurRadius: 32,
+                  offset: const Offset(0, 16),
+                ),
+              ],
             ),
             child: Column(
               children: [
@@ -23872,16 +23922,23 @@ class _InputBox extends StatelessWidget {
       style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: colors.mutedText),
         filled: true,
-        fillColor: colors.field,
+        fillColor: colors.field.withValues(alpha: enabled ? 0.92 : 0.48),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderSide: BorderSide.none,
-          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.border),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: colors.border),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: colors.adminAccent, width: 1.5),
+          borderRadius: BorderRadius.circular(18),
         ),
       ),
     );
@@ -23984,14 +24041,33 @@ class _DeliveryTimingCard extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 102),
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xff2563eb).withOpacity(0.16)
-                : colors.field,
+            gradient: selected
+                ? LinearGradient(
+                    colors: [
+                      _CircumDesignV2.softAqua.withValues(alpha: 0.18),
+                      _CircumDesignV2.softLavender.withValues(alpha: 0.16),
+                    ],
+                  )
+                : LinearGradient(
+                    colors: [
+                      colors.field.withValues(alpha: 0.88),
+                      colors.panel.withValues(alpha: 0.58),
+                    ],
+                  ),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: selected ? const Color(0xff60a5fa) : colors.border,
+              color: selected ? _CircumDesignV2.softAqua : colors.border,
               width: selected ? 2 : 1,
             ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: _CircumDesignV2.softAqua.withValues(alpha: 0.15),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             children: [
@@ -24352,6 +24428,7 @@ class _RouteSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     return _GlassPanel(
       colors: colors,
+      tone: _V2SurfaceTone.iris,
       child: _RouteRow(colors: colors, from: pickup, to: dropoff),
     );
   }
@@ -25576,12 +25653,14 @@ class _GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final bool iridescent;
+  final _V2SurfaceTone tone;
 
   const _GlassCard({
     required this.colors,
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.iridescent = false,
+    this.tone = _V2SurfaceTone.core,
   });
 
   @override
@@ -25591,6 +25670,7 @@ class _GlassCard extends StatelessWidget {
       radius: _CircumDesignV2.cardRadius,
       padding: padding,
       iridescent: iridescent,
+      tone: tone,
       child: child,
     );
   }
@@ -25602,6 +25682,7 @@ class _V2GlassSurface extends StatelessWidget {
   final double radius;
   final EdgeInsetsGeometry padding;
   final bool iridescent;
+  final _V2SurfaceTone tone;
 
   const _V2GlassSurface({
     required this.colors,
@@ -25609,12 +25690,15 @@ class _V2GlassSurface extends StatelessWidget {
     required this.radius,
     required this.padding,
     this.iridescent = false,
+    this.tone = _V2SurfaceTone.core,
   });
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = iridescent
-        ? _CircumDesignV2.softLavender.withValues(alpha: 0.34)
+    final accent = _toneAccent(tone, colors);
+    final strong = iridescent || tone == _V2SurfaceTone.gifts;
+    final borderColor = strong
+        ? accent.withValues(alpha: 0.40)
         : colors.border.withValues(alpha: colors.dark ? 0.80 : 1);
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -25630,17 +25714,7 @@ class _V2GlassSurface extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: iridescent
-                  ? [
-                      colors.panel.withValues(alpha: colors.dark ? 0.90 : 0.96),
-                      _CircumDesignV2.softAqua.withValues(alpha: 0.12),
-                      _CircumDesignV2.softLavender.withValues(alpha: 0.12),
-                      colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
-                    ]
-                  : [
-                      colors.panel.withValues(alpha: colors.dark ? 0.88 : 0.96),
-                      colors.field.withValues(alpha: colors.dark ? 0.56 : 0.70),
-                    ],
+              colors: _toneGradient(tone, colors, strong),
             ),
             border: Border.all(color: borderColor),
             borderRadius: BorderRadius.circular(radius),
@@ -25651,9 +25725,9 @@ class _V2GlassSurface extends StatelessWidget {
                 blurRadius: 26,
                 offset: const Offset(0, 14),
               ),
-              if (iridescent)
+              if (strong || tone == _V2SurfaceTone.iris)
                 BoxShadow(
-                  color: _CircumDesignV2.softAqua.withValues(alpha: 0.14),
+                  color: accent.withValues(alpha: 0.15),
                   blurRadius: 38,
                   offset: const Offset(0, 18),
                 ),
@@ -25663,6 +25737,68 @@ class _V2GlassSurface extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static Color _toneAccent(_V2SurfaceTone tone, _CircumColors colors) {
+    return switch (tone) {
+      _V2SurfaceTone.gifts => _CircumDesignV2.softLavender,
+      _V2SurfaceTone.iris => _CircumDesignV2.softAqua,
+      _V2SurfaceTone.health => const Color(0xff6ee7b7),
+      _V2SurfaceTone.vanguard => const Color(0xfff8fafc),
+      _V2SurfaceTone.rider => const Color(0xff60a5fa),
+      _V2SurfaceTone.admin => colors.adminAccent,
+      _ => colors.adminAccent,
+    };
+  }
+
+  static List<Color> _toneGradient(
+    _V2SurfaceTone tone,
+    _CircumColors colors,
+    bool strong,
+  ) {
+    final base = colors.panel.withValues(alpha: colors.dark ? 0.88 : 0.96);
+    final field = colors.field.withValues(alpha: colors.dark ? 0.56 : 0.70);
+    return switch (tone) {
+      _V2SurfaceTone.gifts => [
+          colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.98),
+          _CircumDesignV2.softPink.withValues(alpha: 0.13),
+          _CircumDesignV2.softLavender.withValues(alpha: 0.17),
+          _CircumDesignV2.softAqua.withValues(alpha: 0.10),
+          colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
+        ],
+      _V2SurfaceTone.iris => [
+          base,
+          _CircumDesignV2.softAqua.withValues(alpha: 0.13),
+          colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
+        ],
+      _V2SurfaceTone.health => [
+          base,
+          const Color(0xff10b981).withValues(alpha: 0.09),
+          colors.panel.withValues(alpha: colors.dark ? 0.86 : 0.95),
+        ],
+      _V2SurfaceTone.vanguard => [
+          colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.98),
+          const Color(0xff64748b).withValues(alpha: 0.14),
+          const Color(0xfff8fafc).withValues(alpha: colors.dark ? 0.06 : 0.16),
+        ],
+      _V2SurfaceTone.rider => [
+          colors.panel.withValues(alpha: colors.dark ? 0.90 : 0.97),
+          const Color(0xff2563eb).withValues(alpha: 0.10),
+          colors.field.withValues(alpha: colors.dark ? 0.42 : 0.66),
+        ],
+      _V2SurfaceTone.admin => [
+          colors.adminChrome.withValues(alpha: colors.dark ? 0.92 : 0.98),
+          colors.panel.withValues(alpha: colors.dark ? 0.78 : 0.95),
+        ],
+      _ => strong
+          ? [
+              base,
+              _CircumDesignV2.softAqua.withValues(alpha: 0.12),
+              _CircumDesignV2.softLavender.withValues(alpha: 0.12),
+              colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
+            ]
+          : [base, field],
+    };
   }
 }
 
@@ -25794,12 +25930,14 @@ class _GlassPanel extends StatelessWidget {
   final _CircumColors colors;
   final Widget child;
   final bool iridescent;
+  final _V2SurfaceTone tone;
 
   const _GlassPanel({
     super.key,
     required this.colors,
     required this.child,
     this.iridescent = false,
+    this.tone = _V2SurfaceTone.core,
   });
 
   @override
@@ -25809,6 +25947,7 @@ class _GlassPanel extends StatelessWidget {
       radius: _CircumDesignV2.panelRadius,
       padding: const EdgeInsets.all(16),
       iridescent: iridescent,
+      tone: tone,
       child: child,
     );
   }
@@ -25882,12 +26021,9 @@ class _MetricPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return _GlassCard(
+      colors: colors,
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(16),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -25973,7 +26109,12 @@ class _LandingFooter extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 34),
       decoration: BoxDecoration(
-        color: colors.background,
+        gradient: LinearGradient(
+          colors: [
+            colors.background,
+            colors.panel.withValues(alpha: colors.dark ? 0.64 : 0.86),
+          ],
+        ),
         border: Border(top: BorderSide(color: colors.border)),
       ),
       child: Center(
