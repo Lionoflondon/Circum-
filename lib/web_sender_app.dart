@@ -54,28 +54,18 @@ const _spectrumGradient = [
 ];
 
 class _CircumDesignV2 {
-  static const deepBlack = Color(0xff07090F);
-  static const navy2 = Color(0xff0D1225);
+  static const deepBlack = Color(0xff0D0D0D);
   static const pearlWhite = Color(0xffffffff);
-  static const softAqua = Color(0xff3B82F6);
-  static const softLavender = Color(0xffA78BFA);
-  static const softPink = Color(0xffffd6e8);
-  static const mint = Color(0xff34D399);
-  static const amber = Color(0xffFBBF24);
-  static const red = Color(0xffF87171);
+  static const softAqua = Color(0xffA5F3FC);
+  static const softLavender = Color(0xffD8B4FE);
+  static const softPink = Color(0xffFBCFE8);
   static const silver = Color(0xffE5E7EB);
-  static const blurSigma = 16.0;
-  static const cardRadius = 12.0;
-  static const panelRadius = 12.0;
+  static const blurSigma = 14.0;
+  static const cardRadius = 24.0;
+  static const panelRadius = 28.0;
   static const pageMaxWidth = 1180.0;
 
-  static const iridescent = [
-    Color(0xffa8edea),
-    Color(0xffc9b8ff),
-    Color(0xffffd6e8),
-    Color(0xffb8f0d8),
-    Color(0xffd4c5ff),
-  ];
+  static const iridescent = [softAqua, softLavender, softPink];
 }
 
 enum _V2SurfaceTone { core, gifts, iris, health, vanguard, rider, admin }
@@ -5744,21 +5734,11 @@ class _AdminBar extends StatelessWidget {
           const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
-            child: Container(
-              height: 3,
-              color: colors.border,
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: normalized,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xff3B82F6), Color(0xff818CF8)],
-                    ),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: normalized,
+              backgroundColor: colors.field,
+              color: const Color(0xff2563eb),
             ),
           ),
         ],
@@ -6188,93 +6168,83 @@ class _LandingNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: colors.adminChrome.withValues(alpha: colors.dark ? 0.94 : 1),
-          border: Border(bottom: BorderSide(color: colors.border)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1180),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/images/circum_wordmark.png',
-                    width: 136,
-                    height: 32,
-                    fit: BoxFit.contain,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: darkMode ? 'Light mode' : 'Dark mode',
-                    onPressed: onToggleTheme,
-                    icon: Icon(
-                      darkMode ? Icons.light_mode : Icons.dark_mode,
-                      color: colors.text,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (MediaQuery.sizeOf(context).width >= 560)
-                    TextButton(
-                      onPressed: onRider,
-                      child: Text(
-                        'Rider',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  if (MediaQuery.sizeOf(context).width >= 680)
-                    TextButton(
-                      onPressed: onHealthPlus,
-                      child: Text(
-                        'Health+',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  if (onGifts != null &&
-                      MediaQuery.sizeOf(context).width >= 760)
-                    TextButton.icon(
-                      onPressed: onGifts,
-                      icon: const Icon(Icons.card_giftcard, size: 18),
-                      label: Text(
-                        'Gifts',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    )
-                  else if (onGifts != null)
-                    IconButton(
-                      tooltip: 'Gifts',
-                      onPressed: onGifts,
-                      icon: Icon(Icons.card_giftcard, color: colors.text),
-                    ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: onStart,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
-                      foregroundColor: colors.inverseText,
-                      shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                    ),
-                    child: const Text('Send a Parcel'),
-                  ),
-                ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Row(
+            children: [
+              Image.asset(
+                'assets/images/circum_wordmark.png',
+                width: 136,
+                height: 32,
+                fit: BoxFit.contain,
               ),
-            ),
+              const Spacer(),
+              IconButton(
+                tooltip: darkMode ? 'Light mode' : 'Dark mode',
+                onPressed: onToggleTheme,
+                icon: Icon(
+                  darkMode ? Icons.light_mode : Icons.dark_mode,
+                  color: colors.text,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (MediaQuery.sizeOf(context).width >= 560)
+                TextButton(
+                  onPressed: onRider,
+                  child: Text(
+                    'Rider',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (MediaQuery.sizeOf(context).width >= 680)
+                TextButton(
+                  onPressed: onHealthPlus,
+                  child: Text(
+                    'Health+',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (onGifts != null && MediaQuery.sizeOf(context).width >= 760)
+                TextButton.icon(
+                  onPressed: onGifts,
+                  icon: const Icon(Icons.card_giftcard, size: 18),
+                  label: Text(
+                    'Gifts',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else if (onGifts != null)
+                IconButton(
+                  tooltip: 'Gifts',
+                  onPressed: onGifts,
+                  icon: Icon(Icons.card_giftcard, color: colors.text),
+                ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: onStart,
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.text,
+                  foregroundColor: colors.inverseText,
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                ),
+                child: const Text('Send a Parcel'),
+              ),
+            ],
           ),
         ),
       ),
@@ -7414,7 +7384,8 @@ class _RiderOrderProfileCard extends StatelessWidget {
     );
     return _GlassPanel(
       colors: colors,
-      tone: _V2SurfaceTone.rider,
+      tone: _V2SurfaceTone.vanguard,
+      iridescent: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -10382,7 +10353,6 @@ class _RiderAccessPanel extends StatelessWidget {
     final signedIn = user != null;
     return _GlassPanel(
       colors: colors,
-      tone: _V2SurfaceTone.rider,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -10511,8 +10481,6 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
 
     return _GlassPanel(
       colors: colors,
-      tone: _V2SurfaceTone.vanguard,
-      iridescent: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -22401,14 +22369,12 @@ class _VanguardCustomerPanel extends StatelessWidget {
             .trim();
     return _GlassPanel(
       colors: colors,
-      tone: _V2SurfaceTone.vanguard,
-      iridescent: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.security, color: _CircumDesignV2.softLavender),
+              Icon(Icons.security, color: colors.text),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -22484,15 +22450,15 @@ class _VanguardPinRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: verified
-              ? _CircumDesignV2.softLavender.withValues(alpha: 0.46)
-              : _CircumDesignV2.softLavender.withValues(alpha: 0.30),
+              ? colors.success.withValues(alpha: 0.42)
+              : _CircumDesignV2.silver.withValues(alpha: 0.30),
         ),
       ),
       child: Row(
         children: [
           Icon(
             verified ? Icons.verified : Icons.pin,
-            color: verified ? _CircumDesignV2.softLavender : colors.text,
+            color: verified ? colors.success : colors.text,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -24513,7 +24479,7 @@ class _RoutePoint extends StatelessWidget {
       children: [
         Icon(
           first ? Icons.radio_button_checked : Icons.location_on,
-          color: first ? _CircumDesignV2.softAqua : _CircumDesignV2.mint,
+          color: first ? const Color(0xff2563eb) : const Color(0xff16a34a),
           size: 24,
         ),
         const SizedBox(width: 10),
@@ -25732,8 +25698,8 @@ class _V2GlassSurface extends StatelessWidget {
     final accent = _toneAccent(tone, colors);
     final strong = iridescent || tone == _V2SurfaceTone.gifts;
     final borderColor = strong
-        ? accent.withValues(alpha: tone == _V2SurfaceTone.gifts ? 0.28 : 0.35)
-        : colors.border.withValues(alpha: colors.dark ? 1 : 1);
+        ? accent.withValues(alpha: 0.40)
+        : colors.border.withValues(alpha: colors.dark ? 0.80 : 1);
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
@@ -25755,15 +25721,15 @@ class _V2GlassSurface extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color:
-                    Colors.black.withValues(alpha: colors.dark ? 0.18 : 0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
+                    Colors.black.withValues(alpha: colors.dark ? 0.22 : 0.06),
+                blurRadius: 26,
+                offset: const Offset(0, 14),
               ),
               if (strong || tone == _V2SurfaceTone.iris)
                 BoxShadow(
-                  color: accent.withValues(alpha: 0.10),
-                  blurRadius: 28,
-                  offset: const Offset(0, 12),
+                  color: accent.withValues(alpha: 0.15),
+                  blurRadius: 38,
+                  offset: const Offset(0, 18),
                 ),
             ],
           ),
@@ -25777,9 +25743,9 @@ class _V2GlassSurface extends StatelessWidget {
     return switch (tone) {
       _V2SurfaceTone.gifts => _CircumDesignV2.softLavender,
       _V2SurfaceTone.iris => _CircumDesignV2.softAqua,
-      _V2SurfaceTone.health => _CircumDesignV2.mint,
-      _V2SurfaceTone.vanguard => _CircumDesignV2.softLavender,
-      _V2SurfaceTone.rider => _CircumDesignV2.mint,
+      _V2SurfaceTone.health => const Color(0xff6ee7b7),
+      _V2SurfaceTone.vanguard => const Color(0xfff8fafc),
+      _V2SurfaceTone.rider => const Color(0xff60a5fa),
       _V2SurfaceTone.admin => colors.adminAccent,
       _ => colors.adminAccent,
     };
@@ -25790,46 +25756,46 @@ class _V2GlassSurface extends StatelessWidget {
     _CircumColors colors,
     bool strong,
   ) {
-    final base = colors.panel.withValues(alpha: colors.dark ? 1 : 0.96);
-    final field = colors.field.withValues(alpha: colors.dark ? 1 : 0.70);
+    final base = colors.panel.withValues(alpha: colors.dark ? 0.88 : 0.96);
+    final field = colors.field.withValues(alpha: colors.dark ? 0.56 : 0.70);
     return switch (tone) {
       _V2SurfaceTone.gifts => [
-          colors.panel.withValues(alpha: colors.dark ? 1 : 0.98),
-          const Color(0xffa8edea).withValues(alpha: 0.08),
-          const Color(0xffc9b8ff).withValues(alpha: 0.08),
-          const Color(0xffffd6e8).withValues(alpha: 0.07),
-          colors.panel.withValues(alpha: colors.dark ? 1 : 0.94),
+          colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.98),
+          _CircumDesignV2.softPink.withValues(alpha: 0.13),
+          _CircumDesignV2.softLavender.withValues(alpha: 0.17),
+          _CircumDesignV2.softAqua.withValues(alpha: 0.10),
+          colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
         ],
       _V2SurfaceTone.iris => [
           base,
-          _CircumDesignV2.softAqua.withValues(alpha: 0.08),
-          _CircumDesignV2.softLavender.withValues(alpha: 0.08),
+          _CircumDesignV2.softAqua.withValues(alpha: 0.13),
+          colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
         ],
       _V2SurfaceTone.health => [
           base,
-          _CircumDesignV2.mint.withValues(alpha: 0.08),
-          colors.panel.withValues(alpha: colors.dark ? 1 : 0.95),
+          const Color(0xff10b981).withValues(alpha: 0.09),
+          colors.panel.withValues(alpha: colors.dark ? 0.86 : 0.95),
         ],
       _V2SurfaceTone.vanguard => [
-          colors.panel.withValues(alpha: colors.dark ? 1 : 0.98),
-          _CircumDesignV2.softLavender.withValues(alpha: 0.10),
-          _CircumDesignV2.softAqua.withValues(alpha: 0.05),
+          colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.98),
+          const Color(0xff64748b).withValues(alpha: 0.14),
+          const Color(0xfff8fafc).withValues(alpha: colors.dark ? 0.06 : 0.16),
         ],
       _V2SurfaceTone.rider => [
-          colors.panel.withValues(alpha: colors.dark ? 1 : 0.97),
-          _CircumDesignV2.mint.withValues(alpha: 0.07),
-          colors.field.withValues(alpha: colors.dark ? 1 : 0.66),
+          colors.panel.withValues(alpha: colors.dark ? 0.90 : 0.97),
+          const Color(0xff2563eb).withValues(alpha: 0.10),
+          colors.field.withValues(alpha: colors.dark ? 0.42 : 0.66),
         ],
       _V2SurfaceTone.admin => [
-          colors.adminChrome.withValues(alpha: colors.dark ? 0.82 : 0.98),
-          colors.panel.withValues(alpha: colors.dark ? 1 : 0.95),
+          colors.adminChrome.withValues(alpha: colors.dark ? 0.92 : 0.98),
+          colors.panel.withValues(alpha: colors.dark ? 0.78 : 0.95),
         ],
       _ => strong
           ? [
               base,
-              _CircumDesignV2.softAqua.withValues(alpha: 0.08),
-              _CircumDesignV2.softLavender.withValues(alpha: 0.08),
-              colors.panel.withValues(alpha: colors.dark ? 1 : 0.94),
+              _CircumDesignV2.softAqua.withValues(alpha: 0.12),
+              _CircumDesignV2.softLavender.withValues(alpha: 0.12),
+              colors.panel.withValues(alpha: colors.dark ? 0.84 : 0.94),
             ]
           : [base, field],
     };
@@ -25864,8 +25830,7 @@ class _SectionHeader extends StatelessWidget {
                   color: colors.text,
                   fontSize: 22,
                   height: 1.05,
-                  fontFamily: 'DM Serif Display',
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
               if (subtitle != null) ...[
@@ -27677,8 +27642,7 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                             style: TextStyle(
                               color: colors.text,
                               fontSize: 18,
-                              fontFamily: 'DM Serif Display',
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
                           Text(
@@ -27883,22 +27847,20 @@ class _CircumColors {
   const _CircumColors(this.dark);
 
   Color get background => dark ? _CircumDesignV2.deepBlack : Colors.white;
-  Color get appBackground => dark ? _CircumDesignV2.deepBlack : Colors.white;
-  Color get stage => dark ? _CircumDesignV2.deepBlack : const Color(0xfff3f4f6);
-  Color get band => dark ? _CircumDesignV2.navy2 : const Color(0xfff8fafc);
-  Color get panel => dark ? Colors.white.withValues(alpha: 0.06) : Colors.white;
-  Color get field =>
-      dark ? Colors.white.withValues(alpha: 0.04) : const Color(0xfff3f4f6);
-  Color get border =>
-      dark ? Colors.white.withValues(alpha: 0.10) : _CircumDesignV2.silver;
+  Color get appBackground => dark ? const Color(0xff070A12) : Colors.white;
+  Color get stage => dark ? const Color(0xff0B1020) : const Color(0xfff3f4f6);
+  Color get band => dark ? const Color(0xff101827) : const Color(0xfff8fafc);
+  Color get panel => dark ? const Color(0xff111827) : Colors.white;
+  Color get field => dark ? const Color(0xff182132) : const Color(0xfff3f4f6);
+  Color get border => dark ? const Color(0xff263247) : _CircumDesignV2.silver;
   Color get text => dark ? _CircumDesignV2.pearlWhite : Colors.black;
   Color get inverseText => dark ? Colors.black : Colors.white;
   Color get mutedText =>
-      dark ? Colors.white.withValues(alpha: 0.70) : const Color(0xff6b7280);
-  Color get success => _CircumDesignV2.mint;
-  Color get warning => _CircumDesignV2.amber;
+      dark ? const Color(0xffA8B3C7) : const Color(0xff6b7280);
+  Color get success => const Color(0xff16a34a);
+  Color get warning => const Color(0xfff59e0b);
   Color get adminChrome =>
-      dark ? _CircumDesignV2.navy2 : const Color(0xfff8fbff);
+      dark ? const Color(0xff08111F) : const Color(0xfff8fbff);
   Color get adminAccent =>
       dark ? _CircumDesignV2.softAqua : const Color(0xff2563eb);
   Color get adminGlow =>
@@ -27933,25 +27895,23 @@ class _RiderRankBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalized = RiderRankPolicy.normalize(rank);
     final colors = switch (normalized) {
-      'sentinel' => const [Color(0xff3B82F6), Color(0xff818CF8)],
-      'warden' => const [Color(0xffFBBF24), Color(0xffA78BFA)],
-      'knight' => const [Color(0xffA78BFA), Color(0xff818CF8)],
-      'veteran' => _CircumDesignV2.iridescent,
-      _ => const [Color(0x12FFFFFF), Color(0x0AFFFFFF)],
+      'sentinel' => const [Color(0xff2563eb), Color(0xff38bdf8)],
+      'warden' => const [Color(0xffb7791f), Color(0xfff6c453)],
+      'knight' => const [Color(0xff7c3aed), Color(0xffc084fc)],
+      'veteran' => const [Color(0xff8b5cf6), Color(0xff5eead4)],
+      _ => const [Color(0xff64748b), Color(0xffe2e8f0)],
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: colors),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         _riderRankLabel(normalized).toUpperCase(),
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
