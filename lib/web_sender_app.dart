@@ -25787,6 +25787,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   String _anonymousGiftType = 'direct';
   String _senderRevealMode = 'anonymous_until_consent';
   String _selfGiftFrequency = 'one_off';
+  int _giftStep = 0;
   DateTime? _deliveryDate;
   final Set<String> _interests = {};
   XFile? _photo;
@@ -25925,6 +25926,117 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Whisky Appreciation',
     'Craft Beverages',
   ];
+  static const _relationshipMoments = {
+    'Partner': 'Partner',
+    'Friend': 'Friend',
+    'Family': 'Mother',
+    'Mentor': 'Mentor',
+    'Colleague': 'Colleague',
+    'Myself': 'Friend',
+  };
+  static const _occasionMoments = [
+    'Birthday',
+    'Anniversary',
+    'Graduation',
+    'Thank You',
+    'Promotion',
+    'Get Well Soon',
+    'New Baby',
+    'Just Because',
+  ];
+  static const _interestGroups = {
+    'Style & beauty': [
+      'Fashion',
+      'Luxury Fashion',
+      'Streetwear',
+      'Beauty',
+      'Makeup',
+      'Skincare',
+      'Fragrance',
+      'Home Fragrance',
+      'Jewellery',
+      'Watches',
+      'Handbags',
+      'Sneakers',
+    ],
+    'Food, drink & dining': [
+      'Food',
+      'Cooking',
+      'Coffee',
+      'Tea',
+      'Restaurants',
+      'Fine Dining',
+      'Michelin Dining',
+      'Street Food',
+      'Brunch',
+      'Afternoon Tea',
+      'Wine Appreciation',
+      'Whisky Appreciation',
+      'Craft Beverages',
+    ],
+    'Travel & experiences': [
+      'Travel',
+      'Luxury Travel',
+      'City Breaks',
+      'Adventure Travel',
+      'Cruises',
+      'Hotels',
+      'Spa Experiences',
+      'Wellness Retreats',
+      'Aviation',
+      'Festivals',
+    ],
+    'Culture & creativity': [
+      'Books',
+      'Writing',
+      'Art',
+      'Design',
+      'Architecture',
+      'Interior Design',
+      'Music',
+      'Live Music',
+      'Film',
+      'Cinema',
+      'TV & Streaming',
+      'Theatre',
+      'Musicals',
+      'Opera',
+      'Photography',
+    ],
+    'Lifestyle & passions': [
+      'Tech',
+      'Gaming',
+      'Gym',
+      'Sports',
+      'Football',
+      'Running',
+      'Cycling',
+      'Swimming',
+      'Cars',
+      'Motorcycles',
+      'Gardening',
+      'Animals',
+      'Nature',
+      'Collectibles',
+    ],
+    'Values & growth': [
+      'Christian',
+      'Muslim',
+      'Jewish',
+      'Spiritual',
+      'Charity',
+      'Sustainability',
+      'Minimalist',
+      'Home Decor',
+      'Luxury',
+      'Business',
+      'Entrepreneurship',
+      'Investing',
+      'Startups',
+      'Personal Development',
+      'Leadership',
+    ],
+  };
 
   @override
   void initState() {
@@ -26400,388 +26512,416 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                               ]),
                         ),
                         const SizedBox(height: 14),
-                        _GlassPanel(
-                            colors: colors,
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text('Create the experience',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 16),
-                                  DropdownButtonFormField<String>(
-                                    initialValue: _giftMode,
-                                    decoration: const InputDecoration(
-                                        labelText: 'Gift mode'),
-                                    items: const {
-                                      'gift_someone': 'Gift someone',
-                                      'gift_myself': 'Gift myself',
-                                      'anonymous_gift': 'Anonymous gift',
-                                    }
-                                        .entries
-                                        .map((entry) => DropdownMenuItem(
-                                            value: entry.key,
-                                            child: Text(entry.value)))
-                                        .toList(),
-                                    onChanged: (value) => setState(
-                                        () => _giftMode = value ?? _giftMode),
-                                  ),
-                                  if (_giftMode == 'anonymous_gift') ...[
-                                    const SizedBox(height: 12),
+                        _giftConciergeFlow(colors, narrow),
+                        if (false)
+                          _GlassPanel(
+                              colors: colors,
+                              child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text('Create the experience',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontSize: 26,
+                                            fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 16),
                                     DropdownButtonFormField<String>(
-                                      initialValue: _anonymousGiftType,
+                                      initialValue: _giftMode,
                                       decoration: const InputDecoration(
-                                          labelText: 'Anonymous gift type'),
+                                          labelText: 'Gift mode'),
                                       items: const {
-                                        'direct': 'Direct anonymous gift',
-                                        'campaign':
-                                            'Campaign · Bringing London Closer',
+                                        'gift_someone': 'Gift someone',
+                                        'gift_myself': 'Gift myself',
+                                        'anonymous_gift': 'Anonymous gift',
                                       }
                                           .entries
                                           .map((entry) => DropdownMenuItem(
                                               value: entry.key,
                                               child: Text(entry.value)))
                                           .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _anonymousGiftType =
-                                              value ?? _anonymousGiftType),
+                                      onChanged: (value) => setState(
+                                          () => _giftMode = value ?? _giftMode),
                                     ),
+                                    if (_giftMode == 'anonymous_gift') ...[
+                                      const SizedBox(height: 12),
+                                      DropdownButtonFormField<String>(
+                                        initialValue: _anonymousGiftType,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Anonymous gift type'),
+                                        items: const {
+                                          'direct': 'Direct anonymous gift',
+                                          'campaign':
+                                              'Campaign · Bringing London Closer',
+                                        }
+                                            .entries
+                                            .map((entry) => DropdownMenuItem(
+                                                value: entry.key,
+                                                child: Text(entry.value)))
+                                            .toList(),
+                                        onChanged: (value) => setState(() =>
+                                            _anonymousGiftType =
+                                                value ?? _anonymousGiftType),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      DropdownButtonFormField<String>(
+                                        initialValue: _senderRevealMode,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Identity reveal'),
+                                        items: const {
+                                          'anonymous_forever':
+                                              'Anonymous forever',
+                                          'reveal_after_delivery':
+                                              'Reveal after delivery',
+                                          'anonymous_until_consent':
+                                              'Reveal only with later consent',
+                                          'reveal_immediately':
+                                              'Reveal immediately',
+                                        }
+                                            .entries
+                                            .map((entry) => DropdownMenuItem(
+                                                value: entry.key,
+                                                child: Text(entry.value)))
+                                            .toList(),
+                                        onChanged: (value) => setState(() =>
+                                            _senderRevealMode =
+                                                value ?? _senderRevealMode),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
+                                        style: TextStyle(
+                                            color: colors.mutedText,
+                                            fontSize: 12),
+                                      ),
+                                    ],
+                                    if (_giftMode == 'gift_myself') ...[
+                                      const SizedBox(height: 12),
+                                      DropdownButtonFormField<String>(
+                                        initialValue: _selfGiftFrequency,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Self-gift frequency'),
+                                        items: const {
+                                          'one_off': 'One-off',
+                                          'monthly': 'Monthly',
+                                          'quarterly': 'Quarterly',
+                                          'custom': 'Custom',
+                                        }
+                                            .entries
+                                            .map((entry) => DropdownMenuItem(
+                                                value: entry.key,
+                                                child: Text(entry.value)))
+                                            .toList(),
+                                        onChanged: (value) => setState(() =>
+                                            _selfGiftFrequency =
+                                                value ?? _selfGiftFrequency),
+                                      ),
+                                    ],
                                     const SizedBox(height: 12),
+                                    Text('Who is receiving?',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 10),
+                                    _giftField(_senderName, 'Sender name',
+                                        Icons.person_outline),
+                                    _giftField(_senderEmail, 'Sender email',
+                                        Icons.email_outlined,
+                                        type: TextInputType.emailAddress),
+                                    _giftField(_recipientName, 'Recipient name',
+                                        Icons.redeem_outlined),
+                                    _giftField(
+                                        _recipientPhone,
+                                        'Recipient phone',
+                                        Icons.contact_phone_outlined),
+                                    _giftField(_recipientEmail,
+                                        'Recipient email', Icons.email_outlined,
+                                        type: TextInputType.emailAddress),
+                                    Text('Tell us about them',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 10),
+                                    Row(children: [
+                                      Expanded(
+                                          child: DropdownButtonFormField<
+                                                  String>(
+                                              initialValue: _relationship,
+                                              decoration: const InputDecoration(
+                                                  labelText: 'Relationship'),
+                                              items: _relationships
+                                                  .map((v) => DropdownMenuItem(
+                                                      value: v, child: Text(v)))
+                                                  .toList(),
+                                              onChanged: (v) => setState(() =>
+                                                  _relationship =
+                                                      v ?? _relationship))),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                          child: DropdownButtonFormField<
+                                                  String>(
+                                              initialValue: _occasion,
+                                              decoration: const InputDecoration(
+                                                  labelText: 'Occasion'),
+                                              items: _occasions
+                                                  .map((v) => DropdownMenuItem(
+                                                      value: v, child: Text(v)))
+                                                  .toList(),
+                                              onChanged: (v) => setState(() =>
+                                                  _occasion = v ?? _occasion))),
+                                    ]),
+                                    const SizedBox(height: 12),
+                                    Text('Sizes and preferences',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                        spacing: 10,
+                                        runSpacing: 10,
+                                        children: [
+                                          SizedBox(
+                                              width: 180,
+                                              child: _giftField(
+                                                  _clothingSize,
+                                                  'Clothing size',
+                                                  Icons.checkroom)),
+                                          SizedBox(
+                                              width: 180,
+                                              child: _giftField(_shoeSize,
+                                                  'Shoe size', Icons.hiking)),
+                                          SizedBox(
+                                              width: 180,
+                                              child: _giftField(
+                                                  _ringSize,
+                                                  'Ring size',
+                                                  Icons.circle_outlined)),
+                                          SizedBox(
+                                              width: 180,
+                                              child: _giftField(_height,
+                                                  'Height', Icons.height)),
+                                        ]),
                                     DropdownButtonFormField<String>(
-                                      initialValue: _senderRevealMode,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Identity reveal'),
-                                      items: const {
-                                        'anonymous_forever':
-                                            'Anonymous forever',
-                                        'reveal_after_delivery':
-                                            'Reveal after delivery',
-                                        'anonymous_until_consent':
-                                            'Reveal only with later consent',
-                                        'reveal_immediately':
-                                            'Reveal immediately',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _senderRevealMode =
-                                              value ?? _senderRevealMode),
-                                    ),
+                                        initialValue: _preferredFit,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Preferred fit'),
+                                        items: const [
+                                          'Slim',
+                                          'Regular',
+                                          'Relaxed',
+                                          'Oversized'
+                                        ]
+                                            .map((v) => DropdownMenuItem(
+                                                value: v, child: Text(v)))
+                                            .toList(),
+                                        onChanged: (v) => setState(() =>
+                                            _preferredFit =
+                                                v ?? _preferredFit)),
+                                    _giftField(
+                                        _favouriteColours,
+                                        'Favourite colours',
+                                        Icons.palette_outlined),
+                                    _giftField(_likedBrands, 'Brands they like',
+                                        Icons.favorite_border),
+                                    _giftField(_dislikedBrands,
+                                        'Brands they dislike', Icons.block),
+                                    Text('Delivery details',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 10),
+                                    _AddressField(
+                                        colors: colors,
+                                        icon: Icons.location_on_outlined,
+                                        label: 'Delivery address',
+                                        controller: _deliveryAddress,
+                                        verified:
+                                            _validatedGiftAddress?.isVerified ==
+                                                true,
+                                        onSelected: (address) => setState(() =>
+                                            _validatedGiftAddress = address),
+                                        onEdited: (_) => setState(
+                                            () => _validatedGiftAddress = null),
+                                        verifiedMessage:
+                                            'Verified delivery address selected'),
+                                    Row(children: [
+                                      Expanded(
+                                          child: OutlinedButton.icon(
+                                              onPressed: () async {
+                                                final date = await showDatePicker(
+                                                    context: context,
+                                                    firstDate: DateTime.now(),
+                                                    lastDate: DateTime.now()
+                                                        .add(const Duration(
+                                                            days: 365)),
+                                                    initialDate:
+                                                        _deliveryDate ??
+                                                            DateTime.now().add(
+                                                                const Duration(
+                                                                    days: 2)));
+                                                if (date != null)
+                                                  setState(() =>
+                                                      _deliveryDate = date);
+                                              },
+                                              icon: const Icon(
+                                                  Icons.calendar_month),
+                                              label: Text(_deliveryDate == null
+                                                  ? 'Preferred delivery date'
+                                                  : _adminDateText(
+                                                      _deliveryDate)))),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                          child: DropdownButtonFormField<
+                                                  String>(
+                                              initialValue: _timeWindow,
+                                              decoration: const InputDecoration(
+                                                  labelText: 'Time window'),
+                                              items: const [
+                                                'Morning',
+                                                'Afternoon',
+                                                'Evening'
+                                              ]
+                                                  .map((v) => DropdownMenuItem(
+                                                      value: v, child: Text(v)))
+                                                  .toList(),
+                                              onChanged: (v) => setState(() =>
+                                                  _timeWindow =
+                                                      v ?? _timeWindow))),
+                                    ]),
+                                    const SizedBox(height: 12),
+                                    Text('Gift budget',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          50,
+                                          100,
+                                          250,
+                                          500,
+                                          1000,
+                                          1500
+                                        ]
+                                            .map((value) => ChoiceChip(
+                                                label: Text('£$value'),
+                                                selected:
+                                                    _budget.text == '$value',
+                                                onSelected: (_) => setState(
+                                                    () => _budget.text =
+                                                        '$value')))
+                                            .toList()),
+                                    const SizedBox(height: 8),
+                                    _giftField(
+                                        _budget,
+                                        'Gift budget (minimum £50)',
+                                        Icons.payments_outlined,
+                                        type: const TextInputType
+                                            .numberWithOptions(decimal: true)),
+                                    Text('Interests',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontWeight: FontWeight.w800)),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: _interestOptions
+                                            .map((interest) => FilterChip(
+                                                label: Text(interest),
+                                                selected: _interests
+                                                    .contains(interest),
+                                                onSelected: (selected) =>
+                                                    setState(() => selected
+                                                        ? _interests
+                                                            .add(interest)
+                                                        : _interests
+                                                            .remove(interest))))
+                                            .toList()),
+                                    const SizedBox(height: 12),
+                                    Text('Additional information',
+                                        style: TextStyle(
+                                            color: colors.text,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 8),
+                                    _giftField(
+                                        _personalMessage,
+                                        'Personal message',
+                                        Icons.chat_bubble_outline,
+                                        lines: 3),
+                                    _giftField(_notes, 'Additional Information',
+                                        Icons.notes,
+                                        lines: 3),
+                                    Text(
+                                        'Record allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
+                                        style: TextStyle(
+                                            color: colors.mutedText,
+                                            fontSize: 12)),
+                                    OutlinedButton.icon(
+                                        onPressed: _pickPhoto,
+                                        icon: const Icon(
+                                            Icons.add_a_photo_outlined),
+                                        label: Text(_photo == null
+                                            ? 'Add optional recipient photo'
+                                            : 'Photo selected · Replace')),
+                                    if (_photo != null)
+                                      Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: TextButton.icon(
+                                              onPressed: () =>
+                                                  setState(() => _photo = null),
+                                              icon: const Icon(Icons.close),
+                                              label:
+                                                  const Text('Remove photo'))),
+                                    if (_message != null)
+                                      Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 12),
+                                          child: Text(_message!,
+                                              style: TextStyle(
+                                                  color: colors.text,
+                                                  fontWeight:
+                                                      FontWeight.w700))),
+                                    const SizedBox(height: 16),
+                                    FilledButton.icon(
+                                        onPressed: _saving ? null : _submit,
+                                        icon: _saving
+                                            ? const SizedBox.square(
+                                                dimension: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 2))
+                                            : const Icon(Icons.card_giftcard),
+                                        label: Text(_saving
+                                            ? 'Preparing payment...'
+                                            : 'Create Gift Experience'),
+                                        style: FilledButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 17))),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
+                                        'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            color: colors.mutedText,
+                                            fontSize: 12)),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                           color: colors.mutedText,
                                           fontSize: 12),
                                     ),
-                                  ],
-                                  if (_giftMode == 'gift_myself') ...[
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _selfGiftFrequency,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Self-gift frequency'),
-                                      items: const {
-                                        'one_off': 'One-off',
-                                        'monthly': 'Monthly',
-                                        'quarterly': 'Quarterly',
-                                        'custom': 'Custom',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _selfGiftFrequency =
-                                              value ?? _selfGiftFrequency),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 12),
-                                  Text('Who is receiving?',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  _giftField(_senderName, 'Sender name',
-                                      Icons.person_outline),
-                                  _giftField(_senderEmail, 'Sender email',
-                                      Icons.email_outlined,
-                                      type: TextInputType.emailAddress),
-                                  _giftField(_recipientName, 'Recipient name',
-                                      Icons.redeem_outlined),
-                                  _giftField(_recipientPhone, 'Recipient phone',
-                                      Icons.contact_phone_outlined),
-                                  _giftField(_recipientEmail, 'Recipient email',
-                                      Icons.email_outlined,
-                                      type: TextInputType.emailAddress),
-                                  Text('Tell us about them',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  Row(children: [
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _relationship,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Relationship'),
-                                            items: _relationships
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _relationship =
-                                                    v ?? _relationship))),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _occasion,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Occasion'),
-                                            items: _occasions
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _occasion = v ?? _occasion))),
-                                  ]),
-                                  const SizedBox(height: 12),
-                                  Text('Sizes and preferences',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  Wrap(spacing: 10, runSpacing: 10, children: [
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(_clothingSize,
-                                            'Clothing size', Icons.checkroom)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(_shoeSize,
-                                            'Shoe size', Icons.hiking)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(
-                                            _ringSize,
-                                            'Ring size',
-                                            Icons.circle_outlined)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(
-                                            _height, 'Height', Icons.height)),
-                                  ]),
-                                  DropdownButtonFormField<String>(
-                                      initialValue: _preferredFit,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Preferred fit'),
-                                      items: const [
-                                        'Slim',
-                                        'Regular',
-                                        'Relaxed',
-                                        'Oversized'
-                                      ]
-                                          .map((v) => DropdownMenuItem(
-                                              value: v, child: Text(v)))
-                                          .toList(),
-                                      onChanged: (v) => setState(() =>
-                                          _preferredFit = v ?? _preferredFit)),
-                                  _giftField(
-                                      _favouriteColours,
-                                      'Favourite colours',
-                                      Icons.palette_outlined),
-                                  _giftField(_likedBrands, 'Brands they like',
-                                      Icons.favorite_border),
-                                  _giftField(_dislikedBrands,
-                                      'Brands they dislike', Icons.block),
-                                  Text('Delivery details',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  _AddressField(
-                                      colors: colors,
-                                      icon: Icons.location_on_outlined,
-                                      label: 'Delivery address',
-                                      controller: _deliveryAddress,
-                                      verified:
-                                          _validatedGiftAddress?.isVerified ==
-                                              true,
-                                      onSelected: (address) => setState(() =>
-                                          _validatedGiftAddress = address),
-                                      onEdited: (_) => setState(
-                                          () => _validatedGiftAddress = null),
-                                      verifiedMessage:
-                                          'Verified delivery address selected'),
-                                  Row(children: [
-                                    Expanded(
-                                        child: OutlinedButton.icon(
-                                            onPressed: () async {
-                                              final date = await showDatePicker(
-                                                  context: context,
-                                                  firstDate: DateTime.now(),
-                                                  lastDate: DateTime.now().add(
-                                                      const Duration(
-                                                          days: 365)),
-                                                  initialDate: _deliveryDate ??
-                                                      DateTime.now().add(
-                                                          const Duration(
-                                                              days: 2)));
-                                              if (date != null)
-                                                setState(
-                                                    () => _deliveryDate = date);
-                                            },
-                                            icon: const Icon(
-                                                Icons.calendar_month),
-                                            label: Text(_deliveryDate == null
-                                                ? 'Preferred delivery date'
-                                                : _adminDateText(
-                                                    _deliveryDate)))),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _timeWindow,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Time window'),
-                                            items: const [
-                                              'Morning',
-                                              'Afternoon',
-                                              'Evening'
-                                            ]
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _timeWindow =
-                                                    v ?? _timeWindow))),
-                                  ]),
-                                  const SizedBox(height: 12),
-                                  Text('Gift budget',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [50, 100, 250, 500, 1000, 1500]
-                                          .map((value) => ChoiceChip(
-                                              label: Text('£$value'),
-                                              selected:
-                                                  _budget.text == '$value',
-                                              onSelected: (_) => setState(() =>
-                                                  _budget.text = '$value')))
-                                          .toList()),
-                                  const SizedBox(height: 8),
-                                  _giftField(
-                                      _budget,
-                                      'Gift budget (minimum £50)',
-                                      Icons.payments_outlined,
-                                      type:
-                                          const TextInputType.numberWithOptions(
-                                              decimal: true)),
-                                  Text('Interests',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontWeight: FontWeight.w800)),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: _interestOptions
-                                          .map((interest) => FilterChip(
-                                              label: Text(interest),
-                                              selected:
-                                                  _interests.contains(interest),
-                                              onSelected: (selected) =>
-                                                  setState(() => selected
-                                                      ? _interests.add(interest)
-                                                      : _interests
-                                                          .remove(interest))))
-                                          .toList()),
-                                  const SizedBox(height: 12),
-                                  Text('Additional information',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 8),
-                                  _giftField(
-                                      _personalMessage,
-                                      'Personal message',
-                                      Icons.chat_bubble_outline,
-                                      lines: 3),
-                                  _giftField(_notes, 'Additional Information',
-                                      Icons.notes,
-                                      lines: 3),
-                                  Text(
-                                      'Record allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12)),
-                                  OutlinedButton.icon(
-                                      onPressed: _pickPhoto,
-                                      icon: const Icon(
-                                          Icons.add_a_photo_outlined),
-                                      label: Text(_photo == null
-                                          ? 'Add optional recipient photo'
-                                          : 'Photo selected · Replace')),
-                                  if (_photo != null)
-                                    Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: TextButton.icon(
-                                            onPressed: () =>
-                                                setState(() => _photo = null),
-                                            icon: const Icon(Icons.close),
-                                            label: const Text('Remove photo'))),
-                                  if (_message != null)
-                                    Padding(
-                                        padding: const EdgeInsets.only(top: 12),
-                                        child: Text(_message!,
-                                            style: TextStyle(
-                                                color: colors.text,
-                                                fontWeight: FontWeight.w700))),
-                                  const SizedBox(height: 16),
-                                  FilledButton.icon(
-                                      onPressed: _saving ? null : _submit,
-                                      icon: _saving
-                                          ? const SizedBox.square(
-                                              dimension: 18,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2))
-                                          : const Icon(Icons.card_giftcard),
-                                      label: Text(_saving
-                                          ? 'Preparing payment...'
-                                          : 'Create Gift Experience'),
-                                      style: FilledButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 17))),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                      'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12)),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: colors.mutedText, fontSize: 12),
-                                  ),
-                                ])),
+                                  ])),
                       ],
                       if (_requests.isNotEmpty) ...[
                         const SizedBox(height: 22),
@@ -26822,6 +26962,711 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _giftConciergeFlow(_CircumColors colors, bool narrow) {
+    final steps = [
+      'Who',
+      'Moment',
+      'Story',
+      'World',
+      'Preview',
+      'Details',
+      'Review',
+    ];
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < steps.length; i++)
+                ChoiceChip(
+                  label: Text('${i + 1}. ${steps[i]}'),
+                  selected: _giftStep == i,
+                  onSelected: (_) => setState(() => _giftStep = i),
+                ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: KeyedSubtree(
+              key: ValueKey(_giftStep),
+              child: switch (_giftStep) {
+                0 => _giftStepCard(
+                    colors: colors,
+                    title: 'Who are we celebrating?',
+                    subtitle:
+                        'Start with the relationship. You can refine the exact stored relationship later.',
+                    body: _giftOptionGrid(
+                      colors,
+                      _relationshipMoments.keys.toList(),
+                      (label) => _relationship == _relationshipMoments[label],
+                      (label) => setState(() {
+                        if (label == 'Myself') _giftMode = 'gift_myself';
+                        _relationship =
+                            _relationshipMoments[label] ?? _relationship;
+                      }),
+                    ),
+                  ),
+                1 => _giftStepCard(
+                    colors: colors,
+                    title: 'What moment are we creating?',
+                    subtitle:
+                        'Choose the emotional reason first. Every existing occasion remains available later.',
+                    body: _giftOptionGrid(
+                      colors,
+                      _occasionMoments,
+                      (label) => _occasion == label,
+                      (label) => setState(() => _occasion = label),
+                    ),
+                  ),
+                2 => _giftStepCard(
+                    colors: colors,
+                    title: 'Tell me about them',
+                    subtitle:
+                        'The better the story, the more personal the experience can feel.',
+                    body: _giftField(
+                      _notes,
+                      'What do they love? What makes them light up? What are they obsessed with?',
+                      Icons.auto_awesome,
+                      lines: 7,
+                    ),
+                  ),
+                3 => _giftStepCard(
+                    colors: colors,
+                    title: 'Discover their world',
+                    subtitle:
+                        'Pick across categories. Selected interests stay visible here and travel into the same existing request field.',
+                    body: _giftInterestSelector(colors),
+                  ),
+                4 => _giftStepCard(
+                    colors: colors,
+                    title: 'IRIS experience preview',
+                    subtitle:
+                        'A private direction of travel. Exact gifts, brands and suppliers stay hidden.',
+                    body: _giftIrisPreview(colors),
+                  ),
+                5 => _giftStepCard(
+                    colors: colors,
+                    title: 'A few details to make it perfect',
+                    subtitle:
+                        'These are the same operational fields Circum already uses for payment, review and delivery.',
+                    body: _giftDetailsFields(colors, narrow),
+                  ),
+                _ => _giftStepCard(
+                    colors: colors,
+                    title: 'One final step',
+                    subtitle:
+                        'Review the safe summary, then continue to Stripe. Gift contents remain private.',
+                    body: _giftFinalStep(colors),
+                  ),
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+          _giftStepControls(colors),
+        ],
+      ),
+    );
+  }
+
+  Widget _giftStepCard({
+    required _CircumColors colors,
+    required String title,
+    required String subtitle,
+    required Widget body,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: TextStyle(color: colors.mutedText, height: 1.45),
+        ),
+        const SizedBox(height: 18),
+        body,
+      ],
+    );
+  }
+
+  Widget _giftOptionGrid(
+    _CircumColors colors,
+    List<String> labels,
+    bool Function(String label) selected,
+    void Function(String label) onTap,
+  ) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final compact = constraints.maxWidth < 560;
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: labels
+            .map((label) => SizedBox(
+                  width: compact
+                      ? double.infinity
+                      : (constraints.maxWidth - 20) / 3,
+                  child: _giftOptionCard(
+                    colors,
+                    label,
+                    selected(label),
+                    () => onTap(label),
+                  ),
+                ))
+            .toList(),
+      );
+    });
+  }
+
+  Widget _giftOptionCard(
+      _CircumColors colors, String label, bool selected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: selected
+              ? colors.adminAccent.withValues(alpha: 0.22)
+              : colors.field.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? colors.adminAccent : colors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.check_circle : Icons.circle_outlined,
+              color: selected ? colors.adminAccent : colors.mutedText,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _giftInterestSelector(_CircumColors colors) {
+    final uncategorised = _interestOptions
+        .where((interest) =>
+            !_interestGroups.values.expand((group) => group).contains(interest))
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_interests.isNotEmpty) ...[
+          Text('Selected',
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _interests
+                .map((interest) => InputChip(
+                      label: Text(interest),
+                      onDeleted: () =>
+                          setState(() => _interests.remove(interest)),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 14),
+        ],
+        for (final entry in {
+          ..._interestGroups,
+          if (uncategorised.isNotEmpty) 'More interests': uncategorised,
+        }.entries)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: colors.field.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: colors.border),
+            ),
+            child: ExpansionTile(
+              collapsedIconColor: colors.mutedText,
+              iconColor: colors.adminAccent,
+              title: Text(entry.key,
+                  style: TextStyle(
+                      color: colors.text, fontWeight: FontWeight.w900)),
+              subtitle: Text('${entry.value.length} options',
+                  style: TextStyle(color: colors.mutedText)),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: entry.value
+                      .map((interest) => FilterChip(
+                            label: Text(interest),
+                            selected: _interests.contains(interest),
+                            onSelected: (selected) => setState(() => selected
+                                ? _interests.add(interest)
+                                : _interests.remove(interest)),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _giftIrisPreview(_CircumColors colors) {
+    final focus = _interests.isEmpty
+        ? 'their story'
+        : _interests.take(3).join(', ').toLowerCase();
+    final toneTags = _giftToneTags();
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.20),
+            colors.adminGlow.withValues(alpha: 0.10),
+            colors.field.withValues(alpha: 0.65),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.auto_awesome, color: colors.adminAccent),
+            const SizedBox(width: 10),
+            Text('Private IRIS preview',
+                style: TextStyle(
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900)),
+          ]),
+          const SizedBox(height: 12),
+          Text(
+            'For a ${_relationship.toLowerCase()} celebrating ${_occasion.toLowerCase()} and drawn to $focus — IRIS imagines an experience built around ${toneTags.take(3).join(', ').toLowerCase()}, and deliberate surprise.',
+            style: TextStyle(color: colors.text, fontSize: 18, height: 1.45),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: toneTags
+                .map((tag) => Chip(
+                      label: Text(tag),
+                      backgroundColor: colors.panel.withValues(alpha: 0.62),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No exact gift items, brands, retailers or procurement costs are shown before delivery.',
+            style: TextStyle(color: colors.mutedText, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _giftToneTags() {
+    final tags = <String>{'Thoughtful'};
+    if (_interests
+        .any(['Fine Dining', 'Jewellery', 'Architecture', 'Luxury'].contains))
+      tags.add('Elegant');
+    if (_relationship == 'Partner' || _occasion == 'Anniversary') {
+      tags.add('Intimate');
+    }
+    if (_occasion == 'Get Well Soon' ||
+        _interests.contains('Spa Experiences') ||
+        _interests.contains('Wellness Retreats')) tags.add('Restorative');
+    if (_interests.contains('Gaming') || _interests.contains('Festivals')) {
+      tags.add('Playful');
+    }
+    tags.add('Surprising');
+    return tags.toList();
+  }
+
+  Widget _giftDetailsFields(_CircumColors colors, bool narrow) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _giftMode,
+          decoration: const InputDecoration(labelText: 'Gift mode'),
+          items: const {
+            'gift_someone': 'Gift someone',
+            'gift_myself': 'Gift myself',
+            'anonymous_gift': 'Anonymous gift',
+          }
+              .entries
+              .map((entry) =>
+                  DropdownMenuItem(value: entry.key, child: Text(entry.value)))
+              .toList(),
+          onChanged: (value) => setState(() => _giftMode = value ?? _giftMode),
+        ),
+        if (_giftMode == 'anonymous_gift') ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _anonymousGiftType,
+            decoration: const InputDecoration(labelText: 'Anonymous gift type'),
+            items: const {
+              'direct': 'Direct anonymous gift',
+              'campaign': 'Campaign · Bringing London Closer',
+            }
+                .entries
+                .map((entry) => DropdownMenuItem(
+                    value: entry.key, child: Text(entry.value)))
+                .toList(),
+            onChanged: (value) => setState(
+                () => _anonymousGiftType = value ?? _anonymousGiftType),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _senderRevealMode,
+            decoration: const InputDecoration(labelText: 'Identity reveal'),
+            items: const {
+              'anonymous_forever': 'Anonymous forever',
+              'reveal_after_delivery': 'Reveal after delivery',
+              'anonymous_until_consent': 'Reveal only with later consent',
+              'reveal_immediately': 'Reveal immediately',
+            }
+                .entries
+                .map((entry) => DropdownMenuItem(
+                    value: entry.key, child: Text(entry.value)))
+                .toList(),
+            onChanged: (value) =>
+                setState(() => _senderRevealMode = value ?? _senderRevealMode),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
+            style: TextStyle(color: colors.mutedText, fontSize: 12),
+          ),
+        ],
+        if (_giftMode == 'gift_myself') ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _selfGiftFrequency,
+            decoration: const InputDecoration(labelText: 'Self-gift frequency'),
+            items: const {
+              'one_off': 'One-off',
+              'monthly': 'Monthly',
+              'quarterly': 'Quarterly',
+              'custom': 'Custom',
+            }
+                .entries
+                .map((entry) => DropdownMenuItem(
+                    value: entry.key, child: Text(entry.value)))
+                .toList(),
+            onChanged: (value) => setState(
+                () => _selfGiftFrequency = value ?? _selfGiftFrequency),
+          ),
+        ],
+        const SizedBox(height: 14),
+        _giftField(_senderName, 'Sender name', Icons.person_outline),
+        _giftField(_senderEmail, 'Sender email', Icons.email_outlined,
+            type: TextInputType.emailAddress),
+        _giftField(_recipientName, 'Recipient name', Icons.redeem_outlined),
+        _giftField(
+            _recipientPhone, 'Recipient phone', Icons.contact_phone_outlined),
+        _giftField(_recipientEmail, 'Recipient email', Icons.email_outlined,
+            type: TextInputType.emailAddress),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: narrow ? double.infinity : 260,
+              child: DropdownButtonFormField<String>(
+                initialValue: _relationship,
+                decoration: const InputDecoration(labelText: 'Relationship'),
+                items: _relationships
+                    .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => _relationship = v ?? _relationship),
+              ),
+            ),
+            SizedBox(
+              width: narrow ? double.infinity : 260,
+              child: DropdownButtonFormField<String>(
+                initialValue: _occasion,
+                decoration: const InputDecoration(labelText: 'Occasion'),
+                items: _occasions
+                    .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                    .toList(),
+                onChanged: (v) => setState(() => _occasion = v ?? _occasion),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _AddressField(
+          colors: colors,
+          icon: Icons.location_on_outlined,
+          label: 'Delivery address',
+          controller: _deliveryAddress,
+          verified: _validatedGiftAddress?.isVerified == true,
+          onSelected: (address) =>
+              setState(() => _validatedGiftAddress = address),
+          onEdited: (_) => setState(() => _validatedGiftAddress = null),
+          verifiedMessage: 'Verified delivery address selected',
+        ),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: narrow ? double.infinity : 260,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    initialDate: _deliveryDate ??
+                        DateTime.now().add(const Duration(days: 2)),
+                  );
+                  if (date != null) setState(() => _deliveryDate = date);
+                },
+                icon: const Icon(Icons.calendar_month),
+                label: Text(_deliveryDate == null
+                    ? 'Preferred delivery date'
+                    : _adminDateText(_deliveryDate)),
+              ),
+            ),
+            SizedBox(
+              width: narrow ? double.infinity : 260,
+              child: DropdownButtonFormField<String>(
+                initialValue: _timeWindow,
+                decoration: const InputDecoration(labelText: 'Time window'),
+                items: const ['Morning', 'Afternoon', 'Evening']
+                    .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => _timeWindow = v ?? _timeWindow),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [50, 100, 250, 500, 1000, 1500]
+              .map((value) => ChoiceChip(
+                    label: Text('£$value'),
+                    selected: _budget.text == '$value',
+                    onSelected: (_) => setState(() => _budget.text = '$value'),
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: 8),
+        _giftField(
+            _budget, 'Gift budget (minimum £50)', Icons.payments_outlined,
+            type: const TextInputType.numberWithOptions(decimal: true)),
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          SizedBox(
+              width: narrow ? double.infinity : 180,
+              child:
+                  _giftField(_clothingSize, 'Clothing size', Icons.checkroom)),
+          SizedBox(
+              width: narrow ? double.infinity : 180,
+              child: _giftField(_shoeSize, 'Shoe size', Icons.hiking)),
+          SizedBox(
+              width: narrow ? double.infinity : 180,
+              child: _giftField(_ringSize, 'Ring size', Icons.circle_outlined)),
+          SizedBox(
+              width: narrow ? double.infinity : 180,
+              child: _giftField(_height, 'Height', Icons.height)),
+        ]),
+        DropdownButtonFormField<String>(
+          initialValue: _preferredFit,
+          decoration: const InputDecoration(labelText: 'Preferred fit'),
+          items: const ['Slim', 'Regular', 'Relaxed', 'Oversized']
+              .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+              .toList(),
+          onChanged: (v) => setState(() => _preferredFit = v ?? _preferredFit),
+        ),
+        _giftField(
+            _favouriteColours, 'Favourite colours', Icons.palette_outlined),
+        _giftField(_likedBrands, 'Brands they like', Icons.favorite_border),
+        _giftField(_dislikedBrands, 'Brands they dislike', Icons.block),
+        _giftField(
+            _personalMessage, 'Personal message', Icons.chat_bubble_outline,
+            lines: 3),
+        Text(
+          'Additional Information already captured above. Include allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
+          style: TextStyle(color: colors.mutedText, fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _pickPhoto,
+          icon: const Icon(Icons.add_a_photo_outlined),
+          label: Text(_photo == null
+              ? 'Add optional recipient photo'
+              : 'Photo selected · Replace'),
+        ),
+        if (_photo != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _photo = null),
+              icon: const Icon(Icons.close),
+              label: const Text('Remove photo'),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _giftFinalStep(_CircumColors colors) {
+    final grossBudget = double.tryParse(_budget.text.trim());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: colors.field.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: colors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _giftSummaryLine('Recipient', _recipientName.text.trim()),
+              _giftSummaryLine('Relationship', _relationship),
+              _giftSummaryLine('Occasion', _occasion),
+              _giftSummaryLine(
+                  'Budget',
+                  grossBudget == null
+                      ? 'Not set'
+                      : '£${grossBudget.toStringAsFixed(2)}'),
+              _giftSummaryLine('Delivery', _deliveryAddress.text.trim()),
+              _giftSummaryLine(
+                  'Date', '${_adminDateText(_deliveryDate)} · $_timeWindow'),
+              _giftSummaryLine(
+                  'Interests',
+                  _interests.isEmpty
+                      ? 'None selected yet'
+                      : _interests.join(', ')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'Nothing is confirmed until our team reviews and approves your gift.',
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Gift contents remain private until delivery.',
+          style: TextStyle(color: colors.mutedText),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Payment is held securely via Stripe and released only upon team approval.',
+          style: TextStyle(color: colors.mutedText),
+        ),
+        if (_message != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(_message!,
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w700)),
+          ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: _saving ? null : _submit,
+          icon: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.card_giftcard),
+          label:
+              Text(_saving ? 'Preparing payment...' : 'Create Gift Experience'),
+          style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 17)),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.mutedText, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.mutedText, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _giftSummaryLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+              width: 110,
+              child: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.w900))),
+          Expanded(child: Text(value.isEmpty ? 'Not provided yet' : value)),
+        ],
+      ),
+    );
+  }
+
+  Widget _giftStepControls(_CircumColors colors) {
+    return Row(
+      children: [
+        if (_giftStep > 0)
+          TextButton.icon(
+            onPressed: () => setState(() => _giftStep--),
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Back'),
+          ),
+        const Spacer(),
+        if (_giftStep < 6)
+          FilledButton.icon(
+            onPressed: () => setState(() => _giftStep++),
+            icon: const Icon(Icons.arrow_forward),
+            label: const Text('Continue'),
+          ),
+      ],
     );
   }
 
