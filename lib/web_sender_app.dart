@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -24,6 +25,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:circum/app/gifts/gift_request_policy.dart';
+import 'package:circum/app/gifts/gift_repository.dart';
 import 'package:circum/app/gifts/gifts_social_policy.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -2616,6 +2618,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool allowPublicPosting = item['allowPublicPosting'] == true;
     bool allowAnonymousPosting = item['allowAnonymousPosting'] == true;
     bool brandTagApproved = item['brandTagApproved'] == true;
+    Map<String, dynamic>? generatedRecommendation;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2889,10 +2892,23 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           actions: [
             TextButton(
               onPressed: () {
-                final interests = (item['interests'] as List?)?.join(', ') ??
-                    'their interests';
-                plan.text =
-                    '${item['occasion']} gift for a ${item['relationship']} with a £${item['grossBudget']} budget, guided by: $interests.';
+                final recommendation = const GiftsRecommendationEngine().recommend(
+                    budget: ((item['grossBudget'] as num?)?.toDouble() ??
+                        (item['budget'] as num?)?.toDouble() ??
+                        50),
+                    relationship: '${item['relationship'] ?? 'Friend'}',
+                    occasion: '${item['occasion'] ?? 'Birthday'}',
+                    interests: (item['interests'] as List?)
+                            ?.map((interest) => '$interest') ??
+                        const <String>[],
+                    notes:
+                        '${item['notes'] ?? ''} ${item['personalMessage'] ?? ''}');
+                generatedRecommendation = recommendation.toMap();
+                plan.text = _formatGiftRecommendationForAdmin(recommendation);
+                if (decision.text.trim().isEmpty) {
+                  decision.text =
+                      'Gifts Team to review recommended experience, safety warnings and procurement notes before approval.';
+                }
               },
               child: const Text('Generate Recommended Experience'),
             ),
@@ -2936,6 +2952,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   'procurementActualCost':
                       double.tryParse(procurementActualCost.text.trim()),
                   'procurementNotes': procurementNotes.text.trim(),
+                  if (generatedRecommendation != null) ...{
+                    'irisGiftRecommendation': generatedRecommendation,
+                    'irisSuggestion':
+                        generatedRecommendation!['experienceSummary'],
+                  },
                   'recipientContentConsent': recipientConsent,
                   'senderContentConsent': senderConsent,
                   'allowCircumSocialUse': allowSocial,
@@ -6062,6 +6083,35 @@ String _adminDateText(dynamic value) {
   if (value is String) date = DateTime.tryParse(value);
   if (date == null) return 'Not yet';
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
+
+String _formatGiftRecommendationForAdmin(GiftRecommendationResult result) {
+  final buffer = StringBuffer(result.experienceSummary);
+  buffer.writeln();
+  buffer.writeln();
+  buffer.writeln('Budget allocation:');
+  for (final entry in result.budgetAllocation.entries) {
+    buffer.writeln('- ${_displayStatusLabel(entry.key)}: £${entry.value}');
+  }
+  buffer.writeln();
+  buffer.writeln('Top internal candidate ideas:');
+  for (final candidate in result.topCandidates.take(10)) {
+    buffer.writeln(
+        '- ${candidate.item.name} (${candidate.item.category}) · score ${candidate.score}');
+  }
+  if (result.riskWarnings.isNotEmpty) {
+    buffer.writeln();
+    buffer.writeln('Risk warnings:');
+    for (final warning in result.riskWarnings) {
+      buffer.writeln('- $warning');
+    }
+  }
+  buffer.writeln();
+  buffer.writeln('Procurement notes:');
+  for (final note in result.procurementNotes) {
+    buffer.writeln('- $note');
+  }
+  return buffer.toString().trim();
 }
 
 class _LandingNav extends StatelessWidget {
@@ -25453,35 +25503,48 @@ class _GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.panel.withOpacity(colors.dark ? 0.92 : 0.96),
-            colors.adminAccent.withOpacity(colors.dark ? 0.10 : 0.06),
-            colors.panel.withOpacity(colors.dark ? 0.86 : 0.94),
-          ],
+    final radius = BorderRadius.circular(24);
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(
+            sigmaX: colors.dark ? 14 : 8, sigmaY: colors.dark ? 14 : 8),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colors.panel.withOpacity(colors.dark ? 0.82 : 0.95),
+                colors.adminAccent.withOpacity(colors.dark ? 0.13 : 0.07),
+                colors.panel.withOpacity(colors.dark ? 0.74 : 0.93),
+              ],
+            ),
+            borderRadius: radius,
+            border: Border.all(
+              color: Color.alphaBlend(
+                colors.adminAccent.withOpacity(colors.dark ? 0.18 : 0.12),
+                Colors.white.withOpacity(colors.dark ? 0.08 : 0.18),
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(colors.dark ? 0.24 : 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: colors.adminGlow.withOpacity(colors.dark ? 0.14 : 0.06),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: child,
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.adminAccent.withOpacity(0.18)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(colors.dark ? 0.18 : 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: colors.adminGlow.withOpacity(colors.dark ? 0.12 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
       ),
-      child: child,
     );
   }
 }
@@ -25826,7 +25889,41 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Animals',
     'Nature',
     'Sustainability',
-    'Collectibles'
+    'Collectibles',
+    'Restaurants',
+    'Fine Dining',
+    'Michelin Dining',
+    'Street Food',
+    'Brunch',
+    'Afternoon Tea',
+    'Luxury Travel',
+    'City Breaks',
+    'Adventure Travel',
+    'Cruises',
+    'Hotels',
+    'Spa Experiences',
+    'Wellness Retreats',
+    'Luxury Fashion',
+    'Streetwear',
+    'Handbags',
+    'Sneakers',
+    'Interior Design',
+    'Home Fragrance',
+    'Musicals',
+    'Opera',
+    'Live Music',
+    'Festivals',
+    'Cinema',
+    'TV & Streaming',
+    'Business',
+    'Entrepreneurship',
+    'Investing',
+    'Startups',
+    'Personal Development',
+    'Leadership',
+    'Wine Appreciation',
+    'Whisky Appreciation',
+    'Craft Beverages',
   ];
 
   @override
