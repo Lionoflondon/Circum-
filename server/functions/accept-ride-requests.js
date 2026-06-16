@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
+const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -50,6 +51,15 @@ const getRiderProfile = async (db, riderId) => {
   if (riderDoc.exists) return riderDoc.data();
 
   return null;
+};
+
+const canOverrideVehicleMismatch = (context, data) => {
+  if (!data || data.adminVehicleOverride !== true) return false;
+  const token = context.auth && context.auth.token || {};
+  const role = cleanText(token.role || token.adminRole || token.claims && token.claims.role).toLowerCase();
+  const roles = Array.isArray(token.roles) ? token.roles.map((item) => cleanText(item).toLowerCase()) : [];
+  return token.super_admin === true || token.admin === true ||
+    [role, ...roles].some((item) => ["super_admin", "operations_admin", "ops_admin"].includes(item));
 };
 
 const notifySender = async (deliveryRequest, payload) => {
@@ -109,6 +119,11 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
 
     if (!riderCanViewDispatch(rider, deliveryRequest)) {
       throw new functions.https.HttpsError("permission-denied", "This delivery is not available to the rider's current rank.");
+    }
+
+    if (!riderVehicleMatchesRequest(rider, deliveryRequest) &&
+        !canOverrideVehicleMismatch(context, data)) {
+      throw new functions.https.HttpsError("failed-precondition", "Your registered vehicle is not suitable for this delivery.");
     }
 
     if (!riderMatchesIris(rider, deliveryRequest)) {

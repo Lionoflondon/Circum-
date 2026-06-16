@@ -1,4 +1,5 @@
 /* eslint-disable max-len, require-jsdoc */
+const vehicleDispatch = require("./vehicle-dispatch");
 const CATEGORIES = Object.freeze([
   "Documents",
   "Electronics",
@@ -558,9 +559,7 @@ function isDispatchable(request) {
 function riderMatchesIris(rider, request) {
   const iris = request.irisPrivate || request.iris || {};
   const matching = iris.internal && iris.internal.riderMatching || request.matchingRules || {};
-  const vehicleRequired = normalize(matching.vehicleRequired || matching.preferredVehicle || "any");
-  const riderVehicle = normalize(rider.typeOfVehicle || rider.vehicleType || rider.vehicle || rider.vehicleMakeModel);
-  if (vehicleRequired === "van" && !riderVehicle.includes("van")) return false;
+  if (!vehicleDispatch.riderVehicleMatchesRequest(rider, request)) return false;
   if (matching.requiresTwoPerson && rider.twoPersonLift !== true && rider.twoPersonCapability !== true) return false;
   return true;
 }
@@ -612,4 +611,8 @@ module.exports = {
   normalizeRiderRank,
   riderCanViewDispatch,
   riderDispatchPriority,
+  normalizeVehicleClass: vehicleDispatch.normalizeVehicleClass,
+  normalizeRiderVehicle: vehicleDispatch.normalizeRiderVehicle,
+  pickRequiredVehicle: vehicleDispatch.pickRequiredVehicle,
+  vehicleCanHandle: vehicleDispatch.vehicleCanHandle,
 };
