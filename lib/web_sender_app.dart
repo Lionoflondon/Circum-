@@ -25800,50 +25800,157 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Partner',
     'Husband',
     'Wife',
+    'Boyfriend',
+    'Girlfriend',
+    'Fiancé',
+    'Fiancée',
+    'Crush',
+    'Date',
     'Mother',
     'Father',
+    'Parent',
+    'Stepmother',
+    'Stepfather',
     'Son',
     'Daughter',
+    'Child',
     'Brother',
     'Sister',
+    'Sibling',
+    'Grandmother',
+    'Grandfather',
+    'Grandparent',
+    'Grandson',
+    'Granddaughter',
+    'Grandchild',
+    'Aunt',
+    'Uncle',
+    'Niece',
+    'Nephew',
+    'Cousin',
+    'Godmother',
+    'Godfather',
+    'Godchild',
+    'In-law',
     'Friend',
+    'Best Friend',
+    'Close Friend',
+    'Childhood Friend',
+    'Family Friend',
+    'Housemate',
+    'Neighbour',
     'Colleague',
+    'Manager',
+    'Boss',
+    'Employee',
     'Mentor',
+    'Mentee',
     'Client',
-    'Teacher'
+    'Customer',
+    'Business Partner',
+    'Teacher',
+    'Tutor',
+    'Student',
+    'Coach',
+    'Team Member',
+    'Church Member',
+    'Pastor',
+    'Community Member',
+    'Volunteer',
+    'Carer',
+    'Support Worker',
+    'Local Hero',
+    'Myself',
+    'Anonymous Recipient',
+    'Secret Recipient',
+    'Someone Special',
+    'Other'
   ];
   static const _occasions = [
     'Birthday',
     'Anniversary',
     'Wedding',
     'Engagement',
+    'Proposal',
     'Graduation',
+    'Promotion',
+    'Retirement',
+    'New Job',
+    'New Business',
+    'Business Milestone',
+    'Work Anniversary',
+    'Passing Exams',
+    'Academic Achievement',
     'New Baby',
     'Baby Shower',
-    'Christening',
-    'Baptism',
-    'Confirmation',
+    'Gender Reveal',
+    'Adoption',
+    'Housewarming',
+    'First Home',
+    'Moving Home',
+    'Family Reunion',
+    'Thank You',
+    'Appreciation',
+    'Recognition',
+    'Well Done',
+    'Congratulations',
+    'Good Luck',
+    'Welcome',
+    'Welcome Back',
+    'Get Well Soon',
+    'Recovery',
+    'Hospital Discharge',
+    'Encouragement',
+    'Thinking Of You',
+    'Difficult Time',
+    'Bereavement',
+    'Sympathy',
+    'Care Package',
+    'Date Night',
+    'Romantic Surprise',
+    "Valentine's Day",
+    'First Anniversary',
+    'Reconciliation',
+    'Just Because I Love You',
     'Christmas',
+    'New Year',
     'Easter',
-    'Eid',
-    'Diwali',
-    'Hanukkah',
     "Mother's Day",
     "Father's Day",
-    "Valentine's Day",
-    'Retirement',
-    'Promotion',
-    'New Job',
-    'Housewarming',
-    'Thank You',
-    'Congratulations',
-    'Get Well Soon',
-    'Sympathy',
-    'Apology',
+    'Eid al-Fitr',
+    'Eid al-Adha',
+    'Diwali',
+    'Hanukkah',
+    'Lunar New Year',
+    'Thanksgiving',
+    'Halloween',
+    'Baptism',
+    'Christening',
+    'Confirmation',
+    'First Communion',
+    'Bar Mitzvah',
+    'Bat Mitzvah',
+    'Religious Celebration',
+    'First Day of School',
+    'School Graduation',
+    'Passing Driving Test',
+    'University Acceptance',
+    'Sports Achievement',
+    'Anonymous Kindness',
+    'Community Campaign',
+    'Bringing London Together',
+    'Local Hero',
+    'Volunteer Recognition',
     'Just Because',
+    'Random Act of Kindness',
+    'Surprise Gift',
+    'Missing You',
+    'Friendship Celebration',
+    'Apology',
     'Bank Holiday Surprise',
     'Leaving Gift',
-    'Achievement Reward'
+    'Achievement Reward',
+    'Other'
   ];
   static const _interestOptions = [
     'Fashion',
@@ -25927,23 +26034,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Craft Beverages',
   ];
   static const _relationshipMoments = {
-    'Partner': 'Partner',
-    'Friend': 'Friend',
-    'Family': 'Mother',
-    'Mentor': 'Mentor',
-    'Colleague': 'Colleague',
-    'Myself': 'Friend',
+    'Someone Else': 'gift_someone',
+    'Anonymous Gift': 'anonymous_gift',
+    'Myself': 'gift_myself',
   };
-  static const _occasionMoments = [
-    'Birthday',
-    'Anniversary',
-    'Graduation',
-    'Thank You',
-    'Promotion',
-    'Get Well Soon',
-    'New Baby',
-    'Just Because',
-  ];
   static const _interestGroups = {
     'Style & beauty': [
       'Fashion',
@@ -27000,30 +27094,108 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               child: switch (_giftStep) {
                 0 => _giftStepCard(
                     colors: colors,
-                    title: 'Who are we celebrating?',
+                    title: 'Who are we gifting?',
                     subtitle:
-                        'Start with the relationship. You can refine the exact stored relationship later.',
-                    body: _giftOptionGrid(
-                      colors,
-                      _relationshipMoments.keys.toList(),
-                      (label) => _relationship == _relationshipMoments[label],
-                      (label) => setState(() {
-                        if (label == 'Myself') _giftMode = 'gift_myself';
-                        _relationship =
-                            _relationshipMoments[label] ?? _relationship;
-                      }),
+                        'Choose how this gift should arrive, then tell us who they are to you.',
+                    body: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _giftOptionGrid(
+                          colors,
+                          _relationshipMoments.keys.toList(),
+                          (label) => _giftMode == _relationshipMoments[label],
+                          (label) => setState(() {
+                            _giftMode =
+                                _relationshipMoments[label] ?? _giftMode;
+                            if (label == 'Myself') _relationship = 'Myself';
+                            if (label == 'Anonymous Gift') {
+                              _relationship = 'Anonymous Recipient';
+                            }
+                          }),
+                        ),
+                        const SizedBox(height: 18),
+                        _giftGlassDropdown(
+                          colors: colors,
+                          label: _giftMode == 'gift_myself'
+                              ? 'Relationship'
+                              : 'Who is this person to you?',
+                          value: _relationship,
+                          options: _relationships,
+                          onSelected: (value) =>
+                              setState(() => _relationship = value),
+                        ),
+                        if (_giftMode == 'anonymous_gift') ...[
+                          const SizedBox(height: 12),
+                          _giftGlassDropdown(
+                            colors: colors,
+                            label: 'Anonymous gift type',
+                            value: _anonymousGiftType,
+                            options: const ['direct', 'campaign'],
+                            labelFor: (value) => value == 'campaign'
+                                ? 'Campaign · Bringing London Closer'
+                                : 'Direct anonymous gift',
+                            onSelected: (value) =>
+                                setState(() => _anonymousGiftType = value),
+                          ),
+                          const SizedBox(height: 12),
+                          _giftGlassDropdown(
+                            colors: colors,
+                            label: 'Identity reveal',
+                            value: _senderRevealMode,
+                            options: const [
+                              'anonymous_forever',
+                              'reveal_after_delivery',
+                              'anonymous_until_consent',
+                              'reveal_immediately',
+                            ],
+                            labelFor: (value) => switch (value) {
+                              'anonymous_forever' => 'Anonymous forever',
+                              'reveal_after_delivery' =>
+                                'Reveal after delivery',
+                              'anonymous_until_consent' =>
+                                'Reveal only with later consent',
+                              _ => 'Reveal immediately',
+                            },
+                            onSelected: (value) =>
+                                setState(() => _senderRevealMode = value),
+                          ),
+                        ],
+                        if (_giftMode == 'gift_myself') ...[
+                          const SizedBox(height: 12),
+                          _giftGlassDropdown(
+                            colors: colors,
+                            label: 'Self-gift frequency',
+                            value: _selfGiftFrequency,
+                            options: const [
+                              'one_off',
+                              'monthly',
+                              'quarterly',
+                              'custom',
+                            ],
+                            labelFor: (value) => switch (value) {
+                              'one_off' => 'One-off',
+                              'monthly' => 'Monthly',
+                              'quarterly' => 'Quarterly',
+                              _ => 'Custom',
+                            },
+                            onSelected: (value) =>
+                                setState(() => _selfGiftFrequency = value),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 1 => _giftStepCard(
                     colors: colors,
                     title: 'What moment are we creating?',
                     subtitle:
-                        'Choose the emotional reason first. Every existing occasion remains available later.',
-                    body: _giftOptionGrid(
-                      colors,
-                      _occasionMoments,
-                      (label) => _occasion == label,
-                      (label) => setState(() => _occasion = label),
+                        'Search the occasion list, then keep moving. This keeps the page calm and focused.',
+                    body: _giftGlassDropdown(
+                      colors: colors,
+                      label: 'Occasion or moment',
+                      value: _occasion,
+                      options: _occasions,
+                      onSelected: (value) => setState(() => _occasion = value),
                     ),
                   ),
                 2 => _giftStepCard(
@@ -27031,12 +27203,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                     title: 'Tell me about them',
                     subtitle:
                         'The better the story, the more personal the experience can feel.',
-                    body: _giftField(
-                      _notes,
-                      'What do they love? What makes them light up? What are they obsessed with?',
-                      Icons.auto_awesome,
-                      lines: 7,
-                    ),
+                    body: _giftStoryBriefingPanel(colors),
                   ),
                 3 => _giftStepCard(
                     colors: colors,
@@ -27089,7 +27256,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           title,
           style: TextStyle(
             color: colors.text,
-            fontSize: 28,
+            fontSize: 32,
             fontWeight: FontWeight.w900,
             height: 1.05,
           ),
@@ -27097,7 +27264,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         const SizedBox(height: 8),
         Text(
           subtitle,
-          style: TextStyle(color: colors.mutedText, height: 1.45),
+          style: TextStyle(color: colors.mutedText, fontSize: 16, height: 1.5),
         ),
         const SizedBox(height: 18),
         body,
@@ -27142,13 +27309,35 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         decoration: BoxDecoration(
-          color: selected
-              ? colors.adminAccent.withValues(alpha: 0.22)
-              : colors.field.withValues(alpha: 0.72),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: selected
+                ? [
+                    colors.adminAccent.withValues(alpha: 0.34),
+                    colors.adminGlow.withValues(alpha: 0.18),
+                    colors.field.withValues(alpha: 0.76),
+                  ]
+                : [
+                    colors.field.withValues(alpha: 0.74),
+                    colors.adminAccent.withValues(alpha: 0.08),
+                  ],
+          ),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? colors.adminAccent : colors.border,
+            color: selected
+                ? colors.adminAccent.withValues(alpha: 0.78)
+                : colors.border.withValues(alpha: 0.75),
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: colors.adminGlow.withValues(alpha: 0.22),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  )
+                ]
+              : null,
         ),
         child: Row(
           children: [
@@ -27169,6 +27358,182 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _giftGlassDropdown({
+    required _CircumColors colors,
+    required String label,
+    required String value,
+    required List<String> options,
+    required ValueChanged<String> onSelected,
+    String Function(String value)? labelFor,
+  }) {
+    final display = labelFor?.call(value) ?? value;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.16),
+            colors.field.withValues(alpha: 0.72),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Autocomplete<String>(
+        key: ValueKey('$label-$value'),
+        initialValue: TextEditingValue(text: display),
+        optionsBuilder: (text) {
+          final query = text.text.trim().toLowerCase();
+          final matches = options.where((option) {
+            final optionLabel = labelFor?.call(option) ?? option;
+            return query.isEmpty ||
+                optionLabel.toLowerCase().contains(query) ||
+                option.toLowerCase().contains(query);
+          }).toList();
+          return matches.take(12);
+        },
+        displayStringForOption: (option) => labelFor?.call(option) ?? option,
+        onSelected: onSelected,
+        fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+          return TextField(
+            controller: controller,
+            focusNode: focusNode,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+            decoration: InputDecoration(
+              labelText: label,
+              prefixIcon:
+                  Icon(Icons.keyboard_arrow_down, color: colors.adminAccent),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+            onSubmitted: (_) => onSubmit(),
+          );
+        },
+        optionsViewBuilder: (context, onOptionSelected, matches) {
+          return Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                constraints:
+                    const BoxConstraints(maxHeight: 280, maxWidth: 520),
+                margin: const EdgeInsets.only(top: 8),
+                decoration: BoxDecoration(
+                  color: colors.panel.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                      color: colors.adminAccent.withValues(alpha: 0.25)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.30),
+                      blurRadius: 22,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shrinkWrap: true,
+                  itemCount: matches.length,
+                  itemBuilder: (context, index) {
+                    final option = matches.elementAt(index);
+                    return ListTile(
+                      dense: true,
+                      title: Text(labelFor?.call(option) ?? option,
+                          style: TextStyle(
+                              color: colors.text, fontWeight: FontWeight.w800)),
+                      onTap: () => onOptionSelected(option),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _giftStoryBriefingPanel(_CircumColors colors) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.18),
+            colors.adminGlow.withValues(alpha: 0.10),
+            colors.field.withValues(alpha: 0.78),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.14),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _notes,
+        maxLines: 10,
+        style: TextStyle(color: colors.text, fontSize: 18, height: 1.55),
+        decoration: InputDecoration(
+          hintText:
+              'Tell us what makes them smile, what they love, what they dislike, what they talk about, what they dream about, and anything that would help Circum create something thoughtful.',
+          hintStyle:
+              TextStyle(color: colors.mutedText, fontSize: 17, height: 1.5),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+      ),
+    );
+  }
+
+  Widget _giftBlueSection(
+    _CircumColors colors, {
+    required String title,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.12),
+            colors.field.withValues(alpha: 0.70),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
       ),
     );
   }
@@ -27206,9 +27571,15 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           Container(
             margin: const EdgeInsets.only(bottom: 10),
             decoration: BoxDecoration(
-              color: colors.field.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colors.border),
+              gradient: LinearGradient(
+                colors: [
+                  colors.adminAccent.withValues(alpha: 0.11),
+                  colors.field.withValues(alpha: 0.74),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border:
+                  Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
             ),
             child: ExpansionTile(
               collapsedIconColor: colors.mutedText,
@@ -27318,112 +27689,46 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DropdownButtonFormField<String>(
-          initialValue: _giftMode,
-          decoration: const InputDecoration(labelText: 'Gift mode'),
-          items: const {
-            'gift_someone': 'Gift someone',
-            'gift_myself': 'Gift myself',
-            'anonymous_gift': 'Anonymous gift',
-          }
-              .entries
-              .map((entry) =>
-                  DropdownMenuItem(value: entry.key, child: Text(entry.value)))
-              .toList(),
-          onChanged: (value) => setState(() => _giftMode = value ?? _giftMode),
+        _giftBlueSection(
+          colors,
+          title: 'Sender',
+          child: Column(
+            children: [
+              _giftField(_senderName, 'Sender name', Icons.person_outline),
+              _giftField(_senderEmail, 'Sender email', Icons.email_outlined,
+                  type: TextInputType.emailAddress),
+            ],
+          ),
         ),
-        if (_giftMode == 'anonymous_gift') ...[
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _anonymousGiftType,
-            decoration: const InputDecoration(labelText: 'Anonymous gift type'),
-            items: const {
-              'direct': 'Direct anonymous gift',
-              'campaign': 'Campaign · Bringing London Closer',
-            }
-                .entries
-                .map((entry) => DropdownMenuItem(
-                    value: entry.key, child: Text(entry.value)))
-                .toList(),
-            onChanged: (value) => setState(
-                () => _anonymousGiftType = value ?? _anonymousGiftType),
+        const SizedBox(height: 12),
+        _giftBlueSection(
+          colors,
+          title: 'Recipient',
+          child: Column(
+            children: [
+              _giftField(
+                  _recipientName, 'Recipient name', Icons.redeem_outlined),
+              _giftField(_recipientPhone, 'Recipient phone',
+                  Icons.contact_phone_outlined),
+              _giftField(
+                  _recipientEmail, 'Recipient email', Icons.email_outlined,
+                  type: TextInputType.emailAddress),
+            ],
           ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _senderRevealMode,
-            decoration: const InputDecoration(labelText: 'Identity reveal'),
-            items: const {
-              'anonymous_forever': 'Anonymous forever',
-              'reveal_after_delivery': 'Reveal after delivery',
-              'anonymous_until_consent': 'Reveal only with later consent',
-              'reveal_immediately': 'Reveal immediately',
-            }
-                .entries
-                .map((entry) => DropdownMenuItem(
-                    value: entry.key, child: Text(entry.value)))
-                .toList(),
-            onChanged: (value) =>
-                setState(() => _senderRevealMode = value ?? _senderRevealMode),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
-            style: TextStyle(color: colors.mutedText, fontSize: 12),
-          ),
-        ],
-        if (_giftMode == 'gift_myself') ...[
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _selfGiftFrequency,
-            decoration: const InputDecoration(labelText: 'Self-gift frequency'),
-            items: const {
-              'one_off': 'One-off',
-              'monthly': 'Monthly',
-              'quarterly': 'Quarterly',
-              'custom': 'Custom',
-            }
-                .entries
-                .map((entry) => DropdownMenuItem(
-                    value: entry.key, child: Text(entry.value)))
-                .toList(),
-            onChanged: (value) => setState(
-                () => _selfGiftFrequency = value ?? _selfGiftFrequency),
-          ),
-        ],
-        const SizedBox(height: 14),
-        _giftField(_senderName, 'Sender name', Icons.person_outline),
-        _giftField(_senderEmail, 'Sender email', Icons.email_outlined,
-            type: TextInputType.emailAddress),
-        _giftField(_recipientName, 'Recipient name', Icons.redeem_outlined),
-        _giftField(
-            _recipientPhone, 'Recipient phone', Icons.contact_phone_outlined),
-        _giftField(_recipientEmail, 'Recipient email', Icons.email_outlined,
-            type: TextInputType.emailAddress),
+        ),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
             SizedBox(
               width: narrow ? double.infinity : 260,
-              child: DropdownButtonFormField<String>(
-                initialValue: _relationship,
-                decoration: const InputDecoration(labelText: 'Relationship'),
-                items: _relationships
-                    .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                    .toList(),
-                onChanged: (v) =>
-                    setState(() => _relationship = v ?? _relationship),
-              ),
-            ),
-            SizedBox(
-              width: narrow ? double.infinity : 260,
-              child: DropdownButtonFormField<String>(
-                initialValue: _occasion,
-                decoration: const InputDecoration(labelText: 'Occasion'),
-                items: _occasions
-                    .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                    .toList(),
-                onChanged: (v) => setState(() => _occasion = v ?? _occasion),
+              child: _giftGlassDropdown(
+                colors: colors,
+                label: 'Relationship',
+                value: _relationship,
+                options: _relationships,
+                onSelected: (value) => setState(() => _relationship = value),
               ),
             ),
           ],
@@ -27508,13 +27813,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               width: narrow ? double.infinity : 180,
               child: _giftField(_height, 'Height', Icons.height)),
         ]),
-        DropdownButtonFormField<String>(
-          initialValue: _preferredFit,
-          decoration: const InputDecoration(labelText: 'Preferred fit'),
-          items: const ['Slim', 'Regular', 'Relaxed', 'Oversized']
-              .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-              .toList(),
-          onChanged: (v) => setState(() => _preferredFit = v ?? _preferredFit),
+        _giftGlassDropdown(
+          colors: colors,
+          label: 'Preferred fit',
+          value: _preferredFit,
+          options: const ['Slim', 'Regular', 'Relaxed', 'Oversized'],
+          onSelected: (value) => setState(() => _preferredFit = value),
         ),
         _giftField(
             _favouriteColours, 'Favourite colours', Icons.palette_outlined),
@@ -27523,8 +27827,13 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         _giftField(
             _personalMessage, 'Personal message', Icons.chat_bubble_outline,
             lines: 3),
+        _giftField(
+            _notes,
+            'Allergies, sensitivities, dietary restrictions and additional notes',
+            Icons.health_and_safety_outlined,
+            lines: 4),
         Text(
-          'Additional Information already captured above. Include allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
+          'Include medical conditions, religious considerations, accessibility needs, dislikes, special requests, or anything Circum should avoid.',
           style: TextStyle(color: colors.mutedText, fontSize: 12),
         ),
         const SizedBox(height: 12),
@@ -27854,7 +28163,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   )
                 : const Icon(Icons.auto_awesome),
             label:
-                Text(_saving ? 'Preparing payment...' : 'Send This Experience'),
+                Text(_saving ? 'Preparing payment...' : 'Gift This Experience'),
             style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 19),
                 textStyle:
