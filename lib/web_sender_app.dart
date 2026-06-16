@@ -27550,52 +27550,281 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
 
   Widget _giftFinalStep(_CircumColors colors) {
     final grossBudget = double.tryParse(_budget.text.trim());
+    final storyHighlights = _giftStoryHighlights();
+    final focus = _interests.isEmpty
+        ? 'thoughtful experiences and meaningful surprises'
+        : '${_interests.take(3).join(', ').toLowerCase()} and meaningful surprises';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
+        _giftReviewPanel(
+          colors,
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
           decoration: BoxDecoration(
-            color: colors.field.withValues(alpha: 0.65),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colors.border),
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colors.adminAccent.withValues(alpha: 0.30),
+                colors.adminGlow.withValues(alpha: 0.16),
+                colors.field.withValues(alpha: 0.72),
+              ],
+            ),
+            border:
+                Border.all(color: colors.adminAccent.withValues(alpha: 0.28)),
+            boxShadow: [
+              BoxShadow(
+                color: colors.adminGlow.withValues(alpha: 0.22),
+                blurRadius: 34,
+                offset: const Offset(0, 18),
+              ),
+            ],
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _giftSummaryLine('Recipient', _recipientName.text.trim()),
-              _giftSummaryLine('Relationship', _relationship),
-              _giftSummaryLine('Occasion', _occasion),
-              _giftSummaryLine(
-                  'Budget',
-                  grossBudget == null
-                      ? 'Not set'
-                      : '£${grossBudget.toStringAsFixed(2)}'),
-              _giftSummaryLine('Delivery', _deliveryAddress.text.trim()),
-              _giftSummaryLine(
-                  'Date', '${_adminDateText(_deliveryDate)} · $_timeWindow'),
-              _giftSummaryLine(
-                  'Interests',
-                  _interests.isEmpty
-                      ? 'None selected yet'
-                      : _interests.join(', ')),
+              Icon(Icons.auto_awesome, color: colors.adminAccent, size: 38),
+              const SizedBox(height: 14),
+              Text(
+                'Your Gift Experience Is Ready',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 34,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Circum will create a thoughtful gift experience based on everything you've shared.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.text.withValues(alpha: 0.86),
+                  height: 1.5,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _giftReviewPanel(
+          colors,
+          child: Wrap(
+            spacing: 14,
+            runSpacing: 14,
+            children: [
+              _giftReviewStat(colors, 'Recipient', _recipientName.text.trim()),
+              _giftReviewStat(colors, 'Relationship', _relationship),
+              _giftReviewStat(colors, 'Occasion', _occasion),
             ],
           ),
         ),
         const SizedBox(height: 14),
-        Text(
-          'Nothing is confirmed until our team reviews and approves your gift.',
-          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+        _giftReviewPanel(
+          colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _giftReviewHeading(
+                  colors, Icons.psychology_alt_outlined, 'IRIS Understanding'),
+              const SizedBox(height: 10),
+              Text(
+                'IRIS believes this recipient values $focus.',
+                style:
+                    TextStyle(color: colors.text, fontSize: 17, height: 1.45),
+              ),
+              if (_interests.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _interests
+                      .map((interest) => Chip(
+                            label: Text(interest),
+                            backgroundColor:
+                                colors.adminAccent.withValues(alpha: 0.16),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ],
+          ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Gift contents remain private until delivery.',
-          style: TextStyle(color: colors.mutedText),
+        if (storyHighlights.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _giftReviewPanel(
+            colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _giftReviewHeading(
+                    colors, Icons.format_quote, 'Story Highlights'),
+                const SizedBox(height: 12),
+                ...storyHighlights.map((line) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        '"$line"',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 18,
+                          height: 1.35,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        _giftReviewPanel(
+          colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _giftReviewHeading(
+                  colors, Icons.local_shipping_outlined, 'Delivery Experience'),
+              const SizedBox(height: 12),
+              _giftSummaryLine('Recipient', _recipientName.text.trim()),
+              _giftSummaryLine(
+                  'Delivery Address', _deliveryAddress.text.trim()),
+              _giftSummaryLine('Delivery Date', _adminDateText(_deliveryDate)),
+              _giftSummaryLine('Delivery Window', _timeWindow),
+            ],
+          ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Payment is held securely via Stripe and released only upon team approval.',
-          style: TextStyle(color: colors.mutedText),
+        const SizedBox(height: 14),
+        _giftReviewPanel(
+          colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _giftReviewHeading(
+                  colors, Icons.card_giftcard, 'Gift Experience Summary'),
+              const SizedBox(height: 10),
+              Text(
+                'Based on the information provided, Circum will create a curated gifting experience tailored to this recipient.',
+                style: TextStyle(color: colors.text, height: 1.45),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Our Gifts Team and IRIS will work together to create something thoughtful and personal.',
+                style: TextStyle(color: colors.mutedText, height: 1.45),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _giftReviewPanel(
+          colors,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              colors: [
+                colors.adminGlow.withValues(alpha: 0.18),
+                colors.adminAccent.withValues(alpha: 0.12),
+                colors.field.withValues(alpha: 0.70),
+              ],
+            ),
+            border:
+                Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _giftReviewHeading(
+                  colors, Icons.verified_outlined, 'The Circum Promise'),
+              const SizedBox(height: 12),
+              ...[
+                'Thoughtfully Curated',
+                'Reviewed By The Gifts Team',
+                'Delivered By Circum',
+                'Built Around Your Story',
+                'Designed To Surprise',
+              ].map((promise) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle,
+                            color: colors.adminAccent, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(promise,
+                              style: TextStyle(
+                                  color: colors.text,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _giftReviewPanel(
+          colors,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Text(
+                'Every great gift starts with understanding.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: colors.text,
+                    fontSize: 28,
+                    height: 1.08,
+                    fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "You've shared the story. We'll create the experience.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.mutedText, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _giftReviewPanel(
+          colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _giftReviewHeading(
+                  colors, Icons.payments_outlined, 'Secure Payment'),
+              const SizedBox(height: 12),
+              _giftSummaryLine(
+                  'Gift Budget',
+                  grossBudget == null
+                      ? 'Not set'
+                      : '£${grossBudget.toStringAsFixed(2)}'),
+              _giftSummaryLine('Delivery Cost', 'Included in review'),
+              _giftSummaryLine(
+                  'Total',
+                  grossBudget == null
+                      ? 'Not set'
+                      : '£${grossBudget.toStringAsFixed(2)}'),
+              const SizedBox(height: 8),
+              Text(
+                'Nothing is confirmed until our team reviews and approves your gift.',
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Gift contents remain private until delivery.',
+                style: TextStyle(color: colors.mutedText),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Payment is held securely via Stripe and released only upon team approval.',
+                style: TextStyle(color: colors.mutedText),
+              ),
+            ],
+          ),
         ),
         if (_message != null)
           Padding(
@@ -27605,18 +27834,32 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                     TextStyle(color: colors.text, fontWeight: FontWeight.w700)),
           ),
         const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: _saving ? null : _submit,
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.card_giftcard),
-          label:
-              Text(_saving ? 'Preparing payment...' : 'Create Gift Experience'),
-          style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 17)),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: colors.adminGlow.withValues(alpha: 0.28),
+                blurRadius: 26,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: FilledButton.icon(
+            onPressed: _saving ? null : _submit,
+            icon: _saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome),
+            label:
+                Text(_saving ? 'Preparing payment...' : 'Send This Experience'),
+            style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 19),
+                textStyle:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -27632,6 +27875,85 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         ),
       ],
     );
+  }
+
+  Widget _giftReviewPanel(
+    _CircumColors colors, {
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
+    BoxDecoration? decoration,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      padding: padding,
+      decoration: decoration ??
+          BoxDecoration(
+            color: colors.field.withValues(alpha: 0.62),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: colors.border.withValues(alpha: 0.82)),
+          ),
+      child: child,
+    );
+  }
+
+  Widget _giftReviewHeading(_CircumColors colors, IconData icon, String label) {
+    return Row(
+      children: [
+        Icon(icon, color: colors.adminAccent),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _giftReviewStat(_CircumColors colors, String label, String value) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 170),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.panel.withValues(alpha: 0.54),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(value.isEmpty ? 'Not provided yet' : value,
+                style: TextStyle(
+                    color: colors.text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<String> _giftStoryHighlights() {
+    final raw = _notes.text.trim();
+    if (raw.isEmpty) return const [];
+    return raw
+        .split(RegExp(r'[.!?\n]+'))
+        .map((line) => line.trim())
+        .where((line) => line.length >= 18)
+        .take(3)
+        .toList();
   }
 
   Widget _giftSummaryLine(String label, String value) {
