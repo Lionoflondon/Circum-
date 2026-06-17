@@ -22767,6 +22767,7 @@ class _AddressField extends StatefulWidget {
   final ValueChanged<_ValidatedAddress>? onSelected;
   final ValueChanged<String>? onEdited;
   final String verifiedMessage;
+  final bool glassStyle;
 
   const _AddressField({
     required this.colors,
@@ -22778,6 +22779,7 @@ class _AddressField extends StatefulWidget {
     this.onSelected,
     this.onEdited,
     this.verifiedMessage = 'Verified address selected',
+    this.glassStyle = false,
   });
 
   @override
@@ -23184,28 +23186,73 @@ class _AddressFieldState extends State<_AddressField> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
+    final inputDecoration = widget.glassStyle
+        ? BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              colors: [
+                colors.adminAccent.withValues(alpha: 0.16),
+                colors.field.withValues(alpha: 0.76),
+              ],
+            ),
+            border: Border.all(
+              color: widget.verified
+                  ? colors.success.withValues(alpha: 0.46)
+                  : colors.adminAccent.withValues(alpha: 0.22),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: colors.adminGlow.withValues(alpha: 0.10),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          )
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
-          focusNode: _focusNode,
-          controller: widget.controller,
-          onChanged: (value) {
-            if (!_selectingSuggestion) widget.onEdited?.call(value);
-          },
-          style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
-          decoration: InputDecoration(
-            prefixIcon: Icon(widget.icon, color: colors.text, size: 18),
-            labelText: widget.label,
-            suffixIcon: widget.verified
-                ? Icon(Icons.verified, color: colors.success, size: 18)
-                : null,
-            labelStyle: TextStyle(color: colors.mutedText),
-            filled: true,
-            fillColor: colors.field,
-            border: OutlineInputBorder(
-              borderSide: BorderSide.none,
-              borderRadius: BorderRadius.circular(16),
+        Container(
+          decoration: inputDecoration,
+          padding: widget.glassStyle
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+              : EdgeInsets.zero,
+          child: TextField(
+            focusNode: _focusNode,
+            controller: widget.controller,
+            onChanged: (value) {
+              if (!_selectingSuggestion) widget.onEdited?.call(value);
+            },
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+            decoration: InputDecoration(
+              prefixIcon: Icon(widget.icon,
+                  color: widget.glassStyle ? colors.adminAccent : colors.text,
+                  size: 18),
+              labelText: widget.label,
+              suffixIcon: widget.verified
+                  ? Icon(Icons.verified, color: colors.success, size: 18)
+                  : null,
+              labelStyle: TextStyle(
+                  color: colors.mutedText, fontWeight: FontWeight.w700),
+              filled: !widget.glassStyle,
+              fillColor: colors.field,
+              border: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius:
+                    BorderRadius.circular(widget.glassStyle ? 22 : 16),
+              ),
+              enabledBorder: widget.glassStyle
+                  ? InputBorder.none
+                  : OutlineInputBorder(
+                      borderSide: BorderSide.none,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+              focusedBorder: widget.glassStyle
+                  ? InputBorder.none
+                  : OutlineInputBorder(
+                      borderSide: BorderSide.none,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
             ),
           ),
         ),
@@ -23311,12 +23358,34 @@ class _AddressFieldState extends State<_AddressField> {
         ],
         if (widget.verified) ...[
           const SizedBox(height: 6),
-          Text(
-            widget.verifiedMessage,
-            style: TextStyle(
-              color: colors.success,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+          Container(
+            padding: widget.glassStyle
+                ? const EdgeInsets.symmetric(horizontal: 10, vertical: 7)
+                : EdgeInsets.zero,
+            decoration: widget.glassStyle
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: colors.success.withValues(alpha: 0.10),
+                    border: Border.all(
+                        color: colors.success.withValues(alpha: 0.24)),
+                  )
+                : null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.glassStyle) ...[
+                  Icon(Icons.verified_rounded, size: 14, color: colors.success),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  widget.verifiedMessage,
+                  style: TextStyle(
+                    color: colors.success,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -27686,17 +27755,28 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   }
 
   Widget _giftDetailsFields(_CircumColors colors, bool narrow) {
+    final fieldWidth = narrow ? double.infinity : 300.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _giftBlueSection(
           colors,
           title: 'Sender',
-          child: Column(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              _giftField(_senderName, 'Sender name', Icons.person_outline),
-              _giftField(_senderEmail, 'Sender email', Icons.email_outlined,
-                  type: TextInputType.emailAddress),
+              SizedBox(
+                width: fieldWidth,
+                child: _giftField(
+                    _senderName, 'Sender name', Icons.person_outline),
+              ),
+              SizedBox(
+                width: fieldWidth,
+                child: _giftField(
+                    _senderEmail, 'Sender email', Icons.email_outlined,
+                    type: TextInputType.emailAddress),
+              ),
             ],
           ),
         ),
@@ -27704,15 +27784,26 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         _giftBlueSection(
           colors,
           title: 'Recipient',
-          child: Column(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              _giftField(
-                  _recipientName, 'Recipient name', Icons.redeem_outlined),
-              _giftField(_recipientPhone, 'Recipient phone',
-                  Icons.contact_phone_outlined),
-              _giftField(
-                  _recipientEmail, 'Recipient email', Icons.email_outlined,
-                  type: TextInputType.emailAddress),
+              SizedBox(
+                width: fieldWidth,
+                child: _giftField(
+                    _recipientName, 'Recipient name', Icons.redeem_outlined),
+              ),
+              SizedBox(
+                width: fieldWidth,
+                child: _giftField(_recipientPhone, 'Recipient phone',
+                    Icons.contact_phone_outlined),
+              ),
+              SizedBox(
+                width: fieldWidth,
+                child: _giftField(
+                    _recipientEmail, 'Recipient email', Icons.email_outlined,
+                    type: TextInputType.emailAddress),
+              ),
             ],
           ),
         ),
@@ -27744,14 +27835,17 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               setState(() => _validatedGiftAddress = address),
           onEdited: (_) => setState(() => _validatedGiftAddress = null),
           verifiedMessage: 'Verified delivery address selected',
+          glassStyle: true,
         ),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
             SizedBox(
               width: narrow ? double.infinity : 260,
-              child: OutlinedButton.icon(
+              child: _giftGlassActionPill(
+                colors: colors,
                 onPressed: () async {
                   final date = await showDatePicker(
                     context: context,
@@ -27770,14 +27864,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             ),
             SizedBox(
               width: narrow ? double.infinity : 260,
-              child: DropdownButtonFormField<String>(
-                initialValue: _timeWindow,
-                decoration: const InputDecoration(labelText: 'Time window'),
-                items: const ['Morning', 'Afternoon', 'Evening']
-                    .map((v) => DropdownMenuItem(value: v, child: Text(v)))
-                    .toList(),
-                onChanged: (v) =>
-                    setState(() => _timeWindow = v ?? _timeWindow),
+              child: _giftGlassDropdown(
+                colors: colors,
+                label: 'Time window',
+                value: _timeWindow,
+                options: const ['Morning', 'Afternoon', 'Evening'],
+                onSelected: (value) => setState(() => _timeWindow = value),
               ),
             ),
           ],
@@ -27787,11 +27879,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           spacing: 8,
           runSpacing: 8,
           children: [50, 100, 250, 500, 1000, 1500]
-              .map((value) => ChoiceChip(
-                    label: Text('£$value'),
-                    selected: _budget.text == '$value',
-                    onSelected: (_) => setState(() => _budget.text = '$value'),
-                  ))
+              .map((value) => _giftBudgetChip(colors, value))
               .toList(),
         ),
         const SizedBox(height: 8),
@@ -27813,13 +27901,23 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               width: narrow ? double.infinity : 180,
               child: _giftField(_height, 'Height', Icons.height)),
         ]),
-        _giftGlassDropdown(
-          colors: colors,
-          label: 'Preferred fit',
-          value: _preferredFit,
-          options: const ['Slim', 'Regular', 'Relaxed', 'Oversized'],
-          onSelected: (value) => setState(() => _preferredFit = value),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width: narrow ? double.infinity : 260,
+              child: _giftGlassDropdown(
+                colors: colors,
+                label: 'Preferred fit',
+                value: _preferredFit,
+                options: const ['Slim', 'Regular', 'Relaxed', 'Oversized'],
+                onSelected: (value) => setState(() => _preferredFit = value),
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: 12),
         _giftField(
             _favouriteColours, 'Favourite colours', Icons.palette_outlined),
         _giftField(_likedBrands, 'Brands they like', Icons.favorite_border),
@@ -27837,7 +27935,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           style: TextStyle(color: colors.mutedText, fontSize: 12),
         ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
+        _giftGlassActionPill(
+          colors: colors,
           onPressed: _pickPhoto,
           icon: const Icon(Icons.add_a_photo_outlined),
           label: Text(_photo == null
@@ -28393,18 +28492,118 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     );
   }
 
+  Widget _giftGlassActionPill({
+    required _CircumColors colors,
+    required VoidCallback? onPressed,
+    required Widget icon,
+    required Widget label,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.16),
+            colors.field.withValues(alpha: 0.76),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: icon,
+        label: label,
+        style: OutlinedButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          foregroundColor: colors.text,
+          minimumSize: const Size(0, 58),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          side: BorderSide.none,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+    );
+  }
+
+  Widget _giftBudgetChip(_CircumColors colors, int value) {
+    final selected = _budget.text == '$value';
+    return ChoiceChip(
+      label: Text('£$value'),
+      selected: selected,
+      onSelected: (_) => setState(() => _budget.text = '$value'),
+      labelStyle: TextStyle(
+        color: selected ? colors.text : colors.text.withValues(alpha: 0.88),
+        fontWeight: FontWeight.w900,
+      ),
+      selectedColor: colors.adminAccent.withValues(alpha: 0.30),
+      backgroundColor: colors.field.withValues(alpha: 0.76),
+      side: BorderSide(
+        color: selected
+            ? colors.adminAccent.withValues(alpha: 0.58)
+            : colors.adminAccent.withValues(alpha: 0.20),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+  }
+
   Widget _giftField(
       TextEditingController controller, String label, IconData icon,
       {TextInputType? type, int lines = 1, bool obscure = false}) {
+    final colors = widget.colors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: TextField(
+      child: Container(
+        constraints: BoxConstraints(minHeight: lines > 1 ? 120 : 58),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(lines > 1 ? 24 : 22),
+          gradient: LinearGradient(
+            colors: [
+              colors.adminAccent.withValues(alpha: 0.16),
+              colors.field.withValues(alpha: 0.76),
+            ],
+          ),
+          border: Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+          boxShadow: [
+            BoxShadow(
+              color: colors.adminGlow.withValues(alpha: 0.10),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: TextField(
           controller: controller,
           keyboardType: type,
           maxLines: lines,
           obscureText: obscure,
-          decoration:
-              InputDecoration(labelText: label, prefixIcon: Icon(icon))),
+          style: TextStyle(
+            color: colors.text,
+            fontSize: lines > 1 ? 16 : 15,
+            height: 1.45,
+            fontWeight: FontWeight.w800,
+          ),
+          decoration: InputDecoration(
+            labelText: label,
+            prefixIcon: Icon(icon, color: colors.adminAccent, size: 20),
+            labelStyle:
+                TextStyle(color: colors.mutedText, fontWeight: FontWeight.w700),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+          ),
+        ),
+      ),
     );
   }
 }
