@@ -3610,7 +3610,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Roth Credit tools',
+              'Roth tools',
               style: TextStyle(
                 color: colors.text,
                 fontSize: 18,
@@ -3619,7 +3619,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Issue or debit non-withdrawable Roth Credit. Rider pending and available earnings are separate and never mixed with Roth Credit.',
+              'Issue or debit non-withdrawable Roth by email. Rider pending and available earnings are separate and never mixed with Roth.',
               style: TextStyle(
                 color: colors.mutedText,
                 fontWeight: FontWeight.w700,
@@ -3635,7 +3635,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   width: 220,
                   child: TextField(
                     controller: _rothUserId,
-                    decoration: decoration('User ID'),
+                    decoration: decoration('User email'),
                   ),
                 ),
                 SizedBox(
@@ -19258,7 +19258,11 @@ class _SenderProfileStep extends StatelessWidget {
       children: [
         _SectionTitle(colors: colors, title: 'Wallet'),
         const SizedBox(height: 10),
-        _SenderWalletPanel(colors: colors, userId: user!.uid),
+        _SenderWalletPanel(
+          colors: colors,
+          userId: user!.uid,
+          userEmail: user!.email,
+        ),
         const SizedBox(height: 16),
         _SectionTitle(colors: colors, title: 'Payment references'),
         const SizedBox(height: 10),
@@ -19353,8 +19357,13 @@ class _SenderProfileStep extends StatelessWidget {
 class _SenderWalletPanel extends StatefulWidget {
   final _CircumColors colors;
   final String userId;
+  final String? userEmail;
 
-  const _SenderWalletPanel({required this.colors, required this.userId});
+  const _SenderWalletPanel({
+    required this.colors,
+    required this.userId,
+    required this.userEmail,
+  });
 
   @override
   State<_SenderWalletPanel> createState() => _SenderWalletPanelState();
@@ -19362,19 +19371,32 @@ class _SenderWalletPanel extends StatefulWidget {
 
 class _SenderWalletPanelState extends State<_SenderWalletPanel> {
   final _giftCardCode = TextEditingController();
+  final _customTopUp = TextEditingController();
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _walletSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _txSub;
   Map<String, dynamic>? _wallet;
   List<Map<String, dynamic>> _transactions = const [];
   bool _redeeming = false;
+  bool _toppingUp = false;
   String? _message;
+
+  String get _walletId {
+    final email = (widget.userEmail ?? '').trim().toLowerCase();
+    return email.isEmpty ? widget.userId : email;
+  }
 
   @override
   void initState() {
     super.initState();
+    final topUpResult = Uri.base.queryParameters['wallet_topup'];
+    if (topUpResult == 'success') {
+      _message = 'Roth top-up received. Your balance will update shortly.';
+    } else if (topUpResult == 'cancelled') {
+      _message = 'Roth top-up was cancelled. No Roth was added.';
+    }
     _walletSub = FirebaseFirestore.instance
         .collection('wallets')
-        .doc(widget.userId)
+        .doc(_walletId)
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
@@ -19382,7 +19404,7 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
     });
     _txSub = FirebaseFirestore.instance
         .collection('walletTransactions')
-        .where('userId', isEqualTo: widget.userId)
+        .where('userId', isEqualTo: _walletId)
         .limit(20)
         .snapshots()
         .listen((snapshot) {
@@ -19398,6 +19420,7 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
   @override
   void dispose() {
     _giftCardCode.dispose();
+    _customTopUp.dispose();
     _walletSub?.cancel();
     _txSub?.cancel();
     super.dispose();
@@ -19418,11 +19441,45 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
           .httpsCallable('redeemGiftCard')
           .call({'code': code});
       _giftCardCode.clear();
-      setState(() => _message = 'Gift Card Credit added to your wallet.');
+      setState(() => _message = 'Roth gift card redeemed.');
     } catch (error) {
       setState(() => _message = 'This gift card could not be redeemed.');
     } finally {
       if (mounted) setState(() => _redeeming = false);
+    }
+  }
+
+  Future<void> _topUp(double amount) async {
+    if (amount <= 0) {
+      setState(() => _message = 'Choose a Roth top-up amount.');
+      return;
+    }
+    setState(() {
+      _toppingUp = true;
+      _message = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createWalletTopUp')
+          .call({
+        'amount': amount,
+        'returnUrl': Uri.base.replace(queryParameters: {
+          ...Uri.base.queryParameters,
+          'app': 'sender',
+          'section': 'wallet',
+        }).toString(),
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final url = Uri.tryParse('${data['checkoutUrl'] ?? ''}');
+      if (url == null) {
+        setState(() => _message = 'Could not start Roth top-up.');
+        return;
+      }
+      await launchUrl(url, webOnlyWindowName: '_self');
+    } catch (error) {
+      setState(() => _message = 'Could not start Roth top-up.');
+    } finally {
+      if (mounted) setState(() => _toppingUp = false);
     }
   }
 
@@ -19452,7 +19509,7 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Current balance',
+              Text('Current Roth balance',
                   style: TextStyle(
                       color: colors.mutedText, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
@@ -19466,13 +19523,44 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Prices are calculated in GBP. Your Circum Wallet balance is held in GBP. You may pay remaining card balances in another supported currency where available.',
+                'Roth is held in GBP, is non-withdrawable, and can be used toward eligible Circum services before card payment.',
                 style: TextStyle(color: colors.mutedText, height: 1.4),
               ),
             ],
           ),
         ),
         const SizedBox(height: 12),
+        _SectionTitle(colors: colors, title: 'Top Up Wallet'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final amount in const [10.0, 20.0, 50.0, 100.0])
+              OutlinedButton(
+                onPressed: _toppingUp ? null : () => _topUp(amount),
+                child: Text('£${amount.toStringAsFixed(0)}'),
+              ),
+            SizedBox(
+              width: 150,
+              child: _InputBox(
+                colors: colors,
+                controller: _customTopUp,
+                hint: 'Custom £',
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _toppingUp
+                  ? null
+                  : () => _topUp(double.tryParse(_customTopUp.text) ?? 0),
+              icon: const Icon(Icons.add_card_outlined),
+              label: Text(_toppingUp ? 'Opening Stripe' : 'Top Up Wallet'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -19483,7 +19571,7 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
               child: _InputBox(
                 colors: colors,
                 controller: _giftCardCode,
-                hint: 'Redeem Gift Card',
+                hint: 'Redeem Roth Gift Card',
               ),
             ),
             FilledButton.icon(
@@ -19498,17 +19586,17 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
           Text(_message!, style: TextStyle(color: colors.mutedText)),
         ],
         const SizedBox(height: 16),
-        _SectionTitle(colors: colors, title: 'Transaction history'),
+        _SectionTitle(colors: colors, title: 'Roth transaction history'),
         const SizedBox(height: 8),
         if (_transactions.isEmpty)
-          Text('No wallet transactions yet.',
+          Text('No Roth transactions yet.',
               style: TextStyle(color: colors.mutedText))
         else
           ..._transactions.take(8).map((tx) {
             final amount = (tx['amount'] as num?)?.toDouble() ?? 0;
             return ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('${tx['type'] ?? 'wallet_transaction'}',
+              title: Text(_rothTransactionLabel(tx),
                   style: TextStyle(
                       color: colors.text, fontWeight: FontWeight.w900)),
               subtitle: Text('${tx['notes'] ?? tx['referenceId'] ?? ''}',
@@ -19523,6 +19611,20 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
       ],
     );
   }
+}
+
+String _rothTransactionLabel(Map<String, dynamic> tx) {
+  final type = '${tx['type'] ?? ''}';
+  return switch (type) {
+    'admin_credit' => 'Roth issued',
+    'admin_debit' => 'Roth debited',
+    'USER_TOP_UP' => 'Roth top-up',
+    'delivery_payment' => 'Roth used for delivery',
+    'gift_payment' => 'Roth used for Gifts',
+    'health_payment' => 'Roth used for Health+',
+    'gift_card_redemption' || 'gift_card_redeem' => 'Roth gift card redeemed',
+    _ => type.isEmpty ? 'Roth transaction' : type.replaceAll('_', ' '),
+  };
 }
 
 class _SenderDeliveryDetails extends StatelessWidget {
@@ -24529,6 +24631,7 @@ class _InputBox extends StatelessWidget {
   final int maxLines;
   final bool obscureText;
   final bool enabled;
+  final TextInputType? keyboardType;
 
   const _InputBox({
     required this.colors,
@@ -24537,6 +24640,7 @@ class _InputBox extends StatelessWidget {
     this.maxLines = 1,
     this.obscureText = false,
     this.enabled = true,
+    this.keyboardType,
   });
 
   @override
@@ -24546,6 +24650,7 @@ class _InputBox extends StatelessWidget {
       maxLines: maxLines,
       obscureText: obscureText,
       enabled: enabled,
+      keyboardType: keyboardType,
       style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
       decoration: InputDecoration(
         hintText: hint,

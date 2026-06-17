@@ -12,6 +12,7 @@ const TRANSACTION_TYPES = Object.freeze({
   rothDebit: "roth_debit",
   rothSpend: "roth_spend",
   giftCardRedeem: "gift_card_redeem",
+  userTopUp: "USER_TOP_UP",
   rewardCredit: "reward_credit",
   adminCredit: "admin_credit",
   adminDebit: "admin_debit",

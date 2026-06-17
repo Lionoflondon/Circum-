@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 const {
   calculateWalletCheckout,
   canRedeemGiftCard,
+  normalizeEmail,
   normalizeStripeCurrency,
+  walletIdForEmail,
 } = require("./wallet-core");
 
 test("full wallet payment skips Stripe", () => {
@@ -57,4 +59,9 @@ test("gift card redemption requires active unredeemed card", () => {
   assert.equal(canRedeemGiftCard({status: "active", value: 50}), true);
   assert.equal(canRedeemGiftCard({status: "redeemed", value: 50}), false);
   assert.equal(canRedeemGiftCard({status: "active", redeemedBy: "user"}), false);
+});
+
+test("email normalization creates one canonical Roth wallet key", () => {
+  assert.equal(normalizeEmail("  AyoJason600@GMAIL.COM "), "ayojason600@gmail.com");
+  assert.equal(walletIdForEmail("  AyoJason600@GMAIL.COM "), "ayojason600@gmail.com");
 });

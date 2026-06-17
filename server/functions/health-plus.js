@@ -128,8 +128,10 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     const recurring = normalizeSchedule(frequency) !== "one_off";
 
     const walletUserId = userId || profileId;
+    const walletUserEmail = `${email || ""}`.trim().toLowerCase();
+    const walletLookupId = walletUserEmail || walletUserId;
     const walletSnap = walletUserId ?
-      await getFirestore().collection("wallets").doc(walletUserId).get() :
+      await getFirestore().collection("wallets").doc(walletLookupId).get() :
       null;
     const wallet = walletSnap && walletSnap.exists ? walletSnap.data() : {};
     const walletBalance = Number(wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance || 0);
@@ -141,6 +143,7 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     if (walletUserId && split.walletContributionGbp > 0) {
       await rothLedger.applyWalletDebit({
         userId: walletUserId,
+        userEmail: walletUserEmail || null,
         amount: split.walletContributionGbp,
         type: "health_payment",
         referenceId: bookingId,

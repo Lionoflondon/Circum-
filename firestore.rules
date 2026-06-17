@@ -26,6 +26,12 @@ service cloud.firestore {
       return hasRole('super_admin') || hasRole('finance_admin');
     }
 
+    function normalizedAuthEmail() {
+      return signedIn() && request.auth.token.email is string ?
+        request.auth.token.email.lower() :
+        '';
+    }
+
     function isDriverManager() {
       return hasRole('super_admin') || hasRole('driver_manager');
     }
@@ -317,14 +323,25 @@ service cloud.firestore {
     }
 
     match /wallets/{userId} {
-      allow read: if isFinanceAdmin() || (signedIn() && userId == request.auth.uid);
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && (
+          userId == request.auth.uid ||
+          userId == normalizedAuthEmail() ||
+          resource.data.uid == request.auth.uid ||
+          resource.data.userEmail == normalizedAuthEmail()
+        ));
       allow create, update: if isFinanceAdmin() || (signedIn() && userId == request.auth.uid);
       allow delete: if hasRole('super_admin');
     }
 
     match /walletTransactions/{transactionId} {
       allow read: if isFinanceAdmin() ||
-        (signedIn() && resource.data.userId == request.auth.uid);
+        (signedIn() && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.userId == normalizedAuthEmail() ||
+          resource.data.uid == request.auth.uid ||
+          resource.data.userEmail == normalizedAuthEmail()
+        ));
       allow create: if isFinanceAdmin() ||
         (signedIn() && request.resource.data.userId == request.auth.uid &&
           request.resource.data.balanceType in ['pendingEarnings', 'availableEarnings']);

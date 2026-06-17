@@ -41,7 +41,8 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     split.remainingGbp = storedRemaining;
     split.stripeRequired = split.remainingGbp > 0;
   } else {
-    const walletSnap = await getFirestore().collection("wallets").doc(context.auth.uid).get();
+    const walletId = `${context.auth.token.email || context.auth.uid}`.trim().toLowerCase();
+    const walletSnap = await getFirestore().collection("wallets").doc(walletId).get();
     const wallet = walletSnap.exists ? walletSnap.data() : {};
     const walletBalance = Number(wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance);
     const selectedCurrency = gift.paymentCurrency || data.paymentCurrency || "gbp";
@@ -54,6 +55,7 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
   if (split.walletContributionGbp > 0 && gift.walletDeducted !== true) {
     await rothLedger.applyWalletDebit({
       userId: context.auth.uid,
+      userEmail: context.auth.token.email,
       amount: split.walletContributionGbp,
       type: "gift_payment",
       referenceId: giftDraftId,

@@ -44,6 +44,15 @@ function normalizeStripeCurrency(currency) {
   return SUPPORTED_STRIPE_CURRENCIES.has(normalized) ? normalized : "gbp";
 }
 
+function normalizeEmail(email) {
+  return `${email || ""}`.trim().toLowerCase();
+}
+
+function walletIdForEmail(email) {
+  const normalized = normalizeEmail(email);
+  return normalized || null;
+}
+
 function minorUnits(amount, currency = "gbp") {
   const normalized = normalizeStripeCurrency(currency);
   const value = Number(amount || 0);
@@ -96,6 +105,8 @@ module.exports = {
   canRedeemGiftCard,
   estimateCurrencyAmountFromGbp,
   minorUnits,
+  normalizeEmail,
   normalizeStripeCurrency,
   roundMoney,
+  walletIdForEmail,
 };

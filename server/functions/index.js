@@ -52,6 +52,7 @@ exports.issueRothCredit = rothLedger.issueRothCredit;
 exports.debitRothCredit = rothLedger.debitRothCredit;
 exports.redeemGiftCard = rothLedger.redeemGiftCard;
 exports.setWalletFrozen = rothLedger.setWalletFrozen;
+exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
@@ -118,7 +119,8 @@ const createPaymentIntentHandler = async (req, res) => {
       selectedCurrency: paymentCurrency || currency || "gbp",
     });
     if (useWallet === true && userId) {
-      const walletRef = await getFirestore().collection("wallets").doc(userId).get();
+      const walletIdentity = `${email || userId}`.trim().toLowerCase();
+      const walletRef = await getFirestore().collection("wallets").doc(walletIdentity).get();
       const walletData = walletRef.exists ? walletRef.data() : {};
       const walletBalance = Number(walletData.balance == null ? walletData.rothCredit || 0 : walletData.balance || 0);
       split = calculateWalletCheckout({
@@ -129,6 +131,7 @@ const createPaymentIntentHandler = async (req, res) => {
       if (split.walletContributionGbp > 0) {
         await rothLedger.applyWalletDebit({
           userId,
+          userEmail: email,
           amount: split.walletContributionGbp,
           type: "delivery_payment",
           referenceId: referenceId || null,
@@ -271,6 +274,9 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     console.log("💰 Payment completed!");
     const sessionData = event.data.object;
     const metadata = sessionData.metadata;
+    if (metadata && metadata.type === "wallet_top_up") {
+      await rothLedger.recordWalletTopUpFromStripeSession(sessionData, event.id);
+    }
 
     const messageObj = JSON.stringify({
       // sessionData,
