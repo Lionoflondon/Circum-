@@ -716,6 +716,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   final _adminInviteEmail = TextEditingController();
   final _adminInviteNote = TextEditingController();
   final _adminChatInput = TextEditingController();
+  final _rothUserId = TextEditingController();
+  final _rothAmount = TextEditingController();
+  final _rothReason = TextEditingController();
   _AdminSection _section = _AdminSection.overview;
   AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   User? _adminUser;
@@ -739,6 +742,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _payoutRequests = const [];
   List<Map<String, dynamic>> _riderWallets = const [];
   List<Map<String, dynamic>> _walletTransactions = const [];
+  List<Map<String, dynamic>> _rothWallets = const [];
+  List<Map<String, dynamic>> _rothTransactions = const [];
   List<Map<String, dynamic>> _adminUsers = const [];
   List<Map<String, dynamic>> _auditLogs = const [];
   List<Map<String, dynamic>> _websiteVisitors = const [];
@@ -767,6 +772,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     _adminInviteEmail.dispose();
     _adminInviteNote.dispose();
     _adminChatInput.dispose();
+    _rothUserId.dispose();
+    _rothAmount.dispose();
+    _rothReason.dispose();
     _adminChatSub?.cancel();
     _supportTicketsSub?.cancel();
     super.dispose();
@@ -936,6 +944,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   .limit(120),
             )
           : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(db.collection('wallets').limit(120))
+          : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(
+              db
+                  .collection('walletTransactions')
+                  .orderBy('createdAt', descending: true)
+                  .limit(160),
+            )
+          : Future.value(<Map<String, dynamic>>[]),
       _readCollection(
         db
             .collection('websiteVisitors')
@@ -971,11 +990,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final payouts = results[10];
     final riderWallets = results[11];
     final walletTransactions = results[12];
-    final visitors = results[13];
-    final riderDocuments = results[14];
-    final giftRequests = results[15];
-    final giftBrands = results[16];
-    final giftCampaignParticipants = results[17];
+    final rothWallets = results[13];
+    final rothTransactions = results[14];
+    final visitors = results[15];
+    final riderDocuments = results[16];
+    final giftRequests = results[17];
+    final giftBrands = results[18];
+    final giftCampaignParticipants = results[19];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -990,12 +1011,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _payoutRequests = payouts;
       _riderWallets = riderWallets;
       _walletTransactions = walletTransactions;
+      _rothWallets = rothWallets;
+      _rothTransactions = rothTransactions;
       _websiteVisitors = visitors;
       _riderDocuments = riderDocuments;
       _giftRequests = giftRequests;
       _giftBrands = giftBrands;
       _giftCampaignParticipants = giftCampaignParticipants;
-      _auditLogs = results[18];
+      _auditLogs = results[20];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -2283,12 +2306,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'type',
           ]),
           wallets: _riderWallets,
+          rothWallets: _rothWallets,
+          rothCredit: _rothWalletTotal('rothCredit'),
+          rothPendingEarnings: _rothWalletTotal('pendingEarnings'),
+          rothAvailableEarnings: _rothWalletTotal('availableEarnings'),
           totalOwed:
               _walletTotal('availableBalance') + _walletTotal('pendingBalance'),
           available: _walletTotal('availableBalance'),
           pending: _walletTotal('pendingBalance'),
           withdrawn: _walletTotal('totalWithdrawn'),
           lifetime: _walletTotal('lifetimeEarnings'),
+          rothTools: _rothCreditTools(colors),
           rowBuilder: _financeRow,
         ),
       _AdminSection.healthPlus => _AdminDataSection(
@@ -3188,14 +3216,20 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final isWithdrawal = recordType == 'driver_payout';
     return [
       _AdminCell.primary(
-        recordType == 'wallet_transaction' ? transactionType : recordType,
+        recordType == 'roth_ledger'
+            ? 'Roth · ${item['balanceType'] ?? ''}'
+            : recordType == 'wallet_transaction'
+                ? transactionType
+                : recordType,
       ),
       _AdminCell(
         '${item['id'] ?? item['paymentId'] ?? item['payoutId'] ?? ''}',
       ),
       _AdminStatusCell(
         colors: widget.colors,
-        status: '${item['status'] ?? 'pending'}',
+        status: recordType == 'roth_ledger'
+            ? '${item['type'] ?? 'recorded'}'
+            : '${item['status'] ?? 'pending'}',
       ),
       _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
       _AdminActions(
@@ -3454,6 +3488,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Map<String, dynamic>> _financeRows() {
     return [
+      ..._rothTransactions.map(
+        (item) => {'recordType': 'roth_ledger', ...item},
+      ),
       ..._walletTransactions.map(
         (item) => {'recordType': 'wallet_transaction', ...item},
       ),
@@ -3471,6 +3508,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   }
 
   double _walletTotal(String field) => _riderWallets.fold<double>(
+        0,
+        (total, wallet) => total + ((wallet[field] as num?)?.toDouble() ?? 0),
+      );
+
+  double _rothWalletTotal(String field) => _rothWallets.fold<double>(
         0,
         (total, wallet) => total + ((wallet[field] as num?)?.toDouble() ?? 0),
       );
@@ -3497,6 +3539,115 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return status == 'approved' || status == 'verified';
   }
 
+  Future<void> _submitRothCreditAction(bool credit) async {
+    if (!_can(AdminPermission.viewFinance)) return;
+    final userId = _rothUserId.text.trim();
+    final amount = double.tryParse(_rothAmount.text.trim()) ?? 0;
+    final reason = _rothReason.text.trim();
+    if (userId.isEmpty || amount <= 0 || reason.isEmpty) {
+      setState(
+          () => _message = 'Roth action requires user, amount and reason.');
+      return;
+    }
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        credit ? 'issueRothCredit' : 'debitRothCredit',
+      );
+      await callable.call({
+        'userId': userId,
+        'amount': amount,
+        'reason': reason,
+      });
+      _rothAmount.clear();
+      _rothReason.clear();
+      setState(() => _message = credit
+          ? 'Roth Credit issued and ledgered.'
+          : 'Roth Credit debit recorded.');
+      await _loadAdminData();
+    } catch (error) {
+      setState(() => _message = 'Roth ledger action failed: $error');
+    }
+  }
+
+  Widget _rothCreditTools(_CircumColors colors) {
+    if (!_can(AdminPermission.viewFinance)) return const SizedBox.shrink();
+    InputDecoration decoration(String label) => InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: colors.field,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: colors.border),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+      child: _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Roth Credit tools',
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Issue or debit non-withdrawable Roth Credit. Rider pending and available earnings are separate and never mixed with Roth Credit.',
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 220,
+                  child: TextField(
+                    controller: _rothUserId,
+                    decoration: decoration('User ID'),
+                  ),
+                ),
+                SizedBox(
+                  width: 140,
+                  child: TextField(
+                    controller: _rothAmount,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: decoration('Amount'),
+                  ),
+                ),
+                SizedBox(
+                  width: 300,
+                  child: TextField(
+                    controller: _rothReason,
+                    decoration: decoration('Reason'),
+                  ),
+                ),
+                FilledButton(
+                  onPressed: () => _submitRothCreditAction(true),
+                  child: const Text('Issue Roth'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _submitRothCreditAction(false),
+                  child: const Text('Debit Roth'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _settleEarning(Map<String, dynamic> item) async {
     if (!_can(AdminPermission.viewFinance) || item['status'] != 'pending') {
       return;
@@ -3510,7 +3661,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       final ledgerRef =
           db.collection('riderWalletTransactions').doc(transactionId);
       final walletRef = db.collection('riderEarnings').doc(riderId);
+      final rothWalletRef = db.collection('wallets').doc(riderId);
+      final rothLedgerRef =
+          db.collection('walletTransactions').doc('roth_settle_$transactionId');
       final ledger = await transaction.get(ledgerRef);
+      final rothWallet = await transaction.get(rothWalletRef);
+      final rothLedger = await transaction.get(rothLedgerRef);
       if (!ledger.exists || ledger.data()?['status'] != 'pending') return;
       transaction.set(
           ledgerRef,
@@ -3528,6 +3684,47 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true));
+      if (!rothLedger.exists) {
+        final pendingBefore =
+            (rothWallet.data()?['pendingEarnings'] as num?)?.toDouble() ?? 0;
+        final availableBefore =
+            (rothWallet.data()?['availableEarnings'] as num?)?.toDouble() ?? 0;
+        transaction.set(
+            rothLedgerRef,
+            {
+              'id': 'roth_settle_$transactionId',
+              'userId': riderId,
+              'amount': amount,
+              'balanceType': 'availableEarnings',
+              'type': 'earnings_available',
+              'reason': 'Admin settlement moved rider earnings to available.',
+              'relatedEntityId': transactionId,
+              'paymentProvider': 'manual_admin',
+              'issuedByAdminId': _adminUser?.uid,
+              'issuedByAdminEmail': _adminUser?.email,
+              'balanceBefore': availableBefore,
+              'balanceAfter':
+                  double.parse((availableBefore + amount).toStringAsFixed(2)),
+              'createdAt': FieldValue.serverTimestamp(),
+              'metadata': {
+                'pendingBefore': pendingBefore,
+                'pendingAfter':
+                    double.parse((pendingBefore - amount).toStringAsFixed(2)),
+                'legacyTransactionId': transactionId,
+              },
+            },
+            SetOptions(merge: false));
+        transaction.set(
+            rothWalletRef,
+            {
+              'userId': riderId,
+              'pendingEarnings': FieldValue.increment(-amount),
+              'availableEarnings': FieldValue.increment(amount),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'createdAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true));
+      }
     });
     await _writeAudit(AdminAuditEntry(
       adminUserId: _adminUser?.uid ?? '',
@@ -3560,8 +3757,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await db.runTransaction((transaction) async {
       final requestRef = db.collection('payoutRequests').doc(requestId);
       final walletRef = db.collection('riderEarnings').doc(riderId);
+      final rothWalletRef = db.collection('wallets').doc(riderId);
       final request = await transaction.get(requestRef);
       final wallet = await transaction.get(walletRef);
+      final rothWallet = await transaction.get(rothWalletRef);
       final currentStatus = '${request.data()?['status'] ?? ''}';
       if (!request.exists ||
           !['requested', 'pending'].contains(currentStatus)) {
@@ -3592,6 +3791,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         throw StateError('Withdrawal exceeds available rider balance.');
       }
       final ledgerId = 'withdrawal_$requestId';
+      final rothLedgerId = 'roth_withdrawal_$requestId';
       transaction.set(
         db.collection('riderWalletTransactions').doc(ledgerId),
         {
@@ -3625,6 +3825,41 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'totalWithdrawn': FieldValue.increment(amount),
             'withdrawnEarnings': FieldValue.increment(amount),
             'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+      final rothAvailable =
+          (rothWallet.data()?['availableEarnings'] as num?)?.toDouble() ?? 0;
+      transaction.set(
+        db.collection('walletTransactions').doc(rothLedgerId),
+        {
+          'id': rothLedgerId,
+          'userId': riderId,
+          'amount': -amount,
+          'balanceType': 'availableEarnings',
+          'type': 'withdrawal',
+          'reason': 'Manual rider withdrawal approved by Circum.',
+          'relatedEntityId': requestId,
+          'paymentProvider': 'manual_admin',
+          'issuedByAdminId': _adminUser?.uid,
+          'issuedByAdminEmail': _adminUser?.email,
+          'balanceBefore': rothAvailable,
+          'balanceAfter':
+              double.parse((rothAvailable - amount).toStringAsFixed(2)),
+          'createdAt': FieldValue.serverTimestamp(),
+          'metadata': {
+            'legacyWithdrawalTransactionId': ledgerId,
+            'withdrawalRequestId': requestId,
+          },
+        },
+        SetOptions(merge: false),
+      );
+      transaction.set(
+          rothWalletRef,
+          {
+            'userId': riderId,
+            'availableEarnings': FieldValue.increment(-amount),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true));
     });
@@ -5016,22 +5251,32 @@ class _AdminFinanceSection extends StatelessWidget {
   final _CircumColors colors;
   final List<Map<String, dynamic>> records;
   final List<Map<String, dynamic>> wallets;
+  final List<Map<String, dynamic>> rothWallets;
+  final double rothCredit;
+  final double rothPendingEarnings;
+  final double rothAvailableEarnings;
   final double totalOwed;
   final double available;
   final double pending;
   final double withdrawn;
   final double lifetime;
+  final Widget rothTools;
   final List<Widget> Function(Map<String, dynamic>) rowBuilder;
 
   const _AdminFinanceSection({
     required this.colors,
     required this.records,
     required this.wallets,
+    required this.rothWallets,
+    required this.rothCredit,
+    required this.rothPendingEarnings,
+    required this.rothAvailableEarnings,
     required this.totalOwed,
     required this.available,
     required this.pending,
     required this.withdrawn,
     required this.lifetime,
+    required this.rothTools,
     required this.rowBuilder,
   });
 
@@ -5047,7 +5292,27 @@ class _AdminFinanceSection extends StatelessWidget {
             children: [
               _AdminMetricCard(
                 colors: colors,
-                label: 'Total Owed To Riders',
+                label: 'Roth Wallets',
+                value: '${rothWallets.length}',
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Roth Credit Liability',
+                value: _adminMoneyText(rothCredit),
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Roth Pending Earnings',
+                value: _adminMoneyText(rothPendingEarnings),
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Roth Available Earnings',
+                value: _adminMoneyText(rothAvailableEarnings),
+              ),
+              _AdminMetricCard(
+                colors: colors,
+                label: 'Legacy Rider Owed',
                 value: _adminMoneyText(totalOwed),
               ),
               _AdminMetricCard(
@@ -5073,12 +5338,13 @@ class _AdminFinanceSection extends StatelessWidget {
             ],
           ),
         ),
+        rothTools,
         Expanded(
           child: _AdminDataSection(
             colors: colors,
-            title: 'Rider wallets and withdrawals',
+            title: 'Roth Ledger, rider wallets and withdrawals',
             subtitle:
-                '${wallets.length} rider wallet(s). Settle completed-job earnings and process manual withdrawal requests here.',
+                '${rothWallets.length} Roth wallet(s), ${wallets.length} legacy rider wallet(s). Roth Credit is non-withdrawable; only available earnings can be withdrawn.',
             records: records,
             columns: const ['Type', 'Record', 'Status', 'Amount', 'Actions'],
             rowBuilder: rowBuilder,
@@ -7611,13 +7877,23 @@ class _RiderEarningsTab extends StatelessWidget {
               label: 'Withdrawn',
               value: _RiderWorkspace._money(earnings.withdrawnEarnings),
             ),
+            _RiderStatTile(
+              colors: colors,
+              label: 'Roth Credit',
+              value: _RiderWorkspace._money(earnings.rothCredit),
+            ),
+            _RiderStatTile(
+              colors: colors,
+              label: 'Roth pending',
+              value: _RiderWorkspace._money(earnings.rothPendingEarnings),
+            ),
           ],
         ),
         const SizedBox(height: 14),
         _GlassPanel(
           colors: colors,
           child: Text(
-            'Drivers earn 65% of each completed delivery. Withdrawal requests and bank details remain available in your rider overview.',
+            'Drivers earn 65% of each completed delivery. Roth Credit is non-withdrawable; only Available Earnings can be withdrawn.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.4,
@@ -7769,6 +8045,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   String? _documentMessage;
   String? _applicationId;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _earningsSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _rothWalletSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _performanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ratingSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
@@ -7827,6 +8104,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   @override
   void dispose() {
     _earningsSub?.cancel();
+    _rothWalletSub?.cancel();
     _performanceSub?.cancel();
     _ratingSub?.cancel();
     _availableJobsSub?.cancel();
@@ -8217,6 +8495,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'completedJobs': FieldValue.increment(0),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    await db.collection('wallets').doc(user.uid).set({
+      'userId': user.uid,
+      'rothCredit': FieldValue.increment(0),
+      'pendingEarnings': FieldValue.increment(0),
+      'availableEarnings': FieldValue.increment(0),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await db.collection('driverPerformanceMetrics').doc(user.uid).set(
           DriverPerformanceMetric.empty(user.uid).toJson()
             ..addAll({'updatedAt': FieldValue.serverTimestamp()}),
@@ -8226,6 +8512,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   void _listenToRiderEarnings(String riderId) {
     _earningsSub?.cancel();
+    _rothWalletSub?.cancel();
     _performanceSub?.cancel();
     _ratingSub?.cancel();
     _earningsSub = FirebaseFirestore.instance
@@ -8236,6 +8523,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(() {
         _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
+      });
+    });
+    _rothWalletSub = FirebaseFirestore.instance
+        .collection('wallets')
+        .doc(riderId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _earnings = _earnings.withRothWallet(snapshot.data());
       });
     });
   }
@@ -8681,8 +8978,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         final deliveryRef = db.collection('deliveryRequests').doc(requestId);
         final walletRef = db.collection('riderWalletTransactions').doc(txId);
         final earningsRef = db.collection('riderEarnings').doc(user.uid);
+        final rothWalletRef = db.collection('wallets').doc(user.uid);
+        final rothLedgerRef =
+            db.collection('walletTransactions').doc('roth_$txId');
         await db.runTransaction((transaction) async {
           final existingWallet = await transaction.get(walletRef);
+          final existingRothLedger = await transaction.get(rothLedgerRef);
+          final rothWallet = await transaction.get(rothWalletRef);
           transaction.set(deliveryRef, updates, SetOptions(merge: true));
           if (existingWallet.exists) return;
           transaction.set(
@@ -8716,6 +9018,48 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 'updatedAt': FieldValue.serverTimestamp(),
               },
               SetOptions(merge: true));
+          if (!existingRothLedger.exists) {
+            final rothBefore =
+                (rothWallet.data()?['pendingEarnings'] as num?)?.toDouble() ??
+                    0;
+            final rothAfter =
+                double.parse((rothBefore + totalCredit).toStringAsFixed(2));
+            transaction.set(
+                rothLedgerRef,
+                {
+                  'id': 'roth_$txId',
+                  'userId': user.uid,
+                  'amount': totalCredit,
+                  'balanceType': 'pendingEarnings',
+                  'type': 'earnings_pending',
+                  'reason': 'Completed delivery awaiting admin settlement.',
+                  'relatedEntityId': requestId,
+                  'paymentProvider': 'roth_internal',
+                  'providerTransactionId': null,
+                  'balanceBefore': rothBefore,
+                  'balanceAfter': rothAfter,
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'metadata': {
+                    'deliveryId': requestId,
+                    'riderId': user.uid,
+                    'legacyTransactionId': txId,
+                    'deliveryEarning': payout,
+                    'tipAmount': tip,
+                  },
+                },
+                SetOptions(merge: false));
+            transaction.set(
+                rothWalletRef,
+                {
+                  'userId': user.uid,
+                  'rothCredit': FieldValue.increment(0),
+                  'pendingEarnings': FieldValue.increment(totalCredit),
+                  'availableEarnings': FieldValue.increment(0),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'createdAt': FieldValue.serverTimestamp(),
+                },
+                SetOptions(merge: true));
+          }
         });
       } else {
         await db
@@ -9577,6 +9921,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<void> _signOutRider() async {
     await _earningsSub?.cancel();
+    await _rothWalletSub?.cancel();
     await _performanceSub?.cancel();
     await _ratingSub?.cancel();
     await _availableJobsSub?.cancel();
@@ -12347,6 +12692,9 @@ class _RiderEarningsSnapshot {
   final double lifetimeEarnings;
   final double tipsReceived;
   final double withdrawnEarnings;
+  final double rothCredit;
+  final double rothPendingEarnings;
+  final double rothAvailableEarnings;
   final int completedJobs;
 
   const _RiderEarningsSnapshot({
@@ -12356,6 +12704,9 @@ class _RiderEarningsSnapshot {
     required this.lifetimeEarnings,
     required this.tipsReceived,
     required this.withdrawnEarnings,
+    required this.rothCredit,
+    required this.rothPendingEarnings,
+    required this.rothAvailableEarnings,
     required this.completedJobs,
   });
 
@@ -12366,6 +12717,9 @@ class _RiderEarningsSnapshot {
         lifetimeEarnings: 0,
         tipsReceived: 0,
         withdrawnEarnings: 0,
+        rothCredit: 0,
+        rothPendingEarnings: 0,
+        rothAvailableEarnings: 0,
         completedJobs: 0,
       );
 
@@ -12387,9 +12741,29 @@ class _RiderEarningsSnapshot {
               data['totalWithdrawn'] as num? ??
               0)
           .toDouble(),
+      rothCredit: 0,
+      rothPendingEarnings: 0,
+      rothAvailableEarnings: 0,
       completedJobs:
           (data['completedJobs'] as num? ?? data['totalTrips'] as num? ?? 0)
               .toInt(),
+    );
+  }
+
+  _RiderEarningsSnapshot withRothWallet(Map<String, dynamic>? data) {
+    if (data == null) return this;
+    return _RiderEarningsSnapshot(
+      availableBalance: availableBalance,
+      pendingBalance: pendingBalance,
+      pendingWithdrawal: pendingWithdrawal,
+      lifetimeEarnings: lifetimeEarnings,
+      tipsReceived: tipsReceived,
+      withdrawnEarnings: withdrawnEarnings,
+      rothCredit: (data['rothCredit'] as num? ?? 0).toDouble(),
+      rothPendingEarnings: (data['pendingEarnings'] as num? ?? 0).toDouble(),
+      rothAvailableEarnings:
+          (data['availableEarnings'] as num? ?? 0).toDouble(),
+      completedJobs: completedJobs,
     );
   }
 }
@@ -16497,6 +16871,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final ratingRef = db.collection('driverRatings').doc(ratingId);
       await db.runTransaction((transaction) async {
         final existing = await transaction.get(ratingRef);
+        final tipTxId = '${requestId}_${driverId}_tip';
+        final rothTipTxId = 'roth_$tipTxId';
+        final rothWalletRef = db.collection('wallets').doc(driverId);
+        final rothWallet = _selectedTipAmount > 0
+            ? await transaction.get(rothWalletRef)
+            : null;
         if (existing.exists) {
           throw StateError('duplicate-rating');
         }
@@ -16529,7 +16909,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           SetOptions(merge: true),
         );
         if (_selectedTipAmount > 0) {
-          final tipTxId = '${requestId}_${driverId}_tip';
+          final rothAvailable =
+              (rothWallet?.data()?['availableEarnings'] as num?)?.toDouble() ??
+                  0;
           transaction.set(
             db.collection('riderWalletTransactions').doc(tipTxId),
             {
@@ -16553,6 +16935,37 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                 'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
                 'tipsReceived': FieldValue.increment(_selectedTipAmount),
                 'updatedAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true));
+          transaction.set(
+            db.collection('walletTransactions').doc(rothTipTxId),
+            {
+              'id': rothTipTxId,
+              'userId': driverId,
+              'amount': _selectedTipAmount,
+              'balanceType': 'availableEarnings',
+              'type': 'earnings_available',
+              'reason': 'Customer tip credited to rider available earnings.',
+              'relatedEntityId': requestId,
+              'paymentProvider': 'stripe',
+              'balanceBefore': rothAvailable,
+              'balanceAfter': double.parse(
+                  (rothAvailable + _selectedTipAmount).toStringAsFixed(2)),
+              'createdAt': FieldValue.serverTimestamp(),
+              'metadata': {
+                'legacyTransactionId': tipTxId,
+                'source': 'customer_tip',
+              },
+            },
+            SetOptions(merge: true),
+          );
+          transaction.set(
+              rothWalletRef,
+              {
+                'userId': driverId,
+                'availableEarnings': FieldValue.increment(_selectedTipAmount),
+                'updatedAt': FieldValue.serverTimestamp(),
+                'createdAt': FieldValue.serverTimestamp(),
               },
               SetOptions(merge: true));
         }

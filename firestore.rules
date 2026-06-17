@@ -316,6 +316,27 @@ service cloud.firestore {
       allow write: if isFinanceAdmin();
     }
 
+    match /wallets/{userId} {
+      allow read: if isFinanceAdmin() || (signedIn() && userId == request.auth.uid);
+      allow create, update: if isFinanceAdmin() || (signedIn() && userId == request.auth.uid);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /walletTransactions/{transactionId} {
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isFinanceAdmin() ||
+        (signedIn() && request.resource.data.userId == request.auth.uid &&
+          request.resource.data.balanceType in ['pendingEarnings', 'availableEarnings']);
+      allow update: if isFinanceAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /rothLedgerRepairLogs/{logId} {
+      allow read, write: if isFinanceAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /healthPlusPayments/{paymentId} {
       allow read: if isFinanceAdmin() ||
         hasRole('operations_admin') ||

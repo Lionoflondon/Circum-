@@ -111,5 +111,27 @@ void main() {
         isFalse,
       );
     });
+
+    test('Roth Credit is tracked separately and cannot be withdrawn', () {
+      expect(
+        RiderMarketplaceRules.rothCreditLiability(const [
+          {'rothCredit': 12.5, 'availableEarnings': 50},
+          {'rothCredit': 7.5, 'pendingEarnings': 10},
+        ]),
+        20,
+      );
+      expect(
+        RiderMarketplaceRules.canWithdrawBalanceType('rothCredit'),
+        isFalse,
+      );
+      expect(
+        RiderMarketplaceRules.canWithdrawBalanceType('pendingEarnings'),
+        isFalse,
+      );
+      expect(
+        RiderMarketplaceRules.canWithdrawBalanceType('availableEarnings'),
+        isTrue,
+      );
+    });
   });
 }

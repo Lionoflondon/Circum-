@@ -66,6 +66,18 @@ class RiderMarketplaceRules {
     });
   }
 
+  static double rothCreditLiability(Iterable<Map<String, dynamic>> wallets) {
+    return wallets.fold<double>(
+      0,
+      (total, wallet) =>
+          total + ((wallet['rothCredit'] as num?)?.toDouble() ?? 0),
+    );
+  }
+
+  static bool canWithdrawBalanceType(String balanceType) {
+    return balanceType == 'availableEarnings';
+  }
+
   static bool canRequestWithdrawal({
     required double amount,
     required double availableBalance,

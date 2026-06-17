@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const rothLedger = require("./roth-ledger");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -93,6 +94,25 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
       updatedAt: FieldValue.serverTimestamp(),
     });
     transaction.delete(draftRef);
+  });
+  await rothLedger.safeRecordRothMovement({
+    db,
+    userId: context.auth.uid,
+    amount: gross,
+    balanceType: rothLedger.BALANCE_TYPES.rothCredit,
+    type: rothLedger.TRANSACTION_TYPES.stripePaymentRecord,
+    reason: "Gifts by Circum Stripe payment recorded in Roth ledger.",
+    relatedEntityId: giftDraftId,
+    paymentProvider: "stripe",
+    providerTransactionId: session.payment_intent || session.id,
+    transactionId: `stripe_gift_${session.id}`,
+    ledgerOnly: true,
+    metadata: {
+      giftRequestId: giftDraftId,
+      service: "gifts",
+      ledgerOnly: true,
+      note: "Stripe remains execution partner; this records value movement only.",
+    },
   });
   return {paymentStatus: "paid", giftStatus: "submitted_for_review", giftRequestId: giftDraftId};
 });

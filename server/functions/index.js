@@ -18,6 +18,7 @@ const deliveryAdjustments = require("./delivery-adjustments");
 const platformNotifications = require("./platform-notifications");
 const legends = require("./legends");
 const giftsPayment = require("./gifts-payment");
+const rothLedger = require("./roth-ledger");
 
 initializeApp();
 
@@ -46,6 +47,8 @@ exports.escalateUnclaimedDeliveries = platformNotifications.escalateUnclaimedDel
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
+exports.issueRothCredit = rothLedger.issueRothCredit;
+exports.debitRothCredit = rothLedger.debitRothCredit;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
@@ -256,6 +259,22 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
       //   console.log(err)
       // console.log('new error')
     });
+    const userId = metadata && (metadata.senderId || metadata.userId || metadata.uid);
+    if (userId) {
+      await rothLedger.safeRecordRothMovement({
+        userId,
+        amount: Number(sessionData.amount || sessionData.amount_captured || 0) / 100,
+        balanceType: rothLedger.BALANCE_TYPES.rothCredit,
+        type: rothLedger.TRANSACTION_TYPES.stripePaymentRecord,
+        reason: "Stripe charge recorded in Roth ledger.",
+        relatedEntityId: metadata.requestId || metadata.bookingId || metadata.giftDraftId || null,
+        paymentProvider: "stripe",
+        providerTransactionId: sessionData.id,
+        transactionId: `stripe_charge_${sessionData.id}`,
+        ledgerOnly: true,
+        metadata: {stripeEventId: event.id, service: metadata.type || "circum"},
+      });
+    }
   }
 
   if (event.type == "checkout.session.completed") {
@@ -298,6 +317,22 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
       //   console.log(err)
       // console.log('new error')
     });
+    const userId = metadata && (metadata.senderId || metadata.userId || metadata.uid);
+    if (userId) {
+      await rothLedger.safeRecordRothMovement({
+        userId,
+        amount: Number(sessionData.amount_total || 0) / 100,
+        balanceType: rothLedger.BALANCE_TYPES.rothCredit,
+        type: rothLedger.TRANSACTION_TYPES.stripePaymentRecord,
+        reason: "Stripe Checkout session recorded in Roth ledger.",
+        relatedEntityId: metadata.requestId || metadata.bookingId || metadata.giftDraftId || null,
+        paymentProvider: "stripe",
+        providerTransactionId: sessionData.payment_intent || sessionData.id,
+        transactionId: `stripe_checkout_${sessionData.id}`,
+        ledgerOnly: true,
+        metadata: {stripeEventId: event.id, service: metadata.type || "circum"},
+      });
+    }
   }
 
   res.send({success: true});
