@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const rothLedger = require("./roth-ledger");
+const {calculateWalletCheckout} = require("./wallet-core");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -26,6 +27,83 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
   const baseUrl = "https://circumuk.com/?app=gifts";
   const successUrl = config.success_url || `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = config.cancel_url || `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`;
+  let split;
+  if (gift.walletDeducted === true) {
+    const storedWalletContribution = Number(gift.walletContributionGbp || 0);
+    const storedRemaining = Number(gift.remainingStripeAmountGbp || Math.max(0, gross - storedWalletContribution));
+    split = calculateWalletCheckout({
+      orderTotalGbp: storedRemaining,
+      walletBalanceGbp: 0,
+      selectedCurrency: gift.paymentCurrency || data.paymentCurrency || "gbp",
+    });
+    split.orderTotalGbp = gross;
+    split.walletContributionGbp = storedWalletContribution;
+    split.remainingGbp = storedRemaining;
+    split.stripeRequired = split.remainingGbp > 0;
+  } else {
+    const walletSnap = await getFirestore().collection("wallets").doc(context.auth.uid).get();
+    const wallet = walletSnap.exists ? walletSnap.data() : {};
+    const walletBalance = Number(wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance);
+    const selectedCurrency = gift.paymentCurrency || data.paymentCurrency || "gbp";
+    split = calculateWalletCheckout({
+      orderTotalGbp: gross,
+      walletBalanceGbp: walletBalance,
+      selectedCurrency,
+    });
+  }
+  if (split.walletContributionGbp > 0 && gift.walletDeducted !== true) {
+    await rothLedger.applyWalletDebit({
+      userId: context.auth.uid,
+      amount: split.walletContributionGbp,
+      type: "gift_payment",
+      referenceId: giftDraftId,
+      notes: "Wallet applied to Gifts by Circum experience.",
+      transactionId: `wallet_gift_${giftDraftId}`,
+      metadata: {
+        orderTotalGbp: split.orderTotalGbp,
+        remainingGbp: split.remainingGbp,
+        service: "gifts",
+      },
+    });
+  }
+  await ref.update({
+    walletContributionGbp: split.walletContributionGbp,
+    remainingStripeAmountGbp: split.remainingGbp,
+    paymentCurrency: split.customerPaymentCurrency,
+    estimatedCustomerPaymentAmount: split.customerPaymentAmount,
+    walletDeducted: split.walletContributionGbp > 0,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  if (!split.stripeRequired) {
+    const db = getFirestore();
+    const giftRef = db.collection("giftRequests").doc(giftDraftId);
+    await db.runTransaction(async (transaction) => {
+      const latest = await transaction.get(ref);
+      const existingGift = await transaction.get(giftRef);
+      if (existingGift.exists) return;
+      transaction.set(giftRef, {
+        ...latest.data(),
+        paymentStatus: "paid",
+        giftStatus: "submitted_for_review",
+        status: "submitted_for_review",
+        stripeCheckoutSessionId: null,
+        stripePaymentIntentId: null,
+        walletPaidInFull: true,
+        paidAt: FieldValue.serverTimestamp(),
+        createdAt: gift.createdAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      transaction.delete(ref);
+    });
+    return {
+      walletPaidInFull: true,
+      paymentStatus: "paid",
+      giftStatus: "submitted_for_review",
+      giftRequestId: giftDraftId,
+      walletContributionGbp: split.walletContributionGbp,
+      remainingStripeAmountGbp: 0,
+    };
+  }
   let session;
   try {
     session = await stripe.checkout.sessions.create({
@@ -34,8 +112,8 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       line_items: [{
         quantity: 1,
         price_data: {
-          currency: "gbp",
-          unit_amount: Math.round(gross * 100),
+          currency: split.customerPaymentCurrency,
+          unit_amount: split.stripeAmountMinor,
           product_data: {
             name: "Gifts by Circum experience",
             description: `${gift.occasion || "Curated"} gift experience for ${gift.recipientName || "recipient"}`,
@@ -44,7 +122,15 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: {giftDraftId, senderId: context.auth.uid, type: "gift_experience"},
+      metadata: {
+        giftDraftId,
+        senderId: context.auth.uid,
+        type: "gift_experience",
+        orderTotalGbp: `${split.orderTotalGbp}`,
+        walletContributionGbp: `${split.walletContributionGbp}`,
+        remainingGbp: `${split.remainingGbp}`,
+        customerPaymentCurrency: split.customerPaymentCurrency,
+      },
     });
   } catch (error) {
     console.error("createGiftPayment Stripe Checkout error", error);
@@ -74,6 +160,7 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
     throw new functions.https.HttpsError("not-found", "Gift draft not found.");
   }
   const gift = snap.data();
+  const gross = Number(gift.grossGiftBudget || gift.grossBudget || 0);
   if (!sessionId || sessionId !== gift.stripeCheckoutSessionId) {
     throw new functions.https.HttpsError("invalid-argument", "Invalid checkout session.");
   }

@@ -332,6 +332,13 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /giftCards/{code} {
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && resource.data.redeemedBy == request.auth.uid);
+      allow create, update: if isFinanceAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /rothLedgerRepairLogs/{logId} {
       allow read, write: if isFinanceAdmin();
       allow delete: if hasRole('super_admin');

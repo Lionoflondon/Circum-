@@ -5,6 +5,8 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const stripeConfig = functions.config().stripe || {};
 const stripe = require("stripe")(stripeConfig.livekey);
+const rothLedger = require("./roth-ledger");
+const {calculateWalletCheckout} = require("./wallet-core");
 const {
   calculateHealthPlusAmountPence,
   normalizeSchedule,
@@ -104,6 +106,8 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       email,
       frequency,
       priceBreakdown,
+      userId,
+      paymentCurrency,
       successUrl,
       cancelUrl,
     } = req.body;
@@ -123,12 +127,64 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     });
     const recurring = normalizeSchedule(frequency) !== "one_off";
 
+    const walletUserId = userId || profileId;
+    const walletSnap = walletUserId ?
+      await getFirestore().collection("wallets").doc(walletUserId).get() :
+      null;
+    const wallet = walletSnap && walletSnap.exists ? walletSnap.data() : {};
+    const walletBalance = Number(wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance || 0);
+    const split = calculateWalletCheckout({
+      orderTotalGbp: amountPence / 100,
+      walletBalanceGbp: walletBalance,
+      selectedCurrency: paymentCurrency || "gbp",
+    });
+    if (walletUserId && split.walletContributionGbp > 0) {
+      await rothLedger.applyWalletDebit({
+        userId: walletUserId,
+        amount: split.walletContributionGbp,
+        type: "health_payment",
+        referenceId: bookingId,
+        notes: "Wallet applied to Health+ checkout.",
+        transactionId: `wallet_health_${bookingId}`,
+        metadata: {
+          orderTotalGbp: split.orderTotalGbp,
+          remainingGbp: split.remainingGbp,
+          service: "health_plus",
+        },
+      });
+    }
+    if (!split.stripeRequired) {
+      await getFirestore().collection("healthPlusPayments").doc(bookingId).set({
+        bookingId,
+        profileId,
+        userId: walletUserId || null,
+        amountPence,
+        amount: amountPence / 100,
+        walletContributionGbp: split.walletContributionGbp,
+        remainingStripeAmountGbp: 0,
+        currency: "GBP",
+        paymentStatus: "paid",
+        status: "paid",
+        paidByWallet: true,
+        frequency: normalizeSchedule(frequency),
+        updatedAt: Date.now(),
+        createdAt: Date.now(),
+      }, {merge: true});
+      return res.send({
+        walletPaidInFull: true,
+        amountPence,
+        walletContributionGbp: split.walletContributionGbp,
+        remainingStripeAmountGbp: 0,
+        recurring,
+      });
+    }
     const params = buildHealthPlusCheckoutParams({
       bookingId,
       profileId,
       email,
-      amountPence,
+      amountPence: split.stripeAmountMinor,
       recurring,
+      currency: split.customerPaymentCurrency,
       successUrl: successUrl || "https://circum-app-2797c.web.app/?app=sender&health=success",
       cancelUrl: cancelUrl || "https://circum-app-2797c.web.app/?app=sender&health=cancelled",
     });
@@ -139,6 +195,10 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       profileId,
       amountPence,
       amount: amountPence / 100,
+      walletContributionGbp: split.walletContributionGbp,
+      remainingStripeAmountGbp: split.remainingGbp,
+      customerPaymentCurrency: split.customerPaymentCurrency,
+      customerPaymentAmount: split.customerPaymentAmount,
       currency: "GBP",
       frequency: normalizeSchedule(frequency),
       status: "checkout_created",

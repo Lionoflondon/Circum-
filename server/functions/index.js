@@ -19,6 +19,7 @@ const platformNotifications = require("./platform-notifications");
 const legends = require("./legends");
 const giftsPayment = require("./gifts-payment");
 const rothLedger = require("./roth-ledger");
+const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
 
@@ -49,6 +50,8 @@ exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
 exports.issueRothCredit = rothLedger.issueRothCredit;
 exports.debitRothCredit = rothLedger.debitRothCredit;
+exports.redeemGiftCard = rothLedger.redeemGiftCard;
+exports.setWalletFrozen = rothLedger.setWalletFrozen;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
@@ -92,10 +95,13 @@ const createPaymentIntentHandler = async (req, res) => {
     email,
     userId,
     saveCard,
+    useWallet,
+    paymentCurrency,
+    referenceId,
   } = req.body;
 
   //   const orderAmount = calculateOrderAmount(items);
-  const orderAmount = amount;
+  const orderTotalGbp = Number(amount || 0) / 100;
 
   try {
     let customerId;
@@ -106,11 +112,50 @@ const createPaymentIntentHandler = async (req, res) => {
       const userData = userRef.data();
       customerId = userData.customerId || undefined;
     }
+    let split = calculateWalletCheckout({
+      orderTotalGbp,
+      walletBalanceGbp: 0,
+      selectedCurrency: paymentCurrency || currency || "gbp",
+    });
+    if (useWallet === true && userId) {
+      const walletRef = await getFirestore().collection("wallets").doc(userId).get();
+      const walletData = walletRef.exists ? walletRef.data() : {};
+      const walletBalance = Number(walletData.balance == null ? walletData.rothCredit || 0 : walletData.balance || 0);
+      split = calculateWalletCheckout({
+        orderTotalGbp,
+        walletBalanceGbp: walletBalance,
+        selectedCurrency: paymentCurrency || currency || "gbp",
+      });
+      if (split.walletContributionGbp > 0) {
+        await rothLedger.applyWalletDebit({
+          userId,
+          amount: split.walletContributionGbp,
+          type: "delivery_payment",
+          referenceId: referenceId || null,
+          notes: "Wallet applied to Circum delivery payment.",
+          transactionId: referenceId ? `wallet_delivery_${referenceId}` : undefined,
+          metadata: {
+            orderTotalGbp: split.orderTotalGbp,
+            remainingGbp: split.remainingGbp,
+            service: "delivery",
+          },
+        });
+      }
+      if (!split.stripeRequired) {
+        return res.send({
+          status: "succeeded",
+          walletPaidInFull: true,
+          orderTotalGbp: split.orderTotalGbp,
+          walletContributionGbp: split.walletContributionGbp,
+          remainingStripeAmountGbp: 0,
+        });
+      }
+    }
 
     const params = {
-      amount: orderAmount,
+      amount: split.stripeAmountMinor,
       // confirm: true,
-      currency,
+      currency: split.customerPaymentCurrency,
       // automatic_payment_methods: {
       //   enabled: true,
       //   allow_redirects: "never",
@@ -121,6 +166,10 @@ const createPaymentIntentHandler = async (req, res) => {
         name: name,
         email: email,
         pushToken: pushToken,
+        orderTotalGbp: `${split.orderTotalGbp}`,
+        walletContributionGbp: `${split.walletContributionGbp}`,
+        remainingGbp: `${split.remainingGbp}`,
+        customerPaymentCurrency: split.customerPaymentCurrency,
       },
       payment_method_types: ["card"],
       setup_future_usage: saveCard ? "off_session" : undefined,

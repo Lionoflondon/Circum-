@@ -3569,6 +3569,28 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     }
   }
 
+  Future<void> _setWalletFrozen(bool frozen) async {
+    if (!_can(AdminPermission.viewFinance)) return;
+    final userId = _rothUserId.text.trim();
+    final reason = _rothReason.text.trim();
+    if (userId.isEmpty || reason.isEmpty) {
+      setState(
+          () => _message = 'Wallet freeze action requires user and reason.');
+      return;
+    }
+    try {
+      await FirebaseFunctions.instance.httpsCallable('setWalletFrozen').call({
+        'userId': userId,
+        'isFrozen': frozen,
+        'reason': reason,
+      });
+      setState(() => _message = frozen ? 'Wallet frozen.' : 'Wallet unfrozen.');
+      await _loadAdminData();
+    } catch (error) {
+      setState(() => _message = 'Wallet freeze action failed: $error');
+    }
+  }
+
   Widget _rothCreditTools(_CircumColors colors) {
     if (!_can(AdminPermission.viewFinance)) return const SizedBox.shrink();
     InputDecoration decoration(String label) => InputDecoration(
@@ -3639,6 +3661,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 OutlinedButton(
                   onPressed: () => _submitRothCreditAction(false),
                   child: const Text('Debit Roth'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _setWalletFrozen(true),
+                  child: const Text('Freeze wallet'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _setWalletFrozen(false),
+                  child: const Text('Unfreeze wallet'),
                 ),
               ],
             ),
@@ -15915,17 +15945,21 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _healthPayments.insert(0, {
           'pickupId': pickupId,
           'amount': quote.total,
-          'status': checkoutUrl == null
-              ? 'pending_secure_checkout'
-              : 'checkout_created',
+          'status': checkoutUrl == 'wallet:paid'
+              ? 'paid'
+              : checkoutUrl == null
+                  ? 'pending_secure_checkout'
+                  : 'checkout_created',
         });
-        _healthMessage = checkoutUrl == null
-            ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
-            : 'Your Health+ pickup is saved. Payment is ready.';
+        _healthMessage = checkoutUrl == 'wallet:paid'
+            ? 'Your Health+ pickup is saved and paid with Wallet.'
+            : checkoutUrl == null
+                ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
+                : 'Your Health+ pickup is saved. Payment is ready.';
         _firebaseOnline = true;
       });
 
-      if (checkoutUrl != null) {
+      if (checkoutUrl != null && checkoutUrl.startsWith('http')) {
         await launchUrl(
           Uri.parse(checkoutUrl),
           mode: LaunchMode.externalApplication,
@@ -15957,6 +15991,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         body: jsonEncode({
           'bookingId': pickupId,
           'profileId': profileId,
+          'userId': _senderUser?.uid ?? FirebaseAuth.instance.currentUser?.uid,
           'email': _healthEmail.text.trim(),
           'frequency': _healthFrequency == HealthPlusFrequency.every28Days
               ? HealthPlusFrequency.custom.value
@@ -15974,6 +16009,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         return null;
       }
       final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['walletPaidInFull'] == true) return 'wallet:paid';
       return data['checkoutUrl'] as String?;
     } catch (_) {
       return null;
@@ -18844,7 +18880,7 @@ class _SenderProfileStep extends StatelessWidget {
       'Profile',
       'Delivery History',
       'Saved Addresses',
-      'Payments',
+      'Wallet',
       'Reviews',
       'Support',
     ];
@@ -19220,7 +19256,11 @@ class _SenderProfileStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(colors: colors, title: 'Payments'),
+        _SectionTitle(colors: colors, title: 'Wallet'),
+        const SizedBox(height: 10),
+        _SenderWalletPanel(colors: colors, userId: user!.uid),
+        const SizedBox(height: 16),
+        _SectionTitle(colors: colors, title: 'Payment references'),
         const SizedBox(height: 10),
         Text(
           profile?.paymentCustomerReference ??
@@ -19306,6 +19346,181 @@ class _SenderProfileStep extends StatelessWidget {
           Text(body, style: TextStyle(color: colors.mutedText, height: 1.45)),
         ],
       ),
+    );
+  }
+}
+
+class _SenderWalletPanel extends StatefulWidget {
+  final _CircumColors colors;
+  final String userId;
+
+  const _SenderWalletPanel({required this.colors, required this.userId});
+
+  @override
+  State<_SenderWalletPanel> createState() => _SenderWalletPanelState();
+}
+
+class _SenderWalletPanelState extends State<_SenderWalletPanel> {
+  final _giftCardCode = TextEditingController();
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _walletSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _txSub;
+  Map<String, dynamic>? _wallet;
+  List<Map<String, dynamic>> _transactions = const [];
+  bool _redeeming = false;
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    _walletSub = FirebaseFirestore.instance
+        .collection('wallets')
+        .doc(widget.userId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() => _wallet = snapshot.data());
+    });
+    _txSub = FirebaseFirestore.instance
+        .collection('walletTransactions')
+        .where('userId', isEqualTo: widget.userId)
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _transactions = snapshot.docs
+            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+            .toList(growable: false);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _giftCardCode.dispose();
+    _walletSub?.cancel();
+    _txSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _redeemGiftCard() async {
+    final code = _giftCardCode.text.trim();
+    if (code.isEmpty) {
+      setState(() => _message = 'Enter a gift card code.');
+      return;
+    }
+    setState(() {
+      _redeeming = true;
+      _message = null;
+    });
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('redeemGiftCard')
+          .call({'code': code});
+      _giftCardCode.clear();
+      setState(() => _message = 'Gift Card Credit added to your wallet.');
+    } catch (error) {
+      setState(() => _message = 'This gift card could not be redeemed.');
+    } finally {
+      if (mounted) setState(() => _redeeming = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final balance =
+        ((_wallet?['balance'] ?? _wallet?['rothCredit']) as num?)?.toDouble() ??
+            0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              colors: [
+                colors.adminAccent.withValues(alpha: 0.20),
+                colors.field.withValues(alpha: 0.72),
+              ],
+            ),
+            border:
+                Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Current balance',
+                  style: TextStyle(
+                      color: colors.mutedText, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text(
+                '£${balance.toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Prices are calculated in GBP. Your Circum Wallet balance is held in GBP. You may pay remaining card balances in another supported currency where available.',
+                style: TextStyle(color: colors.mutedText, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 260,
+              child: _InputBox(
+                colors: colors,
+                controller: _giftCardCode,
+                hint: 'Redeem Gift Card',
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _redeeming ? null : _redeemGiftCard,
+              icon: const Icon(Icons.redeem_outlined),
+              label: Text(_redeeming ? 'Redeeming' : 'Redeem'),
+            ),
+          ],
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: 8),
+          Text(_message!, style: TextStyle(color: colors.mutedText)),
+        ],
+        const SizedBox(height: 16),
+        _SectionTitle(colors: colors, title: 'Transaction history'),
+        const SizedBox(height: 8),
+        if (_transactions.isEmpty)
+          Text('No wallet transactions yet.',
+              style: TextStyle(color: colors.mutedText))
+        else
+          ..._transactions.take(8).map((tx) {
+            final amount = (tx['amount'] as num?)?.toDouble() ?? 0;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('${tx['type'] ?? 'wallet_transaction'}',
+                  style: TextStyle(
+                      color: colors.text, fontWeight: FontWeight.w900)),
+              subtitle: Text('${tx['notes'] ?? tx['referenceId'] ?? ''}',
+                  style: TextStyle(color: colors.mutedText)),
+              trailing: Text(
+                '${amount < 0 ? '-' : '+'}£${amount.abs().toStringAsFixed(2)}',
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+              ),
+            );
+          }),
+      ],
     );
   }
 }
@@ -26918,6 +27133,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           .httpsCallable('createGiftPayment')
           .call({'giftDraftId': doc.id});
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
+      if (paymentData['walletPaidInFull'] == true) {
+        if (!mounted) return;
+        setState(() => _message =
+            'Your gift request has been submitted and paid with Wallet.');
+        return;
+      }
       final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
         throw StateError(

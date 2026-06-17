@@ -50,6 +50,7 @@ function buildHealthPlusCheckoutParams({
   email,
   amountPence,
   recurring,
+  currency = "gbp",
   successUrl,
   cancelUrl,
 }) {
@@ -57,7 +58,7 @@ function buildHealthPlusCheckoutParams({
   const lineItem = {
     quantity: 1,
     price_data: {
-      currency: "gbp",
+      currency,
       product_data: {
         name: recurring ?
           "Circum Health+ recurring prescription pickup" :
