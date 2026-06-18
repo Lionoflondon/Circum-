@@ -5583,6 +5583,7 @@ class _AdminFinanceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final uniqueRothWallets = _uniqueRothWalletCount;
     return Column(
       children: [
         Padding(
@@ -5594,7 +5595,7 @@ class _AdminFinanceSection extends StatelessWidget {
               _AdminMetricCard(
                 colors: colors,
                 label: 'Roth Wallets',
-                value: '${rothWallets.length}',
+                value: '$uniqueRothWallets',
               ),
               _AdminMetricCard(
                 colors: colors,
@@ -5645,7 +5646,7 @@ class _AdminFinanceSection extends StatelessWidget {
             colors: colors,
             title: 'Roth Ledger, rider wallets and withdrawals',
             subtitle:
-                '${rothWallets.length} Roth wallet(s), ${wallets.length} legacy rider wallet(s). Roth Credit is non-withdrawable; only available earnings can be withdrawn.',
+                '$uniqueRothWallets unique customer Roth wallet(s), ${wallets.length} legacy rider wallet(s). Internal service partitions are not counted as separate customer wallets. Roth Credit is non-withdrawable; only available earnings can be withdrawn.',
             records: records,
             columns: const ['Type', 'Record', 'Status', 'Amount', 'Actions'],
             rowBuilder: rowBuilder,
@@ -5654,6 +5655,33 @@ class _AdminFinanceSection extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  int get _uniqueRothWalletCount {
+    final keys = <String>{};
+    for (final wallet in rothWallets) {
+      final key = _rothWalletIdentity(wallet);
+      if (key.isNotEmpty) keys.add(key);
+    }
+    return keys.length;
+  }
+
+  String _rothWalletIdentity(Map<String, dynamic> wallet) {
+    const fields = [
+      'normalizedEmail',
+      'userEmail',
+      'email',
+      'senderEmail',
+      'ownerEmail',
+      'userId',
+      'uid',
+      'ownerId',
+    ];
+    for (final field in fields) {
+      final value = '${wallet[field] ?? ''}'.trim().toLowerCase();
+      if (value.isNotEmpty && value != 'null') return value;
+    }
+    return '${wallet['id'] ?? wallet['walletId'] ?? ''}'.trim().toLowerCase();
   }
 }
 
@@ -31397,6 +31425,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   ],
                 ),
                 const SizedBox(height: 30),
+                _giftIrisUnderstandingCard(colors),
+                const SizedBox(height: 18),
                 _giftRecipientHero(colors, recipientName),
                 const SizedBox(height: 22),
                 _giftLuxuryInfoGrid(colors, budgetText, address),
@@ -31472,6 +31502,155 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         ),
       ],
     );
+  }
+
+  Widget _giftIrisUnderstandingCard(_CircumColors colors) {
+    final insight = _giftIrisUnderstanding();
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.adminGlow.withValues(alpha: 0.22),
+            colors.adminAccent.withValues(alpha: 0.16),
+            Colors.white.withValues(alpha: 0.07),
+            Colors.black.withValues(alpha: 0.18),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.26)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.22),
+            blurRadius: 34,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: colors.adminAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'What IRIS Understands',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            insight,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 17,
+              height: 1.48,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _giftIrisUnderstanding() {
+    final clues = [
+      _relationship,
+      _occasion,
+      _interests.join(' '),
+      _personalMessage.text,
+      _notes.text,
+      _favouriteColours.text,
+      _likedBrands.text,
+      _dislikedBrands.text,
+    ].where((value) => value.trim().isNotEmpty).join(' ').toLowerCase();
+    final meaningfulInput = _interests.isNotEmpty ||
+        _personalMessage.text.trim().length > 18 ||
+        _notes.text.trim().length > 18 ||
+        _favouriteColours.text.trim().isNotEmpty ||
+        _likedBrands.text.trim().isNotEmpty;
+    if (!meaningfulInput) {
+      return 'IRIS has enough to begin preparing a thoughtful gift experience.\n\nAs more details are added, IRIS can better understand the feeling the gift should carry.\n\nIRIS will keep this in mind as the gift experience is prepared.';
+    }
+
+    bool hasAny(Iterable<String> terms) =>
+        terms.any((term) => clues.contains(term.toLowerCase()));
+
+    if (hasAny([
+      'sports',
+      'sport',
+      'football',
+      'arsenal',
+      'live game',
+      'gym',
+      'fitness',
+      'running',
+      'cycling',
+    ])) {
+      return 'They appear to enjoy excitement, shared experiences and the anticipation that comes with special occasions.\n\nSport is more than entertainment to them — it is part of their identity and a source of lasting memories.\n\nIRIS will keep this in mind as the gift experience is prepared.';
+    }
+    if (hasAny([
+      'pink',
+      'beauty',
+      'makeup',
+      'fashion',
+      'self-care',
+      'self care',
+      'skincare',
+      'jewellery',
+      'fragrance',
+    ])) {
+      return 'They appear to enjoy self-expression, personal style and thoughtful details that feel made for them.\n\nA gift experience with warmth, elegance and a sense of care may feel especially meaningful.\n\nIRIS will keep this in mind as the gift experience is prepared.';
+    }
+    if (hasAny([
+      'yellow',
+      'nature',
+      'calm',
+      'books',
+      'book',
+      'tea',
+      'gardening',
+      'wellness',
+      'minimalist',
+    ])) {
+      return 'They may value warmth, calm and simple moments that feel peaceful rather than overwhelming.\n\nA gift experience that feels gentle, personal and comforting may resonate with them.\n\nIRIS will keep this in mind as the gift experience is prepared.';
+    }
+    if (hasAny([
+      'red',
+      'cars',
+      'car',
+      'boxing',
+      'adventure',
+      'nightlife',
+      'motorcycles',
+      'travel',
+      'festivals',
+    ])) {
+      return 'They seem drawn to energy, intensity and experiences with a sense of excitement.\n\nA gift experience with confidence, movement and memorable impact may suit their personality.\n\nIRIS will keep this in mind as the gift experience is prepared.';
+    }
+    if (hasAny([
+      'partner',
+      'husband',
+      'wife',
+      'fiancé',
+      'fiancée',
+      'anniversary',
+      'valentine'
+    ])) {
+      return 'They may value intimacy, attention and details that feel personal rather than generic.\n\nA gift experience with warmth, closeness and a sense of occasion may feel especially meaningful.\n\nIRIS will keep this in mind as the gift experience is prepared.';
+    }
+
+    return 'They appear to value thoughtful details, personal attention and a gift experience that feels considered rather than generic.\n\nIRIS will keep this in mind as the gift experience is prepared.';
   }
 
   Widget _giftRecipientHero(_CircumColors colors, String recipientName) {
