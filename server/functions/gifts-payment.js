@@ -52,15 +52,15 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       selectedCurrency,
     });
   }
-  if (split.walletContributionGbp > 0 && gift.walletDeducted !== true) {
+  if (split.walletContributionGbp > 0 && gift.walletDeducted !== true && !split.stripeRequired) {
     await rothLedger.applyWalletDebit({
       userId: context.auth.uid,
       userEmail: context.auth.token.email,
       amount: split.walletContributionGbp,
       type: "gift_payment",
       referenceId: giftDraftId,
-      notes: "Wallet applied to Gifts by Circum experience.",
-      transactionId: `wallet_gift_${giftDraftId}`,
+      notes: "Roth applied to Gifts by Circum experience.",
+      transactionId: `wallet_gifts_${giftDraftId}`,
       metadata: {
         orderTotalGbp: split.orderTotalGbp,
         remainingGbp: split.remainingGbp,
@@ -73,7 +73,7 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     remainingStripeAmountGbp: split.remainingGbp,
     paymentCurrency: split.customerPaymentCurrency,
     estimatedCustomerPaymentAmount: split.customerPaymentAmount,
-    walletDeducted: split.walletContributionGbp > 0,
+    walletDeducted: split.walletContributionGbp > 0 && !split.stripeRequired,
     updatedAt: FieldValue.serverTimestamp(),
   });
   if (!split.stripeRequired) {
@@ -106,6 +106,11 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       remainingStripeAmountGbp: 0,
     };
   }
+  const safeOccasion = `${gift.occasion || ""}`.trim().toLowerCase();
+  const safeRecipient = `${gift.recipientName || ""}`.trim().split(/\s+/)[0];
+  const giftDescription = safeOccasion && safeRecipient ?
+    `Curated ${safeOccasion} gift experience for ${safeRecipient}` :
+    "Gifts by Circum curated experience";
   let session;
   try {
     session = await stripe.checkout.sessions.create({
@@ -117,8 +122,8 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
           currency: split.customerPaymentCurrency,
           unit_amount: split.stripeAmountMinor,
           product_data: {
-            name: "Gifts by Circum experience",
-            description: `${gift.occasion || "Curated"} gift experience for ${gift.recipientName || "recipient"}`,
+            name: "Gifts by Circum Experience",
+            description: giftDescription,
           },
         },
       }],
@@ -126,8 +131,16 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       cancel_url: cancelUrl,
       metadata: {
         giftDraftId,
+        giftRequestId: giftDraftId,
         senderId: context.auth.uid,
+        senderEmail: gift.senderEmail || context.auth.token.email || "",
         type: "gift_experience",
+        paymentType: "gifts",
+        totalBudget: `${split.orderTotalGbp}`,
+        rothApplied: `${split.walletContributionGbp}`,
+        stripeAmount: `${split.remainingGbp}`,
+        occasion: gift.occasion || "",
+        walletApplied: split.walletContributionGbp > 0 ? "true" : "false",
         orderTotalGbp: `${split.orderTotalGbp}`,
         walletContributionGbp: `${split.walletContributionGbp}`,
         remainingGbp: `${split.remainingGbp}`,
@@ -143,7 +156,13 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     stripeCheckoutSessionId: session.id,
     updatedAt: FieldValue.serverTimestamp(),
   });
-  return {url: session.url, sessionId: session.id};
+  return {
+    url: session.url,
+    sessionId: session.id,
+    orderTotalGbp: split.orderTotalGbp,
+    walletContributionGbp: split.walletContributionGbp,
+    remainingStripeAmountGbp: split.remainingGbp,
+  };
 });
 
 exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
@@ -170,6 +189,24 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
   if (session.payment_status !== "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Payment has not completed.");
   }
+  const walletContribution = Number(gift.walletContributionGbp || 0);
+  if (walletContribution > 0 && gift.walletDeducted !== true) {
+    await rothLedger.applyWalletDebit({
+      userId: context.auth.uid,
+      userEmail: context.auth.token.email || gift.senderEmail,
+      amount: walletContribution,
+      type: "gift_payment",
+      referenceId: giftDraftId,
+      notes: "Roth applied to Gifts by Circum experience.",
+      transactionId: `wallet_gifts_${giftDraftId}`,
+      metadata: {
+        orderTotalGbp: gross,
+        remainingGbp: Number(gift.remainingStripeAmountGbp || 0),
+        service: "gifts",
+        stripeCheckoutSessionId: sessionId,
+      },
+    });
+  }
   await db.runTransaction(async (transaction) => {
     transaction.set(giftRef, {
       ...gift,
@@ -178,6 +215,7 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
       status: "submitted_for_review",
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: session.payment_intent,
+      walletDeducted: walletContribution > 0 || gift.walletDeducted === true,
       paidAt: FieldValue.serverTimestamp(),
       createdAt: gift.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

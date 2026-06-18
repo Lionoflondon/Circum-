@@ -283,7 +283,7 @@ exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, cont
         currency: "gbp",
         unit_amount: Math.round(amount * 100),
         product_data: {
-          name: "Roth Wallet top-up",
+          name: "Roth Wallet Top-Up",
           description: "Adds Roth balance to your Circum Wallet after payment succeeds.",
         },
       },
@@ -328,6 +328,31 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
 }
 
 exports.recordWalletTopUpFromStripeSession = recordWalletTopUpFromStripeSession;
+
+exports.applyCheckoutRoth = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in to use Roth.");
+  }
+  const amount = roundWalletMoney(data.amount);
+  const referenceId = `${data.referenceId || ""}`.trim();
+  const service = `${data.service || "delivery"}`.trim().toLowerCase();
+  if (amount <= 0 || !referenceId) {
+    throw new functions.https.HttpsError("invalid-argument", "Amount and reference are required.");
+  }
+  const type = service === "gifts" ? "gift_payment" :
+    service === "health_plus" ? "health_payment" :
+      "delivery_payment";
+  return applyWalletDebit({
+    userId: context.auth.uid,
+    userEmail: context.auth.token.email,
+    amount,
+    type,
+    referenceId,
+    notes: `Roth applied to ${service.replace("_", " ")} checkout.`,
+    transactionId: `wallet_${service}_${referenceId}`,
+    metadata: {service, source: "checkout_roth"},
+  });
+});
 
 exports.issueRothCredit = functions.https.onCall(async (data, context) => {
   requireRothAdmin(context);

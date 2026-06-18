@@ -140,14 +140,14 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       walletBalanceGbp: walletBalance,
       selectedCurrency: paymentCurrency || "gbp",
     });
-    if (walletUserId && split.walletContributionGbp > 0) {
+    if (walletUserId && split.walletContributionGbp > 0 && !split.stripeRequired) {
       await rothLedger.applyWalletDebit({
         userId: walletUserId,
         userEmail: walletUserEmail || null,
         amount: split.walletContributionGbp,
         type: "health_payment",
         referenceId: bookingId,
-        notes: "Wallet applied to Health+ checkout.",
+        notes: "Roth applied to Health+ checkout.",
         transactionId: `wallet_health_${bookingId}`,
         metadata: {
           orderTotalGbp: split.orderTotalGbp,
@@ -191,6 +191,18 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       successUrl: successUrl || "https://circum-app-2797c.web.app/?app=sender&health=success",
       cancelUrl: cancelUrl || "https://circum-app-2797c.web.app/?app=sender&health=cancelled",
     });
+    params.line_items[0].price_data.product_data.name = "Health+ Pickup";
+    params.line_items[0].price_data.product_data.description = "Circum Health+ prescription pickup";
+    params.metadata = {
+      ...params.metadata,
+      paymentType: "health_plus",
+      userId: walletUserId || "",
+      userEmail: walletUserEmail || email || "",
+      walletApplied: split.walletContributionGbp > 0 ? "true" : "false",
+      walletContributionGbp: `${split.walletContributionGbp}`,
+      orderTotalGbp: `${split.orderTotalGbp}`,
+      remainingGbp: `${split.remainingGbp}`,
+    };
 
     const session = await stripe.checkout.sessions.create(params);
     await getFirestore().collection("healthPlusPayments").doc(bookingId).set({

@@ -13051,6 +13051,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   int _senderProfileTab = 0;
   User? _senderUser;
   SenderProfile? _senderProfile;
+  double _senderRothBalance = 0;
   bool _legendCelebrationShowing = false;
   List<SenderDeliveryRecord> _senderDeliveries = const [];
   SenderDeliveryRecord? _selectedSenderDelivery;
@@ -13071,6 +13072,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _liveLocationSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _senderSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _senderRothWalletSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _driverProfileSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _driverPerformanceSub;
@@ -13421,6 +13424,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           senderEnteredWeightKg: _senderEnteredWeightKg,
           weightKg: _deliveryClassification.finalWeightKg,
           total: _quoteTotal,
+          rothAvailable: _senderRothBalance,
           checkoutState: _checkoutState,
           weightConfirmed: _hasConfirmedWeight,
           weightSource: _weightSourceText,
@@ -13514,6 +13518,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           message: _healthMessage,
           checkoutUrl: _healthCheckoutUrl,
           quote: _healthQuote,
+          rothAvailable: _senderRothBalance,
           pickups: _healthPickups,
           payments: _healthPayments,
           onBack: () => setState(() => _step = _SenderStep.dashboard),
@@ -14048,6 +14053,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _attachSender(User user) {
     _senderSub?.cancel();
+    _senderRothWalletSub?.cancel();
     setState(() {
       _senderUser = user;
       _senderEmail.text = user.email ?? _senderEmail.text;
@@ -14086,6 +14092,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }
     });
     _listenForDeliveryAdjustments(user.uid);
+    final walletId = (user.email ?? user.uid).trim().toLowerCase();
+    _senderRothWalletSub = FirebaseFirestore.instance
+        .collection('wallets')
+        .doc(walletId)
+        .snapshots()
+        .listen((snapshot) {
+      final data = snapshot.data() ?? const <String, dynamic>{};
+      final balance =
+          ((data['balance'] ?? data['rothCredit']) as num?)?.toDouble() ?? 0;
+      if (!mounted) return;
+      setState(() => _senderRothBalance = balance);
+    });
   }
 
   Future<void> _showLegendCelebration(SenderProfile profile) async {
@@ -14528,11 +14546,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _signOutSender() async {
     await FirebaseAuth.instance.signOut();
     await _senderSub?.cancel();
+    await _senderRothWalletSub?.cancel();
     await _deliveryAdjustmentSub?.cancel();
     if (!mounted) return;
     setState(() {
       _senderUser = null;
       _senderProfile = null;
+      _senderRothBalance = 0;
       _senderDeliveries = const [];
       _selectedSenderDelivery = null;
       _senderDeliveryLoadError = null;
@@ -15664,6 +15684,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final db = FirebaseFirestore.instance;
       final parcelPhotoData = await _uploadParcelPhoto(id);
       final request = _requestPayload(id, parcelPhotoData);
+      final paymentResult = await _collectDeliveryPayment(id, _quoteTotal);
+      request.addAll(paymentResult);
       _activeVanguardData = request['vanguardEnabled'] == true
           ? Map<String, dynamic>.from(request)
           : null;
@@ -15725,6 +15747,84 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'We could not save this delivery just now. Please try again.';
       });
     }
+  }
+
+  Future<Map<String, dynamic>> _collectDeliveryPayment(
+    String requestId,
+    double total,
+  ) async {
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) throw StateError('Sign in to pay for this delivery.');
+    final rothApplied = math.min(math.max(0, _senderRothBalance), total);
+    final cardRemaining = double.parse(
+      math.max(0, total - rothApplied).toStringAsFixed(2),
+    );
+    if (rothApplied >= total && total > 0) {
+      await FirebaseFunctions.instance.httpsCallable('applyCheckoutRoth').call({
+        'amount': rothApplied,
+        'referenceId': requestId,
+        'service': 'delivery',
+      });
+      return {
+        'paymentStatus': 'paid',
+        'paidByRoth': true,
+        'rothApplied': rothApplied,
+        'walletContributionGbp': rothApplied,
+        'cardRemaining': 0,
+        'stripeAmount': 0,
+      };
+    }
+    if (cardRemaining > 0) {
+      Stripe.publishableKey = Env.publishableLiveKey;
+      await Stripe.instance.applySettings();
+      final response = await http.post(
+        Uri.parse(
+          'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
+        ),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'currency': 'gbp',
+          'amount': (cardRemaining * 100).round(),
+          'pushToken': '',
+          'email': user.email,
+          'name': _senderName.text.trim(),
+          'userId': user.uid,
+          'saveCard': false,
+          'useWallet': false,
+          'referenceId': requestId,
+        }),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final clientSecret = '${data['clientSecret'] ?? ''}';
+      if (clientSecret.isEmpty || data['error'] != null) {
+        throw StateError('${data['error'] ?? 'Could not start card payment.'}');
+      }
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: clientSecret,
+          merchantDisplayName: 'Circum',
+          style: ThemeMode.dark,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+      if (rothApplied > 0) {
+        await FirebaseFunctions.instance
+            .httpsCallable('applyCheckoutRoth')
+            .call({
+          'amount': rothApplied,
+          'referenceId': requestId,
+          'service': 'delivery',
+        });
+      }
+    }
+    return {
+      'paymentStatus': 'paid',
+      'paidByRoth': cardRemaining <= 0,
+      'rothApplied': rothApplied,
+      'walletContributionGbp': rothApplied,
+      'cardRemaining': cardRemaining,
+      'stripeAmount': cardRemaining,
+    };
   }
 
   Future<void> _bookHealthPlus() async {
@@ -15952,7 +16052,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   : 'checkout_created',
         });
         _healthMessage = checkoutUrl == 'wallet:paid'
-            ? 'Your Health+ pickup is saved and paid with Wallet.'
+            ? 'Your Health+ pickup is saved and paid with Roth.'
             : checkoutUrl == null
                 ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
                 : 'Your Health+ pickup is saved. Payment is ready.';
@@ -19571,7 +19671,7 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
               child: _InputBox(
                 colors: colors,
                 controller: _giftCardCode,
-                hint: 'Redeem Roth Gift Card',
+                hint: 'Redeem Circum Gift Card',
               ),
             ),
             FilledButton.icon(
@@ -19611,6 +19711,17 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
       ],
     );
   }
+}
+
+Future<double> _fetchRothBalanceForUser(User? user) async {
+  if (user == null) return 0;
+  final walletId = (user.email ?? user.uid).trim().toLowerCase();
+  final snapshot = await FirebaseFirestore.instance
+      .collection('wallets')
+      .doc(walletId)
+      .get();
+  final data = snapshot.data() ?? const <String, dynamic>{};
+  return ((data['balance'] ?? data['rothCredit']) as num?)?.toDouble() ?? 0;
 }
 
 String _rothTransactionLabel(Map<String, dynamic> tx) {
@@ -20406,6 +20517,7 @@ class _HealthPlusStep extends StatelessWidget {
   final String? message;
   final String? checkoutUrl;
   final HealthPlusPriceBreakdown quote;
+  final double rothAvailable;
   final List<Map<String, dynamic>> pickups;
   final List<Map<String, dynamic>> payments;
   final VoidCallback onBack;
@@ -20446,6 +20558,7 @@ class _HealthPlusStep extends StatelessWidget {
     required this.message,
     required this.checkoutUrl,
     required this.quote,
+    required this.rothAvailable,
     required this.pickups,
     required this.payments,
     required this.onBack,
@@ -20713,6 +20826,14 @@ class _HealthPlusStep extends StatelessWidget {
                 value: '£${quote.total.toStringAsFixed(2)}',
                 strong: true,
               ),
+              const SizedBox(height: 10),
+              _CircumPaymentSummary(
+                colors: colors,
+                serviceName: 'Health+ Pickup',
+                totalLabel: 'Total',
+                total: quote.total,
+                rothAvailable: rothAvailable,
+              ),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: savePayment,
@@ -20767,7 +20888,13 @@ class _HealthPlusStep extends StatelessWidget {
             label: Text(
               submitting
                   ? 'Setting up Health+...'
-                  : 'Pay £${quote.total.toStringAsFixed(2)} securely',
+                  : math.max(
+                              0,
+                              quote.total -
+                                  math.min(quote.total, rothAvailable)) <=
+                          0
+                      ? 'Pay with Roth securely'
+                      : 'Pay £${math.max(0, quote.total - math.min(quote.total, rothAvailable)).toStringAsFixed(2)} securely',
             ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
@@ -22220,6 +22347,7 @@ class _PaymentStep extends StatelessWidget {
   final double? senderEnteredWeightKg;
   final double weightKg;
   final double total;
+  final double rothAvailable;
   final _CheckoutState checkoutState;
   final bool weightConfirmed;
   final String weightSource;
@@ -22245,6 +22373,7 @@ class _PaymentStep extends StatelessWidget {
     required this.senderEnteredWeightKg,
     required this.weightKg,
     required this.total,
+    required this.rothAvailable,
     required this.checkoutState,
     required this.weightConfirmed,
     required this.weightSource,
@@ -22455,28 +22584,15 @@ class _PaymentStep extends StatelessWidget {
                 strong: true,
               ),
               const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: colors.field,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.credit_card, color: colors.text),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Visa ending 4242',
-                        style: TextStyle(
-                          color: colors.text,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.check_circle, color: colors.success),
-                  ],
-                ),
+              _CircumPaymentSummary(
+                colors: colors,
+                serviceName: 'Circum Delivery',
+                totalLabel: 'Total',
+                total: total,
+                rothAvailable: rothAvailable,
+                ctaLabel: total <= rothAvailable && total > 0
+                    ? 'Pay with Roth & Broadcast'
+                    : 'Pay £${math.max(0, total - math.min(total, rothAvailable)).toStringAsFixed(2)} & Broadcast',
               ),
             ],
           ),
@@ -25477,6 +25593,107 @@ class _PriceLine extends StatelessWidget {
   }
 }
 
+class _CircumPaymentSummary extends StatelessWidget {
+  final _CircumColors colors;
+  final String serviceName;
+  final String totalLabel;
+  final double total;
+  final double rothAvailable;
+  final String? ctaLabel;
+
+  const _CircumPaymentSummary({
+    required this.colors,
+    required this.serviceName,
+    required this.totalLabel,
+    required this.total,
+    required this.rothAvailable,
+    this.ctaLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final available = math.max(0, rothAvailable);
+    final applied = math.min(total, available);
+    final remaining = math.max(0, total - applied);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined, color: colors.text),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  serviceName,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _PriceLine(
+            colors: colors,
+            label: totalLabel,
+            value: '£${total.toStringAsFixed(2)}',
+            strong: true,
+          ),
+          _PriceLine(
+            colors: colors,
+            label: 'Roth available',
+            value: '£${available.toStringAsFixed(2)}',
+          ),
+          _PriceLine(
+            colors: colors,
+            label: 'Roth Applied',
+            value: '£${applied.toStringAsFixed(2)}',
+            strong: applied > 0,
+          ),
+          _PriceLine(
+            colors: colors,
+            label: 'Card Remaining',
+            value: '£${remaining.toStringAsFixed(2)}',
+            strong: remaining > 0,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            remaining <= 0
+                ? 'Payment method: Roth only. No card payment required.'
+                : applied > 0
+                    ? 'Payment method: Roth first, then card for the remaining balance.'
+                    : 'Payment method: Card payment.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+          if (ctaLabel != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              ctaLabel!,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _BroadcastCard extends StatelessWidget {
   final _CircumColors colors;
 
@@ -27091,6 +27308,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           'Please select a verified address from the suggestions, or confirm the manual address.');
       return;
     }
+    final rothBalance = await _fetchRothBalanceForUser(user);
     final proceed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -27104,7 +27322,14 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                 'Contact: ${_recipientPhone.text.trim()} · ${_recipientEmail.text.trim()}'),
             Text('Delivery: ${_deliveryAddress.text.trim()}'),
             Text('Date: ${_adminDateText(_deliveryDate)} · $_timeWindow'),
-            Text('Gift budget: £${grossBudget!.toStringAsFixed(2)}'),
+            _CircumPaymentSummary(
+              colors: widget.colors,
+              serviceName: 'Gifts by Circum Experience',
+              totalLabel: 'Total Experience Budget',
+              total: grossBudget!,
+              rothAvailable: rothBalance,
+              ctaLabel: 'Gift This Experience',
+            ),
             if (_personalMessage.text.trim().isNotEmpty)
               Text('Message: ${_personalMessage.text.trim()}'),
             const SizedBox(height: 12),
@@ -27241,7 +27466,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       if (paymentData['walletPaidInFull'] == true) {
         if (!mounted) return;
         setState(() => _message =
-            'Your gift request has been submitted and paid with Wallet.');
+            'Your gift request has been submitted and paid with Roth.');
         return;
       }
       final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
@@ -27249,8 +27474,16 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         throw StateError(
             'Stripe Checkout could not be opened. Please try again.');
       }
-      setState(
-          () => _message = 'Complete payment to submit your gift request.');
+      final total = (paymentData['orderTotalGbp'] as num?)?.toDouble() ??
+          grossBudget ??
+          0;
+      final rothApplied =
+          (paymentData['walletContributionGbp'] as num?)?.toDouble() ?? 0;
+      final cardRemaining =
+          (paymentData['remainingStripeAmountGbp'] as num?)?.toDouble() ??
+              math.max(0, total - rothApplied);
+      setState(() => _message =
+          'Complete payment to submit your gift request. Total Experience Budget: £${total.toStringAsFixed(2)} · Roth Applied: £${rothApplied.toStringAsFixed(2)} · Card Payment: £${cardRemaining.toStringAsFixed(2)}');
       final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
       if (!opened)
         throw StateError(

@@ -53,6 +53,7 @@ exports.debitRothCredit = rothLedger.debitRothCredit;
 exports.redeemGiftCard = rothLedger.redeemGiftCard;
 exports.setWalletFrozen = rothLedger.setWalletFrozen;
 exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
+exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
@@ -128,7 +129,7 @@ const createPaymentIntentHandler = async (req, res) => {
         walletBalanceGbp: walletBalance,
         selectedCurrency: paymentCurrency || currency || "gbp",
       });
-      if (split.walletContributionGbp > 0) {
+      if (split.walletContributionGbp > 0 && !split.stripeRequired) {
         await rothLedger.applyWalletDebit({
           userId,
           userEmail: email,
@@ -169,6 +170,11 @@ const createPaymentIntentHandler = async (req, res) => {
         name: name,
         email: email,
         pushToken: pushToken,
+        paymentType: "delivery",
+        userId: userId || "",
+        userEmail: email || "",
+        requestId: referenceId || "",
+        walletApplied: split.walletContributionGbp > 0 ? "true" : "false",
         orderTotalGbp: `${split.orderTotalGbp}`,
         walletContributionGbp: `${split.walletContributionGbp}`,
         remainingGbp: `${split.remainingGbp}`,
@@ -276,6 +282,21 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     const metadata = sessionData.metadata;
     if (metadata && metadata.type === "wallet_top_up") {
       await rothLedger.recordWalletTopUpFromStripeSession(sessionData, event.id);
+    }
+    if (metadata && metadata.walletApplied === "true" && metadata.walletContributionGbp) {
+      const service = metadata.paymentType === "gifts" ? "gifts" :
+        metadata.feature === "health_plus" ? "health_plus" :
+          "delivery";
+      await rothLedger.applyWalletDebit({
+        userId: metadata.senderId || metadata.userId || metadata.uid || metadata.userEmail,
+        userEmail: metadata.senderEmail || metadata.userEmail || metadata.email,
+        amount: Number(metadata.walletContributionGbp || 0),
+        type: service === "gifts" ? "gift_payment" : service === "health_plus" ? "health_payment" : "delivery_payment",
+        referenceId: metadata.giftDraftId || metadata.bookingId || metadata.requestId || sessionData.id,
+        notes: `Roth applied to ${service.replace("_", " ")} checkout.`,
+        transactionId: `wallet_${service}_${metadata.giftDraftId || metadata.bookingId || metadata.requestId || sessionData.id}`,
+        metadata: {stripeEventId: event.id, service, stripeCheckoutSessionId: sessionData.id},
+      });
     }
 
     const messageObj = JSON.stringify({
