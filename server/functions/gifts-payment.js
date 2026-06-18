@@ -10,10 +10,39 @@ function requireAuth(context) {
   }
 }
 
+async function giftWalletBalanceForUser(db, context) {
+  const email = `${context.auth.token.email || ""}`.trim().toLowerCase();
+  const uid = context.auth.uid;
+  const candidates = [email, uid].filter(Boolean);
+  for (const id of candidates) {
+    const snap = await db.collection("wallets").doc(id).get();
+    if (snap.exists) {
+      const wallet = snap.data() || {};
+      return Number(wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance);
+    }
+  }
+  for (const [field, value] of [
+    ["normalizedEmail", email],
+    ["userEmail", email],
+    ["email", email],
+    ["uid", uid],
+    ["userId", uid],
+  ]) {
+    if (!value) continue;
+    const query = await db.collection("wallets").where(field, "==", value).limit(1).get();
+    if (!query.empty) {
+      const wallet = query.docs[0].data() || {};
+      return Number(wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance);
+    }
+  }
+  return 0;
+}
+
 exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
   requireAuth(context);
+  const db = getFirestore();
   const giftDraftId = String(data.giftDraftId || "");
-  const ref = getFirestore().collection("giftPaymentDrafts").doc(giftDraftId);
+  const ref = db.collection("giftPaymentDrafts").doc(giftDraftId);
   const snap = await ref.get();
   if (!snap.exists || snap.data().senderId !== context.auth.uid) {
     throw new functions.https.HttpsError("not-found", "Gift draft not found.");
@@ -41,10 +70,7 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     split.remainingGbp = storedRemaining;
     split.stripeRequired = split.remainingGbp > 0;
   } else {
-    const walletId = `${context.auth.token.email || context.auth.uid}`.trim().toLowerCase();
-    const walletSnap = await getFirestore().collection("wallets").doc(walletId).get();
-    const wallet = walletSnap.exists ? walletSnap.data() : {};
-    const walletBalance = Number(wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance);
+    const walletBalance = await giftWalletBalanceForUser(db, context);
     const selectedCurrency = gift.paymentCurrency || data.paymentCurrency || "gbp";
     split = calculateWalletCheckout({
       orderTotalGbp: gross,
@@ -77,7 +103,6 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     updatedAt: FieldValue.serverTimestamp(),
   });
   if (!split.stripeRequired) {
-    const db = getFirestore();
     const giftRef = db.collection("giftRequests").doc(giftDraftId);
     await db.runTransaction(async (transaction) => {
       const latest = await transaction.get(ref);
@@ -91,6 +116,12 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
         stripeCheckoutSessionId: null,
         stripePaymentIntentId: null,
         walletPaidInFull: true,
+        paymentMethod: "roth",
+        giftStoryEnabled: true,
+        giftStoryApproved: true,
+        giftStoryShareEnabled: true,
+        giftStoryCreatedAt: FieldValue.serverTimestamp(),
+        giftStoryUpdatedAt: FieldValue.serverTimestamp(),
         paidAt: FieldValue.serverTimestamp(),
         createdAt: gift.createdAt || FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -216,6 +247,12 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: session.payment_intent,
       walletDeducted: walletContribution > 0 || gift.walletDeducted === true,
+      paymentMethod: walletContribution > 0 && Number(gift.remainingStripeAmountGbp || 0) <= 0 ? "roth" : "stripe",
+      giftStoryEnabled: gift.giftStoryEnabled !== false,
+      giftStoryApproved: gift.giftStoryApproved !== false,
+      giftStoryShareEnabled: gift.giftStoryShareEnabled !== false,
+      giftStoryCreatedAt: gift.giftStoryCreatedAt || FieldValue.serverTimestamp(),
+      giftStoryUpdatedAt: FieldValue.serverTimestamp(),
       paidAt: FieldValue.serverTimestamp(),
       createdAt: gift.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

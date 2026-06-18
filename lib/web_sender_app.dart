@@ -29,6 +29,7 @@ import 'package:circum/app/gifts/gift_repository.dart';
 import 'package:circum/app/gifts/gifts_social_policy.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -2917,6 +2918,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool allowPublicPosting = item['allowPublicPosting'] == true;
     bool allowAnonymousPosting = item['allowAnonymousPosting'] == true;
     bool brandTagApproved = item['brandTagApproved'] == true;
+    bool giftStoryEnabled = item['giftStoryEnabled'] != false;
+    bool giftStoryApproved = item['giftStoryApproved'] != false;
+    bool giftStoryShareEnabled = item['giftStoryShareEnabled'] != false;
     Map<String, dynamic>? generatedRecommendation;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -3025,6 +3029,49 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       maxLines: 3,
                       decoration: const InputDecoration(
                           labelText: 'Procurement internal notes')),
+                  const SizedBox(height: 22),
+                  const Divider(),
+                  const Text('Gift Story',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  const Text(
+                      'Shown only after delivery is completed. Contents remain hidden before delivery.'),
+                  SwitchListTile(
+                    value: giftStoryEnabled,
+                    onChanged: (value) =>
+                        setDialogState(() => giftStoryEnabled = value),
+                    title: const Text('Enable Gift Story'),
+                  ),
+                  SwitchListTile(
+                    value: giftStoryApproved,
+                    onChanged: (value) =>
+                        setDialogState(() => giftStoryApproved = value),
+                    title: const Text('Story approved'),
+                  ),
+                  SwitchListTile(
+                    value: giftStoryShareEnabled,
+                    onChanged: (value) =>
+                        setDialogState(() => giftStoryShareEnabled = value),
+                    title: const Text('Allow story sharing'),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => _GiftStoryViewer(
+                            colors: widget.colors,
+                            gift: item,
+                            adminPreview: true,
+                            onClose: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.auto_stories_outlined),
+                      label: const Text('Preview Gift Story'),
+                    ),
+                  ),
                   if (isCampaignGift) ...[
                     const SizedBox(height: 22),
                     const Divider(),
@@ -3251,6 +3298,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   'procurementActualCost':
                       double.tryParse(procurementActualCost.text.trim()),
                   'procurementNotes': procurementNotes.text.trim(),
+                  'giftStoryEnabled': giftStoryEnabled,
+                  'giftStoryApproved': giftStoryApproved,
+                  'giftStoryShareEnabled': giftStoryShareEnabled,
+                  'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
                   if (generatedRecommendation != null) ...{
                     'irisGiftRecommendation': generatedRecommendation,
                     'irisSuggestion':
@@ -29215,6 +29266,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   bool _signingIn = false;
   String? _message;
   List<Map<String, dynamic>> _requests = const [];
+  Map<String, dynamic>? _activeGiftStory;
 
   static const _relationships = [
     'Partner',
@@ -29592,16 +29644,36 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     _senderEmail.text = user.email ?? '';
     _senderName.text = user.displayName ?? '';
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final senderSnapshot = await FirebaseFirestore.instance
           .collection('giftRequests')
           .where('senderId', isEqualTo: user.uid)
           .limit(20)
           .get();
+      final recipientSnapshot = await FirebaseFirestore.instance
+          .collection('giftRequests')
+          .where('recipientEmail', isEqualTo: (user.email ?? '').toLowerCase())
+          .limit(20)
+          .get();
+      final byId = <String, Map<String, dynamic>>{};
+      for (final doc in [...senderSnapshot.docs, ...recipientSnapshot.docs]) {
+        byId[doc.id] = <String, dynamic>{'id': doc.id, ...doc.data()};
+      }
       if (!mounted) return;
-      setState(() => _requests = snapshot.docs
-          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-          .toList());
+      setState(() => _requests = byId.values.toList());
       await _handleGiftPaymentReturn();
+      final storyId = Uri.base.queryParameters['giftStory'];
+      if (storyId != null && mounted) {
+        Map<String, dynamic>? story;
+        for (final request in _requests) {
+          if ('${request['id']}' == storyId) {
+            story = request;
+            break;
+          }
+        }
+        if (_giftStoryCanOpen(story)) {
+          setState(() => _activeGiftStory = story);
+        }
+      }
     } catch (error) {
       debugPrint('Gift request history error: $error');
     }
@@ -29827,6 +29899,14 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'paymentStatus': 'payment_pending',
         'giftStatus': 'draft',
         'status': 'draft',
+        'giftStoryEnabled': true,
+        'giftStoryApproved': true,
+        'giftStoryShareEnabled': true,
+        'giftStoryRevealViewedAt': null,
+        'senderMessageText': _personalMessage.text.trim(),
+        'senderMessageVideoUrl': '',
+        'interestTags': _interests.toList(),
+        'storyTheme': 'iridescent',
         'assignedAdminId': null,
         'irisSuggestion': 'Pending IRIS gift recommendation',
         'adminDecision': '',
@@ -29865,6 +29945,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           .call({'giftDraftId': doc.id});
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       if (paymentData['walletPaidInFull'] == true) {
+        await _loadAccountAndRequests();
         if (!mounted) return;
         setState(() => _message =
             'Your gift request has been submitted and paid with Roth.');
@@ -29908,6 +29989,14 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     final colors = widget.colors;
     final narrow = MediaQuery.sizeOf(context).width < 760;
     final signedIn = FirebaseAuth.instance.currentUser != null;
+    final activeStory = _activeGiftStory;
+    if (activeStory != null) {
+      return _GiftStoryViewer(
+        colors: colors,
+        gift: activeStory,
+        onClose: () => setState(() => _activeGiftStory = null),
+      );
+    }
     return Scaffold(
       backgroundColor: colors.background,
       body: SafeArea(
@@ -30461,6 +30550,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                       ],
                       if (_requests.isNotEmpty) ...[
                         const SizedBox(height: 22),
+                        _giftMemoryVault(colors),
+                        const SizedBox(height: 22),
                         Text('Your gift requests',
                             style: TextStyle(
                                 color: colors.text,
@@ -30485,8 +30576,20 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                   '${request['status']}',
                                 ),
                               ),
-                              trailing: Text(
-                                '£${((request['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                              trailing: Wrap(
+                                spacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    '£${((request['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                                  ),
+                                  if (_giftStoryCanOpen(request))
+                                    TextButton(
+                                      onPressed: () => setState(
+                                          () => _activeGiftStory = request),
+                                      child: const Text('View Gift Story'),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
@@ -30497,6 +30600,75 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  bool _giftStoryCanOpen(Map<String, dynamic>? request) {
+    if (request == null) return false;
+    final status =
+        '${request['giftStatus'] ?? request['status']}'.toLowerCase();
+    final delivered = status == 'delivered' || status == 'completed';
+    return delivered &&
+        request['giftStoryEnabled'] != false &&
+        request['giftStoryApproved'] != false;
+  }
+
+  Widget _giftMemoryVault(_CircumColors colors) {
+    final completedStories = _requests.where(_giftStoryCanOpen).toList();
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: LinearGradient(colors: [
+          colors.adminAccent.withValues(alpha: 0.18),
+          colors.adminGlow.withValues(alpha: 0.10),
+          colors.field.withValues(alpha: 0.62),
+        ]),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.auto_stories_outlined, color: colors.adminAccent),
+            const SizedBox(width: 10),
+            Text('Gift Memories',
+                style: TextStyle(
+                    color: colors.text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900)),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            completedStories.isEmpty
+                ? 'Completed Gift Stories will appear here after delivery.'
+                : 'A Memory Vault for completed Gifts by Circum experiences.',
+            style: TextStyle(color: colors.mutedText, height: 1.35),
+          ),
+          if (completedStories.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...completedStories.map(
+              (story) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.card_giftcard, color: colors.adminAccent),
+                title: Text(
+                  '${story['occasion'] ?? 'Gift'} for ${story['recipientName'] ?? 'Recipient'}',
+                  style: TextStyle(
+                      color: colors.text, fontWeight: FontWeight.w900),
+                ),
+                subtitle: Text(
+                  '${_adminDateText(story['deliveryDate'])} · ${story['senderRevealMode'] == 'anonymous_forever' ? 'Anonymous sender' : (story['senderName'] ?? 'Circum sender')}',
+                  style: TextStyle(color: colors.mutedText),
+                ),
+                trailing: TextButton(
+                  onPressed: () => setState(() => _activeGiftStory = story),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -32130,6 +32302,418 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       ),
     );
   }
+}
+
+class _GiftStoryViewer extends StatefulWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> gift;
+  final VoidCallback onClose;
+  final bool adminPreview;
+
+  const _GiftStoryViewer({
+    required this.colors,
+    required this.gift,
+    required this.onClose,
+    this.adminPreview = false,
+  });
+
+  @override
+  State<_GiftStoryViewer> createState() => _GiftStoryViewerState();
+}
+
+class _GiftStoryViewerState extends State<_GiftStoryViewer> {
+  int _chapter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _markRevealViewed();
+  }
+
+  Future<void> _markRevealViewed() async {
+    if (widget.adminPreview) return;
+    final id = '${widget.gift['id'] ?? ''}';
+    if (id.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance.collection('giftRequests').doc(id).set({
+        'giftStoryRevealViewedAt': FieldValue.serverTimestamp(),
+        'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (error) {
+      debugPrint('Gift Story viewed update failed: $error');
+    }
+  }
+
+  List<_GiftStoryChapter> get _chapters {
+    final gift = widget.gift;
+    final interests = _giftList(gift['interestTags']).isNotEmpty
+        ? _giftList(gift['interestTags'])
+        : _giftList(gift['interests']);
+    final revealItems = _giftRevealItems(gift);
+    final senderMessage =
+        '${gift['senderMessageText'] ?? gift['personalMessage'] ?? ''}'.trim();
+    return [
+      _GiftStoryChapter(
+        icon: Icons.card_giftcard,
+        title: 'Someone wanted to make today special.',
+        body: 'A Gifts by Circum experience has arrived.',
+        chips: const ['Gifted by Circum'],
+      ),
+      _GiftStoryChapter(
+        icon: Icons.celebration,
+        title: '${gift['occasion'] ?? 'A special moment'}',
+        body:
+            '${gift['recipientName'] ?? 'Recipient'} · ${_adminDateText(gift['deliveryDate'])}',
+        chips: [
+          'Thoughtful gifting',
+          '${gift['deliveryTimeWindow'] ?? 'Delivered'}'
+        ],
+      ),
+      _GiftStoryChapter(
+        icon: Icons.auto_awesome,
+        title: 'Why this was chosen',
+        body: _giftStoryWhyText(gift, interests),
+        chips: interests.take(6).toList(),
+      ),
+      _GiftStoryChapter(
+        icon: Icons.diamond_outlined,
+        title: 'The reveal',
+        body: revealItems.length == 1
+            ? revealItems.first
+            : 'Each part of the experience was prepared to feel personal, thoughtful and memorable.',
+        chips: revealItems.take(5).toList(),
+      ),
+      _GiftStoryChapter(
+        icon: Icons.message_outlined,
+        title: 'Sender message',
+        body: senderMessage.isEmpty
+            ? 'This gift was designed around what makes them smile.'
+            : senderMessage,
+        chips: const ['Personal moment'],
+      ),
+      const _GiftStoryChapter(
+        icon: Icons.wallet_giftcard,
+        title: 'Circum Gift Card',
+        body:
+            'If a physical Circum Gift Card was included, it can be redeemed through a Circum account.',
+        chips: ['Redeem through Circum'],
+      ),
+      const _GiftStoryChapter(
+        icon: Icons.ios_share,
+        title: 'Gifted by Circum',
+        body: 'Thoughtful gifting, delivered by Circum.',
+        chips: ['Share My Gift Story'],
+        finalChapter: true,
+      ),
+    ];
+  }
+
+  static List<String> _giftList(dynamic value) {
+    if (value is Iterable) {
+      return value
+          .map((item) => '$item'.trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  static List<String> _giftRevealItems(Map<String, dynamic> gift) {
+    final raw =
+        '${gift['giftItemsSummary'] ?? gift['procurementItemTitle'] ?? gift['manualGiftPlan'] ?? ''}';
+    final items = raw
+        .split(RegExp(r'[\n,;]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .take(6)
+        .toList();
+    return items.isEmpty
+        ? const ['A thoughtful surprise prepared by Circum']
+        : items;
+  }
+
+  static String _giftStoryWhyText(
+      Map<String, dynamic> gift, List<String> interests) {
+    final focus =
+        interests.isEmpty ? 'their story' : interests.take(3).join(', ');
+    return 'This gift was designed around what makes them smile.\n\nIRIS and the Gifts Team considered $focus, the occasion, and the details shared before preparing the experience.';
+  }
+
+  void _next() {
+    setState(() => _chapter = math.min(_chapter + 1, _chapters.length - 1));
+  }
+
+  void _previous() {
+    setState(() => _chapter = math.max(_chapter - 1, 0));
+  }
+
+  String get _storyLink {
+    final id = '${widget.gift['id'] ?? ''}';
+    return 'https://circumuk.com/?app=gifts&giftStory=$id';
+  }
+
+  Future<void> _copyStoryLink() async {
+    await Clipboard.setData(ClipboardData(text: _storyLink));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Gift Story link copied.')),
+    );
+  }
+
+  Future<void> _shareStory() async {
+    final subject = Uri.encodeComponent('Gifted by Circum');
+    final body = Uri.encodeComponent(
+        'Thoughtful gifting, delivered by Circum.\n\n$_storyLink');
+    final opened =
+        await launchUrl(Uri.parse('mailto:?subject=$subject&body=$body'));
+    if (!opened) await _copyStoryLink();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final chapter = _chapters[_chapter];
+    return Scaffold(
+      backgroundColor: const Color(0xff050914),
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            _next();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            _previous();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.escape) {
+            widget.onClose();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: GestureDetector(
+          onTapUp: (details) {
+            final width = MediaQuery.sizeOf(context).width;
+            details.localPosition.dx < width * 0.35 ? _previous() : _next();
+          },
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity < -120) _next();
+            if (velocity > 120) _previous();
+          },
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment.topLeft,
+                      radius: 1.25,
+                      colors: [
+                        colors.adminAccent.withValues(alpha: 0.42),
+                        colors.adminGlow.withValues(alpha: 0.22),
+                        const Color(0xff050914),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: List.generate(
+                                _chapters.length,
+                                (index) => Expanded(
+                                  child: Container(
+                                    height: 4,
+                                    margin: const EdgeInsets.only(right: 5),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(999),
+                                      color: index <= _chapter
+                                          ? Colors.white
+                                          : Colors.white
+                                              .withValues(alpha: 0.22),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Close Gift Story',
+                            onPressed: widget.onClose,
+                            icon: const Icon(Icons.close, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Expanded(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 560),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              child: Container(
+                                key: ValueKey(_chapter),
+                                padding: const EdgeInsets.all(28),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(34),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withValues(alpha: 0.16),
+                                      colors.adminAccent
+                                          .withValues(alpha: 0.22),
+                                      colors.adminGlow.withValues(alpha: 0.16),
+                                      Colors.black.withValues(alpha: 0.34),
+                                    ],
+                                  ),
+                                  border: Border.all(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.20)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colors.adminGlow
+                                          .withValues(alpha: 0.32),
+                                      blurRadius: 54,
+                                      offset: const Offset(0, 24),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(chapter.icon,
+                                        color: Colors.white, size: 54),
+                                    const SizedBox(height: 26),
+                                    Text(
+                                      chapter.title,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 38,
+                                        height: 1.02,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 18),
+                                    Text(
+                                      chapter.body,
+                                      style: TextStyle(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.88),
+                                        fontSize: 18,
+                                        height: 1.45,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    if (chapter.chips.isNotEmpty) ...[
+                                      const SizedBox(height: 24),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: chapter.chips
+                                            .map((chip) => Chip(
+                                                  label: Text(chip),
+                                                  backgroundColor: Colors.white
+                                                      .withValues(alpha: 0.14),
+                                                  labelStyle: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w800),
+                                                  side: BorderSide(
+                                                      color: Colors.white
+                                                          .withValues(
+                                                              alpha: 0.16)),
+                                                ))
+                                            .toList(),
+                                      ),
+                                    ],
+                                    if (chapter.finalChapter) ...[
+                                      const SizedBox(height: 28),
+                                      FilledButton.icon(
+                                        onPressed: widget.gift[
+                                                    'giftStoryShareEnabled'] ==
+                                                false
+                                            ? null
+                                            : _shareStory,
+                                        icon: const Icon(Icons.ios_share),
+                                        label:
+                                            const Text('Share My Gift Story'),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      OutlinedButton.icon(
+                                        onPressed: _copyStoryLink,
+                                        icon: const Icon(Icons.link),
+                                        label: const Text('Copy Link'),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      OutlinedButton.icon(
+                                        onPressed: () {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                            content: Text(
+                                                'Download Story video rendering is coming soon.'),
+                                          ));
+                                        },
+                                        icon: const Icon(Icons.download),
+                                        label: const Text('Download Story'),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Semantics(
+                        label:
+                            'Gift Story chapter ${_chapter + 1} of ${_chapters.length}. Tap right for next or left for previous.',
+                        child: Text(
+                          'Tap or swipe to move through your Gift Story.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.70),
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftStoryChapter {
+  final IconData icon;
+  final String title;
+  final String body;
+  final List<String> chips;
+  final bool finalChapter;
+
+  const _GiftStoryChapter({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.chips = const [],
+    this.finalChapter = false,
+  });
 }
 
 class _GiftsComingSoonPage extends StatefulWidget {

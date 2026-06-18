@@ -272,8 +272,20 @@ service cloud.firestore {
     match /giftRequests/{giftRequestId} {
       allow create: if isAdmin();
       allow read: if isAdmin() ||
-        (signedIn() && resource.data.senderId == request.auth.uid);
-      allow update: if isAdmin();
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() &&
+          resource.data.recipientEmail is string &&
+          resource.data.recipientEmail.lower() == normalizedAuthEmail() &&
+          resource.data.giftStoryEnabled != false &&
+          resource.data.giftStoryApproved != false &&
+          (resource.data.status in ['delivered', 'completed'] ||
+            resource.data.giftStatus in ['delivered', 'completed']));
+      allow update: if isAdmin() ||
+        (signedIn() &&
+          resource.data.recipientEmail is string &&
+          resource.data.recipientEmail.lower() == normalizedAuthEmail() &&
+          request.resource.data.diff(resource.data).changedKeys()
+            .hasOnly(['giftStoryRevealViewedAt', 'giftStoryUpdatedAt']));
       allow delete: if hasRole('super_admin');
     }
 
