@@ -6372,6 +6372,37 @@ String _displayStatusLabel(String status) {
       .join(' ');
 }
 
+String _customerDeliveryStatusLabel(String status) {
+  final normalized = status.trim().toLowerCase();
+  if (normalized == 'pending' || normalized == 'requested') {
+    return 'Finding a rider';
+  }
+  if (normalized == 'accepted' ||
+      normalized == 'rider_assigned' ||
+      normalized == 'assigned') {
+    return 'Rider assigned';
+  }
+  if (normalized == 'en_route_pickup' || normalized == 'en_route_to_pickup') {
+    return 'Rider travelling to pickup';
+  }
+  if (normalized == 'collected' || normalized == 'picked_up') {
+    return 'Parcel collected';
+  }
+  if (normalized == 'in_transit') return 'In transit';
+  if (normalized == 'arriving') return 'Rider arriving';
+  if (normalized == 'completed' ||
+      normalized == 'complete' ||
+      normalized == 'delivered') {
+    return 'Delivered';
+  }
+  if (normalized == 'cancelled' ||
+      normalized == 'canceled' ||
+      normalized == 'cancelled_by_sender') {
+    return 'Cancelled';
+  }
+  return _displayStatusLabel(status);
+}
+
 String _adminDateText(dynamic value) {
   DateTime? date;
   if (value is Timestamp) date = value.toDate();
@@ -17565,6 +17596,7 @@ class _DesktopPortalLayout extends StatelessWidget {
     }
     final status = _trackingStatuses[
         statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
+    final statusLabel = status.title;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -17623,128 +17655,29 @@ class _DesktopPortalLayout extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 20),
-                  _GlassPanel(
+                  _PremiumDeliveryMilestoneCard(
                     colors: colors,
-                    child: Row(
-                      children: [
-                        Icon(Icons.flag_circle, color: colors.text),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                status.title,
-                                style: TextStyle(
-                                  color: colors.text,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                status.body,
-                                style: TextStyle(
-                                  color: colors.mutedText,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    label: statusLabel,
+                    body: status.body,
+                    icon: Icons.flag_circle,
+                    active: statusIndex < 3,
+                    completed: statusLabel == 'Delivered',
                   ),
                   const SizedBox(height: 18),
-                  _GlassPanel(
+                  _PremiumRouteSummaryCard(
                     colors: colors,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _RouteLine(
-                          colors: colors,
-                          icon: Icons.radio_button_checked,
-                          label: 'Pickup',
-                          value: pickup.isEmpty ? 'Pickup location' : pickup,
-                          iconColor: const Color(0xff2563eb),
-                        ),
-                        const SizedBox(height: 14),
-                        _RouteLine(
-                          colors: colors,
-                          icon: Icons.location_on,
-                          label: 'Drop-off',
-                          value:
-                              dropoff.isEmpty ? 'Drop-off location' : dropoff,
-                          iconColor: const Color(0xff22c55e),
-                        ),
-                      ],
-                    ),
+                    pickup: pickup.isEmpty ? 'Pickup location' : pickup,
+                    dropoff: dropoff.isEmpty ? 'Drop-off location' : dropoff,
                   ),
                   const SizedBox(height: 18),
-                  _GlassPanel(
+                  _PremiumPriceBreakdownCard(
                     colors: colors,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Price breakdown',
-                          style: TextStyle(
-                            color: colors.text,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _PriceLine(
-                          colors: colors,
-                          label: 'Base fare',
-                          value: '£${breakdown.baseFare.toStringAsFixed(2)}',
-                        ),
-                        _PriceLine(
-                          colors: colors,
-                          label: 'Distance fare',
-                          value:
-                              '£${breakdown.distanceFare.toStringAsFixed(2)}',
-                        ),
-                        _PriceLine(
-                          colors: colors,
-                          label:
-                              '${breakdown.weightCategory} (${_formatWeight(weightKg)} kg)',
-                          value:
-                              '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
-                        ),
-                        _PriceLine(
-                          colors: colors,
-                          label: '${vehicle.name} vehicle',
-                          value:
-                              '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
-                        ),
-                        if (breakdown.heavyHandlingSurcharge > 0)
-                          _PriceLine(
-                            colors: colors,
-                            label: 'Heavy Handling Surcharge',
-                            value:
-                                '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
-                          ),
-                        if (breakdown.specialConditions > 0)
-                          _PriceLine(
-                            colors: colors,
-                            label: speed == 'Express'
-                                ? 'Express service'
-                                : 'Special conditions',
-                            value:
-                                '£${breakdown.specialConditions.toStringAsFixed(2)}',
-                          ),
-                        Divider(color: colors.border, height: 24),
-                        _PriceLine(
-                          colors: colors,
-                          label: 'Total',
-                          value: '£${breakdown.total.toStringAsFixed(2)}',
-                          strong: true,
-                        ),
-                      ],
-                    ),
+                    breakdown: breakdown,
+                    weightKg: weightKg,
+                    vehicle: vehicle,
+                    speed: speed,
+                    weightLabel:
+                        '${breakdown.weightCategory} (${_formatWeight(weightKg)} kg)',
                   ),
                   const SizedBox(height: 18),
                   _FirebaseStatusBanner(
@@ -17754,36 +17687,13 @@ class _DesktopPortalLayout extends StatelessWidget {
                     checkoutState: checkoutState,
                   ),
                   const SizedBox(height: 18),
-                  _GlassPanel(
+                  _PremiumDeliveryMilestoneCard(
                     colors: colors,
-                    child: Row(
-                      children: [
-                        Icon(Icons.radar, color: colors.text),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                status.title,
-                                style: TextStyle(
-                                  color: colors.text,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text(
-                                status.body,
-                                style: TextStyle(
-                                  color: colors.mutedText,
-                                  height: 1.3,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    label: statusLabel,
+                    body: status.body,
+                    icon: Icons.radar,
+                    active: statusIndex < 3,
+                    completed: statusLabel == 'Delivered',
                   ),
                 ],
               ),
@@ -17912,6 +17822,7 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
         ? null
         : _jobReceivedTextFromDate(delivery.createdAt);
     final hasDriver = delivery.assignedDriverName.trim().isNotEmpty;
+    final statusLabel = _customerDeliveryStatusLabel(delivery.status);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -17929,7 +17840,7 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
             ),
             _StatusPill(
               colors: colors,
-              label: _displayStatusLabel(delivery.status),
+              label: statusLabel,
             ),
           ],
         ),
@@ -17952,56 +17863,23 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 20),
-        _GlassPanel(
+        _PremiumRouteSummaryCard(
           colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _RouteLine(
-                colors: colors,
-                icon: Icons.radio_button_checked,
-                label: 'Pickup',
-                value: delivery.pickupAddress,
-                iconColor: const Color(0xff2563eb),
-              ),
-              const SizedBox(height: 14),
-              _RouteLine(
-                colors: colors,
-                icon: Icons.location_on,
-                label: 'Drop-off',
-                value: delivery.dropoffAddress,
-                iconColor: const Color(0xff22c55e),
-              ),
-            ],
-          ),
+          pickup: delivery.pickupAddress,
+          dropoff: delivery.dropoffAddress,
         ),
         const SizedBox(height: 18),
-        _GlassPanel(
+        _PremiumSinglePriceCard(
           colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Price'),
-              const SizedBox(height: 8),
-              _PriceLine(
-                colors: colors,
-                label: 'Final price',
-                value: delivery.pricePaid > 0
-                    ? '£${delivery.pricePaid.toStringAsFixed(2)}'
-                    : 'Price not confirmed',
-                strong: true,
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Payment',
-                value: delivery.paymentStatus,
-              ),
-            ],
-          ),
+          total: delivery.pricePaid > 0
+              ? '£${delivery.pricePaid.toStringAsFixed(2)}'
+              : 'Price not confirmed',
+          paymentStatus: delivery.paymentStatus,
         ),
         const SizedBox(height: 18),
-        _GlassPanel(
+        _LuxuryGlassSurface(
           colors: colors,
+          glow: hasDriver ? const Color(0xff22c55e) : colors.adminAccent,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -18059,16 +17937,30 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final completed = label.toLowerCase().contains('delivered');
+    final glow = completed ? const Color(0xff22c55e) : const Color(0xff38bdf8);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.text,
         borderRadius: BorderRadius.circular(999),
+        gradient: LinearGradient(
+          colors: [
+            glow.withValues(alpha: 0.30),
+            colors.adminGlow.withValues(alpha: 0.20),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: glow.withValues(alpha: 0.20),
+            blurRadius: 22,
+          ),
+        ],
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: colors.inverseText,
+          color: colors.text,
           fontSize: 12,
           fontWeight: FontWeight.w900,
         ),
@@ -18109,55 +18001,6 @@ class _StepBadge extends StatelessWidget {
           fontWeight: FontWeight.w900,
         ),
       ),
-    );
-  }
-}
-
-class _RouteLine extends StatelessWidget {
-  final _CircumColors colors;
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color iconColor;
-
-  const _RouteLine({
-    required this.colors,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: iconColor, size: 20),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label.toUpperCase(),
-                style: TextStyle(
-                  color: colors.mutedText,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Text(
-                value,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
@@ -19174,6 +19017,49 @@ class _SenderProfileStep extends StatelessWidget {
     );
   }
 
+  bool _isVerifiedAccount(SenderProfileSummary summary) {
+    final status = (profile?.verificationStatus ?? '').trim().toLowerCase();
+    return user?.emailVerified == true ||
+        status == 'verified' ||
+        status == 'approved' ||
+        summary.completedDeliveries > 0;
+  }
+
+  bool _isCompletedProfileDelivery(SenderDeliveryRecord delivery) {
+    final status = delivery.status.trim().toLowerCase();
+    return status == 'completed' ||
+        status == 'complete' ||
+        status == 'delivered';
+  }
+
+  bool _isCancelledProfileDelivery(SenderDeliveryRecord delivery) {
+    final status = delivery.status.trim().toLowerCase();
+    return status == 'cancelled' ||
+        status == 'canceled' ||
+        status == 'cancelled_by_sender';
+  }
+
+  SenderDeliveryRecord? _displayedProfileDelivery() {
+    final activeDeliveries = deliveries
+        .where(
+          (delivery) =>
+              !_isCompletedProfileDelivery(delivery) &&
+              !_isCancelledProfileDelivery(delivery),
+        )
+        .toList()
+      ..sort((a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    if (activeDeliveries.isNotEmpty) return activeDeliveries.first;
+
+    final completedDeliveries = deliveries
+        .where(_isCompletedProfileDelivery)
+        .toList()
+      ..sort((a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    if (completedDeliveries.isNotEmpty) return completedDeliveries.first;
+    return null;
+  }
+
   Widget _profileNavigation(List<String> tabs, {required bool vertical}) {
     final items = List.generate(tabs.length, (index) {
       final selected = tabIndex == index;
@@ -19293,11 +19179,8 @@ class _SenderProfileStep extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _GlassMiniChip(
-                          colors: colors,
-                          label:
-                              '${profile?.verificationStatus ?? 'unverified'} account',
-                        ),
+                        if (_isVerifiedAccount(summary))
+                          _VerifiedAccountBadge(colors: colors),
                         if (profile?.isLegend == true &&
                             profile?.legendNumber != null)
                           _GlassMiniChip(
@@ -19349,8 +19232,69 @@ class _SenderProfileStep extends StatelessWidget {
   }
 
   Widget _profileRightRail(SenderProfileSummary summary) {
-    final latestDelivery =
-        selectedDelivery ?? (deliveries.isEmpty ? null : deliveries.first);
+    final displayedDelivery = selectedDelivery ?? _displayedProfileDelivery();
+    final verifiedLabel =
+        _isVerifiedAccount(summary) ? 'Verified Account' : 'Active account';
+    if (displayedDelivery == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _PremiumGlassPanel(
+            colors: colors,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Account Pulse'),
+                const SizedBox(height: 18),
+                _GlassMiniChip(colors: colors, label: summary.loyaltyLevel),
+                const SizedBox(height: 18),
+                Text(
+                  'Your sender profile, Roth balance, saved places, support history, and delivery record live here.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _SettingsLine(
+                  colors: colors,
+                  label: 'Profile',
+                  value: verifiedLabel,
+                ),
+                _SettingsLine(
+                  colors: colors,
+                  label: 'Roth',
+                  value: '£${rothBalance.toStringAsFixed(2)}',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
+          _PremiumGlassPanel(
+            colors: colors,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Delivery Status'),
+                const SizedBox(height: 16),
+                _PremiumDeliveryMilestoneCard(
+                  colors: colors,
+                  label: 'No deliveries yet',
+                  body:
+                      'Send a parcel with Circum and your delivery status will appear here.',
+                  icon: Icons.local_shipping_outlined,
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    final statusLabel = _deliveryStatusChipLabel(displayedDelivery.status);
+    final completed = _isCompletedProfileDelivery(displayedDelivery);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -19376,7 +19320,7 @@ class _SenderProfileStep extends StatelessWidget {
               _SettingsLine(
                 colors: colors,
                 label: 'Profile',
-                value: profile?.verificationStatus ?? 'unverified',
+                value: verifiedLabel,
               ),
               _SettingsLine(
                 colors: colors,
@@ -19393,29 +19337,35 @@ class _SenderProfileStep extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(colors: colors, title: 'Dashboard Summary'),
+              _SectionTitle(colors: colors, title: 'Delivery Status'),
               const SizedBox(height: 18),
-              _SettingsLine(
+              _PremiumDeliveryMilestoneCard(
                 colors: colors,
-                label: 'Completed',
-                value: '${summary.completedDeliveries}',
+                label: completed ? '✓ Delivered' : statusLabel,
+                body: completed
+                    ? 'Your delivery has been completed successfully.'
+                    : 'Your selected delivery is currently $statusLabel.',
+                icon: completed
+                    ? Icons.check_circle
+                    : Icons.local_shipping_outlined,
+                active: !completed,
+                completed: completed,
               ),
-              _SettingsLine(
+              if (!completed) ...[
+                const SizedBox(height: 16),
+                _PremiumRouteSummaryCard(
+                  colors: colors,
+                  pickup: displayedDelivery.pickupAddress,
+                  dropoff: displayedDelivery.dropoffAddress,
+                ),
+              ],
+              const SizedBox(height: 16),
+              _PremiumSinglePriceCard(
                 colors: colors,
-                label: 'Parcels',
-                value: '${summary.totalDeliveries}',
-              ),
-              _SettingsLine(
-                colors: colors,
-                label: 'Spend',
-                value: '£${summary.lifetimeValue.toStringAsFixed(2)}',
-              ),
-              _SettingsLine(
-                colors: colors,
-                label: 'Latest',
-                value: latestDelivery == null
-                    ? 'No deliveries yet'
-                    : _deliveryStatusChipLabel(latestDelivery.status),
+                total: displayedDelivery.pricePaid > 0
+                    ? '£${displayedDelivery.pricePaid.toStringAsFixed(2)}'
+                    : 'Price not confirmed',
+                paymentStatus: displayedDelivery.paymentStatus,
               ),
             ],
           ),
@@ -19578,19 +19528,7 @@ class _SenderProfileStep extends StatelessWidget {
   }
 
   String _deliveryStatusChipLabel(String status) {
-    final normalized = status.toLowerCase();
-    if (normalized.contains('picked') || normalized.contains('collected')) {
-      return 'Picked Up';
-    }
-    if (normalized.contains('delivered') || normalized.contains('completed')) {
-      return 'Delivered';
-    }
-    if (normalized.contains('scheduled')) return 'Scheduled';
-    if (normalized.contains('transit')) return 'In Transit';
-    if (normalized.contains('finding') || normalized.contains('pending')) {
-      return 'Finding Rider';
-    }
-    return _titleCase(status.replaceAll('_', ' '));
+    return _customerDeliveryStatusLabel(status);
   }
 
   Widget _addressesTab() {
@@ -19831,7 +19769,8 @@ class _SenderProfileStep extends StatelessWidget {
             _SettingsLine(
               colors: colors,
               label: 'Account status',
-              value: profile?.verificationStatus ?? 'unverified',
+              value:
+                  _isVerifiedAccount(summary) ? 'Verified Account' : 'Active',
             ),
           ],
         ),
@@ -20126,6 +20065,483 @@ class _GlassMiniChip extends StatelessWidget {
           color: colors.text,
           fontSize: 12,
           fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _VerifiedAccountBadge extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _VerifiedAccountBadge({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xff22c55e).withValues(alpha: 0.34),
+            const Color(0xff14b8a6).withValues(alpha: 0.22),
+          ],
+        ),
+        border:
+            Border.all(color: const Color(0xff86efac).withValues(alpha: 0.44)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff22c55e).withValues(alpha: 0.24),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle, color: const Color(0xffbbf7d0), size: 16),
+          const SizedBox(width: 7),
+          Text(
+            'Verified Account',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumDeliveryMilestoneCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String body;
+  final IconData icon;
+  final bool active;
+  final bool completed;
+
+  const _PremiumDeliveryMilestoneCard({
+    required this.colors,
+    required this.label,
+    required this.body,
+    required this.icon,
+    this.active = false,
+    this.completed = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final glow = completed
+        ? const Color(0xff22c55e)
+        : active
+            ? const Color(0xff38bdf8)
+            : colors.adminGlow;
+    return _LuxuryGlassSurface(
+      colors: colors,
+      padding: const EdgeInsets.all(20),
+      glow: glow,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  glow.withValues(alpha: 0.46),
+                  glow.withValues(alpha: 0.12),
+                ],
+              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.26)),
+              boxShadow: [
+                BoxShadow(
+                  color: glow.withValues(alpha: active ? 0.34 : 0.20),
+                  blurRadius: active ? 28 : 18,
+                ),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 23),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: LinearGradient(
+                      colors: [
+                        glow.withValues(alpha: 0.28),
+                        colors.adminAccent.withValues(alpha: 0.20),
+                      ],
+                    ),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: glow.withValues(alpha: active ? 0.24 : 0.12),
+                        blurRadius: 22,
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  body,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.42,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumRouteSummaryCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String pickup;
+  final String dropoff;
+
+  const _PremiumRouteSummaryCard({
+    required this.colors,
+    required this.pickup,
+    required this.dropoff,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _LuxuryGlassSurface(
+      colors: colors,
+      padding: const EdgeInsets.all(20),
+      glow: colors.adminAccent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Route',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _PremiumRouteStop(
+            colors: colors,
+            label: 'Pickup',
+            value: pickup,
+            iconColor: const Color(0xff38bdf8),
+            showConnector: true,
+          ),
+          _PremiumRouteStop(
+            colors: colors,
+            label: 'Drop-off',
+            value: dropoff,
+            iconColor: const Color(0xff22c55e),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumRouteStop extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+  final Color iconColor;
+  final bool showConnector;
+
+  const _PremiumRouteStop({
+    required this.colors,
+    required this.label,
+    required this.value,
+    required this.iconColor,
+    this.showConnector = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: iconColor.withValues(alpha: 0.22),
+                border: Border.all(color: iconColor.withValues(alpha: 0.80)),
+                boxShadow: [
+                  BoxShadow(
+                    color: iconColor.withValues(alpha: 0.28),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+            ),
+            if (showConnector)
+              Container(
+                width: 2,
+                height: 42,
+                margin: const EdgeInsets.symmetric(vertical: 5),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      iconColor.withValues(alpha: 0.70),
+                      const Color(0xff22c55e).withValues(alpha: 0.70),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: showConnector ? 0 : 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 11,
+                    letterSpacing: 0,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 15,
+                    height: 1.32,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PremiumPriceBreakdownCard extends StatelessWidget {
+  final _CircumColors colors;
+  final DeliveryPricingBreakdown breakdown;
+  final double weightKg;
+  final _VehicleOption vehicle;
+  final String speed;
+  final String weightLabel;
+
+  const _PremiumPriceBreakdownCard({
+    required this.colors,
+    required this.breakdown,
+    required this.weightKg,
+    required this.vehicle,
+    required this.speed,
+    required this.weightLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _LuxuryGlassSurface(
+      colors: colors,
+      padding: const EdgeInsets.all(20),
+      glow: colors.adminGlow,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Price breakdown',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _PriceLine(
+            colors: colors,
+            label: 'Base fare',
+            value: '£${breakdown.baseFare.toStringAsFixed(2)}',
+          ),
+          _PriceLine(
+            colors: colors,
+            label: 'Distance fare',
+            value: '£${breakdown.distanceFare.toStringAsFixed(2)}',
+          ),
+          _PriceLine(
+            colors: colors,
+            label: weightLabel,
+            value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
+          ),
+          _PriceLine(
+            colors: colors,
+            label: '${vehicle.name} vehicle',
+            value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
+          ),
+          if (breakdown.heavyHandlingSurcharge > 0)
+            _PriceLine(
+              colors: colors,
+              label: 'Heavy Handling Surcharge',
+              value: '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
+            ),
+          if (breakdown.specialConditions > 0)
+            _PriceLine(
+              colors: colors,
+              label:
+                  speed == 'Express' ? 'Express service' : 'Special conditions',
+              value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
+            ),
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withValues(alpha: 0.04),
+                  Colors.white.withValues(alpha: 0.28),
+                  Colors.white.withValues(alpha: 0.04),
+                ],
+              ),
+            ),
+          ),
+          _PriceLine(
+            colors: colors,
+            label: 'Total',
+            value: '£${breakdown.total.toStringAsFixed(2)}',
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumSinglePriceCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String total;
+  final String paymentStatus;
+
+  const _PremiumSinglePriceCard({
+    required this.colors,
+    required this.total,
+    required this.paymentStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _LuxuryGlassSurface(
+      colors: colors,
+      padding: const EdgeInsets.all(20),
+      glow: colors.adminGlow,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Price breakdown',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _PriceLine(
+              colors: colors, label: 'Total', value: total, strong: true),
+          _PriceLine(colors: colors, label: 'Payment', value: paymentStatus),
+        ],
+      ),
+    );
+  }
+}
+
+class _LuxuryGlassSurface extends StatelessWidget {
+  final _CircumColors colors;
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color? glow;
+
+  const _LuxuryGlassSurface({
+    required this.colors,
+    required this.child,
+    this.padding = const EdgeInsets.all(18),
+    this.glow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final glowColor = glow ?? colors.adminAccent;
+    final radius = BorderRadius.circular(28);
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          width: double.infinity,
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colors.adminAccent.withValues(alpha: 0.24),
+                colors.adminGlow.withValues(alpha: 0.16),
+                colors.field.withValues(alpha: colors.dark ? 0.70 : 0.86),
+              ],
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            boxShadow: [
+              BoxShadow(
+                color:
+                    Colors.black.withValues(alpha: colors.dark ? 0.34 : 0.12),
+                blurRadius: 42,
+                offset: const Offset(0, 22),
+              ),
+              BoxShadow(
+                color: glowColor.withValues(alpha: 0.20),
+                blurRadius: 34,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: child,
         ),
       ),
     );
@@ -24303,19 +24719,39 @@ class _FirebaseStatusBanner extends StatelessWidget {
     };
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: healthy ? const Color(0xffdcfce7) : const Color(0xfffff7ed),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: healthy ? const Color(0xff86efac) : const Color(0xffffd7aa),
+        gradient: LinearGradient(
+          colors: healthy
+              ? [
+                  const Color(0xff22c55e).withValues(alpha: 0.18),
+                  const Color(0xff14b8a6).withValues(alpha: 0.10),
+                ]
+              : [
+                  const Color(0xff38bdf8).withValues(alpha: 0.16),
+                  const Color(0xffa855f7).withValues(alpha: 0.12),
+                ],
         ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: healthy
+              ? const Color(0xff86efac).withValues(alpha: 0.34)
+              : Colors.white.withValues(alpha: 0.16),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (healthy ? const Color(0xff22c55e) : colors.adminGlow)
+                .withValues(alpha: 0.16),
+            blurRadius: 28,
+          ),
+        ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             healthy ? Icons.cloud_done : Icons.cloud_off,
-            color: healthy ? const Color(0xff15803d) : const Color(0xffc2410c),
+            color: healthy ? const Color(0xff86efac) : colors.text,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -24327,8 +24763,7 @@ class _FirebaseStatusBanner extends StatelessWidget {
                       ? '$message\nRider matching starts after payment and booking confirmation.'
                       : message,
               style: TextStyle(
-                color:
-                    healthy ? const Color(0xff166534) : const Color(0xff9a3412),
+                color: colors.text,
                 fontSize: 12,
                 height: 1.3,
                 fontWeight: FontWeight.w800,
