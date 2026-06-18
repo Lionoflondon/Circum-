@@ -6768,6 +6768,7 @@ class _PhoneStage extends StatelessWidget {
         child: Center(
           child: Container(
             width: double.infinity,
+            height: double.infinity,
             constraints: const BoxConstraints(maxWidth: 1180),
             decoration: BoxDecoration(
               color: colors.appBackground,
@@ -13183,13 +13184,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
+    final healthPlusMode = _isHealthPlusRoute;
+    _logHealthPlusBranch(
+      context,
+      'portal-build',
+      extra:
+          'step=${_step.name}, initial=${widget.initialStep.name}, routeRequested=$_healthPlusRequestedByRoute, dismissed=$_healthRouteDismissed',
+    );
     return Stack(
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final healthPlusMode = _isHealthPlusRoute;
-            final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
-                !healthPlusMode;
+        LayoutBuilder(builder: (context, constraints) {
+          final desktop =
+              constraints.maxWidth >= _desktopWebBreakpoint && !healthPlusMode;
+          _logHealthPlusBranch(
+            context,
+            'portal-layout',
+            maxWidth: constraints.maxWidth,
+            extra: 'desktop=$desktop, healthPlusMode=$healthPlusMode',
+          );
+          if (healthPlusMode) {
             return Column(
               children: [
                 _PortalHeader(
@@ -13200,41 +13213,58 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   onProfile: () => setState(() => _step = _SenderStep.profile),
                 ),
                 Expanded(
-                  child: desktop
-                      ? _DesktopPortalLayout(
-                          colors: colors,
-                          pickup: _pickup.text,
-                          dropoff: _dropoff.text,
-                          vehicle: _effectiveVehicle,
-                          speed: _selectedSpeed,
-                          weightKg: _deliveryClassification.finalWeightKg,
-                          breakdown: _quoteBreakdown,
-                          step: _step,
-                          checkoutState: _checkoutState,
-                          firebaseOnline: _firebaseOnline,
-                          firebaseError: _firebaseError,
-                          statusIndex: _statusIndex,
-                          receivedAt: _activeRequestReceivedAt,
-                          activeDelivery: _activeSenderDelivery,
-                          deliveryLoadError: _senderDeliveryLoadError,
-                          onSendParcel: () =>
-                              setState(() => _step = _SenderStep.details),
-                          onViewHistory: () => setState(() {
-                            _step = _SenderStep.profile;
-                            _senderProfileTab = 1;
-                          }),
-                          onCancelBooking: _cancelSenderBooking,
-                          child: _buildCurrentStep(colors),
-                        )
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
-                          child: _buildAnimatedStep(colors),
-                        ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
+                    child: _buildHealthPlusStep(colors),
+                  ),
                 ),
               ],
             );
-          },
-        ),
+          }
+          return Column(
+            children: [
+              _PortalHeader(
+                colors: colors,
+                darkMode: widget.darkMode,
+                onBack: widget.onBack,
+                onToggleTheme: widget.onToggleTheme,
+                onProfile: () => setState(() => _step = _SenderStep.profile),
+              ),
+              Expanded(
+                child: desktop
+                    ? _DesktopPortalLayout(
+                        colors: colors,
+                        pickup: _pickup.text,
+                        dropoff: _dropoff.text,
+                        vehicle: _effectiveVehicle,
+                        speed: _selectedSpeed,
+                        weightKg: _deliveryClassification.finalWeightKg,
+                        breakdown: _quoteBreakdown,
+                        step: _step,
+                        checkoutState: _checkoutState,
+                        firebaseOnline: _firebaseOnline,
+                        firebaseError: _firebaseError,
+                        statusIndex: _statusIndex,
+                        receivedAt: _activeRequestReceivedAt,
+                        activeDelivery: _activeSenderDelivery,
+                        deliveryLoadError: _senderDeliveryLoadError,
+                        onSendParcel: () =>
+                            setState(() => _step = _SenderStep.details),
+                        onViewHistory: () => setState(() {
+                          _step = _SenderStep.profile;
+                          _senderProfileTab = 1;
+                        }),
+                        onCancelBooking: _cancelSenderBooking,
+                        child: _buildCurrentStep(colors),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
+                        child: _buildAnimatedStep(colors),
+                      ),
+              ),
+            ],
+          );
+        }),
         if (_chatOpen)
           _ChatSheet(
             colors: colors,
@@ -13523,6 +13553,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           loading: _senderAuthLoading,
           busy: _senderAuthBusy || _senderProfileSaving,
           message: _senderProfileMessage,
+          rothBalance: _senderRothBalance,
           tabIndex: _senderProfileTab,
           email: _senderEmail,
           password: _senderPassword,
@@ -13546,6 +13577,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onChangePassword: _changeSenderPassword,
           onChangeEmail: _changeSenderEmail,
           onSignOut: _signOutSender,
+          onRequestDeletion: () => setState(() {
+            _supportChat = true;
+            _chatOpen = true;
+          }),
           onSaveProfile: _saveSenderProfile,
           onAddAddress: _addSenderAddress,
           onSavedAddressType: (type) =>
@@ -13566,6 +13601,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Widget _buildHealthPlusStep(_CircumColors colors) {
     try {
+      debugPrint(
+        'Health+ branch: build-body user=${_senderUser?.uid ?? 'guest'} '
+        'authLoading=$_senderAuthLoading profileLoaded=${_senderProfile != null} '
+        'pickups=${_healthPickups.length} payments=${_healthPayments.length}',
+      );
       return _HealthPlusStep(
         key: const ValueKey('health-plus'),
         colors: colors,
@@ -13659,6 +13699,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_healthMessage != null) return _healthMessage;
     if (_senderAuthLoading) return 'Health+ is loading.';
     return null;
+  }
+
+  void _logHealthPlusBranch(
+    BuildContext context,
+    String branch, {
+    double? maxWidth,
+    String? extra,
+  }) {
+    if (!_isHealthPlusRoute && !_healthPlusRequestedByRoute) return;
+    final size = MediaQuery.maybeSizeOf(context);
+    final width = maxWidth ?? size?.width ?? 0;
+    debugPrint(
+      'Health+ branch: $branch width=${width.toStringAsFixed(1)} '
+      'desktop=${width >= _desktopWebBreakpoint} web=$kIsWeb '
+      'authLoading=$_senderAuthLoading user=${_senderUser?.uid ?? 'guest'}'
+      '${extra == null ? '' : ' $extra'}',
+    );
   }
 
   double get _quoteTotal {
@@ -18921,6 +18978,7 @@ class _SenderProfileStep extends StatelessWidget {
   final bool loading;
   final bool busy;
   final String? message;
+  final double rothBalance;
   final int tabIndex;
   final TextEditingController email;
   final TextEditingController password;
@@ -18944,6 +19002,7 @@ class _SenderProfileStep extends StatelessWidget {
   final VoidCallback onChangePassword;
   final VoidCallback onChangeEmail;
   final VoidCallback onSignOut;
+  final VoidCallback onRequestDeletion;
   final VoidCallback onSaveProfile;
   final VoidCallback onAddAddress;
   final ValueChanged<String> onSavedAddressType;
@@ -18963,6 +19022,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.loading,
     required this.busy,
     required this.message,
+    required this.rothBalance,
     required this.tabIndex,
     required this.email,
     required this.password,
@@ -18986,6 +19046,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onChangePassword,
     required this.onChangeEmail,
     required this.onSignOut,
+    required this.onRequestDeletion,
     required this.onSaveProfile,
     required this.onAddAddress,
     required this.onSavedAddressType,
@@ -19061,12 +19122,13 @@ class _SenderProfileStep extends StatelessWidget {
 
     final summary = SenderProfileService.summarize(deliveries);
     final tabs = const [
-      'Profile',
-      'Delivery History',
-      'Saved Addresses',
-      'Wallet',
+      'Overview',
+      'Deliveries',
+      'Addresses',
+      'Roth',
       'Reviews',
       'Support',
+      'Settings',
     ];
 
     return SingleChildScrollView(
@@ -19108,7 +19170,10 @@ class _SenderProfileStep extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             '${profile?.verificationStatus ?? 'unverified'} account',
-                            style: TextStyle(color: colors.mutedText),
+                            style: TextStyle(
+                              color: colors.mutedText,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           if (profile?.isLegend == true &&
                               profile?.legendNumber != null) ...[
@@ -19152,8 +19217,8 @@ class _SenderProfileStep extends StatelessWidget {
                     ),
                     _MetricPill(
                       colors: colors,
-                      label: 'Status',
-                      value: summary.loyaltyLevel,
+                      label: 'Roth',
+                      value: '£${rothBalance.toStringAsFixed(2)}',
                     ),
                   ],
                 ),
@@ -19204,11 +19269,13 @@ class _SenderProfileStep extends StatelessWidget {
       2 => _addressesTab(),
       3 => _paymentsTab(),
       4 => _reviewsTab(),
-      _ => _supportTab(),
+      5 => _supportTab(),
+      _ => _settingsTab(context, summary),
     };
   }
 
   Widget _profileTab(SenderProfileSummary summary) {
+    final spend = '£${summary.lifetimeValue.toStringAsFixed(2)}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -19222,7 +19289,86 @@ class _SenderProfileStep extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        _SectionTitle(colors: colors, title: 'Profile details'),
+        _SectionTitle(colors: colors, title: 'Command Centre Overview'),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              colors: [
+                colors.adminAccent.withValues(alpha: 0.26),
+                colors.adminGlow.withValues(alpha: 0.16),
+                colors.field.withValues(alpha: 0.68),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.16),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: colors.adminGlow.withValues(alpha: 0.16),
+                blurRadius: 34,
+                offset: const Offset(0, 18),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                profile?.fullName.isNotEmpty == true
+                    ? profile!.fullName
+                    : user?.email ?? 'Circum sender',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 30,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${profile?.verificationStatus ?? 'unverified'} account · ${summary.loyaltyLevel}',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _CommandCentreStat(
+                    colors: colors,
+                    label: 'Deliveries completed',
+                    value: '${summary.completedDeliveries}',
+                  ),
+                  _CommandCentreStat(
+                    colors: colors,
+                    label: 'Parcels sent',
+                    value: '${summary.totalDeliveries}',
+                  ),
+                  _CommandCentreStat(
+                    colors: colors,
+                    label: 'Lifetime spend',
+                    value: spend,
+                  ),
+                  _CommandCentreStat(
+                    colors: colors,
+                    label: 'Roth balance',
+                    value: '£${rothBalance.toStringAsFixed(2)}',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _SectionTitle(colors: colors, title: 'Account snapshot'),
         const SizedBox(height: 12),
         _InputBox(colors: colors, controller: fullName, hint: 'Full name'),
         const SizedBox(height: 10),
@@ -19244,26 +19390,6 @@ class _SenderProfileStep extends StatelessWidget {
           onPressed: busy ? null : onSaveProfile,
           icon: const Icon(Icons.save_outlined),
           label: Text(busy ? 'Saving' : 'Save profile'),
-        ),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: onSignOut,
-          icon: const Icon(Icons.logout),
-          label: const Text('Sign out'),
-        ),
-        const SizedBox(height: 14),
-        _AccountSecurityPanel(
-          colors: colors,
-          title: 'Security',
-          currentPassword: currentPassword,
-          newPassword: newPassword,
-          confirmNewPassword: confirmNewPassword,
-          newEmail: newEmail,
-          emailChangePassword: emailChangePassword,
-          submitting: securitySubmitting,
-          message: securityMessage,
-          onChangePassword: onChangePassword,
-          onChangeEmail: onChangeEmail,
         ),
       ],
     );
@@ -19440,7 +19566,7 @@ class _SenderProfileStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(colors: colors, title: 'Wallet'),
+        _SectionTitle(colors: colors, title: 'Roth Wallet'),
         const SizedBox(height: 10),
         _SenderWalletPanel(
           colors: colors,
@@ -19497,23 +19623,234 @@ class _SenderProfileStep extends StatelessWidget {
 
   Widget _supportTab() {
     final notes = deliveries.expand((delivery) => delivery.supportNotes);
-    if (notes.isEmpty) {
-      return _empty(
-        'No support notes',
-        'If anything needs attention, Circum support notes will sit here.',
-      );
-    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: notes
-          .map(
+      children: [
+        _SectionTitle(colors: colors, title: 'Support'),
+        const SizedBox(height: 10),
+        Text(
+          'Need help with a delivery, payment, Roth, Gifts or Health+? Circum Support can help from here.',
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.45,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 14),
+        FilledButton.icon(
+          onPressed: onRequestDeletion,
+          icon: const Icon(Icons.support_agent),
+          label: const Text('Open Support'),
+        ),
+        const SizedBox(height: 18),
+        if (notes.isEmpty)
+          _empty(
+            'No support notes',
+            'If anything needs attention, Circum support notes will sit here.',
+          )
+        else
+          ...notes.map(
             (note) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Text('$note', style: TextStyle(color: colors.text)),
             ),
-          )
-          .toList(),
+          ),
+      ],
     );
+  }
+
+  Widget _settingsTab(BuildContext context, SenderProfileSummary summary) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Settings'),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          colors: colors,
+          title: 'Account',
+          icon: Icons.person_outline,
+          children: [
+            _SettingsLine(colors: colors, label: 'Name', value: fullName.text),
+            _SettingsLine(colors: colors, label: 'Phone', value: phone.text),
+            _SettingsLine(
+              colors: colors,
+              label: 'Email',
+              value: user?.email ?? email.text,
+            ),
+            _SettingsLine(
+              colors: colors,
+              label: 'Account status',
+              value: profile?.verificationStatus ?? 'unverified',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          colors: colors,
+          title: 'Security',
+          icon: Icons.lock_outline,
+          children: [
+            _AccountSecurityPanel(
+              colors: colors,
+              title: 'Sign-in details',
+              currentPassword: currentPassword,
+              newPassword: newPassword,
+              confirmNewPassword: confirmNewPassword,
+              newEmail: newEmail,
+              emailChangePassword: emailChangePassword,
+              submitting: securitySubmitting,
+              message: securityMessage,
+              onChangePassword: onChangePassword,
+              onChangeEmail: onChangeEmail,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _confirmSignOut(context),
+              icon: const Icon(Icons.logout),
+              label: const Text('Sign Out'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          colors: colors,
+          title: 'Notifications',
+          icon: Icons.notifications_none,
+          children: const [
+            _DisabledPreference(label: 'Delivery updates'),
+            _DisabledPreference(label: 'Rider updates'),
+            _DisabledPreference(label: 'Gifts updates'),
+            _DisabledPreference(label: 'Health+ updates'),
+            _DisabledPreference(label: 'Marketing preferences'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          colors: colors,
+          title: 'Payment & Roth',
+          icon: Icons.account_balance_wallet_outlined,
+          children: [
+            _SettingsLine(
+              colors: colors,
+              label: 'Roth balance',
+              value: '£${rothBalance.toStringAsFixed(2)}',
+            ),
+            _SettingsLine(
+              colors: colors,
+              label: 'Saved payment references',
+              value: profile?.paymentCustomerReference ??
+                  'No saved payment profile attached',
+            ),
+            const _DisabledPreference(label: 'Circum Gift Card history'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          colors: colors,
+          title: 'Privacy',
+          icon: Icons.privacy_tip_outlined,
+          children: const [
+            _DisabledPreference(label: 'Privacy policy'),
+            _DisabledPreference(label: 'Terms'),
+            _DisabledPreference(label: 'Data download'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          colors: colors,
+          title: 'Account Actions',
+          icon: Icons.warning_amber_rounded,
+          danger: true,
+          children: [
+            Text(
+              'Account deletion is protected. Circum Support handles requests while secure deletion is being finalised.',
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.4,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _showDeleteAccountRequest(context),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete Account'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xffef4444),
+                side: BorderSide(
+                    color: const Color(0xffef4444).withValues(alpha: 0.6)),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) onSignOut();
+  }
+
+  Future<void> _showDeleteAccountRequest(BuildContext context) async {
+    final confirm = TextEditingController();
+    final requested = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Delete account request'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'This may permanently remove your account profile, saved addresses, wallet access and account data. Some records may be retained where required for legal, payment, fraud prevention or operational reasons.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirm,
+                decoration: const InputDecoration(
+                  labelText: 'Type DELETE to continue',
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Account deletion requests are handled by Circum Support while secure deletion is being finalised.',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: confirm.text.trim() == 'DELETE'
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              child: const Text('Request account deletion'),
+            ),
+          ],
+        ),
+      ),
+    );
+    confirm.dispose();
+    if (requested == true) onRequestDeletion();
   }
 
   Widget _empty(String title, String body) {
@@ -19532,6 +19869,182 @@ class _SenderProfileStep extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(body, style: TextStyle(color: colors.mutedText, height: 1.45)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommandCentreStat extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+
+  const _CommandCentreStat({
+    required this.colors,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: MediaQuery.sizeOf(context).width < 520 ? 138 : 172,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        color: Colors.white.withValues(alpha: colors.dark ? 0.08 : 0.72),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsSection extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  final bool danger;
+
+  const _SettingsSection({
+    required this.colors,
+    required this.title,
+    required this.icon,
+    required this.children,
+    this.danger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = danger ? const Color(0xffef4444) : colors.adminAccent;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            accent.withValues(alpha: danger ? 0.12 : 0.16),
+            colors.field.withValues(alpha: 0.64),
+          ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: 0.24)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: accent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsLine extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+
+  const _SettingsLine({
+    required this.colors,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final display = value.trim().isEmpty ? 'Not provided' : value.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 128,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              display,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DisabledPreference extends StatelessWidget {
+  final String label;
+
+  const _DisabledPreference({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_clock, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text('$label · coming soon')),
         ],
       ),
     );
