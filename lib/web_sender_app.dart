@@ -13106,6 +13106,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   void initState() {
     super.initState();
+    if (_healthPlusRequestedByRoute) {
+      _step = _SenderStep.healthPlus;
+      _roleChoiceConfirmed = true;
+      _healthRouteDismissed = false;
+    }
     _weight.addListener(_handleWeightChanged);
     _senderName.addListener(_handleContactDetailsChanged);
     _senderPhone.addListener(_handleContactDetailsChanged);
@@ -13182,8 +13187,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
+            final healthPlusMode = _isHealthPlusRoute;
             final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
-                !_isHealthPlusRoute;
+                !healthPlusMode;
             return Column(
               children: [
                 _PortalHeader(
@@ -13639,10 +13645,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   bool get _isHealthPlusRoute {
     return _step == _SenderStep.healthPlus ||
-        (!_healthRouteDismissed &&
-            (widget.initialStep == _SenderStep.healthPlus ||
-                Uri.base.queryParameters['app'] == 'health' ||
-                Uri.base.queryParameters.containsKey('health')));
+        (!_healthRouteDismissed && _healthPlusRequestedByRoute);
+  }
+
+  bool get _healthPlusRequestedByRoute {
+    return widget.initialStep == _SenderStep.healthPlus ||
+        Uri.base.queryParameters['app'] == 'health' ||
+        Uri.base.queryParameters.containsKey('health') ||
+        Uri.base.path.toLowerCase().contains('health');
   }
 
   String? get messageForHealthPlus {
