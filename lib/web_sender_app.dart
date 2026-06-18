@@ -13631,6 +13631,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         rothAvailable: _senderRothBalance,
         pickups: _healthPickups,
         payments: _healthPayments,
+        currentRoute: Uri.base.toString(),
+        authState: _senderUser == null
+            ? (_senderAuthLoading ? 'loading' : 'guest')
+            : 'signed-in:${_senderUser!.uid}',
+        senderStep: _step.name,
         onBack: () => setState(() {
           _healthRouteDismissed = true;
           _step = _SenderStep.dashboard;
@@ -19131,126 +19136,312 @@ class _SenderProfileStep extends StatelessWidget {
       'Settings',
     ];
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final desktop = width >= 980;
+        final tablet = width >= 720 && width < 980;
+        final body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _profileHeroCard(context, summary),
+            if (message != null) ...[
+              const SizedBox(height: 12),
+              Text(message!, style: TextStyle(color: colors.mutedText)),
+            ],
+            if (tabIndex != 0) ...[
+              const SizedBox(height: 16),
+              _GlassPanel(colors: colors, child: _tabBody(context, summary)),
+            ],
+          ],
+        );
+        final rail = _profileNavigation(tabs, vertical: desktop);
+        final right = _profileRightRail();
+
+        if (desktop) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 240, child: rail),
+              const SizedBox(width: 18),
+              Expanded(flex: 6, child: body),
+              const SizedBox(width: 18),
+              Expanded(flex: 3, child: right),
+            ],
+          );
+        }
+        if (tablet) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              rail,
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 6, child: body),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 4, child: right),
+                ],
+              ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            rail,
+            const SizedBox(height: 16),
+            body,
+            const SizedBox(height: 16),
+            right,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _profileNavigation(List<String> tabs, {required bool vertical}) {
+    final items = List.generate(tabs.length, (index) {
+      final selected = tabIndex == index;
+      final icon = switch (index) {
+        0 => Icons.dashboard_outlined,
+        1 => Icons.local_shipping_outlined,
+        2 => Icons.place_outlined,
+        3 => Icons.account_balance_wallet_outlined,
+        4 => Icons.star_outline,
+        5 => Icons.support_agent,
+        _ => Icons.settings_outlined,
+      };
+      final item = _ProfileNavItem(
+        colors: colors,
+        label: tabs[index],
+        icon: icon,
+        selected: selected,
+        onTap: () => onTab(index),
+      );
+      return vertical
+          ? Padding(padding: const EdgeInsets.only(bottom: 10), child: item)
+          : Padding(padding: const EdgeInsets.only(right: 10), child: item);
+    });
+    if (vertical) {
+      return _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Profile',
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ...items,
+          ],
+        ),
+      );
+    }
     return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: items),
+    );
+  }
+
+  Widget _profileHeroCard(BuildContext context, SenderProfileSummary summary) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.22),
+            colors.adminGlow.withValues(alpha: 0.16),
+            colors.field.withValues(alpha: 0.70),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.18),
+            blurRadius: 42,
+            offset: const Offset(0, 24),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 42,
+                backgroundColor: colors.field,
+                backgroundImage: (profile?.photoUrl.isNotEmpty == true)
+                    ? NetworkImage(profile!.photoUrl)
+                    : null,
+                child: profile?.photoUrl.isNotEmpty == true
+                    ? null
+                    : Icon(Icons.person, color: colors.text, size: 42),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: colors.field,
-                      backgroundImage: (profile?.photoUrl.isNotEmpty == true)
-                          ? NetworkImage(profile!.photoUrl)
-                          : null,
-                      child: profile?.photoUrl.isNotEmpty == true
-                          ? null
-                          : Icon(Icons.person, color: colors.text),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            profile?.fullName.isNotEmpty == true
-                                ? profile!.fullName
-                                : user!.email ?? 'Circum sender',
-                            style: TextStyle(
-                              color: colors.text,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${profile?.verificationStatus ?? 'unverified'} account',
-                            style: TextStyle(
-                              color: colors.mutedText,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (profile?.isLegend == true &&
-                              profile?.legendNumber != null) ...[
-                            const SizedBox(height: 7),
-                            _LegendBadge(number: profile!.legendNumber!),
-                          ],
-                        ],
+                    Text(
+                      profile?.fullName.isNotEmpty == true
+                          ? profile!.fullName
+                          : user?.email ?? 'Circum sender',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize:
+                            MediaQuery.sizeOf(context).width < 520 ? 30 : 38,
+                        height: 1.02,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Back to sending',
-                      onPressed: onBack,
-                      icon: Icon(Icons.close, color: colors.text),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _GlassMiniChip(
+                          colors: colors,
+                          label:
+                              '${profile?.verificationStatus ?? 'unverified'} account',
+                        ),
+                        if (profile?.isLegend == true &&
+                            profile?.legendNumber != null)
+                          _GlassMiniChip(
+                            colors: colors,
+                            label: 'Legend #${profile!.legendNumber}',
+                          ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                GridView.count(
-                  shrinkWrap: true,
-                  crossAxisCount:
-                      MediaQuery.sizeOf(context).width < 720 ? 2 : 4,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: 1.55,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _MetricPill(
-                      colors: colors,
-                      label: 'Completed',
-                      value: '${summary.completedDeliveries}',
-                    ),
-                    _MetricPill(
-                      colors: colors,
-                      label: 'All parcels',
-                      value: '${summary.totalDeliveries}',
-                    ),
-                    _MetricPill(
-                      colors: colors,
-                      label: 'Spent',
-                      value: '£${summary.lifetimeValue.toStringAsFixed(2)}',
-                    ),
-                    _MetricPill(
-                      colors: colors,
-                      label: 'Roth',
-                      value: '£${rothBalance.toStringAsFixed(2)}',
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+              IconButton(
+                tooltip: 'Back',
+                onPressed: onBack,
+                icon: Icon(Icons.arrow_back, color: colors.text),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(tabs.length, (index) {
-                final selected = tabIndex == index;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    selected: selected,
-                    onSelected: (_) => onTab(index),
-                    label: Text(tabs[index]),
-                  ),
-                );
-              }),
-            ),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _ProfileHeroMetric(
+                colors: colors,
+                label: 'Completed deliveries',
+                value: '${summary.completedDeliveries}',
+              ),
+              _ProfileHeroMetric(
+                colors: colors,
+                label: 'Parcels sent',
+                value: '${summary.totalDeliveries}',
+              ),
+              _ProfileHeroMetric(
+                colors: colors,
+                label: 'Lifetime spend',
+                value: '£${summary.lifetimeValue.toStringAsFixed(2)}',
+              ),
+              _ProfileHeroMetric(
+                colors: colors,
+                label: 'Roth balance',
+                value: '£${rothBalance.toStringAsFixed(2)}',
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          if (message != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(message!, style: TextStyle(color: colors.mutedText)),
-            ),
-          _GlassPanel(colors: colors, child: _tabBody(context, summary)),
         ],
       ),
+    );
+  }
+
+  Widget _profileRightRail() {
+    final delivery =
+        selectedDelivery ?? (deliveries.isEmpty ? null : deliveries.first);
+    final status = delivery?.status ?? 'No active delivery';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Delivery Status'),
+              const SizedBox(height: 12),
+              _GlassMiniChip(colors: colors, label: _titleCase(status)),
+              const SizedBox(height: 12),
+              Text(
+                delivery == null
+                    ? 'No selected delivery. Choose a delivery to see tracking details.'
+                    : '${delivery.pickupAddress}\n→ ${delivery.dropoffAddress}',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (delivery?.assignedDriverName.isNotEmpty == true) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Rider: ${delivery!.assignedDriverName}',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(colors: colors, title: 'Price Breakdown'),
+              const SizedBox(height: 12),
+              _PriceLine(
+                colors: colors,
+                label: 'Base fare',
+                value: delivery == null ? '—' : 'Included',
+              ),
+              _PriceLine(
+                colors: colors,
+                label: 'Distance',
+                value: delivery == null ? '—' : 'Included',
+              ),
+              _PriceLine(
+                colors: colors,
+                label: 'Vehicle',
+                value: delivery == null ? '—' : 'Included',
+              ),
+              Divider(color: colors.border, height: 24),
+              _PriceLine(
+                colors: colors,
+                label: 'Total',
+                value: delivery == null
+                    ? '—'
+                    : '£${delivery.pricePaid.toStringAsFixed(2)}',
+                strong: true,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -19275,7 +19466,6 @@ class _SenderProfileStep extends StatelessWidget {
   }
 
   Widget _profileTab(SenderProfileSummary summary) {
-    final spend = '£${summary.lifetimeValue.toStringAsFixed(2)}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -19289,107 +19479,10 @@ class _SenderProfileStep extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        _SectionTitle(colors: colors, title: 'Command Centre Overview'),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
-              colors: [
-                colors.adminAccent.withValues(alpha: 0.26),
-                colors.adminGlow.withValues(alpha: 0.16),
-                colors.field.withValues(alpha: 0.68),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.16),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: colors.adminGlow.withValues(alpha: 0.16),
-                blurRadius: 34,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                profile?.fullName.isNotEmpty == true
-                    ? profile!.fullName
-                    : user?.email ?? 'Circum sender',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 30,
-                  height: 1.05,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${profile?.verificationStatus ?? 'unverified'} account · ${summary.loyaltyLevel}',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.35,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _CommandCentreStat(
-                    colors: colors,
-                    label: 'Deliveries completed',
-                    value: '${summary.completedDeliveries}',
-                  ),
-                  _CommandCentreStat(
-                    colors: colors,
-                    label: 'Parcels sent',
-                    value: '${summary.totalDeliveries}',
-                  ),
-                  _CommandCentreStat(
-                    colors: colors,
-                    label: 'Lifetime spend',
-                    value: spend,
-                  ),
-                  _CommandCentreStat(
-                    colors: colors,
-                    label: 'Roth balance',
-                    value: '£${rothBalance.toStringAsFixed(2)}',
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        _SectionTitle(colors: colors, title: 'Account snapshot'),
-        const SizedBox(height: 12),
-        _InputBox(colors: colors, controller: fullName, hint: 'Full name'),
-        const SizedBox(height: 10),
-        _InputBox(colors: colors, controller: phone, hint: 'Phone number'),
-        const SizedBox(height: 10),
-        _InputBox(
-          colors: colors,
-          controller: email,
-          hint: 'Email',
-          enabled: false,
-        ),
-        const SizedBox(height: 12),
         Text(
-          'Created ${_readableDate(profile?.createdAt)}. ${summary.loyaltyLevel}.',
-          style: TextStyle(color: colors.mutedText),
-        ),
-        const SizedBox(height: 14),
-        ElevatedButton.icon(
-          onPressed: busy ? null : onSaveProfile,
-          icon: const Icon(Icons.save_outlined),
-          label: Text(busy ? 'Saving' : 'Save profile'),
+          'Your account overview is shown above.',
+          style:
+              TextStyle(color: colors.mutedText, fontWeight: FontWeight.w700),
         ),
       ],
     );
@@ -19403,43 +19496,118 @@ class _SenderProfileStep extends StatelessWidget {
       );
     }
     return Column(
-      children: deliveries
-          .map(
-            (delivery) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                delivery.parcelDescription,
-                style: TextStyle(
-                  color: colors.text,
-                  fontWeight: FontWeight.w900,
-                ),
+      children: deliveries.map(_deliveryGlassCard).toList(),
+    );
+  }
+
+  Widget _deliveryGlassCard(SenderDeliveryRecord delivery) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: () => onSelectDelivery(delivery),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              colors: [
+                colors.adminAccent.withValues(alpha: 0.16),
+                colors.adminGlow.withValues(alpha: 0.10),
+                colors.field.withValues(alpha: 0.68),
+              ],
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            boxShadow: [
+              BoxShadow(
+                color: colors.adminGlow.withValues(alpha: 0.10),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
               ),
-              subtitle: Text(
-                '${delivery.pickupAddress} to ${delivery.dropoffAddress}\n${_jobReceivedTextFromDate(delivery.createdAt)}',
-                style: TextStyle(color: colors.mutedText),
-              ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '£${delivery.pricePaid.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w900,
+                  Expanded(
+                    child: Text(
+                      delivery.parcelDescription.isEmpty
+                          ? 'Circum delivery'
+                          : delivery.parcelDescription,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
-                  Text(
-                    delivery.status,
-                    style: TextStyle(color: colors.mutedText, fontSize: 12),
+                  const SizedBox(width: 10),
+                  _GlassMiniChip(
+                    colors: colors,
+                    label: _deliveryStatusChipLabel(delivery.status),
                   ),
                 ],
               ),
-              onTap: () => onSelectDelivery(delivery),
-            ),
-          )
-          .toList(),
+              const SizedBox(height: 12),
+              Text(
+                '${delivery.pickupAddress}\n→ ${delivery.dropoffAddress}',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.38,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _GlassMiniChip(
+                    colors: colors,
+                    label: 'Delivery',
+                  ),
+                  _GlassMiniChip(
+                    colors: colors,
+                    label: _jobReceivedTextFromDate(delivery.createdAt),
+                  ),
+                  _GlassMiniChip(
+                    colors: colors,
+                    label: '£${delivery.pricePaid.toStringAsFixed(2)}',
+                  ),
+                  if (delivery.assignedDriverName.isNotEmpty)
+                    _GlassMiniChip(
+                      colors: colors,
+                      label: 'Rider ${delivery.assignedDriverName}',
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  String _deliveryStatusChipLabel(String status) {
+    final normalized = status.toLowerCase();
+    if (normalized.contains('picked') || normalized.contains('collected')) {
+      return 'Picked Up';
+    }
+    if (normalized.contains('delivered') || normalized.contains('completed')) {
+      return 'Delivered';
+    }
+    if (normalized.contains('scheduled')) return 'Scheduled';
+    if (normalized.contains('transit')) return 'In Transit';
+    if (normalized.contains('finding') || normalized.contains('pending')) {
+      return 'Finding Rider';
+    }
+    return _titleCase(status.replaceAll('_', ' '));
   }
 
   Widget _addressesTab() {
@@ -19875,12 +20043,117 @@ class _SenderProfileStep extends StatelessWidget {
   }
 }
 
-class _CommandCentreStat extends StatelessWidget {
+class _ProfileNavItem extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ProfileNavItem({
+    required this.colors,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: selected
+              ? const LinearGradient(
+                  colors: [
+                    Color(0xff1dd6ff),
+                    Color(0xff476cff),
+                    Color(0xffa855f7),
+                  ],
+                )
+              : LinearGradient(
+                  colors: [
+                    colors.field.withValues(alpha: 0.66),
+                    Colors.white.withValues(alpha: colors.dark ? 0.05 : 0.50),
+                  ],
+                ),
+          border: Border.all(
+            color: selected
+                ? Colors.white.withValues(alpha: 0.24)
+                : Colors.white.withValues(alpha: 0.10),
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: colors.adminGlow.withValues(alpha: 0.24),
+                    blurRadius: 26,
+                    offset: const Offset(0, 12),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 19),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: selected ? 1 : 0.70),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassMiniChip extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+
+  const _GlassMiniChip({required this.colors, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.22),
+            colors.adminGlow.withValues(alpha: 0.14),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.text,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileHeroMetric extends StatelessWidget {
   final _CircumColors colors;
   final String label;
   final String value;
 
-  const _CommandCentreStat({
+  const _ProfileHeroMetric({
     required this.colors,
     required this.label,
     required this.value,
@@ -19889,12 +20162,12 @@ class _CommandCentreStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: MediaQuery.sizeOf(context).width < 520 ? 138 : 172,
-      padding: const EdgeInsets.all(14),
+      width: MediaQuery.sizeOf(context).width < 520 ? 142 : 184,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: Colors.white.withValues(alpha: colors.dark ? 0.08 : 0.72),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withValues(alpha: colors.dark ? 0.08 : 0.68),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -19903,16 +20176,18 @@ class _CommandCentreStat extends StatelessWidget {
             label,
             style: TextStyle(
               color: colors.mutedText,
-              fontSize: 11,
+              fontSize: 12,
+              height: 1.2,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
               color: colors.text,
-              fontSize: 20,
+              fontSize: 28,
+              height: 1,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -21243,6 +21518,9 @@ class _HealthPlusStep extends StatelessWidget {
   final double rothAvailable;
   final List<Map<String, dynamic>> pickups;
   final List<Map<String, dynamic>> payments;
+  final String currentRoute;
+  final String authState;
+  final String senderStep;
   final VoidCallback onBack;
   final ValueChanged<HealthPlusFrequency> onFrequency;
   final ValueChanged<String> onPrescriptionType;
@@ -21284,6 +21562,9 @@ class _HealthPlusStep extends StatelessWidget {
     required this.rothAvailable,
     required this.pickups,
     required this.payments,
+    required this.currentRoute,
+    required this.authState,
+    required this.senderStep,
     required this.onBack,
     required this.onFrequency,
     required this.onPrescriptionType,
@@ -21303,10 +21584,13 @@ class _HealthPlusStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('_HealthPlusStep build start');
     final nextPickup = pickups.isEmpty ? null : pickups.first;
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final desktop = viewportWidth >= _desktopWebBreakpoint;
     final cardRemaining =
         math.max(0, quote.total - math.min(quote.total, rothAvailable));
-    return Container(
+    final content = Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
@@ -21322,6 +21606,73 @@ class _HealthPlusStep extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xfffff200),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: const Text(
+              'HEALTH+ BODY MOUNTED',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xff00e5ff),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: Text(
+              'Health+ diagnostics\n'
+              'viewport width: ${viewportWidth.toStringAsFixed(1)}\n'
+              'route: $currentRoute\n'
+              'auth state: $authState\n'
+              'sender step: $senderStep\n'
+              'detection: ${desktop ? 'desktop' : 'mobile/tablet'}',
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xffff2bd6),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66ff2bd6),
+                  blurRadius: 22,
+                  offset: Offset(0, 12),
+                ),
+              ],
+            ),
+            child: const Text(
+              'IF YOU CAN SEE THIS CARD, _HealthPlusStep IS RENDERING',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           _StepTopBar(colors: colors, title: 'Health+', onBack: onBack),
           const SizedBox(height: 14),
           _GlassPanel(
@@ -21729,6 +22080,8 @@ class _HealthPlusStep extends StatelessWidget {
         ],
       ),
     );
+    debugPrint('_HealthPlusStep build complete');
+    return content;
   }
 }
 
