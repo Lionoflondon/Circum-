@@ -121,5 +121,31 @@ void main() {
       expect(summary.lifetimeValue, 0);
       expect(summary.loyaltyLevel, 'New sender');
     });
+
+    test('maps sender trust points to tiers and next threshold', () {
+      expect(SenderTrustPolicy.tierForPoints(0), 'new_sender');
+      expect(SenderTrustPolicy.tierForPoints(25), 'active_sender');
+      expect(SenderTrustPolicy.tierForPoints(100), 'regular_sender');
+      expect(SenderTrustPolicy.tierForPoints(300), 'priority_sender');
+      expect(SenderTrustPolicy.tierForPoints(750), 'platinum_sender');
+      expect(SenderTrustPolicy.pointsForNextTier(512), 238);
+      expect(SenderTrustPolicy.label('priority_sender'), 'Priority Sender');
+    });
+
+    test('parses sender trust fields separately from Legend recognition', () {
+      final profile = SenderProfile.fromMap('sender-1', {
+        'senderTrustPoints': 512,
+        'senderTier': 'priority_sender',
+        'senderTrustFrozen': true,
+        'isLegend': true,
+        'legendNumber': 284,
+      });
+
+      expect(profile.trustPoints, 512);
+      expect(profile.senderTier, 'priority_sender');
+      expect(profile.senderTrustFrozen, isTrue);
+      expect(profile.isLegend, isTrue);
+      expect(profile.legendNumber, 284);
+    });
   });
 }

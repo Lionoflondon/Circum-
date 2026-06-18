@@ -50,6 +50,20 @@ service cloud.firestore {
       ]);
     }
 
+    function changesSenderTrustFields() {
+      return request.resource.data.diff(resource.data).changedKeys().hasAny([
+        'senderTrustPoints',
+        'trustPoints',
+        'senderTier',
+        'trustTier',
+        'senderTrustFrozen',
+        'senderTrustUpdatedAt',
+        'senderTrustUpdatedBy',
+        'senderTrustLastReason',
+        'senderTrustBreakdown'
+      ]);
+    }
+
     function isRiderAccount() {
       return signedIn() && (
         hasRole('super_admin') ||
@@ -478,11 +492,30 @@ service cloud.firestore {
           'legendNumber',
           'legendAwardedAt',
           'legendSource',
-          'legendDeliveryId'
+          'legendDeliveryId',
+          'senderTrustPoints',
+          'trustPoints',
+          'senderTier',
+          'trustTier',
+          'senderTrustFrozen',
+          'senderTrustBreakdown'
         ]);
       allow update: if hasRole('super_admin') ||
-        ((isAdmin() || ownsSenderRecord(userId)) && !changesLegendFields());
+        (isAdmin() && !changesLegendFields()) ||
+        (ownsSenderRecord(userId) && !changesLegendFields() && !changesSenderTrustFields());
       allow delete: if hasRole('super_admin');
+    }
+
+    match /senderTrustEvents/{eventId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /emailQueue/{emailId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if hasRole('super_admin');
     }
 
     match /platformStats/legends {

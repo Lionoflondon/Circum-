@@ -16,6 +16,10 @@ class SenderProfile {
   final int? legendNumber;
   final DateTime? legendAwardedAt;
   final DateTime? legendCelebrationSeenAt;
+  final int trustPoints;
+  final String senderTier;
+  final bool senderTrustFrozen;
+  final Map<String, dynamic> senderTrustBreakdown;
 
   const SenderProfile({
     required this.id,
@@ -33,6 +37,10 @@ class SenderProfile {
     this.legendNumber,
     this.legendAwardedAt,
     this.legendCelebrationSeenAt,
+    this.trustPoints = 0,
+    this.senderTier = 'new_sender',
+    this.senderTrustFrozen = false,
+    this.senderTrustBreakdown = const {},
   });
 
   factory SenderProfile.fromMap(String id, Map<String, dynamic> data) {
@@ -64,6 +72,18 @@ class SenderProfile {
       legendNumber: (data['legendNumber'] as num?)?.toInt(),
       legendAwardedAt: parseDate(data['legendAwardedAt']),
       legendCelebrationSeenAt: parseDate(data['legendCelebrationSeenAt']),
+      trustPoints: (data['senderTrustPoints'] as num?)?.toInt() ??
+          (data['trustPoints'] as num?)?.toInt() ??
+          0,
+      senderTier: SenderTrustPolicy.normalizeTier(
+        data['senderTier'] ?? data['trustTier'],
+        points: (data['senderTrustPoints'] as num?)?.toInt() ??
+            (data['trustPoints'] as num?)?.toInt() ??
+            0,
+      ),
+      senderTrustFrozen: data['senderTrustFrozen'] == true,
+      senderTrustBreakdown:
+          Map<String, dynamic>.from(data['senderTrustBreakdown'] ?? {}),
     );
   }
 
@@ -83,6 +103,87 @@ class SenderProfile {
       'userType': 'sender',
       'updatedAt': FieldValue.serverTimestamp(),
     };
+  }
+}
+
+class SenderTrustPolicy {
+  static const tiers = [
+    'new_sender',
+    'active_sender',
+    'regular_sender',
+    'priority_sender',
+    'platinum_sender',
+  ];
+
+  static const tierLabels = {
+    'new_sender': 'New Sender',
+    'active_sender': 'Active Sender',
+    'regular_sender': 'Regular Sender',
+    'priority_sender': 'Priority Sender',
+    'platinum_sender': 'Platinum Sender',
+  };
+
+  static const thresholds = {
+    'new_sender': 0,
+    'active_sender': 25,
+    'regular_sender': 100,
+    'priority_sender': 300,
+    'platinum_sender': 750,
+  };
+
+  static const pointRules = {
+    'parcel_sent': 1,
+    'successful_delivery': 1,
+    'lifetime_spend_milestone': 2,
+    'gifts_order': 3,
+    'health_order': 5,
+    'account_age_milestone': 2,
+    'referral': 7,
+    'confirmed_fraud': -5,
+    'wrong_chargeback': -4,
+    'unnecessary_cancellation': -3,
+  };
+
+  static String tierForPoints(int points) {
+    if (points >= 750) return 'platinum_sender';
+    if (points >= 300) return 'priority_sender';
+    if (points >= 100) return 'regular_sender';
+    if (points >= 25) return 'active_sender';
+    return 'new_sender';
+  }
+
+  static String normalizeTier(Object? value, {int points = 0}) {
+    final raw =
+        '$value'.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+    return tiers.contains(raw) ? raw : tierForPoints(points);
+  }
+
+  static String label(Object? tierOrPoints) {
+    if (tierOrPoints is num) {
+      return tierLabels[tierForPoints(tierOrPoints.toInt())]!;
+    }
+    final tier = normalizeTier(tierOrPoints);
+    return tierLabels[tier] ?? 'New Sender';
+  }
+
+  static String? nextTier(String tier) {
+    final normalized = normalizeTier(tier);
+    final index = tiers.indexOf(normalized);
+    if (index < 0 || index >= tiers.length - 1) return null;
+    return tiers[index + 1];
+  }
+
+  static int pointsForNextTier(int points) {
+    final next = nextTier(tierForPoints(points));
+    if (next == null) return 0;
+    return (thresholds[next] ?? points) - points;
+  }
+
+  static bool isPositiveEvent(String eventType, int points) {
+    return points > 0 &&
+        !eventType.toLowerCase().contains('deduct') &&
+        !eventType.toLowerCase().contains('fraud') &&
+        !eventType.toLowerCase().contains('chargeback');
   }
 }
 

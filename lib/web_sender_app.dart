@@ -2217,9 +2217,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'Email',
             'Phone',
             'Status',
+            'Sender Tier',
             'Legend',
             'Awarded',
             'Value',
+            'Actions',
           ],
           rowBuilder: _senderRow,
           emptyText: 'No sender records yet.',
@@ -2405,6 +2407,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Widget> _senderRow(Map<String, dynamic> item) {
     final id = '${item['id'] ?? item['userId'] ?? ''}';
+    final points = (item['senderTrustPoints'] as num?)?.toInt() ??
+        (item['trustPoints'] as num?)?.toInt() ??
+        0;
+    final tier =
+        SenderTrustPolicy.normalizeTier(item['senderTier'], points: points);
     final value = _deliveries
         .where(
           (delivery) =>
@@ -2419,6 +2426,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         colors: widget.colors,
         status: '${item['status'] ?? 'active'}',
       ),
+      _AdminCell('${SenderTrustPolicy.label(tier)}\n$points points'),
       _AdminCell(item['isLegend'] == true
           ? 'Legend #${item['legendNumber'] ?? ''}'
           : '—'),
@@ -2426,7 +2434,270 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ? '${_adminDateText(item['legendAwardedAt'])}\n${item['legendDeliveryId'] ?? ''}'
           : '—'),
       _AdminCell('£${value.toStringAsFixed(2)}'),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Trust',
+            enabled: _can(AdminPermission.editCustomers),
+            onTap: () => _openSenderTrustDialog(item),
+          ),
+        ],
+      ),
     ];
+  }
+
+  Future<void> _openSenderTrustDialog(Map<String, dynamic> sender) async {
+    if (!_can(AdminPermission.editCustomers)) return;
+    final isSuper = _roles.contains(AdminRole.superAdmin.value);
+    final amountController = TextEditingController(text: isSuper ? '5' : '1');
+    final reasonController = TextEditingController();
+    var action = 'award';
+    var selectedTier = SenderTrustPolicy.normalizeTier(
+      sender['senderTier'],
+      points: (sender['senderTrustPoints'] as num?)?.toInt() ?? 0,
+    );
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Sender trust controls'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: action,
+                  decoration: const InputDecoration(labelText: 'Action'),
+                  items: [
+                    const DropdownMenuItem(
+                        value: 'award', child: Text('Award trust points')),
+                    if (isSuper) ...const [
+                      DropdownMenuItem(
+                          value: 'deduct', child: Text('Deduct trust points')),
+                      DropdownMenuItem(
+                          value: 'promote', child: Text('Promote tier')),
+                      DropdownMenuItem(
+                          value: 'demote', child: Text('Demote tier')),
+                      DropdownMenuItem(
+                          value: 'freeze', child: Text('Freeze progression')),
+                      DropdownMenuItem(
+                          value: 'restore', child: Text('Restore progression')),
+                    ],
+                  ],
+                  onChanged: (value) =>
+                      setDialogState(() => action = value ?? action),
+                ),
+                if (action == 'award' || action == 'deduct') ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText:
+                          isSuper ? 'Points value' : 'Points value (+1 to +5)',
+                    ),
+                  ),
+                ],
+                if (action == 'promote' || action == 'demote') ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedTier,
+                    decoration: const InputDecoration(labelText: 'Sender tier'),
+                    items: SenderTrustPolicy.tiers
+                        .map((tier) => DropdownMenuItem(
+                              value: tier,
+                              child: Text(SenderTrustPolicy.label(tier)),
+                            ))
+                        .toList(),
+                    onChanged: (tier) => setDialogState(
+                      () => selectedTier = tier ?? selectedTier,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonController,
+                  autofocus: true,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason required',
+                    hintText: 'Positive engagement with Circum team',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty) return;
+                Navigator.pop(dialogContext, {
+                  'action': action,
+                  'amount': amountController.text.trim(),
+                  'tier': selectedTier,
+                  'reason': reason,
+                });
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+    amountController.dispose();
+    reasonController.dispose();
+    if (result == null) return;
+    await _applySenderTrustAction(sender, result);
+  }
+
+  Future<void> _applySenderTrustAction(
+    Map<String, dynamic> sender,
+    Map<String, String> input,
+  ) async {
+    final isSuper = _roles.contains(AdminRole.superAdmin.value);
+    final action = input['action'] ?? 'award';
+    final reason = input['reason']?.trim() ?? '';
+    final userId = '${sender['id'] ?? sender['userId'] ?? ''}'.trim();
+    if (userId.isEmpty || reason.isEmpty) return;
+    var pointsDelta = int.tryParse(input['amount'] ?? '0') ?? 0;
+    if (action == 'award' && !isSuper && (pointsDelta < 1 || pointsDelta > 5)) {
+      setState(() => _message = 'Admins can award +1 to +5 trust points.');
+      return;
+    }
+    if (action == 'award' && pointsDelta <= 0) return;
+    if (action == 'deduct') {
+      if (!isSuper) return;
+      pointsDelta = -pointsDelta.abs();
+    }
+    if (!isSuper &&
+        const ['deduct', 'promote', 'demote', 'freeze', 'restore']
+            .contains(action)) {
+      return;
+    }
+    final db = FirebaseFirestore.instance;
+    final userRef = db.collection('users').doc(userId);
+    final eventRef = db.collection('senderTrustEvents').doc();
+    final timestamp = FieldValue.serverTimestamp();
+    late Map<String, dynamic> event;
+    await db.runTransaction((transaction) async {
+      final snap = await transaction.get(userRef);
+      final data = snap.data() ?? sender;
+      final previousPoints = (data['senderTrustPoints'] as num?)?.toInt() ?? 0;
+      final previousTier = SenderTrustPolicy.normalizeTier(
+        data['senderTier'],
+        points: previousPoints,
+      );
+      final frozen = data['senderTrustFrozen'] == true;
+      var newPoints = math.max(0, previousPoints + pointsDelta).toInt();
+      var newTier = previousTier;
+      var nextFrozen = frozen;
+      if (action == 'award' || action == 'deduct') {
+        newTier =
+            frozen ? previousTier : SenderTrustPolicy.tierForPoints(newPoints);
+      } else if (action == 'promote' || action == 'demote') {
+        newTier = SenderTrustPolicy.normalizeTier(input['tier']);
+      } else if (action == 'freeze') {
+        nextFrozen = true;
+      } else if (action == 'restore') {
+        nextFrozen = false;
+        newTier = SenderTrustPolicy.tierForPoints(newPoints);
+      }
+      final adminId = _adminUser?.uid ?? 'unknown-admin';
+      final adminEmail = _adminUser?.email ?? '';
+      event = {
+        'userId': userId,
+        'userName': data['fullName'] ?? data['name'] ?? 'Sender',
+        'userEmail': data['email'] ?? sender['email'],
+        'eventType': action,
+        'pointsChange': pointsDelta,
+        'reason': reason,
+        'source': isSuper ? 'super_admin' : 'admin',
+        'awardedBy': adminId,
+        'awardedByEmail': adminEmail,
+        'previousPoints': previousPoints,
+        'newPoints': newPoints,
+        'previousTier': previousTier,
+        'newTier': newTier,
+        'createdAt': timestamp,
+      };
+      transaction.set(
+          userRef,
+          {
+            'senderTrustPoints': newPoints,
+            'senderTier': newTier,
+            'senderTrustFrozen': nextFrozen,
+            'senderTrustUpdatedAt': timestamp,
+            'senderTrustUpdatedBy': adminId,
+            'senderTrustLastReason': reason,
+            'updatedAt': timestamp,
+          },
+          SetOptions(merge: true));
+      transaction.set(eventRef, event);
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: 'sender_trust_$action',
+      recordType: 'users',
+      recordId: userId,
+      oldValue: {
+        'points': event['previousPoints'],
+        'tier': event['previousTier'],
+      },
+      newValue: {'points': event['newPoints'], 'tier': event['newTier']},
+      reason: reason,
+    ));
+    await _notifySenderTrustChange(event, action);
+    setState(() => _message = 'Sender trust updated.');
+    await _loadAdminData();
+  }
+
+  Future<void> _notifySenderTrustChange(
+    Map<String, dynamic> event,
+    String action,
+  ) async {
+    final points = (event['pointsChange'] as num?)?.toInt() ?? 0;
+    final previousTier = '${event['previousTier'] ?? ''}';
+    final newTier = '${event['newTier'] ?? ''}';
+    final positiveAward = points > 0 && action == 'award';
+    final tierChanged = previousTier != newTier &&
+        (action == 'promote' || action == 'demote' || points > 0);
+    if (!positiveAward && !tierChanged) return;
+    final userId = '${event['userId'] ?? ''}';
+    final name = '${event['userName'] ?? 'there'}';
+    final tierLabel = SenderTrustPolicy.label(newTier);
+    final title = positiveAward
+        ? 'Circum Trust Points Awarded'
+        : 'Congratulations — You’ve reached $tierLabel';
+    final notificationBody = positiveAward
+        ? 'Circum has awarded $points Trust Points to your account. Your current sender status: $tierLabel.'
+        : 'Your continued use of Circum has earned you $tierLabel status.';
+    final emailBody = positiveAward
+        ? 'Circum has awarded $points Trust Points to your account.\n\nReason:\n${event['reason']}\n\nAwarded by:\n${_adminUser?.displayName ?? _adminUser?.email ?? 'Circum'}\n\nYour current sender status:\n$tierLabel\n\nThank you for helping make Circum a trusted community.\n\n— Circum'
+        : 'Congratulations.\n\nYour continued use of Circum has earned you $tierLabel status.\n\nYour current sender status:\n$tierLabel\n\nThank you for being a trusted member of the Circum community.\n\n— Circum';
+    final db = FirebaseFirestore.instance;
+    await db.collection('notifications').add({
+      'recipientId': userId,
+      'recipientEmail': event['userEmail'],
+      'type': 'sender_trust',
+      'title': title,
+      'body': notificationBody,
+      'read': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await db.collection('emailQueue').add({
+      'to': event['userEmail'],
+      'subject': title,
+      'body': 'Hello $name,\n\n$emailBody',
+      'type': 'sender_trust',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   List<Widget> _giftRequestRow(Map<String, dynamic> item) {
@@ -13608,6 +13879,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _supportChat = true;
             _chatOpen = true;
           }),
+          onUploadProfilePhoto: _uploadSenderProfilePhoto,
           onSaveProfile: _saveSenderProfile,
           onAddAddress: _addSenderAddress,
           onSavedAddressType: (type) =>
@@ -14713,6 +14985,58 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
+  Future<void> _uploadSenderProfilePhoto() async {
+    final user = _senderUser;
+    if (user == null || _senderProfileSaving) return;
+    setState(() {
+      _senderProfileSaving = true;
+      _senderProfileMessage = 'Uploading profile photo...';
+    });
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 84,
+      );
+      if (picked == null) {
+        if (mounted) {
+          setState(() => _senderProfileMessage = 'No photo selected.');
+        }
+        return;
+      }
+      if (!await _parcelPhotoIsSafe(picked)) {
+        if (mounted) {
+          setState(
+            () => _senderProfileMessage =
+                'Choose a JPG, PNG, WebP, or HEIC image under 10MB.',
+          );
+        }
+        return;
+      }
+      final bytes = await picked.readAsBytes();
+      final safeName = picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final storagePath =
+          'sender_profile_photos/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      final ref = FirebaseStorage.instance.ref(storagePath);
+      await ref.putData(bytes);
+      final url = await ref.getDownloadURL();
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'photoUrl': url,
+        'photoURL': url,
+        'profilePhotoUpdatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (mounted) {
+        setState(() => _senderProfileMessage = 'Profile photo updated.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _senderProfileMessage = 'Could not update photo.');
+      }
+    } finally {
+      if (mounted) setState(() => _senderProfileSaving = false);
+    }
+  }
+
   Future<void> _addSenderAddress() async {
     final user = _senderUser;
     final address = _savedAddress.text.trim();
@@ -14787,6 +15111,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderDeliveries = records;
         _senderDeliveryLoadError = null;
       });
+      await _syncSenderTrustBaseline(uid, records);
     } catch (error) {
       debugPrint('Could not load sender deliveries: $error');
       if (!mounted) return;
@@ -14795,6 +15120,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderDeliveryLoadError =
             'We could not load your delivery status. Please refresh or contact support.';
       });
+    }
+  }
+
+  Future<void> _syncSenderTrustBaseline(
+    String uid,
+    List<SenderDeliveryRecord> records,
+  ) async {
+    if (records.isEmpty || _senderUser?.uid != uid) return;
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('syncSenderTrustBaseline')
+          .call();
+    } catch (error) {
+      debugPrint('Could not sync sender trust baseline: $error');
     }
   }
 
@@ -18820,6 +19159,7 @@ class _SenderProfileStep extends StatelessWidget {
   final VoidCallback onChangeEmail;
   final VoidCallback onSignOut;
   final VoidCallback onRequestDeletion;
+  final VoidCallback onUploadProfilePhoto;
   final VoidCallback onSaveProfile;
   final VoidCallback onAddAddress;
   final ValueChanged<String> onSavedAddressType;
@@ -18864,6 +19204,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onChangeEmail,
     required this.onSignOut,
     required this.onRequestDeletion,
+    required this.onUploadProfilePhoto,
     required this.onSaveProfile,
     required this.onAddAddress,
     required this.onSavedAddressType,
@@ -19111,6 +19452,10 @@ class _SenderProfileStep extends StatelessWidget {
   }
 
   Widget _profileHeroCard(BuildContext context, SenderProfileSummary summary) {
+    final trustPoints = profile?.trustPoints ?? 0;
+    final tier =
+        profile?.senderTier ?? SenderTrustPolicy.tierForPoints(trustPoints);
+    final tierLabel = SenderTrustPolicy.label(tier);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(34),
@@ -19147,15 +19492,38 @@ class _SenderProfileStep extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: MediaQuery.sizeOf(context).width < 520 ? 44 : 56,
-                backgroundColor: colors.field,
-                backgroundImage: (profile?.photoUrl.isNotEmpty == true)
-                    ? NetworkImage(profile!.photoUrl)
-                    : null,
-                child: profile?.photoUrl.isNotEmpty == true
-                    ? null
-                    : Icon(Icons.person, color: colors.text, size: 54),
+              InkWell(
+                onTap: busy ? null : onUploadProfilePhoto,
+                borderRadius: BorderRadius.circular(999),
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    CircleAvatar(
+                      radius: MediaQuery.sizeOf(context).width < 520 ? 44 : 56,
+                      backgroundColor: colors.field,
+                      backgroundImage: (profile?.photoUrl.isNotEmpty == true)
+                          ? NetworkImage(profile!.photoUrl)
+                          : null,
+                      child: profile?.photoUrl.isNotEmpty == true
+                          ? null
+                          : Icon(Icons.person, color: colors.text, size: 54),
+                    ),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [colors.adminAccent, colors.adminGlow],
+                        ),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.36)),
+                      ),
+                      child: const Icon(Icons.camera_alt,
+                          color: Colors.white, size: 16),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 24),
               Expanded(
@@ -19179,8 +19547,12 @@ class _SenderProfileStep extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (_isVerifiedAccount(summary))
-                          _VerifiedAccountBadge(colors: colors),
+                        _SenderTierBadge(
+                          colors: colors,
+                          label: '⭐ $tierLabel',
+                          onTap: () =>
+                              _showSenderTrustDetails(context, summary),
+                        ),
                         if (profile?.isLegend == true &&
                             profile?.legendNumber != null)
                           _GlassMiniChip(
@@ -19206,7 +19578,7 @@ class _SenderProfileStep extends StatelessWidget {
             children: [
               _ProfileHeroMetric(
                 colors: colors,
-                label: 'Completed deliveries',
+                label: 'Delivered Orders',
                 value: '${summary.completedDeliveries}',
               ),
               _ProfileHeroMetric(
@@ -19229,6 +19601,65 @@ class _SenderProfileStep extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showSenderTrustDetails(
+    BuildContext context,
+    SenderProfileSummary summary,
+  ) {
+    final points = profile?.trustPoints ?? 0;
+    final tier = profile?.senderTier ?? SenderTrustPolicy.tierForPoints(points);
+    final next = SenderTrustPolicy.nextTier(tier);
+    final nextThreshold =
+        next == null ? points : SenderTrustPolicy.thresholds[next] ?? points;
+    final needed = next == null ? 0 : math.max(0, nextThreshold - points);
+    final breakdown = <String, int>{
+      'Parcels Sent': summary.totalDeliveries,
+      'Successful Deliveries': summary.completedDeliveries,
+      'Lifetime Spend': (summary.lifetimeValue ~/ 100) * 2,
+      'Gifts Orders': _trustBreakdownValue('giftsOrders'),
+      'Health+ Orders': _trustBreakdownValue('healthOrders'),
+      'Account Age': _trustBreakdownValue('accountAge'),
+      'Referrals': _trustBreakdownValue('referrals'),
+      'Admin Awards': _trustBreakdownValue('adminAwards'),
+    };
+    final content = _SenderTrustDetailsSheet(
+      colors: colors,
+      tier: SenderTrustPolicy.label(tier),
+      points: points,
+      nextTier: next == null ? null : SenderTrustPolicy.label(next),
+      nextThreshold: nextThreshold,
+      pointsNeeded: needed,
+      breakdown: breakdown,
+      isLegend: profile?.isLegend == true,
+      legendNumber: profile?.legendNumber,
+      frozen: profile?.senderTrustFrozen == true,
+    );
+    if (MediaQuery.sizeOf(context).width < 700) {
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (_) => content,
+      );
+    } else {
+      showDialog<void>(
+        context: context,
+        builder: (_) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: content,
+          ),
+        ),
+      );
+    }
+  }
+
+  int _trustBreakdownValue(String key) {
+    final value = profile?.senderTrustBreakdown[key];
+    if (value is num) return value.toInt();
+    return 0;
   }
 
   Widget _profileRightRail(SenderProfileSummary summary) {
@@ -20071,47 +20502,251 @@ class _GlassMiniChip extends StatelessWidget {
   }
 }
 
-class _VerifiedAccountBadge extends StatelessWidget {
+class _SenderTierBadge extends StatelessWidget {
   final _CircumColors colors;
+  final String label;
+  final VoidCallback onTap;
 
-  const _VerifiedAccountBadge({required this.colors});
+  const _SenderTierBadge({
+    required this.colors,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xff22c55e).withValues(alpha: 0.34),
-            const Color(0xff14b8a6).withValues(alpha: 0.22),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          gradient: LinearGradient(
+            colors: [
+              colors.adminAccent.withValues(alpha: 0.42),
+              colors.adminGlow.withValues(alpha: 0.30),
+              const Color(0xff22d3ee).withValues(alpha: 0.18),
+            ],
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.26)),
+          boxShadow: [
+            BoxShadow(
+              color: colors.adminGlow.withValues(alpha: 0.30),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
           ],
         ),
-        border:
-            Border.all(color: const Color(0xff86efac).withValues(alpha: 0.44)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff22c55e).withValues(alpha: 0.24),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle, color: const Color(0xffbbf7d0), size: 16),
-          const SizedBox(width: 7),
-          Text(
-            'Verified Account',
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
             ),
+            const SizedBox(width: 8),
+            Icon(Icons.info_outline, color: colors.text, size: 15),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderTrustDetailsSheet extends StatelessWidget {
+  final _CircumColors colors;
+  final String tier;
+  final int points;
+  final String? nextTier;
+  final int nextThreshold;
+  final int pointsNeeded;
+  final Map<String, int> breakdown;
+  final bool isLegend;
+  final int? legendNumber;
+  final bool frozen;
+
+  const _SenderTrustDetailsSheet({
+    required this.colors,
+    required this.tier,
+    required this.points,
+    required this.nextTier,
+    required this.nextThreshold,
+    required this.pointsNeeded,
+    required this.breakdown,
+    required this.isLegend,
+    required this.legendNumber,
+    required this.frozen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = nextTier == null || nextThreshold <= 0
+        ? 1.0
+        : (points / nextThreshold).clamp(0.0, 1.0);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        16 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: _LuxuryGlassSurface(
+        colors: colors,
+        padding: const EdgeInsets.all(28),
+        glow: colors.adminGlow,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      tier,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.close, color: colors.text),
+                  ),
+                ],
+              ),
+              Text(
+                '$points Trust Points',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (frozen)
+                _GlassMiniChip(
+                  colors: colors,
+                  label: 'Progression paused by Circum',
+                ),
+              if (nextTier != null) ...[
+                const SizedBox(height: 18),
+                Text(
+                  'Progress to $nextTier',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    minHeight: 12,
+                    value: progress,
+                    backgroundColor: Colors.white.withValues(alpha: 0.10),
+                    valueColor: AlwaysStoppedAnimation<Color>(colors.adminGlow),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$points / $nextThreshold · $pointsNeeded points to go',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 18),
+                Text(
+                  'You have reached the highest sender tier.',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              Text(
+                'Tier ladder',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: SenderTrustPolicy.tiers
+                    .map((tierId) => _GlassMiniChip(
+                          colors: colors,
+                          label:
+                              '${SenderTrustPolicy.label(tierId)} ${SenderTrustPolicy.thresholds[tierId]}+',
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'How points are earned',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Parcel Sent +1 · Successful Delivery +1 · Lifetime Spend Milestone +2 · Gifts Order +3 · Health+ Order +5 · Account Age +2 · Referral +7',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Score breakdown',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...breakdown.entries.map(
+                (entry) => _PriceLine(
+                  colors: colors,
+                  label: entry.key,
+                  value: '${entry.value}',
+                ),
+              ),
+              if (isLegend && legendNumber != null) ...[
+                const SizedBox(height: 18),
+                _GlassMiniChip(colors: colors, label: 'Legend #$legendNumber'),
+              ],
+              const SizedBox(height: 18),
+              Text(
+                'Some internal trust adjustments may affect your score.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

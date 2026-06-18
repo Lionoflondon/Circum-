@@ -19,6 +19,7 @@ const platformNotifications = require("./platform-notifications");
 const legends = require("./legends");
 const giftsPayment = require("./gifts-payment");
 const rothLedger = require("./roth-ledger");
+const senderTrust = require("./sender-trust");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -54,6 +55,7 @@ exports.redeemGiftCard = rothLedger.redeemGiftCard;
 exports.setWalletFrozen = rothLedger.setWalletFrozen;
 exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
 exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
+exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
