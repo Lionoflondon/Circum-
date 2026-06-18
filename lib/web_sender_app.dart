@@ -13045,6 +13045,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _roleChoiceConfirmed = false;
   bool _differentCollectionContact = false;
   bool _parcelPhotoBusy = false;
+  bool _healthRouteDismissed = false;
   int _statusIndex = 0;
   int _selectedRating = 0;
   double _selectedTipAmount = 0;
@@ -13182,7 +13183,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         LayoutBuilder(
           builder: (context, constraints) {
             final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
-                _step != _SenderStep.healthPlus;
+                !_isHealthPlusRoute;
             return Column(
               children: [
                 _PortalHeader(
@@ -13250,7 +13251,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Widget _buildCurrentStep(_CircumColors colors) {
-    if (_step == _SenderStep.healthPlus) {
+    if (_isHealthPlusRoute) {
       return _buildHealthPlusStep(colors);
     }
     if (_senderAuthLoading) {
@@ -13293,6 +13294,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onSendParcel: () => setState(() => _step = _SenderStep.details),
           onHealthPlus: () => setState(() {
             _roleChoiceConfirmed = true;
+            _healthRouteDismissed = false;
             _step = _SenderStep.healthPlus;
           }),
           onProfile: () => setState(() => _step = _SenderStep.profile),
@@ -13557,61 +13559,90 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Widget _buildHealthPlusStep(_CircumColors colors) {
-    return _HealthPlusStep(
-      key: const ValueKey('health-plus'),
-      colors: colors,
-      fullName: _healthName,
-      phone: _healthPhone,
-      email: _healthEmail,
-      pharmacyName: _healthPharmacyName,
-      pharmacyAddress: _healthPharmacy,
-      deliveryAddress: _healthDelivery,
-      notes: _healthNotes,
-      preferredDay: _healthPreferredDay,
-      preferredTime: _healthPreferredTime,
-      customSchedule: _healthCustomSchedule,
-      frequency: _healthFrequency,
-      prescriptionType: _healthPrescriptionType,
-      subscriptionPlan: _healthSubscriptionPlan,
-      consent: _healthConsent,
-      savePayment: _healthSavePayment,
-      submitting: _healthSubmitting,
-      message: messageForHealthPlus,
-      checkoutUrl: _healthCheckoutUrl,
-      quote: _healthQuote,
-      rothAvailable: _senderRothBalance,
-      pickups: _healthPickups,
-      payments: _healthPayments,
-      onBack: () => setState(() => _step = _SenderStep.dashboard),
-      onFrequency: (frequency) => setState(() => _healthFrequency = frequency),
-      onPrescriptionType: (type) =>
-          setState(() => _healthPrescriptionType = type),
-      onSubscriptionPlan: (plan) =>
-          setState(() => _healthSubscriptionPlan = plan),
-      onStartSubscription: (plan) {
-        setState(() {
-          _healthSubscriptionPlan = plan;
-          if (_healthFrequency == HealthPlusFrequency.oneOff) {
-            _healthFrequency = HealthPlusFrequency.weekly;
-          }
-        });
-        _bookHealthPlus();
-      },
-      onContinueOneOff: () {
-        setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
-        _bookHealthPlus();
-      },
-      onConsent: (value) => setState(() => _healthConsent = value ?? false),
-      onSavePayment: (value) =>
-          setState(() => _healthSavePayment = value ?? false),
-      onSubmit: _bookHealthPlus,
-      onPauseSchedule: _pauseHealthPlusSchedule,
-      onResumeSchedule: _resumeHealthPlusSchedule,
-      onCancelSchedule: _cancelHealthPlusSchedule,
-      onCancelPickup: _cancelNextHealthPlusPickup,
-      onUpdatePayment: _openHealthPlusCheckout,
-      onAdminStatus: _adminUpdateHealthPlusStatus,
-    );
+    try {
+      return _HealthPlusStep(
+        key: const ValueKey('health-plus'),
+        colors: colors,
+        fullName: _healthName,
+        phone: _healthPhone,
+        email: _healthEmail,
+        pharmacyName: _healthPharmacyName,
+        pharmacyAddress: _healthPharmacy,
+        deliveryAddress: _healthDelivery,
+        notes: _healthNotes,
+        preferredDay: _healthPreferredDay,
+        preferredTime: _healthPreferredTime,
+        customSchedule: _healthCustomSchedule,
+        frequency: _healthFrequency,
+        prescriptionType: _healthPrescriptionType,
+        subscriptionPlan: _healthSubscriptionPlan,
+        consent: _healthConsent,
+        savePayment: _healthSavePayment,
+        submitting: _healthSubmitting,
+        message: messageForHealthPlus,
+        checkoutUrl: _healthCheckoutUrl,
+        quote: _healthQuote,
+        rothAvailable: _senderRothBalance,
+        pickups: _healthPickups,
+        payments: _healthPayments,
+        onBack: () => setState(() {
+          _healthRouteDismissed = true;
+          _step = _SenderStep.dashboard;
+        }),
+        onFrequency: (frequency) =>
+            setState(() => _healthFrequency = frequency),
+        onPrescriptionType: (type) =>
+            setState(() => _healthPrescriptionType = type),
+        onSubscriptionPlan: (plan) =>
+            setState(() => _healthSubscriptionPlan = plan),
+        onStartSubscription: (plan) {
+          setState(() {
+            _healthSubscriptionPlan = plan;
+            if (_healthFrequency == HealthPlusFrequency.oneOff) {
+              _healthFrequency = HealthPlusFrequency.weekly;
+            }
+          });
+          _bookHealthPlus();
+        },
+        onContinueOneOff: () {
+          setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
+          _bookHealthPlus();
+        },
+        onConsent: (value) => setState(() => _healthConsent = value ?? false),
+        onSavePayment: (value) =>
+            setState(() => _healthSavePayment = value ?? false),
+        onSubmit: _bookHealthPlus,
+        onPauseSchedule: _pauseHealthPlusSchedule,
+        onResumeSchedule: _resumeHealthPlusSchedule,
+        onCancelSchedule: _cancelHealthPlusSchedule,
+        onCancelPickup: _cancelNextHealthPlusPickup,
+        onUpdatePayment: _openHealthPlusCheckout,
+        onAdminStatus: _adminUpdateHealthPlusStatus,
+      );
+    } catch (error, stackTrace) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'circum.health_plus',
+        context: ErrorDescription('building the Health+ route'),
+      ));
+      return _HealthPlusUnavailableCard(
+        colors: colors,
+        debugError: kDebugMode ? '$error' : null,
+        onRetry: () => setState(() {
+          _healthMessage = 'Health+ is loading.';
+          _step = _SenderStep.healthPlus;
+        }),
+      );
+    }
+  }
+
+  bool get _isHealthPlusRoute {
+    return _step == _SenderStep.healthPlus ||
+        (!_healthRouteDismissed &&
+            (widget.initialStep == _SenderStep.healthPlus ||
+                Uri.base.queryParameters['app'] == 'health' ||
+                Uri.base.queryParameters.containsKey('health')));
   }
 
   String? get messageForHealthPlus {
@@ -20532,6 +20563,132 @@ class _ContactSummaryLine extends StatelessWidget {
               height: 1.35,
               fontWeight: FontWeight.w700,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HealthPlusUnavailableCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String? debugError;
+  final VoidCallback onRetry;
+
+  const _HealthPlusUnavailableCard({
+    required this.colors,
+    required this.onRetry,
+    this.debugError,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepTopBar(colors: colors, title: 'Health+', onBack: onRetry),
+        const SizedBox(height: 14),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  gradient: LinearGradient(
+                    colors: [
+                      colors.adminAccent.withValues(alpha: 0.90),
+                      colors.adminGlow.withValues(alpha: 0.74),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.adminGlow.withValues(alpha: 0.24),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.health_and_safety,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Health+ temporarily unavailable',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 28,
+                  height: 1.08,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Unable to load Health+ right now. Please try again.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.45,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (debugError != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  debugError!,
+                  style: TextStyle(
+                    color: colors.warning,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xff1dd6ff),
+                        Color(0xff476cff),
+                        Color(0xffa855f7),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.adminGlow.withValues(alpha: 0.24),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry Health+'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
