@@ -13270,7 +13270,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         onForgotPassword: _sendSenderPasswordReset,
       );
     }
-    if (!_roleChoiceConfirmed && _availableRoles.length > 1) {
+    if (!_roleChoiceConfirmed &&
+        _availableRoles.length > 1 &&
+        _step != _SenderStep.healthPlus) {
       return _MultiRoleChoicePanel(
         colors: colors,
         roles: _availableRoles,
@@ -13286,7 +13288,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           profile: _senderProfile,
           deliveries: _senderDeliveries,
           onSendParcel: () => setState(() => _step = _SenderStep.details),
-          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+          onHealthPlus: () => setState(() {
+            _roleChoiceConfirmed = true;
+            _step = _SenderStep.healthPlus;
+          }),
           onProfile: () => setState(() => _step = _SenderStep.profile),
           onSupport: () => setState(() {
             _supportChat = true;
@@ -15737,7 +15742,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _firebaseOnline = true;
         _step = _SenderStep.tracking;
       });
-    } catch (_) {
+    } on StateError catch (error) {
+      debugPrint('Delivery checkout/payment error: $error');
+      if (!mounted) return;
+      final message = error.message.isNotEmpty
+          ? error.message
+          : 'We could not start payment just now. Please try again.';
+      setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _broadcasting = false;
+        _firebaseOnline = true;
+        _firebaseError = message;
+      });
+    } catch (error) {
+      debugPrint('Delivery checkout/save error: $error');
       if (!mounted) return;
       setState(() {
         _checkoutState = _CheckoutState.failed;
@@ -15774,54 +15792,67 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'stripeAmount': 0,
       };
     }
+    var cardPaymentCompleted = false;
+    var rothDebited = false;
     if (cardRemaining > 0) {
-      Stripe.publishableKey = Env.publishableLiveKey;
-      await Stripe.instance.applySettings();
-      final response = await http.post(
-        Uri.parse(
-          'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
-        ),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'currency': 'gbp',
-          'amount': (cardRemaining * 100).round(),
-          'pushToken': '',
-          'email': user.email,
-          'name': _senderName.text.trim(),
-          'userId': user.uid,
-          'saveCard': false,
-          'useWallet': false,
-          'referenceId': requestId,
-        }),
-      );
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final clientSecret = '${data['clientSecret'] ?? ''}';
-      if (clientSecret.isEmpty || data['error'] != null) {
-        throw StateError('${data['error'] ?? 'Could not start card payment.'}');
-      }
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Circum',
-          style: ThemeMode.dark,
-        ),
-      );
-      await Stripe.instance.presentPaymentSheet();
-      if (rothApplied > 0) {
-        await FirebaseFunctions.instance
-            .httpsCallable('applyCheckoutRoth')
-            .call({
-          'amount': rothApplied,
-          'referenceId': requestId,
-          'service': 'delivery',
-        });
+      try {
+        Stripe.publishableKey = Env.publishableLiveKey;
+        await Stripe.instance.applySettings();
+        final response = await http.post(
+          Uri.parse(
+            'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
+          ),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'currency': 'gbp',
+            'amount': (cardRemaining * 100).round(),
+            'pushToken': '',
+            'email': user.email,
+            'name': _senderName.text.trim(),
+            'userId': user.uid,
+            'saveCard': false,
+            'useWallet': false,
+            'referenceId': requestId,
+          }),
+        );
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final clientSecret = '${data['clientSecret'] ?? ''}';
+        if (clientSecret.isEmpty || data['error'] != null) {
+          throw StateError(
+              '${data['error'] ?? 'Could not start card payment.'}');
+        }
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Circum',
+            style: ThemeMode.dark,
+          ),
+        );
+        await Stripe.instance.presentPaymentSheet();
+        cardPaymentCompleted = true;
+        if (rothApplied > 0) {
+          await FirebaseFunctions.instance
+              .httpsCallable('applyCheckoutRoth')
+              .call({
+            'amount': rothApplied,
+            'referenceId': requestId,
+            'service': 'delivery',
+          });
+          rothDebited = true;
+        }
+      } catch (error) {
+        debugPrint('Delivery card payment setup failed: $error');
+        throw StateError(
+            'We could not start card payment just now. Please try again.');
       }
     }
     return {
-      'paymentStatus': 'paid',
+      'paymentStatus': cardRemaining <= 0 || cardPaymentCompleted
+          ? 'paid'
+          : 'payment_pending',
       'paidByRoth': cardRemaining <= 0,
-      'rothApplied': rothApplied,
-      'walletContributionGbp': rothApplied,
+      'rothApplied': rothDebited ? rothApplied : 0,
+      'walletContributionGbp': rothDebited ? rothApplied : 0,
       'cardRemaining': cardRemaining,
       'stripeAmount': cardRemaining,
     };
@@ -22600,34 +22631,68 @@ class _PaymentStep extends StatelessWidget {
         const SizedBox(height: 18),
         SizedBox(
           width: double.infinity,
-          child: FilledButton.icon(
-            onPressed:
-                weightConfirmed && locationsConfirmed && !processingPayment
-                    ? onPay
-                    : null,
-            icon: processingPayment
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.lock),
-            label: Text(
-              processingPayment
-                  ? 'Processing payment...'
-                  : !locationsConfirmed
-                      ? 'Confirm pickup and drop-off before payment'
-                      : weightConfirmed
-                          ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
-                          : 'Confirm parcel weight before payment',
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
-              foregroundColor: colors.inverseText,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              gradient: LinearGradient(
+                colors: weightConfirmed && locationsConfirmed
+                    ? const [
+                        Color(0xff1dd6ff),
+                        Color(0xff476cff),
+                        Color(0xffa855f7),
+                      ]
+                    : [
+                        colors.field.withValues(alpha: 0.9),
+                        colors.field.withValues(alpha: 0.65),
+                      ],
               ),
-              padding: const EdgeInsets.symmetric(vertical: 17),
+              boxShadow: weightConfirmed && locationsConfirmed
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xff38bdf8).withValues(alpha: 0.22),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
+                      ),
+                    ]
+                  : null,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.18),
+              ),
+            ),
+            child: FilledButton.icon(
+              onPressed:
+                  weightConfirmed && locationsConfirmed && !processingPayment
+                      ? onPay
+                      : null,
+              icon: processingPayment
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock),
+              label: Text(
+                processingPayment
+                    ? 'Processing payment...'
+                    : !locationsConfirmed
+                        ? 'Confirm pickup and drop-off before payment'
+                        : weightConfirmed
+                            ? total <= rothAvailable && total > 0
+                                ? 'Pay with Roth & Broadcast'
+                                : 'Continue to Card Payment'
+                            : 'Confirm parcel weight before payment',
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                disabledBackgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                disabledForegroundColor: colors.mutedText,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 18),
+              ),
             ),
           ),
         ),
@@ -25617,18 +25682,60 @@ class _CircumPaymentSummary extends StatelessWidget {
     final remaining = math.max(0, total - applied);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xff0f4cff).withValues(alpha: 0.28),
+            const Color(0xff111827).withValues(alpha: 0.86),
+            const Color(0xff7c3aed).withValues(alpha: 0.24),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xff67e8f9).withValues(alpha: 0.30),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff2563eb).withValues(alpha: 0.24),
+            blurRadius: 32,
+            offset: const Offset(0, 18),
+          ),
+          BoxShadow(
+            color: const Color(0xffa855f7).withValues(alpha: 0.12),
+            blurRadius: 46,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.account_balance_wallet_outlined, color: colors.text),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff67e8f9), Color(0xff8b5cf6)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff67e8f9).withValues(alpha: 0.28),
+                      blurRadius: 18,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Colors.white,
+                  size: 21,
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -25663,7 +25770,25 @@ class _CircumPaymentSummary extends StatelessWidget {
             colors: colors,
             label: 'Card Remaining',
             value: '£${remaining.toStringAsFixed(2)}',
-            strong: remaining > 0,
+            strong: true,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Card Remaining',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+            ),
+          ),
+          Text(
+            '£${remaining.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.w900,
+              height: 1.05,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
