@@ -13185,23 +13185,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Widget build(BuildContext context) {
     final colors = widget.colors;
     final healthPlusMode = _isHealthPlusRoute;
-    _logHealthPlusBranch(
-      context,
-      'portal-build',
-      extra:
-          'step=${_step.name}, initial=${widget.initialStep.name}, routeRequested=$_healthPlusRequestedByRoute, dismissed=$_healthRouteDismissed',
-    );
     return Stack(
       children: [
         LayoutBuilder(builder: (context, constraints) {
           final desktop =
               constraints.maxWidth >= _desktopWebBreakpoint && !healthPlusMode;
-          _logHealthPlusBranch(
-            context,
-            'portal-layout',
-            maxWidth: constraints.maxWidth,
-            extra: 'desktop=$desktop, healthPlusMode=$healthPlusMode',
-          );
           if (healthPlusMode) {
             return Column(
               children: [
@@ -13213,9 +13201,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   onProfile: () => setState(() => _step = _SenderStep.profile),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
-                    child: _buildHealthPlusStep(colors),
+                  child: SafeArea(
+                    top: false,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(18, 24, 18, 96),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 760),
+                          child: _buildHealthPlusStep(colors),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -13601,11 +13597,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Widget _buildHealthPlusStep(_CircumColors colors) {
     try {
-      debugPrint(
-        'Health+ branch: build-body user=${_senderUser?.uid ?? 'guest'} '
-        'authLoading=$_senderAuthLoading profileLoaded=${_senderProfile != null} '
-        'pickups=${_healthPickups.length} payments=${_healthPayments.length}',
-      );
       return _HealthPlusStep(
         key: const ValueKey('health-plus'),
         colors: colors,
@@ -13631,11 +13622,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         rothAvailable: _senderRothBalance,
         pickups: _healthPickups,
         payments: _healthPayments,
-        currentRoute: Uri.base.toString(),
-        authState: _senderUser == null
-            ? (_senderAuthLoading ? 'loading' : 'guest')
-            : 'signed-in:${_senderUser!.uid}',
-        senderStep: _step.name,
         onBack: () => setState(() {
           _healthRouteDismissed = true;
           _step = _SenderStep.dashboard;
@@ -13704,23 +13690,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_healthMessage != null) return _healthMessage;
     if (_senderAuthLoading) return 'Health+ is loading.';
     return null;
-  }
-
-  void _logHealthPlusBranch(
-    BuildContext context,
-    String branch, {
-    double? maxWidth,
-    String? extra,
-  }) {
-    if (!_isHealthPlusRoute && !_healthPlusRequestedByRoute) return;
-    final size = MediaQuery.maybeSizeOf(context);
-    final width = maxWidth ?? size?.width ?? 0;
-    debugPrint(
-      'Health+ branch: $branch width=${width.toStringAsFixed(1)} '
-      'desktop=${width >= _desktopWebBreakpoint} web=$kIsWeb '
-      'authLoading=$_senderAuthLoading user=${_senderUser?.uid ?? 'guest'}'
-      '${extra == null ? '' : ' $extra'}',
-    );
   }
 
   double get _quoteTotal {
@@ -19151,21 +19120,25 @@ class _SenderProfileStep extends StatelessWidget {
             ],
             if (tabIndex != 0) ...[
               const SizedBox(height: 16),
-              _GlassPanel(colors: colors, child: _tabBody(context, summary)),
+              _PremiumGlassPanel(
+                colors: colors,
+                padding: const EdgeInsets.all(28),
+                child: _tabBody(context, summary),
+              ),
             ],
           ],
         );
         final rail = _profileNavigation(tabs, vertical: desktop);
-        final right = _profileRightRail();
+        final right = _profileRightRail(summary);
 
         if (desktop) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(width: 240, child: rail),
-              const SizedBox(width: 18),
+              const SizedBox(width: 26),
               Expanded(flex: 6, child: body),
-              const SizedBox(width: 18),
+              const SizedBox(width: 26),
               Expanded(flex: 3, child: right),
             ],
           );
@@ -19225,8 +19198,9 @@ class _SenderProfileStep extends StatelessWidget {
           : Padding(padding: const EdgeInsets.only(right: 10), child: item);
     });
     if (vertical) {
-      return _GlassPanel(
+      return _PremiumGlassPanel(
         colors: colors,
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -19238,7 +19212,7 @@ class _SenderProfileStep extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 20),
             ...items,
           ],
         ),
@@ -19253,24 +19227,31 @@ class _SenderProfileStep extends StatelessWidget {
   Widget _profileHeroCard(BuildContext context, SenderProfileSummary summary) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(34),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(40),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            colors.adminAccent.withValues(alpha: 0.22),
-            colors.adminGlow.withValues(alpha: 0.16),
-            colors.field.withValues(alpha: 0.70),
+            const Color(0xff1dd6ff).withValues(alpha: 0.30),
+            const Color(0xff476cff).withValues(alpha: 0.24),
+            const Color(0xffa855f7).withValues(alpha: 0.24),
+            colors.field.withValues(alpha: 0.78),
           ],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.26)),
         boxShadow: [
           BoxShadow(
-            color: colors.adminGlow.withValues(alpha: 0.18),
-            blurRadius: 42,
-            offset: const Offset(0, 24),
+            color: colors.adminGlow.withValues(alpha: 0.30),
+            blurRadius: 68,
+            spreadRadius: 4,
+            offset: const Offset(0, 32),
+          ),
+          BoxShadow(
+            color: colors.adminAccent.withValues(alpha: 0.18),
+            blurRadius: 44,
+            offset: const Offset(-12, -8),
           ),
         ],
       ),
@@ -19281,16 +19262,16 @@ class _SenderProfileStep extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
-                radius: 42,
+                radius: MediaQuery.sizeOf(context).width < 520 ? 44 : 56,
                 backgroundColor: colors.field,
                 backgroundImage: (profile?.photoUrl.isNotEmpty == true)
                     ? NetworkImage(profile!.photoUrl)
                     : null,
                 child: profile?.photoUrl.isNotEmpty == true
                     ? null
-                    : Icon(Icons.person, color: colors.text, size: 42),
+                    : Icon(Icons.person, color: colors.text, size: 54),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 24),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -19302,12 +19283,12 @@ class _SenderProfileStep extends StatelessWidget {
                       style: TextStyle(
                         color: colors.text,
                         fontSize:
-                            MediaQuery.sizeOf(context).width < 520 ? 30 : 38,
+                            MediaQuery.sizeOf(context).width < 520 ? 34 : 46,
                         height: 1.02,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 14),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -19335,7 +19316,7 @@ class _SenderProfileStep extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 36),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -19367,76 +19348,74 @@ class _SenderProfileStep extends StatelessWidget {
     );
   }
 
-  Widget _profileRightRail() {
-    final delivery =
+  Widget _profileRightRail(SenderProfileSummary summary) {
+    final latestDelivery =
         selectedDelivery ?? (deliveries.isEmpty ? null : deliveries.first);
-    final status = delivery?.status ?? 'No active delivery';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _GlassPanel(
+        _PremiumGlassPanel(
           colors: colors,
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(colors: colors, title: 'Delivery Status'),
-              const SizedBox(height: 12),
-              _GlassMiniChip(colors: colors, label: _titleCase(status)),
-              const SizedBox(height: 12),
+              _SectionTitle(colors: colors, title: 'Account Pulse'),
+              const SizedBox(height: 18),
+              _GlassMiniChip(colors: colors, label: summary.loyaltyLevel),
+              const SizedBox(height: 18),
               Text(
-                delivery == null
-                    ? 'No selected delivery. Choose a delivery to see tracking details.'
-                    : '${delivery.pickupAddress}\n→ ${delivery.dropoffAddress}',
+                'Your sender profile, Roth balance, saved places, support history, and delivery record live here.',
                 style: TextStyle(
                   color: colors.mutedText,
-                  height: 1.4,
+                  height: 1.5,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (delivery?.assignedDriverName.isNotEmpty == true) ...[
-                const SizedBox(height: 10),
-                Text(
-                  'Rider: ${delivery!.assignedDriverName}',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+              const SizedBox(height: 18),
+              _SettingsLine(
+                colors: colors,
+                label: 'Profile',
+                value: profile?.verificationStatus ?? 'unverified',
+              ),
+              _SettingsLine(
+                colors: colors,
+                label: 'Roth',
+                value: '£${rothBalance.toStringAsFixed(2)}',
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        _GlassPanel(
+        const SizedBox(height: 22),
+        _PremiumGlassPanel(
           colors: colors,
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(colors: colors, title: 'Price Breakdown'),
-              const SizedBox(height: 12),
-              _PriceLine(
+              _SectionTitle(colors: colors, title: 'Dashboard Summary'),
+              const SizedBox(height: 18),
+              _SettingsLine(
                 colors: colors,
-                label: 'Base fare',
-                value: delivery == null ? '—' : 'Included',
+                label: 'Completed',
+                value: '${summary.completedDeliveries}',
               ),
-              _PriceLine(
+              _SettingsLine(
                 colors: colors,
-                label: 'Distance',
-                value: delivery == null ? '—' : 'Included',
+                label: 'Parcels',
+                value: '${summary.totalDeliveries}',
               ),
-              _PriceLine(
+              _SettingsLine(
                 colors: colors,
-                label: 'Vehicle',
-                value: delivery == null ? '—' : 'Included',
+                label: 'Spend',
+                value: '£${summary.lifetimeValue.toStringAsFixed(2)}',
               ),
-              Divider(color: colors.border, height: 24),
-              _PriceLine(
+              _SettingsLine(
                 colors: colors,
-                label: 'Total',
-                value: delivery == null
-                    ? '—'
-                    : '£${delivery.pricePaid.toStringAsFixed(2)}',
-                strong: true,
+                label: 'Latest',
+                value: latestDelivery == null
+                    ? 'No deliveries yet'
+                    : _deliveryStatusChipLabel(latestDelivery.status),
               ),
             ],
           ),
@@ -19502,29 +19481,33 @@ class _SenderProfileStep extends StatelessWidget {
 
   Widget _deliveryGlassCard(SenderDeliveryRecord delivery) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
         onTap: () => onSelectDelivery(delivery),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           width: double.infinity,
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(32),
             gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: [
-                colors.adminAccent.withValues(alpha: 0.16),
-                colors.adminGlow.withValues(alpha: 0.10),
-                colors.field.withValues(alpha: 0.68),
+                colors.adminAccent.withValues(alpha: 0.22),
+                colors.adminGlow.withValues(alpha: 0.16),
+                Colors.white.withValues(alpha: colors.dark ? 0.08 : 0.60),
+                colors.field.withValues(alpha: 0.76),
               ],
             ),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
             boxShadow: [
               BoxShadow(
-                color: colors.adminGlow.withValues(alpha: 0.10),
-                blurRadius: 28,
-                offset: const Offset(0, 14),
+                color: colors.adminGlow.withValues(alpha: 0.20),
+                blurRadius: 42,
+                spreadRadius: 1,
+                offset: const Offset(0, 22),
               ),
             ],
           ),
@@ -19541,7 +19524,7 @@ class _SenderProfileStep extends StatelessWidget {
                           : delivery.parcelDescription,
                       style: TextStyle(
                         color: colors.text,
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -19553,7 +19536,7 @@ class _SenderProfileStep extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Text(
                 '${delivery.pickupAddress}\n→ ${delivery.dropoffAddress}',
                 style: TextStyle(
@@ -19562,7 +19545,7 @@ class _SenderProfileStep extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -20065,9 +20048,9 @@ class _ProfileNavItem extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(26),
           gradient: selected
               ? const LinearGradient(
                   colors: [
@@ -20078,8 +20061,8 @@ class _ProfileNavItem extends StatelessWidget {
                 )
               : LinearGradient(
                   colors: [
-                    colors.field.withValues(alpha: 0.66),
-                    Colors.white.withValues(alpha: colors.dark ? 0.05 : 0.50),
+                    colors.field.withValues(alpha: 0.76),
+                    Colors.white.withValues(alpha: colors.dark ? 0.08 : 0.56),
                   ],
                 ),
           border: Border.all(
@@ -20090,9 +20073,10 @@ class _ProfileNavItem extends StatelessWidget {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: colors.adminGlow.withValues(alpha: 0.24),
-                    blurRadius: 26,
-                    offset: const Offset(0, 12),
+                    color: colors.adminGlow.withValues(alpha: 0.38),
+                    blurRadius: 36,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 16),
                   ),
                 ]
               : null,
@@ -20101,7 +20085,7 @@ class _ProfileNavItem extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: Colors.white, size: 19),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Text(
               label,
               style: TextStyle(
@@ -20130,11 +20114,11 @@ class _GlassMiniChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         gradient: LinearGradient(
           colors: [
-            colors.adminAccent.withValues(alpha: 0.22),
-            colors.adminGlow.withValues(alpha: 0.14),
+            colors.adminAccent.withValues(alpha: 0.30),
+            colors.adminGlow.withValues(alpha: 0.22),
           ],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: Text(
         label,
@@ -20162,12 +20146,25 @@ class _ProfileHeroMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: MediaQuery.sizeOf(context).width < 520 ? 142 : 184,
-      padding: const EdgeInsets.all(16),
+      width: MediaQuery.sizeOf(context).width < 520 ? 152 : 204,
+      padding: const EdgeInsets.all(21),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withValues(alpha: colors.dark ? 0.08 : 0.68),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        borderRadius: BorderRadius.circular(30),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: colors.dark ? 0.13 : 0.76),
+            colors.adminAccent.withValues(alpha: 0.14),
+            colors.adminGlow.withValues(alpha: 0.10),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.14),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -20186,13 +20183,61 @@ class _ProfileHeroMetric extends StatelessWidget {
             value,
             style: TextStyle(
               color: colors.text,
-              fontSize: 28,
+              fontSize: 31,
               height: 1,
               fontWeight: FontWeight.w900,
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PremiumGlassPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _PremiumGlassPanel({
+    required this.colors,
+    required this.child,
+    this.padding = const EdgeInsets.all(24),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: colors.dark ? 0.11 : 0.74),
+            colors.adminAccent.withValues(alpha: 0.14),
+            colors.adminGlow.withValues(alpha: 0.12),
+            colors.field.withValues(alpha: 0.72),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.22),
+            blurRadius: 46,
+            spreadRadius: 2,
+            offset: const Offset(0, 24),
+          ),
+          BoxShadow(
+            color: colors.adminAccent.withValues(alpha: 0.10),
+            blurRadius: 28,
+            offset: const Offset(-10, -8),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }
@@ -20217,21 +20262,22 @@ class _SettingsSection extends StatelessWidget {
     final accent = danger ? const Color(0xffef4444) : colors.adminAccent;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
           colors: [
-            accent.withValues(alpha: danger ? 0.12 : 0.16),
-            colors.field.withValues(alpha: 0.64),
+            accent.withValues(alpha: danger ? 0.16 : 0.22),
+            Colors.white.withValues(alpha: colors.dark ? 0.08 : 0.64),
+            colors.field.withValues(alpha: 0.70),
           ],
         ),
-        border: Border.all(color: accent.withValues(alpha: 0.24)),
+        border: Border.all(color: accent.withValues(alpha: 0.32)),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: 0.08),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
+            color: accent.withValues(alpha: 0.16),
+            blurRadius: 34,
+            offset: const Offset(0, 18),
           ),
         ],
       ),
@@ -20254,7 +20300,7 @@ class _SettingsSection extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 18),
           ...children,
         ],
       ),
@@ -21518,9 +21564,6 @@ class _HealthPlusStep extends StatelessWidget {
   final double rothAvailable;
   final List<Map<String, dynamic>> pickups;
   final List<Map<String, dynamic>> payments;
-  final String currentRoute;
-  final String authState;
-  final String senderStep;
   final VoidCallback onBack;
   final ValueChanged<HealthPlusFrequency> onFrequency;
   final ValueChanged<String> onPrescriptionType;
@@ -21562,9 +21605,6 @@ class _HealthPlusStep extends StatelessWidget {
     required this.rothAvailable,
     required this.pickups,
     required this.payments,
-    required this.currentRoute,
-    required this.authState,
-    required this.senderStep,
     required this.onBack,
     required this.onFrequency,
     required this.onPrescriptionType,
@@ -21584,13 +21624,10 @@ class _HealthPlusStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('_HealthPlusStep build start');
     final nextPickup = pickups.isEmpty ? null : pickups.first;
-    final viewportWidth = MediaQuery.sizeOf(context).width;
-    final desktop = viewportWidth >= _desktopWebBreakpoint;
     final cardRemaining =
         math.max(0, quote.total - math.min(quote.total, rothAvailable));
-    final content = Container(
+    return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
@@ -21606,73 +21643,6 @@ class _HealthPlusStep extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xfffff200),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: const Text(
-              'HEALTH+ BODY MOUNTED',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xff00e5ff),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: Text(
-              'Health+ diagnostics\n'
-              'viewport width: ${viewportWidth.toStringAsFixed(1)}\n'
-              'route: $currentRoute\n'
-              'auth state: $authState\n'
-              'sender step: $senderStep\n'
-              'detection: ${desktop ? 'desktop' : 'mobile/tablet'}',
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 13,
-                height: 1.35,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xffff2bd6),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x66ff2bd6),
-                  blurRadius: 22,
-                  offset: Offset(0, 12),
-                ),
-              ],
-            ),
-            child: const Text(
-              'IF YOU CAN SEE THIS CARD, _HealthPlusStep IS RENDERING',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
           _StepTopBar(colors: colors, title: 'Health+', onBack: onBack),
           const SizedBox(height: 14),
           _GlassPanel(
@@ -22080,8 +22050,6 @@ class _HealthPlusStep extends StatelessWidget {
         ],
       ),
     );
-    debugPrint('_HealthPlusStep build complete');
-    return content;
   }
 }
 
