@@ -13250,6 +13250,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Widget _buildCurrentStep(_CircumColors colors) {
+    if (_step == _SenderStep.healthPlus) {
+      return _buildHealthPlusStep(colors);
+    }
     if (_senderAuthLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -13501,62 +13504,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _senderProfileTab = 1;
           }),
         ),
-      _SenderStep.healthPlus => _HealthPlusStep(
-          key: const ValueKey('health-plus'),
-          colors: colors,
-          fullName: _healthName,
-          phone: _healthPhone,
-          email: _healthEmail,
-          pharmacyName: _healthPharmacyName,
-          pharmacyAddress: _healthPharmacy,
-          deliveryAddress: _healthDelivery,
-          notes: _healthNotes,
-          preferredDay: _healthPreferredDay,
-          preferredTime: _healthPreferredTime,
-          customSchedule: _healthCustomSchedule,
-          frequency: _healthFrequency,
-          prescriptionType: _healthPrescriptionType,
-          subscriptionPlan: _healthSubscriptionPlan,
-          consent: _healthConsent,
-          savePayment: _healthSavePayment,
-          submitting: _healthSubmitting,
-          message: _healthMessage,
-          checkoutUrl: _healthCheckoutUrl,
-          quote: _healthQuote,
-          rothAvailable: _senderRothBalance,
-          pickups: _healthPickups,
-          payments: _healthPayments,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onFrequency: (frequency) =>
-              setState(() => _healthFrequency = frequency),
-          onPrescriptionType: (type) =>
-              setState(() => _healthPrescriptionType = type),
-          onSubscriptionPlan: (plan) =>
-              setState(() => _healthSubscriptionPlan = plan),
-          onStartSubscription: (plan) {
-            setState(() {
-              _healthSubscriptionPlan = plan;
-              if (_healthFrequency == HealthPlusFrequency.oneOff) {
-                _healthFrequency = HealthPlusFrequency.weekly;
-              }
-            });
-            _bookHealthPlus();
-          },
-          onContinueOneOff: () {
-            setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
-            _bookHealthPlus();
-          },
-          onConsent: (value) => setState(() => _healthConsent = value ?? false),
-          onSavePayment: (value) =>
-              setState(() => _healthSavePayment = value ?? false),
-          onSubmit: _bookHealthPlus,
-          onPauseSchedule: _pauseHealthPlusSchedule,
-          onResumeSchedule: _resumeHealthPlusSchedule,
-          onCancelSchedule: _cancelHealthPlusSchedule,
-          onCancelPickup: _cancelNextHealthPlusPickup,
-          onUpdatePayment: _openHealthPlusCheckout,
-          onAdminStatus: _adminUpdateHealthPlusStatus,
-        ),
+      _SenderStep.healthPlus => _buildHealthPlusStep(colors),
       _SenderStep.profile => _SenderProfileStep(
           key: const ValueKey('sender-profile'),
           colors: colors,
@@ -13606,6 +13554,70 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onCancelBooking: _cancelSenderBooking,
         ),
     };
+  }
+
+  Widget _buildHealthPlusStep(_CircumColors colors) {
+    return _HealthPlusStep(
+      key: const ValueKey('health-plus'),
+      colors: colors,
+      fullName: _healthName,
+      phone: _healthPhone,
+      email: _healthEmail,
+      pharmacyName: _healthPharmacyName,
+      pharmacyAddress: _healthPharmacy,
+      deliveryAddress: _healthDelivery,
+      notes: _healthNotes,
+      preferredDay: _healthPreferredDay,
+      preferredTime: _healthPreferredTime,
+      customSchedule: _healthCustomSchedule,
+      frequency: _healthFrequency,
+      prescriptionType: _healthPrescriptionType,
+      subscriptionPlan: _healthSubscriptionPlan,
+      consent: _healthConsent,
+      savePayment: _healthSavePayment,
+      submitting: _healthSubmitting,
+      message: messageForHealthPlus,
+      checkoutUrl: _healthCheckoutUrl,
+      quote: _healthQuote,
+      rothAvailable: _senderRothBalance,
+      pickups: _healthPickups,
+      payments: _healthPayments,
+      onBack: () => setState(() => _step = _SenderStep.dashboard),
+      onFrequency: (frequency) => setState(() => _healthFrequency = frequency),
+      onPrescriptionType: (type) =>
+          setState(() => _healthPrescriptionType = type),
+      onSubscriptionPlan: (plan) =>
+          setState(() => _healthSubscriptionPlan = plan),
+      onStartSubscription: (plan) {
+        setState(() {
+          _healthSubscriptionPlan = plan;
+          if (_healthFrequency == HealthPlusFrequency.oneOff) {
+            _healthFrequency = HealthPlusFrequency.weekly;
+          }
+        });
+        _bookHealthPlus();
+      },
+      onContinueOneOff: () {
+        setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
+        _bookHealthPlus();
+      },
+      onConsent: (value) => setState(() => _healthConsent = value ?? false),
+      onSavePayment: (value) =>
+          setState(() => _healthSavePayment = value ?? false),
+      onSubmit: _bookHealthPlus,
+      onPauseSchedule: _pauseHealthPlusSchedule,
+      onResumeSchedule: _resumeHealthPlusSchedule,
+      onCancelSchedule: _cancelHealthPlusSchedule,
+      onCancelPickup: _cancelNextHealthPlusPickup,
+      onUpdatePayment: _openHealthPlusCheckout,
+      onAdminStatus: _adminUpdateHealthPlusStatus,
+    );
+  }
+
+  String? get messageForHealthPlus {
+    if (_healthMessage != null) return _healthMessage;
+    if (_senderAuthLoading) return 'Health+ is loading.';
+    return null;
   }
 
   double get _quoteTotal {
@@ -20612,380 +20624,475 @@ class _HealthPlusStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nextPickup = pickups.isEmpty ? null : pickups.first;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _StepTopBar(colors: colors, title: 'Health+', onBack: onBack),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xffdcfce7),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.health_and_safety,
-                      color: Color(0xff16a34a),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Get your meds before you run out.',
-                          style: TextStyle(
-                            color: colors.text,
-                            fontSize: 26,
-                            height: 1.05,
-                            fontWeight: FontWeight.w900,
-                          ),
+    final cardRemaining =
+        math.max(0, quote.total - math.min(quote.total, rothAvailable));
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.08),
+            colors.adminGlow.withValues(alpha: 0.06),
+            Colors.transparent,
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StepTopBar(colors: colors, title: 'Health+', onBack: onBack),
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            colors.adminAccent.withValues(alpha: 0.90),
+                            colors.adminGlow.withValues(alpha: 0.74),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Arrange one-off or recurring prescription pickups from a pharmacy to your door. From £11.',
-                          style: TextStyle(
-                            color: colors.mutedText,
-                            height: 1.4,
-                            fontWeight: FontWeight.w600,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.adminGlow.withValues(alpha: 0.24),
+                            blurRadius: 24,
+                            offset: const Offset(0, 12),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.health_and_safety,
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: const [
-                  _HealthChip(label: 'Prescription pickup'),
-                  _HealthChip(label: 'Recurring reminders'),
-                  _HealthChip(label: 'Secure checkout'),
-                  _HealthChip(label: 'Sealed packages only'),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Get your meds before you run out.',
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 30,
+                              height: 1.05,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Arrange one-off or recurring prescription pickups from a pharmacy to your door. From £11.',
+                            style: TextStyle(
+                              color: colors.mutedText,
+                              height: 1.4,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _HealthChip(colors: colors, label: 'Prescription pickup'),
+                    _HealthChip(colors: colors, label: 'Recurring reminders'),
+                    _HealthChip(colors: colors, label: 'Secure checkout'),
+                    _HealthChip(colors: colors, label: 'Sealed packages only'),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Pharmacy / pickup details'),
-              const SizedBox(height: 12),
-              _InputBox(
-                colors: colors,
-                controller: fullName,
-                hint: 'Full name',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: phone,
-                hint: 'Phone number',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(colors: colors, controller: email, hint: 'Email'),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: pharmacyName,
-                hint: 'Pharmacy name',
-              ),
-              const SizedBox(height: 10),
-              _AddressField(
-                colors: colors,
-                icon: Icons.local_pharmacy,
-                controller: pharmacyAddress,
-                label: 'Pharmacy pickup address',
-                pharmacyMode: true,
-              ),
-              const SizedBox(height: 10),
-              _AddressField(
-                colors: colors,
-                icon: Icons.home_outlined,
-                controller: deliveryAddress,
-                label: 'Delivery address',
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Prescription details'),
-              const SizedBox(height: 12),
-              _PrescriptionTypePicker(
-                colors: colors,
-                selected: prescriptionType,
-                onChanged: onPrescriptionType,
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: notes,
-                hint: 'Prescription or pickup notes',
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Recurring schedule'),
-              const SizedBox(height: 12),
-              _HealthFrequencyPicker(
-                colors: colors,
-                selected: frequency,
-                onChanged: onFrequency,
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: preferredDay,
-                hint: 'Preferred pickup day',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: preferredTime,
-                hint: 'Preferred pickup time',
-              ),
-              if (frequency == HealthPlusFrequency.custom) ...[
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(
+                    colors: colors, title: 'Pharmacy / pickup details'),
+                const SizedBox(height: 12),
+                _InputBox(
+                  colors: colors,
+                  controller: fullName,
+                  hint: 'Full name',
+                  glassStyle: true,
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
                   colors: colors,
-                  controller: customSchedule,
-                  hint: 'Custom pickup date or repeat pattern',
+                  controller: phone,
+                  hint: 'Phone number',
+                  glassStyle: true,
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: email,
+                  hint: 'Email',
+                  glassStyle: true,
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: pharmacyName,
+                  hint: 'Pharmacy name',
+                  glassStyle: true,
+                ),
+                const SizedBox(height: 10),
+                _AddressField(
+                  colors: colors,
+                  icon: Icons.local_pharmacy,
+                  controller: pharmacyAddress,
+                  label: 'Pharmacy pickup address',
+                  pharmacyMode: true,
+                  glassStyle: true,
+                ),
+                const SizedBox(height: 10),
+                _AddressField(
+                  colors: colors,
+                  icon: Icons.home_outlined,
+                  controller: deliveryAddress,
+                  label: 'Delivery address',
+                  glassStyle: true,
                 ),
               ],
-            ],
+            ),
           ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Subscription plan'),
-              const SizedBox(height: 12),
-              _HealthPlanGrid(
-                colors: colors,
-                selectedPlan: subscriptionPlan,
-                onSelect: onSubscriptionPlan,
-                onStartSubscription: onStartSubscription,
-                onContinueOneOff: onContinueOneOff,
-              ),
-            ],
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Prescription details'),
+                const SizedBox(height: 12),
+                _PrescriptionTypePicker(
+                  colors: colors,
+                  selected: prescriptionType,
+                  onChanged: onPrescriptionType,
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: notes,
+                  hint: 'Prescription or pickup notes',
+                  maxLines: 3,
+                  glassStyle: true,
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Price breakdown'),
-              const SizedBox(height: 10),
-              _PriceLine(
-                colors: colors,
-                label: 'Base pickup fee',
-                value: '£${quote.delivery.baseFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Distance estimate',
-                value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Health+ care fee',
-                value: '£${quote.serviceFee.toStringAsFixed(2)}',
-              ),
-              if (quote.priorityFee > 0)
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Recurring schedule'),
+                const SizedBox(height: 12),
+                _HealthFrequencyPicker(
+                  colors: colors,
+                  selected: frequency,
+                  onChanged: onFrequency,
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: preferredDay,
+                  hint: 'Preferred pickup day',
+                  glassStyle: true,
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: preferredTime,
+                  hint: 'Preferred pickup time',
+                  glassStyle: true,
+                ),
+                if (frequency == HealthPlusFrequency.custom) ...[
+                  const SizedBox(height: 10),
+                  _InputBox(
+                    colors: colors,
+                    controller: customSchedule,
+                    hint: 'Custom pickup date or repeat pattern',
+                    glassStyle: true,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Subscription plan'),
+                const SizedBox(height: 12),
+                _HealthPlanGrid(
+                  colors: colors,
+                  selectedPlan: subscriptionPlan,
+                  onSelect: onSubscriptionPlan,
+                  onStartSubscription: onStartSubscription,
+                  onContinueOneOff: onContinueOneOff,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Price breakdown'),
+                const SizedBox(height: 10),
                 _PriceLine(
                   colors: colors,
-                  label: 'Priority fee',
-                  value: '£${quote.priorityFee.toStringAsFixed(2)}',
+                  label: 'Base pickup fee',
+                  value: '£${quote.delivery.baseFare.toStringAsFixed(2)}',
                 ),
-              if (quote.familySupportFee > 0)
                 _PriceLine(
                   colors: colors,
-                  label: 'Family support',
-                  value: '£${quote.familySupportFee.toStringAsFixed(2)}',
+                  label: 'Distance estimate',
+                  value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}',
                 ),
-              if (quote.recurringDiscount > 0)
                 _PriceLine(
                   colors: colors,
-                  label: 'Recurring discount',
-                  value: '-£${quote.recurringDiscount.toStringAsFixed(2)}',
+                  label: 'Health+ care fee',
+                  value: '£${quote.serviceFee.toStringAsFixed(2)}',
                 ),
-              if (quote.minimumAdjustment > 0)
+                if (quote.priorityFee > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Priority fee',
+                    value: '£${quote.priorityFee.toStringAsFixed(2)}',
+                  ),
+                if (quote.familySupportFee > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Family support',
+                    value: '£${quote.familySupportFee.toStringAsFixed(2)}',
+                  ),
+                if (quote.recurringDiscount > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Recurring discount',
+                    value: '-£${quote.recurringDiscount.toStringAsFixed(2)}',
+                  ),
+                if (quote.minimumAdjustment > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Health+ minimum adjustment',
+                    value: '£${quote.minimumAdjustment.toStringAsFixed(2)}',
+                  ),
+                Divider(color: colors.border, height: 24),
                 _PriceLine(
                   colors: colors,
-                  label: 'Health+ minimum adjustment',
-                  value: '£${quote.minimumAdjustment.toStringAsFixed(2)}',
+                  label: frequency == HealthPlusFrequency.oneOff
+                      ? 'One-off total'
+                      : 'Recurring pickup total',
+                  value: '£${quote.total.toStringAsFixed(2)}',
+                  strong: true,
                 ),
-              Divider(color: colors.border, height: 24),
-              _PriceLine(
-                colors: colors,
-                label: frequency == HealthPlusFrequency.oneOff
-                    ? 'One-off total'
-                    : 'Recurring pickup total',
-                value: '£${quote.total.toStringAsFixed(2)}',
-                strong: true,
+                const SizedBox(height: 10),
+                _CircumPaymentSummary(
+                  colors: colors,
+                  serviceName: 'Health+ Pickup',
+                  totalLabel: 'Total',
+                  total: quote.total,
+                  rothAvailable: rothAvailable,
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: savePayment,
+                  onChanged: onSavePayment,
+                  activeColor: colors.text,
+                  title: Text(
+                    'Save this payment method',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _HealthTrustGrid(colors: colors),
+          const SizedBox(height: 14),
+          _HealthDisclaimer(colors: colors),
+          const SizedBox(height: 10),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: consent,
+            onChanged: onConsent,
+            activeColor: colors.text,
+            title: Text(
+              'I confirm the prescription is valid and ready, or will be ready, for collection.',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (message != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                message!,
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 10),
-              _CircumPaymentSummary(
-                colors: colors,
-                serviceName: 'Health+ Pickup',
-                totalLabel: 'Total',
-                total: quote.total,
-                rothAvailable: rothAvailable,
+            ),
+          SizedBox(
+            width: double.infinity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  colors: submitting
+                      ? [
+                          colors.field.withValues(alpha: 0.88),
+                          colors.field.withValues(alpha: 0.62),
+                        ]
+                      : const [
+                          Color(0xff1dd6ff),
+                          Color(0xff476cff),
+                          Color(0xffa855f7),
+                        ],
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                boxShadow: submitting
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: colors.adminGlow.withValues(alpha: 0.24),
+                          blurRadius: 28,
+                          offset: const Offset(0, 14),
+                        ),
+                      ],
               ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: savePayment,
-                onChanged: onSavePayment,
-                activeColor: colors.text,
-                title: Text(
-                  'Save this payment method',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
+              child: FilledButton.icon(
+                onPressed: submitting ? null : onSubmit,
+                icon: submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.lock),
+                label: Text(
+                  submitting
+                      ? 'Setting up Health+...'
+                      : cardRemaining <= 0
+                          ? 'Pay with Roth'
+                          : 'Continue to Card Payment',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  disabledBackgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: colors.mutedText,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _HealthTrustGrid(colors: colors),
-        const SizedBox(height: 14),
-        _HealthDisclaimer(colors: colors),
-        const SizedBox(height: 10),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: consent,
-          onChanged: onConsent,
-          activeColor: colors.text,
-          title: Text(
-            'I confirm the prescription is valid and ready, or will be ready, for collection.',
-            style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (message != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Text(
-              message!,
-              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
             ),
           ),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: submitting ? null : onSubmit,
-            icon: submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.lock),
-            label: Text(
-              submitting
-                  ? 'Setting up Health+...'
-                  : math.max(
-                              0,
-                              quote.total -
-                                  math.min(quote.total, rothAvailable)) <=
-                          0
-                      ? 'Pay with Roth securely'
-                      : 'Pay £${math.max(0, quote.total - math.min(quote.total, rothAvailable)).toStringAsFixed(2)} securely',
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
-              foregroundColor: colors.inverseText,
-              padding: const EdgeInsets.symmetric(vertical: 17),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          if (checkoutUrl != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onUpdatePayment,
+                icon: const Icon(Icons.credit_card),
+                label: const Text('Continue to payment'),
               ),
             ),
+          ],
+          const SizedBox(height: 18),
+          _HealthDashboard(
+            colors: colors,
+            pickup: nextPickup,
+            payments: payments,
+            onPauseSchedule: onPauseSchedule,
+            onResumeSchedule: onResumeSchedule,
+            onCancelSchedule: onCancelSchedule,
+            onCancelPickup: onCancelPickup,
+            onUpdatePayment: onUpdatePayment,
           ),
-        ),
-        if (checkoutUrl != null) ...[
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onUpdatePayment,
-              icon: const Icon(Icons.credit_card),
-              label: const Text('Continue to payment'),
-            ),
+          const SizedBox(height: 14),
+          _HealthAdminPanel(
+            colors: colors,
+            pickup: nextPickup,
+            onStatus: onAdminStatus,
           ),
         ],
-        const SizedBox(height: 18),
-        _HealthDashboard(
-          colors: colors,
-          pickup: nextPickup,
-          payments: payments,
-          onPauseSchedule: onPauseSchedule,
-          onResumeSchedule: onResumeSchedule,
-          onCancelSchedule: onCancelSchedule,
-          onCancelPickup: onCancelPickup,
-          onUpdatePayment: onUpdatePayment,
-        ),
-        const SizedBox(height: 14),
-        _HealthAdminPanel(
-          colors: colors,
-          pickup: nextPickup,
-          onStatus: onAdminStatus,
-        ),
-      ],
+      ),
     );
   }
 }
 
 class _HealthChip extends StatelessWidget {
+  final _CircumColors? colors;
   final String label;
 
-  const _HealthChip({required this.label});
+  const _HealthChip({this.colors, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      label: Text(label),
-      visualDensity: VisualDensity.compact,
-      backgroundColor: const Color(0xffecfdf5),
-      labelStyle: const TextStyle(
-        color: Color(0xff166534),
-        fontWeight: FontWeight.w800,
+    final colors = this.colors;
+    if (colors == null) {
+      return Chip(
+        label: Text(label),
+        visualDensity: VisualDensity.compact,
+        backgroundColor: const Color(0xffecfdf5),
+        labelStyle: const TextStyle(
+          color: Color(0xff166534),
+          fontWeight: FontWeight.w800,
+        ),
+        side: BorderSide.none,
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.18),
+            colors.field.withValues(alpha: 0.72),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.24)),
       ),
-      side: BorderSide.none,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.text,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }
@@ -21020,13 +21127,18 @@ class _HealthFrequencyPicker extends StatelessWidget {
           selected: active,
           onSelected: (_) => onChanged(frequency),
           label: Text(frequency.label),
-          selectedColor: colors.text,
-          backgroundColor: colors.field,
+          selectedColor: colors.adminAccent.withValues(alpha: 0.24),
+          backgroundColor: colors.field.withValues(alpha: 0.74),
           labelStyle: TextStyle(
-            color: active ? colors.inverseText : colors.text,
-            fontWeight: FontWeight.w800,
+            color: colors.text,
+            fontWeight: FontWeight.w900,
           ),
-          side: BorderSide(color: active ? colors.text : colors.border),
+          side: BorderSide(
+            color: active
+                ? colors.adminAccent.withValues(alpha: 0.74)
+                : colors.border.withValues(alpha: 0.75),
+          ),
+          elevation: active ? 3 : 0,
         );
       }).toList(),
     );
@@ -21062,13 +21174,18 @@ class _PrescriptionTypePicker extends StatelessWidget {
           selected: active,
           onSelected: (_) => onChanged(type),
           label: Text(type),
-          selectedColor: colors.text,
-          backgroundColor: colors.field,
+          selectedColor: colors.adminAccent.withValues(alpha: 0.24),
+          backgroundColor: colors.field.withValues(alpha: 0.74),
           labelStyle: TextStyle(
-            color: active ? colors.inverseText : colors.text,
-            fontWeight: FontWeight.w800,
+            color: colors.text,
+            fontWeight: FontWeight.w900,
           ),
-          side: BorderSide(color: active ? colors.text : colors.border),
+          side: BorderSide(
+            color: active
+                ? colors.adminAccent.withValues(alpha: 0.74)
+                : colors.border.withValues(alpha: 0.75),
+          ),
+          elevation: active ? 3 : 0,
         );
       }).toList(),
     );
@@ -21195,20 +21312,37 @@ class _HealthPlanCard extends StatelessWidget {
       onTap: onSelect,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: colors.field.withAlpha(209),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: selected ? const Color(0xff38bdf8) : colors.border,
+            color: selected
+                ? colors.adminAccent.withValues(alpha: 0.72)
+                : colors.adminAccent.withValues(alpha: 0.18),
             width: selected ? 1.6 : 1,
           ),
-          gradient: selected
-              ? LinearGradient(
-                  colors: _spectrumGradient
-                      .map((color) => color.withAlpha(41))
-                      .toList(),
-                )
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: selected
+                ? [
+                    colors.adminAccent.withValues(alpha: 0.30),
+                    colors.adminGlow.withValues(alpha: 0.15),
+                    colors.field.withValues(alpha: 0.72),
+                  ]
+                : [
+                    colors.field.withValues(alpha: 0.72),
+                    colors.adminAccent.withValues(alpha: 0.08),
+                  ],
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: colors.adminGlow.withValues(alpha: 0.20),
+                    blurRadius: 24,
+                    offset: const Offset(0, 14),
+                  ),
+                ]
               : null,
         ),
         child: Column(
@@ -21254,12 +21388,20 @@ class _HealthPlanCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            OutlinedButton(
+            FilledButton(
               onPressed: onStartSubscription,
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.adminAccent.withValues(alpha: 0.88),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
               child: const Text('Start subscription'),
             ),
             TextButton(
               onPressed: onContinueOneOff,
+              style: TextButton.styleFrom(foregroundColor: colors.text),
               child: const Text('Continue one-off pickup'),
             ),
           ],
@@ -24813,6 +24955,7 @@ class _InputBox extends StatelessWidget {
   final bool obscureText;
   final bool enabled;
   final TextInputType? keyboardType;
+  final bool glassStyle;
 
   const _InputBox({
     required this.colors,
@@ -24822,31 +24965,65 @@ class _InputBox extends StatelessWidget {
     this.obscureText = false,
     this.enabled = true,
     this.keyboardType,
+    this.glassStyle = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    final field = TextField(
       controller: controller,
       maxLines: maxLines,
       obscureText: obscureText,
       enabled: enabled,
       keyboardType: keyboardType,
-      style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
+      style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: colors.mutedText),
-        filled: true,
+        filled: !glassStyle,
         fillColor: colors.field,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: glassStyle ? 16 : 14,
+          vertical: glassStyle ? 16 : 14,
         ),
         border: OutlineInputBorder(
           borderSide: BorderSide.none,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(glassStyle ? 22 : 16),
         ),
+        enabledBorder: glassStyle
+            ? InputBorder.none
+            : OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(16),
+              ),
+        focusedBorder: glassStyle
+            ? InputBorder.none
+            : OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(16),
+              ),
       ),
+    );
+    if (!glassStyle) return field;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.16),
+            colors.field.withValues(alpha: 0.76),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: field,
     );
   }
 }
