@@ -99,7 +99,7 @@ Future<void> _activateReferralSafely({
   }
 }
 
-enum _WebAppMode { landing, sender, rider, gifts, admin }
+enum _WebAppMode { landing, sender, rider, gifts, admin, terms, privacy }
 
 bool _isPublicHostingHost() {
   final host = Uri.base.host.toLowerCase();
@@ -142,6 +142,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
     if (_adminHostingTarget && !_isPublicHostingHost()) {
       return _WebAppMode.admin;
     }
+    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    if (path == '/terms') return _WebAppMode.terms;
+    if (path == '/privacy') return _WebAppMode.privacy;
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
@@ -229,6 +232,20 @@ class _WebSenderAppState extends State<WebSenderApp> {
                 _WebAppMode.gifts => _GiftsRequestPage(
                     key: const ValueKey('gifts-request'),
                     colors: colors,
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                  ),
+                _WebAppMode.terms => _LegalDocumentPage(
+                    key: const ValueKey('terms'),
+                    colors: colors,
+                    title: 'Terms of Service',
+                    documentPath: '/legal/CIRCUM_Terms_of_Service.pdf',
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                  ),
+                _WebAppMode.privacy => _LegalDocumentPage(
+                    key: const ValueKey('privacy'),
+                    colors: colors,
+                    title: 'Privacy Policy',
+                    documentPath: '/legal/CIRCUM_Privacy_Policy.pdf',
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
                   ),
                 _WebAppMode.landing => _LandingPage(
@@ -24865,6 +24882,8 @@ class _HealthPlusStep extends StatelessWidget {
             pickup: nextPickup,
             onStatus: onAdminStatus,
           ),
+          const SizedBox(height: 28),
+          _GlobalLegalFooter(colors: colors),
         ],
       ),
     );
@@ -30865,7 +30884,7 @@ class _LandingFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 34),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(top: BorderSide(color: colors.border)),
@@ -30873,28 +30892,227 @@ class _LandingFooter extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 24,
-            runSpacing: 18,
+          child: _GlobalLegalFooter(colors: colors, showWordmark: true),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlobalLegalFooter extends StatelessWidget {
+  final _CircumColors colors;
+  final bool showWordmark;
+
+  const _GlobalLegalFooter({required this.colors, this.showWordmark = false});
+
+  Future<void> _open(String path) async {
+    await launchUrl(Uri.base.resolve(path), webOnlyWindowName: '_self');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.10),
+            colors.adminGlow.withValues(alpha: 0.07),
+            colors.field.withValues(alpha: 0.62),
+          ],
+        ),
+        border: Border.all(color: colors.border.withValues(alpha: 0.9)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 28,
+        runSpacing: 18,
+        children: [
+          if (showWordmark)
+            Image.asset(
+              'assets/images/circum_wordmark.png',
+              width: 118,
+              height: 28,
+              fit: BoxFit.contain,
+            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset(
-                'assets/images/circum_wordmark.png',
-                width: 118,
-                height: 28,
-                fit: BoxFit.contain,
-              ),
               Text(
-                'Privacy Policy   Terms of Service',
+                'Resources',
                 style: TextStyle(
-                  color: colors.mutedText,
-                  fontWeight: FontWeight.w700,
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 2,
+                children: [
+                  TextButton(
+                    onPressed: () => _open('/terms'),
+                    child: const Text('Terms of Service'),
+                  ),
+                  TextButton(
+                    onPressed: () => _open('/privacy'),
+                    child: const Text('Privacy Policy'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
               Text(
-                '© ${DateTime.now().year} Circum Technologies Ltd.',
-                style: TextStyle(color: colors.mutedText),
+                'Legal',
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '© 2026 Circum Technologies Ltd. All rights reserved.',
+                style: TextStyle(color: colors.mutedText, height: 1.35),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegalDocumentPage extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String documentPath;
+  final VoidCallback onBack;
+
+  const _LegalDocumentPage({
+    super.key,
+    required this.colors,
+    required this.title,
+    required this.documentPath,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.topLeft,
+            radius: 1.35,
+            colors: [
+              colors.adminAccent.withValues(alpha: 0.20),
+              colors.adminGlow.withValues(alpha: 0.10),
+              colors.background,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 36),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Back to Circum',
+                            onPressed: onBack,
+                            icon: const Icon(Icons.arrow_back),
+                          ),
+                          const SizedBox(width: 8),
+                          Image.asset(
+                            'assets/images/circum_wordmark.png',
+                            width: 126,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 42),
+                      _GlassPanel(
+                        colors: colors,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 18,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.gavel_outlined,
+                                size: 40,
+                                color: colors.adminAccent,
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  color: colors.text,
+                                  fontSize:
+                                      MediaQuery.sizeOf(context).width < 600
+                                          ? 34
+                                          : 48,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'The current Circum $title is available as a PDF document.',
+                                style: TextStyle(
+                                  color: colors.mutedText,
+                                  fontSize: 17,
+                                  height: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 26),
+                              FilledButton.icon(
+                                onPressed: () => launchUrl(
+                                  Uri.base.resolve(documentPath),
+                                  webOnlyWindowName: '_blank',
+                                ),
+                                icon: const Icon(Icons.open_in_new),
+                                label: Text('Open $title'),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 18,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      _GlobalLegalFooter(colors: colors, showWordmark: true),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -32394,6 +32612,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 28),
+                      _GlobalLegalFooter(colors: colors),
                     ]),
               ),
             ),
