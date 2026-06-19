@@ -47,7 +47,7 @@ void main() {
   });
 
   test(
-      'recommendation engine returns top ten internal candidates and budget notes',
+      'recommendation engine returns three to five internal candidates and budget notes',
       () {
     final result = const GiftsRecommendationEngine().recommend(
       budget: 500,
@@ -56,10 +56,25 @@ void main() {
       interests: const ['Fine Dining', 'Luxury Travel', 'Books'],
       notes: 'No allergies.',
     );
-    expect(result.topCandidates, hasLength(10));
+    expect(result.topCandidates.length, inInclusiveRange(3, 5));
     expect(result.experienceSummary, contains('Recommended Experience'));
     expect(result.budgetAllocation.keys, contains('giftProcurement'));
     expect(result.procurementNotes.join(' '), contains('Do not reveal'));
+  });
+
+  test('recommendation engine excludes restricted allergy conflicts', () {
+    final result = const GiftsRecommendationEngine().recommend(
+      budget: 500,
+      relationship: 'Friend',
+      occasion: 'Birthday',
+      interests: const ['Food', 'Fine Dining'],
+      notes: 'Severe food allergy.',
+    );
+    expect(
+      result.topCandidates
+          .any((candidate) => candidate.item.avoidIf.contains('allergy')),
+      isFalse,
+    );
   });
 
   test('medical and religious safety risks are surfaced for admin review', () {

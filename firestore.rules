@@ -541,6 +541,11 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /giftRecommendationRepository/{itemId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /emailQueue/{emailId} {
       allow read, create: if isAdmin();
       allow update, delete: if hasRole('super_admin');

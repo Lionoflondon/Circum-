@@ -3045,6 +3045,19 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool giftStoryApproved = item['giftStoryApproved'] != false;
     bool giftStoryShareEnabled = item['giftStoryShareEnabled'] != false;
     Map<String, dynamic>? generatedRecommendation;
+    GiftRecommendationResult? irisGiftRecommendation;
+    final approvedSuggestionIds = <String>{
+      for (final id in ((item['approvedGiftPlan']
+                  as Map<String, dynamic>?)?['selectedRepositoryItemIds']
+              as List? ??
+          const []))
+        '$id',
+    };
+    final rejectedSuggestionIds = <String>{
+      for (final id
+          in (item['rejectedIrisGiftSuggestionIds'] as List? ?? const []))
+        '$id',
+    };
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -3104,6 +3117,109 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       maxLines: 3,
                       decoration: const InputDecoration(
                           labelText: 'Recommended Experience')),
+                  const SizedBox(height: 12),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: widget.colors.field.withOpacity(0.68),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: widget.colors.adminAccent.withOpacity(0.24),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.auto_awesome,
+                                  color: widget.colors.adminAccent),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Iris Gift Suggestions',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Admin-only procurement ideas. Do not reveal exact items to sender or recipient before delivery.',
+                          ),
+                          const SizedBox(height: 12),
+                          if (irisGiftRecommendation == null)
+                            Text(
+                              'Generate suggestions to review 3–5 real internal gift ideas for this request.',
+                              style: TextStyle(
+                                color: widget.colors.mutedText,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            )
+                          else ...[
+                            for (final candidate in irisGiftRecommendation!
+                                .topCandidates
+                                .where((candidate) => !rejectedSuggestionIds
+                                    .contains(candidate.item.id))) ...[
+                              _AdminIrisGiftSuggestionCard(
+                                colors: widget.colors,
+                                candidate: candidate,
+                                approved: approvedSuggestionIds
+                                    .contains(candidate.item.id),
+                                onApprove: () => setDialogState(() {
+                                  approvedSuggestionIds.add(candidate.item.id);
+                                  if (procurementTitle.text.trim().isEmpty) {
+                                    procurementTitle.text = candidate.item.name;
+                                  }
+                                  if (procurementEstimatedCost.text
+                                      .trim()
+                                      .isEmpty) {
+                                    procurementEstimatedCost.text =
+                                        '${candidate.item.estimatedPriceMax}';
+                                  }
+                                  final notesText =
+                                      'Supplier type: ${candidate.item.supplierType}\nDifficulty: ${candidate.item.procurementDifficulty}\n${candidate.item.description}';
+                                  if (procurementNotes.text.trim().isEmpty &&
+                                      notesText.isNotEmpty) {
+                                    procurementNotes.text = notesText;
+                                  }
+                                }),
+                                onEdit: () => setDialogState(() {
+                                  procurementTitle.text = candidate.item.name;
+                                  procurementEstimatedCost.text =
+                                      '${candidate.item.estimatedPriceMax}';
+                                  procurementNotes.text = [
+                                    candidate.item.description,
+                                    'Supplier type: ${candidate.item.supplierType}',
+                                    'Difficulty: ${candidate.item.procurementDifficulty}',
+                                    ...candidate.riskWarnings,
+                                  ].join('\n');
+                                }),
+                                onReject: () => setDialogState(() {
+                                  approvedSuggestionIds
+                                      .remove(candidate.item.id);
+                                  rejectedSuggestionIds.add(candidate.item.id);
+                                }),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                            if (irisGiftRecommendation!.riskWarnings.isNotEmpty)
+                              Text(
+                                'Warnings: ${irisGiftRecommendation!.riskWarnings.join(' • ')}',
+                                style: const TextStyle(
+                                  color: Color(0xfff59e0b),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                       controller: decision,
@@ -3383,9 +3499,19 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     interests: (item['interests'] as List?)
                             ?.map((interest) => '$interest') ??
                         const <String>[],
+                    ageRange: '${item['ageRange'] ?? ''}'.trim().isEmpty
+                        ? null
+                        : '${item['ageRange']}',
+                    gender: '${item['gender'] ?? ''}'.trim().isEmpty
+                        ? null
+                        : '${item['gender']}',
+                    deliveryDate: item['deliveryDate'] is Timestamp
+                        ? (item['deliveryDate'] as Timestamp).toDate()
+                        : DateTime.tryParse('${item['deliveryDate'] ?? ''}'),
                     notes:
                         '${item['notes'] ?? ''} ${item['personalMessage'] ?? ''}');
                 generatedRecommendation = recommendation.toMap();
+                setDialogState(() => irisGiftRecommendation = recommendation);
                 plan.text = _formatGiftRecommendationForAdmin(recommendation);
                 if (decision.text.trim().isEmpty) {
                   decision.text =
@@ -3448,6 +3574,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     'irisGiftRecommendation': generatedRecommendation,
                     'irisSuggestion':
                         generatedRecommendation!['experienceSummary'],
+                    'approvedGiftPlan': {
+                      'selectedRepositoryItemIds':
+                          approvedSuggestionIds.toList(growable: false),
+                      'adminNotes': decision.text.trim(),
+                      'approvedBy': _adminUser?.uid ?? _adminUser?.email,
+                      'approvedAt': FieldValue.serverTimestamp(),
+                    },
+                    'rejectedIrisGiftSuggestionIds':
+                        rejectedSuggestionIds.toList(growable: false),
                   },
                   'recipientContentConsent': recipientConsent,
                   'senderContentConsent': senderConsent,
@@ -6940,6 +7075,133 @@ String _formatGiftRecommendationForAdmin(GiftRecommendationResult result) {
     buffer.writeln('- $note');
   }
   return buffer.toString().trim();
+}
+
+class _AdminIrisGiftSuggestionCard extends StatelessWidget {
+  final _CircumColors colors;
+  final GiftRecommendationCandidate candidate;
+  final bool approved;
+  final VoidCallback onApprove;
+  final VoidCallback onEdit;
+  final VoidCallback onReject;
+
+  const _AdminIrisGiftSuggestionCard({
+    required this.colors,
+    required this.candidate,
+    required this.approved,
+    required this.onApprove,
+    required this.onEdit,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final item = candidate.item;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.panel.withOpacity(colors.dark ? 0.62 : 0.86),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: approved
+              ? const Color(0xff14b8a6).withOpacity(0.56)
+              : colors.border.withOpacity(0.42),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (approved ? const Color(0xff14b8a6) : colors.adminAccent)
+                .withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.category} · £${item.estimatedPriceMin}–£${item.estimatedPriceMax} · score ${candidate.score}',
+                        style: TextStyle(
+                          color: colors.mutedText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (approved)
+                  const Icon(Icons.check_circle, color: Color(0xff14b8a6)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.description,
+              style: TextStyle(color: colors.text, height: 1.35),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Why Iris suggested it: ${candidate.reasons.join(' ')}',
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+            if (candidate.riskWarnings.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Restriction warnings: ${candidate.riskWarnings.join(' • ')}',
+                style: const TextStyle(
+                  color: Color(0xfff59e0b),
+                  fontWeight: FontWeight.w800,
+                  height: 1.35,
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onApprove,
+                  icon: Icon(approved ? Icons.check : Icons.check_circle),
+                  label: Text(approved ? 'Approved' : 'Approve'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Edit'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onReject,
+                  icon: const Icon(Icons.close),
+                  label: const Text('Reject'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _LandingNav extends StatelessWidget {

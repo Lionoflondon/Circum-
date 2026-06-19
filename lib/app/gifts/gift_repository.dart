@@ -445,15 +445,31 @@ class GiftsRecommendationEngine {
     required Iterable<String> interests,
     String? ageRange,
     String? gender,
+    DateTime? deliveryDate,
     String? notes,
     Iterable<GiftRepositoryItem>? repository,
+    int maxResults = 5,
   }) {
     final sourceRepository = repository ?? internalGiftRepository;
     final selectedInterests = interests.map(_normalise).toSet();
     final riskTerms = _riskTerms(notes ?? '', selectedInterests);
+    final spendableBudget = budget * 0.82;
+    final urgent = deliveryDate != null &&
+        deliveryDate.difference(DateTime.now()).inDays <= 3;
     final candidates = sourceRepository
         .where((item) => item.active && item.internalOnly)
-        .map((item) {
+        .where((item) => item.estimatedPriceMin <= spendableBudget)
+        .where((item) {
+      if (ageRange != null &&
+          ageRange.trim().isNotEmpty &&
+          !item.ageRanges.contains(ageRange)) {
+        return false;
+      }
+      for (final avoid in item.avoidIf) {
+        if (riskTerms.contains(_normalise(avoid))) return false;
+      }
+      return true;
+    }).map((item) {
       var score = 0;
       final reasons = <String>[];
       final warnings = <String>[];
@@ -488,6 +504,13 @@ class GiftsRecommendationEngine {
       if (gender != null &&
           item.genderFit.map(_normalise).contains(_normalise(gender)))
         score += 4;
+      if (urgent && item.procurementDifficulty == 'easy') {
+        score += 8;
+        reasons.add('Practical for a shorter delivery window.');
+      } else if (urgent && item.procurementDifficulty == 'hard') {
+        score -= 10;
+        warnings.add('Hard procurement may be risky for the requested date.');
+      }
 
       for (final avoid in item.avoidIf) {
         if (riskTerms.contains(_normalise(avoid))) {
@@ -516,7 +539,7 @@ class GiftsRecommendationEngine {
     }).toList()
       ..sort((a, b) => b.score.compareTo(a.score));
 
-    final top = candidates.take(10).toList();
+    final top = candidates.take(maxResults.clamp(3, 5)).toList();
     final warningSet = <String>{
       for (final candidate in top) ...candidate.riskWarnings,
       ..._globalRiskWarnings(notes ?? '', selectedInterests),
