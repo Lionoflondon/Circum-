@@ -9601,22 +9601,36 @@ class _RiderOrderProfileCard extends StatelessWidget {
   }
 }
 
-enum _RiderPortalTab { overview, earnings, referrals, order }
+enum _RiderPortalTab {
+  dashboard,
+  jobs,
+  earnings,
+  referrals,
+  documents,
+  settings,
+  order,
+}
 
 String _riderTabLabel(_RiderPortalTab tab) {
   return switch (tab) {
-    _RiderPortalTab.overview => 'Overview',
+    _RiderPortalTab.dashboard => 'Dashboard',
+    _RiderPortalTab.jobs => 'Jobs',
     _RiderPortalTab.earnings => 'Earnings',
     _RiderPortalTab.referrals => 'Referrals',
+    _RiderPortalTab.documents => 'Documents',
+    _RiderPortalTab.settings => 'Settings',
     _RiderPortalTab.order => 'The Circum Order',
   };
 }
 
 IconData _riderTabIcon(_RiderPortalTab tab) {
   return switch (tab) {
-    _RiderPortalTab.overview => Icons.dashboard_outlined,
+    _RiderPortalTab.dashboard => Icons.dashboard_outlined,
+    _RiderPortalTab.jobs => Icons.route_outlined,
     _RiderPortalTab.earnings => Icons.payments_outlined,
     _RiderPortalTab.referrals => Icons.group_add_outlined,
+    _RiderPortalTab.documents => Icons.folder_copy_outlined,
+    _RiderPortalTab.settings => Icons.settings_outlined,
     _RiderPortalTab.order => Icons.auto_awesome,
   };
 }
@@ -9793,13 +9807,62 @@ class _RiderEarningsTab extends StatelessWidget {
   }
 }
 
-class _RiderReferralsTab extends StatelessWidget {
+class _RiderReferralsTab extends StatefulWidget {
   final _CircumColors colors;
+  final User? user;
 
-  const _RiderReferralsTab({required this.colors});
+  const _RiderReferralsTab({required this.colors, required this.user});
+
+  @override
+  State<_RiderReferralsTab> createState() => _RiderReferralsTabState();
+}
+
+class _RiderReferralsTabState extends State<_RiderReferralsTab> {
+  String? _code;
+  String? _link;
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (widget.user == null) return;
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('ensureReferralCode')
+          .call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      setState(() {
+        _code = '${data['referralCode'] ?? ''}';
+        _link = '${data['referralLink'] ?? ''}';
+      });
+    } catch (error) {
+      if (mounted) setState(() => _message = 'Referral link is unavailable.');
+    }
+  }
+
+  String get _shareText =>
+      "I've joined Circum. Use my link to join. When you complete your first booking or delivery, we both receive 5 Roth. ${_link ?? ''}";
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: _link ?? ''));
+    if (mounted) setState(() => _message = 'Referral link copied.');
+  }
+
+  Future<void> _share() async {
+    await launchUrl(
+      Uri.parse('https://wa.me/?text=${Uri.encodeComponent(_shareText)}'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final colors = widget.colors;
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
       children: [
@@ -9811,7 +9874,7 @@ class _RiderReferralsTab extends StatelessWidget {
               _SectionTitle(colors: colors, title: 'Referrals'),
               const SizedBox(height: 10),
               Text(
-                'Earn £10 for every verified rider you refer.',
+                'Earn 5 Roth when someone you invite completes their first booking.',
                 style: TextStyle(
                   color: colors.text,
                   fontSize: 21,
@@ -9841,7 +9904,7 @@ class _RiderReferralsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Available after rider verification',
+                      _code ?? 'Preparing your referral code...',
                       style: TextStyle(
                         color: colors.text,
                         fontSize: 18,
@@ -9854,15 +9917,27 @@ class _RiderReferralsTab extends StatelessWidget {
               const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.ios_share),
-                  label: const Text('Share referral link'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _link == null ? null : _copy,
+                      icon: const Icon(Icons.copy),
+                      label: const Text('Copy link'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _link == null ? null : _share,
+                      icon: const Icon(Icons.ios_share),
+                      label: const Text('Invite riders'),
+                    ),
+                  ],
                 ),
               ),
+              if (_message != null) ...[
+                const SizedBox(height: 10),
+                Text(_message!, style: TextStyle(color: colors.mutedText)),
+              ],
             ],
           ),
         ),
@@ -9945,6 +10020,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   List<Map<String, dynamic>> _availableJobs = const [];
   List<Map<String, dynamic>> _acceptedJobs = const [];
   List<Map<String, dynamic>> _completedJobs = const [];
+  Set<String> _knownAvailableJobIds = const {};
+  bool _availableJobsInitialised = false;
+  bool _newJobSoundEnabled = true;
   Map<String, dynamic>? _riderProfile;
   Set<CircumRole> _availableRoles = const {};
   bool _superAdminRiderBypass = false;
@@ -9982,9 +10060,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         Uri.base.queryParameters['app'];
     return switch (section) {
       'earnings' => _RiderPortalTab.earnings,
+      'jobs' => _RiderPortalTab.jobs,
       'referrals' => _RiderPortalTab.referrals,
+      'documents' => _RiderPortalTab.documents,
+      'settings' => _RiderPortalTab.settings,
       'circum-order' || 'order' => _RiderPortalTab.order,
-      _ => _RiderPortalTab.overview,
+      _ => _RiderPortalTab.dashboard,
     };
   }
 
@@ -10507,7 +10588,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 matchingStatus == 'requested';
           }).toList();
           jobs.sort(_compareRiderJobs);
+          final jobIds = jobs.map((job) => '${job['id']}').toSet();
+          final hasNewJob = _availableJobsInitialised &&
+              jobIds.difference(_knownAvailableJobIds).isNotEmpty;
           _availableJobs = jobs;
+          _knownAvailableJobIds = jobIds;
+          _availableJobsInitialised = true;
+          if (hasNewJob && _newJobSoundEnabled) _playNewJobSound();
         });
       },
       onError: (_) {
@@ -10517,6 +10604,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         );
       },
     );
+  }
+
+  void _playNewJobSound() {
+    try {
+      final audio = html.AudioElement('assets/assets/audio/new_job.wav')
+        ..volume = 0.55;
+      unawaited(audio.play().catchError((_) {}));
+    } catch (_) {
+      // Browser autoplay policies may block sound until the rider interacts.
+    }
   }
 
   int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
@@ -12198,7 +12295,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     );
   }
 
-  Widget _buildRiderWorkspace(_CircumColors colors, {bool nested = false}) {
+  Widget _buildRiderWorkspace(
+    _CircumColors colors, {
+    bool nested = false,
+    _RiderPortalTab section = _RiderPortalTab.dashboard,
+  }) {
     return _RiderWorkspace(
       colors: colors,
       user: _riderUser,
@@ -12240,11 +12341,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       onUpdateJobStatus: _updateAcceptedJobStatus,
       onReportIssue: _reportParcelIssue,
       onOpenChat: _openRiderChat,
+      onSignOut: _signOutRider,
+      newJobSoundEnabled: _newJobSoundEnabled,
+      onNewJobSoundChanged: (value) =>
+          setState(() => _newJobSoundEnabled = value),
+      section: section,
       nested: nested,
     );
   }
 
-  Widget _buildSignedInRiderContent(_CircumColors colors, bool wide) {
+  Widget _buildSignedInRiderContent(
+    _CircumColors colors,
+    bool wide, {
+    _RiderPortalTab section = _RiderPortalTab.dashboard,
+  }) {
     if (_riderProfile == null && !_superAdminRiderBypass) {
       final children = [
         _buildRiderAccessPanel(colors),
@@ -12285,7 +12395,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       );
     }
 
-    return _buildRiderWorkspace(colors, nested: !wide);
+    return _buildRiderWorkspace(colors, nested: !wide, section: section);
   }
 
   Widget _buildPendingDocumentUpload(_CircumColors colors) {
@@ -12371,16 +12481,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     _RiderPortalTab.order => _CircumOrderContent(
                         colors: colors,
                         onBecomeRider: () => setState(
-                            () => _riderTab = _RiderPortalTab.overview),
-                      ),
-                    _RiderPortalTab.earnings => _RiderEarningsTab(
-                        colors: colors,
-                        earnings: _earnings,
+                            () => _riderTab = _RiderPortalTab.dashboard),
                       ),
                     _RiderPortalTab.referrals => _RiderReferralsTab(
                         colors: colors,
+                        user: _riderUser,
                       ),
-                    _RiderPortalTab.overview => _riderUser == null
+                    _ => _riderUser == null
                         ? ListView(
                             padding: EdgeInsets.fromLTRB(
                               wide ? 28 : 18,
@@ -12430,7 +12537,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                   ),
                                 ],
                               )
-                            : _buildSignedInRiderContent(colors, wide),
+                            : _buildSignedInRiderContent(
+                                colors,
+                                wide,
+                                section: _riderTab,
+                              ),
                   },
                 ),
               ],
@@ -13000,6 +13111,10 @@ class _RiderWorkspace extends StatelessWidget {
       onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
+  final VoidCallback onSignOut;
+  final bool newJobSoundEnabled;
+  final ValueChanged<bool> onNewJobSoundChanged;
+  final _RiderPortalTab section;
   final bool nested;
 
   const _RiderWorkspace({
@@ -13043,6 +13158,10 @@ class _RiderWorkspace extends StatelessWidget {
     required this.onUpdateJobStatus,
     required this.onReportIssue,
     required this.onOpenChat,
+    required this.onSignOut,
+    required this.newJobSoundEnabled,
+    required this.onNewJobSoundChanged,
+    required this.section,
     this.nested = false,
   });
 
@@ -13062,23 +13181,25 @@ class _RiderWorkspace extends StatelessWidget {
         shrinkWrap: nested,
         physics: nested ? const NeverScrollableScrollPhysics() : null,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Rider dashboard',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: compact ? 28 : 34,
-                    fontWeight: FontWeight.w900,
+          if (section == _RiderPortalTab.dashboard)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Rider dashboard',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: compact ? 28 : 34,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
-              ),
-              _HealthChip(label: signedIn ? 'Signed in' : 'Account needed'),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (jobMessage != null &&
+                _HealthChip(label: signedIn ? 'Signed in' : 'Account needed'),
+              ],
+            ),
+          if (section == _RiderPortalTab.dashboard) const SizedBox(height: 18),
+          if (section == _RiderPortalTab.dashboard &&
+              jobMessage != null &&
               !jobMessage!.toLowerCase().contains('completed')) ...[
             _GlassPanel(
               colors: colors,
@@ -13101,371 +13222,392 @@ class _RiderWorkspace extends StatelessWidget {
             ),
             const SizedBox(height: 14),
           ],
-          _GlassPanel(
-            colors: colors,
-            child: Row(
-              children: [
-                Icon(Icons.route_outlined, color: colors.text),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'No live route at the moment.',
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      height: 1.35,
-                      fontWeight: FontWeight.w800,
+          if (section == _RiderPortalTab.dashboard)
+            _GlassPanel(
+              colors: colors,
+              child: Row(
+                children: [
+                  Icon(Icons.route_outlined, color: colors.text),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No live route at the moment.',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        height: 1.35,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
-          _RiderOrderProfileCard(
-            colors: colors,
-            profile: riderProfile,
-            performance: performance,
-          ),
-          const SizedBox(height: 14),
-          _DriverPerformancePanel(
-            colors: colors,
-            performance: performance,
-            recentRatings: recentRatings,
-          ),
-          const SizedBox(height: 14),
-          _AccountSecurityPanel(
-            colors: colors,
-            title: 'Security',
-            currentPassword: currentPassword,
-            newPassword: newPassword,
-            confirmNewPassword: confirmNewPassword,
-            newEmail: newEmail,
-            emailChangePassword: emailChangePassword,
-            submitting: securitySubmitting,
-            message: securityMessage,
-            onChangePassword: onChangePassword,
-            onChangeEmail: onChangeEmail,
-          ),
-          const SizedBox(height: 14),
-          _AvailableDriverJobsPanel(
-            colors: colors,
-            jobs: availableJobs,
-            onAcceptJob: onAcceptJob,
-            onRejectJob: onRejectJob,
-            onIgnoreJob: onIgnoreJob,
-            onReportIssue: onReportIssue,
-            onOpenChat: onOpenChat,
-          ),
-          const SizedBox(height: 14),
-          _RiderJobListPanel(
-            colors: colors,
-            title: 'Accepted jobs',
-            emptyText: 'Accepted jobs will appear here.',
-            jobs: acceptedJobs,
-            onUpdateJobStatus: onUpdateJobStatus,
-            onReportIssue: onReportIssue,
-            onOpenChat: onOpenChat,
-          ),
-          const SizedBox(height: 14),
-          _RiderJobListPanel(
-            colors: colors,
-            title: 'Completed jobs',
-            emptyText: 'Completed deliveries will appear here.',
-            jobs: completedJobs,
-            completed: true,
-            onUpdateJobStatus: onUpdateJobStatus,
-            onReportIssue: onReportIssue,
-            onOpenChat: onOpenChat,
-          ),
-          const SizedBox(height: 14),
-          _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'Earnings'),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xff2563eb), Color(0xff4f46e5)],
+          if (section == _RiderPortalTab.dashboard) const SizedBox(height: 18),
+          if (section == _RiderPortalTab.dashboard)
+            _RiderOrderProfileCard(
+              colors: colors,
+              profile: riderProfile,
+              performance: performance,
+            ),
+          if (section == _RiderPortalTab.dashboard) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.dashboard)
+            _DriverPerformancePanel(
+              colors: colors,
+              performance: performance,
+              recentRatings: recentRatings,
+            ),
+          if (section == _RiderPortalTab.settings)
+            _AccountSecurityPanel(
+              colors: colors,
+              title: 'Security',
+              currentPassword: currentPassword,
+              newPassword: newPassword,
+              confirmNewPassword: confirmNewPassword,
+              newEmail: newEmail,
+              emailChangePassword: emailChangePassword,
+              submitting: securitySubmitting,
+              message: securityMessage,
+              onChangePassword: onChangePassword,
+              onChangeEmail: onChangeEmail,
+            ),
+          if (section == _RiderPortalTab.settings) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.settings)
+            _RiderSettingsActions(
+              colors: colors,
+              newJobSoundEnabled: newJobSoundEnabled,
+              onNewJobSoundChanged: onNewJobSoundChanged,
+              onSignOut: onSignOut,
+            ),
+          if (section == _RiderPortalTab.jobs)
+            _AvailableDriverJobsPanel(
+              colors: colors,
+              jobs: availableJobs,
+              onAcceptJob: onAcceptJob,
+              onRejectJob: onRejectJob,
+              onIgnoreJob: onIgnoreJob,
+              onReportIssue: onReportIssue,
+              onOpenChat: onOpenChat,
+            ),
+          if (section == _RiderPortalTab.jobs) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.jobs)
+            _RiderJobListPanel(
+              colors: colors,
+              title: 'Accepted jobs',
+              emptyText: 'Accepted jobs will appear here.',
+              jobs: acceptedJobs,
+              onUpdateJobStatus: onUpdateJobStatus,
+              onReportIssue: onReportIssue,
+              onOpenChat: onOpenChat,
+            ),
+          if (section == _RiderPortalTab.jobs) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.jobs)
+            _RiderJobListPanel(
+              colors: colors,
+              title: 'Completed jobs',
+              emptyText: 'Completed deliveries will appear here.',
+              jobs: completedJobs,
+              completed: true,
+              onUpdateJobStatus: onUpdateJobStatus,
+              onReportIssue: onReportIssue,
+              onOpenChat: onOpenChat,
+            ),
+          if (section == _RiderPortalTab.earnings)
+            _GlassPanel(
+              colors: colors,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(colors: colors, title: 'Earnings'),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xff2563eb), Color(0xff4f46e5)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    borderRadius: BorderRadius.circular(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'AVAILABLE TO WITHDRAW',
+                          style: TextStyle(
+                            color: Color(0xffdbeafe),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _money(earnings.availableBalance),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      const Text(
-                        'AVAILABLE TO WITHDRAW',
-                        style: TextStyle(
-                          color: Color(0xffdbeafe),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
+                      Expanded(
+                        child: _RiderStatTile(
+                          colors: colors,
+                          label: 'Tips',
+                          value: _money(earnings.tipsReceived),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _money(earnings.availableBalance),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _RiderStatTile(
+                          colors: colors,
+                          label: 'Pending',
+                          value: _money(earnings.pendingBalance),
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _RiderStatTile(
-                        colors: colors,
-                        label: 'Tips',
-                        value: _money(earnings.tipsReceived),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _RiderStatTile(
+                          colors: colors,
+                          label: 'Lifetime',
+                          value: _money(earnings.lifetimeEarnings),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _RiderStatTile(
-                        colors: colors,
-                        label: 'Pending',
-                        value: _money(earnings.pendingBalance),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _RiderStatTile(
+                          colors: colors,
+                          label: 'Jobs',
+                          value: '${earnings.completedJobs}',
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _RiderStatTile(
-                        colors: colors,
-                        label: 'Lifetime',
-                        value: _money(earnings.lifetimeEarnings),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _RiderStatTile(
-                        colors: colors,
-                        label: 'Jobs',
-                        value: '${earnings.completedJobs}',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _RiderStatTile(
-                  colors: colors,
-                  label: 'Withdrawn',
-                  value: _money(earnings.withdrawnEarnings),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'Withdraw to bank'),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: withdrawAmount,
-                  hint: 'Amount to withdraw',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: bankName,
-                  hint: 'Bank name',
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _InputBox(
-                        colors: colors,
-                        controller: sortCode,
-                        hint: 'Sort code',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _InputBox(
-                        colors: colors,
-                        controller: accountNumber,
-                        hint: 'Account number',
-                      ),
-                    ),
-                  ],
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: saveBank,
-                  onChanged: onSaveBank,
-                  activeColor: colors.text,
-                  title: Text(
-                    'Save this bank for future withdrawals',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    ],
                   ),
-                ),
-                if (withdrawMessage != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    withdrawMessage!,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  const SizedBox(height: 10),
+                  _RiderStatTile(
+                    colors: colors,
+                    label: 'Withdrawn',
+                    value: _money(earnings.withdrawnEarnings),
                   ),
                 ],
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: signedIn &&
-                            !submittingWithdrawal &&
-                            _canRequestWithdrawal(
-                              amountText: withdrawAmount.text,
-                              availableBalance: earnings.availableBalance,
-                              bankName: bankName.text,
-                              sortCode: sortCode.text,
-                              accountNumber: accountNumber.text,
+              ),
+            ),
+          if (section == _RiderPortalTab.earnings) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.earnings)
+            _GlassPanel(
+              colors: colors,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(colors: colors, title: 'Withdraw to bank'),
+                  const SizedBox(height: 10),
+                  _InputBox(
+                    colors: colors,
+                    controller: withdrawAmount,
+                    hint: 'Amount to withdraw',
+                  ),
+                  const SizedBox(height: 10),
+                  _InputBox(
+                    colors: colors,
+                    controller: bankName,
+                    hint: 'Bank name',
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _InputBox(
+                          colors: colors,
+                          controller: sortCode,
+                          hint: 'Sort code',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _InputBox(
+                          colors: colors,
+                          controller: accountNumber,
+                          hint: 'Account number',
+                        ),
+                      ),
+                    ],
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: saveBank,
+                    onChanged: onSaveBank,
+                    activeColor: colors.text,
+                    title: Text(
+                      'Save this bank for future withdrawals',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (withdrawMessage != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      withdrawMessage!,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: signedIn &&
+                              !submittingWithdrawal &&
+                              _canRequestWithdrawal(
+                                amountText: withdrawAmount.text,
+                                availableBalance: earnings.availableBalance,
+                                bankName: bankName.text,
+                                sortCode: sortCode.text,
+                                accountNumber: accountNumber.text,
+                              )
+                          ? onWithdraw
+                          : null,
+                      icon: submittingWithdrawal
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                        ? onWithdraw
-                        : null,
-                    icon: submittingWithdrawal
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.account_balance),
-                    label: Text(
-                      submittingWithdrawal
-                          ? 'Sending request...'
-                          : 'Request withdrawal',
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
-                      foregroundColor: colors.inverseText,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'Driver documents'),
-                const SizedBox(height: 8),
-                Text(
-                  'Upload each document for Circum review. Replace a file if support asks for a new copy.',
-                  style: TextStyle(
-                    color: colors.mutedText,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _RiderDocumentStatusList(
-                  colors: colors,
-                  profile: riderProfile,
-                  onSelectType: (type) => documentType.text = type,
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: documentType,
-                  hint: 'Document type',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: documentNotes,
-                  hint: 'Notes for review',
-                  maxLines: 2,
-                ),
-                if (documentMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    documentMessage!,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w800,
+                          : const Icon(Icons.account_balance),
+                      label: Text(
+                        submittingWithdrawal
+                            ? 'Sending request...'
+                            : 'Request withdrawal',
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.text,
+                        foregroundColor: colors.inverseText,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: signedIn && !submittingDocument
-                        ? onUploadDocument
-                        : null,
-                    icon: submittingDocument
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.upload_file),
-                    label: Text(
-                      submittingDocument ? 'Uploading...' : 'Upload document',
+              ),
+            ),
+          if (section == _RiderPortalTab.documents)
+            _GlassPanel(
+              colors: colors,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(
+                      colors: colors, title: 'Verification documents'),
+                  const SizedBox(height: 8),
+                  _RiderDocumentProgress(
+                    colors: colors,
+                    profile: riderProfile,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Upload each document for Circum review. Replace a file if support asks for a new copy.',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  _RiderDocumentStatusList(
+                    colors: colors,
+                    profile: riderProfile,
+                    onSelectType: (type) => documentType.text = type,
+                  ),
+                  const SizedBox(height: 10),
+                  _InputBox(
+                    colors: colors,
+                    controller: documentType,
+                    hint: 'Document type',
+                  ),
+                  const SizedBox(height: 10),
+                  _InputBox(
+                    colors: colors,
+                    controller: documentNotes,
+                    hint: 'Notes for review',
+                    maxLines: 2,
+                  ),
+                  if (documentMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      documentMessage!,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: signedIn && !submittingDocument
+                          ? onUploadDocument
+                          : null,
+                      icon: submittingDocument
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.upload_file),
+                      label: Text(
+                        submittingDocument ? 'Uploading...' : 'Upload document',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
-          _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'What happens next'),
-                _RiderChecklistRow(
-                  colors: colors,
-                  icon: Icons.assignment_turned_in,
-                  label: 'Application received',
-                  value: applicationId ?? 'Not sent yet',
-                ),
-                _RiderChecklistRow(
-                  colors: colors,
-                  icon: Icons.verified_user,
-                  label: 'Circum review',
-                  value: 'Documents, vehicle, and availability',
-                ),
-                _RiderChecklistRow(
-                  colors: colors,
-                  icon: Icons.medical_services,
-                  label: 'Health+ pickups',
-                  value: 'Sealed pharmacy packages only',
-                ),
-                _RiderChecklistRow(
-                  colors: colors,
-                  icon: Icons.route,
-                  label: 'Jobs you can receive',
-                  value: 'Sender requests and Health+ pickups',
-                ),
-              ],
+          if (section == _RiderPortalTab.documents) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.documents)
+            _GlassPanel(
+              colors: colors,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(colors: colors, title: 'What happens next'),
+                  _RiderChecklistRow(
+                    colors: colors,
+                    icon: Icons.assignment_turned_in,
+                    label: 'Application received',
+                    value: applicationId ?? 'Not sent yet',
+                  ),
+                  _RiderChecklistRow(
+                    colors: colors,
+                    icon: Icons.verified_user,
+                    label: 'Circum review',
+                    value: 'Documents, vehicle, and availability',
+                  ),
+                  _RiderChecklistRow(
+                    colors: colors,
+                    icon: Icons.medical_services,
+                    label: 'Health+ pickups',
+                    value: 'Sealed pharmacy packages only',
+                  ),
+                  _RiderChecklistRow(
+                    colors: colors,
+                    icon: Icons.route,
+                    label: 'Jobs you can receive',
+                    value: 'Sender requests and Health+ pickups',
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -13486,6 +13628,138 @@ class _RiderWorkspace extends StatelessWidget {
         bankName.trim().isNotEmpty &&
         sortCode.trim().isNotEmpty &&
         accountNumber.trim().isNotEmpty;
+  }
+}
+
+class _RiderDocumentProgress extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic>? profile;
+
+  const _RiderDocumentProgress({required this.colors, required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final documents =
+        (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
+            (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    var uploaded = 0;
+    for (final type in _RiderDocumentStatusList.documentTypes) {
+      final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+      final value =
+          documents[key] ?? documents[type] ?? documents[type.toLowerCase()];
+      if (value == true || value is Map) uploaded++;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$uploaded of ${_RiderDocumentStatusList.documentTypes.length} documents uploaded',
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        LinearProgressIndicator(
+          value: uploaded / _RiderDocumentStatusList.documentTypes.length,
+          minHeight: 8,
+          borderRadius: BorderRadius.circular(999),
+          backgroundColor: colors.field,
+          color: colors.adminAccent,
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderSettingsActions extends StatelessWidget {
+  final _CircumColors colors;
+  final bool newJobSoundEnabled;
+  final ValueChanged<bool> onNewJobSoundChanged;
+  final VoidCallback onSignOut;
+
+  const _RiderSettingsActions({
+    required this.colors,
+    required this.newJobSoundEnabled,
+    required this.onNewJobSoundChanged,
+    required this.onSignOut,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: newJobSoundEnabled,
+            onChanged: onNewJobSoundChanged,
+            secondary: const Icon(Icons.notifications_active_outlined),
+            title: Text(
+              'New job notification sound',
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            subtitle: Text(
+              'Play a short alert when a new eligible job arrives.',
+              style: TextStyle(color: colors.mutedText),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _SectionTitle(colors: colors, title: 'Account actions'),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Sign out?'),
+                      content: const Text(
+                        'Are you sure you want to sign out of the rider platform?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Sign Out'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) onSignOut();
+                },
+                icon: const Icon(Icons.logout),
+                label: const Text('Sign Out'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => launchUrl(
+                  Uri.parse(
+                    'mailto:support@circumuk.com?subject=Rider account deletion request',
+                  ),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Request account deletion'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xfff87171),
+                  side: const BorderSide(color: Color(0x88f87171)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -13871,19 +14145,106 @@ class _RiderJobListPanel extends StatelessWidget {
             Text(emptyText, style: TextStyle(color: colors.mutedText))
           else
             ...jobs.take(8).map(
-                  (job) => _DriverJobCard(
-                    colors: colors,
-                    job: job,
-                    completed: completed,
-                    onAccept: () => onUpdateJobStatus(job, 'accepted'),
-                    onUpdateStatus: completed
-                        ? null
-                        : (status) => onUpdateJobStatus(job, status),
-                    onReportDiscrepancy: () =>
-                        onReportIssue(job, 'discrepancy'),
-                    onOpenChat: () => onOpenChat(job),
-                  ),
+                  (job) => completed
+                      ? _CompletedRiderJobTile(
+                          colors: colors,
+                          job: job,
+                          onOpenChat: () => onOpenChat(job),
+                          onReportDiscrepancy: () =>
+                              onReportIssue(job, 'discrepancy'),
+                        )
+                      : _DriverJobCard(
+                          colors: colors,
+                          job: job,
+                          onAccept: () => onUpdateJobStatus(job, 'accepted'),
+                          onUpdateStatus: (status) =>
+                              onUpdateJobStatus(job, status),
+                          onReportDiscrepancy: () =>
+                              onReportIssue(job, 'discrepancy'),
+                          onOpenChat: () => onOpenChat(job),
+                        ),
                 ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompletedRiderJobTile extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> job;
+  final VoidCallback onOpenChat;
+  final VoidCallback onReportDiscrepancy;
+
+  const _CompletedRiderJobTile({
+    required this.colors,
+    required this.job,
+    required this.onOpenChat,
+    required this.onReportDiscrepancy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final summary =
+        (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final reference = '${job['requestId'] ?? job['id'] ?? 'Delivery'}';
+    final pickup = '${summary['pickupDisplay'] ?? job['pickupAddress'] ?? ''}';
+    final dropoff =
+        '${summary['dropoffDisplay'] ?? job['dropoffAddress'] ?? ''}';
+    final vehicle = '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Car'}';
+    final service =
+        '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? 'Standard'}';
+    final payout = ((summary['driverPayout'] ?? job['driverPayout']) as num?)
+            ?.toDouble() ??
+        0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(colors: [
+          colors.adminAccent.withValues(alpha: 0.12),
+          colors.field.withValues(alpha: 0.72),
+        ]),
+        border: Border.all(color: colors.border),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        title: Text(
+          reference,
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          '$service · $vehicle\n${pickup.isEmpty ? 'Pickup' : pickup} → ${dropoff.isEmpty ? 'Drop-off' : dropoff}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: colors.mutedText, height: 1.35),
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Text('Completed',
+                style: TextStyle(
+                    color: Color(0xff4ade80), fontWeight: FontWeight.w900)),
+            Text('£${payout.toStringAsFixed(2)}',
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+          ],
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: _DriverJobCard(
+              colors: colors,
+              job: job,
+              completed: true,
+              onAccept: () {},
+              onReportDiscrepancy: onReportDiscrepancy,
+              onOpenChat: onOpenChat,
+            ),
+          ),
         ],
       ),
     );
