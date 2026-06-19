@@ -1474,10 +1474,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     required _CircumColors colors,
     required bool enabled,
     required String selectedId,
+    required String provider,
+    required TextEditingController externalUrlController,
     required String? customAudioUrl,
     required XFile? pendingAudio,
     required String? audioError,
     required ValueChanged<bool> onEnabled,
+    required ValueChanged<String> onProviderChanged,
     required ValueChanged<String> onSelected,
     required VoidCallback onPickAudio,
     required VoidCallback onRemoveAudio,
@@ -1505,9 +1508,43 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Gift Story music'),
               subtitle: const Text(
-                'Approved Circum soundtracks only. No user-uploaded commercial songs.',
+                'Choose a feeling. Spotify and Apple Music links are stored as references only; Circum does not copy or redistribute commercial audio.',
               ),
             ),
+            DropdownButtonFormField<String>(
+              initialValue: provider,
+              decoration: const InputDecoration(labelText: 'Music source'),
+              items: const [
+                DropdownMenuItem(
+                    value: 'spotify', child: Text('Spotify search / link')),
+                DropdownMenuItem(
+                    value: 'apple_music',
+                    child: Text('Apple Music search / link')),
+                DropdownMenuItem(
+                    value: 'circum', child: Text('Circum soundtrack library')),
+                DropdownMenuItem(
+                    value: 'upload',
+                    child: Text('Upload audio file as fallback')),
+              ],
+              onChanged: enabled
+                  ? (value) => onProviderChanged(
+                      _giftStoryMusicProvider(value ?? 'circum'))
+                  : null,
+            ),
+            if (provider == 'spotify' || provider == 'apple_music') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: externalUrlController,
+                decoration: InputDecoration(
+                  labelText: provider == 'spotify'
+                      ? 'Paste Spotify link'
+                      : 'Paste Apple Music link',
+                  helperText:
+                      'Only the provider reference is saved. Recipient sees Sound On / Off, not song metadata.',
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: selectedId,
               decoration: const InputDecoration(labelText: 'Soundtrack mood'),
@@ -1525,6 +1562,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   : null,
             ),
             const SizedBox(height: 12),
+            Text(
+              'Upload audio file is a fallback for approved/licensed audio only.',
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w800,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -3328,12 +3374,18 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool giftStoryApproved = item['giftStoryApproved'] != false;
     bool giftStoryShareEnabled = item['giftStoryShareEnabled'] != false;
     bool giftStoryMusicEnabled = item['giftStoryMusicEnabled'] != false;
+    String giftStorySharePrivacy =
+        _giftStorySharePrivacy('${item['giftStorySharePrivacy'] ?? ''}');
+    String giftStoryMusicProvider =
+        _giftStoryMusicProvider('${item['giftStoryMusicProvider'] ?? ''}');
     String giftStorySoundtrackId =
         _giftStorySoundtrackId('${item['giftStorySoundtrackId'] ?? ''}');
     String? giftStoryCustomAudioUrl =
         '${item['giftStoryCustomAudioUrl'] ?? ''}'.trim().isEmpty
             ? null
             : '${item['giftStoryCustomAudioUrl']}';
+    final dspTrackLink = TextEditingController(
+        text: '${item['giftStoryMusicExternalUrl'] ?? ''}'.trim());
     XFile? pendingStoryAudio;
     String? storyAudioError;
     final storyPhotos = <String>{
@@ -3630,11 +3682,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     colors: widget.colors,
                     enabled: giftStoryMusicEnabled,
                     selectedId: giftStorySoundtrackId,
+                    provider: giftStoryMusicProvider,
+                    externalUrlController: dspTrackLink,
                     customAudioUrl: giftStoryCustomAudioUrl,
                     pendingAudio: pendingStoryAudio,
                     audioError: storyAudioError,
                     onEnabled: (value) =>
                         setDialogState(() => giftStoryMusicEnabled = value),
+                    onProviderChanged: (value) =>
+                        setDialogState(() => giftStoryMusicProvider = value),
                     onSelected: (value) =>
                         setDialogState(() => giftStorySoundtrackId = value),
                     onPickAudio: () async {
@@ -3692,6 +3748,24 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         setDialogState(() => giftStoryShareEnabled = value),
                     title: const Text('Allow story sharing'),
                   ),
+                  DropdownButtonFormField<String>(
+                    initialValue: giftStorySharePrivacy,
+                    decoration:
+                        const InputDecoration(labelText: 'Story privacy'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'unlisted',
+                          child: Text('Unlisted Share Link')),
+                      DropdownMenuItem(
+                          value: 'private',
+                          child: Text('Private: sender and recipient only')),
+                      DropdownMenuItem(
+                          value: 'public', child: Text('Public Share')),
+                    ],
+                    onChanged: (value) => setDialogState(() =>
+                        giftStorySharePrivacy =
+                            _giftStorySharePrivacy(value ?? 'unlisted')),
+                  ),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
@@ -3709,9 +3783,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                               'giftStoryCircumMessage':
                                   circumMessage.text.trim(),
                               'giftStoryMusicEnabled': giftStoryMusicEnabled,
+                              'giftStoryMusicProvider': giftStoryMusicProvider,
+                              'giftStoryMusicExternalUrl':
+                                  dspTrackLink.text.trim(),
                               'giftStorySoundtrackId': giftStorySoundtrackId,
                               'giftStoryCustomAudioUrl':
                                   giftStoryCustomAudioUrl,
+                              'giftStorySharePrivacy': giftStorySharePrivacy,
                             },
                             adminPreview: true,
                             onClose: () => Navigator.of(context).pop(),
@@ -3993,10 +4071,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         'giftStoryEnabled': giftStoryEnabled,
                         'giftStoryApproved': giftStoryApproved,
                         'giftStoryShareEnabled': giftStoryShareEnabled,
+                        'giftStorySharePrivacy': giftStorySharePrivacy,
                         'giftStoryPhotos': storyPhotos.toSet().toList(),
                         'giftStoryPhotoUrls': storyPhotos.toSet().toList(),
                         'giftStoryCircumMessage': circumMessage.text.trim(),
                         'giftStoryMusicEnabled': giftStoryMusicEnabled,
+                        'giftStoryMusicProvider': giftStoryMusicProvider,
+                        'giftStoryMusicExternalUrl': dspTrackLink.text.trim(),
+                        'giftStoryMusicProviderTrackId':
+                            _giftStoryProviderTrackId(
+                                giftStoryMusicProvider, dspTrackLink.text),
                         'giftStorySoundtrackId': giftStorySoundtrackId,
                         'giftStoryCustomAudioUrl': giftStoryCustomAudioUrl,
                         'giftStorySoundtrack':
@@ -4058,6 +4142,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     caption.dispose();
     approvedCaption.dispose();
     circumMessage.dispose();
+    dspTrackLink.dispose();
     tiktok.dispose();
     instagram.dispose();
     youtube.dispose();
@@ -4102,7 +4187,43 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     if (nowPosted && '${result['brandName'] ?? ''}'.trim().isNotEmpty) {
       await _recordGiftBrandExposure('${item['id']}', result);
     }
+    final wasGiftComplete = _giftStoryStatusIsComplete('${item['status']}');
+    final isGiftComplete = _giftStoryStatusIsComplete('${result['status']}');
+    if (isGiftComplete && !wasGiftComplete) {
+      await _queueGiftStoryEmails('${item['id']}', {...item, ...result});
+    }
     await _loadAdminData();
+  }
+
+  bool _giftStoryStatusIsComplete(String status) {
+    final normalized = status.trim().toLowerCase();
+    return normalized == 'delivered' ||
+        normalized == 'completed' ||
+        normalized == 'complete' ||
+        normalized == 'out_for_delivery_delivered';
+  }
+
+  Future<void> _queueGiftStoryEmails(
+      String giftRequestId, Map<String, dynamic> gift) async {
+    final storyLink =
+        'https://circumuk.com/?app=gifts&giftStory=$giftRequestId';
+    final recipients = <String>{
+      '${gift['senderEmail'] ?? ''}'.trim().toLowerCase(),
+      '${gift['recipientEmail'] ?? gift['recipientContact'] ?? ''}'
+          .trim()
+          .toLowerCase(),
+    }..removeWhere((email) => email.isEmpty || !email.contains('@'));
+    for (final email in recipients) {
+      await FirebaseFirestore.instance.collection('emailQueue').add({
+        'to': email,
+        'subject': 'Open Gift Story',
+        'body':
+            'Hello,\n\nYour Gifts by Circum story is ready.\n\nOpen Gift Story:\n$storyLink\n\nDownload Story and Share Story options are available inside the story viewer.\n\nThoughtful gifting, delivered by Circum.\n\n— Circum',
+        'type': 'gift_story_ready',
+        'giftRequestId': giftRequestId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   Future<void> _recordGiftBrandExposure(
@@ -7611,6 +7732,43 @@ String _giftStorySoundtrackId(String id) {
     return normalized;
   }
   return giftStorySoundtracks.firstWhere((track) => track.isDefault).id;
+}
+
+String _giftStoryMusicProvider(String provider) {
+  final normalized = provider.trim().toLowerCase().replaceAll('-', '_');
+  if (const ['spotify', 'apple_music', 'circum', 'upload']
+      .contains(normalized)) {
+    return normalized;
+  }
+  return 'circum';
+}
+
+String _giftStorySharePrivacy(String value) {
+  final normalized = value.trim().toLowerCase().replaceAll('-', '_');
+  if (const ['public', 'unlisted', 'private'].contains(normalized)) {
+    return normalized;
+  }
+  return 'unlisted';
+}
+
+String _giftStoryProviderTrackId(String provider, String externalUrl) {
+  final url = externalUrl.trim();
+  if (url.isEmpty) return '';
+  final uri = Uri.tryParse(url);
+  if (uri == null) return '';
+  if (provider == 'spotify') {
+    final segments = uri.pathSegments;
+    final trackIndex = segments.indexOf('track');
+    if (trackIndex >= 0 && trackIndex + 1 < segments.length) {
+      return segments[trackIndex + 1];
+    }
+  }
+  if (provider == 'apple_music') {
+    final i = uri.queryParameters['i'];
+    if (i != null && i.isNotEmpty) return i;
+    if (uri.pathSegments.isNotEmpty) return uri.pathSegments.last;
+  }
+  return uri.pathSegments.isNotEmpty ? uri.pathSegments.last : url;
 }
 
 _GiftStorySoundtrack _giftStorySoundtrackById(String id) {
@@ -30790,6 +30948,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   String _selfGiftFrequency = 'one_off';
   String _giftStorySoundtrackId = 'circum_warm';
   bool _giftStoryMusicEnabled = true;
+  String _giftStoryMusicProvider = 'circum';
+  final _giftStoryMusicExternalUrl = TextEditingController();
   XFile? _giftStoryCustomMusic;
   String? _giftStoryMusicError;
   int _giftStep = 0;
@@ -31163,6 +31323,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _favouriteColours,
       _likedBrands,
       _dislikedBrands,
+      _giftStoryMusicExternalUrl,
       _previewEmail,
       _previewPassword
     ]) {
@@ -31528,7 +31689,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'giftStoryEnabled': true,
         'giftStoryApproved': true,
         'giftStoryShareEnabled': true,
+        'giftStorySharePrivacy': 'unlisted',
         'giftStoryMusicEnabled': _giftStoryMusicEnabled,
+        'giftStoryMusicProvider': _giftStoryMusicProvider,
+        'giftStoryMusicExternalUrl': _giftStoryMusicExternalUrl.text.trim(),
+        'giftStoryMusicProviderTrackId': _giftStoryProviderTrackId(
+            _giftStoryMusicProvider, _giftStoryMusicExternalUrl.text),
         'giftStorySoundtrackId':
             _giftStoryMusicEnabled ? _giftStorySoundtrackId : 'circum_warm',
         'giftStoryCustomAudioUrl': customAudioUrl,
@@ -32773,14 +32939,56 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Add a soundtrack to the Gift Story',
+          Text('Choose a Soundtrack',
               style:
                   TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
           Text(
-            'Optional. Circum-approved soundtracks only; no copyrighted uploads.',
+            'Choose the feeling. Spotify and Apple Music links are saved as references only; Circum does not copy or redistribute commercial audio.',
             style: TextStyle(color: colors.mutedText, height: 1.35),
           ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Spotify'),
+                selected: _giftStoryMusicProvider == 'spotify',
+                onSelected: (_) =>
+                    setState(() => _giftStoryMusicProvider = 'spotify'),
+              ),
+              ChoiceChip(
+                label: const Text('Apple Music'),
+                selected: _giftStoryMusicProvider == 'apple_music',
+                onSelected: (_) =>
+                    setState(() => _giftStoryMusicProvider = 'apple_music'),
+              ),
+              ChoiceChip(
+                label: const Text('Circum library'),
+                selected: _giftStoryMusicProvider == 'circum',
+                onSelected: (_) =>
+                    setState(() => _giftStoryMusicProvider = 'circum'),
+              ),
+              ChoiceChip(
+                label: const Text('Upload fallback'),
+                selected: _giftStoryMusicProvider == 'upload',
+                onSelected: (_) =>
+                    setState(() => _giftStoryMusicProvider = 'upload'),
+              ),
+            ],
+          ),
+          if (_giftStoryMusicProvider == 'spotify' ||
+              _giftStoryMusicProvider == 'apple_music') ...[
+            const SizedBox(height: 12),
+            _giftField(
+              _giftStoryMusicExternalUrl,
+              _giftStoryMusicProvider == 'spotify'
+                  ? 'Paste Spotify link'
+                  : 'Paste Apple Music link',
+              Icons.link,
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -32820,6 +33028,16 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             ],
           ),
           const SizedBox(height: 12),
+          Text(
+            'Upload audio is fallback only for audio you have rights to use.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -34135,6 +34353,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   late bool _muted;
   late bool _playing;
   late String _soundtrackId;
+  late String _sharePrivacy;
   html.AudioElement? _audio;
   String? _musicPrompt;
   bool _customAudioFailed = false;
@@ -34148,6 +34367,8 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     _soundtrackId = _giftStorySoundtrackId(
       '${widget.gift['recipientGiftStorySoundtrackOverride'] ?? widget.gift['giftStorySoundtrackId'] ?? ''}',
     );
+    _sharePrivacy =
+        _giftStorySharePrivacy('${widget.gift['giftStorySharePrivacy'] ?? ''}');
     _markRevealViewed();
   }
 
@@ -34315,13 +34536,125 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   }
 
   Future<void> _shareStory() async {
-    final subject = Uri.encodeComponent('Gifted by Circum');
-    final body = Uri.encodeComponent(
-        'Thoughtful gifting, delivered by Circum.\n\n$_storyLink');
-    final opened =
-        await launchUrl(Uri.parse('mailto:?subject=$subject&body=$body'));
+    final encodedText = Uri.encodeComponent(_shareMessage);
+    final opened = await launchUrl(
+      Uri.parse('https://wa.me/?text=$encodedText'),
+      mode: LaunchMode.externalApplication,
+    );
     if (!opened) await _copyStoryLink();
   }
+
+  String get _shareTitle => 'A special gift story awaits.';
+
+  String get _shareMessage =>
+      'A special gift story awaits.\n\nCreated with Gifts by Circum.\n$_storyLink';
+
+  Future<void> _launchStoryShare(String platform) async {
+    final url = Uri.encodeComponent(_storyLink);
+    final text = Uri.encodeComponent(_shareMessage);
+    final title = Uri.encodeComponent(_shareTitle);
+    Uri? target;
+    switch (platform) {
+      case 'WhatsApp':
+        target = Uri.parse('https://wa.me/?text=$text');
+      case 'Facebook':
+      case 'Facebook Story':
+        target = Uri.parse('https://www.facebook.com/sharer/sharer.php?u=$url');
+      case 'X':
+        target = Uri.parse('https://twitter.com/intent/tweet?text=$text');
+      case 'Messages':
+        target = Uri.parse('sms:?&body=$text');
+      case 'Email':
+        target = Uri.parse('mailto:?subject=$title&body=$text');
+      case 'Instagram Story':
+      case 'Instagram DM':
+      case 'Instagram':
+      case 'TikTok':
+      case 'Snapchat':
+        await _downloadStoryImageSequence(
+          notice:
+              '$platform does not support direct browser posting here. Story images are downloading for upload.',
+        );
+        return;
+    }
+    if (target == null) return;
+    final opened =
+        await launchUrl(target, mode: LaunchMode.externalApplication);
+    if (!opened) await _copyStoryLink();
+  }
+
+  Future<void> _updateSharePrivacy(String privacy) async {
+    final next = _giftStorySharePrivacy(privacy);
+    setState(() => _sharePrivacy = next);
+    final id = '${widget.gift['id'] ?? ''}';
+    if (id.isEmpty || widget.adminPreview) return;
+    try {
+      await FirebaseFirestore.instance.collection('giftRequests').doc(id).set({
+        'giftStorySharePrivacy': next,
+        'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (error) {
+      debugPrint('Gift Story privacy update failed: $error');
+    }
+  }
+
+  Future<void> _downloadStoryImageSequence({String? notice}) async {
+    final chapters = _chapters;
+    for (var i = 0; i < chapters.length; i++) {
+      final chapter = chapters[i];
+      final svg = _storySvg(chapter, i + 1, chapters.length);
+      final blob = html.Blob([svg], 'image/svg+xml;charset=utf-8');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)
+        ..download = 'circum-gift-story-${i + 1}.svg'
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(notice ??
+          'Gift Story image sequence downloaded. MP4 rendering will use a server renderer in a later pass.'),
+    ));
+  }
+
+  String _storySvg(_GiftStoryChapter chapter, int index, int total) {
+    final title = _xmlEscape(chapter.title);
+    final body = _xmlEscape(chapter.body.replaceAll('\n', ' '));
+    final chips = _xmlEscape(chapter.chips.take(3).join(' · '));
+    return '''
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#7c5cff"/>
+      <stop offset="45%" stop-color="#356aff"/>
+      <stop offset="100%" stop-color="#050914"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="18%" cy="10%" r="85%">
+      <stop offset="0%" stop-color="#8bf5ff" stop-opacity=".42"/>
+      <stop offset="100%" stop-color="#050914" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <rect width="1080" height="1920" fill="url(#glow)"/>
+  <rect x="56" y="78" width="${(968 / total * index).round()}" height="10" rx="5" fill="#ffffff"/>
+  <rect x="56" y="1400" width="968" height="360" rx="44" fill="#06101f" opacity=".62" stroke="#ffffff" stroke-opacity=".22"/>
+  <text x="92" y="1492" font-family="Helvetica, Arial, sans-serif" font-size="76" font-weight="800" fill="#ffffff">$title</text>
+  <foreignObject x="92" y="1535" width="896" height="130">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Helvetica,Arial,sans-serif;color:white;font-size:34px;line-height:1.28;font-weight:650;">$body</div>
+  </foreignObject>
+  <text x="92" y="1715" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#d9e7ff">$chips</text>
+  <text x="92" y="1830" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="800" fill="#ffffff">Created with Gifts by Circum</text>
+  <text x="92" y="1874" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#d9e7ff">Thoughtful gifting, delivered by Circum.</text>
+</svg>
+''';
+  }
+
+  String _xmlEscape(String value) => value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
 
   String _currentAudioUrl() {
     final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
@@ -34629,9 +34962,11 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
 
   Widget _storyCaptionPanel(_GiftStoryChapter chapter) {
     final width = MediaQuery.sizeOf(context).width;
+    final height = MediaQuery.sizeOf(context).height;
     final titleSize = width < 420 ? 35.0 : 48.0;
     return Container(
       width: double.infinity,
+      constraints: BoxConstraints(maxHeight: height * 0.70),
       padding: EdgeInsets.all(width < 420 ? 20 : 28),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(width < 420 ? 26 : 32),
@@ -34653,113 +34988,165 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            chapter.title,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: titleSize,
-              height: 0.98,
-              fontWeight: FontWeight.w900,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              chapter.title,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: titleSize,
+                height: 0.98,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            chapter.body,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.90),
-              fontSize: width < 420 ? 16 : 18,
-              height: 1.45,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 16),
+            Text(
+              chapter.body,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.90),
+                fontSize: width < 420 ? 16 : 18,
+                height: 1.45,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          if (chapter.chips.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: chapter.chips
-                  .map((chip) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(999),
-                          color: Colors.white.withValues(alpha: 0.14),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.16)),
-                        ),
-                        child: Text(
-                          chip,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
+            if (chapter.chips.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: chapter.chips
+                    .map((chip) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            color: Colors.white.withValues(alpha: 0.14),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.16)),
                           ),
-                        ),
-                      ))
-                  .toList(),
-            ),
+                          child: Text(
+                            chip,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+            if (chapter.finalChapter) ...[
+              const SizedBox(height: 24),
+              _storyFinalActions(),
+            ],
           ],
-          if (chapter.finalChapter) ...[
-            const SizedBox(height: 24),
-            _storyFinalActions(),
-          ],
-        ],
+        ),
       ),
     );
   }
 
   Widget _storyFinalActions() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+    final sharingEnabled = widget.gift['giftStoryShareEnabled'] != false &&
+        _sharePrivacy != 'private';
+    const platforms = [
+      ('WhatsApp', Icons.chat),
+      ('Instagram Story', Icons.camera_alt_outlined),
+      ('Instagram DM', Icons.send_outlined),
+      ('Facebook', Icons.facebook),
+      ('Facebook Story', Icons.auto_stories_outlined),
+      ('TikTok', Icons.music_note),
+      ('X', Icons.alternate_email),
+      ('Snapchat', Icons.photo_camera_front_outlined),
+      ('Messages', Icons.sms_outlined),
+      ('Email', Icons.email_outlined),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FilledButton.icon(
-          onPressed: widget.gift['giftStoryShareEnabled'] == false
-              ? null
-              : _shareStory,
-          icon: const Icon(Icons.ios_share),
-          label: const Text('Share My Gift Story'),
-          style: FilledButton.styleFrom(
-            backgroundColor: widget.colors.adminAccent,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        const Text(
+          'Share This Moment',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: _copyStoryLink,
-          icon: const Icon(Icons.link),
-          label: const Text('Copy Link'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        const SizedBox(height: 8),
+        Text(
+          'Created with Gifts by Circum',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.78),
+            fontWeight: FontWeight.w800,
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'Download Story video rendering is coming soon. Use Copy Link for now.'),
-            ));
-          },
-          icon: const Icon(Icons.download),
-          label: const Text('Download Story'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Public Share'),
+              selected: _sharePrivacy == 'public',
+              onSelected: (_) => _updateSharePrivacy('public'),
+            ),
+            ChoiceChip(
+              label: const Text('Unlisted Share Link'),
+              selected: _sharePrivacy == 'unlisted',
+              onSelected: (_) => _updateSharePrivacy('unlisted'),
+            ),
+            ChoiceChip(
+              label: const Text('Private'),
+              selected: _sharePrivacy == 'private',
+              onSelected: (_) => _updateSharePrivacy('private'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final platform in platforms)
+              _storyShareButton(
+                platform.$1,
+                platform.$2,
+                sharingEnabled ? () => _launchStoryShare(platform.$1) : null,
+              ),
+            _storyShareButton('Copy Link', Icons.link, _copyStoryLink),
+            _storyShareButton(
+              'Download Story',
+              Icons.download,
+              () => _downloadStoryImageSequence(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        TextButton(
+          onPressed: () => launchUrl(
+            Uri.parse('https://circumuk.com/?app=gifts'),
+            mode: LaunchMode.externalApplication,
           ),
+          child: const Text('Learn More · Send a Gift · Join Waitlist'),
         ),
       ],
+    );
+  }
+
+  Widget _storyShareButton(String label, IconData icon, VoidCallback? onTap) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white.withValues(alpha: 0.38),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.28)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
     );
   }
 
