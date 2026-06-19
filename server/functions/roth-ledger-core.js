@@ -14,6 +14,8 @@ const TRANSACTION_TYPES = Object.freeze({
   giftCardRedeem: "gift_card_redeem",
   userTopUp: "USER_TOP_UP",
   rewardCredit: "reward_credit",
+  referralReward: "referral_reward",
+  referralWelcomeReward: "referral_welcome_reward",
   adminCredit: "admin_credit",
   adminDebit: "admin_debit",
   earningsPending: "earnings_pending",

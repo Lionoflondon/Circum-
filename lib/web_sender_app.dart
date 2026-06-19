@@ -54,6 +54,48 @@ const _spectrumGradient = [
   Color(0xff0023ff),
   Color(0xff19a0ff),
 ];
+final String? _incomingReferralCode = _extractIncomingReferralCode();
+
+String? _extractIncomingReferralCode() {
+  final query = Uri.base.queryParameters['ref'] ??
+      Uri.base.queryParameters['referral'] ??
+      Uri.base.queryParameters['code'];
+  if (query != null && query.trim().isNotEmpty) {
+    return query.trim().toUpperCase();
+  }
+  final segments = Uri.base.pathSegments;
+  final joinIndex = segments.indexWhere((segment) => segment == 'join');
+  if (joinIndex >= 0 && segments.length > joinIndex + 1) {
+    return segments[joinIndex + 1].trim().toUpperCase();
+  }
+  return null;
+}
+
+Future<void> _attachIncomingReferralIfPresent() async {
+  final code = _incomingReferralCode;
+  if (code == null || code.isEmpty) return;
+  try {
+    await FirebaseFunctions.instance
+        .httpsCallable('attachReferralCode')
+        .call({'referralCode': code});
+  } catch (error) {
+    debugPrint('Referral attach skipped: $error');
+  }
+}
+
+Future<void> _activateReferralSafely({
+  required String activityType,
+  required String activityId,
+}) async {
+  try {
+    await FirebaseFunctions.instance.httpsCallable('activateReferral').call({
+      'activityType': activityType,
+      'activityId': activityId,
+    });
+  } catch (error) {
+    debugPrint('Referral activation skipped: $error');
+  }
+}
 
 enum _WebAppMode { landing, sender, rider, gifts, admin }
 
@@ -2879,8 +2921,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         TextEditingController(text: '${item['captionDraft'] ?? ''}');
     final approvedCaption =
         TextEditingController(text: '${item['approvedCaption'] ?? ''}');
-    final contentUrl =
-        TextEditingController(text: '${item['reactionContentUrl'] ?? ''}');
+    final storyPhotoUrls = TextEditingController(
+        text: (item['giftStoryPhotoUrls'] as List?)?.join(', ') ?? '');
+    final circumMessage =
+        TextEditingController(text: '${item['giftStoryCircumMessage'] ?? ''}');
     final tiktok =
         TextEditingController(text: '${item['postedTikTokUrl'] ?? ''}');
     final instagram =
@@ -3036,7 +3080,19 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                           TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
                   const Text(
-                      'Shown only after delivery is completed. Contents remain hidden before delivery.'),
+                      'Shown only after delivery is completed. Add only approved gift, wrapped package, safe preparation, sender note/card, or Message from Circum content. Do not add recipient reaction media, receipts, costs, or internal notes.'),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: storyPhotoUrls,
+                      decoration: const InputDecoration(
+                          labelText:
+                              'Approved gift / wrapped package photo URLs')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: circumMessage,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: 'Message from Circum')),
                   SwitchListTile(
                     value: giftStoryEnabled,
                     onChanged: (value) =>
@@ -3165,9 +3221,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     ),
                     const SizedBox(height: 12),
                     TextField(
-                        controller: contentUrl,
+                        controller: storyPhotoUrls,
                         decoration: const InputDecoration(
-                            labelText: 'Reaction photo/video link')),
+                            labelText:
+                                'Campaign-approved gift/prep photo URLs')),
                     const SizedBox(height: 12),
                     TextField(
                         controller: caption,
@@ -3301,6 +3358,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   'giftStoryEnabled': giftStoryEnabled,
                   'giftStoryApproved': giftStoryApproved,
                   'giftStoryShareEnabled': giftStoryShareEnabled,
+                  'giftStoryPhotoUrls': storyPhotoUrls.text
+                      .split(',')
+                      .map((url) => url.trim())
+                      .where((url) => url.isNotEmpty)
+                      .toList(),
+                  'giftStoryCircumMessage': circumMessage.text.trim(),
                   'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
                   if (generatedRecommendation != null) ...{
                     'irisGiftRecommendation': generatedRecommendation,
@@ -3320,7 +3383,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                           ? 'circum_marketing'
                           : 'private',
                   'contentStatus': contentStatus,
-                  'reactionContentUrl': contentUrl.text.trim(),
                   'captionDraft': caption.text.trim(),
                   'approvedCaption': approvedCaption.text.trim(),
                   'brandName': brandName.text.trim(),
@@ -3347,7 +3409,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     plan.dispose();
     caption.dispose();
     approvedCaption.dispose();
-    contentUrl.dispose();
+    storyPhotoUrls.dispose();
+    circumMessage.dispose();
     tiktok.dispose();
     instagram.dispose();
     youtube.dispose();
@@ -8629,6 +8692,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (_signupMode) {
         await user.updateDisplayName(_fullName.text.trim());
         await _saveRiderProfile(user);
+        await _attachIncomingReferralIfPresent();
         _riderProfile = await _loadRiderProfile(user.uid);
         _availableRoles = {CircumRole.rider};
       } else if (!await _allowRiderUser(user)) {
@@ -8640,6 +8704,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         );
         return;
       } else {
+        await _attachIncomingReferralIfPresent();
         _riderProfile = await _loadRiderProfile(user.uid);
       }
       _listenToRiderEarnings(user.uid);
@@ -14511,6 +14576,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         });
         return;
       }
+      await _attachIncomingReferralIfPresent();
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
     } catch (_) {
@@ -14828,6 +14894,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      await _attachIncomingReferralIfPresent();
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
@@ -21520,12 +21587,18 @@ class _SenderWalletPanel extends StatefulWidget {
 class _SenderWalletPanelState extends State<_SenderWalletPanel> {
   final _giftCardCode = TextEditingController();
   final _customTopUp = TextEditingController();
+  final _manualReferralCode = TextEditingController();
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _walletSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _txSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _referralSub;
   Map<String, dynamic>? _wallet;
   List<Map<String, dynamic>> _transactions = const [];
+  List<Map<String, dynamic>> _referrals = const [];
+  String? _referralCode;
+  String? _referralLink;
   bool _redeeming = false;
   bool _toppingUp = false;
+  bool _referralBusy = false;
   String? _message;
 
   String get _walletId {
@@ -21563,15 +21636,83 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
             .toList(growable: false);
       });
     });
+    _referralSub = FirebaseFirestore.instance
+        .collection('referrals')
+        .where('referrerUserId', isEqualTo: widget.userId)
+        .limit(50)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _referrals = snapshot.docs
+            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+            .toList(growable: false);
+      });
+    });
+    _loadReferralCode();
   }
 
   @override
   void dispose() {
     _giftCardCode.dispose();
     _customTopUp.dispose();
+    _manualReferralCode.dispose();
     _walletSub?.cancel();
     _txSub?.cancel();
+    _referralSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadReferralCode() async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('ensureReferralCode')
+          .call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      setState(() {
+        _referralCode = '${data['referralCode'] ?? ''}';
+        _referralLink = '${data['referralLink'] ?? ''}';
+      });
+    } catch (error) {
+      debugPrint('Referral code load failed: $error');
+    }
+  }
+
+  String get _shareMessage {
+    final link = _referralLink ?? 'https://circumuk.com';
+    return "I've joined Circum.\nUse my link to join.\nWhen you complete your first booking or delivery, we both receive 5 Roth.\n$link";
+  }
+
+  Future<void> _copyReferralLink() async {
+    await Clipboard.setData(ClipboardData(text: _referralLink ?? ''));
+    if (!mounted) return;
+    setState(() => _message = 'Referral link copied.');
+  }
+
+  Future<void> _shareReferral(Uri uri) async {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _attachManualReferralCode() async {
+    final code = _manualReferralCode.text.trim();
+    if (code.isEmpty) {
+      setState(() => _message = 'Enter a referral code.');
+      return;
+    }
+    setState(() => _referralBusy = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('attachReferralCode')
+          .call({'referralCode': code});
+      _manualReferralCode.clear();
+      setState(() => _message =
+          'Referral attached. Roth is awarded after your first completed activity.');
+    } catch (error) {
+      setState(() => _message = 'Referral code could not be attached.');
+    } finally {
+      if (mounted) setState(() => _referralBusy = false);
+    }
   }
 
   Future<void> _redeemGiftCard() async {
@@ -21631,6 +21772,154 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
     }
   }
 
+  Widget _referralHub(_CircumColors colors) {
+    final pending =
+        _referrals.where((item) => '${item['status']}' == 'pending').length;
+    final activated = _referrals
+        .where((item) =>
+            '${item['status']}' == 'activated' ||
+            '${item['status']}' == 'rewarded')
+        .length;
+    final earned = _transactions
+        .where((tx) => '${tx['type']}' == 'referral_reward')
+        .fold<double>(
+          0,
+          (sum, tx) => sum + ((tx['amount'] as num?)?.toDouble() ?? 0),
+        );
+    final link = _referralLink ?? 'Generating referral link...';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminGlow.withValues(alpha: 0.20),
+            colors.adminAccent.withValues(alpha: 0.16),
+            colors.field.withValues(alpha: 0.70),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.24)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withValues(alpha: 0.16),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.group_add_outlined, color: colors.adminAccent),
+            const SizedBox(width: 10),
+            Text('Invite Friends',
+                style: TextStyle(
+                    color: colors.text,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900)),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            'Earn 5 Roth when someone you invite completes their first booking or delivery.',
+            style: TextStyle(color: colors.mutedText, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          Wrap(spacing: 10, runSpacing: 10, children: [
+            _referralStat(colors, 'Referral code', _referralCode ?? '...'),
+            _referralStat(colors, 'Pending referrals', '$pending'),
+            _referralStat(colors, 'Activated referrals', '$activated'),
+            _referralStat(colors, 'People introduced', '${_referrals.length}'),
+            _referralStat(
+                colors, 'Total Roth earned', '£${earned.toStringAsFixed(2)}'),
+          ]),
+          const SizedBox(height: 12),
+          SelectableText(link,
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            FilledButton.icon(
+              onPressed: _referralLink == null ? null : _copyReferralLink,
+              icon: const Icon(Icons.copy),
+              label: const Text('Copy Link'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _referralLink == null
+                  ? null
+                  : () => _shareReferral(Uri.parse(
+                      'mailto:?subject=${Uri.encodeComponent('Join Circum')}&body=${Uri.encodeComponent(_shareMessage)}')),
+              icon: const Icon(Icons.ios_share),
+              label: const Text('Share Link'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _referralLink == null
+                  ? null
+                  : () => _shareReferral(Uri.parse(
+                      'https://wa.me/?text=${Uri.encodeComponent(_shareMessage)}')),
+              icon: const Icon(Icons.chat_outlined),
+              label: const Text('WhatsApp'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _referralLink == null
+                  ? null
+                  : () => _shareReferral(Uri.parse(
+                      'sms:?&body=${Uri.encodeComponent(_shareMessage)}')),
+              icon: const Icon(Icons.sms_outlined),
+              label: const Text('SMS'),
+            ),
+          ]),
+          const SizedBox(height: 14),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            SizedBox(
+              width: 220,
+              child: _InputBox(
+                colors: colors,
+                controller: _manualReferralCode,
+                hint: 'Enter referral code',
+              ),
+            ),
+            FilledButton(
+              onPressed: _referralBusy ? null : _attachManualReferralCode,
+              child: Text(_referralBusy ? 'Attaching' : 'Apply Code'),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _referralStat(_CircumColors colors, String label, String value) {
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withValues(alpha: 0.07),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 5),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: colors.text,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
@@ -21678,6 +21967,8 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
           ),
         ),
         const SizedBox(height: 12),
+        _referralHub(colors),
+        const SizedBox(height: 16),
         _SectionTitle(colors: colors, title: 'Top Up Wallet'),
         const SizedBox(height: 8),
         Wrap(
@@ -21781,6 +22072,8 @@ String _rothTransactionLabel(Map<String, dynamic> tx) {
     'delivery_payment' => 'Roth used for delivery',
     'gift_payment' => 'Roth used for Gifts',
     'health_payment' => 'Roth used for Health+',
+    'referral_reward' => 'Referral reward',
+    'referral_welcome_reward' => 'Referral welcome reward',
     'gift_card_redemption' || 'gift_card_redeem' => 'Roth gift card redeemed',
     _ => type.isEmpty ? 'Roth transaction' : type.replaceAll('_', ' '),
   };
@@ -32350,8 +32643,10 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         ? _giftList(gift['interestTags'])
         : _giftList(gift['interests']);
     final revealItems = _giftRevealItems(gift);
+    final photoUrls = _giftList(gift['giftStoryPhotoUrls']);
     final senderMessage =
         '${gift['senderMessageText'] ?? gift['personalMessage'] ?? ''}'.trim();
+    final circumMessage = '${gift['giftStoryCircumMessage'] ?? ''}'.trim();
     return [
       _GiftStoryChapter(
         icon: Icons.card_giftcard,
@@ -32382,6 +32677,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             ? revealItems.first
             : 'Each part of the experience was prepared to feel personal, thoughtful and memorable.',
         chips: revealItems.take(5).toList(),
+        photoUrl: photoUrls.isEmpty ? null : photoUrls.first,
       ),
       _GiftStoryChapter(
         icon: Icons.message_outlined,
@@ -32398,6 +32694,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             'If a physical Circum Gift Card was included, it can be redeemed through a Circum account.',
         chips: ['Redeem through Circum'],
       ),
+      if (circumMessage.isNotEmpty)
+        _GiftStoryChapter(
+          icon: Icons.favorite_border,
+          title: 'Message from Circum',
+          body: circumMessage,
+          chips: const ['Thoughtful gifting, delivered by Circum.'],
+        ),
       const _GiftStoryChapter(
         icon: Icons.ios_share,
         title: 'Gifted by Circum',
@@ -32597,6 +32900,20 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                                     Icon(chapter.icon,
                                         color: Colors.white, size: 54),
                                     const SizedBox(height: 26),
+                                    if (chapter.photoUrl != null) ...[
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(24),
+                                        child: Image.network(
+                                          chapter.photoUrl!,
+                                          height: 210,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              const SizedBox.shrink(),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 22),
+                                    ],
                                     Text(
                                       chapter.title,
                                       style: const TextStyle(
@@ -32706,6 +33023,7 @@ class _GiftStoryChapter {
   final String body;
   final List<String> chips;
   final bool finalChapter;
+  final String? photoUrl;
 
   const _GiftStoryChapter({
     required this.icon,
@@ -32713,6 +33031,7 @@ class _GiftStoryChapter {
     required this.body,
     this.chips = const [],
     this.finalChapter = false,
+    this.photoUrl,
   });
 }
 

@@ -525,6 +525,22 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /referralCodes/{code} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /referrals/{referralId} {
+      allow read: if isAdmin() ||
+        (signedIn() && (
+          resource.data.referrerUserId == request.auth.uid ||
+          resource.data.referredUserId == request.auth.uid
+        ));
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /emailQueue/{emailId} {
       allow read, create: if isAdmin();
       allow update, delete: if hasRole('super_admin');

@@ -20,6 +20,7 @@ const legends = require("./legends");
 const giftsPayment = require("./gifts-payment");
 const rothLedger = require("./roth-ledger");
 const senderTrust = require("./sender-trust");
+const referrals = require("./referrals");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -56,6 +57,12 @@ exports.setWalletFrozen = rothLedger.setWalletFrozen;
 exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
 exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
+exports.ensureReferralCode = referrals.ensureReferralCode;
+exports.attachReferralCode = referrals.attachReferralCode;
+exports.activateReferral = referrals.activateReferral;
+exports.activateReferralOnDeliveryCompleted = referrals.activateReferralOnDeliveryCompleted;
+exports.activateReferralOnGiftCompleted = referrals.activateReferralOnGiftCompleted;
+exports.activateReferralOnHealthPlusCompleted = referrals.activateReferralOnHealthPlusCompleted;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
