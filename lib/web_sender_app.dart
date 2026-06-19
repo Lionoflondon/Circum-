@@ -1360,28 +1360,35 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   Future<XFile?> _pickGiftStoryAudioFile() async {
     final completer = Completer<XFile?>();
     final input = html.FileUploadInputElement()
-      ..accept = 'audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav';
+      ..accept =
+          'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/aac,.mp3,.m4a,.wav,.aac';
     input.onChange.first.then((_) {
       final file = input.files?.isNotEmpty == true ? input.files!.first : null;
       if (file == null) {
         completer.complete(null);
         return;
       }
+      debugPrint(
+          'Gift Story admin audio selected: name=${file.name}, type=${file.type}, size=${file.size}');
       final reader = html.FileReader();
       reader.onLoadEnd.first.then((_) {
-        final result = reader.result;
-        if (result is! ByteBuffer) {
-          completer.completeError(StateError('Could not read audio file.'));
+        final bytes = _bytesFromFileReaderResult(reader.result);
+        if (bytes == null) {
+          completer.completeError(StateError(
+              'Corrupted file: the browser could not read this audio file.'));
           return;
         }
+        debugPrint(
+            'Gift Story admin audio read: name=${file.name}, bytes=${bytes.length}, type=${file.type}');
         completer.complete(XFile.fromData(
-          result.asUint8List(),
+          bytes,
           name: file.name,
           mimeType: file.type.isEmpty ? 'audio/mpeg' : file.type,
         ));
       });
       reader.onError.first.then((_) {
-        completer.completeError(StateError('Could not read audio file.'));
+        completer.completeError(StateError(
+            'Corrupted file: the browser could not read this audio file.'));
       });
       reader.readAsArrayBuffer(file);
     });
@@ -1393,41 +1400,74 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     String giftRequestId,
     XFile file,
   ) async {
-    final lower = file.name.toLowerCase();
-    final valid = lower.endsWith('.mp3') ||
-        lower.endsWith('.m4a') ||
-        lower.endsWith('.wav');
-    if (!valid) {
-      throw StateError('Only MP3, M4A or WAV audio can be attached.');
-    }
+    final extension = _giftStoryAudioExtension(file.name, file.mimeType);
+    if (extension == null) throw StateError(_unsupportedGiftStoryAudioMessage);
     final bytes = await file.readAsBytes();
+    debugPrint(
+        'Gift Story admin audio upload starting: name=${file.name}, mime=${file.mimeType}, ext=$extension, size=${bytes.length}');
     if (bytes.length > 20 * 1024 * 1024) {
       throw StateError('${file.name} is larger than 20 MB.');
     }
-    final extension = lower.endsWith('.wav')
-        ? 'wav'
-        : lower.endsWith('.m4a')
-            ? 'm4a'
-            : 'mp3';
-    final contentType = switch (extension) {
-      'wav' => 'audio/wav',
-      'm4a' => 'audio/mp4',
-      _ => 'audio/mpeg',
-    };
+    final contentType = _giftStoryAudioContentType(extension);
     final storageRef = FirebaseStorage.instance.ref(
       'gift_story/$giftRequestId/audio/${DateTime.now().millisecondsSinceEpoch}.$extension',
     );
-    await storageRef.putData(
-      bytes,
-      SettableMetadata(
-        contentType: contentType,
-        customMetadata: {
-          'purpose': 'gift_story_custom_music',
-          'uploadedBy': _adminUser?.uid ?? _adminUser?.email ?? 'admin',
-        },
-      ),
-    );
-    return storageRef.getDownloadURL();
+    try {
+      await storageRef.putData(
+        bytes,
+        SettableMetadata(
+          contentType: contentType,
+          customMetadata: {
+            'purpose': 'gift_story_custom_music',
+            'uploadedBy': _adminUser?.uid ?? _adminUser?.email ?? 'admin',
+            'originalFilename': file.name,
+          },
+        ),
+      );
+      final metadata = await storageRef.getMetadata();
+      final url = await storageRef.getDownloadURL();
+      debugPrint(
+          'Gift Story admin audio uploaded: path=${metadata.fullPath}, size=${metadata.size}, contentType=${metadata.contentType}, url=$url');
+      await _probeGiftStoryAudioUrl(url);
+      return url;
+    } on FirebaseException catch (error) {
+      debugPrint(
+          'Gift Story admin audio storage error: code=${error.code}, message=${error.message}');
+      throw StateError(
+          'Storage permission error: ${error.message ?? error.code}');
+    } catch (error) {
+      debugPrint('Gift Story admin audio upload/decode error: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> _previewGiftStoryAudio(XFile? pendingAudio, String? url) async {
+    try {
+      String? source = url;
+      if (pendingAudio != null) {
+        final bytes = await pendingAudio.readAsBytes();
+        final extension =
+            _giftStoryAudioExtension(pendingAudio.name, pendingAudio.mimeType);
+        if (extension == null) {
+          throw StateError(_unsupportedGiftStoryAudioMessage);
+        }
+        source =
+            'data:${_giftStoryAudioContentType(extension)};base64,${base64Encode(bytes)}';
+      }
+      if (source == null || source.trim().isEmpty) return;
+      final audio = html.AudioElement(source)
+        ..preload = 'auto'
+        ..volume = 1;
+      audio.onError.listen((_) {
+        debugPrint(
+            'Gift Story admin audio element error: network=${audio.networkState}, ready=${audio.readyState}, src=$source');
+      });
+      await audio.play();
+      debugPrint('Gift Story admin audio preview playing: $source');
+    } catch (error) {
+      debugPrint('Gift Story admin audio preview failed: $error');
+      rethrow;
+    }
   }
 
   Widget _giftStorySoundtrackAdminControls({
@@ -1441,6 +1481,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     required ValueChanged<String> onSelected,
     required VoidCallback onPickAudio,
     required VoidCallback onRemoveAudio,
+    required VoidCallback onPreviewAudio,
   }) {
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1502,6 +1543,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     icon: const Icon(Icons.close),
                     label: const Text('Remove music'),
                   ),
+                if (pendingAudio != null || customAudioUrl != null)
+                  OutlinedButton.icon(
+                    onPressed: onPreviewAudio,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Preview music'),
+                  ),
               ],
             ),
             if (pendingAudio != null) ...[
@@ -1527,6 +1574,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 ),
               ),
             ],
+            const SizedBox(height: 8),
+            Text(
+              'Spotify, Apple Music and other DSP tracks can be added by the user after downloading their own video. Circum cannot attach commercial streaming tracks for copyright reasons.',
+              style: TextStyle(
+                color: colors.mutedText,
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ),
@@ -3584,23 +3641,21 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       try {
                         final picked = await _pickGiftStoryAudioFile();
                         if (picked == null) return;
-                        final lower = picked.name.toLowerCase();
-                        final valid = lower.endsWith('.mp3') ||
-                            lower.endsWith('.m4a') ||
-                            lower.endsWith('.wav');
+                        final extension = _giftStoryAudioExtension(
+                            picked.name, picked.mimeType);
                         setDialogState(() {
-                          if (valid) {
+                          if (extension != null) {
                             pendingStoryAudio = picked;
                             giftStoryCustomAudioUrl = null;
                             storyAudioError = null;
                             giftStoryMusicEnabled = true;
                           } else {
-                            storyAudioError =
-                                'Only MP3, M4A or WAV audio can be attached.';
+                            storyAudioError = _unsupportedGiftStoryAudioMessage;
                           }
                         });
                       } catch (error) {
-                        setDialogState(() => storyAudioError = '$error');
+                        setDialogState(() => storyAudioError =
+                            _giftStoryAudioDisplayError(error));
                       }
                     },
                     onRemoveAudio: () => setDialogState(() {
@@ -3608,6 +3663,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       giftStoryCustomAudioUrl = null;
                       storyAudioError = null;
                     }),
+                    onPreviewAudio: () async {
+                      try {
+                        setDialogState(() => storyAudioError = null);
+                        await _previewGiftStoryAudio(
+                            pendingStoryAudio, giftStoryCustomAudioUrl);
+                      } catch (error) {
+                        setDialogState(() => storyAudioError =
+                            _giftStoryAudioDisplayError(error));
+                      }
+                    },
                   ),
                   SwitchListTile(
                     value: giftStoryEnabled,
@@ -3905,7 +3970,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         setDialogState(() {
                           uploadingStoryPhotos = false;
                           if ('$error'.toLowerCase().contains('audio')) {
-                            storyAudioError = '$error';
+                            storyAudioError =
+                                _giftStoryAudioDisplayError(error);
                           } else {
                             storyPhotoError = '$error';
                           }
@@ -7550,6 +7616,110 @@ String _giftStorySoundtrackId(String id) {
 _GiftStorySoundtrack _giftStorySoundtrackById(String id) {
   final normalized = _giftStorySoundtrackId(id);
   return giftStorySoundtracks.firstWhere((track) => track.id == normalized);
+}
+
+const _unsupportedGiftStoryAudioMessage =
+    'Unsupported format. Please upload MP3, M4A, WAV or AAC audio.';
+
+Uint8List? _bytesFromFileReaderResult(Object? result) {
+  if (result is ByteBuffer) return result.asUint8List();
+  if (result is ByteData) return result.buffer.asUint8List();
+  if (result is Uint8List) return result;
+  if (result is List<int>) return Uint8List.fromList(result);
+  debugPrint(
+      'Gift Story audio read returned unsupported result type: ${result.runtimeType}');
+  return null;
+}
+
+String? _giftStoryAudioExtension(String filename, String? mimeType) {
+  final name = filename.toLowerCase().trim();
+  final mime = (mimeType ?? '').toLowerCase().trim();
+  final parts = name.split('.');
+  final extensionLabel = parts.length > 1 ? parts.last : '';
+  debugPrint(
+      'Gift Story audio validation: filename=$filename, extension=$extensionLabel, mime=$mime');
+  if (name.endsWith('.mp3') || mime == 'audio/mpeg' || mime == 'audio/mp3') {
+    return 'mp3';
+  }
+  if (name.endsWith('.m4a') || mime == 'audio/mp4' || mime == 'audio/x-m4a') {
+    return 'm4a';
+  }
+  if (name.endsWith('.wav') || mime == 'audio/wav' || mime == 'audio/x-wav') {
+    return 'wav';
+  }
+  if (name.endsWith('.aac') || mime == 'audio/aac') return 'aac';
+  return null;
+}
+
+String _giftStoryAudioContentType(String extension) {
+  return switch (extension) {
+    'wav' => 'audio/wav',
+    'm4a' => 'audio/mp4',
+    'aac' => 'audio/aac',
+    _ => 'audio/mpeg',
+  };
+}
+
+String _giftStoryAudioDisplayError(Object error) {
+  final text = '$error';
+  final lower = text.toLowerCase();
+  if (lower.contains('unsupported format') ||
+      lower.contains('mp3') && lower.contains('wav')) {
+    return _unsupportedGiftStoryAudioMessage;
+  }
+  if (lower.contains('storage') ||
+      lower.contains('permission') ||
+      lower.contains('unauthorized')) {
+    return 'Storage permission error. Please check admin access and try again.';
+  }
+  if (lower.contains('decode') ||
+      lower.contains('media') ||
+      lower.contains('audio could not')) {
+    return 'Audio decode failed. Please try a different MP3, M4A or WAV file.';
+  }
+  if (lower.contains('corrupted') || lower.contains('read this audio')) {
+    return 'Corrupted file. Please choose a different audio file.';
+  }
+  if (lower.contains('larger than'))
+    return text.replaceFirst('Bad state: ', '');
+  if (lower.contains('failed')) return text.replaceFirst('Bad state: ', '');
+  return 'Upload failed. Please try another audio file.';
+}
+
+Future<void> _probeGiftStoryAudioUrl(String url) async {
+  final completer = Completer<void>();
+  final audio = html.AudioElement(url)..preload = 'metadata';
+  late StreamSubscription errorSub;
+  late StreamSubscription canPlaySub;
+  late Timer timer;
+  void finish([Object? error]) {
+    if (completer.isCompleted) return;
+    errorSub.cancel();
+    canPlaySub.cancel();
+    timer.cancel();
+    if (error != null) {
+      completer.completeError(error);
+    } else {
+      completer.complete();
+    }
+  }
+
+  errorSub = audio.onError.listen((_) {
+    debugPrint(
+        'Gift Story audio element error: network=${audio.networkState}, ready=${audio.readyState}, src=$url');
+    finish(StateError('Audio decode failed for the uploaded file.'));
+  });
+  canPlaySub = audio.onCanPlay.first.asStream().listen((_) {
+    debugPrint(
+        'Gift Story audio URL probe succeeded: duration=${audio.duration}, src=$url');
+    finish();
+  });
+  timer = Timer(const Duration(seconds: 8), () {
+    debugPrint('Gift Story audio URL probe timed out: $url');
+    finish(StateError('Audio decode failed. The file could not be previewed.'));
+  });
+  audio.load();
+  return completer.future;
 }
 
 String _generatedGiftStoryToneDataUri(String id) {
@@ -31121,29 +31291,35 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   Future<XFile?> _pickGiftStoryAudio() async {
     final completer = Completer<XFile?>();
     final input = html.FileUploadInputElement()
-      ..accept = 'audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav';
+      ..accept =
+          'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/aac,.mp3,.m4a,.wav,.aac';
     input.onChange.first.then((_) {
       final file = input.files?.isNotEmpty == true ? input.files!.first : null;
       if (file == null) {
         completer.complete(null);
         return;
       }
+      debugPrint(
+          'Gift Story sender audio selected: name=${file.name}, type=${file.type}, size=${file.size}');
       final reader = html.FileReader();
       reader.onLoadEnd.first.then((_) {
-        final result = reader.result;
-        if (result is! ByteBuffer) {
-          completer.completeError(StateError('Could not read audio file.'));
+        final bytes = _bytesFromFileReaderResult(reader.result);
+        if (bytes == null) {
+          completer.completeError(StateError(
+              'Corrupted file: the browser could not read this audio file.'));
           return;
         }
+        debugPrint(
+            'Gift Story sender audio read: name=${file.name}, bytes=${bytes.length}, type=${file.type}');
         completer.complete(XFile.fromData(
-          result.asUint8List(),
+          bytes,
           name: file.name,
           mimeType: file.type.isEmpty ? 'audio/mpeg' : file.type,
         ));
       });
       reader.onError.first.then(
-        (_) =>
-            completer.completeError(StateError('Could not read audio file.')),
+        (_) => completer.completeError(StateError(
+            'Corrupted file: the browser could not read this audio file.')),
       );
       reader.readAsArrayBuffer(file);
     });
@@ -31156,38 +31332,44 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     String giftDraftId,
     XFile file,
   ) async {
-    final lower = file.name.toLowerCase();
-    final valid = lower.endsWith('.mp3') ||
-        lower.endsWith('.m4a') ||
-        lower.endsWith('.wav');
-    if (!valid) {
-      throw StateError('Only MP3, M4A or WAV audio can be attached.');
-    }
+    final extension = _giftStoryAudioExtension(file.name, file.mimeType);
+    if (extension == null) throw StateError(_unsupportedGiftStoryAudioMessage);
     final bytes = await file.readAsBytes();
+    debugPrint(
+        'Gift Story sender audio upload starting: name=${file.name}, mime=${file.mimeType}, ext=$extension, size=${bytes.length}');
     if (bytes.length > 20 * 1024 * 1024) {
       throw StateError('${file.name} is larger than 20 MB.');
     }
-    final extension = lower.endsWith('.wav')
-        ? 'wav'
-        : lower.endsWith('.m4a')
-            ? 'm4a'
-            : 'mp3';
-    final contentType = switch (extension) {
-      'wav' => 'audio/wav',
-      'm4a' => 'audio/mp4',
-      _ => 'audio/mpeg',
-    };
+    final contentType = _giftStoryAudioContentType(extension);
     final ref = FirebaseStorage.instance.ref(
       'gift_requests/$userId/$giftDraftId/story_music.$extension',
     );
-    await ref.putData(
-      bytes,
-      SettableMetadata(
-        contentType: contentType,
-        customMetadata: {'purpose': 'gift_story_sender_custom_music'},
-      ),
-    );
-    return ref.getDownloadURL();
+    try {
+      await ref.putData(
+        bytes,
+        SettableMetadata(
+          contentType: contentType,
+          customMetadata: {
+            'purpose': 'gift_story_sender_custom_music',
+            'originalFilename': file.name,
+          },
+        ),
+      );
+      final metadata = await ref.getMetadata();
+      final url = await ref.getDownloadURL();
+      debugPrint(
+          'Gift Story sender audio uploaded: path=${metadata.fullPath}, size=${metadata.size}, contentType=${metadata.contentType}, url=$url');
+      await _probeGiftStoryAudioUrl(url);
+      return url;
+    } on FirebaseException catch (error) {
+      debugPrint(
+          'Gift Story sender audio storage error: code=${error.code}, message=${error.message}');
+      throw StateError(
+          'Storage permission error: ${error.message ?? error.code}');
+    } catch (error) {
+      debugPrint('Gift Story sender audio upload/decode error: $error');
+      rethrow;
+    }
   }
 
   Future<void> _submit() async {
@@ -32647,22 +32829,21 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   try {
                     final picked = await _pickGiftStoryAudio();
                     if (picked == null) return;
-                    final lower = picked.name.toLowerCase();
-                    final valid = lower.endsWith('.mp3') ||
-                        lower.endsWith('.m4a') ||
-                        lower.endsWith('.wav');
+                    final extension =
+                        _giftStoryAudioExtension(picked.name, picked.mimeType);
                     setState(() {
-                      if (valid) {
+                      if (extension != null) {
                         _giftStoryCustomMusic = picked;
                         _giftStoryMusicEnabled = true;
                         _giftStoryMusicError = null;
                       } else {
                         _giftStoryMusicError =
-                            'Only MP3, M4A or WAV audio can be attached.';
+                            _unsupportedGiftStoryAudioMessage;
                       }
                     });
                   } catch (error) {
-                    setState(() => _giftStoryMusicError = '$error');
+                    setState(() => _giftStoryMusicError =
+                        _giftStoryAudioDisplayError(error));
                   }
                 },
                 icon: const Icon(Icons.library_music_outlined),
@@ -32678,6 +32859,37 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   }),
                   icon: const Icon(Icons.close),
                   label: const Text('Remove music'),
+                ),
+              if (_giftStoryCustomMusic != null)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final file = _giftStoryCustomMusic!;
+                      final bytes = await file.readAsBytes();
+                      final extension =
+                          _giftStoryAudioExtension(file.name, file.mimeType);
+                      if (extension == null) {
+                        throw StateError(_unsupportedGiftStoryAudioMessage);
+                      }
+                      final source =
+                          'data:${_giftStoryAudioContentType(extension)};base64,${base64Encode(bytes)}';
+                      final audio = html.AudioElement(source)
+                        ..preload = 'auto'
+                        ..volume = 1;
+                      audio.onError.listen((_) {
+                        debugPrint(
+                            'Gift Story sender audio preview element error: network=${audio.networkState}, ready=${audio.readyState}');
+                      });
+                      await audio.play();
+                      debugPrint(
+                          'Gift Story sender audio preview playing: ${file.name}');
+                    } catch (error) {
+                      setState(() => _giftStoryMusicError =
+                          _giftStoryAudioDisplayError(error));
+                    }
+                  },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Preview music'),
                 ),
             ],
           ),
@@ -32698,6 +32910,16 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          Text(
+            'You can add music from Spotify, Apple Music or other DSPs to your own downloaded video later. Circum cannot attach commercial streaming tracks for copyright reasons.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -33915,6 +34137,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   late String _soundtrackId;
   html.AudioElement? _audio;
   String? _musicPrompt;
+  bool _customAudioFailed = false;
 
   @override
   void initState() {
@@ -34102,7 +34325,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
 
   String _currentAudioUrl() {
     final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
-    if (custom.isNotEmpty) return custom;
+    if (custom.isNotEmpty && !_customAudioFailed) return custom;
     final track = _giftStorySoundtrackById(_soundtrackId);
     if (track.audioUrl.trim().isNotEmpty) return track.audioUrl.trim();
     return _generatedGiftStoryToneDataUri(track.id);
@@ -34123,11 +34346,18 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       ..preload = 'auto';
     audio.onError.listen((_) {
       if (!mounted) return;
+      final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
+      final wasCustom = custom.isNotEmpty && url == custom;
       setState(() {
+        if (wasCustom) _customAudioFailed = true;
         _playing = false;
-        _musicPrompt =
-            'Music could not play, so the story will continue silently.';
+        _audio = null;
+        _musicPrompt = wasCustom
+            ? 'Uploaded music could not play, so Circum switched to the selected soundtrack.'
+            : 'Music could not play, so the story will continue silently.';
       });
+      debugPrint(
+          'Gift Story audio playback error: custom=$wasCustom, network=${audio.networkState}, ready=${audio.readyState}, src=${audio.src}');
     });
     _audio = audio;
   }
@@ -34152,12 +34382,20 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         _playing = true;
         _musicPrompt = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
+      final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
       setState(() {
+        if (custom.isNotEmpty && !_customAudioFailed) {
+          _customAudioFailed = true;
+          _audio = null;
+        }
         _playing = false;
-        _musicPrompt = 'Tap play to start music.';
+        _musicPrompt = custom.isNotEmpty
+            ? 'Uploaded music could not play yet. Tap play again to use the Circum soundtrack.'
+            : 'Tap play to start music.';
       });
+      debugPrint('Gift Story audio play failed: $error');
     }
   }
 
@@ -34206,6 +34444,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             onSelected: (id) => setState(() {
               _soundtrackId = id;
               _musicEnabled = true;
+              _customAudioFailed = true;
               _playing = false;
               _audio?.pause();
               _audio = null;
