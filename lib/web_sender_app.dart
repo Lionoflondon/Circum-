@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1303,6 +1304,110 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     );
     setState(() => _message = 'Delivery $id was deleted from the active list.');
     await _loadAdminData();
+  }
+
+  Future<List<String>> _uploadGiftStoryPhotoFiles(
+    String giftRequestId,
+    List<XFile> files,
+  ) async {
+    if (files.isEmpty) return const [];
+    final urls = <String>[];
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+      final lower = file.name.toLowerCase();
+      final extension = lower.endsWith('.jpeg')
+          ? 'jpg'
+          : lower.endsWith('.png')
+              ? 'png'
+              : lower.endsWith('.webp')
+                  ? 'webp'
+                  : 'jpg';
+      final valid = lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png') ||
+          lower.endsWith('.webp');
+      if (!valid) {
+        throw StateError('Only JPG, JPEG, PNG or WEBP images can be attached.');
+      }
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 8 * 1024 * 1024) {
+        throw StateError('${file.name} is larger than 8 MB.');
+      }
+      final contentType = switch (extension) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        _ => 'image/jpeg',
+      };
+      final storageRef = FirebaseStorage.instance.ref(
+        'gift_story/$giftRequestId/${DateTime.now().millisecondsSinceEpoch}_$i.$extension',
+      );
+      await storageRef.putData(
+        bytes,
+        SettableMetadata(
+          contentType: contentType,
+          customMetadata: {
+            'purpose': 'gift_story_approved_photo',
+            'uploadedBy': _adminUser?.uid ?? _adminUser?.email ?? 'admin',
+          },
+        ),
+      );
+      urls.add(await storageRef.getDownloadURL());
+    }
+    return urls;
+  }
+
+  Widget _giftStorySoundtrackAdminControls({
+    required _CircumColors colors,
+    required bool enabled,
+    required String selectedId,
+    required ValueChanged<bool> onEnabled,
+    required ValueChanged<String> onSelected,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withOpacity(0.14),
+            colors.field.withOpacity(0.70),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withOpacity(0.22)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SwitchListTile(
+              value: enabled,
+              onChanged: onEnabled,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Gift Story music'),
+              subtitle: const Text(
+                'Approved Circum soundtracks only. No user-uploaded commercial songs.',
+              ),
+            ),
+            DropdownButtonFormField<String>(
+              initialValue: selectedId,
+              decoration: const InputDecoration(labelText: 'Soundtrack mood'),
+              items: giftStorySoundtracks
+                  .where((track) => track.isActive)
+                  .map(
+                    (track) => DropdownMenuItem(
+                      value: track.id,
+                      child: Text('${track.mood} · ${track.title}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: enabled
+                  ? (value) => onSelected(_giftStorySoundtrackId(value ?? ''))
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _updateRecordStatus(
@@ -3000,8 +3105,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         TextEditingController(text: '${item['captionDraft'] ?? ''}');
     final approvedCaption =
         TextEditingController(text: '${item['approvedCaption'] ?? ''}');
-    final storyPhotoUrls = TextEditingController(
-        text: (item['giftStoryPhotoUrls'] as List?)?.join(', ') ?? '');
     final circumMessage =
         TextEditingController(text: '${item['giftStoryCircumMessage'] ?? ''}');
     final tiktok =
@@ -3044,6 +3147,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool giftStoryEnabled = item['giftStoryEnabled'] != false;
     bool giftStoryApproved = item['giftStoryApproved'] != false;
     bool giftStoryShareEnabled = item['giftStoryShareEnabled'] != false;
+    bool giftStoryMusicEnabled = item['giftStoryMusicEnabled'] != false;
+    String giftStorySoundtrackId =
+        _giftStorySoundtrackId('${item['giftStorySoundtrackId'] ?? ''}');
+    final storyPhotos = <String>{
+      ..._giftStringList(item['giftStoryPhotos']),
+      ..._giftStringList(item['giftStoryPhotoUrls']),
+    }.toList();
+    final pendingStoryPhotos = <XFile>[];
+    String? storyPhotoError;
+    bool uploadingStoryPhotos = false;
     Map<String, dynamic>? generatedRecommendation;
     GiftRecommendationResult? irisGiftRecommendation;
     final approvedSuggestionIds = <String>{
@@ -3277,17 +3390,65 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   const Text(
                       'Shown only after delivery is completed. Add only approved gift, wrapped package, safe preparation, sender note/card, or Message from Circum content. Do not add recipient reaction media, receipts, costs, or internal notes.'),
                   const SizedBox(height: 12),
-                  TextField(
-                      controller: storyPhotoUrls,
-                      decoration: const InputDecoration(
-                          labelText:
-                              'Approved gift / wrapped package photo URLs')),
+                  _AdminGiftStoryPhotoUploader(
+                    colors: widget.colors,
+                    existingUrls: storyPhotos,
+                    pendingFiles: pendingStoryPhotos,
+                    errorText: storyPhotoError,
+                    uploading: uploadingStoryPhotos,
+                    onAdd: () async {
+                      final remaining =
+                          10 - storyPhotos.length - pendingStoryPhotos.length;
+                      if (remaining <= 0) {
+                        setDialogState(() =>
+                            storyPhotoError = 'Maximum 10 images per story.');
+                        return;
+                      }
+                      final picked = await ImagePicker().pickMultiImage(
+                        imageQuality: 86,
+                        maxWidth: 2200,
+                      );
+                      final accepted = <XFile>[];
+                      String? rejected;
+                      for (final file in picked.take(remaining)) {
+                        final lower = file.name.toLowerCase();
+                        final valid = lower.endsWith('.jpg') ||
+                            lower.endsWith('.jpeg') ||
+                            lower.endsWith('.png') ||
+                            lower.endsWith('.webp');
+                        if (valid) {
+                          accepted.add(file);
+                        } else {
+                          rejected =
+                              'Only JPG, JPEG, PNG or WEBP images can be attached.';
+                        }
+                      }
+                      setDialogState(() {
+                        pendingStoryPhotos.addAll(accepted);
+                        storyPhotoError = rejected;
+                      });
+                    },
+                    onRemoveExisting: (url) =>
+                        setDialogState(() => storyPhotos.remove(url)),
+                    onRemovePending: (file) =>
+                        setDialogState(() => pendingStoryPhotos.remove(file)),
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                       controller: circumMessage,
                       maxLines: 2,
                       decoration: const InputDecoration(
                           labelText: 'Message from Circum')),
+                  const SizedBox(height: 12),
+                  _giftStorySoundtrackAdminControls(
+                    colors: widget.colors,
+                    enabled: giftStoryMusicEnabled,
+                    selectedId: giftStorySoundtrackId,
+                    onEnabled: (value) =>
+                        setDialogState(() => giftStoryMusicEnabled = value),
+                    onSelected: (value) =>
+                        setDialogState(() => giftStorySoundtrackId = value),
+                  ),
                   SwitchListTile(
                     value: giftStoryEnabled,
                     onChanged: (value) =>
@@ -3313,7 +3474,18 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         MaterialPageRoute(
                           builder: (_) => _GiftStoryViewer(
                             colors: widget.colors,
-                            gift: item,
+                            gift: {
+                              ...item,
+                              'giftStoryPhotos': [
+                                ...storyPhotos,
+                                ...pendingStoryPhotos.map((file) => file.path),
+                              ],
+                              'giftStoryPhotoUrls': storyPhotos,
+                              'giftStoryCircumMessage':
+                                  circumMessage.text.trim(),
+                              'giftStoryMusicEnabled': giftStoryMusicEnabled,
+                              'giftStorySoundtrackId': giftStorySoundtrackId,
+                            },
                             adminPreview: true,
                             onClose: () => Navigator.of(context).pop(),
                           ),
@@ -3414,12 +3586,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       onChanged: (value) => setDialogState(
                           () => contentStatus = value ?? contentStatus),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                        controller: storyPhotoUrls,
-                        decoration: const InputDecoration(
-                            labelText:
-                                'Campaign-approved gift/prep photo URLs')),
                     const SizedBox(height: 12),
                     TextField(
                         controller: caption,
@@ -3524,95 +3690,122 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Close')),
             FilledButton(
-              onPressed: () {
-                final candidate = <String, dynamic>{
-                  ...item,
-                  'recipientContentConsent': recipientConsent,
-                  'allowCircumSocialUse': allowSocial,
-                  'allowPublicPosting': allowPublicPosting,
-                  'allowBrandTagging': allowBrandTagging,
-                };
-                if (contentStatus == 'posted' &&
-                    !GiftsSocialPolicy.canPostPublicly(candidate)) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text(
-                        'Public consent is required before content can be marked posted.'),
-                  ));
-                  return;
-                }
-                if (brandTagApproved &&
-                    !GiftsSocialPolicy.canApproveBrandTags(candidate)) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text(
-                        'Brand tagging consent is required before tags can be approved.'),
-                  ));
-                  return;
-                }
-                Navigator.pop(context, {
-                  'status': status,
-                  'manualGiftPlan': plan.text.trim(),
-                  'adminDecision': decision.text.trim(),
-                  'internalNotes': notes.text.trim(),
-                  'procurementItemTitle': procurementTitle.text.trim(),
-                  'procurementSupplier': procurementSupplier.text.trim(),
-                  'procurementEstimatedCost':
-                      double.tryParse(procurementEstimatedCost.text.trim()),
-                  'procurementActualCost':
-                      double.tryParse(procurementActualCost.text.trim()),
-                  'procurementNotes': procurementNotes.text.trim(),
-                  'giftStoryEnabled': giftStoryEnabled,
-                  'giftStoryApproved': giftStoryApproved,
-                  'giftStoryShareEnabled': giftStoryShareEnabled,
-                  'giftStoryPhotoUrls': storyPhotoUrls.text
-                      .split(',')
-                      .map((url) => url.trim())
-                      .where((url) => url.isNotEmpty)
-                      .toList(),
-                  'giftStoryCircumMessage': circumMessage.text.trim(),
-                  'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
-                  if (generatedRecommendation != null) ...{
-                    'irisGiftRecommendation': generatedRecommendation,
-                    'irisSuggestion':
-                        generatedRecommendation!['experienceSummary'],
-                    'approvedGiftPlan': {
-                      'selectedRepositoryItemIds':
-                          approvedSuggestionIds.toList(growable: false),
-                      'adminNotes': decision.text.trim(),
-                      'approvedBy': _adminUser?.uid ?? _adminUser?.email,
-                      'approvedAt': FieldValue.serverTimestamp(),
+              onPressed: uploadingStoryPhotos
+                  ? null
+                  : () async {
+                      final candidate = <String, dynamic>{
+                        ...item,
+                        'recipientContentConsent': recipientConsent,
+                        'allowCircumSocialUse': allowSocial,
+                        'allowPublicPosting': allowPublicPosting,
+                        'allowBrandTagging': allowBrandTagging,
+                      };
+                      if (contentStatus == 'posted' &&
+                          !GiftsSocialPolicy.canPostPublicly(candidate)) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(const SnackBar(
+                          content: Text(
+                              'Public consent is required before content can be marked posted.'),
+                        ));
+                        return;
+                      }
+                      if (brandTagApproved &&
+                          !GiftsSocialPolicy.canApproveBrandTags(candidate)) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(const SnackBar(
+                          content: Text(
+                              'Brand tagging consent is required before tags can be approved.'),
+                        ));
+                        return;
+                      }
+                      setDialogState(() {
+                        uploadingStoryPhotos = true;
+                        storyPhotoError = null;
+                      });
+                      try {
+                        final uploaded = await _uploadGiftStoryPhotoFiles(
+                          '${item['id']}',
+                          pendingStoryPhotos,
+                        );
+                        storyPhotos
+                          ..addAll(uploaded)
+                          ..removeWhere((url) => url.trim().isEmpty);
+                        pendingStoryPhotos.clear();
+                      } catch (error) {
+                        setDialogState(() {
+                          uploadingStoryPhotos = false;
+                          storyPhotoError = '$error';
+                        });
+                        return;
+                      }
+                      Navigator.pop(context, {
+                        'status': status,
+                        'manualGiftPlan': plan.text.trim(),
+                        'adminDecision': decision.text.trim(),
+                        'internalNotes': notes.text.trim(),
+                        'procurementItemTitle': procurementTitle.text.trim(),
+                        'procurementSupplier': procurementSupplier.text.trim(),
+                        'procurementEstimatedCost': double.tryParse(
+                            procurementEstimatedCost.text.trim()),
+                        'procurementActualCost':
+                            double.tryParse(procurementActualCost.text.trim()),
+                        'procurementNotes': procurementNotes.text.trim(),
+                        'giftStoryEnabled': giftStoryEnabled,
+                        'giftStoryApproved': giftStoryApproved,
+                        'giftStoryShareEnabled': giftStoryShareEnabled,
+                        'giftStoryPhotos': storyPhotos.toSet().toList(),
+                        'giftStoryPhotoUrls': storyPhotos.toSet().toList(),
+                        'giftStoryCircumMessage': circumMessage.text.trim(),
+                        'giftStoryMusicEnabled': giftStoryMusicEnabled,
+                        'giftStorySoundtrackId': giftStorySoundtrackId,
+                        'giftStorySoundtrack':
+                            _giftStorySoundtrackById(giftStorySoundtrackId)
+                                .toMap(),
+                        'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
+                        if (generatedRecommendation != null) ...{
+                          'irisGiftRecommendation': generatedRecommendation,
+                          'irisSuggestion':
+                              generatedRecommendation!['experienceSummary'],
+                          'approvedGiftPlan': {
+                            'selectedRepositoryItemIds':
+                                approvedSuggestionIds.toList(growable: false),
+                            'adminNotes': decision.text.trim(),
+                            'approvedBy': _adminUser?.uid ?? _adminUser?.email,
+                            'approvedAt': FieldValue.serverTimestamp(),
+                          },
+                          'rejectedIrisGiftSuggestionIds':
+                              rejectedSuggestionIds.toList(growable: false),
+                        },
+                        'recipientContentConsent': recipientConsent,
+                        'senderContentConsent': senderConsent,
+                        'allowCircumSocialUse': allowSocial,
+                        'allowBrandTagging': allowBrandTagging,
+                        'allowReactionRecording': allowRecording,
+                        'allowPublicPosting': allowPublicPosting,
+                        'allowAnonymousPosting': allowAnonymousPosting,
+                        'contentUsageScope': allowPublicPosting
+                            ? 'social_media'
+                            : allowSocial
+                                ? 'circum_marketing'
+                                : 'private',
+                        'contentStatus': contentStatus,
+                        'captionDraft': caption.text.trim(),
+                        'approvedCaption': approvedCaption.text.trim(),
+                        'brandName': brandName.text.trim(),
+                        'brandTags': brandTags.text
+                            .split(',')
+                            .map((tag) => tag.trim())
+                            .where((tag) => tag.isNotEmpty)
+                            .toList(),
+                        'brandTagApproved': brandTagApproved,
+                        'postedTikTokUrl': tiktok.text.trim(),
+                        'postedInstagramUrl': instagram.text.trim(),
+                        'postedYouTubeShortsUrl': youtube.text.trim(),
+                        ...metrics,
+                      });
                     },
-                    'rejectedIrisGiftSuggestionIds':
-                        rejectedSuggestionIds.toList(growable: false),
-                  },
-                  'recipientContentConsent': recipientConsent,
-                  'senderContentConsent': senderConsent,
-                  'allowCircumSocialUse': allowSocial,
-                  'allowBrandTagging': allowBrandTagging,
-                  'allowReactionRecording': allowRecording,
-                  'allowPublicPosting': allowPublicPosting,
-                  'allowAnonymousPosting': allowAnonymousPosting,
-                  'contentUsageScope': allowPublicPosting
-                      ? 'social_media'
-                      : allowSocial
-                          ? 'circum_marketing'
-                          : 'private',
-                  'contentStatus': contentStatus,
-                  'captionDraft': caption.text.trim(),
-                  'approvedCaption': approvedCaption.text.trim(),
-                  'brandName': brandName.text.trim(),
-                  'brandTags': brandTags.text
-                      .split(',')
-                      .map((tag) => tag.trim())
-                      .where((tag) => tag.isNotEmpty)
-                      .toList(),
-                  'brandTagApproved': brandTagApproved,
-                  'postedTikTokUrl': tiktok.text.trim(),
-                  'postedInstagramUrl': instagram.text.trim(),
-                  'postedYouTubeShortsUrl': youtube.text.trim(),
-                  ...metrics,
-                });
-              },
-              child: const Text('Save'),
+              child:
+                  Text(uploadingStoryPhotos ? 'Uploading photos...' : 'Save'),
             ),
           ],
         ),
@@ -3623,7 +3816,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     plan.dispose();
     caption.dispose();
     approvedCaption.dispose();
-    storyPhotoUrls.dispose();
     circumMessage.dispose();
     tiktok.dispose();
     instagram.dispose();
@@ -7075,6 +7267,315 @@ String _formatGiftRecommendationForAdmin(GiftRecommendationResult result) {
     buffer.writeln('- $note');
   }
   return buffer.toString().trim();
+}
+
+class _GiftStorySoundtrack {
+  final String id;
+  final String title;
+  final String mood;
+  final String audioUrl;
+  final Duration duration;
+  final bool isDefault;
+  final bool isActive;
+
+  const _GiftStorySoundtrack({
+    required this.id,
+    required this.title,
+    required this.mood,
+    required this.audioUrl,
+    required this.duration,
+    required this.isDefault,
+    required this.isActive,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'title': title,
+        'mood': mood,
+        'audioUrl': audioUrl,
+        'duration': duration.inSeconds,
+        'isDefault': isDefault,
+        'isActive': isActive,
+      };
+}
+
+const giftStorySoundtracks = <_GiftStorySoundtrack>[
+  _GiftStorySoundtrack(
+    id: 'circum_warm',
+    title: 'Warm Arrival',
+    mood: 'Warm',
+    audioUrl: '',
+    duration: Duration(seconds: 45),
+    isDefault: true,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_celebration',
+    title: 'Celebration Lift',
+    mood: 'Celebration',
+    audioUrl: '',
+    duration: Duration(seconds: 48),
+    isDefault: false,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_emotional',
+    title: 'Quiet Meaning',
+    mood: 'Emotional',
+    audioUrl: '',
+    duration: Duration(seconds: 52),
+    isDefault: false,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_elegant',
+    title: 'Elegant Reveal',
+    mood: 'Elegant',
+    audioUrl: '',
+    duration: Duration(seconds: 50),
+    isDefault: false,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_cinematic',
+    title: 'Cinematic Glow',
+    mood: 'Cinematic',
+    audioUrl: '',
+    duration: Duration(seconds: 55),
+    isDefault: false,
+    isActive: true,
+  ),
+];
+
+List<String> _giftStringList(dynamic value) {
+  if (value is Iterable) {
+    return value
+        .map((item) => '$item'.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+  if (value is String && value.trim().isNotEmpty) {
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+  return const [];
+}
+
+String _giftStorySoundtrackId(String id) {
+  final normalized = id.trim();
+  if (giftStorySoundtracks.any((track) => track.id == normalized)) {
+    return normalized;
+  }
+  return giftStorySoundtracks.firstWhere((track) => track.isDefault).id;
+}
+
+_GiftStorySoundtrack _giftStorySoundtrackById(String id) {
+  final normalized = _giftStorySoundtrackId(id);
+  return giftStorySoundtracks.firstWhere((track) => track.id == normalized);
+}
+
+class _AdminGiftStoryPhotoUploader extends StatelessWidget {
+  final _CircumColors colors;
+  final List<String> existingUrls;
+  final List<XFile> pendingFiles;
+  final String? errorText;
+  final bool uploading;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemoveExisting;
+  final ValueChanged<XFile> onRemovePending;
+
+  const _AdminGiftStoryPhotoUploader({
+    required this.colors,
+    required this.existingUrls,
+    required this.pendingFiles,
+    required this.errorText,
+    required this.uploading,
+    required this.onAdd,
+    required this.onRemoveExisting,
+    required this.onRemovePending,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = existingUrls.length + pendingFiles.length;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.adminAccent.withOpacity(0.18),
+            colors.adminGlow.withOpacity(0.10),
+            colors.field.withOpacity(0.74),
+          ],
+        ),
+        border: Border.all(color: colors.adminAccent.withOpacity(0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminGlow.withOpacity(0.16),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.add_photo_alternate_outlined,
+                    color: colors.adminAccent),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Attach gift photos for story',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                Text('$total/10',
+                    style: TextStyle(
+                        color: colors.mutedText, fontWeight: FontWeight.w900)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Upload approved gift, wrapped package, note, or presentation photos. These appear in the Gift Story after delivery.',
+              style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: uploading || total >= 10 ? null : onAdd,
+              icon: uploading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_upload_outlined),
+              label: Text(uploading
+                  ? 'Uploading approved photos...'
+                  : 'Upload approved photos'),
+            ),
+            if (errorText != null && errorText!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                errorText!,
+                style: const TextStyle(
+                  color: Color(0xfff97316),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+            if (total > 0) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final url in existingUrls)
+                    _GiftStoryPhotoThumb(
+                      colors: colors,
+                      image: Image.network(url, fit: BoxFit.cover),
+                      onRemove: () => onRemoveExisting(url),
+                    ),
+                  for (final file in pendingFiles)
+                    _GiftStoryPhotoThumb(
+                      colors: colors,
+                      image: FutureBuilder<Uint8List>(
+                        future: file.readAsBytes(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            );
+                          }
+                          return Image.memory(snapshot.data!,
+                              fit: BoxFit.cover);
+                        },
+                      ),
+                      pending: true,
+                      onRemove: () => onRemovePending(file),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftStoryPhotoThumb extends StatelessWidget {
+  final _CircumColors colors;
+  final Widget image;
+  final VoidCallback onRemove;
+  final bool pending;
+
+  const _GiftStoryPhotoThumb({
+    required this.colors,
+    required this.image,
+    required this.onRemove,
+    this.pending = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            width: 92,
+            height: 92,
+            child: ColoredBox(
+              color: colors.panel.withOpacity(0.6),
+              child: image,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.58),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 16),
+            ),
+          ),
+        ),
+        if (pending)
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: colors.adminAccent.withOpacity(0.78),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Text(
+                'New',
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _AdminIrisGiftSuggestionCard extends StatelessWidget {
@@ -29901,6 +30402,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   String _anonymousGiftType = 'direct';
   String _senderRevealMode = 'anonymous_until_consent';
   String _selfGiftFrequency = 'one_off';
+  String _giftStorySoundtrackId = 'circum_warm';
+  bool _giftStoryMusicEnabled = true;
   int _giftStep = 0;
   DateTime? _deliveryDate;
   final Set<String> _interests = {};
@@ -30545,6 +31048,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'giftStoryEnabled': true,
         'giftStoryApproved': true,
         'giftStoryShareEnabled': true,
+        'giftStoryMusicEnabled': _giftStoryMusicEnabled,
+        'giftStorySoundtrackId':
+            _giftStoryMusicEnabled ? _giftStorySoundtrackId : 'circum_warm',
+        'giftStorySoundtrack': _giftStorySoundtrackById(
+          _giftStoryMusicEnabled ? _giftStorySoundtrackId : 'circum_warm',
+        ).toMap(),
         'giftStoryRevealViewedAt': null,
         'senderMessageText': _personalMessage.text.trim(),
         'senderMessageVideoUrl': '',
@@ -31743,19 +32252,93 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           ),
         ],
       ),
-      child: TextField(
-        controller: _notes,
-        maxLines: 10,
-        style: TextStyle(color: colors.text, fontSize: 18, height: 1.55),
-        decoration: InputDecoration(
-          hintText:
-              'Tell us what makes them smile, what they love, what they dislike, what they talk about, what they dream about, and anything that would help Circum create something thoughtful.',
-          hintStyle:
-              TextStyle(color: colors.mutedText, fontSize: 17, height: 1.5),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _notes,
+            maxLines: 8,
+            style: TextStyle(color: colors.text, fontSize: 18, height: 1.55),
+            decoration: InputDecoration(
+              hintText:
+                  'Tell us what makes them smile, what they love, what they dislike, what they talk about, what they dream about, and anything that would help Circum create something thoughtful.',
+              hintStyle:
+                  TextStyle(color: colors.mutedText, fontSize: 17, height: 1.5),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _giftStorySoundtrackSelector(colors),
+        ],
+      ),
+    );
+  }
+
+  Widget _giftStorySoundtrackSelector(_CircumColors colors) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.14),
+            colors.field.withValues(alpha: 0.70),
+          ],
         ),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Add a soundtrack to the Gift Story',
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(
+            'Optional. Circum-approved soundtracks only; no copyrighted uploads.',
+            style: TextStyle(color: colors.mutedText, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Use Circum default'),
+                selected: _giftStoryMusicEnabled &&
+                    _giftStorySoundtrackId ==
+                        giftStorySoundtracks
+                            .firstWhere((track) => track.isDefault)
+                            .id,
+                onSelected: (_) => setState(() {
+                  _giftStoryMusicEnabled = true;
+                  _giftStorySoundtrackId = giftStorySoundtracks
+                      .firstWhere((track) => track.isDefault)
+                      .id;
+                }),
+              ),
+              ChoiceChip(
+                label: const Text('No music'),
+                selected: !_giftStoryMusicEnabled,
+                onSelected: (_) =>
+                    setState(() => _giftStoryMusicEnabled = false),
+              ),
+              for (final track
+                  in giftStorySoundtracks.where((track) => !track.isDefault))
+                ChoiceChip(
+                  label: Text(track.mood),
+                  selected: _giftStoryMusicEnabled &&
+                      _giftStorySoundtrackId == track.id,
+                  onSelected: (_) => setState(() {
+                    _giftStoryMusicEnabled = true;
+                    _giftStorySoundtrackId = track.id;
+                  }),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -32966,10 +33549,20 @@ class _GiftStoryViewer extends StatefulWidget {
 
 class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   int _chapter = 0;
+  late bool _musicEnabled;
+  late bool _muted;
+  late bool _playing;
+  late String _soundtrackId;
 
   @override
   void initState() {
     super.initState();
+    _musicEnabled = widget.gift['giftStoryMusicEnabled'] != false;
+    _muted = false;
+    _playing = false;
+    _soundtrackId = _giftStorySoundtrackId(
+      '${widget.gift['recipientGiftStorySoundtrackOverride'] ?? widget.gift['giftStorySoundtrackId'] ?? ''}',
+    );
     _markRevealViewed();
   }
 
@@ -32993,7 +33586,10 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         ? _giftList(gift['interestTags'])
         : _giftList(gift['interests']);
     final revealItems = _giftRevealItems(gift);
-    final photoUrls = _giftList(gift['giftStoryPhotoUrls']);
+    final photoUrls = <String>{
+      ..._giftStringList(gift['giftStoryPhotos']),
+      ..._giftStringList(gift['giftStoryPhotoUrls']),
+    }.toList();
     final senderMessage =
         '${gift['senderMessageText'] ?? gift['personalMessage'] ?? ''}'.trim();
     final circumMessage = '${gift['giftStoryCircumMessage'] ?? ''}'.trim();
@@ -33122,6 +33718,83 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     if (!opened) await _copyStoryLink();
   }
 
+  void _togglePlayback() {
+    setState(() {
+      _musicEnabled = true;
+      _playing = !_playing;
+    });
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _musicEnabled = true;
+      _muted = !_muted;
+    });
+  }
+
+  Widget _musicControls(_CircumColors colors) {
+    final track = _giftStorySoundtrackById(_soundtrackId);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.30),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: _playing ? 'Pause music' : 'Play music',
+            onPressed: _musicEnabled ? _togglePlayback : null,
+            icon: Icon(
+              _playing ? Icons.pause : Icons.play_arrow,
+              color: Colors.white,
+            ),
+          ),
+          IconButton(
+            tooltip: _muted ? 'Unmute music' : 'Mute music',
+            onPressed: _musicEnabled ? _toggleMute : null,
+            icon: Icon(
+              _muted || !_musicEnabled ? Icons.volume_off : Icons.volume_up,
+              color: Colors.white,
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Change soundtrack',
+            enabled: _musicEnabled,
+            color: const Color(0xff101827),
+            icon: const Icon(Icons.music_note, color: Colors.white),
+            onSelected: (id) => setState(() {
+              _soundtrackId = id;
+              _musicEnabled = true;
+            }),
+            itemBuilder: (context) => giftStorySoundtracks
+                .where((track) => track.isActive)
+                .map((track) => PopupMenuItem(
+                      value: track.id,
+                      child: Text('${track.mood} · ${track.title}'),
+                    ))
+                .toList(),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 150),
+            child: Text(
+              _musicEnabled
+                  ? '${track.mood}${track.audioUrl.isEmpty ? ' · preview' : ''}'
+                  : 'No music',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
@@ -33207,6 +33880,11 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                             icon: const Icon(Icons.close, color: Colors.white),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: _musicControls(colors),
                       ),
                       const SizedBox(height: 18),
                       Expanded(
