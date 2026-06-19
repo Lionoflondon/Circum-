@@ -792,6 +792,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _websiteVisitors = const [];
   List<Map<String, dynamic>> _riderDocuments = const [];
   bool _adminChatOpen = false;
+  bool _showDeletedDeliveries = false;
   String? _activeAdminChatId;
   String? _activeAdminTicketId;
   String _activeAdminChatTitle = 'Booking chat';
@@ -1243,6 +1244,64 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       ),
     );
     setState(() => _message = 'Duplicated delivery as $newId.');
+    await _loadAdminData();
+  }
+
+  Future<void> _softDeleteDelivery(Map<String, dynamic> delivery) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot delete deliveries.');
+      return;
+    }
+    final id = '${delivery['id'] ?? delivery['requestId'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete delivery transaction?'),
+        content: Text(
+          'This will hide delivery $id from the default admin delivery list. '
+          'Roth ledger entries, payment records, and audit logs will not be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xffdc2626),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final previousStatus = '${delivery['status'] ?? ''}';
+    final adminId = _adminUser?.uid ?? _adminUser?.email ?? 'unknown-admin';
+    await FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .doc(id)
+        .set({
+      'status': 'deleted',
+      'deletedAt': FieldValue.serverTimestamp(),
+      'deletedBy': adminId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(
+      AdminAuditEntry(
+        adminUserId: _adminUser?.uid ?? 'unknown-admin',
+        actionType: 'delivery_soft_deleted',
+        recordType: 'deliveryRequests',
+        recordId: id,
+        oldValue: {'status': previousStatus},
+        newValue: {'status': 'deleted', 'deletedBy': adminId},
+        reason: 'Admin soft deleted delivery transaction from deliveries table',
+      ),
+    );
+    setState(() => _message = 'Delivery $id was deleted from the active list.');
     await _loadAdminData();
   }
 
@@ -2296,14 +2355,34 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           title: 'Deliveries',
           subtitle:
               'Track, edit safe fields, duplicate, cancel, and resolve orders.',
-          records: adminSearch(_deliveries, query, [
-            'requestId',
-            'pickupAddress',
-            'dropoffAddress',
-            'senderName',
-            'riderName',
-            'status',
-          ]),
+          headerActions: [
+            FilterChip(
+              selected: _showDeletedDeliveries,
+              onSelected: (selected) =>
+                  setState(() => _showDeletedDeliveries = selected),
+              label: const Text('Show deleted'),
+              avatar: Icon(
+                _showDeletedDeliveries
+                    ? Icons.visibility
+                    : Icons.visibility_off,
+                size: 18,
+              ),
+            ),
+          ],
+          records: adminSearch(
+              _deliveries.where((delivery) {
+                final status = '${delivery['status'] ?? ''}'.toLowerCase();
+                return _showDeletedDeliveries || status != 'deleted';
+              }).toList(growable: false),
+              query,
+              [
+                'requestId',
+                'pickupAddress',
+                'dropoffAddress',
+                'senderName',
+                'riderName',
+                'status',
+              ]),
           columns: const [
             'ID',
             'Received',
@@ -3586,6 +3665,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             enabled: _can(AdminPermission.viewSupport),
             onTap: () => _openAdminChat(item),
           ),
+          _AdminAction(
+            label: 'Delete',
+            enabled: _can(AdminPermission.editDeliveries) &&
+                '${item['status'] ?? ''}'.toLowerCase() != 'deleted',
+            onTap: () => _softDeleteDelivery(item),
+          ),
         ],
       ),
     ];
@@ -4666,7 +4751,7 @@ class _AdminUsersSection extends StatelessWidget {
                     columnSpacing: 24,
                     horizontalMargin: 16,
                     dataRowMinHeight: 58,
-                    dataRowMaxHeight: 82,
+                    dataRowMaxHeight: double.infinity,
                     headingRowColor: WidgetStatePropertyAll(
                       colors.adminAccent.withOpacity(0.10),
                     ),
@@ -5581,6 +5666,7 @@ class _AdminDataSection extends StatelessWidget {
   final List<String> columns;
   final List<Widget> Function(Map<String, dynamic>) rowBuilder;
   final String emptyText;
+  final List<Widget> headerActions;
 
   const _AdminDataSection({
     required this.colors,
@@ -5590,6 +5676,7 @@ class _AdminDataSection extends StatelessWidget {
     required this.columns,
     required this.rowBuilder,
     required this.emptyText,
+    this.headerActions = const [],
   });
 
   @override
@@ -5619,6 +5706,15 @@ class _AdminDataSection extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (headerActions.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: headerActions,
+                ),
+              ],
               const SizedBox(height: 16),
               if (records.isEmpty)
                 Text(
@@ -5632,6 +5728,10 @@ class _AdminDataSection extends StatelessWidget {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
+                    columnSpacing: 24,
+                    horizontalMargin: 16,
+                    dataRowMinHeight: 64,
+                    dataRowMaxHeight: double.infinity,
                     headingTextStyle: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w900,
@@ -6483,28 +6583,12 @@ class _AdminActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 768;
     final buttons = actions.map(_buttonFor).toList(growable: false);
-    if (narrow) {
-      return ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < buttons.length; i++) ...[
-              buttons[i],
-              if (i != buttons.length - 1) const SizedBox(height: 8),
-            ],
-          ],
-        ),
-      );
-    }
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 300),
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
       child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
+        spacing: 8,
+        runSpacing: 8,
         alignment: WrapAlignment.start,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: buttons,
@@ -6515,7 +6599,11 @@ class _AdminActions extends StatelessWidget {
   Widget _buttonFor(_AdminAction action) {
     final intent = _adminActionColor(action.label);
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 108),
+      constraints: const BoxConstraints(
+        minWidth: 96,
+        minHeight: 36,
+        maxWidth: 160,
+      ),
       child: OutlinedButton(
         onPressed: action.enabled ? action.onTap : null,
         style: OutlinedButton.styleFrom(
@@ -6535,9 +6623,9 @@ class _AdminActions extends StatelessWidget {
         ),
         child: Text(
           action.label,
-          maxLines: 1,
-          overflow: TextOverflow.fade,
-          softWrap: false,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          softWrap: true,
           textAlign: TextAlign.center,
         ),
       ),
