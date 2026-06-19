@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:html' as html;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -1356,12 +1357,90 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return urls;
   }
 
+  Future<XFile?> _pickGiftStoryAudioFile() async {
+    final completer = Completer<XFile?>();
+    final input = html.FileUploadInputElement()
+      ..accept = 'audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav';
+    input.onChange.first.then((_) {
+      final file = input.files?.isNotEmpty == true ? input.files!.first : null;
+      if (file == null) {
+        completer.complete(null);
+        return;
+      }
+      final reader = html.FileReader();
+      reader.onLoadEnd.first.then((_) {
+        final result = reader.result;
+        if (result is! ByteBuffer) {
+          completer.completeError(StateError('Could not read audio file.'));
+          return;
+        }
+        completer.complete(XFile.fromData(
+          result.asUint8List(),
+          name: file.name,
+          mimeType: file.type.isEmpty ? 'audio/mpeg' : file.type,
+        ));
+      });
+      reader.onError.first.then((_) {
+        completer.completeError(StateError('Could not read audio file.'));
+      });
+      reader.readAsArrayBuffer(file);
+    });
+    input.click();
+    return completer.future;
+  }
+
+  Future<String> _uploadGiftStoryAudioFile(
+    String giftRequestId,
+    XFile file,
+  ) async {
+    final lower = file.name.toLowerCase();
+    final valid = lower.endsWith('.mp3') ||
+        lower.endsWith('.m4a') ||
+        lower.endsWith('.wav');
+    if (!valid) {
+      throw StateError('Only MP3, M4A or WAV audio can be attached.');
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.length > 20 * 1024 * 1024) {
+      throw StateError('${file.name} is larger than 20 MB.');
+    }
+    final extension = lower.endsWith('.wav')
+        ? 'wav'
+        : lower.endsWith('.m4a')
+            ? 'm4a'
+            : 'mp3';
+    final contentType = switch (extension) {
+      'wav' => 'audio/wav',
+      'm4a' => 'audio/mp4',
+      _ => 'audio/mpeg',
+    };
+    final storageRef = FirebaseStorage.instance.ref(
+      'gift_story/$giftRequestId/audio/${DateTime.now().millisecondsSinceEpoch}.$extension',
+    );
+    await storageRef.putData(
+      bytes,
+      SettableMetadata(
+        contentType: contentType,
+        customMetadata: {
+          'purpose': 'gift_story_custom_music',
+          'uploadedBy': _adminUser?.uid ?? _adminUser?.email ?? 'admin',
+        },
+      ),
+    );
+    return storageRef.getDownloadURL();
+  }
+
   Widget _giftStorySoundtrackAdminControls({
     required _CircumColors colors,
     required bool enabled,
     required String selectedId,
+    required String? customAudioUrl,
+    required XFile? pendingAudio,
+    required String? audioError,
     required ValueChanged<bool> onEnabled,
     required ValueChanged<String> onSelected,
+    required VoidCallback onPickAudio,
+    required VoidCallback onRemoveAudio,
   }) {
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1404,6 +1483,50 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   ? (value) => onSelected(_giftStorySoundtrackId(value ?? ''))
                   : null,
             ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: enabled ? onPickAudio : null,
+                  icon: const Icon(Icons.library_music_outlined),
+                  label: Text(pendingAudio != null || customAudioUrl != null
+                      ? 'Replace custom music'
+                      : 'Upload custom music'),
+                ),
+                if (pendingAudio != null || customAudioUrl != null)
+                  OutlinedButton.icon(
+                    onPressed: onRemoveAudio,
+                    icon: const Icon(Icons.close),
+                    label: const Text('Remove music'),
+                  ),
+              ],
+            ),
+            if (pendingAudio != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'New custom music: ${pendingAudio.name}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ] else if (customAudioUrl != null && customAudioUrl.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Custom music is attached to this Gift Story.',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
+            if (audioError != null && audioError.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                audioError,
+                style: const TextStyle(
+                  color: Color(0xfff97316),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -3150,6 +3273,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool giftStoryMusicEnabled = item['giftStoryMusicEnabled'] != false;
     String giftStorySoundtrackId =
         _giftStorySoundtrackId('${item['giftStorySoundtrackId'] ?? ''}');
+    String? giftStoryCustomAudioUrl =
+        '${item['giftStoryCustomAudioUrl'] ?? ''}'.trim().isEmpty
+            ? null
+            : '${item['giftStoryCustomAudioUrl']}';
+    XFile? pendingStoryAudio;
+    String? storyAudioError;
     final storyPhotos = <String>{
       ..._giftStringList(item['giftStoryPhotos']),
       ..._giftStringList(item['giftStoryPhotoUrls']),
@@ -3444,10 +3573,41 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     colors: widget.colors,
                     enabled: giftStoryMusicEnabled,
                     selectedId: giftStorySoundtrackId,
+                    customAudioUrl: giftStoryCustomAudioUrl,
+                    pendingAudio: pendingStoryAudio,
+                    audioError: storyAudioError,
                     onEnabled: (value) =>
                         setDialogState(() => giftStoryMusicEnabled = value),
                     onSelected: (value) =>
                         setDialogState(() => giftStorySoundtrackId = value),
+                    onPickAudio: () async {
+                      try {
+                        final picked = await _pickGiftStoryAudioFile();
+                        if (picked == null) return;
+                        final lower = picked.name.toLowerCase();
+                        final valid = lower.endsWith('.mp3') ||
+                            lower.endsWith('.m4a') ||
+                            lower.endsWith('.wav');
+                        setDialogState(() {
+                          if (valid) {
+                            pendingStoryAudio = picked;
+                            giftStoryCustomAudioUrl = null;
+                            storyAudioError = null;
+                            giftStoryMusicEnabled = true;
+                          } else {
+                            storyAudioError =
+                                'Only MP3, M4A or WAV audio can be attached.';
+                          }
+                        });
+                      } catch (error) {
+                        setDialogState(() => storyAudioError = '$error');
+                      }
+                    },
+                    onRemoveAudio: () => setDialogState(() {
+                      pendingStoryAudio = null;
+                      giftStoryCustomAudioUrl = null;
+                      storyAudioError = null;
+                    }),
                   ),
                   SwitchListTile(
                     value: giftStoryEnabled,
@@ -3485,6 +3645,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                                   circumMessage.text.trim(),
                               'giftStoryMusicEnabled': giftStoryMusicEnabled,
                               'giftStorySoundtrackId': giftStorySoundtrackId,
+                              'giftStoryCustomAudioUrl':
+                                  giftStoryCustomAudioUrl,
                             },
                             adminPreview: true,
                             onClose: () => Navigator.of(context).pop(),
@@ -3731,10 +3893,22 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                           ..addAll(uploaded)
                           ..removeWhere((url) => url.trim().isEmpty);
                         pendingStoryPhotos.clear();
+                        if (pendingStoryAudio != null) {
+                          giftStoryCustomAudioUrl =
+                              await _uploadGiftStoryAudioFile(
+                            '${item['id']}',
+                            pendingStoryAudio!,
+                          );
+                          pendingStoryAudio = null;
+                        }
                       } catch (error) {
                         setDialogState(() {
                           uploadingStoryPhotos = false;
-                          storyPhotoError = '$error';
+                          if ('$error'.toLowerCase().contains('audio')) {
+                            storyAudioError = '$error';
+                          } else {
+                            storyPhotoError = '$error';
+                          }
                         });
                         return;
                       }
@@ -3758,6 +3932,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         'giftStoryCircumMessage': circumMessage.text.trim(),
                         'giftStoryMusicEnabled': giftStoryMusicEnabled,
                         'giftStorySoundtrackId': giftStorySoundtrackId,
+                        'giftStoryCustomAudioUrl': giftStoryCustomAudioUrl,
                         'giftStorySoundtrack':
                             _giftStorySoundtrackById(giftStorySoundtrackId)
                                 .toMap(),
@@ -7375,6 +7550,47 @@ String _giftStorySoundtrackId(String id) {
 _GiftStorySoundtrack _giftStorySoundtrackById(String id) {
   final normalized = _giftStorySoundtrackId(id);
   return giftStorySoundtracks.firstWhere((track) => track.id == normalized);
+}
+
+String _generatedGiftStoryToneDataUri(String id) {
+  final frequency = switch (id) {
+    'circum_celebration' => 660.0,
+    'circum_emotional' => 392.0,
+    'circum_elegant' => 523.25,
+    'circum_cinematic' => 330.0,
+    _ => 440.0,
+  };
+  const sampleRate = 8000;
+  const seconds = 3;
+  final sampleCount = sampleRate * seconds;
+  final dataSize = sampleCount * 2;
+  final bytes = ByteData(44 + dataSize);
+  void writeAscii(int offset, String value) {
+    for (var i = 0; i < value.length; i++) {
+      bytes.setUint8(offset + i, value.codeUnitAt(i));
+    }
+  }
+
+  writeAscii(0, 'RIFF');
+  bytes.setUint32(4, 36 + dataSize, Endian.little);
+  writeAscii(8, 'WAVE');
+  writeAscii(12, 'fmt ');
+  bytes.setUint32(16, 16, Endian.little);
+  bytes.setUint16(20, 1, Endian.little);
+  bytes.setUint16(22, 1, Endian.little);
+  bytes.setUint32(24, sampleRate, Endian.little);
+  bytes.setUint32(28, sampleRate * 2, Endian.little);
+  bytes.setUint16(32, 2, Endian.little);
+  bytes.setUint16(34, 16, Endian.little);
+  writeAscii(36, 'data');
+  bytes.setUint32(40, dataSize, Endian.little);
+  for (var i = 0; i < sampleCount; i++) {
+    final t = i / sampleRate;
+    final envelope = math.sin(math.pi * math.min(t / seconds, 1));
+    final tone = math.sin(2 * math.pi * frequency * t) * 0.20 * envelope;
+    bytes.setInt16(44 + (i * 2), (tone * 32767).round(), Endian.little);
+  }
+  return 'data:audio/wav;base64,${base64Encode(bytes.buffer.asUint8List())}';
 }
 
 class _AdminGiftStoryPhotoUploader extends StatelessWidget {
@@ -30404,6 +30620,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   String _selfGiftFrequency = 'one_off';
   String _giftStorySoundtrackId = 'circum_warm';
   bool _giftStoryMusicEnabled = true;
+  XFile? _giftStoryCustomMusic;
+  String? _giftStoryMusicError;
   int _giftStep = 0;
   DateTime? _deliveryDate;
   final Set<String> _interests = {};
@@ -30900,6 +31118,78 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     if (photo != null && mounted) setState(() => _photo = photo);
   }
 
+  Future<XFile?> _pickGiftStoryAudio() async {
+    final completer = Completer<XFile?>();
+    final input = html.FileUploadInputElement()
+      ..accept = 'audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav';
+    input.onChange.first.then((_) {
+      final file = input.files?.isNotEmpty == true ? input.files!.first : null;
+      if (file == null) {
+        completer.complete(null);
+        return;
+      }
+      final reader = html.FileReader();
+      reader.onLoadEnd.first.then((_) {
+        final result = reader.result;
+        if (result is! ByteBuffer) {
+          completer.completeError(StateError('Could not read audio file.'));
+          return;
+        }
+        completer.complete(XFile.fromData(
+          result.asUint8List(),
+          name: file.name,
+          mimeType: file.type.isEmpty ? 'audio/mpeg' : file.type,
+        ));
+      });
+      reader.onError.first.then(
+        (_) =>
+            completer.completeError(StateError('Could not read audio file.')),
+      );
+      reader.readAsArrayBuffer(file);
+    });
+    input.click();
+    return completer.future;
+  }
+
+  Future<String> _uploadSenderGiftStoryAudio(
+    String userId,
+    String giftDraftId,
+    XFile file,
+  ) async {
+    final lower = file.name.toLowerCase();
+    final valid = lower.endsWith('.mp3') ||
+        lower.endsWith('.m4a') ||
+        lower.endsWith('.wav');
+    if (!valid) {
+      throw StateError('Only MP3, M4A or WAV audio can be attached.');
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.length > 20 * 1024 * 1024) {
+      throw StateError('${file.name} is larger than 20 MB.');
+    }
+    final extension = lower.endsWith('.wav')
+        ? 'wav'
+        : lower.endsWith('.m4a')
+            ? 'm4a'
+            : 'mp3';
+    final contentType = switch (extension) {
+      'wav' => 'audio/wav',
+      'm4a' => 'audio/mp4',
+      _ => 'audio/mpeg',
+    };
+    final ref = FirebaseStorage.instance.ref(
+      'gift_requests/$userId/$giftDraftId/story_music.$extension',
+    );
+    await ref.putData(
+      bytes,
+      SettableMetadata(
+        contentType: contentType,
+        customMetadata: {'purpose': 'gift_story_sender_custom_music'},
+      ),
+    );
+    return ref.getDownloadURL();
+  }
+
   Future<void> _submit() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -30975,6 +31265,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       final doc =
           FirebaseFirestore.instance.collection('giftPaymentDrafts').doc();
       final photoUrls = <String>[];
+      String? customAudioUrl;
       if (_photo != null) {
         final bytes = await _photo!.readAsBytes();
         if (bytes.length > 8 * 1024 * 1024) {
@@ -30984,6 +31275,13 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             .ref('gift_requests/${user.uid}/${doc.id}.jpg');
         await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
         photoUrls.add(await ref.getDownloadURL());
+      }
+      if (_giftStoryCustomMusic != null) {
+        customAudioUrl = await _uploadSenderGiftStoryAudio(
+          user.uid,
+          doc.id,
+          _giftStoryCustomMusic!,
+        );
       }
       await doc.set({
         'senderId': user.uid,
@@ -31051,6 +31349,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'giftStoryMusicEnabled': _giftStoryMusicEnabled,
         'giftStorySoundtrackId':
             _giftStoryMusicEnabled ? _giftStorySoundtrackId : 'circum_warm',
+        'giftStoryCustomAudioUrl': customAudioUrl,
         'giftStorySoundtrack': _giftStorySoundtrackById(
           _giftStoryMusicEnabled ? _giftStorySoundtrackId : 'circum_warm',
         ).toMap(),
@@ -32338,6 +32637,67 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                 ),
             ],
           ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () async {
+                  try {
+                    final picked = await _pickGiftStoryAudio();
+                    if (picked == null) return;
+                    final lower = picked.name.toLowerCase();
+                    final valid = lower.endsWith('.mp3') ||
+                        lower.endsWith('.m4a') ||
+                        lower.endsWith('.wav');
+                    setState(() {
+                      if (valid) {
+                        _giftStoryCustomMusic = picked;
+                        _giftStoryMusicEnabled = true;
+                        _giftStoryMusicError = null;
+                      } else {
+                        _giftStoryMusicError =
+                            'Only MP3, M4A or WAV audio can be attached.';
+                      }
+                    });
+                  } catch (error) {
+                    setState(() => _giftStoryMusicError = '$error');
+                  }
+                },
+                icon: const Icon(Icons.library_music_outlined),
+                label: Text(_giftStoryCustomMusic == null
+                    ? 'Upload custom music'
+                    : 'Replace custom music'),
+              ),
+              if (_giftStoryCustomMusic != null)
+                OutlinedButton.icon(
+                  onPressed: () => setState(() {
+                    _giftStoryCustomMusic = null;
+                    _giftStoryMusicError = null;
+                  }),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Remove music'),
+                ),
+            ],
+          ),
+          if (_giftStoryCustomMusic != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Custom music selected: ${_giftStoryCustomMusic!.name}',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+            ),
+          ],
+          if (_giftStoryMusicError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _giftStoryMusicError!,
+              style: const TextStyle(
+                color: Color(0xfff97316),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -33553,6 +33913,8 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   late bool _muted;
   late bool _playing;
   late String _soundtrackId;
+  html.AudioElement? _audio;
+  String? _musicPrompt;
 
   @override
   void initState() {
@@ -33564,6 +33926,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       '${widget.gift['recipientGiftStorySoundtrackOverride'] ?? widget.gift['giftStorySoundtrackId'] ?? ''}',
     );
     _markRevealViewed();
+  }
+
+  @override
+  void dispose() {
+    _audio?.pause();
+    _audio = null;
+    super.dispose();
   }
 
   Future<void> _markRevealViewed() async {
@@ -33593,12 +33962,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     final senderMessage =
         '${gift['senderMessageText'] ?? gift['personalMessage'] ?? ''}'.trim();
     final circumMessage = '${gift['giftStoryCircumMessage'] ?? ''}'.trim();
-    return [
+    final chapters = [
       _GiftStoryChapter(
         icon: Icons.card_giftcard,
         title: 'Someone wanted to make today special.',
         body: 'A Gifts by Circum experience has arrived.',
         chips: const ['Gifted by Circum'],
+        photoUrl: photoUrls.isEmpty ? null : photoUrls.first,
       ),
       _GiftStoryChapter(
         icon: Icons.celebration,
@@ -33609,12 +33979,14 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           'Thoughtful gifting',
           '${gift['deliveryTimeWindow'] ?? 'Delivered'}'
         ],
+        photoUrl: photoUrls.length > 1 ? photoUrls[1] : null,
       ),
       _GiftStoryChapter(
         icon: Icons.auto_awesome,
         title: 'Why this was chosen',
         body: _giftStoryWhyText(gift, interests),
         chips: interests.take(6).toList(),
+        photoUrl: photoUrls.length > 2 ? photoUrls[2] : null,
       ),
       _GiftStoryChapter(
         icon: Icons.diamond_outlined,
@@ -33623,8 +33995,17 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             ? revealItems.first
             : 'Each part of the experience was prepared to feel personal, thoughtful and memorable.',
         chips: revealItems.take(5).toList(),
-        photoUrl: photoUrls.isEmpty ? null : photoUrls.first,
+        photoUrl: photoUrls.length > 3 ? photoUrls[3] : null,
       ),
+      for (var i = 4; i < photoUrls.length; i++)
+        _GiftStoryChapter(
+          icon: Icons.photo_camera_back_outlined,
+          title: 'A closer look',
+          body:
+              'Every detail was prepared to feel personal, thoughtful and memorable.',
+          chips: const ['Gift detail'],
+          photoUrl: photoUrls[i],
+        ),
       _GiftStoryChapter(
         icon: Icons.message_outlined,
         title: 'Sender message',
@@ -33655,6 +34036,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         finalChapter: true,
       ),
     ];
+    return chapters;
   }
 
   static List<String> _giftList(dynamic value) {
@@ -33718,17 +34100,73 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     if (!opened) await _copyStoryLink();
   }
 
-  void _togglePlayback() {
-    setState(() {
-      _musicEnabled = true;
-      _playing = !_playing;
+  String _currentAudioUrl() {
+    final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
+    if (custom.isNotEmpty) return custom;
+    final track = _giftStorySoundtrackById(_soundtrackId);
+    if (track.audioUrl.trim().isNotEmpty) return track.audioUrl.trim();
+    return _generatedGiftStoryToneDataUri(track.id);
+  }
+
+  Future<void> _ensureAudio() async {
+    final url = _currentAudioUrl();
+    final existing = _audio;
+    if (existing != null && existing.src == url) {
+      existing.muted = _muted;
+      existing.loop = true;
+      return;
+    }
+    existing?.pause();
+    final audio = html.AudioElement(url)
+      ..loop = true
+      ..muted = _muted
+      ..preload = 'auto';
+    audio.onError.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _playing = false;
+        _musicPrompt =
+            'Music could not play, so the story will continue silently.';
+      });
     });
+    _audio = audio;
+  }
+
+  Future<void> _togglePlayback() async {
+    if (!_musicEnabled) {
+      setState(() => _musicEnabled = true);
+    }
+    if (_playing) {
+      _audio?.pause();
+      setState(() {
+        _playing = false;
+        _musicPrompt = null;
+      });
+      return;
+    }
+    try {
+      await _ensureAudio();
+      await _audio?.play();
+      if (!mounted) return;
+      setState(() {
+        _playing = true;
+        _musicPrompt = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _playing = false;
+        _musicPrompt = 'Tap play to start music.';
+      });
+    }
   }
 
   void _toggleMute() {
+    final nextMuted = !_muted;
+    _audio?.muted = nextMuted;
     setState(() {
       _musicEnabled = true;
-      _muted = !_muted;
+      _muted = nextMuted;
     });
   }
 
@@ -33768,6 +34206,9 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             onSelected: (id) => setState(() {
               _soundtrackId = id;
               _musicEnabled = true;
+              _playing = false;
+              _audio?.pause();
+              _audio = null;
             }),
             itemBuilder: (context) => giftStorySoundtracks
                 .where((track) => track.isActive)
@@ -33792,6 +34233,294 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _storySlide(BuildContext context, _GiftStoryChapter chapter) {
+    final colors = widget.colors;
+    final hasPhoto = chapter.photoUrl != null && chapter.photoUrl!.isNotEmpty;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.985, end: 1).animate(animation),
+          child: child,
+        ),
+      ),
+      child: ClipRRect(
+        key: ValueKey('${_chapter}-${chapter.photoUrl ?? chapter.title}'),
+        borderRadius: BorderRadius.circular(34),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasPhoto)
+              Image.network(
+                chapter.photoUrl!,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (_, __, ___) =>
+                    _storyPlaceholderBackground(colors),
+              )
+            else
+              _storyPlaceholderBackground(colors),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.22),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: hasPhoto ? 0.76 : 0.50),
+                    ],
+                    stops: const [0, 0.42, 1],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.topLeft,
+                    radius: 1.35,
+                    colors: [
+                      colors.adminAccent.withValues(alpha: 0.20),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _storySlideBadge(chapter, hasPhoto),
+                  const Spacer(),
+                  _storyCaptionPanel(chapter),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _storyPlaceholderBackground(_CircumColors colors) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.adminAccent.withValues(alpha: 0.46),
+            colors.adminGlow.withValues(alpha: 0.30),
+            const Color(0xff050914),
+          ],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -80,
+            right: -50,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: colors.adminGlow.withValues(alpha: 0.25),
+                boxShadow: [
+                  BoxShadow(
+                    color: colors.adminGlow.withValues(alpha: 0.34),
+                    blurRadius: 80,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Center(
+            child: Icon(
+              Icons.card_giftcard,
+              color: Colors.white.withValues(alpha: 0.18),
+              size: 156,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _storySlideBadge(_GiftStoryChapter chapter, bool hasPhoto) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: hasPhoto ? 0.28 : 0.18),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: widget.colors.adminGlow.withValues(alpha: 0.22),
+            blurRadius: 26,
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(chapter.icon, color: Colors.white, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            hasPhoto ? 'Gift memory' : 'Gift Story',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _storyCaptionPanel(_GiftStoryChapter chapter) {
+    final width = MediaQuery.sizeOf(context).width;
+    final titleSize = width < 420 ? 35.0 : 48.0;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(width < 420 ? 20 : 28),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(width < 420 ? 26 : 32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.18),
+            widget.colors.adminAccent.withValues(alpha: 0.24),
+            Colors.black.withValues(alpha: 0.36),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+        boxShadow: [
+          BoxShadow(
+            color: widget.colors.adminGlow.withValues(alpha: 0.34),
+            blurRadius: 48,
+            offset: const Offset(0, 22),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            chapter.title,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: titleSize,
+              height: 0.98,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            chapter.body,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.90),
+              fontSize: width < 420 ? 16 : 18,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (chapter.chips.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: chapter.chips
+                  .map((chip) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          color: Colors.white.withValues(alpha: 0.14),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.16)),
+                        ),
+                        child: Text(
+                          chip,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ],
+          if (chapter.finalChapter) ...[
+            const SizedBox(height: 24),
+            _storyFinalActions(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _storyFinalActions() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        FilledButton.icon(
+          onPressed: widget.gift['giftStoryShareEnabled'] == false
+              ? null
+              : _shareStory,
+          icon: const Icon(Icons.ios_share),
+          label: const Text('Share My Gift Story'),
+          style: FilledButton.styleFrom(
+            backgroundColor: widget.colors.adminAccent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: _copyStoryLink,
+          icon: const Icon(Icons.link),
+          label: const Text('Copy Link'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Download Story video rendering is coming soon. Use Copy Link for now.'),
+            ));
+          },
+          icon: const Icon(Icons.download),
+          label: const Text('Download Story'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          ),
+        ),
+      ],
     );
   }
 
@@ -33886,139 +34615,23 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                         alignment: Alignment.centerRight,
                         child: _musicControls(colors),
                       ),
+                      if (_musicPrompt != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _musicPrompt!,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.76),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       Expanded(
                         child: Center(
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 560),
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 260),
-                              child: Container(
-                                key: ValueKey(_chapter),
-                                padding: const EdgeInsets.all(28),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(34),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Colors.white.withValues(alpha: 0.16),
-                                      colors.adminAccent
-                                          .withValues(alpha: 0.22),
-                                      colors.adminGlow.withValues(alpha: 0.16),
-                                      Colors.black.withValues(alpha: 0.34),
-                                    ],
-                                  ),
-                                  border: Border.all(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.20)),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: colors.adminGlow
-                                          .withValues(alpha: 0.32),
-                                      blurRadius: 54,
-                                      offset: const Offset(0, 24),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(chapter.icon,
-                                        color: Colors.white, size: 54),
-                                    const SizedBox(height: 26),
-                                    if (chapter.photoUrl != null) ...[
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(24),
-                                        child: Image.network(
-                                          chapter.photoUrl!,
-                                          height: 210,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
-                                              const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 22),
-                                    ],
-                                    Text(
-                                      chapter.title,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 38,
-                                        height: 1.02,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 18),
-                                    Text(
-                                      chapter.body,
-                                      style: TextStyle(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.88),
-                                        fontSize: 18,
-                                        height: 1.45,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    if (chapter.chips.isNotEmpty) ...[
-                                      const SizedBox(height: 24),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: chapter.chips
-                                            .map((chip) => Chip(
-                                                  label: Text(chip),
-                                                  backgroundColor: Colors.white
-                                                      .withValues(alpha: 0.14),
-                                                  labelStyle: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.w800),
-                                                  side: BorderSide(
-                                                      color: Colors.white
-                                                          .withValues(
-                                                              alpha: 0.16)),
-                                                ))
-                                            .toList(),
-                                      ),
-                                    ],
-                                    if (chapter.finalChapter) ...[
-                                      const SizedBox(height: 28),
-                                      FilledButton.icon(
-                                        onPressed: widget.gift[
-                                                    'giftStoryShareEnabled'] ==
-                                                false
-                                            ? null
-                                            : _shareStory,
-                                        icon: const Icon(Icons.ios_share),
-                                        label:
-                                            const Text('Share My Gift Story'),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      OutlinedButton.icon(
-                                        onPressed: _copyStoryLink,
-                                        icon: const Icon(Icons.link),
-                                        label: const Text('Copy Link'),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      OutlinedButton.icon(
-                                        onPressed: () {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(const SnackBar(
-                                            content: Text(
-                                                'Download Story video rendering is coming soon.'),
-                                          ));
-                                        },
-                                        icon: const Icon(Icons.download),
-                                        label: const Text('Download Story'),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
+                            constraints: const BoxConstraints(maxWidth: 760),
+                            child: _storySlide(context, chapter),
                           ),
                         ),
                       ),
