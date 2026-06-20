@@ -6,6 +6,8 @@ const {
   normalizeSchedule,
   buildHealthPlusCheckoutParams,
   buildAdminStatusUpdate,
+  buildHealthPlusPlanFields,
+  buildCustodyEvent,
 } = require("./health-plus-core");
 
 test("creates a Health+ checkout amount with the £11 minimum", () => {
@@ -45,4 +47,44 @@ test("admin status updates reject unknown pickup statuses", () => {
   assert.equal(update.status, "collected");
   assert.equal(update.assignedDriverId, "driver_1");
   assert.equal(typeof update.updatedAt, "number");
+});
+
+test("builds launch Health+ plans and usage counters", () => {
+  const core = buildHealthPlusPlanFields("core", {usedDeliveriesThisCycle: 1});
+  assert.equal(core.monthlyPrice, 15);
+  assert.equal(core.includedDeliveries, 2);
+  assert.equal(core.remainingDeliveriesThisCycle, 1);
+  assert.equal(core.overageRate, 7.5);
+  assert.equal(core.isVanguard, true);
+  assert.equal(core.trustPoints, 6);
+
+  const priority = buildHealthPlusPlanFields("priority");
+  assert.equal(priority.monthlyPrice, 25);
+  assert.equal(priority.includedDeliveries, 4);
+  assert.equal(priority.overageRate, 6.25);
+
+  const family = buildHealthPlusPlanFields("family");
+  assert.equal(family.monthlyPrice, 40);
+  assert.equal(family.remainingDeliveriesThisCycle, null);
+
+  const custom = buildHealthPlusPlanFields("custom", {
+    monthlyPrice: 75,
+    customIncludedDeliveries: 6,
+    customOverageRate: 5,
+  });
+  assert.equal(custom.monthlyPrice, 75);
+  assert.equal(custom.includedDeliveries, 6);
+  assert.equal(custom.customOverageRate, 5);
+});
+
+test("custody archive entries require a public-safe message", () => {
+  const event = buildCustodyEvent({
+    eventType: "prescription_collected",
+    publicMessage: "Your prescription has been collected.",
+    statusAfterEvent: "collected",
+    actorType: "rider",
+  });
+  assert.equal(event.actorType, "rider");
+  assert.equal(event.internalNote, null);
+  assert.throws(() => buildCustodyEvent({eventType: "collected"}));
 });

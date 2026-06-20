@@ -3,6 +3,8 @@ import 'package:circum/app/health_plus/models/health_plus_profile.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/prescription_pickup.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
+import 'package:circum/app/health_plus/models/health_plus_subscription.dart';
+import 'package:circum/app/health_plus/models/health_plus_custody_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -75,6 +77,33 @@ void main() {
     test('cancelling or pausing uses explicit status fields', () {
       expect(PickupStatusValue.fromValue('cancelled'), PickupStatus.cancelled);
       expect(PickupStatus.failed.value, 'failed');
+    });
+
+    test('defines launch subscription allowances and overage rates', () {
+      expect(HealthPlusPlanType.core.monthlyPrice, 15);
+      expect(HealthPlusPlanType.core.includedDeliveries, 2);
+      expect(HealthPlusPlanType.core.overageRate, 7.5);
+      expect(HealthPlusPlanType.priority.includedDeliveries, 4);
+      expect(HealthPlusPlanType.family.includedDeliveries, isNull);
+
+      const usage = HealthPlusSubscriptionUsage(
+        planType: HealthPlusPlanType.priority,
+        usedDeliveries: 3,
+        includedDeliveries: 4,
+      );
+      expect(usage.remainingDeliveries, 1);
+    });
+
+    test('creates customer-safe custody archive entries', () {
+      final event = HealthPlusCustodyEvent(
+        eventType: 'rider_assigned',
+        timestamp: DateTime.utc(2026, 6, 20),
+        actorType: 'system',
+        publicMessage: 'A verified rider has been assigned.',
+        statusAfterEvent: 'assigned',
+      );
+      expect(event.toJson()['publicMessage'], contains('verified rider'));
+      expect(event.toJson()['internalNote'], isNull);
     });
   });
 }

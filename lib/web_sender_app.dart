@@ -2020,6 +2020,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     }
     final id = '${pickup['id'] ?? ''}';
     if (id.isEmpty) return;
+    final requiresReason = [
+      'escalated',
+      'rescheduled',
+      'prescription_not_ready',
+      'customer_unavailable',
+      'override_completed',
+    ].contains(status);
+    final reason = requiresReason
+        ? await _healthPlusAdminReason(status.replaceAll('_', ' '))
+        : 'Updated from the Health+ operations panel';
+    if (reason == null) return;
     final oldStatus = '${pickup['status'] ?? ''}';
     final patch = AdminHealthPlusTools.statusPatch(
       status: status,
@@ -2035,6 +2046,27 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'status': status,
       'source': 'circum-admin',
       'adminUserId': _adminUser?.uid,
+      'adminName': _adminUser?.displayName ?? _adminUser?.email,
+      'reason': reason,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await FirebaseFirestore.instance
+        .collection('healthPlusCustodyArchive')
+        .add({
+      'pickupId': id,
+      'profileId': pickup['profileId'],
+      'scheduleId': pickup['scheduleId'],
+      'userId': pickup['userId'] ?? pickup['senderId'],
+      'eventType':
+          status == 'override_completed' ? 'override_completion' : status,
+      'timestamp': FieldValue.serverTimestamp(),
+      'actorType': 'admin',
+      'actorId': _adminUser?.uid,
+      'actorName': _adminUser?.displayName ?? _adminUser?.email,
+      'publicMessage': _healthPlusPublicStatusMessage(status),
+      'internalNote': reason,
+      'evidenceUrl': null,
+      'statusAfterEvent': status,
       'createdAt': FieldValue.serverTimestamp(),
     });
     await _writeAudit(
@@ -2045,11 +2077,45 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         recordId: id,
         oldValue: {'status': oldStatus},
         newValue: {'status': status},
-        reason: 'Updated from admin operations panel',
+        reason: reason,
       ),
     );
     setState(() => _message = 'Health+ pickup $id updated to $status.');
     await _loadAdminData();
+  }
+
+  Future<String?> _healthPlusAdminReason(String action) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Health+ ${action.trim()}'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Admin reason',
+            hintText: 'Required for the custody archive',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+            },
+            child: const Text('Confirm action'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return reason;
   }
 
   Future<void> _addAdminNote(
@@ -4446,29 +4512,53 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         '${item['fullName'] ?? item['senderName'] ?? 'Health+ customer'}\n${item['phoneNumber'] ?? ''}',
       ),
       _AdminCell(
-        '${item['frequency'] ?? 'one-off'}\n${item['preferredPickupTime'] ?? item['nextPickupAt'] ?? ''}',
+        '${item['planType'] ?? item['subscriptionPlan'] ?? 'core'} · ${item['frequency'] ?? 'one-off'}\n'
+        'Usage ${item['usedDeliveriesThisCycle'] ?? 0} / ${item['includedDeliveries'] ?? 'fair use'}\n'
+        '${item['preferredPickupTime'] ?? item['nextPickupAt'] ?? ''}',
       ),
       _AdminStatusCell(
         colors: widget.colors,
-        status: '${item['status'] ?? 'scheduled'}',
+        status:
+            '${item['status'] ?? 'scheduled'} · ${item['riskStatus'] ?? 'scheduled'}',
       ),
       _AdminActions(
         colors: widget.colors,
         actions: [
           _AdminAction(
-            label: 'Collected',
+            label: 'Mark Collected',
             enabled: isPickup && _can(AdminPermission.manageHealthPlus),
             onTap: () => _updateHealthPlusPickup(item, 'collected'),
           ),
           _AdminAction(
-            label: 'Delivered',
+            label: 'Mark Delivered',
             enabled: isPickup && _can(AdminPermission.manageHealthPlus),
             onTap: () => _updateHealthPlusPickup(item, 'delivered'),
           ),
           _AdminAction(
-            label: 'Failed',
+            label: 'Escalate',
             enabled: isPickup && _can(AdminPermission.manageHealthPlus),
-            onTap: () => _updateHealthPlusPickup(item, 'failed'),
+            onTap: () => _updateHealthPlusPickup(item, 'escalated'),
+          ),
+          _AdminAction(
+            label: 'Reschedule',
+            enabled: isPickup && _can(AdminPermission.manageHealthPlus),
+            onTap: () => _updateHealthPlusPickup(item, 'rescheduled'),
+          ),
+          _AdminAction(
+            label: 'Prescription Not Ready',
+            enabled: isPickup && _can(AdminPermission.manageHealthPlus),
+            onTap: () =>
+                _updateHealthPlusPickup(item, 'prescription_not_ready'),
+          ),
+          _AdminAction(
+            label: 'Customer Unavailable',
+            enabled: isPickup && _can(AdminPermission.manageHealthPlus),
+            onTap: () => _updateHealthPlusPickup(item, 'customer_unavailable'),
+          ),
+          _AdminAction(
+            label: 'Override Completion',
+            enabled: isPickup && _can(AdminPermission.manageHealthPlus),
+            onTap: () => _updateHealthPlusPickup(item, 'override_completed'),
           ),
         ],
       ),
@@ -7472,6 +7562,20 @@ IconData _adminSectionIcon(_AdminSection section) {
 }
 
 String _adminMoneyText(double value) => '£${value.toStringAsFixed(2)}';
+
+String _healthPlusPublicStatusMessage(String status) => switch (status) {
+      'collected' => 'Your prescription has been collected securely.',
+      'delivered' ||
+      'override_completed' =>
+        'Your Health+ delivery has been completed.',
+      'rescheduled' => 'Your Health+ collection has been rescheduled.',
+      'prescription_not_ready' =>
+        'The prescription was not ready. Circum is coordinating the next step.',
+      'customer_unavailable' =>
+        'We could not complete delivery and will help reschedule.',
+      'escalated' => 'Your Health+ delivery has been escalated for review.',
+      _ => 'Your Health+ delivery status has been updated.',
+    };
 
 const _shortMonthNames = [
   'Jan',
@@ -15187,7 +15291,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _healthSavePayment = true;
   bool _healthSubmitting = false;
   String _healthPrescriptionType = 'NHS prescription';
-  String _healthSubscriptionPlan = 'basic';
+  String _healthSubscriptionPlan = 'core';
   bool _ratingSubmitting = false;
   bool _ratingSubmitted = false;
   String? _activeOrderId;
@@ -18269,6 +18373,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final batch = db.batch();
       final profileRef = db.collection('healthPlusProfiles').doc(id);
       final pickupRef = db.collection('prescriptionPickups').doc(pickupId);
+      final planDefinition = switch (_healthSubscriptionPlan) {
+        'priority' => (25.0, 4, 6.25),
+        'family' => (40.0, null, null),
+        'custom' => (60.0, 0, null),
+        _ => (15.0, 2, 7.5),
+      };
 
       final profile = {
         'id': id,
@@ -18285,6 +18395,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'prescriptionType': _healthPrescriptionType,
         'subscriptionPlan': _healthSubscriptionPlan,
         'healthPlusPlan': _healthSubscriptionPlan,
+        'planType': _healthSubscriptionPlan,
+        'monthlyPrice': planDefinition.$1,
+        'includedDeliveries': planDefinition.$2,
+        'usedDeliveriesThisCycle': 0,
+        'remainingDeliveriesThisCycle': planDefinition.$2,
+        'subscriptionStatus': scheduleId == null ? 'one_off' : 'active',
+        'preferredRiderId': null,
+        'preferredRiderName': null,
+        'customIncludedDeliveries':
+            _healthSubscriptionPlan == 'custom' ? 0 : null,
+        'customOverageRate': null,
+        'overageRate': planDefinition.$3,
+        'isVanguard': true,
+        'trustPoints': 6,
         'preferredDay': _healthPreferredDay.text.trim(),
         'preferredTime': _healthPreferredTime.text.trim(),
         'preferredPickupDay': _healthPreferredDay.text.trim(),
@@ -18316,6 +18440,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'prescriptionType': _healthPrescriptionType,
         'subscriptionPlan': _healthSubscriptionPlan,
         'healthPlusPlan': _healthSubscriptionPlan,
+        'planType': _healthSubscriptionPlan,
+        'isVanguard': true,
+        'trustPoints': 6,
+        'riskStatus': 'scheduled',
         'preferredDay': _healthPreferredDay.text.trim(),
         'preferredTime': _healthPreferredTime.text.trim(),
         'consentAccepted': _healthConsent,
@@ -18354,6 +18482,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'prescriptionType': _healthPrescriptionType,
           'subscriptionPlan': _healthSubscriptionPlan,
           'healthPlusPlan': _healthSubscriptionPlan,
+          'planType': _healthSubscriptionPlan,
+          'monthlyPrice': planDefinition.$1,
+          'includedDeliveries': planDefinition.$2,
+          'usedDeliveriesThisCycle': 0,
+          'remainingDeliveriesThisCycle': planDefinition.$2,
+          'subscriptionStatus': 'active',
+          'preferredRiderId': null,
+          'preferredRiderName': null,
+          'overageRate': planDefinition.$3,
+          'isVanguard': true,
+          'trustPoints': 6,
           'preferredDay': _healthPreferredDay.text.trim(),
           'preferredTime': _healthPreferredTime.text.trim(),
           'prescriptionNotes': _healthNotes.text.trim(),
@@ -18420,6 +18559,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'source': 'circum-web',
         'createdAt': FieldValue.serverTimestamp(),
       });
+      batch.set(
+          db.collection('healthPlusCustodyArchive').doc('${pickupId}_created'),
+          {
+            'pickupId': pickupId,
+            'profileId': id,
+            'scheduleId': scheduleId,
+            'userId': senderId,
+            'eventType': 'booking_created',
+            'timestamp': FieldValue.serverTimestamp(),
+            'actorType': 'customer',
+            'actorId': senderId,
+            'actorName': _healthName.text.trim(),
+            'publicMessage': 'Your Health+ collection has been scheduled.',
+            'internalNote': null,
+            'evidenceUrl': null,
+            'statusAfterEvent': 'scheduled',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
 
       await batch.commit();
       final checkoutUrl = await _createHealthPlusCheckoutSession(
@@ -25127,6 +25284,13 @@ class _HealthPlusStep extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _HealthTrustGrid(colors: colors),
+          if (nextPickup != null) ...[
+            const SizedBox(height: 14),
+            _HealthCustodyTimeline(
+              colors: colors,
+              pickupId: '${nextPickup['id'] ?? ''}',
+            ),
+          ],
           const SizedBox(height: 14),
           _HealthDisclaimer(colors: colors),
           const SizedBox(height: 10),
@@ -25403,33 +25567,43 @@ class _HealthPlanGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     const plans = [
       _HealthPlanCopy(
-        id: 'basic',
-        title: 'Health+ Basic',
-        price: 'From £11',
+        id: 'core',
+        title: 'Health+ Core',
+        price: '£15 / month',
         benefits: [
-          'Discounted recurring pickups',
-          'Medicine delivery reminders',
-          'Secure sealed-package handover',
+          '2 included Health+ deliveries',
+          '£7.50 baseline additional journey',
+          'Vanguard handling and reminders',
         ],
       ),
       _HealthPlanCopy(
         id: 'priority',
         title: 'Health+ Priority',
-        price: 'Priority matching',
+        price: '£25 / month',
         benefits: [
-          'Priority rider matching',
-          'Faster pickup target',
-          'Recurring prescription reminders',
+          '4 included Health+ deliveries',
+          '£6.25 baseline additional journey',
+          'Preferred rider offered first',
         ],
       ),
       _HealthPlanCopy(
         id: 'family',
         title: 'Health+ Family',
-        price: 'Family support',
+        price: '£40 / month',
         benefits: [
-          'Support for elderly relatives',
-          'Shared pickup notes',
-          'Repeat medicine reminders',
+          'Unlimited deliveries subject to fair use',
+          'Family scheduling support',
+          'Vanguard custody archive',
+        ],
+      ),
+      _HealthPlanCopy(
+        id: 'custom',
+        title: 'Health+ Custom',
+        price: 'From £60 / month',
+        benefits: [
+          'Admin-configured allowance',
+          'Custom overage rate',
+          'Tailored collection schedule',
         ],
       ),
     ];
@@ -25660,6 +25834,111 @@ class _HealthTrustGrid extends StatelessWidget {
                   ),
                 )
                 .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthCustodyTimeline extends StatelessWidget {
+  final _CircumColors colors;
+  final String pickupId;
+
+  const _HealthCustodyTimeline({
+    required this.colors,
+    required this.pickupId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (pickupId.isEmpty) return const SizedBox.shrink();
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Health+ Custody Archive'),
+          const SizedBox(height: 6),
+          Text(
+            'Live, customer-safe updates for this Health+ collection.',
+            style: TextStyle(color: colors.mutedText),
+          ),
+          const SizedBox(height: 14),
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('healthPlusCustodyArchive')
+                .where('pickupId', isEqualTo: pickupId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Text(
+                  'Custody updates are temporarily unavailable.',
+                  style: TextStyle(color: colors.mutedText),
+                );
+              }
+              if (!snapshot.hasData) {
+                return const LinearProgressIndicator(minHeight: 2);
+              }
+              final events = snapshot.data!.docs
+                  .map((doc) => doc.data())
+                  .toList(growable: false)
+                ..sort((a, b) => (_dateFromAny(b['timestamp']) ??
+                        DateTime.fromMillisecondsSinceEpoch(0))
+                    .compareTo(_dateFromAny(a['timestamp']) ??
+                        DateTime.fromMillisecondsSinceEpoch(0)));
+              if (events.isEmpty) {
+                return Text(
+                  'Your first custody update will appear here.',
+                  style: TextStyle(color: colors.mutedText),
+                );
+              }
+              return Column(
+                children: events.take(12).map((event) {
+                  final status = '${event['statusAfterEvent'] ?? 'scheduled'}';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          status == 'completed'
+                              ? Icons.check_circle
+                              : Icons.radio_button_checked,
+                          color: status == 'completed'
+                              ? colors.success
+                              : colors.adminAccent,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${event['publicMessage'] ?? 'Health+ updated'}',
+                                style: TextStyle(
+                                  color: colors.text,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _adminDateText(event['timestamp']),
+                                style: TextStyle(
+                                  color: colors.mutedText,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
           ),
         ],
       ),
