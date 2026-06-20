@@ -746,6 +746,7 @@ class _LandingPage extends StatelessWidget {
             ),
           ),
           _FeatureBand(colors: colors),
+          _VanguardLandingBand(colors: colors),
           _LandingFooter(colors: colors),
         ],
       ),
@@ -15496,6 +15497,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                         speed: _selectedSpeed,
                         weightKg: _deliveryClassification.finalWeightKg,
                         breakdown: _quoteBreakdown,
+                        finalTotal: _quoteTotal,
+                        vanguardSelected: _vanguardAddonSelected,
                         step: _step,
                         checkoutState: _checkoutState,
                         firebaseOnline: _firebaseOnline,
@@ -19954,6 +19957,8 @@ class _DesktopPortalLayout extends StatelessWidget {
   final String speed;
   final double weightKg;
   final DeliveryPricingBreakdown breakdown;
+  final double finalTotal;
+  final bool vanguardSelected;
   final _SenderStep step;
   final _CheckoutState checkoutState;
   final bool firebaseOnline;
@@ -19975,6 +19980,8 @@ class _DesktopPortalLayout extends StatelessWidget {
     required this.speed,
     required this.weightKg,
     required this.breakdown,
+    required this.finalTotal,
+    required this.vanguardSelected,
     required this.step,
     required this.checkoutState,
     required this.firebaseOnline,
@@ -20117,6 +20124,8 @@ class _DesktopPortalLayout extends StatelessWidget {
                     speed: speed,
                     weightLabel:
                         '${breakdown.weightCategory} (${_formatWeight(weightKg)} kg)',
+                    total: finalTotal,
+                    vanguardSelected: vanguardSelected,
                   ),
                   const SizedBox(height: 18),
                   _FirebaseStatusBanner(
@@ -23107,6 +23116,8 @@ class _PremiumPriceBreakdownCard extends StatelessWidget {
   final _VehicleOption vehicle;
   final String speed;
   final String weightLabel;
+  final double total;
+  final bool vanguardSelected;
 
   const _PremiumPriceBreakdownCard({
     required this.colors,
@@ -23115,6 +23126,8 @@ class _PremiumPriceBreakdownCard extends StatelessWidget {
     required this.vehicle,
     required this.speed,
     required this.weightLabel,
+    required this.total,
+    required this.vanguardSelected,
   });
 
   @override
@@ -23168,6 +23181,12 @@ class _PremiumPriceBreakdownCard extends StatelessWidget {
                   speed == 'Express' ? 'Express service' : 'Special conditions',
               value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
             ),
+          if (vanguardSelected)
+            _PriceLine(
+              colors: colors,
+              label: 'Vanguard Handling',
+              value: '£${_vanguardAddonPriceGbp.toStringAsFixed(2)}',
+            ),
           Container(
             height: 1,
             margin: const EdgeInsets.symmetric(vertical: 14),
@@ -23184,7 +23203,7 @@ class _PremiumPriceBreakdownCard extends StatelessWidget {
           _PriceLine(
             colors: colors,
             label: 'Total',
-            value: '£${breakdown.total.toStringAsFixed(2)}',
+            value: '£${total.toStringAsFixed(2)}',
             strong: true,
           ),
         ],
@@ -27090,13 +27109,32 @@ class _VanguardAddonCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    'Add Vanguard handling +£1.99',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Vanguard',
+                        style: GoogleFonts.dmSerifDisplay(
+                          color: Colors.white,
+                          fontSize: 23,
+                        ),
+                      ),
+                      Text(
+                        'Trust matters more than speed.',
+                        style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.70),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Add Vanguard handling +£1.99',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Switch.adaptive(
@@ -27394,8 +27432,20 @@ class _PaymentStep extends StatelessWidget {
               if (vanguardSelected)
                 _PriceLine(
                   colors: colors,
-                  label: '🛡 Vanguard',
+                  label: '🛡 Vanguard Handling',
                   value: '£${_vanguardAddonPriceGbp.toStringAsFixed(2)}',
+                ),
+              if (vanguardSelected)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 6),
+                  child: Text(
+                    'Enhanced custody tracking and trusted rider prioritisation.',
+                    style: GoogleFonts.inter(
+                      color: colors.mutedText,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
                 ),
               Divider(color: colors.border, height: 26),
               _PriceLine(
@@ -31685,6 +31735,101 @@ class _PillButton extends StatelessWidget {
   }
 }
 
+class _VanguardLandingBand extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _VanguardLandingBand({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xff3b82f6);
+    const features = [
+      (Icons.verified_user_outlined, 'Trusted Rider Prioritisation'),
+      (Icons.route_outlined, 'Enhanced Custody Tracking'),
+      (Icons.support_agent, 'Priority Support'),
+      (Icons.fact_check_outlined, 'Priority Dispute Review'),
+    ];
+    return Container(
+      width: double.infinity,
+      color: const Color(0xff07090f),
+      padding: const EdgeInsets.fromLTRB(22, 54, 22, 54),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1040),
+          child: Column(
+            children: [
+              const Icon(Icons.shield_outlined, color: blue, size: 38),
+              const SizedBox(height: 16),
+              Text(
+                'Trust matters more than speed.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontSize: 38,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Add Vanguard for £1.99 and receive enhanced custody tracking, trusted rider prioritisation, priority support, and better handling for important deliveries.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.74),
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 12,
+                children: features
+                    .map((feature) => Container(
+                          width: 220,
+                          constraints: const BoxConstraints(minHeight: 92),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.11)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(feature.$1, color: blue, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  feature.$2,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 18),
+              TextButton.icon(
+                onPressed: () => launchUrl(
+                  Uri.base.resolve('/vanguard'),
+                  webOnlyWindowName: '_self',
+                ),
+                icon: const Icon(Icons.arrow_forward, size: 17),
+                label: const Text('Learn more'),
+                style: TextButton.styleFrom(foregroundColor: blue),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LandingFooter extends StatelessWidget {
   final _CircumColors colors;
 
@@ -31755,6 +31900,46 @@ class _GlobalLegalFooter extends StatelessWidget {
               height: 28,
               fit: BoxFit.contain,
             ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Services',
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: [
+                  TextButton(
+                    onPressed: () => _open('/?app=sender'),
+                    child: const Text('Deliveries'),
+                  ),
+                  TextButton(
+                    onPressed: () => _open('/?app=health'),
+                    child: const Text('Health+'),
+                  ),
+                  TextButton(
+                    onPressed: () => _open('/?app=gifts'),
+                    child: const Text('Gifts by Circum'),
+                  ),
+                  TextButton(
+                    onPressed: () => _open('/?app=sender'),
+                    child: const Text('Business'),
+                  ),
+                  TextButton(
+                    onPressed: () => _open('/vanguard'),
+                    child: const Text('Vanguard'),
+                  ),
+                ],
+              ),
+            ],
+          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -31892,191 +32077,203 @@ class _VanguardExplainerPage extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 54),
-            children: [
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 920),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      InkWell(
-                        onTap: onHome,
-                        borderRadius: BorderRadius.circular(10),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Image.asset(
-                            'assets/images/circum_wordmark.png',
-                            width: 124,
-                            height: 30,
-                            fit: BoxFit.contain,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 54),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 920),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          InkWell(
+                            onTap: onHome,
+                            borderRadius: BorderRadius.circular(10),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Image.asset(
+                                'assets/images/circum_wordmark.png',
+                                width: 124,
+                                height: 30,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 44),
-                      Center(
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 82,
-                              height: 82,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: blue.withValues(alpha: 0.10),
-                                border: Border.all(
-                                    color: blue.withValues(alpha: 0.42)),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xff8b5cf6)
-                                        .withValues(alpha: 0.12),
-                                    blurRadius: 32,
+                          const SizedBox(height: 44),
+                          Center(
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 82,
+                                  height: 82,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: blue.withValues(alpha: 0.10),
+                                    border: Border.all(
+                                        color: blue.withValues(alpha: 0.42)),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xff8b5cf6)
+                                            .withValues(alpha: 0.12),
+                                        blurRadius: 32,
+                                      ),
+                                    ],
                                   ),
+                                  child: const Icon(Icons.shield_outlined,
+                                      color: blue, size: 42),
+                                ),
+                                const SizedBox(height: 22),
+                                Text(
+                                  'Vanguard',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.dmSerifDisplay(
+                                    color: Colors.white,
+                                    fontSize: 54,
+                                    height: 1,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Vanguard gives your delivery enhanced handling, priority support, trusted rider prioritisation, and stronger custody tracking for important items.',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withValues(alpha: 0.78),
+                                    fontSize: 17,
+                                    height: 1.55,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Optional add-on at checkout — £1.99',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 42),
+                          Text(
+                            'Vanguard exists for deliveries where trust matters more than speed.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.dmSerifDisplay(
+                              color: Colors.white,
+                              fontSize: 32,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          LayoutBuilder(builder: (context, constraints) {
+                            final stacked = constraints.maxWidth < 700;
+                            return Flex(
+                              direction:
+                                  stacked ? Axis.vertical : Axis.horizontal,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: features.map((feature) {
+                                final card = glass(Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(feature.$1, color: blue),
+                                    const SizedBox(height: 14),
+                                    Text(feature.$2,
+                                        style: GoogleFonts.inter(
+                                            color: Colors.white,
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w800)),
+                                    const SizedBox(height: 8),
+                                    Text(feature.$3,
+                                        style: GoogleFonts.inter(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.70),
+                                            height: 1.45)),
+                                  ],
+                                ));
+                                return stacked
+                                    ? Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 12),
+                                        child: card)
+                                    : Expanded(
+                                        child: Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 12),
+                                          child: card,
+                                        ),
+                                      );
+                              }).toList(),
+                            );
+                          }),
+                          const SizedBox(height: 24),
+                          glass(Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _VanguardPageHeading('Custody preview'),
+                              const SizedBox(height: 18),
+                              for (var i = 0; i < timeline.length; i++)
+                                _VanguardTimelineRow(
+                                  label: timeline[i],
+                                  last: i == timeline.length - 1,
+                                ),
+                            ],
+                          )),
+                          const SizedBox(height: 24),
+                          LayoutBuilder(builder: (context, constraints) {
+                            final stacked = constraints.maxWidth < 700;
+                            final when = glass(_VanguardListSection(
+                                title: 'When to use it', items: useCases));
+                            final adds = glass(_VanguardListSection(
+                                title: 'What £1.99 adds', items: additions));
+                            if (stacked) {
+                              return Column(
+                                children: [
+                                  when,
+                                  const SizedBox(height: 14),
+                                  adds
                                 ],
-                              ),
-                              child: const Icon(Icons.shield_outlined,
-                                  color: blue, size: 42),
-                            ),
-                            const SizedBox(height: 22),
-                            Text(
-                              'Vanguard',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.dmSerifDisplay(
-                                color: Colors.white,
-                                fontSize: 54,
-                                height: 1,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Vanguard gives your delivery enhanced handling, priority support, trusted rider prioritisation, and stronger custody tracking for important items.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(
-                                color: Colors.white.withValues(alpha: 0.78),
-                                fontSize: 17,
-                                height: 1.55,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Optional add-on at checkout — £1.99',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 42),
-                      Text(
-                        'Vanguard exists for deliveries where trust matters more than speed.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.dmSerifDisplay(
-                          color: Colors.white,
-                          fontSize: 32,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      LayoutBuilder(builder: (context, constraints) {
-                        final stacked = constraints.maxWidth < 700;
-                        return Flex(
-                          direction: stacked ? Axis.vertical : Axis.horizontal,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: features.map((feature) {
-                            final card = glass(Column(
+                              );
+                            }
+                            return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(feature.$1, color: blue),
-                                const SizedBox(height: 14),
-                                Text(feature.$2,
-                                    style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800)),
-                                const SizedBox(height: 8),
-                                Text(feature.$3,
-                                    style: GoogleFonts.inter(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.70),
-                                        height: 1.45)),
+                                Expanded(child: when),
+                                const SizedBox(width: 14),
+                                Expanded(child: adds),
                               ],
-                            ));
-                            return stacked
-                                ? Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: card)
-                                : Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(right: 12),
-                                      child: card,
-                                    ),
-                                  );
-                          }).toList(),
-                        );
-                      }),
-                      const SizedBox(height: 24),
-                      glass(Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _VanguardPageHeading('Custody preview'),
-                          const SizedBox(height: 18),
-                          for (var i = 0; i < timeline.length; i++)
-                            _VanguardTimelineRow(
-                              label: timeline[i],
-                              last: i == timeline.length - 1,
-                            ),
+                            );
+                          }),
+                          const SizedBox(height: 24),
+                          glass(Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _VanguardPageHeading('Important'),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees. Vanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.76),
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          )),
+                          const SizedBox(height: 24),
+                          glass(_VanguardListSection(
+                            title: 'Included automatically',
+                            items: included,
+                            footer:
+                                'These deliveries already include Vanguard-level handling at no extra cost.',
+                          )),
                         ],
-                      )),
-                      const SizedBox(height: 24),
-                      LayoutBuilder(builder: (context, constraints) {
-                        final stacked = constraints.maxWidth < 700;
-                        final when = glass(_VanguardListSection(
-                            title: 'When to use it', items: useCases));
-                        final adds = glass(_VanguardListSection(
-                            title: 'What £1.99 adds', items: additions));
-                        if (stacked) {
-                          return Column(
-                            children: [when, const SizedBox(height: 14), adds],
-                          );
-                        }
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: when),
-                            const SizedBox(width: 14),
-                            Expanded(child: adds),
-                          ],
-                        );
-                      }),
-                      const SizedBox(height: 24),
-                      glass(Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _VanguardPageHeading('Important'),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees. Vanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
-                            style: GoogleFonts.inter(
-                              color: Colors.white.withValues(alpha: 0.76),
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      )),
-                      const SizedBox(height: 24),
-                      glass(_VanguardListSection(
-                        title: 'Included automatically',
-                        items: included,
-                        footer:
-                            'These deliveries already include Vanguard-level handling at no extra cost.',
-                      )),
-                    ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
