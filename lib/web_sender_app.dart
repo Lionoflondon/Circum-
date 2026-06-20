@@ -7724,7 +7724,78 @@ const giftStorySoundtracks = <_GiftStorySoundtrack>[
     isDefault: false,
     isActive: true,
   ),
+  _GiftStorySoundtrack(
+    id: 'circum_birthday',
+    title: 'Birthday Spark',
+    mood: 'Birthday',
+    audioUrl: '',
+    duration: Duration(seconds: 48),
+    isDefault: false,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_romantic',
+    title: 'Romantic Light',
+    mood: 'Romantic',
+    audioUrl: '',
+    duration: Duration(seconds: 52),
+    isDefault: false,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_christmas',
+    title: 'Christmas Warmth',
+    mood: 'Christmas',
+    audioUrl: '',
+    duration: Duration(seconds: 50),
+    isDefault: false,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_graduation',
+    title: 'Graduation Rise',
+    mood: 'Graduation',
+    audioUrl: '',
+    duration: Duration(seconds: 49),
+    isDefault: false,
+    isActive: true,
+  ),
+  _GiftStorySoundtrack(
+    id: 'circum_thank_you',
+    title: 'Thank You',
+    mood: 'Thank You',
+    audioUrl: '',
+    duration: Duration(seconds: 46),
+    isDefault: false,
+    isActive: true,
+  ),
 ];
+
+class _GiftStoryOutputDraft {
+  final String senderName;
+  final String recipientName;
+  final String relationship;
+  final String occasion;
+  final String story;
+  final List<String> interests;
+  final String soundtrackCategory;
+  final List<String> photoUrls;
+  final bool deliveryCompleted;
+  final String? renderedVideoUrl;
+
+  const _GiftStoryOutputDraft({
+    required this.senderName,
+    required this.recipientName,
+    required this.relationship,
+    required this.occasion,
+    required this.story,
+    required this.interests,
+    required this.soundtrackCategory,
+    required this.photoUrls,
+    required this.deliveryCompleted,
+    this.renderedVideoUrl,
+  });
+}
 
 List<String> _giftStringList(dynamic value) {
   if (value is Iterable) {
@@ -31529,6 +31600,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   bool _giftStoryMusicEnabled = true;
   String _giftStoryMusicProvider = 'circum';
   final _giftStoryMusicExternalUrl = TextEditingController();
+  final _customInterest = TextEditingController();
+  final Set<String> _expandedInterestGroups = {'Style & beauty'};
   XFile? _giftStoryCustomMusic;
   String? _giftStoryMusicError;
   int _giftStep = 0;
@@ -31903,6 +31976,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _likedBrands,
       _dislikedBrands,
       _giftStoryMusicExternalUrl,
+      _customInterest,
       _previewEmail,
       _previewPassword
     ]) {
@@ -32926,9 +33000,9 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                     ),
                                   ])),
                       ],
+                      const SizedBox(height: 22),
+                      _giftMemoryVault(colors),
                       if (_requests.isNotEmpty) ...[
-                        const SizedBox(height: 22),
-                        _giftMemoryVault(colors),
                         const SizedBox(height: 22),
                         Text('Your gift requests',
                             style: TextStyle(
@@ -32995,7 +33069,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   }
 
   Widget _giftMemoryVault(_CircumColors colors) {
-    final completedStories = _requests.where(_giftStoryCanOpen).toList();
+    final deliveredGifts = _requests.where((request) {
+      final status =
+          '${request['giftStatus'] ?? request['status']}'.toLowerCase();
+      return status == 'delivered' || status == 'completed';
+    }).toList();
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -33021,35 +33099,140 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           ]),
           const SizedBox(height: 8),
           Text(
-            completedStories.isEmpty
-                ? 'Completed Gift Stories will appear here after delivery.'
-                : 'A Memory Vault for completed Gifts by Circum experiences.',
+            deliveredGifts.isEmpty
+                ? 'Your delivered gift experiences will become lasting stories here.'
+                : 'Revisit completed Gifts by Circum experiences and their stories.',
             style: TextStyle(color: colors.mutedText, height: 1.35),
           ),
-          if (completedStories.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            ...completedStories.map(
-              (story) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.card_giftcard, color: colors.adminAccent),
-                title: Text(
-                  '${story['occasion'] ?? 'Gift'} for ${story['recipientName'] ?? 'Recipient'}',
-                  style: TextStyle(
-                      color: colors.text, fontWeight: FontWeight.w900),
-                ),
-                subtitle: Text(
-                  '${_adminDateText(story['deliveryDate'])} · ${story['senderRevealMode'] == 'anonymous_forever' ? 'Anonymous sender' : (story['senderName'] ?? 'Circum sender')}',
-                  style: TextStyle(color: colors.mutedText),
-                ),
-                trailing: TextButton(
-                  onPressed: () => setState(() => _activeGiftStory = story),
-                  child: const Text('Open'),
-                ),
+          if (deliveredGifts.isEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.auto_stories_outlined,
+                      color: colors.adminAccent, size: 34),
+                  const SizedBox(height: 10),
+                  Text('No Gift Memories yet',
+                      style: TextStyle(
+                          color: colors.text,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 5),
+                  Text(
+                    'After a gift is delivered, its approved Gift Story will appear here.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.mutedText),
+                  ),
+                ],
               ),
             ),
+          ] else ...[
+            const SizedBox(height: 12),
+            ...deliveredGifts.map((story) {
+              final draft = _giftStoryOutputFromRequest(story);
+              final storyReady = _giftStoryCanOpen(story);
+              final videoReady = (draft.renderedVideoUrl ?? '').isNotEmpty;
+              final recipientFirstName = draft.recipientName.trim().isEmpty
+                  ? 'Recipient'
+                  : draft.recipientName.trim().split(RegExp(r'\s+')).first;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: LinearGradient(colors: [
+                    colors.adminAccent.withValues(alpha: 0.12),
+                    colors.field.withValues(alpha: 0.72),
+                  ]),
+                  border: Border.all(color: colors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.card_giftcard, color: colors.adminAccent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${draft.occasion} for $recipientFirstName',
+                          style: TextStyle(
+                              color: colors.text,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      _HealthChip(label: 'Delivered'),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Created ${_adminDateText(story['createdAt'] ?? story['deliveryDate'])}',
+                      style: TextStyle(color: colors.mutedText),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      if (storyReady)
+                        FilledButton.icon(
+                          onPressed: () =>
+                              setState(() => _activeGiftStory = story),
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('View Story'),
+                        )
+                      else
+                        Chip(
+                          avatar: const Icon(Icons.hourglass_top, size: 17),
+                          label: const Text('Story preparing'),
+                          backgroundColor: colors.field,
+                        ),
+                      if (videoReady)
+                        OutlinedButton.icon(
+                          onPressed: () => launchUrl(
+                            Uri.parse(draft.renderedVideoUrl!),
+                            webOnlyWindowName: '_blank',
+                          ),
+                          icon: const Icon(Icons.download),
+                          label: const Text('Download Video'),
+                        ),
+                    ]),
+                  ],
+                ),
+              );
+            }),
           ],
         ],
       ),
+    );
+  }
+
+  _GiftStoryOutputDraft _giftStoryOutputFromRequest(
+      Map<String, dynamic> request) {
+    final status =
+        '${request['giftStatus'] ?? request['status']}'.toLowerCase();
+    return _GiftStoryOutputDraft(
+      senderName: '${request['senderName'] ?? ''}',
+      recipientName: '${request['recipientName'] ?? ''}',
+      relationship: '${request['relationship'] ?? ''}',
+      occasion: '${request['occasion'] ?? 'Gift'}',
+      story: '${request['senderMessageText'] ?? request['notes'] ?? ''}',
+      interests: _giftStringList(
+          request['interestTags'] ?? request['interests'] ?? const []),
+      soundtrackCategory:
+          '${request['giftStorySoundtrackId'] ?? 'circum_warm'}',
+      photoUrls: _giftStringList(
+          request['giftStoryPhotos'] ?? request['approvedGiftPhotoUrls']),
+      deliveryCompleted: status == 'delivered' || status == 'completed',
+      renderedVideoUrl:
+          '${request['giftStoryVideoUrl'] ?? request['giftStoryRenderedVideoUrl'] ?? ''}'
+                  .trim()
+                  .isEmpty
+              ? null
+              : '${request['giftStoryVideoUrl'] ?? request['giftStoryRenderedVideoUrl']}',
     );
   }
 
@@ -33520,12 +33703,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Choose a Soundtrack',
+          Text('Circum Sound Library',
               style:
                   TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
           Text(
-            'Choose the feeling. Spotify and Apple Music links are saved as references only; Circum does not copy or redistribute commercial audio.',
+            'Choose the feeling for the Gift Story, or leave it silent.',
             style: TextStyle(color: colors.mutedText, height: 1.35),
           ),
           const SizedBox(height: 12),
@@ -33534,190 +33717,67 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             runSpacing: 8,
             children: [
               ChoiceChip(
-                label: const Text('Spotify'),
-                selected: _giftStoryMusicProvider == 'spotify',
-                onSelected: (_) =>
-                    setState(() => _giftStoryMusicProvider = 'spotify'),
-              ),
-              ChoiceChip(
-                label: const Text('Apple Music'),
-                selected: _giftStoryMusicProvider == 'apple_music',
-                onSelected: (_) =>
-                    setState(() => _giftStoryMusicProvider = 'apple_music'),
-              ),
-              ChoiceChip(
-                label: const Text('Circum library'),
-                selected: _giftStoryMusicProvider == 'circum',
-                onSelected: (_) =>
-                    setState(() => _giftStoryMusicProvider = 'circum'),
-              ),
-              ChoiceChip(
-                label: const Text('Upload fallback'),
-                selected: _giftStoryMusicProvider == 'upload',
-                onSelected: (_) =>
-                    setState(() => _giftStoryMusicProvider = 'upload'),
-              ),
-            ],
-          ),
-          if (_giftStoryMusicProvider == 'spotify' ||
-              _giftStoryMusicProvider == 'apple_music') ...[
-            const SizedBox(height: 12),
-            _giftField(
-              _giftStoryMusicExternalUrl,
-              _giftStoryMusicProvider == 'spotify'
-                  ? 'Paste Spotify link'
-                  : 'Paste Apple Music link',
-              Icons.link,
-            ),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ChoiceChip(
-                label: const Text('Use Circum default'),
-                selected: _giftStoryMusicEnabled &&
-                    _giftStorySoundtrackId ==
-                        giftStorySoundtracks
-                            .firstWhere((track) => track.isDefault)
-                            .id,
-                onSelected: (_) => setState(() {
-                  _giftStoryMusicEnabled = true;
-                  _giftStorySoundtrackId = giftStorySoundtracks
-                      .firstWhere((track) => track.isDefault)
-                      .id;
-                }),
-              ),
-              ChoiceChip(
                 label: const Text('No music'),
                 selected: !_giftStoryMusicEnabled,
-                onSelected: (_) =>
-                    setState(() => _giftStoryMusicEnabled = false),
+                onSelected: (_) => setState(() {
+                  _giftStoryMusicEnabled = false;
+                  _giftStoryMusicProvider = 'circum';
+                }),
               ),
-              for (final track
-                  in giftStorySoundtracks.where((track) => !track.isDefault))
+              for (final track in giftStorySoundtracks)
                 ChoiceChip(
                   label: Text(track.mood),
                   selected: _giftStoryMusicEnabled &&
                       _giftStorySoundtrackId == track.id,
                   onSelected: (_) => setState(() {
                     _giftStoryMusicEnabled = true;
+                    _giftStoryMusicProvider = 'circum';
                     _giftStorySoundtrackId = track.id;
                   }),
                 ),
             ],
           ),
+          const SizedBox(height: 14),
+          Text('Download and add your own music later',
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(
+            'After Circum creates your Gift Story, you can download it and add any music you like on your preferred social media or preferred editor.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 12),
-          Text(
-            'Upload audio is fallback only for audio you have rights to use.',
-            style: TextStyle(
-              color: colors.mutedText,
-              fontSize: 12,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: Text('Royalty-free soundtrack shortlist',
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+            subtitle: Text('Instrumental working titles for the library',
+                style: TextStyle(color: colors.mutedText)),
             children: [
-              OutlinedButton.icon(
-                onPressed: () async {
-                  try {
-                    final picked = await _pickGiftStoryAudio();
-                    if (picked == null) return;
-                    final extension =
-                        _giftStoryAudioExtension(picked.name, picked.mimeType);
-                    setState(() {
-                      if (extension != null) {
-                        _giftStoryCustomMusic = picked;
-                        _giftStoryMusicEnabled = true;
-                        _giftStoryMusicError = null;
-                      } else {
-                        _giftStoryMusicError =
-                            _unsupportedGiftStoryAudioMessage;
-                      }
-                    });
-                  } catch (error) {
-                    setState(() => _giftStoryMusicError =
-                        _giftStoryAudioDisplayError(error));
-                  }
-                },
-                icon: const Icon(Icons.library_music_outlined),
-                label: Text(_giftStoryCustomMusic == null
-                    ? 'Upload custom music'
-                    : 'Replace custom music'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: const [
+                  'Bright Arrival',
+                  'A Little Celebration',
+                  'Meaningful Moments',
+                  'Afterglow',
+                  'The Big Reveal',
+                  'Birthday Spark',
+                  'Always You',
+                  'Winter Lights',
+                  'Next Chapter',
+                  'With Gratitude',
+                ].map((title) => Chip(label: Text(title))).toList(),
               ),
-              if (_giftStoryCustomMusic != null)
-                OutlinedButton.icon(
-                  onPressed: () => setState(() {
-                    _giftStoryCustomMusic = null;
-                    _giftStoryMusicError = null;
-                  }),
-                  icon: const Icon(Icons.close),
-                  label: const Text('Remove music'),
-                ),
-              if (_giftStoryCustomMusic != null)
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final file = _giftStoryCustomMusic!;
-                      final bytes = await file.readAsBytes();
-                      final extension =
-                          _giftStoryAudioExtension(file.name, file.mimeType);
-                      if (extension == null) {
-                        throw StateError(_unsupportedGiftStoryAudioMessage);
-                      }
-                      final source =
-                          'data:${_giftStoryAudioContentType(extension)};base64,${base64Encode(bytes)}';
-                      final audio = html.AudioElement(source)
-                        ..preload = 'auto'
-                        ..volume = 1;
-                      audio.onError.listen((_) {
-                        debugPrint(
-                            'Gift Story sender audio preview element error: network=${audio.networkState}, ready=${audio.readyState}');
-                      });
-                      await audio.play();
-                      debugPrint(
-                          'Gift Story sender audio preview playing: ${file.name}');
-                    } catch (error) {
-                      setState(() => _giftStoryMusicError =
-                          _giftStoryAudioDisplayError(error));
-                    }
-                  },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Preview music'),
-                ),
             ],
-          ),
-          if (_giftStoryCustomMusic != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Custom music selected: ${_giftStoryCustomMusic!.name}',
-              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
-            ),
-          ],
-          if (_giftStoryMusicError != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _giftStoryMusicError!,
-              style: const TextStyle(
-                color: Color(0xfff97316),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Text(
-            'You can add music from Spotify, Apple Music or other DSPs to your own downloaded video later. Circum cannot attach commercial streaming tracks for copyright reasons.',
-            style: TextStyle(
-              color: colors.mutedText,
-              fontSize: 12,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
-            ),
           ),
         ],
       ),
@@ -33767,24 +33827,66 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_interests.isNotEmpty) ...[
-          Text('Selected',
-              style:
-                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _interests
-                .map((interest) => InputChip(
-                      label: Text(interest),
-                      onDeleted: () =>
-                          setState(() => _interests.remove(interest)),
-                    ))
-                .toList(),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(colors: [
+              colors.adminGlow.withValues(alpha: 0.16),
+              colors.adminAccent.withValues(alpha: 0.12),
+              colors.field.withValues(alpha: 0.72),
+            ]),
+            border:
+                Border.all(color: colors.adminAccent.withValues(alpha: 0.22)),
           ),
-          const SizedBox(height: 14),
-        ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Selected Interests',
+                  style: TextStyle(
+                      color: colors.text, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              if (_interests.isEmpty)
+                Text('Choose interests below or add a personal one.',
+                    style: TextStyle(color: colors.mutedText))
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _interests
+                      .map((interest) => InputChip(
+                            label: Text(interest),
+                            onDeleted: () =>
+                                setState(() => _interests.remove(interest)),
+                          ))
+                      .toList(),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _giftField(_customInterest, 'Add custom interest',
+                  Icons.add_circle_outline),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              tooltip: 'Add custom interest',
+              onPressed: () {
+                final value = _customInterest.text.trim();
+                if (value.isEmpty) return;
+                setState(() {
+                  _interests.add(value);
+                  _customInterest.clear();
+                });
+              },
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
         for (final entry in {
           ..._interestGroups,
           if (uncategorised.isNotEmpty) 'More interests': uncategorised,
@@ -33803,6 +33905,21 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
             ),
             child: ExpansionTile(
+              key: ValueKey(
+                  '${entry.key}-${_expandedInterestGroups.contains(entry.key)}'),
+              initiallyExpanded: _expandedInterestGroups.contains(entry.key),
+              onExpansionChanged: (expanded) => setState(() {
+                if (expanded) {
+                  if (_expandedInterestGroups.length >= 2) {
+                    _expandedInterestGroups.remove(
+                      _expandedInterestGroups.first,
+                    );
+                  }
+                  _expandedInterestGroups.add(entry.key);
+                } else {
+                  _expandedInterestGroups.remove(entry.key);
+                }
+              }),
               collapsedIconColor: colors.mutedText,
               iconColor: colors.adminAccent,
               title: Text(entry.key,
@@ -33833,10 +33950,9 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   }
 
   Widget _giftIrisPreview(_CircumColors colors) {
-    final focus = _interests.isEmpty
-        ? 'their story'
-        : _interests.take(3).join(', ').toLowerCase();
-    final toneTags = _giftToneTags();
+    final preview = buildGiftPreview();
+    final signals = getGiftSignals();
+    final directions = getExperienceDirections();
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -33856,7 +33972,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           Row(children: [
             Icon(Icons.auto_awesome, color: colors.adminAccent),
             const SizedBox(width: 10),
-            Text('Private IRIS preview',
+            Text('IRIS Experience Preview',
                 style: TextStyle(
                     color: colors.text,
                     fontSize: 18,
@@ -33864,14 +33980,18 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           ]),
           const SizedBox(height: 12),
           Text(
-            'For a ${_relationship.toLowerCase()} celebrating ${_occasion.toLowerCase()} and drawn to $focus — IRIS imagines an experience built around ${toneTags.take(3).join(', ').toLowerCase()}, and deliberate surprise.',
+            preview,
             style: TextStyle(color: colors.text, fontSize: 18, height: 1.45),
           ),
           const SizedBox(height: 14),
+          Text('Signals detected',
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: toneTags
+            children: signals
                 .map((tag) => Chip(
                       label: Text(tag),
                       backgroundColor: colors.panel.withValues(alpha: 0.62),
@@ -33879,8 +33999,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                 .toList(),
           ),
           const SizedBox(height: 12),
+          Text('Experience direction',
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                directions.map((tag) => _giftLuxuryChip(colors, tag)).toList(),
+          ),
+          const SizedBox(height: 14),
           Text(
-            'No exact gift items, brands, retailers or procurement costs are shown before delivery.',
+            'Exact gift items, brands, suppliers, retailers, and procurement costs stay hidden before delivery.',
             style: TextStyle(color: colors.mutedText, fontSize: 12),
           ),
         ],
@@ -33888,7 +34019,34 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     );
   }
 
-  List<String> _giftToneTags() {
+  String buildGiftPreview() {
+    final interests = _interests.take(3).toList();
+    final interestText = interests.isEmpty
+        ? 'the story you have shared'
+        : interests.map((value) => value.toLowerCase()).join(', ');
+    final directions = getExperienceDirections();
+    final budget = double.tryParse(_budget.text.trim());
+    final timing = _deliveryDate == null
+        ? ''
+        : ' with ${_timeWindow.toLowerCase()} delivery in mind';
+    final storySignal = _notes.text.trim().length > 24
+        ? ' and the personal details in their story'
+        : '';
+    final target = _giftMode == 'gift_myself'
+        ? 'yourself'
+        : 'a ${_relationship.toLowerCase()}';
+    return 'For $target celebrating ${_occasion.toLowerCase()} with interests in $interestText$storySignal, IRIS is shaping an experience around ${directions.take(3).map((value) => value.toLowerCase()).join(', ')}${budget == null ? '' : ' within a £${budget.toStringAsFixed(0)} budget'}$timing.';
+  }
+
+  List<String> getGiftSignals() {
+    final signals = <String>[_relationship, _occasion, ..._interests.take(4)];
+    final budget = double.tryParse(_budget.text.trim());
+    if (budget != null) signals.add('£${budget.toStringAsFixed(0)} budget');
+    if (_deliveryDate != null) signals.add(_timeWindow);
+    return signals.toSet().toList();
+  }
+
+  List<String> getExperienceDirections() {
     final tags = <String>{'Thoughtful'};
     if (_interests
         .any(['Fine Dining', 'Jewellery', 'Architecture', 'Luxury'].contains))
@@ -33902,7 +34060,20 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     if (_interests.contains('Gaming') || _interests.contains('Festivals')) {
       tags.add('Playful');
     }
-    tags.add('Surprising');
+    if (_interests.any(['Travel', 'Aviation', 'Adventure Travel'].contains)) {
+      tags.add('Adventure-led');
+    }
+    if (_interests
+        .any(['Christian', 'Muslim', 'Jewish', 'Spiritual'].contains)) {
+      tags.add('Faith-inspired');
+    }
+    if (_interests.any(['Art', 'Design', 'Writing', 'Music'].contains)) {
+      tags.add('Creative');
+    }
+    if (_occasion == 'Get Well Soon' || _occasion == 'Sympathy') {
+      tags.add('Comforting');
+    }
+    if (_budget.text.isNotEmpty) tags.add('Premium');
     return tags.toList();
   }
 
