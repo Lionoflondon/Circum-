@@ -2937,7 +2937,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         colors: widget.colors,
         status: '${item['status'] ?? 'active'}',
       ),
-      _AdminCell('${SenderTrustPolicy.label(tier)}\n$points points'),
+      _AdminCell(
+        '${SenderTrustPolicy.label(tier)}\n$points points\n'
+        'Roth top-up: ${((item['senderTrustBreakdown'] as Map?)?['rothTopUps'] as num?)?.toInt() ?? 0} points',
+      ),
       _AdminCell(item['isLegend'] == true
           ? 'Legend #${item['legendNumber'] ?? ''}'
           : '—'),
@@ -4468,6 +4471,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminCell.primary(
         recordType == 'roth_ledger'
             ? 'Roth · ${item['balanceType'] ?? ''}'
+                '${item['progressionPointsAwarded'] == null ? '' : '\n+${item['progressionPointsAwarded']} progression points'}'
             : recordType == 'wallet_transaction'
                 ? transactionType
                 : recordType,
@@ -21731,6 +21735,7 @@ class _SenderProfileStep extends StatelessWidget {
       'Account Age': _trustBreakdownValue('accountAge'),
       'Referrals': _trustBreakdownValue('referrals'),
       'Admin Awards': _trustBreakdownValue('adminAwards'),
+      'Roth Top-Ups': _trustBreakdownValue('rothTopUps'),
     };
     final content = _SenderTrustDetailsSheet(
       colors: colors,
@@ -24016,7 +24021,8 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
               title: Text(_rothTransactionLabel(tx),
                   style: TextStyle(
                       color: colors.text, fontWeight: FontWeight.w900)),
-              subtitle: Text('${tx['notes'] ?? tx['referenceId'] ?? ''}',
+              subtitle: Text(
+                  '${tx['progressionLabel'] ?? tx['notes'] ?? tx['referenceId'] ?? ''}',
                   style: TextStyle(color: colors.mutedText)),
               trailing: Text(
                 '${amount < 0 ? '-' : '+'}£${amount.abs().toStringAsFixed(2)}',

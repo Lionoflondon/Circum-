@@ -18,6 +18,7 @@ const {
   roundMoney: roundWalletMoney,
   walletIdForEmail,
 } = require("./wallet-core");
+const senderTrust = require("./sender-trust");
 
 function hasAdminRole(context) {
   const token = context.auth && context.auth.token || {};
@@ -306,7 +307,8 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
   if (metadata.type !== "wallet_top_up") return null;
   const amount = roundWalletMoney(metadata.amountGbp || Number(sessionData.amount_total || 0) / 100);
   if (amount <= 0) return null;
-  return recordRothMovement({
+  const transactionId = `wallet_top_up_${sessionData.id}`;
+  const movement = await recordRothMovement({
     userId: metadata.userId || metadata.userEmail || metadata.uid,
     uid: metadata.uid || null,
     userEmail: metadata.userEmail || null,
@@ -317,7 +319,7 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
     relatedEntityId: sessionData.id,
     paymentProvider: "stripe",
     providerTransactionId: sessionData.payment_intent || sessionData.id,
-    transactionId: `wallet_top_up_${sessionData.id}`,
+    transactionId,
     metadata: {
       stripeEventId: eventId,
       stripeCheckoutSessionId: sessionData.id,
@@ -325,6 +327,14 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
       label: "Roth top-up",
     },
   });
+  const progression = await senderTrust.awardRothTopUpProgression({
+    uid: metadata.uid || null,
+    userEmail: metadata.userEmail || null,
+    amount,
+    stripeSessionId: sessionData.id,
+    walletTransactionId: transactionId,
+  });
+  return {...movement, progression};
 }
 
 exports.recordWalletTopUpFromStripeSession = recordWalletTopUpFromStripeSession;

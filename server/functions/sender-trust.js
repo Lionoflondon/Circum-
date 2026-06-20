@@ -30,6 +30,104 @@ function deliveryValue(data) {
   return money(data.price || data.quote || data.amount || data.finalCustomerPrice || data.total);
 }
 
+function rothTopUpPoints(amount) {
+  const value = money(amount);
+  if (value <= 0) return 0;
+  if (value <= 25) return 1;
+  if (value <= 50) return 2;
+  if (value <= 100) return 3;
+  if (value <= 250) return 4;
+  if (value <= 500) return 5;
+  return 6;
+}
+
+function isSenderEligibleForRothProgression(user) {
+  const roles = Array.isArray(user.roles) ?
+    user.roles.map((role) => `${role}`.toLowerCase()) : [];
+  const userType = `${user.userType || user.role || ""}`.toLowerCase();
+  const riderOnly = ["rider", "driver"].includes(userType) &&
+    !roles.some((role) => ["sender", "customer", "user"].includes(role));
+  return !riderOnly;
+}
+
+async function awardRothTopUpProgression({
+  uid,
+  userEmail,
+  amount,
+  stripeSessionId,
+  walletTransactionId,
+}) {
+  if (!uid || !stripeSessionId) return {awarded: false, points: 0};
+  const points = rothTopUpPoints(amount);
+  if (points <= 0) return {awarded: false, points: 0};
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+  const eventRef = db.collection("senderTrustEvents")
+      .doc(`roth_topup_${stripeSessionId}`);
+  const ledgerRef = walletTransactionId ?
+    db.collection("walletTransactions").doc(walletTransactionId) : null;
+  let awarded = false;
+  await db.runTransaction(async (transaction) => {
+    const eventSnap = await transaction.get(eventRef);
+    if (eventSnap.exists) return;
+    const userSnap = await transaction.get(userRef);
+    const user = userSnap.exists ? userSnap.data() : {};
+    if (!isSenderEligibleForRothProgression(user)) return;
+    const previousPoints = Number(
+        user.senderTrustPoints || user.trustPoints || 0,
+    );
+    const previousTier = normalizeTier(
+        user.senderTier || user.trustTier,
+        previousPoints,
+    );
+    const newPoints = previousPoints + points;
+    const frozen = user.senderTrustFrozen === true;
+    const newTier = frozen ? previousTier : tierForPoints(newPoints);
+    const breakdown = user.senderTrustBreakdown || {};
+    const timestamp = FieldValue.serverTimestamp();
+    transaction.set(userRef, {
+      senderTrustPoints: newPoints,
+      senderTier: newTier,
+      senderTrustBreakdown: {
+        ...breakdown,
+        rothTopUps: Number(breakdown.rothTopUps || 0) + points,
+      },
+      senderTrustUpdatedAt: timestamp,
+      senderTrustUpdatedBy: "system",
+      senderTrustLastReason:
+        `Roth top-up reward: +${points} progression points`,
+      updatedAt: timestamp,
+    }, {merge: true});
+    transaction.create(eventRef, {
+      userId: uid,
+      userName: user.fullName || user.name || "Sender",
+      userEmail: user.email || userEmail || null,
+      eventType: "roth_top_up_reward",
+      pointsChange: points,
+      reason: `Roth top-up reward: +${points} progression points`,
+      source: "system",
+      awardedBy: "system",
+      relatedEntityId: stripeSessionId,
+      topUpAmount: money(amount),
+      previousPoints,
+      newPoints,
+      previousTier,
+      newTier,
+      createdAt: timestamp,
+    });
+    if (ledgerRef) {
+      transaction.set(ledgerRef, {
+        progressionPointsAwarded: points,
+        progressionLabel:
+          `Roth top-up reward: +${points} progression points`,
+        updatedAt: timestamp,
+      }, {merge: true});
+    }
+    awarded = true;
+  });
+  return {awarded, points: awarded ? points : 0};
+}
+
 async function readSenderDeliveries(db, uid) {
   const snapshots = await Promise.all([
     db.collection("deliveryRequests").where("senderId", "==", uid).get(),
@@ -61,15 +159,23 @@ exports.syncSenderTrustBaseline = functions.https.onCall(async (data, context) =
     const userSnap = await transaction.get(userRef);
     const user = userSnap.exists ? userSnap.data() : {};
     const previousPoints = Number(user.senderTrustPoints || user.trustPoints || 0);
-    if (baseline <= previousPoints) return;
+    const previousBreakdown = user.senderTrustBreakdown || {};
+    const previousDeliveryBaseline =
+      Number(previousBreakdown.parcelsSent || 0) +
+      Number(previousBreakdown.successfulDeliveries || 0) +
+      Number(previousBreakdown.lifetimeSpend || 0);
+    const nonDeliveryPoints = Math.max(0, previousPoints - previousDeliveryBaseline);
+    const nextPoints = baseline + nonDeliveryPoints;
+    if (nextPoints <= previousPoints) return;
     const previousTier = normalizeTier(user.senderTier || user.trustTier, previousPoints);
     const frozen = user.senderTrustFrozen === true;
-    const newTier = frozen ? previousTier : tierForPoints(baseline);
+    const newTier = frozen ? previousTier : tierForPoints(nextPoints);
     const timestamp = FieldValue.serverTimestamp();
     transaction.set(userRef, {
-      senderTrustPoints: baseline,
+      senderTrustPoints: nextPoints,
       senderTier: newTier,
       senderTrustBreakdown: {
+        ...previousBreakdown,
         parcelsSent,
         successfulDeliveries,
         lifetimeSpend: lifetimeSpendPoints,
@@ -83,12 +189,12 @@ exports.syncSenderTrustBaseline = functions.https.onCall(async (data, context) =
       userName: user.fullName || user.name || "Sender",
       userEmail: user.email || context.auth.token.email || null,
       eventType: "system_baseline_sync",
-      pointsChange: baseline - previousPoints,
+      pointsChange: nextPoints - previousPoints,
       reason: "System baseline from delivery history",
       source: "system",
       awardedBy: "system",
       previousPoints,
-      newPoints: baseline,
+      newPoints: nextPoints,
       previousTier,
       newTier,
       createdAt: timestamp,
@@ -99,3 +205,7 @@ exports.syncSenderTrustBaseline = functions.https.onCall(async (data, context) =
 
 module.exports.tierForPoints = tierForPoints;
 module.exports.normalizeTier = normalizeTier;
+module.exports.rothTopUpPoints = rothTopUpPoints;
+module.exports.awardRothTopUpProgression = awardRothTopUpProgression;
+module.exports.isSenderEligibleForRothProgression =
+  isSenderEligibleForRothProgression;
