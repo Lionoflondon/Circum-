@@ -33,6 +33,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -35725,26 +35726,33 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   Widget _storyCaptionPanel(_GiftStoryChapter chapter) {
     final width = MediaQuery.sizeOf(context).width;
     final height = MediaQuery.sizeOf(context).height;
-    final titleSize = width < 420 ? 35.0 : 48.0;
     return Container(
       width: double.infinity,
       constraints: BoxConstraints(maxHeight: height * 0.70),
       padding: EdgeInsets.all(width < 420 ? 20 : 28),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(width < 420 ? 26 : 32),
+        color: Color.alphaBlend(
+          Colors.white.withValues(alpha: 0.16),
+          Colors.black.withValues(alpha: 0.34),
+        ),
+        backgroundBlendMode: BlendMode.overlay,
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Colors.white.withValues(alpha: 0.18),
-            widget.colors.adminAccent.withValues(alpha: 0.24),
-            Colors.black.withValues(alpha: 0.36),
+            const Color(0xffa8edea).withValues(alpha: 0.20),
+            const Color(0xffc9b8ff).withValues(alpha: 0.20),
+            const Color(0xffffd6e8).withValues(alpha: 0.20),
+            const Color(0xffb8f0d8).withValues(alpha: 0.20),
+            const Color(0xffd4c5ff).withValues(alpha: 0.20),
           ],
+          stops: const [0, 0.25, 0.5, 0.75, 1],
         ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
         boxShadow: [
           BoxShadow(
-            color: widget.colors.adminGlow.withValues(alpha: 0.34),
+            color: const Color(0xffc9b8ff).withValues(alpha: 0.34),
             blurRadius: 48,
             offset: const Offset(0, 22),
           ),
@@ -35757,21 +35765,21 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           children: [
             Text(
               chapter.title,
-              style: TextStyle(
+              style: GoogleFonts.dmSerifDisplay(
                 color: Colors.white,
-                fontSize: titleSize,
-                height: 0.98,
-                fontWeight: FontWeight.w900,
+                fontSize: 38,
+                height: 1.02,
+                fontWeight: FontWeight.w400,
               ),
             ),
             const SizedBox(height: 16),
             Text(
               chapter.body,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.90),
-                fontSize: width < 420 ? 16 : 18,
+              style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.88),
+                fontSize: 18,
                 height: 1.45,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
             if (chapter.chips.isNotEmpty) ...[
@@ -35791,9 +35799,9 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                           ),
                           child: Text(
                             chip,
-                            style: const TextStyle(
+                            style: GoogleFonts.inter(
                               color: Colors.white,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ))
@@ -35915,7 +35923,10 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 18),
-      label: Text(label),
+      label: Text(
+        label,
+        style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+      ),
       style: OutlinedButton.styleFrom(
         foregroundColor: Colors.white,
         disabledForegroundColor: Colors.white.withValues(alpha: 0.38),
@@ -36053,9 +36064,9 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                         child: Text(
                           'Tap or swipe to move through your Gift Story.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: GoogleFonts.inter(
                               color: Colors.white.withValues(alpha: 0.70),
-                              fontWeight: FontWeight.w700),
+                              fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],

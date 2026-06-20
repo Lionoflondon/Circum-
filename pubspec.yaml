@@ -51,6 +51,7 @@ dependencies:
   equatable: ^2.0.5
   flutter_bloc: ^8.1.0
   flutter_dotenv: ^5.1.0
+  google_fonts: ^8.1.0
   flutter_keyboard_visibility: ^6.0.0
   flutter_keyboard_size: ^1.0.1
   flutter_local_notifications: ^18.0.1
