@@ -1489,16 +1489,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   Widget _giftStorySoundtrackAdminControls({
     required _CircumColors colors,
-    required bool enabled,
-    required String selectedId,
-    required String provider,
-    required TextEditingController externalUrlController,
     required String? customAudioUrl,
     required XFile? pendingAudio,
     required String? audioError,
-    required ValueChanged<bool> onEnabled,
-    required ValueChanged<String> onProviderChanged,
-    required ValueChanged<String> onSelected,
     required VoidCallback onPickAudio,
     required VoidCallback onRemoveAudio,
     required VoidCallback onPreviewAudio,
@@ -1519,68 +1512,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SwitchListTile(
-              value: enabled,
-              onChanged: onEnabled,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Gift Story music'),
-              subtitle: const Text(
-                'Choose a feeling. Spotify and Apple Music links are stored as references only; Circum does not copy or redistribute commercial audio.',
-              ),
+            const Text(
+              'Gift Story Audio',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
-            DropdownButtonFormField<String>(
-              initialValue: provider,
-              decoration: const InputDecoration(labelText: 'Music source'),
-              items: const [
-                DropdownMenuItem(
-                    value: 'spotify', child: Text('Spotify search / link')),
-                DropdownMenuItem(
-                    value: 'apple_music',
-                    child: Text('Apple Music search / link')),
-                DropdownMenuItem(
-                    value: 'circum', child: Text('Circum soundtrack library')),
-                DropdownMenuItem(
-                    value: 'upload',
-                    child: Text('Upload audio file as fallback')),
-              ],
-              onChanged: enabled
-                  ? (value) => onProviderChanged(
-                      _giftStoryMusicProvider(value ?? 'circum'))
-                  : null,
-            ),
-            if (provider == 'spotify' || provider == 'apple_music') ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: externalUrlController,
-                decoration: InputDecoration(
-                  labelText: provider == 'spotify'
-                      ? 'Paste Spotify link'
-                      : 'Paste Apple Music link',
-                  helperText:
-                      'Only the provider reference is saved. Recipient sees Sound On / Off, not song metadata.',
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: selectedId,
-              decoration: const InputDecoration(labelText: 'Soundtrack mood'),
-              items: giftStorySoundtracks
-                  .where((track) => track.isActive)
-                  .map(
-                    (track) => DropdownMenuItem(
-                      value: track.id,
-                      child: Text('${track.mood} · ${track.title}'),
-                    ),
-                  )
-                  .toList(),
-              onChanged: enabled
-                  ? (value) => onSelected(_giftStorySoundtrackId(value ?? ''))
-                  : null,
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             Text(
-              'Upload audio file is a fallback for approved/licensed audio only.',
+              'Optional. Upload only audio Circum has permission to use. If no audio is uploaded, the Gift Story will be silent.',
               style: TextStyle(
                 color: colors.mutedText,
                 fontWeight: FontWeight.w800,
@@ -1594,36 +1532,36 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 OutlinedButton.icon(
-                  onPressed: enabled ? onPickAudio : null,
+                  onPressed: onPickAudio,
                   icon: const Icon(Icons.library_music_outlined),
                   label: Text(pendingAudio != null || customAudioUrl != null
-                      ? 'Replace custom music'
-                      : 'Upload custom music'),
+                      ? 'Replace audio file'
+                      : 'Upload audio file'),
                 ),
                 if (pendingAudio != null || customAudioUrl != null)
                   OutlinedButton.icon(
                     onPressed: onRemoveAudio,
                     icon: const Icon(Icons.close),
-                    label: const Text('Remove music'),
+                    label: const Text('Remove audio file'),
                   ),
                 if (pendingAudio != null || customAudioUrl != null)
                   OutlinedButton.icon(
                     onPressed: onPreviewAudio,
                     icon: const Icon(Icons.play_arrow),
-                    label: const Text('Preview music'),
+                    label: const Text('Preview audio'),
                   ),
               ],
             ),
             if (pendingAudio != null) ...[
               const SizedBox(height: 8),
               Text(
-                'New custom music: ${pendingAudio.name}',
+                'New audio: ${pendingAudio.name}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ] else if (customAudioUrl != null && customAudioUrl.isNotEmpty) ...[
               const SizedBox(height: 8),
               const Text(
-                'Custom music is attached to this Gift Story.',
+                'Audio is attached to this Gift Story.',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ],
@@ -1637,16 +1575,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 ),
               ),
             ],
-            const SizedBox(height: 8),
-            Text(
-              'Spotify, Apple Music and other DSP tracks can be added by the user after downloading their own video. Circum cannot attach commercial streaming tracks for copyright reasons.',
-              style: TextStyle(
-                color: colors.mutedText,
-                fontSize: 12,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            if (pendingAudio == null &&
+                (customAudioUrl == null || customAudioUrl.isEmpty)) ...[
+              const SizedBox(height: 8),
+              Text('Story will be silent.',
+                  style: TextStyle(color: colors.mutedText)),
+            ],
           ],
         ),
       ),
@@ -3390,19 +3324,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool giftStoryEnabled = item['giftStoryEnabled'] != false;
     bool giftStoryApproved = item['giftStoryApproved'] != false;
     bool giftStoryShareEnabled = item['giftStoryShareEnabled'] != false;
-    bool giftStoryMusicEnabled = item['giftStoryMusicEnabled'] != false;
+    bool giftStoryMusicEnabled =
+        '${item['giftStoryCustomAudioUrl'] ?? ''}'.trim().isNotEmpty;
     String giftStorySharePrivacy =
         _giftStorySharePrivacy('${item['giftStorySharePrivacy'] ?? ''}');
-    String giftStoryMusicProvider =
-        _giftStoryMusicProvider('${item['giftStoryMusicProvider'] ?? ''}');
-    String giftStorySoundtrackId =
-        _giftStorySoundtrackId('${item['giftStorySoundtrackId'] ?? ''}');
     String? giftStoryCustomAudioUrl =
         '${item['giftStoryCustomAudioUrl'] ?? ''}'.trim().isEmpty
             ? null
             : '${item['giftStoryCustomAudioUrl']}';
-    final dspTrackLink = TextEditingController(
-        text: '${item['giftStoryMusicExternalUrl'] ?? ''}'.trim());
     XFile? pendingStoryAudio;
     String? storyAudioError;
     final storyPhotos = <String>{
@@ -3697,19 +3626,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   const SizedBox(height: 12),
                   _giftStorySoundtrackAdminControls(
                     colors: widget.colors,
-                    enabled: giftStoryMusicEnabled,
-                    selectedId: giftStorySoundtrackId,
-                    provider: giftStoryMusicProvider,
-                    externalUrlController: dspTrackLink,
                     customAudioUrl: giftStoryCustomAudioUrl,
                     pendingAudio: pendingStoryAudio,
                     audioError: storyAudioError,
-                    onEnabled: (value) =>
-                        setDialogState(() => giftStoryMusicEnabled = value),
-                    onProviderChanged: (value) =>
-                        setDialogState(() => giftStoryMusicProvider = value),
-                    onSelected: (value) =>
-                        setDialogState(() => giftStorySoundtrackId = value),
                     onPickAudio: () async {
                       try {
                         final picked = await _pickGiftStoryAudioFile();
@@ -3734,6 +3653,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     onRemoveAudio: () => setDialogState(() {
                       pendingStoryAudio = null;
                       giftStoryCustomAudioUrl = null;
+                      giftStoryMusicEnabled = false;
                       storyAudioError = null;
                     }),
                     onPreviewAudio: () async {
@@ -3800,10 +3720,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                               'giftStoryCircumMessage':
                                   circumMessage.text.trim(),
                               'giftStoryMusicEnabled': giftStoryMusicEnabled,
-                              'giftStoryMusicProvider': giftStoryMusicProvider,
-                              'giftStoryMusicExternalUrl':
-                                  dspTrackLink.text.trim(),
-                              'giftStorySoundtrackId': giftStorySoundtrackId,
                               'giftStoryCustomAudioUrl':
                                   giftStoryCustomAudioUrl,
                               'giftStorySharePrivacy': giftStorySharePrivacy,
@@ -4060,6 +3976,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                             pendingStoryAudio!,
                           );
                           pendingStoryAudio = null;
+                          giftStoryMusicEnabled = true;
                         }
                       } catch (error) {
                         setDialogState(() {
@@ -4093,16 +4010,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         'giftStoryPhotoUrls': storyPhotos.toSet().toList(),
                         'giftStoryCircumMessage': circumMessage.text.trim(),
                         'giftStoryMusicEnabled': giftStoryMusicEnabled,
-                        'giftStoryMusicProvider': giftStoryMusicProvider,
-                        'giftStoryMusicExternalUrl': dspTrackLink.text.trim(),
-                        'giftStoryMusicProviderTrackId':
-                            _giftStoryProviderTrackId(
-                                giftStoryMusicProvider, dspTrackLink.text),
-                        'giftStorySoundtrackId': giftStorySoundtrackId,
                         'giftStoryCustomAudioUrl': giftStoryCustomAudioUrl,
-                        'giftStorySoundtrack':
-                            _giftStorySoundtrackById(giftStorySoundtrackId)
-                                .toMap(),
                         'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
                         if (generatedRecommendation != null) ...{
                           'irisGiftRecommendation': generatedRecommendation,
@@ -4159,7 +4067,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     caption.dispose();
     approvedCaption.dispose();
     circumMessage.dispose();
-    dspTrackLink.dispose();
     tiktok.dispose();
     instagram.dispose();
     youtube.dispose();
@@ -7648,129 +7555,6 @@ String _formatGiftRecommendationForAdmin(GiftRecommendationResult result) {
   return buffer.toString().trim();
 }
 
-class _GiftStorySoundtrack {
-  final String id;
-  final String title;
-  final String mood;
-  final String audioUrl;
-  final Duration duration;
-  final bool isDefault;
-  final bool isActive;
-
-  const _GiftStorySoundtrack({
-    required this.id,
-    required this.title,
-    required this.mood,
-    required this.audioUrl,
-    required this.duration,
-    required this.isDefault,
-    required this.isActive,
-  });
-
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'title': title,
-        'mood': mood,
-        'audioUrl': audioUrl,
-        'duration': duration.inSeconds,
-        'isDefault': isDefault,
-        'isActive': isActive,
-      };
-}
-
-const giftStorySoundtracks = <_GiftStorySoundtrack>[
-  _GiftStorySoundtrack(
-    id: 'circum_warm',
-    title: 'Warm Arrival',
-    mood: 'Warm',
-    audioUrl: '',
-    duration: Duration(seconds: 45),
-    isDefault: true,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_celebration',
-    title: 'Celebration Lift',
-    mood: 'Celebration',
-    audioUrl: '',
-    duration: Duration(seconds: 48),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_emotional',
-    title: 'Quiet Meaning',
-    mood: 'Emotional',
-    audioUrl: '',
-    duration: Duration(seconds: 52),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_elegant',
-    title: 'Elegant Reveal',
-    mood: 'Elegant',
-    audioUrl: '',
-    duration: Duration(seconds: 50),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_cinematic',
-    title: 'Cinematic Glow',
-    mood: 'Cinematic',
-    audioUrl: '',
-    duration: Duration(seconds: 55),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_birthday',
-    title: 'Birthday Spark',
-    mood: 'Birthday',
-    audioUrl: '',
-    duration: Duration(seconds: 48),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_romantic',
-    title: 'Romantic Light',
-    mood: 'Romantic',
-    audioUrl: '',
-    duration: Duration(seconds: 52),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_christmas',
-    title: 'Christmas Warmth',
-    mood: 'Christmas',
-    audioUrl: '',
-    duration: Duration(seconds: 50),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_graduation',
-    title: 'Graduation Rise',
-    mood: 'Graduation',
-    audioUrl: '',
-    duration: Duration(seconds: 49),
-    isDefault: false,
-    isActive: true,
-  ),
-  _GiftStorySoundtrack(
-    id: 'circum_thank_you',
-    title: 'Thank You',
-    mood: 'Thank You',
-    audioUrl: '',
-    duration: Duration(seconds: 46),
-    isDefault: false,
-    isActive: true,
-  ),
-];
-
 class _GiftStoryOutputDraft {
   final String senderName;
   final String recipientName;
@@ -7778,7 +7562,7 @@ class _GiftStoryOutputDraft {
   final String occasion;
   final String story;
   final List<String> interests;
-  final String soundtrackCategory;
+  final String? audioUrl;
   final List<String> photoUrls;
   final bool deliveryCompleted;
   final String? renderedVideoUrl;
@@ -7790,7 +7574,7 @@ class _GiftStoryOutputDraft {
     required this.occasion,
     required this.story,
     required this.interests,
-    required this.soundtrackCategory,
+    this.audioUrl,
     required this.photoUrls,
     required this.deliveryCompleted,
     this.renderedVideoUrl,
@@ -7814,54 +7598,12 @@ List<String> _giftStringList(dynamic value) {
   return const [];
 }
 
-String _giftStorySoundtrackId(String id) {
-  final normalized = id.trim();
-  if (giftStorySoundtracks.any((track) => track.id == normalized)) {
-    return normalized;
-  }
-  return giftStorySoundtracks.firstWhere((track) => track.isDefault).id;
-}
-
-String _giftStoryMusicProvider(String provider) {
-  final normalized = provider.trim().toLowerCase().replaceAll('-', '_');
-  if (const ['spotify', 'apple_music', 'circum', 'upload']
-      .contains(normalized)) {
-    return normalized;
-  }
-  return 'circum';
-}
-
 String _giftStorySharePrivacy(String value) {
   final normalized = value.trim().toLowerCase().replaceAll('-', '_');
   if (const ['public', 'unlisted', 'private'].contains(normalized)) {
     return normalized;
   }
   return 'unlisted';
-}
-
-String _giftStoryProviderTrackId(String provider, String externalUrl) {
-  final url = externalUrl.trim();
-  if (url.isEmpty) return '';
-  final uri = Uri.tryParse(url);
-  if (uri == null) return '';
-  if (provider == 'spotify') {
-    final segments = uri.pathSegments;
-    final trackIndex = segments.indexOf('track');
-    if (trackIndex >= 0 && trackIndex + 1 < segments.length) {
-      return segments[trackIndex + 1];
-    }
-  }
-  if (provider == 'apple_music') {
-    final i = uri.queryParameters['i'];
-    if (i != null && i.isNotEmpty) return i;
-    if (uri.pathSegments.isNotEmpty) return uri.pathSegments.last;
-  }
-  return uri.pathSegments.isNotEmpty ? uri.pathSegments.last : url;
-}
-
-_GiftStorySoundtrack _giftStorySoundtrackById(String id) {
-  final normalized = _giftStorySoundtrackId(id);
-  return giftStorySoundtracks.firstWhere((track) => track.id == normalized);
 }
 
 const _unsupportedGiftStoryAudioMessage =
@@ -7966,47 +7708,6 @@ Future<void> _probeGiftStoryAudioUrl(String url) async {
   });
   audio.load();
   return completer.future;
-}
-
-String _generatedGiftStoryToneDataUri(String id) {
-  final frequency = switch (id) {
-    'circum_celebration' => 660.0,
-    'circum_emotional' => 392.0,
-    'circum_elegant' => 523.25,
-    'circum_cinematic' => 330.0,
-    _ => 440.0,
-  };
-  const sampleRate = 8000;
-  const seconds = 3;
-  final sampleCount = sampleRate * seconds;
-  final dataSize = sampleCount * 2;
-  final bytes = ByteData(44 + dataSize);
-  void writeAscii(int offset, String value) {
-    for (var i = 0; i < value.length; i++) {
-      bytes.setUint8(offset + i, value.codeUnitAt(i));
-    }
-  }
-
-  writeAscii(0, 'RIFF');
-  bytes.setUint32(4, 36 + dataSize, Endian.little);
-  writeAscii(8, 'WAVE');
-  writeAscii(12, 'fmt ');
-  bytes.setUint32(16, 16, Endian.little);
-  bytes.setUint16(20, 1, Endian.little);
-  bytes.setUint16(22, 1, Endian.little);
-  bytes.setUint32(24, sampleRate, Endian.little);
-  bytes.setUint32(28, sampleRate * 2, Endian.little);
-  bytes.setUint16(32, 2, Endian.little);
-  bytes.setUint16(34, 16, Endian.little);
-  writeAscii(36, 'data');
-  bytes.setUint32(40, dataSize, Endian.little);
-  for (var i = 0; i < sampleCount; i++) {
-    final t = i / sampleRate;
-    final envelope = math.sin(math.pi * math.min(t / seconds, 1));
-    final tone = math.sin(2 * math.pi * frequency * t) * 0.20 * envelope;
-    bytes.setInt16(44 + (i * 2), (tone * 32767).round(), Endian.little);
-  }
-  return 'data:audio/wav;base64,${base64Encode(bytes.buffer.asUint8List())}';
 }
 
 class _AdminGiftStoryPhotoUploader extends StatelessWidget {
@@ -31596,14 +31297,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   String _anonymousGiftType = 'direct';
   String _senderRevealMode = 'anonymous_until_consent';
   String _selfGiftFrequency = 'one_off';
-  String _giftStorySoundtrackId = 'circum_warm';
-  bool _giftStoryMusicEnabled = true;
-  String _giftStoryMusicProvider = 'circum';
-  final _giftStoryMusicExternalUrl = TextEditingController();
   final _customInterest = TextEditingController();
   final Set<String> _expandedInterestGroups = {'Style & beauty'};
-  XFile? _giftStoryCustomMusic;
-  String? _giftStoryMusicError;
   int _giftStep = 0;
   DateTime? _deliveryDate;
   final Set<String> _interests = {};
@@ -31975,7 +31670,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _favouriteColours,
       _likedBrands,
       _dislikedBrands,
-      _giftStoryMusicExternalUrl,
       _customInterest,
       _previewEmail,
       _previewPassword
@@ -32102,90 +31796,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     if (photo != null && mounted) setState(() => _photo = photo);
   }
 
-  Future<XFile?> _pickGiftStoryAudio() async {
-    final completer = Completer<XFile?>();
-    final input = html.FileUploadInputElement()
-      ..accept =
-          'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/aac,.mp3,.m4a,.wav,.aac';
-    input.onChange.first.then((_) {
-      final file = input.files?.isNotEmpty == true ? input.files!.first : null;
-      if (file == null) {
-        completer.complete(null);
-        return;
-      }
-      debugPrint(
-          'Gift Story sender audio selected: name=${file.name}, type=${file.type}, size=${file.size}');
-      final reader = html.FileReader();
-      reader.onLoadEnd.first.then((_) {
-        final bytes = _bytesFromFileReaderResult(reader.result);
-        if (bytes == null) {
-          completer.completeError(StateError(
-              'Corrupted file: the browser could not read this audio file.'));
-          return;
-        }
-        debugPrint(
-            'Gift Story sender audio read: name=${file.name}, bytes=${bytes.length}, type=${file.type}');
-        completer.complete(XFile.fromData(
-          bytes,
-          name: file.name,
-          mimeType: file.type.isEmpty ? 'audio/mpeg' : file.type,
-        ));
-      });
-      reader.onError.first.then(
-        (_) => completer.completeError(StateError(
-            'Corrupted file: the browser could not read this audio file.')),
-      );
-      reader.readAsArrayBuffer(file);
-    });
-    input.click();
-    return completer.future;
-  }
-
-  Future<String> _uploadSenderGiftStoryAudio(
-    String userId,
-    String giftDraftId,
-    XFile file,
-  ) async {
-    final extension = _giftStoryAudioExtension(file.name, file.mimeType);
-    if (extension == null) throw StateError(_unsupportedGiftStoryAudioMessage);
-    final bytes = await file.readAsBytes();
-    debugPrint(
-        'Gift Story sender audio upload starting: name=${file.name}, mime=${file.mimeType}, ext=$extension, size=${bytes.length}');
-    if (bytes.length > 20 * 1024 * 1024) {
-      throw StateError('${file.name} is larger than 20 MB.');
-    }
-    final contentType = _giftStoryAudioContentType(extension);
-    final ref = FirebaseStorage.instance.ref(
-      'gift_requests/$userId/$giftDraftId/story_music.$extension',
-    );
-    try {
-      await ref.putData(
-        bytes,
-        SettableMetadata(
-          contentType: contentType,
-          customMetadata: {
-            'purpose': 'gift_story_sender_custom_music',
-            'originalFilename': file.name,
-          },
-        ),
-      );
-      final metadata = await ref.getMetadata();
-      final url = await ref.getDownloadURL();
-      debugPrint(
-          'Gift Story sender audio uploaded: path=${metadata.fullPath}, size=${metadata.size}, contentType=${metadata.contentType}, url=$url');
-      await _probeGiftStoryAudioUrl(url);
-      return url;
-    } on FirebaseException catch (error) {
-      debugPrint(
-          'Gift Story sender audio storage error: code=${error.code}, message=${error.message}');
-      throw StateError(
-          'Storage permission error: ${error.message ?? error.code}');
-    } catch (error) {
-      debugPrint('Gift Story sender audio upload/decode error: $error');
-      rethrow;
-    }
-  }
-
   Future<void> _submit() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -32261,7 +31871,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       final doc =
           FirebaseFirestore.instance.collection('giftPaymentDrafts').doc();
       final photoUrls = <String>[];
-      String? customAudioUrl;
       if (_photo != null) {
         final bytes = await _photo!.readAsBytes();
         if (bytes.length > 8 * 1024 * 1024) {
@@ -32271,13 +31880,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             .ref('gift_requests/${user.uid}/${doc.id}.jpg');
         await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
         photoUrls.add(await ref.getDownloadURL());
-      }
-      if (_giftStoryCustomMusic != null) {
-        customAudioUrl = await _uploadSenderGiftStoryAudio(
-          user.uid,
-          doc.id,
-          _giftStoryCustomMusic!,
-        );
       }
       await doc.set({
         'senderId': user.uid,
@@ -32343,17 +31945,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'giftStoryApproved': true,
         'giftStoryShareEnabled': true,
         'giftStorySharePrivacy': 'unlisted',
-        'giftStoryMusicEnabled': _giftStoryMusicEnabled,
-        'giftStoryMusicProvider': _giftStoryMusicProvider,
-        'giftStoryMusicExternalUrl': _giftStoryMusicExternalUrl.text.trim(),
-        'giftStoryMusicProviderTrackId': _giftStoryProviderTrackId(
-            _giftStoryMusicProvider, _giftStoryMusicExternalUrl.text),
-        'giftStorySoundtrackId':
-            _giftStoryMusicEnabled ? _giftStorySoundtrackId : 'circum_warm',
-        'giftStoryCustomAudioUrl': customAudioUrl,
-        'giftStorySoundtrack': _giftStorySoundtrackById(
-          _giftStoryMusicEnabled ? _giftStorySoundtrackId : 'circum_warm',
-        ).toMap(),
+        'giftStoryMusicEnabled': false,
+        'giftStoryCustomAudioUrl': null,
         'giftStoryRevealViewedAt': null,
         'senderMessageText': _personalMessage.text.trim(),
         'senderMessageVideoUrl': '',
@@ -33222,8 +32815,9 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       story: '${request['senderMessageText'] ?? request['notes'] ?? ''}',
       interests: _giftStringList(
           request['interestTags'] ?? request['interests'] ?? const []),
-      soundtrackCategory:
-          '${request['giftStorySoundtrackId'] ?? 'circum_warm'}',
+      audioUrl: '${request['giftStoryCustomAudioUrl'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${request['giftStoryCustomAudioUrl']}',
       photoUrls: _giftStringList(
           request['giftStoryPhotos'] ?? request['approvedGiftPhotoUrls']),
       deliveryCompleted: status == 'delivered' || status == 'completed',
@@ -33679,105 +33273,6 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
             ),
-          ),
-          const SizedBox(height: 14),
-          _giftStorySoundtrackSelector(colors),
-        ],
-      ),
-    );
-  }
-
-  Widget _giftStorySoundtrackSelector(_CircumColors colors) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [
-            colors.adminAccent.withValues(alpha: 0.14),
-            colors.field.withValues(alpha: 0.70),
-          ],
-        ),
-        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.20)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Circum Sound Library',
-              style:
-                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text(
-            'Choose the feeling for the Gift Story, or leave it silent.',
-            style: TextStyle(color: colors.mutedText, height: 1.35),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ChoiceChip(
-                label: const Text('No music'),
-                selected: !_giftStoryMusicEnabled,
-                onSelected: (_) => setState(() {
-                  _giftStoryMusicEnabled = false;
-                  _giftStoryMusicProvider = 'circum';
-                }),
-              ),
-              for (final track in giftStorySoundtracks)
-                ChoiceChip(
-                  label: Text(track.mood),
-                  selected: _giftStoryMusicEnabled &&
-                      _giftStorySoundtrackId == track.id,
-                  onSelected: (_) => setState(() {
-                    _giftStoryMusicEnabled = true;
-                    _giftStoryMusicProvider = 'circum';
-                    _giftStorySoundtrackId = track.id;
-                  }),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text('Download and add your own music later',
-              style:
-                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text(
-            'After Circum creates your Gift Story, you can download it and add any music you like on your preferred social media or preferred editor.',
-            style: TextStyle(
-              color: colors.mutedText,
-              fontSize: 12,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ExpansionTile(
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: EdgeInsets.zero,
-            title: Text('Royalty-free soundtrack shortlist',
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
-            subtitle: Text('Instrumental working titles for the library',
-                style: TextStyle(color: colors.mutedText)),
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: const [
-                  'Bright Arrival',
-                  'A Little Celebration',
-                  'Meaningful Moments',
-                  'Afterglow',
-                  'The Big Reveal',
-                  'Birthday Spark',
-                  'Always You',
-                  'Winter Lights',
-                  'Next Chapter',
-                  'With Gratitude',
-                ].map((title) => Chip(label: Text(title))).toList(),
-              ),
-            ],
           ),
         ],
       ),
@@ -35104,21 +34599,17 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   late bool _musicEnabled;
   late bool _muted;
   late bool _playing;
-  late String _soundtrackId;
   late String _sharePrivacy;
   html.AudioElement? _audio;
   String? _musicPrompt;
-  bool _customAudioFailed = false;
 
   @override
   void initState() {
     super.initState();
-    _musicEnabled = widget.gift['giftStoryMusicEnabled'] != false;
+    _musicEnabled = widget.gift['giftStoryMusicEnabled'] == true &&
+        '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim().isNotEmpty;
     _muted = false;
     _playing = false;
-    _soundtrackId = _giftStorySoundtrackId(
-      '${widget.gift['recipientGiftStorySoundtrackOverride'] ?? widget.gift['giftStorySoundtrackId'] ?? ''}',
-    );
     _sharePrivacy =
         _giftStorySharePrivacy('${widget.gift['giftStorySharePrivacy'] ?? ''}');
     _markRevealViewed();
@@ -35409,15 +34900,12 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       .replaceAll("'", '&apos;');
 
   String _currentAudioUrl() {
-    final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
-    if (custom.isNotEmpty && !_customAudioFailed) return custom;
-    final track = _giftStorySoundtrackById(_soundtrackId);
-    if (track.audioUrl.trim().isNotEmpty) return track.audioUrl.trim();
-    return _generatedGiftStoryToneDataUri(track.id);
+    return '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
   }
 
   Future<void> _ensureAudio() async {
     final url = _currentAudioUrl();
+    if (url.isEmpty) return;
     final existing = _audio;
     if (existing != null && existing.src == url) {
       existing.muted = _muted;
@@ -35431,26 +34919,21 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       ..preload = 'auto';
     audio.onError.listen((_) {
       if (!mounted) return;
-      final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
-      final wasCustom = custom.isNotEmpty && url == custom;
       setState(() {
-        if (wasCustom) _customAudioFailed = true;
         _playing = false;
+        _musicEnabled = false;
         _audio = null;
-        _musicPrompt = wasCustom
-            ? 'Uploaded music could not play, so Circum switched to the selected soundtrack.'
-            : 'Music could not play, so the story will continue silently.';
+        _musicPrompt =
+            'Audio could not play. The story will continue silently.';
       });
       debugPrint(
-          'Gift Story audio playback error: custom=$wasCustom, network=${audio.networkState}, ready=${audio.readyState}, src=${audio.src}');
+          'Gift Story audio playback error: network=${audio.networkState}, ready=${audio.readyState}, src=${audio.src}');
     });
     _audio = audio;
   }
 
   Future<void> _togglePlayback() async {
-    if (!_musicEnabled) {
-      setState(() => _musicEnabled = true);
-    }
+    if (!_musicEnabled || _currentAudioUrl().isEmpty) return;
     if (_playing) {
       _audio?.pause();
       setState(() {
@@ -35469,16 +34952,12 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       });
     } catch (error) {
       if (!mounted) return;
-      final custom = '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
       setState(() {
-        if (custom.isNotEmpty && !_customAudioFailed) {
-          _customAudioFailed = true;
-          _audio = null;
-        }
         _playing = false;
-        _musicPrompt = custom.isNotEmpty
-            ? 'Uploaded music could not play yet. Tap play again to use the Circum soundtrack.'
-            : 'Tap play to start music.';
+        _musicEnabled = false;
+        _audio = null;
+        _musicPrompt =
+            'Audio could not play. The story will continue silently.';
       });
       debugPrint('Gift Story audio play failed: $error');
     }
@@ -35488,13 +34967,11 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     final nextMuted = !_muted;
     _audio?.muted = nextMuted;
     setState(() {
-      _musicEnabled = true;
       _muted = nextMuted;
     });
   }
 
   Widget _musicControls(_CircumColors colors) {
-    final track = _giftStorySoundtrackById(_soundtrackId);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -35507,7 +34984,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         children: [
           IconButton(
             tooltip: _playing ? 'Pause music' : 'Play music',
-            onPressed: _musicEnabled ? _togglePlayback : null,
+            onPressed: _togglePlayback,
             icon: Icon(
               _playing ? Icons.pause : Icons.play_arrow,
               color: Colors.white,
@@ -35515,46 +34992,15 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           ),
           IconButton(
             tooltip: _muted ? 'Unmute music' : 'Mute music',
-            onPressed: _musicEnabled ? _toggleMute : null,
+            onPressed: _toggleMute,
             icon: Icon(
               _muted || !_musicEnabled ? Icons.volume_off : Icons.volume_up,
               color: Colors.white,
             ),
           ),
-          PopupMenuButton<String>(
-            tooltip: 'Change soundtrack',
-            enabled: _musicEnabled,
-            color: const Color(0xff101827),
-            icon: const Icon(Icons.music_note, color: Colors.white),
-            onSelected: (id) => setState(() {
-              _soundtrackId = id;
-              _musicEnabled = true;
-              _customAudioFailed = true;
-              _playing = false;
-              _audio?.pause();
-              _audio = null;
-            }),
-            itemBuilder: (context) => giftStorySoundtracks
-                .where((track) => track.isActive)
-                .map((track) => PopupMenuItem(
-                      value: track.id,
-                      child: Text('${track.mood} · ${track.title}'),
-                    ))
-                .toList(),
-          ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 150),
-            child: Text(
-              _musicEnabled
-                  ? '${track.mood}${track.audioUrl.isEmpty ? ' · preview' : ''}'
-                  : 'No music',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
+          const Text('Audio',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -35989,10 +35435,11 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: _musicControls(colors),
-                      ),
+                      if (_musicEnabled)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: _musicControls(colors),
+                        ),
                       if (_musicPrompt != null) ...[
                         const SizedBox(height: 8),
                         Text(
