@@ -22,6 +22,7 @@ const rothLedger = require("./roth-ledger");
 const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
+const giftStoryAutomation = require("./gift-story-automation");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -67,6 +68,17 @@ exports.activateReferralOnHealthPlusCompleted = referrals.activateReferralOnHeal
 exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
 exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
 exports.onHealthPaymentMovementWrite = movementLedger.onHealthPaymentMovementWrite;
+exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;
+exports.resolveGiftStoryAccess = giftStoryAutomation.resolveGiftStoryAccess;
+exports.recordGiftStoryEvent = giftStoryAutomation.recordGiftStoryEvent;
+exports.updateGiftStoryPrivacy = giftStoryAutomation.updateGiftStoryPrivacy;
+exports.retryGiftStoryAutomation = giftStoryAutomation.retryGiftStoryAutomation;
+exports.manageGiftStoryAccess = giftStoryAutomation.manageGiftStoryAccess;
+exports.createGiftStoryVideoUpload = giftStoryAutomation.createGiftStoryVideoUpload;
+exports.finalizeGiftStoryVideoUpload = giftStoryAutomation.finalizeGiftStoryVideoUpload;
+exports.getGiftStoryVideoDownload = giftStoryAutomation.getGiftStoryVideoDownload;
+exports.giftStoryLanding = giftStoryAutomation.giftStoryLanding;
+exports.cleanupExpiredGiftStories = giftStoryAutomation.cleanupExpiredGiftStories;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

@@ -3709,6 +3709,99 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         setDialogState(() => giftStoryShareEnabled = value),
                     title: const Text('Allow story sharing'),
                   ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _HealthChip(
+                          label:
+                              'Views ${(item['giftStoryViews'] as num?)?.toInt() ?? 0}'),
+                      _HealthChip(
+                          label:
+                              'Shares ${(item['giftStoryShares'] as num?)?.toInt() ?? 0}'),
+                      _HealthChip(
+                          label:
+                              'Downloads ${(item['giftStoryDownloads'] as num?)?.toInt() ?? 0}'),
+                      _HealthChip(
+                          label:
+                              'Watch completion ${((((item['giftStoryCompletedViews'] as num?)?.toDouble() ?? 0) / math.max(1, (item['giftStoryViews'] as num?)?.toDouble() ?? 0)) * 100).clamp(0, 100).toStringAsFixed(0)}%'),
+                      _HealthChip(
+                          label:
+                              'Video ${item['giftStoryVideoStatus'] ?? 'not rendered'}'),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if ('${item['giftStoryAutomationStatus']}' ==
+                              'retry_required' ||
+                          '${item['giftStoryEmailStatus']}' == 'retry_required')
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            await FirebaseFunctions.instanceFor(
+                                    region: 'us-central1')
+                                .httpsCallable('retryGiftStoryAutomation')
+                                .call({'giftRequestId': '${item['id']}'});
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Gift Story automation queued again.')),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry story/email'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            FirebaseFunctions.instanceFor(region: 'us-central1')
+                                .httpsCallable('retryGiftStoryAutomation')
+                                .call({
+                          'giftRequestId': '${item['id']}',
+                          'regenerateToken': true,
+                        }),
+                        icon: const Icon(Icons.link),
+                        label: const Text('Regenerate link'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            FirebaseFunctions.instanceFor(region: 'us-central1')
+                                .httpsCallable('manageGiftStoryAccess')
+                                .call({
+                          'giftRequestId': '${item['id']}',
+                          'action': 'extend',
+                        }),
+                        icon: const Icon(Icons.schedule),
+                        label: const Text('Extend 48 hours'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            FirebaseFunctions.instanceFor(region: 'us-central1')
+                                .httpsCallable('manageGiftStoryAccess')
+                                .call({
+                          'giftRequestId': '${item['id']}',
+                          'action': 'revoke',
+                        }),
+                        icon: const Icon(Icons.link_off),
+                        label: const Text('Revoke link'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            FirebaseFunctions.instanceFor(region: 'us-central1')
+                                .httpsCallable('manageGiftStoryAccess')
+                                .call({
+                          'giftRequestId': '${item['id']}',
+                          'action': 'delete_assets',
+                        }),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Delete story assets'),
+                      ),
+                    ],
+                  ),
                   DropdownButtonFormField<String>(
                     initialValue: giftStorySharePrivacy,
                     decoration:
@@ -3725,7 +3818,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     ],
                     onChanged: (value) => setDialogState(() =>
                         giftStorySharePrivacy =
-                            _giftStorySharePrivacy(value ?? 'unlisted')),
+                            _giftStorySharePrivacy(value ?? 'private')),
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -4135,43 +4228,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     if (nowPosted && '${result['brandName'] ?? ''}'.trim().isNotEmpty) {
       await _recordGiftBrandExposure('${item['id']}', result);
     }
-    final wasGiftComplete = _giftStoryStatusIsComplete('${item['status']}');
-    final isGiftComplete = _giftStoryStatusIsComplete('${result['status']}');
-    if (isGiftComplete && !wasGiftComplete) {
-      await _queueGiftStoryEmails('${item['id']}', {...item, ...result});
-    }
     await _loadAdminData();
-  }
-
-  bool _giftStoryStatusIsComplete(String status) {
-    final normalized = status.trim().toLowerCase();
-    return normalized == 'delivered' ||
-        normalized == 'completed' ||
-        normalized == 'complete' ||
-        normalized == 'out_for_delivery_delivered';
-  }
-
-  Future<void> _queueGiftStoryEmails(
-      String giftRequestId, Map<String, dynamic> gift) async {
-    final storyLink =
-        'https://circumuk.com/?app=gifts&giftStory=$giftRequestId';
-    final recipients = <String>{
-      '${gift['senderEmail'] ?? ''}'.trim().toLowerCase(),
-      '${gift['recipientEmail'] ?? gift['recipientContact'] ?? ''}'
-          .trim()
-          .toLowerCase(),
-    }..removeWhere((email) => email.isEmpty || !email.contains('@'));
-    for (final email in recipients) {
-      await FirebaseFirestore.instance.collection('emailQueue').add({
-        'to': email,
-        'subject': 'Open Gift Story',
-        'body':
-            'Hello,\n\nYour Gifts by Circum story is ready.\n\nOpen Gift Story:\n$storyLink\n\nDownload Story and Share Story options are available inside the story viewer.\n\nThoughtful gifting, delivered by Circum.\n\n— Circum',
-        'type': 'gift_story_ready',
-        'giftRequestId': giftRequestId,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
   }
 
   Future<void> _recordGiftBrandExposure(
@@ -7720,7 +7777,7 @@ String _giftStorySharePrivacy(String value) {
   if (const ['public', 'unlisted', 'private'].contains(normalized)) {
     return normalized;
   }
-  return 'unlisted';
+  return 'private';
 }
 
 const _unsupportedGiftStoryAudioMessage =
@@ -31804,6 +31861,25 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
 
   Future<void> _loadAccountAndRequests() async {
     await _ensureCircumFirebaseReady();
+    final storyToken = Uri.base.queryParameters['giftStoryToken'];
+    if (storyToken != null && storyToken.trim().isNotEmpty) {
+      try {
+        final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('resolveGiftStoryAccess');
+        final result = await callable.call({'token': storyToken.trim()});
+        final payload = Map<String, dynamic>.from(result.data as Map);
+        final story = Map<String, dynamic>.from(payload['story'] as Map);
+        if (mounted && _giftStoryCanOpen(story)) {
+          setState(() => _activeGiftStory = story);
+        }
+      } catch (error) {
+        debugPrint('Gift Story secure link error: $error');
+        if (mounted) {
+          setState(() => _message =
+              'This Gift Story link is invalid, expired, or not available yet.');
+        }
+      }
+    }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     _senderEmail.text = user.email ?? '';
@@ -32067,7 +32143,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'giftStoryEnabled': true,
         'giftStoryApproved': true,
         'giftStoryShareEnabled': true,
-        'giftStorySharePrivacy': 'unlisted',
+        'giftStorySharePrivacy': 'private',
         'giftStoryMusicEnabled': false,
         'giftStoryCustomAudioUrl': null,
         'giftStoryRevealViewedAt': null,
@@ -34727,6 +34803,8 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   String? _musicPrompt;
   bool _exportingVideo = false;
   double _exportProgress = 0;
+  bool _storyPlayRecorded = false;
+  bool _storyCompletionRecorded = false;
 
   @override
   void initState() {
@@ -34883,7 +34961,16 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   }
 
   void _next() {
-    setState(() => _chapter = math.min(_chapter + 1, _chapters.length - 1));
+    final next = math.min(_chapter + 1, _chapters.length - 1);
+    setState(() => _chapter = next);
+    if (!_storyPlayRecorded) {
+      _storyPlayRecorded = true;
+      unawaited(_recordStoryEvent('play'));
+    }
+    if (next == _chapters.length - 1 && !_storyCompletionRecorded) {
+      _storyCompletionRecorded = true;
+      unawaited(_recordStoryEvent('complete'));
+    }
   }
 
   void _previous() {
@@ -34891,12 +34978,33 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   }
 
   String get _storyLink {
+    final token = _storyAccessToken;
+    if (token.isNotEmpty) {
+      return 'https://circumuk.com/story/${Uri.encodeComponent(token)}';
+    }
     final id = '${widget.gift['id'] ?? ''}';
     return 'https://circumuk.com/?app=gifts&giftStory=$id';
   }
 
+  String get _storyAccessToken =>
+      '${widget.gift['giftStoryAccessToken'] ?? Uri.base.queryParameters['giftStoryToken'] ?? ''}'
+          .trim();
+
+  Future<void> _recordStoryEvent(String event) async {
+    final token = _storyAccessToken;
+    if (token.isEmpty || widget.adminPreview) return;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('recordGiftStoryEvent')
+          .call({'token': token, 'event': event});
+    } catch (error) {
+      debugPrint('Gift Story analytics event failed: $event ($error)');
+    }
+  }
+
   Future<void> _copyStoryLink() async {
     await Clipboard.setData(ClipboardData(text: _storyLink));
+    unawaited(_recordStoryEvent('share'));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Gift Story link copied.')),
@@ -34958,10 +35066,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     final id = '${widget.gift['id'] ?? ''}';
     if (id.isEmpty || widget.adminPreview) return;
     try {
-      await FirebaseFirestore.instance.collection('giftRequests').doc(id).set({
-        'giftStorySharePrivacy': next,
-        'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateGiftStoryPrivacy')
+          .call({
+        'giftRequestId': id,
+        'token': _storyAccessToken,
+        'privacy': next,
+      });
     } catch (error) {
       debugPrint('Gift Story privacy update failed: $error');
     }
@@ -34977,7 +35088,15 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       _exportProgress = 0;
     });
     try {
-      final result = await _renderStoryVideo();
+      final result = await _loadStoredStoryVideo() ?? await _renderStoryVideo();
+      if ('${widget.gift['giftStoryVideoStatus'] ?? ''}' != 'ready') {
+        try {
+          await _persistRenderedStoryVideo(result);
+        } catch (error) {
+          debugPrint(
+              'Gift Story temporary video storage failed; local export continues: $error');
+        }
+      }
       final id = '${widget.gift['id'] ?? 'story'}'
           .replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '-');
       final filename = 'circum-gift-story-$id.${result.extension}';
@@ -34989,6 +35108,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             'text': 'Created with Gifts by Circum.',
             'files': [file],
           });
+          unawaited(_recordStoryEvent('share'));
         } catch (error) {
           _downloadVideoBlob(result.blob, filename);
           if (mounted) {
@@ -35002,6 +35122,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         }
       } else {
         _downloadVideoBlob(result.blob, filename);
+        unawaited(_recordStoryEvent('download'));
       }
       if (mounted && notice != null) {
         ScaffoldMessenger.of(context)
@@ -35033,6 +35154,63 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       const Duration(seconds: 2),
       () => html.Url.revokeObjectUrl(url),
     );
+  }
+
+  Future<_GiftStoryVideoResult?> _loadStoredStoryVideo() async {
+    if ('${widget.gift['giftStoryVideoStatus'] ?? ''}' != 'ready') return null;
+    final giftId = '${widget.gift['id'] ?? ''}'.trim();
+    if (giftId.isEmpty) return null;
+    try {
+      final response =
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('getGiftStoryVideoDownload')
+              .call({
+        'giftRequestId': giftId,
+        'token': _storyAccessToken,
+      });
+      final payload = Map<String, dynamic>.from(response.data as Map);
+      final mime = '${payload['mime'] ?? 'video/webm'}';
+      final request = await html.HttpRequest.request(
+        '${payload['downloadUrl']}',
+        responseType: 'blob',
+      );
+      final blob = request.response as html.Blob?;
+      if (blob == null || blob.size == 0) return null;
+      return _GiftStoryVideoResult(
+        blob: blob,
+        mime: mime,
+        extension: mime.startsWith('video/mp4') ? 'mp4' : 'webm',
+      );
+    } catch (error) {
+      debugPrint(
+          'Stored Gift Story video unavailable; rendering again: $error');
+      return null;
+    }
+  }
+
+  Future<void> _persistRenderedStoryVideo(_GiftStoryVideoResult result) async {
+    final giftId = '${widget.gift['id'] ?? ''}'.trim();
+    if (giftId.isEmpty) return;
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+    final upload =
+        await functions.httpsCallable('createGiftStoryVideoUpload').call({
+      'giftRequestId': giftId,
+      'token': _storyAccessToken,
+      'extension': result.extension,
+    });
+    final payload = Map<String, dynamic>.from(upload.data as Map);
+    await html.HttpRequest.request(
+      '${payload['uploadUrl']}',
+      method: 'PUT',
+      requestHeaders: {'Content-Type': result.mime},
+      sendData: result.blob,
+    );
+    await functions.httpsCallable('finalizeGiftStoryVideoUpload').call({
+      'giftRequestId': giftId,
+      'token': _storyAccessToken,
+      'storagePath': payload['storagePath'],
+      'mime': result.mime,
+    });
   }
 
   Future<_GiftStoryVideoResult> _renderStoryVideo() async {
@@ -35405,7 +35583,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         ),
       ),
       child: ClipRRect(
-        key: ValueKey('${_chapter}-${chapter.photoUrl ?? chapter.title}'),
+        key: ValueKey('$_chapter-${chapter.photoUrl ?? chapter.title}'),
         borderRadius: BorderRadius.circular(34),
         child: Stack(
           fit: StackFit.expand,
@@ -35694,7 +35872,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           runSpacing: 10,
           children: [
             _storyShareButton(
-              _exportingVideo ? 'Rendering video' : 'Share Story',
+              _exportingVideo ? 'Rendering video' : 'Share',
               Icons.ios_share,
               sharingEnabled && !_exportingVideo
                   ? () => _exportStoryVideo(shareAfter: true)
@@ -35710,8 +35888,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             _storyShareButton(
               _exportingVideo
                   ? 'Rendering ${(_exportProgress * 100).round()}%'
-                  : 'Download Story',
+                  : 'Download Video',
               Icons.download,
+              _exportingVideo ? null : _exportStoryVideo,
+            ),
+            _storyShareButton(
+              'Save to Device',
+              Icons.save_alt,
               _exportingVideo ? null : _exportStoryVideo,
             ),
           ],

@@ -54,6 +54,10 @@
       ],
       "rewrites": [
         {
+          "source": "/story/**",
+          "function": "giftStoryLanding"
+        },
+        {
           "source": "**",
           "destination": "/index.html"
         }
@@ -106,6 +110,10 @@
         }
       ],
       "rewrites": [
+        {
+          "source": "/story/**",
+          "function": "giftStoryLanding"
+        },
         {
           "source": "**",
           "destination": "/index.html"
