@@ -15354,8 +15354,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return Stack(
       children: [
         LayoutBuilder(builder: (context, constraints) {
-          final desktop =
-              constraints.maxWidth >= _desktopWebBreakpoint &&
+          final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
               _step != _SenderStep.healthPlus;
           return Column(
             children: [
@@ -15401,9 +15400,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                             child: Center(
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(
-                                  maxWidth: constraints.maxWidth >= 1100
-                                      ? 560
-                                      : 430,
+                                  maxWidth:
+                                      constraints.maxWidth >= 1100 ? 560 : 430,
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(28),
@@ -15462,10 +15460,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                               ),
                             ),
                           )
-                    : SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
-                        child: _buildAnimatedStep(colors),
-                      ),
+                        : SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
+                            child: _buildAnimatedStep(colors),
+                          ),
               ),
             ],
           );
@@ -34837,7 +34835,12 @@ class _GiftStoryViewer extends StatefulWidget {
 }
 
 class _GiftStoryViewerState extends State<_GiftStoryViewer> {
+  static const _chapterDurationMs = 8000.0;
   int _chapter = 0;
+  int _transitionDirection = 1;
+  double _chapterProgress = 0;
+  int? _progressFrame;
+  num? _progressStartedAt;
   late bool _musicEnabled;
   late bool _muted;
   late bool _playing;
@@ -34859,10 +34862,14 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     _sharePrivacy =
         _giftStorySharePrivacy('${widget.gift['giftStorySharePrivacy'] ?? ''}');
     _markRevealViewed();
+    _restartChapterProgress();
   }
 
   @override
   void dispose() {
+    if (_progressFrame != null) {
+      html.window.cancelAnimationFrame(_progressFrame!);
+    }
     _audio?.pause();
     _audio = null;
     super.dispose();
@@ -34969,7 +34976,31 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         finalChapter: true,
       ),
     ];
-    return chapters;
+    return chapters.take(10).toList(growable: false);
+  }
+
+  void _restartChapterProgress() {
+    if (_progressFrame != null) {
+      html.window.cancelAnimationFrame(_progressFrame!);
+    }
+    _progressStartedAt = null;
+    if (mounted) setState(() => _chapterProgress = 0);
+    _progressFrame = html.window.requestAnimationFrame(_tickChapterProgress);
+  }
+
+  void _tickChapterProgress(num timestamp) {
+    if (!mounted) return;
+    _progressStartedAt ??= timestamp;
+    final progress =
+        ((timestamp - _progressStartedAt!) / _chapterDurationMs).clamp(0, 1);
+    setState(() => _chapterProgress = progress.toDouble());
+    if (progress >= 1) {
+      if (_chapter < _chapters.length - 1) {
+        _next();
+      }
+      return;
+    }
+    _progressFrame = html.window.requestAnimationFrame(_tickChapterProgress);
   }
 
   static List<String> _giftList(dynamic value) {
@@ -35005,7 +35036,11 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
 
   void _next() {
     final next = math.min(_chapter + 1, _chapters.length - 1);
-    setState(() => _chapter = next);
+    setState(() {
+      _transitionDirection = 1;
+      _chapter = next;
+    });
+    _restartChapterProgress();
     if (!_storyPlayRecorded) {
       _storyPlayRecorded = true;
       unawaited(_recordStoryEvent('play'));
@@ -35017,7 +35052,38 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   }
 
   void _previous() {
-    setState(() => _chapter = math.max(_chapter - 1, 0));
+    setState(() {
+      _transitionDirection = -1;
+      _chapter = math.max(_chapter - 1, 0);
+    });
+    _restartChapterProgress();
+  }
+
+  Future<void> _downloadCurrentSlide() async {
+    const width = 720;
+    const height = 1280;
+    final canvas = html.CanvasElement(width: width, height: height);
+    final photos = await _loadStoryExportPhotos();
+    final chapter = _chapters[_chapter];
+    _paintStoryVideoFrame(
+      canvas.context2D,
+      chapter,
+      _chapter,
+      _chapters.length,
+      1,
+      photos[chapter.photoUrl],
+    );
+    final blob = await canvas.toBlob('image/png');
+    final id = '${widget.gift['id'] ?? 'story'}'
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '-');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..download = 'circum-gift-story-$id-slide-${_chapter + 1}.png'
+      ..click();
+    Future<void>.delayed(
+      const Duration(seconds: 2),
+      () => html.Url.revokeObjectUrl(url),
+    );
   }
 
   String get _storyLink {
@@ -35618,12 +35684,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     final hasPhoto = chapter.photoUrl != null && chapter.photoUrl!.isNotEmpty;
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.985, end: 1).animate(animation),
-          child: child,
-        ),
+      transitionBuilder: (child, animation) => SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(_transitionDirection.toDouble(), 0),
+          end: Offset.zero,
+        ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        child: FadeTransition(opacity: animation, child: child),
       ),
       child: ClipRRect(
         key: ValueKey('$_chapter-${chapter.photoUrl ?? chapter.title}'),
@@ -35754,7 +35821,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           const SizedBox(width: 8),
           Text(
             hasPhoto ? 'Gift memory' : 'Gift Story',
-            style: const TextStyle(
+            style: GoogleFonts.dmSans(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.2,
@@ -35807,17 +35874,17 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           children: [
             Text(
               chapter.title,
-              style: GoogleFonts.dmSerifDisplay(
+              style: GoogleFonts.dmSans(
                 color: Colors.white,
                 fontSize: 38,
                 height: 1.02,
-                fontWeight: FontWeight.w400,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 16),
             Text(
               chapter.body,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.dmSans(
                 color: Colors.white.withValues(alpha: 0.88),
                 fontSize: 18,
                 height: 1.45,
@@ -35841,7 +35908,7 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                           ),
                           child: Text(
                             chip,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.dmSans(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
                             ),
@@ -35935,6 +36002,11 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                 sharingEnabled ? () => _launchStoryShare(platform.$1) : null,
               ),
             _storyShareButton('Copy Link', Icons.link, _copyStoryLink),
+            _storyShareButton(
+              'Save Current Slide',
+              Icons.image_outlined,
+              _downloadCurrentSlide,
+            ),
             _storyShareButton(
               _exportingVideo
                   ? 'Rendering ${(_exportProgress * 100).round()}%'
@@ -36048,10 +36120,19 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                                     margin: const EdgeInsets.only(right: 5),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(999),
-                                      color: index <= _chapter
-                                          ? Colors.white
-                                          : Colors.white
-                                              .withValues(alpha: 0.22),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.22),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: FractionallySizedBox(
+                                      alignment: Alignment.centerLeft,
+                                      widthFactor: index < _chapter
+                                          ? 1
+                                          : index == _chapter
+                                              ? _chapterProgress
+                                              : 0,
+                                      child:
+                                          const ColoredBox(color: Colors.white),
                                     ),
                                   ),
                                 ),
