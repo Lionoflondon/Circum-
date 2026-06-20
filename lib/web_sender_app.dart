@@ -44,6 +44,7 @@ import 'firebase_options.dart';
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
+const _vanguardAddonPriceGbp = 1.99;
 const _adminHostingTarget = bool.fromEnvironment('CIRCUM_ADMIN_HOSTING');
 const _googlePlacesApiKey = String.fromEnvironment(
   'GOOGLE_PLACES_API_KEY',
@@ -100,7 +101,16 @@ Future<void> _activateReferralSafely({
   }
 }
 
-enum _WebAppMode { landing, sender, rider, gifts, admin, terms, privacy }
+enum _WebAppMode {
+  landing,
+  sender,
+  rider,
+  gifts,
+  admin,
+  terms,
+  privacy,
+  vanguard,
+}
 
 bool _isPublicHostingHost() {
   final host = Uri.base.host.toLowerCase();
@@ -146,6 +156,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
     final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
     if (path == '/terms') return _WebAppMode.terms;
     if (path == '/privacy') return _WebAppMode.privacy;
+    if (path == '/vanguard') return _WebAppMode.vanguard;
     return switch (Uri.base.queryParameters['app']) {
       'sender' || 'health' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
@@ -248,6 +259,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     title: 'Privacy Policy',
                     documentPath: '/legal/CIRCUM_Privacy_Policy.pdf',
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
+                  ),
+                _WebAppMode.vanguard => _VanguardExplainerPage(
+                    key: const ValueKey('vanguard'),
+                    onHome: () => setState(() => _mode = _WebAppMode.landing),
                   ),
                 _WebAppMode.landing => _LandingPage(
                     key: const ValueKey('landing'),
@@ -4391,7 +4406,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
     return [
       _AdminCell.primary(
-        '${item['requestId'] ?? id}\n${_movementServiceLabel(_movementServiceType(item))}',
+        '${item['requestId'] ?? id}\n${_movementServiceLabel(_movementServiceType(item))}'
+        '${item['vanguardEnabled'] == true ? '\n🛡 Vanguard' : ''}',
       ),
       _AdminCell(_jobReceivedText(item)),
       _AdminCell(
@@ -15290,6 +15306,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _healthConsent = false;
   bool _healthSavePayment = true;
   bool _healthSubmitting = false;
+  bool _vanguardAddonSelected = false;
   String _healthPrescriptionType = 'NHS prescription';
   String _healthSubscriptionPlan = 'core';
   bool _ratingSubmitting = false;
@@ -15732,6 +15749,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           priceReady: _quoteTotal > 0,
           weightReady: _deliveryClassification.finalWeightKg > 0,
           specialHandling: _specialHandling,
+          vanguardSelected: _vanguardAddonSelected,
           pickupAccess: _pickupAccess,
           dropoffAccess: _dropoffAccess,
           onPickupAccess: (value) => setState(() => _pickupAccess = value),
@@ -15756,6 +15774,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           },
           onSpeed: (speed) => setState(() {
             _selectedSpeed = speed;
+            _checkoutState = _CheckoutState.awaitingPayment;
+          }),
+          onVanguardChanged: (selected) => setState(() {
+            _vanguardAddonSelected = selected;
             _checkoutState = _CheckoutState.awaitingPayment;
           }),
           onBack: () => setState(() => _step = _SenderStep.dashboard),
@@ -15783,6 +15805,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           weightSource: _weightSourceText,
           pricingReason: _weightPricingReason,
           specialHandling: _specialHandling,
+          vanguardSelected: _vanguardAddonSelected,
           scheduledPickupDate: _scheduledPickupDate.text.trim(),
           scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
           scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
@@ -16005,7 +16028,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   double get _quoteTotal {
-    return _quoteBreakdown.total;
+    return _quoteBreakdown.total +
+        (_vanguardAddonSelected ? _vanguardAddonPriceGbp : 0);
   }
 
   bool get _hasConfirmedWeight {
@@ -18879,6 +18903,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       description: _description.text.trim(),
       packageType: packageType,
       declaredValueGbp: null,
+      manuallySelected: _vanguardAddonSelected,
     );
     final vanguardEnabled = vanguardFields['vanguardEnabled'] == true;
     final hasPhoto = parcelPhotoData['hasPhoto'] == true;
@@ -18892,7 +18917,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       irisRecommendedVehicle,
     );
     final driverPayout = quote.totalRiderEarnings;
-    final platformRevenue = quote.totalCircumRevenue;
+    final vanguardAddon = _vanguardAddonSelected ? _vanguardAddonPriceGbp : 0.0;
+    final customerTotal = quote.total + vanguardAddon;
+    final platformRevenue = quote.totalCircumRevenue + vanguardAddon;
     final driverJobSummary = {
       'pickupDisplay': pickupAddress.compactDisplay,
       'dropoffDisplay': dropoffAddress.compactDisplay,
@@ -19146,8 +19173,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'standardPrice': standardQuote.total,
       'expressPrice': expressQuote.total,
       'basePrice': standardQuote.total,
-      'finalPrice': quote.total,
-      'finalCustomerPrice': quote.total,
+      'finalPrice': customerTotal,
+      'finalCustomerPrice': customerTotal,
       'assistedFee': quote.assistedFee,
       'heavyDutyFee': quote.heavyDutyFee,
       'twoPersonFee': quote.twoPersonFee,
@@ -19174,15 +19201,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'broadcastRank': DeliveryPricing.matchingPriorityRank(
         selectedServiceLevel,
       ),
-      'quote': quote.total,
-      'price': quote.total,
-      'fare': quote.total,
+      'quote': customerTotal,
+      'price': customerTotal,
+      'fare': customerTotal,
       'driverPayout': driverPayout,
       'riderPayout': driverPayout,
       'platformRevenue': platformRevenue,
       'platformShare': DeliveryPricing.platformDeliveryFareShare,
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
-      'pricingBreakdown': quote.toJson(),
+      'pricingBreakdown': {
+        ...quote.toJson(),
+        'vanguardAddon': vanguardAddon,
+        'totalBeforeVanguard': quote.total,
+        'total': customerTotal,
+      },
+      'vanguardAddonSelected': _vanguardAddonSelected,
+      'vanguardAddonPrice': vanguardAddon,
+      'vanguardAssignmentPolicy': 'trusted_rider_prioritisation',
       ...vanguardFields,
       'currency': 'GBP',
       'status': 'requested',
@@ -19895,6 +19930,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _assignedDriver = null;
       _assignedDriverMetric = null;
       _activeVanguardData = null;
+      _vanguardAddonSelected = false;
       _liveLocationData = null;
       _activeRequestReceivedAt = null;
       _statusIndex = 0;
@@ -26691,12 +26727,14 @@ class _VehicleStep extends StatelessWidget {
   final bool priceReady;
   final bool weightReady;
   final SpecialHandlingResult specialHandling;
+  final bool vanguardSelected;
   final DeliveryAccess pickupAccess;
   final DeliveryAccess dropoffAccess;
   final ValueChanged<DeliveryAccess> onPickupAccess;
   final ValueChanged<DeliveryAccess> onDropoffAccess;
   final ValueChanged<_VehicleOption> onVehicle;
   final ValueChanged<String> onSpeed;
+  final ValueChanged<bool> onVanguardChanged;
   final VoidCallback onBack;
   final VoidCallback onContinue;
 
@@ -26713,12 +26751,14 @@ class _VehicleStep extends StatelessWidget {
     required this.priceReady,
     required this.weightReady,
     required this.specialHandling,
+    required this.vanguardSelected,
     required this.pickupAccess,
     required this.dropoffAccess,
     required this.onPickupAccess,
     required this.onDropoffAccess,
     required this.onVehicle,
     required this.onSpeed,
+    required this.onVanguardChanged,
     required this.onBack,
     required this.onContinue,
   });
@@ -26853,6 +26893,12 @@ class _VehicleStep extends StatelessWidget {
           selected: selectedSpeed,
           onChanged: onSpeed,
         ),
+        const SizedBox(height: 14),
+        _VanguardAddonCard(
+          colors: colors,
+          selected: vanguardSelected,
+          onChanged: onVanguardChanged,
+        ),
         if (specialHandling.requiresAccessQuestions) ...[
           const SizedBox(height: 14),
           _GlassPanel(
@@ -26979,6 +27025,129 @@ class _AccessDropdown extends StatelessWidget {
   }
 }
 
+class _VanguardAddonCard extends StatelessWidget {
+  final _CircumColors colors;
+  final bool selected;
+  final ValueChanged<bool> onChanged;
+
+  const _VanguardAddonCard({
+    required this.colors,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xff3b82f6);
+    const benefits = [
+      'Trusted Rider Prioritisation',
+      'Priority support',
+      'Enhanced custody tracking',
+      'Priority dispute review',
+      'Better handling for important items',
+    ];
+    return InkWell(
+      onTap: () => onChanged(!selected),
+      borderRadius: BorderRadius.circular(24),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: Color.alphaBlend(
+            blue.withValues(alpha: selected ? 0.12 : 0.05),
+            const Color(0xff07090f).withValues(alpha: 0.88),
+          ),
+          border: Border.all(
+            color: selected
+                ? blue.withValues(alpha: 0.68)
+                : Colors.white.withValues(alpha: 0.12),
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: blue.withValues(alpha: 0.14),
+                    blurRadius: 26,
+                    offset: const Offset(0, 12),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: blue.withValues(alpha: 0.14),
+                    border: Border.all(color: blue.withValues(alpha: 0.38)),
+                  ),
+                  child: const Icon(Icons.shield_outlined, color: blue),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Add Vanguard handling +£1.99',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Switch.adaptive(
+                  value: selected,
+                  onChanged: onChanged,
+                  activeTrackColor: blue,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Vanguard gives your delivery enhanced handling, priority support, trusted rider prioritisation, and stronger custody tracking for important items.',
+              style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.78),
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: benefits
+                  .map((benefit) => _HealthChip(label: '✓ $benefit'))
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Circum prioritises experienced and highly trusted riders during assignment. Customers do not choose riders.',
+              style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.72),
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => launchUrl(
+                Uri.parse('https://circumuk.com/vanguard'),
+                mode: LaunchMode.externalApplication,
+              ),
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Learn more about Vanguard'),
+              style: TextButton.styleFrom(foregroundColor: blue),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PaymentStep extends StatelessWidget {
   final _CircumColors colors;
   final _VehicleOption vehicle;
@@ -26997,6 +27166,7 @@ class _PaymentStep extends StatelessWidget {
   final String weightSource;
   final String? pricingReason;
   final SpecialHandlingResult specialHandling;
+  final bool vanguardSelected;
   final String scheduledPickupDate;
   final String scheduledPickupWindow;
   final String scheduledDropoffDate;
@@ -27023,6 +27193,7 @@ class _PaymentStep extends StatelessWidget {
     required this.weightSource,
     required this.pricingReason,
     required this.specialHandling,
+    required this.vanguardSelected,
     required this.scheduledPickupDate,
     required this.scheduledPickupWindow,
     required this.scheduledDropoffDate,
@@ -27219,6 +27390,12 @@ class _PaymentStep extends StatelessWidget {
                       ? 'Express service'
                       : 'Special conditions',
                   value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
+                ),
+              if (vanguardSelected)
+                _PriceLine(
+                  colors: colors,
+                  label: '🛡 Vanguard',
+                  value: '£${_vanguardAddonPriceGbp.toStringAsFixed(2)}',
                 ),
               Divider(color: colors.border, height: 26),
               _PriceLine(
@@ -31628,6 +31805,391 @@ class _GlobalLegalFooter extends StatelessWidget {
       ),
     );
   }
+}
+
+class _VanguardExplainerPage extends StatelessWidget {
+  final VoidCallback onHome;
+
+  const _VanguardExplainerPage({super.key, required this.onHome});
+
+  @override
+  Widget build(BuildContext context) {
+    const navy = Color(0xff07090f);
+    const blue = Color(0xff3b82f6);
+    const features = [
+      (
+        Icons.verified_user_outlined,
+        'Trusted Rider Prioritisation',
+        'Circum prioritises experienced and highly trusted riders during assignment. Customers do not choose riders.'
+      ),
+      (
+        Icons.support_agent,
+        'Priority support',
+        'Vanguard deliveries receive priority support and dispute review.'
+      ),
+      (
+        Icons.route_outlined,
+        'Enhanced custody tracking',
+        'Clearer delivery milestones create stronger visibility from assignment to delivery.'
+      ),
+    ];
+    const timeline = [
+      'Rider assigned',
+      'Item collected',
+      'In transit',
+      'Delivery attempt',
+      'Delivered',
+    ];
+    const useCases = [
+      'Gifts and keepsakes',
+      'Signed documents',
+      'Passports and travel documents',
+      'Electronics and valuable items',
+      'Fragile items',
+      'Sentimental items',
+    ];
+    const additions = [
+      'Trusted Rider Prioritisation',
+      'Priority support',
+      'Enhanced custody tracking',
+      'Priority dispute review',
+      'Better handling for important items',
+    ];
+    const included = [
+      'Health+',
+      'Gifts by Circum',
+      'Corporate Gifts',
+      'Required high-value deliveries',
+    ];
+    Widget glass(Widget child,
+        {EdgeInsets padding = const EdgeInsets.all(22)}) {
+      return Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: Colors.white.withValues(alpha: 0.045),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.11)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.30),
+              blurRadius: 36,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        child: child,
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: navy,
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.topCenter,
+            radius: 1.15,
+            colors: [blue.withValues(alpha: 0.10), navy],
+          ),
+        ),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 54),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 920),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      InkWell(
+                        onTap: onHome,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Image.asset(
+                            'assets/images/circum_wordmark.png',
+                            width: 124,
+                            height: 30,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 44),
+                      Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 82,
+                              height: 82,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: blue.withValues(alpha: 0.10),
+                                border: Border.all(
+                                    color: blue.withValues(alpha: 0.42)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xff8b5cf6)
+                                        .withValues(alpha: 0.12),
+                                    blurRadius: 32,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.shield_outlined,
+                                  color: blue, size: 42),
+                            ),
+                            const SizedBox(height: 22),
+                            Text(
+                              'Vanguard',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.dmSerifDisplay(
+                                color: Colors.white,
+                                fontSize: 54,
+                                height: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Vanguard gives your delivery enhanced handling, priority support, trusted rider prioritisation, and stronger custody tracking for important items.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                color: Colors.white.withValues(alpha: 0.78),
+                                fontSize: 17,
+                                height: 1.55,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Optional add-on at checkout — £1.99',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 42),
+                      Text(
+                        'Vanguard exists for deliveries where trust matters more than speed.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.dmSerifDisplay(
+                          color: Colors.white,
+                          fontSize: 32,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      LayoutBuilder(builder: (context, constraints) {
+                        final stacked = constraints.maxWidth < 700;
+                        return Flex(
+                          direction: stacked ? Axis.vertical : Axis.horizontal,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: features.map((feature) {
+                            final card = glass(Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(feature.$1, color: blue),
+                                const SizedBox(height: 14),
+                                Text(feature.$2,
+                                    style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800)),
+                                const SizedBox(height: 8),
+                                Text(feature.$3,
+                                    style: GoogleFonts.inter(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.70),
+                                        height: 1.45)),
+                              ],
+                            ));
+                            return stacked
+                                ? Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: card)
+                                : Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(right: 12),
+                                      child: card,
+                                    ),
+                                  );
+                          }).toList(),
+                        );
+                      }),
+                      const SizedBox(height: 24),
+                      glass(Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _VanguardPageHeading('Custody preview'),
+                          const SizedBox(height: 18),
+                          for (var i = 0; i < timeline.length; i++)
+                            _VanguardTimelineRow(
+                              label: timeline[i],
+                              last: i == timeline.length - 1,
+                            ),
+                        ],
+                      )),
+                      const SizedBox(height: 24),
+                      LayoutBuilder(builder: (context, constraints) {
+                        final stacked = constraints.maxWidth < 700;
+                        final when = glass(_VanguardListSection(
+                            title: 'When to use it', items: useCases));
+                        final adds = glass(_VanguardListSection(
+                            title: 'What £1.99 adds', items: additions));
+                        if (stacked) {
+                          return Column(
+                            children: [when, const SizedBox(height: 14), adds],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: when),
+                            const SizedBox(width: 14),
+                            Expanded(child: adds),
+                          ],
+                        );
+                      }),
+                      const SizedBox(height: 24),
+                      glass(Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _VanguardPageHeading('Important'),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees. Vanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.76),
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      )),
+                      const SizedBox(height: 24),
+                      glass(_VanguardListSection(
+                        title: 'Included automatically',
+                        items: included,
+                        footer:
+                            'These deliveries already include Vanguard-level handling at no extra cost.',
+                      )),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VanguardPageHeading extends StatelessWidget {
+  final String text;
+
+  const _VanguardPageHeading(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: GoogleFonts.dmSerifDisplay(
+          color: Colors.white,
+          fontSize: 28,
+        ),
+      );
+}
+
+class _VanguardListSection extends StatelessWidget {
+  final String title;
+  final List<String> items;
+  final String? footer;
+
+  const _VanguardListSection({
+    required this.title,
+    required this.items,
+    this.footer,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _VanguardPageHeading(title),
+          const SizedBox(height: 14),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.check_circle_outline,
+                      color: Color(0xff3b82f6), size: 18),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(item,
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+          if (footer != null) ...[
+            const SizedBox(height: 8),
+            Text(footer!,
+                style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.68), height: 1.45)),
+          ],
+        ],
+      );
+}
+
+class _VanguardTimelineRow extends StatelessWidget {
+  final String label;
+  final bool last;
+
+  const _VanguardTimelineRow({required this.label, required this.last});
+
+  @override
+  Widget build(BuildContext context) => IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              children: [
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xff3b82f6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xff3b82f6).withValues(alpha: 0.18),
+                        blurRadius: 14,
+                      ),
+                    ],
+                  ),
+                ),
+                if (!last)
+                  Expanded(
+                    child: Container(
+                      width: 1,
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Text(label,
+                  style: GoogleFonts.inter(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
 }
 
 class _LegalDocumentPage extends StatelessWidget {
