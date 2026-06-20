@@ -15351,39 +15351,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
-    final healthPlusMode = _isHealthPlusRoute;
     return Stack(
       children: [
         LayoutBuilder(builder: (context, constraints) {
           final desktop =
-              constraints.maxWidth >= _desktopWebBreakpoint && !healthPlusMode;
-          if (healthPlusMode) {
-            return Column(
-              children: [
-                _PortalHeader(
-                  colors: colors,
-                  darkMode: widget.darkMode,
-                  onBack: widget.onBack,
-                  onToggleTheme: widget.onToggleTheme,
-                  onProfile: () => setState(() => _step = _SenderStep.profile),
-                ),
-                Expanded(
-                  child: SafeArea(
-                    top: false,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(18, 24, 18, 96),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 760),
-                          child: _buildHealthPlusStep(colors),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }
+              constraints.maxWidth >= _desktopWebBreakpoint &&
+              _step != _SenderStep.healthPlus;
           return Column(
             children: [
               _PortalHeader(
@@ -15420,6 +15393,75 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                         onCancelBooking: _cancelSenderBooking,
                         child: _buildCurrentStep(colors),
                       )
+                    : _step == _SenderStep.healthPlus &&
+                            constraints.maxWidth >= _desktopWebBreakpoint
+                        ? Container(
+                            color: colors.stage,
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth >= 1100
+                                      ? 560
+                                      : 430,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(28),
+                                  child: BackdropFilter(
+                                    filter: ui.ImageFilter.blur(
+                                      sigmaX: colors.dark ? 14 : 8,
+                                      sigmaY: colors.dark ? 14 : 8,
+                                    ),
+                                    child: Container(
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            colors.panel.withOpacity(
+                                                colors.dark ? 0.82 : 0.95),
+                                            colors.adminAccent.withOpacity(
+                                                colors.dark ? 0.13 : 0.07),
+                                            colors.panel.withOpacity(
+                                                colors.dark ? 0.74 : 0.93),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(28),
+                                        border: Border.all(
+                                          color: Color.alphaBlend(
+                                            colors.adminAccent.withOpacity(
+                                                colors.dark ? 0.18 : 0.12),
+                                            Colors.white.withOpacity(
+                                                colors.dark ? 0.08 : 0.18),
+                                          ),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                                colors.dark ? 0.24 : 0.06),
+                                            blurRadius: 20,
+                                            offset: const Offset(0, 10),
+                                          ),
+                                          BoxShadow(
+                                            color: colors.adminGlow.withOpacity(
+                                                colors.dark ? 0.14 : 0.06),
+                                            blurRadius: 28,
+                                            offset: const Offset(0, 14),
+                                          ),
+                                        ],
+                                      ),
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            18, 18, 18, 36),
+                                        child: _buildAnimatedStep(colors),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
                     : SingleChildScrollView(
                         padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
                         child: _buildAnimatedStep(colors),
