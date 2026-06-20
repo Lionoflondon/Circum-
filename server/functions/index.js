@@ -21,6 +21,7 @@ const giftsPayment = require("./gifts-payment");
 const rothLedger = require("./roth-ledger");
 const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
+const movementLedger = require("./movement-ledger");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -63,6 +64,9 @@ exports.activateReferral = referrals.activateReferral;
 exports.activateReferralOnDeliveryCompleted = referrals.activateReferralOnDeliveryCompleted;
 exports.activateReferralOnGiftCompleted = referrals.activateReferralOnGiftCompleted;
 exports.activateReferralOnHealthPlusCompleted = referrals.activateReferralOnHealthPlusCompleted;
+exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
+exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
+exports.onHealthPaymentMovementWrite = movementLedger.onHealthPaymentMovementWrite;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

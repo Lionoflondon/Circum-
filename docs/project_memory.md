@@ -4,6 +4,27 @@ Last updated: 2026-06-04
 Current working branch: `main`  
 Firebase project: `circum-2797c`
 
+## Protected Service Taxonomy
+
+The following platform-level service identifiers are permanent:
+
+- `STANDARD`
+- `SCHEDULED`
+- `HEAVY_DUTY`
+- `BUSINESS`
+- `VANGUARD`
+- `GIFTS`
+- `HEALTH_PLUS`
+
+They must never be renamed, merged, collapsed, hidden, or replaced with a
+generic `DELIVERY` / `Delivery` category unless explicitly instructed by the
+owner.
+
+Business, Gifts, Health+, Vanguard, Scheduled, Heavy Duty, and Standard may
+share projection, fulfilment, rider, payment, or history infrastructure
+underneath. Their product identity, category label, filters, routing, pricing
+meaning, and user/admin visibility must remain separate.
+
 ## Live URLs
 
 - Public web app: https://circumuk.com

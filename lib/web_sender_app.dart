@@ -812,6 +812,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _riderDocuments = const [];
   bool _adminChatOpen = false;
   bool _showDeletedDeliveries = false;
+  String _deliveryServiceFilter = 'ALL';
   String? _activeAdminChatId;
   String? _activeAdminTicketId;
   String _activeAdminChatTitle = 'Booking chat';
@@ -2638,6 +2639,24 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           subtitle:
               'Track, edit safe fields, duplicate, cancel, and resolve orders.',
           headerActions: [
+            for (final serviceType in const [
+              'ALL',
+              'STANDARD',
+              'SCHEDULED',
+              'HEAVY_DUTY',
+              'BUSINESS',
+              'VANGUARD',
+              'GIFTS',
+              'HEALTH_PLUS',
+            ])
+              FilterChip(
+                selected: _deliveryServiceFilter == serviceType,
+                onSelected: (_) =>
+                    setState(() => _deliveryServiceFilter = serviceType),
+                label: Text(serviceType == 'ALL'
+                    ? 'All'
+                    : _movementServiceLabel(serviceType)),
+              ),
             FilterChip(
               selected: _showDeletedDeliveries,
               onSelected: (selected) =>
@@ -2654,7 +2673,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           records: adminSearch(
               _deliveries.where((delivery) {
                 final status = '${delivery['status'] ?? ''}'.toLowerCase();
-                return _showDeletedDeliveries || status != 'deleted';
+                final visible = _showDeletedDeliveries || status != 'deleted';
+                final serviceMatches = _deliveryServiceFilter == 'ALL' ||
+                    _movementServiceType(delivery) == _deliveryServiceFilter;
+                return visible && serviceMatches;
               }).toList(growable: false),
               query,
               [
@@ -2664,6 +2686,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 'senderName',
                 'riderName',
                 'status',
+                'serviceType',
+                'sourceModule',
               ]),
           columns: const [
             'ID',
@@ -4242,7 +4266,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     }
 
     return [
-      _AdminCell.primary('${item['requestId'] ?? id}'),
+      _AdminCell.primary(
+        '${item['requestId'] ?? id}\n${_movementServiceLabel(_movementServiceType(item))}',
+      ),
       _AdminCell(_jobReceivedText(item)),
       _AdminCell(
         '${addressSummary('${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}', pickupCanonical)}\n→ ${addressSummary('${item['dropoffAddress'] ?? ''}', dropoffCanonical)}',
@@ -7422,6 +7448,97 @@ DateTime? _dateFromAny(dynamic value) {
 
 String _jobReceivedText(Map<String, dynamic> job) {
   return _jobReceivedTextFromDate(_jobReceivedDate(job));
+}
+
+String _movementServiceType(Map<String, dynamic> delivery) {
+  final source = '${delivery['sourceModule'] ?? ''}'
+      .trim()
+      .toLowerCase()
+      .replaceAll('-', '_')
+      .replaceAll(' ', '_');
+  if (source == 'gifts' ||
+      source == 'gift' ||
+      delivery['giftOrderId'] != null) {
+    return 'GIFTS';
+  }
+  if (source == 'health_plus' ||
+      source == 'healthplus' ||
+      source == 'health' ||
+      delivery['healthPlusOrderId'] != null) {
+    return 'HEALTH_PLUS';
+  }
+  if (source == 'business') return 'BUSINESS';
+  if (source == 'vanguard') return 'VANGUARD';
+  final explicit = '${delivery['serviceType'] ?? ''}'
+      .trim()
+      .toUpperCase()
+      .replaceAll('-', '_')
+      .replaceAll(' ', '_');
+  switch (explicit) {
+    case 'GIFT':
+    case 'GIFT_DELIVERY':
+    case 'GIFTS_BY_CIRCUM':
+    case 'GIFTS':
+      return 'GIFTS';
+    case 'HEALTH':
+    case 'HEALTHPLUS':
+    case 'HEALTH_PLUS_COLLECTION':
+    case 'HEALTH_PLUS':
+      return 'HEALTH_PLUS';
+    case 'BUSINESS_ACCOUNT':
+    case 'BUSINESS_DELIVERY':
+    case 'BUSINESS':
+      return 'BUSINESS';
+    case 'VANGUARD_DELIVERY':
+    case 'VANGUARD':
+      return 'VANGUARD';
+    case 'HEAVY':
+    case 'HEAVY_DUTY_DELIVERY':
+    case 'HEAVY_DUTY':
+      return 'HEAVY_DUTY';
+    case 'SCHEDULED_DELIVERY':
+    case 'SCHEDULED':
+      return 'SCHEDULED';
+  }
+  if (delivery['vanguardEnabled'] == true) return 'VANGUARD';
+  if (delivery['businessDelivery'] == true ||
+      delivery['businessAccountId'] != null) {
+    return 'BUSINESS';
+  }
+  if (delivery['heavyDuty'] == true ||
+      ((delivery['heavyDutyFee'] as num?)?.toDouble() ?? 0) > 0) {
+    return 'HEAVY_DUTY';
+  }
+  if (delivery['scheduledAt'] != null ||
+      delivery['scheduledPickupDate'] != null ||
+      '${delivery['deliveryTimingType'] ?? ''}'.toLowerCase() == 'scheduled') {
+    return 'SCHEDULED';
+  }
+  return 'STANDARD';
+}
+
+String _movementServiceLabel(String serviceType) {
+  return switch (serviceType.toUpperCase()) {
+    'SCHEDULED' => '📅 Scheduled',
+    'HEAVY_DUTY' => '🚚 Heavy Duty',
+    'BUSINESS' => '🏢 Business',
+    'VANGUARD' => '🛡️ Vanguard',
+    'GIFTS' => '🎁 Gifts',
+    'HEALTH_PLUS' => '💊 Health+',
+    _ => '📦 Standard',
+  };
+}
+
+String _riderMovementLabel(Map<String, dynamic> delivery) {
+  return switch (_movementServiceType(delivery)) {
+    'GIFTS' => '🎁 Gift Delivery',
+    'HEALTH_PLUS' => '💊 Health+ Collection',
+    'VANGUARD' => '🛡️ Vanguard Delivery',
+    'SCHEDULED' => '📅 Scheduled Delivery',
+    'HEAVY_DUTY' => '🚚 Heavy Duty Delivery',
+    'BUSINESS' => '🏢 Business Delivery',
+    _ => '📦 Standard Delivery',
+  };
 }
 
 String _jobReceivedTextFromDate(DateTime? date) {
@@ -14100,6 +14217,7 @@ class _DriverJobCard extends StatelessWidget {
         '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
     final serviceLevel =
         '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
+    final movementService = _riderMovementLabel(job);
     final vanguardEnabled = job['vanguardEnabled'] == true ||
         summary['vanguardEnabled'] == true ||
         ((job['vanguardProtection'] as Map?)?['enabled'] == true);
@@ -14218,10 +14336,10 @@ class _DriverJobCard extends StatelessWidget {
           _JobInfoLine(
             colors: colors,
             icon: Icons.bolt,
-            label: 'Service',
+            label: 'Service type',
             value: serviceLevel.toLowerCase() == 'express'
-                ? 'Express priority'
-                : 'Standard',
+                ? '$movementService • Express priority'
+                : movementService,
           ),
           if (assistedFee > 0 || heavyDutyFee > 0 || twoPersonFee > 0)
             _JobInfoLine(
@@ -21625,7 +21743,12 @@ class _SenderProfileStep extends StatelessWidget {
                 children: [
                   _GlassMiniChip(
                     colors: colors,
-                    label: 'Delivery',
+                    label: _movementServiceLabel(
+                      _movementServiceType({
+                        'serviceType': delivery.serviceType,
+                        'packageDescription': delivery.parcelDescription,
+                      }),
+                    ),
                   ),
                   _GlassMiniChip(
                     colors: colors,
@@ -34602,6 +34725,8 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
   late String _sharePrivacy;
   html.AudioElement? _audio;
   String? _musicPrompt;
+  bool _exportingVideo = false;
+  double _exportProgress = 0;
 
   @override
   void initState() {
@@ -34652,10 +34777,18 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     final chapters = [
       _GiftStoryChapter(
         icon: Icons.card_giftcard,
-        title: 'Someone wanted to make today special.',
-        body: 'A Gifts by Circum experience has arrived.',
-        chips: const ['Gifted by Circum'],
+        title: 'Your gift is en route',
+        body: 'Someone wanted this moment to feel special.',
+        chips: const ['PREPARED BY GIFTS BY CIRCUM'],
         photoUrl: photoUrls.isEmpty ? null : photoUrls.first,
+      ),
+      _GiftStoryChapter(
+        icon: Icons.message_outlined,
+        title: 'A message for you',
+        body: senderMessage.isEmpty
+            ? 'This gift was designed around what makes you smile.'
+            : senderMessage,
+        chips: const ['FROM SOMEONE WHO THOUGHT OF YOU'],
       ),
       _GiftStoryChapter(
         icon: Icons.celebration,
@@ -34693,14 +34826,6 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           chips: const ['Gift detail'],
           photoUrl: photoUrls[i],
         ),
-      _GiftStoryChapter(
-        icon: Icons.message_outlined,
-        title: 'Sender message',
-        body: senderMessage.isEmpty
-            ? 'This gift was designed around what makes them smile.'
-            : senderMessage,
-        chips: const ['Personal moment'],
-      ),
       const _GiftStoryChapter(
         icon: Icons.wallet_giftcard,
         title: 'Circum Gift Card',
@@ -34717,8 +34842,8 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
         ),
       const _GiftStoryChapter(
         icon: Icons.ios_share,
-        title: 'Gifted by Circum',
-        body: 'Thoughtful gifting, delivered by Circum.',
+        title: 'Thank you for sharing this moment.',
+        body: 'Gifted by Circum. Thoughtful gifting, delivered by Circum.',
         chips: ['Share My Gift Story'],
         finalChapter: true,
       ),
@@ -34814,9 +34939,10 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       case 'Instagram':
       case 'TikTok':
       case 'Snapchat':
-        await _downloadStoryImageSequence(
+        await _exportStoryVideo(
+          shareAfter: true,
           notice:
-              '$platform does not support direct browser posting here. Story images are downloading for upload.',
+              '$platform will open through your device share sheet when supported.',
         );
         return;
     }
@@ -34841,63 +34967,323 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     }
   }
 
-  Future<void> _downloadStoryImageSequence({String? notice}) async {
-    final chapters = _chapters;
-    for (var i = 0; i < chapters.length; i++) {
-      final chapter = chapters[i];
-      final svg = _storySvg(chapter, i + 1, chapters.length);
-      final blob = html.Blob([svg], 'image/svg+xml;charset=utf-8');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
-        ..download = 'circum-gift-story-${i + 1}.svg'
-        ..click();
-      html.Url.revokeObjectUrl(url);
+  Future<void> _exportStoryVideo({
+    bool shareAfter = false,
+    String? notice,
+  }) async {
+    if (_exportingVideo) return;
+    setState(() {
+      _exportingVideo = true;
+      _exportProgress = 0;
+    });
+    try {
+      final result = await _renderStoryVideo();
+      final id = '${widget.gift['id'] ?? 'story'}'
+          .replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '-');
+      final filename = 'circum-gift-story-$id.${result.extension}';
+      if (shareAfter) {
+        final file = html.File([result.blob], filename, {'type': result.mime});
+        try {
+          await html.window.navigator.share({
+            'title': _shareTitle,
+            'text': 'Created with Gifts by Circum.',
+            'files': [file],
+          });
+        } catch (error) {
+          _downloadVideoBlob(result.blob, filename);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Video downloaded. Choose it from the social app to share.'),
+              ),
+            );
+          }
+        }
+      } else {
+        _downloadVideoBlob(result.blob, filename);
+      }
+      if (mounted && notice != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(notice)));
+      }
+    } catch (error) {
+      debugPrint('Gift Story video export failed: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Video export failed: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportingVideo = false;
+          _exportProgress = 0;
+        });
+      }
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(notice ??
-          'Gift Story image sequence downloaded. MP4 rendering will use a server renderer in a later pass.'),
-    ));
   }
 
-  String _storySvg(_GiftStoryChapter chapter, int index, int total) {
-    final title = _xmlEscape(chapter.title);
-    final body = _xmlEscape(chapter.body.replaceAll('\n', ' '));
-    final chips = _xmlEscape(chapter.chips.take(3).join(' · '));
-    return '''
-<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
-  <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#7c5cff"/>
-      <stop offset="45%" stop-color="#356aff"/>
-      <stop offset="100%" stop-color="#050914"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="18%" cy="10%" r="85%">
-      <stop offset="0%" stop-color="#8bf5ff" stop-opacity=".42"/>
-      <stop offset="100%" stop-color="#050914" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect width="1080" height="1920" fill="url(#bg)"/>
-  <rect width="1080" height="1920" fill="url(#glow)"/>
-  <rect x="56" y="78" width="${(968 / total * index).round()}" height="10" rx="5" fill="#ffffff"/>
-  <rect x="56" y="1400" width="968" height="360" rx="44" fill="#06101f" opacity=".62" stroke="#ffffff" stroke-opacity=".22"/>
-  <text x="92" y="1492" font-family="Helvetica, Arial, sans-serif" font-size="76" font-weight="800" fill="#ffffff">$title</text>
-  <foreignObject x="92" y="1535" width="896" height="130">
-    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Helvetica,Arial,sans-serif;color:white;font-size:34px;line-height:1.28;font-weight:650;">$body</div>
-  </foreignObject>
-  <text x="92" y="1715" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#d9e7ff">$chips</text>
-  <text x="92" y="1830" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="800" fill="#ffffff">Created with Gifts by Circum</text>
-  <text x="92" y="1874" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#d9e7ff">Thoughtful gifting, delivered by Circum.</text>
-</svg>
-''';
+  void _downloadVideoBlob(html.Blob blob, String filename) {
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..download = filename
+      ..click();
+    Future<void>.delayed(
+      const Duration(seconds: 2),
+      () => html.Url.revokeObjectUrl(url),
+    );
   }
 
-  String _xmlEscape(String value) => value
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&apos;');
+  Future<_GiftStoryVideoResult> _renderStoryVideo() async {
+    const width = 720;
+    const height = 1280;
+    const framesPerSecond = 24;
+    const framesPerChapter = 48;
+    final canvas = html.CanvasElement(width: width, height: height);
+    final context = canvas.context2D;
+    final stream = canvas.captureStream(framesPerSecond);
+    html.AudioElement? exportAudio;
+    final audioUrl = _currentAudioUrl();
+    if (_musicEnabled && audioUrl.isNotEmpty) {
+      try {
+        exportAudio = html.AudioElement(audioUrl)
+          ..crossOrigin = 'anonymous'
+          ..loop = true
+          ..preload = 'auto';
+        final audioStream = exportAudio.captureStream();
+        for (final track in audioStream.getAudioTracks()) {
+          stream.addTrack(track);
+        }
+        await exportAudio.play();
+      } catch (error) {
+        debugPrint(
+            'Gift Story export audio unavailable; rendering silent: $error');
+        exportAudio?.pause();
+        exportAudio = null;
+      }
+    }
+    final mime = _preferredStoryVideoMime();
+    final recorder = html.MediaRecorder(stream, {
+      'mimeType': mime,
+      'videoBitsPerSecond': 5000000,
+    });
+    final chunks = <html.Blob>[];
+    final stopped = Completer<void>();
+    recorder.on['dataavailable'].listen((event) {
+      final data = (event as html.BlobEvent).data;
+      if (data != null && data.size > 0) chunks.add(data);
+    });
+    recorder.on['stop'].listen((_) {
+      if (!stopped.isCompleted) stopped.complete();
+    });
+    recorder.onError.listen((event) {
+      if (!stopped.isCompleted) {
+        stopped.completeError(StateError('Browser video recorder failed.'));
+      }
+    });
+    recorder.start(500);
+    final photos = await _loadStoryExportPhotos();
+    final chapters = _chapters;
+    for (var chapterIndex = 0; chapterIndex < chapters.length; chapterIndex++) {
+      for (var frame = 0; frame < framesPerChapter; frame++) {
+        final phase = frame / (framesPerChapter - 1);
+        _paintStoryVideoFrame(
+          context,
+          chapters[chapterIndex],
+          chapterIndex,
+          chapters.length,
+          phase,
+          photos[chapters[chapterIndex].photoUrl],
+        );
+        if (mounted && frame % 8 == 0) {
+          setState(() {
+            _exportProgress = (chapterIndex * framesPerChapter + frame + 1) /
+                (chapters.length * framesPerChapter);
+          });
+        }
+        await Future<void>.delayed(
+          const Duration(milliseconds: 42),
+        );
+      }
+    }
+    recorder.stop();
+    await stopped.future.timeout(const Duration(seconds: 8));
+    exportAudio?.pause();
+    for (final track in stream.getTracks()) {
+      track.stop();
+    }
+    if (chunks.isEmpty) {
+      throw StateError('The browser did not produce a video file.');
+    }
+    final blob = html.Blob(chunks, mime);
+    return _GiftStoryVideoResult(
+      blob: blob,
+      mime: mime,
+      extension: mime.startsWith('video/mp4') ? 'mp4' : 'webm',
+    );
+  }
+
+  String _preferredStoryVideoMime() {
+    const options = [
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+    ];
+    for (final option in options) {
+      if (html.MediaRecorder.isTypeSupported(option)) return option;
+    }
+    throw UnsupportedError('This browser cannot render MP4 or WebM video.');
+  }
+
+  Future<Map<String?, html.ImageElement>> _loadStoryExportPhotos() async {
+    final result = <String?, html.ImageElement>{};
+    for (final url in _chapters.map((chapter) => chapter.photoUrl).toSet()) {
+      if (url == null || url.isEmpty) continue;
+      try {
+        final image = html.ImageElement()
+          ..crossOrigin = 'anonymous'
+          ..src = url;
+        await image.onLoad.first.timeout(const Duration(seconds: 10));
+        result[url] = image;
+      } catch (error) {
+        debugPrint('Gift Story export photo skipped: $url ($error)');
+      }
+    }
+    return result;
+  }
+
+  void _paintStoryVideoFrame(
+    html.CanvasRenderingContext2D context,
+    _GiftStoryChapter chapter,
+    int index,
+    int total,
+    double phase,
+    html.ImageElement? photo,
+  ) {
+    const width = 720.0;
+    const height = 1280.0;
+    context
+      ..save()
+      ..fillStyle = '#050816'
+      ..fillRect(0, 0, width, height);
+    if (photo != null && photo.naturalWidth > 0 && photo.naturalHeight > 0) {
+      final imageRatio = photo.naturalWidth / photo.naturalHeight;
+      const frameRatio = width / height;
+      final scale = 1 + phase * 0.035;
+      if (imageRatio > frameRatio) {
+        final sourceWidth = photo.naturalHeight * frameRatio / scale;
+        final sourceX = (photo.naturalWidth - sourceWidth) / 2;
+        context.drawImageScaledFromSource(
+          photo,
+          sourceX,
+          0,
+          sourceWidth,
+          photo.naturalHeight,
+          0,
+          0,
+          width,
+          height,
+        );
+      } else {
+        final sourceHeight = photo.naturalWidth / frameRatio / scale;
+        final sourceY = (photo.naturalHeight - sourceHeight) / 2;
+        context.drawImageScaledFromSource(
+          photo,
+          0,
+          sourceY,
+          photo.naturalWidth,
+          sourceHeight,
+          0,
+          0,
+          width,
+          height,
+        );
+      }
+    } else {
+      final gradient = context.createLinearGradient(0, 0, width, height)
+        ..addColorStop(0, '#121938')
+        ..addColorStop(0.48, '#6D5EF8')
+        ..addColorStop(1, '#050816');
+      context
+        ..fillStyle = gradient
+        ..fillRect(0, 0, width, height);
+    }
+    final overlay = context.createLinearGradient(0, 0, 0, height)
+      ..addColorStop(0, 'rgba(5,8,22,.36)')
+      ..addColorStop(.45, 'rgba(5,8,22,.08)')
+      ..addColorStop(1, 'rgba(5,8,22,.92)');
+    context
+      ..fillStyle = overlay
+      ..fillRect(0, 0, width, height);
+    for (var i = 0; i < total; i++) {
+      context
+        ..fillStyle = i <= index ? '#ffffff' : 'rgba(255,255,255,.22)'
+        ..fillRect(
+            28 + i * ((width - 56) / total), 30, ((width - 56) / total) - 5, 5);
+    }
+    context
+      ..fillStyle = '#ffffff'
+      ..font = '700 17px Helvetica, Arial, sans-serif'
+      ..fillText('giftsbycircum', 30, 76)
+      ..fillStyle = 'rgba(255,255,255,.68)'
+      ..font = '600 13px Helvetica, Arial, sans-serif'
+      ..fillText('NOW  ·  ${index + 1}/$total', 30, 99);
+    final entrance = Curves.easeOut.transform(math.min(1, phase * 4));
+    context
+      ..globalAlpha = entrance
+      ..fillStyle = 'rgba(8,11,31,.68)'
+      ..fillRect(28, 840 + (1 - entrance) * 28, width - 56, 330)
+      ..fillStyle = '#ffffff'
+      ..font = '800 54px Helvetica, Arial, sans-serif';
+    var y = 920 + (1 - entrance) * 28;
+    y = _paintWrappedText(context, chapter.title, 52, y, width - 104, 60, 3);
+    context
+      ..fillStyle = 'rgba(255,255,255,.88)'
+      ..font = '650 25px Helvetica, Arial, sans-serif';
+    _paintWrappedText(context, chapter.body.replaceAll('\n', ' '), 52, y + 22,
+        width - 104, 34, 4);
+    context
+      ..globalAlpha = 1
+      ..fillStyle = 'rgba(255,255,255,.72)'
+      ..font = '700 16px Helvetica, Arial, sans-serif'
+      ..fillText('CREATED WITH GIFTS BY CIRCUM', 30, 1232)
+      ..restore();
+  }
+
+  double _paintWrappedText(
+    html.CanvasRenderingContext2D context,
+    String text,
+    double x,
+    double y,
+    double maxWidth,
+    double lineHeight,
+    int maxLines,
+  ) {
+    final words = text.split(RegExp(r'\s+'));
+    var line = '';
+    var lines = 0;
+    for (final word in words) {
+      final candidate = line.isEmpty ? word : '$line $word';
+      if ((context.measureText(candidate).width ?? 0) > maxWidth &&
+          line.isNotEmpty) {
+        context.fillText(line, x, y);
+        y += lineHeight;
+        lines++;
+        if (lines >= maxLines) return y;
+        line = word;
+      } else {
+        line = candidate;
+      }
+    }
+    if (line.isNotEmpty && lines < maxLines) {
+      context.fillText(line, x, y);
+      y += lineHeight;
+    }
+    return y;
+  }
 
   String _currentAudioUrl() {
     return '${widget.gift['giftStoryCustomAudioUrl'] ?? ''}'.trim();
@@ -35307,6 +35693,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
           spacing: 10,
           runSpacing: 10,
           children: [
+            _storyShareButton(
+              _exportingVideo ? 'Rendering video' : 'Share Story',
+              Icons.ios_share,
+              sharingEnabled && !_exportingVideo
+                  ? () => _exportStoryVideo(shareAfter: true)
+                  : null,
+            ),
             for (final platform in platforms)
               _storyShareButton(
                 platform.$1,
@@ -35315,9 +35708,11 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
               ),
             _storyShareButton('Copy Link', Icons.link, _copyStoryLink),
             _storyShareButton(
-              'Download Story',
+              _exportingVideo
+                  ? 'Rendering ${(_exportProgress * 100).round()}%'
+                  : 'Download Story',
               Icons.download,
-              () => _downloadStoryImageSequence(),
+              _exportingVideo ? null : _exportStoryVideo,
             ),
           ],
         ),
@@ -35453,11 +35848,20 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                       ],
                       const SizedBox(height: 18),
                       Expanded(
-                        child: Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 760),
-                            child: _storySlide(context, chapter),
-                          ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final storyWidth = math.min(
+                              480.0,
+                              constraints.maxHeight * 9 / 16,
+                            );
+                            return Center(
+                              child: SizedBox(
+                                width: storyWidth,
+                                height: storyWidth * 16 / 9,
+                                child: _storySlide(context, chapter),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       Semantics(
@@ -35481,6 +35885,18 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
       ),
     );
   }
+}
+
+class _GiftStoryVideoResult {
+  final html.Blob blob;
+  final String mime;
+  final String extension;
+
+  const _GiftStoryVideoResult({
+    required this.blob,
+    required this.mime,
+    required this.extension,
+  });
 }
 
 class _GiftStoryChapter {

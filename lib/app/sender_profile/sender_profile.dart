@@ -271,6 +271,7 @@ class SenderDeliveryRecord {
   final String dropoffAddress;
   final DateTime? createdAt;
   final String status;
+  final String serviceType;
   final String assignedDriverName;
   final double pricePaid;
   final String currency;
@@ -289,6 +290,7 @@ class SenderDeliveryRecord {
     required this.dropoffAddress,
     required this.createdAt,
     required this.status,
+    required this.serviceType,
     required this.assignedDriverName,
     required this.pricePaid,
     required this.currency,
@@ -317,6 +319,7 @@ class SenderDeliveryRecord {
           '${data['dropoffAddress'] ?? dropoffDetails['address'] ?? ''}',
       createdAt: parseDate(data['createdAt']),
       status: '${data['status'] ?? 'requested'}',
+      serviceType: '${data['serviceType'] ?? ''}',
       assignedDriverName:
           '${data['riderName'] ?? data['driverName'] ?? data['courierName'] ?? ''}',
       pricePaid: _parseMoney(data['price'] ?? data['quote'] ?? data['amount']),
