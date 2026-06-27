@@ -273,10 +273,18 @@ class SenderDeliveryRecord {
   final String status;
   final String serviceType;
   final String assignedDriverName;
+  final String assignedDriverPhone;
+  final String assignedDriverVehicle;
   final double pricePaid;
   final String currency;
   final String paymentStatus;
   final String trackingReference;
+  final String irisMatchedItemName;
+  final double parcelWeightKg;
+  final String weightBand;
+  final String recommendedVehicle;
+  final bool fragile;
+  final String handlingNotes;
   final num? ratingGiven;
   final Map<String, dynamic> proofOfDelivery;
   final List<dynamic> supportNotes;
@@ -292,10 +300,18 @@ class SenderDeliveryRecord {
     required this.status,
     required this.serviceType,
     required this.assignedDriverName,
+    required this.assignedDriverPhone,
+    required this.assignedDriverVehicle,
     required this.pricePaid,
     required this.currency,
     required this.paymentStatus,
     required this.trackingReference,
+    required this.irisMatchedItemName,
+    required this.parcelWeightKg,
+    required this.weightBand,
+    required this.recommendedVehicle,
+    required this.fragile,
+    required this.handlingNotes,
     required this.ratingGiven,
     this.proofOfDelivery = const {},
     this.supportNotes = const [],
@@ -306,7 +322,15 @@ class SenderDeliveryRecord {
         Map<String, dynamic>.from(data['pickupDetails'] ?? {});
     final dropoffDetails =
         Map<String, dynamic>.from(data['dropoffDetails'] ?? {});
+    final suitability =
+        Map<String, dynamic>.from(data['vehicleSuitability'] ?? const {});
     final requestId = '${data['requestId'] ?? id}';
+    final price = _parseMoney(data['price'] ??
+        data['totalFare'] ??
+        data['quote'] ??
+        data['amount'] ??
+        data['stripeAmount']);
+    final rawPaymentStatus = '${data['paymentStatus'] ?? ''}'.trim();
     return SenderDeliveryRecord(
       id: id,
       senderId: '${data['senderId'] ?? data['userId'] ?? ''}',
@@ -322,15 +346,51 @@ class SenderDeliveryRecord {
       serviceType: '${data['serviceType'] ?? ''}',
       assignedDriverName:
           '${data['riderName'] ?? data['driverName'] ?? data['courierName'] ?? ''}',
-      pricePaid: _parseMoney(data['price'] ?? data['quote'] ?? data['amount']),
+      assignedDriverPhone:
+          '${data['riderPhone'] ?? data['driverPhone'] ?? data['courierPhone'] ?? ''}',
+      assignedDriverVehicle:
+          '${data['vehicleMakeModel'] ?? data['vehicleType'] ?? data['vehicle'] ?? ''}',
+      pricePaid: price,
       currency: '${data['currency'] ?? 'GBP'}',
-      paymentStatus: '${data['paymentStatus'] ?? 'pending'}',
+      paymentStatus: rawPaymentStatus.isNotEmpty
+          ? rawPaymentStatus
+          : _inferPaymentStatus(data, price),
       trackingReference: '${data['code'] ?? requestId}',
+      irisMatchedItemName:
+          '${data['irisMatchedItemName'] ?? data['normalizedItemName'] ?? ''}',
+      parcelWeightKg: _parseMoney(data['finalWeightKg'] ??
+          data['finalWeightUsed'] ??
+          data['weightKg'] ??
+          data['confirmedWeightKg']),
+      weightBand:
+          '${data['finalWeightBand'] ?? data['weightBand'] ?? data['weightCategory'] ?? ''}',
+      recommendedVehicle:
+          '${data['irisRecommendedVehicle'] ?? suitability['recommendedVehicle'] ?? data['vehicleType'] ?? data['vehicle'] ?? ''}',
+      fragile: data['fragile'] == true || suitability['fragile'] == true,
+      handlingNotes:
+          '${data['irisImageHandlingNotes'] ?? suitability['handlingNotes'] ?? data['specialHandlingNotes'] ?? ''}',
       ratingGiven: data['riderRating'] ?? data['userRating'],
       proofOfDelivery:
           Map<String, dynamic>.from(data['proofOfDelivery'] ?? const {}),
       supportNotes: data['supportNotes'] as List<dynamic>? ?? const [],
     );
+  }
+
+  static String _inferPaymentStatus(Map<String, dynamic> data, double price) {
+    final status = '${data['status'] ?? ''}'.toLowerCase();
+    if (status.contains('payment_pending') ||
+        status.contains('awaiting_payment')) {
+      return 'pending';
+    }
+    if (data['paidByRoth'] == true ||
+        data['cardPaymentCompleted'] == true ||
+        '${data['stripePaymentId'] ?? data['paymentIntentId'] ?? data['stripeIntentId'] ?? ''}'
+            .trim()
+            .isNotEmpty ||
+        price > 0) {
+      return 'paid';
+    }
+    return 'pending';
   }
 }
 

@@ -37,6 +37,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
@@ -15438,6 +15439,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _senderPhone = TextEditingController();
   final _receiverName = TextEditingController();
   final _receiverPhone = TextEditingController();
+  final _deliveryInstructions = TextEditingController();
   final _collectionContactName = TextEditingController();
   final _collectionContactPhone = TextEditingController();
   final _savedAddressLabel = TextEditingController(text: 'Home');
@@ -15528,6 +15530,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   DriverProfile? _assignedDriver;
   DriverPerformanceMetric? _assignedDriverMetric;
   Map<String, dynamic>? _activeVanguardData;
+  Map<String, dynamic>? _activeRequestData;
   Map<String, dynamic>? _liveLocationData;
   XFile? _parcelPhoto;
   DateTime? _parcelPhotoCapturedAt;
@@ -15585,6 +15588,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _senderPhone.addListener(_handleContactDetailsChanged);
     _receiverName.addListener(_handleContactDetailsChanged);
     _receiverPhone.addListener(_handleContactDetailsChanged);
+    _deliveryInstructions.addListener(_handleContactDetailsChanged);
     _collectionContactName.addListener(_handleContactDetailsChanged);
     _collectionContactPhone.addListener(_handleContactDetailsChanged);
     _restoreSenderSession();
@@ -15597,6 +15601,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _senderPhone.removeListener(_handleContactDetailsChanged);
     _receiverName.removeListener(_handleContactDetailsChanged);
     _receiverPhone.removeListener(_handleContactDetailsChanged);
+    _deliveryInstructions.removeListener(_handleContactDetailsChanged);
     _collectionContactName.removeListener(_handleContactDetailsChanged);
     _collectionContactPhone.removeListener(_handleContactDetailsChanged);
     _pickup.dispose();
@@ -15630,6 +15635,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _senderPhone.dispose();
     _receiverName.dispose();
     _receiverPhone.dispose();
+    _deliveryInstructions.dispose();
     _collectionContactName.dispose();
     _collectionContactPhone.dispose();
     _savedAddressLabel.dispose();
@@ -15865,6 +15871,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           senderDetailsRequired: _senderDetailsRequired,
           receiverName: _receiverName,
           receiverPhone: _receiverPhone,
+          deliveryInstructions: _deliveryInstructions,
           differentCollectionContact: _differentCollectionContact,
           collectionContactName: _collectionContactName,
           collectionContactPhone: _collectionContactPhone,
@@ -15883,6 +15890,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onDropoffSelected: _selectDropoffAddress,
           onPickupEdited: _handlePickupEdited,
           onDropoffEdited: _handleDropoffEdited,
+          onEditPhone: _editPhoneNumber,
           description: _description,
           weight: _weight,
           irisEstimatedWeightKg: _irisEstimatedWeightKg,
@@ -16017,6 +16025,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           dropoffAddress: _validatedDropoff,
           liveLocation: _liveLocationData,
           vanguardData: _activeVanguardData,
+          activeRequestData: _activeRequestData,
           irisItemName: _irisMatchedItemName,
           irisQuantity: _irisQuantity,
           irisConfidence: _irisWeightConfidence,
@@ -16329,7 +16338,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_effectiveSenderName.isEmpty || _effectiveSenderPhone.isEmpty) {
       return false;
     }
-    if (_receiverName.text.trim().isEmpty ||
+    if (_receiverName.text.trim().length < 2 ||
         _receiverPhone.text.trim().isEmpty) {
       return false;
     }
@@ -16345,9 +16354,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_effectiveSenderName.isEmpty || _effectiveSenderPhone.isEmpty) {
       return 'Add sender name and phone number before pricing.';
     }
-    if (_receiverName.text.trim().isEmpty ||
-        _receiverPhone.text.trim().isEmpty) {
-      return 'Add receiver name and phone number before pricing.';
+    if (_receiverName.text.trim().length < 2) {
+      return 'Add receiver name before pricing.';
+    }
+    if (_receiverPhone.text.trim().isEmpty) {
+      return 'Add receiver phone number before pricing.';
     }
     if (_differentCollectionContact &&
         (_collectionContactName.text.trim().isEmpty ||
@@ -17433,6 +17444,21 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<void> _analyseRequest() async {
+    final pickupPhone = _effectiveCollectionContactPhone;
+    final dropoffName = _receiverName.text.trim();
+    final dropoffPhone = _receiverPhone.text.trim();
+    if (pickupPhone.isEmpty) {
+      _showBookingReviewMessage('Please add a pick-up phone number');
+      return;
+    }
+    if (dropoffName.length < 2) {
+      _showBookingReviewMessage('Please add a drop-off contact name');
+      return;
+    }
+    if (dropoffPhone.isEmpty) {
+      _showBookingReviewMessage('Please add a drop-off phone number');
+      return;
+    }
     if (!_hasValidatedRoute) {
       setState(() {
         _checkoutState = _CheckoutState.failed;
@@ -17514,6 +17540,115 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       );
       _logCheckoutPricing();
     }
+  }
+
+  void _showBookingReviewMessage(String message) {
+    setState(() {
+      _checkoutState = _CheckoutState.draft;
+      _firebaseError = message;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _editPhoneNumber(TextEditingController controller) async {
+    final next = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        var isPhoneValid = false;
+        String? completeNumber;
+        return StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+              decoration: BoxDecoration(
+                color: widget.colors.panel,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(color: widget.colors.border),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Phone number',
+                    style: TextStyle(
+                      color: widget.colors.text,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  IntlPhoneField(
+                    initialCountryCode: 'GB',
+                    initialValue: controller.text.trim(),
+                    style: TextStyle(
+                      color: widget.colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    dropdownTextStyle: TextStyle(color: widget.colors.text),
+                    decoration: InputDecoration(
+                      hintText: 'Phone number',
+                      hintStyle: TextStyle(color: widget.colors.mutedText),
+                      filled: true,
+                      fillColor: widget.colors.field,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        isPhoneValid = value.isValidNumber();
+                        completeNumber = value.completeNumber;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () {
+                            if (!isPhoneValid || completeNumber == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text('Please enter a valid phone number'),
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.pop(sheetContext, completeNumber);
+                          },
+                          child: const Text('Done'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (next == null || !mounted) return;
+    setState(() => controller.text = next);
   }
 
   Future<void> _pickParcelPhoto() async {
@@ -18365,6 +18500,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _activeVanguardData = request['vanguardEnabled'] == true
           ? Map<String, dynamic>.from(request)
           : null;
+      _activeRequestData = Map<String, dynamic>.from(request);
       final senderId = '${request['senderId']}';
       final batch = db.batch();
       batch.set(db.collection('webSenderRequests').doc(id), request);
@@ -19533,6 +19669,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _activeVanguardData = data['vanguardEnabled'] == true
               ? Map<String, dynamic>.from(data)
               : null;
+          _activeRequestData = Map<String, dynamic>.from(data);
           _activeRequestReceivedAt = _jobReceivedDate(data);
         });
         if (driverId != null && driverId != _assignedDriverId) {
@@ -20112,6 +20249,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _assignedDriver = null;
       _assignedDriverMetric = null;
       _activeVanguardData = null;
+      _activeRequestData = null;
       _vanguardAddonSelected = false;
       _liveLocationData = null;
       _activeRequestReceivedAt = null;
@@ -20450,6 +20588,8 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
         : _jobReceivedTextFromDate(delivery.createdAt);
     final hasDriver = delivery.assignedDriverName.trim().isNotEmpty;
     final statusLabel = _customerDeliveryStatusLabel(delivery.status);
+    final displayStatusLabel = hasDriver ? statusLabel : 'Finding a rider';
+    final paymentLabel = _senderDeliveryPaymentStatusLabel(delivery);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -20467,7 +20607,7 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
             ),
             _StatusPill(
               colors: colors,
-              label: statusLabel,
+              label: displayStatusLabel,
             ),
           ],
         ),
@@ -20501,7 +20641,13 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
           total: delivery.pricePaid > 0
               ? '£${delivery.pricePaid.toStringAsFixed(2)}'
               : 'Price not confirmed',
-          paymentStatus: delivery.paymentStatus,
+          paymentStatus: paymentLabel,
+        ),
+        const SizedBox(height: 18),
+        _TrackingItemWeightCard(
+          colors: colors,
+          item: _TrackingItemContext.fromDelivery(delivery),
+          paymentStatus: paymentLabel,
         ),
         const SizedBox(height: 18),
         _LuxuryGlassSurface(
@@ -20529,8 +20675,8 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       hasDriver
-                          ? delivery.assignedDriverName
-                          : 'Circum will show rider details once this delivery has been assigned.',
+                          ? _driverAssignmentSummary(delivery)
+                          : 'Circum is matching your delivery with an eligible rider.',
                       style: TextStyle(
                         color: colors.mutedText,
                         height: 1.35,
@@ -22085,7 +22231,9 @@ class _SenderProfileStep extends StatelessWidget {
                 total: displayedDelivery.pricePaid > 0
                     ? '£${displayedDelivery.pricePaid.toStringAsFixed(2)}'
                     : 'Price not confirmed',
-                paymentStatus: displayedDelivery.paymentStatus,
+                paymentStatus: _senderDeliveryPaymentStatusLabel(
+                  displayedDelivery,
+                ),
               ),
             ],
           ),
@@ -24261,9 +24409,9 @@ class _SenderDeliveryDetails extends StatelessWidget {
       'Received': _jobReceivedTextFromDate(delivery.createdAt),
       'Driver': delivery.assignedDriverName.isEmpty
           ? 'Not assigned yet'
-          : delivery.assignedDriverName,
+          : _driverAssignmentSummary(delivery),
       'Payment':
-          '${delivery.paymentStatus} · £${delivery.pricePaid.toStringAsFixed(2)}',
+          '${_senderDeliveryPaymentStatusLabel(delivery)} · £${delivery.pricePaid.toStringAsFixed(2)}',
       'Rating': delivery.ratingGiven == null
           ? 'Not rated yet'
           : '${delivery.ratingGiven} stars',
@@ -24415,6 +24563,7 @@ class _DetailsStep extends StatelessWidget {
   final bool senderDetailsRequired;
   final TextEditingController receiverName;
   final TextEditingController receiverPhone;
+  final TextEditingController deliveryInstructions;
   final bool differentCollectionContact;
   final TextEditingController collectionContactName;
   final TextEditingController collectionContactPhone;
@@ -24425,6 +24574,7 @@ class _DetailsStep extends StatelessWidget {
   final ValueChanged<_ValidatedAddress> onDropoffSelected;
   final ValueChanged<String> onPickupEdited;
   final ValueChanged<String> onDropoffEdited;
+  final ValueChanged<TextEditingController> onEditPhone;
   final TextEditingController description;
   final TextEditingController weight;
   final double? irisEstimatedWeightKg;
@@ -24475,6 +24625,7 @@ class _DetailsStep extends StatelessWidget {
     required this.senderDetailsRequired,
     required this.receiverName,
     required this.receiverPhone,
+    required this.deliveryInstructions,
     required this.differentCollectionContact,
     required this.collectionContactName,
     required this.collectionContactPhone,
@@ -24485,6 +24636,7 @@ class _DetailsStep extends StatelessWidget {
     required this.onDropoffSelected,
     required this.onPickupEdited,
     required this.onDropoffEdited,
+    required this.onEditPhone,
     required this.description,
     required this.weight,
     required this.irisEstimatedWeightKg,
@@ -24657,10 +24809,11 @@ class _DetailsStep extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _InputBox(
+                      child: _PhonePickerBox(
                         colors: colors,
                         controller: senderPhone,
                         hint: 'Sender phone',
+                        onTap: () => onEditPhone(senderPhone),
                       ),
                     ),
                   ],
@@ -24685,13 +24838,31 @@ class _DetailsStep extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _InputBox(
+                    child: _PhonePickerBox(
                       colors: colors,
                       controller: receiverPhone,
                       hint: 'Receiver phone',
+                      onTap: () => onEditPhone(receiverPhone),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Delivery instructions',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 6),
+              _InputBox(
+                colors: colors,
+                controller: deliveryInstructions,
+                hint: 'Access code, flat number…',
+                maxLines: 3,
+                glassStyle: true,
               ),
               const SizedBox(height: 8),
               CheckboxListTile(
@@ -24720,10 +24891,11 @@ class _DetailsStep extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _InputBox(
+                      child: _PhonePickerBox(
                         colors: colors,
                         controller: collectionContactPhone,
                         hint: 'Collection contact phone',
+                        onTap: () => onEditPhone(collectionContactPhone),
                       ),
                     ),
                   ],
@@ -27738,6 +27910,7 @@ class _TrackingStep extends StatelessWidget {
   final _ValidatedAddress? dropoffAddress;
   final Map<String, dynamic>? liveLocation;
   final Map<String, dynamic>? vanguardData;
+  final Map<String, dynamic>? activeRequestData;
   final String? irisItemName;
   final int irisQuantity;
   final String? irisConfidence;
@@ -27782,6 +27955,7 @@ class _TrackingStep extends StatelessWidget {
     required this.dropoffAddress,
     required this.liveLocation,
     required this.vanguardData,
+    required this.activeRequestData,
     required this.irisItemName,
     required this.irisQuantity,
     required this.irisConfidence,
@@ -27813,6 +27987,16 @@ class _TrackingStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final analysedItemName = irisItemName?.trim();
+    final request = activeRequestData ?? const <String, dynamic>{};
+    final itemContext = _TrackingItemContext.fromRequest(
+      request,
+      fallbackDescription: pickup.isEmpty ? null : null,
+      fallbackIrisItemName: analysedItemName,
+      fallbackWeightKg: irisWeightKg,
+      fallbackWeightBand: irisWeightBand,
+      fallbackVehicle: recommendedVehicle,
+    );
+    final paymentLabel = _deliveryPaymentStatusLabel(request);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -27844,6 +28028,23 @@ class _TrackingStep extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  _StatusPill(
+                    colors: colors,
+                    label: assignedDriver == null
+                        ? 'Finding a rider'
+                        : 'Rider assigned',
+                  ),
+                  if (assignedDriver == null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Circum is matching your delivery with an eligible rider.',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -27860,6 +28061,7 @@ class _TrackingStep extends StatelessWidget {
           online: firebaseOnline,
           error: firebaseError,
           checkoutState: checkoutState,
+          paymentStatus: paymentLabel,
         ),
         if (vanguardData?['vanguardEnabled'] == true) ...[
           const SizedBox(height: 14),
@@ -27872,6 +28074,12 @@ class _TrackingStep extends StatelessWidget {
           dropoff: dropoffAddress,
           liveLocation: liveLocation,
           statusIndex: statusIndex,
+        ),
+        const SizedBox(height: 14),
+        _TrackingItemWeightCard(
+          colors: colors,
+          item: itemContext,
+          paymentStatus: paymentLabel,
         ),
         const SizedBox(height: 14),
         if (broadcasting)
@@ -27904,7 +28112,7 @@ class _TrackingStep extends StatelessWidget {
         ],
         const SizedBox(height: 14),
         _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
-        if (statusIndex >= 3 && analysedItemName?.isNotEmpty == true) ...[
+        if (analysedItemName?.isNotEmpty == true) ...[
           const SizedBox(height: 14),
           _IrisDeliveryAnalysisCard(
             colors: colors,
@@ -28061,7 +28269,7 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
                 ),
               ),
               Text(
-                'Updated ${_relativeSeconds(updatedAt!)} ago',
+                'Updated ${_relativeSeconds(updatedAt)} ago',
                 style: TextStyle(
                   color: colors.mutedText,
                   fontSize: 12,
@@ -28152,17 +28360,191 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
   }
 }
 
+class _TrackingItemContext {
+  final String description;
+  final String irisItemName;
+  final double weightKg;
+  final String weightBand;
+  final String vehicle;
+  final bool fragile;
+  final String handlingNotes;
+
+  const _TrackingItemContext({
+    required this.description,
+    required this.irisItemName,
+    required this.weightKg,
+    required this.weightBand,
+    required this.vehicle,
+    required this.fragile,
+    required this.handlingNotes,
+  });
+
+  factory _TrackingItemContext.fromRequest(
+    Map<String, dynamic> data, {
+    String? fallbackDescription,
+    String? fallbackIrisItemName,
+    required double fallbackWeightKg,
+    required String fallbackWeightBand,
+    required String fallbackVehicle,
+  }) {
+    final suitability =
+        Map<String, dynamic>.from(data['vehicleSuitability'] ?? const {});
+    return _TrackingItemContext(
+      description: _firstNonEmpty([
+        data['packageDescription'],
+        data['originalDescription'],
+        fallbackDescription,
+      ]),
+      irisItemName: _firstNonEmpty([
+        data['irisMatchedItemName'],
+        data['normalizedItemName'],
+        fallbackIrisItemName,
+      ]),
+      weightKg: _doubleFromAny(data['finalWeightKg']) ??
+          _doubleFromAny(data['finalWeightUsed']) ??
+          _doubleFromAny(data['weightKg']) ??
+          fallbackWeightKg,
+      weightBand: _firstNonEmpty([
+        data['finalWeightBand'],
+        data['weightBand'],
+        data['weightCategory'],
+        fallbackWeightBand,
+      ]),
+      vehicle: _firstNonEmpty([
+        data['irisRecommendedVehicle'],
+        suitability['recommendedVehicle'],
+        data['vehicleType'],
+        data['vehicle'],
+        fallbackVehicle,
+      ]),
+      fragile: data['fragile'] == true || suitability['fragile'] == true,
+      handlingNotes: _firstNonEmpty([
+        data['irisImageHandlingNotes'],
+        suitability['handlingNotes'],
+        data['specialHandlingNotes'],
+      ]),
+    );
+  }
+
+  factory _TrackingItemContext.fromDelivery(SenderDeliveryRecord delivery) {
+    return _TrackingItemContext(
+      description: delivery.parcelDescription,
+      irisItemName: delivery.irisMatchedItemName,
+      weightKg: delivery.parcelWeightKg,
+      weightBand: delivery.weightBand,
+      vehicle: delivery.recommendedVehicle,
+      fragile: delivery.fragile,
+      handlingNotes: delivery.handlingNotes,
+    );
+  }
+}
+
+class _TrackingItemWeightCard extends StatelessWidget {
+  final _CircumColors colors;
+  final _TrackingItemContext item;
+  final String paymentStatus;
+
+  const _TrackingItemWeightCard({
+    required this.colors,
+    required this.item,
+    required this.paymentStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = item.irisItemName.isNotEmpty
+        ? item.irisItemName
+        : item.description.isNotEmpty
+            ? item.description
+            : 'Parcel';
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, color: colors.adminAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Item & weight',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _StatusPill(colors: colors, label: paymentStatus),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (item.description.isNotEmpty && item.description != title) ...[
+            const SizedBox(height: 4),
+            Text(
+              item.description,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _GlassMiniChip(
+                colors: colors,
+                label: '${_formatKg(item.weightKg)} kg',
+              ),
+              if (item.weightBand.isNotEmpty)
+                _GlassMiniChip(colors: colors, label: item.weightBand),
+              if (item.vehicle.isNotEmpty)
+                _GlassMiniChip(colors: colors, label: '${item.vehicle} ready'),
+              if (item.fragile)
+                _GlassMiniChip(colors: colors, label: 'Fragile handling'),
+            ],
+          ),
+          if (item.handlingNotes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              item.handlingNotes,
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _FirebaseStatusBanner extends StatelessWidget {
   final _CircumColors colors;
   final bool online;
   final String? error;
   final _CheckoutState checkoutState;
+  final String? paymentStatus;
 
   const _FirebaseStatusBanner({
     required this.colors,
     required this.online,
     required this.error,
     required this.checkoutState,
+    this.paymentStatus,
   });
 
   @override
@@ -28179,6 +28561,7 @@ class _FirebaseStatusBanner extends StatelessWidget {
       _CheckoutState.failed => error ?? 'This delivery could not be started.',
       _ => error ?? 'Estimated rider availability',
     };
+    final payment = paymentStatus?.trim();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -28218,12 +28601,16 @@ class _FirebaseStatusBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              healthy
-                  ? 'This delivery is saved and live.'
-                  : checkoutState.index < _CheckoutState.bookingCreated.index &&
-                          error == null
-                      ? '$message\nRider matching starts after payment and booking confirmation.'
-                      : message,
+              [
+                healthy
+                    ? 'This delivery is saved and live.'
+                    : checkoutState.index <
+                                _CheckoutState.bookingCreated.index &&
+                            error == null
+                        ? '$message\nRider matching starts after payment and booking confirmation.'
+                        : message,
+                if (payment != null && payment.isNotEmpty) 'Payment: $payment',
+              ].join('\n'),
               style: TextStyle(
                 color: colors.text,
                 fontSize: 12,
@@ -28236,6 +28623,84 @@ class _FirebaseStatusBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+String _deliveryPaymentStatusLabel(Map<String, dynamic> data) {
+  final raw = '${data['paymentStatus'] ?? ''}'.trim().toLowerCase();
+  if (raw == 'paid' ||
+      raw == 'completed' ||
+      raw == 'succeeded' ||
+      raw == 'success') {
+    return 'Paid';
+  }
+  if (raw == 'payment_pending' ||
+      raw == 'pending' ||
+      raw == 'requires_action') {
+    return 'Pending';
+  }
+  final deliveryStatus = '${data['status'] ?? ''}'.toLowerCase();
+  if (deliveryStatus.contains('payment_pending') ||
+      deliveryStatus.contains('awaiting_payment')) {
+    return 'Pending';
+  }
+  final hasPaidSignal = data['paidByRoth'] == true ||
+      data['cardPaymentCompleted'] == true ||
+      _firstNonEmpty([
+        data['stripePaymentId'],
+        data['paymentIntentId'],
+        data['stripeIntentId'],
+      ]).isNotEmpty ||
+      (_doubleFromAny(data['price']) ??
+              _doubleFromAny(data['totalFare']) ??
+              _doubleFromAny(data['stripeAmount']) ??
+              0) >
+          0;
+  return hasPaidSignal ? 'Paid' : 'Pending';
+}
+
+String _senderDeliveryPaymentStatusLabel(SenderDeliveryRecord delivery) {
+  final raw = delivery.paymentStatus.trim().toLowerCase();
+  if (raw == 'paid' ||
+      raw == 'completed' ||
+      raw == 'succeeded' ||
+      raw == 'success') {
+    return 'Paid';
+  }
+  if (raw == 'payment_pending' ||
+      raw == 'pending' ||
+      raw == 'requires_action') {
+    return delivery.pricePaid > 0 ? 'Paid' : 'Pending';
+  }
+  return raw.isEmpty ? (delivery.pricePaid > 0 ? 'Paid' : 'Pending') : raw;
+}
+
+String _driverAssignmentSummary(SenderDeliveryRecord delivery) {
+  final parts = [
+    delivery.assignedDriverName,
+    delivery.assignedDriverPhone,
+    delivery.assignedDriverVehicle,
+  ].where((part) => part.trim().isNotEmpty).toList();
+  return parts.isEmpty ? 'Rider assigned' : parts.join(' • ');
+}
+
+String _firstNonEmpty(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isNotEmpty && text != 'null') return text;
+  }
+  return '';
+}
+
+double? _doubleFromAny(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('${value ?? ''}');
+}
+
+String _formatKg(double weightKg) {
+  if (weightKg <= 0) return '0';
+  return weightKg.truncateToDouble() == weightKg
+      ? weightKg.toStringAsFixed(0)
+      : weightKg.toStringAsFixed(1);
 }
 
 class _VanguardCustomerPanel extends StatelessWidget {
@@ -29926,6 +30391,51 @@ class _InputBox extends StatelessWidget {
   }
 }
 
+class _PhonePickerBox extends StatelessWidget {
+  final _CircumColors colors;
+  final TextEditingController controller;
+  final String hint;
+  final VoidCallback onTap;
+
+  const _PhonePickerBox({
+    required this.colors,
+    required this.controller,
+    required this.hint,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = controller.text.trim();
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        decoration: BoxDecoration(
+          color: colors.field,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value.isEmpty ? hint : value,
+                style: TextStyle(
+                  color: value.isEmpty ? colors.mutedText : colors.text,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Icon(Icons.phone_outlined, color: colors.mutedText, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 const _todayWindowOptions = ['Morning', 'Afternoon', 'Evening'];
 
 class _DeliveryTimingChoices extends StatelessWidget {
@@ -30962,19 +31472,44 @@ class _DriverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile = driver ??
-        DriverProfile.fromMap(
-            'preview-rider',
-            {
-              'fullName': 'Marcus A.',
-              'vehicleType': vehicle.name,
-              'vehicleMakeModel':
-                  vehicle.name == 'Bike' ? 'E-bike' : 'Toyota Prius',
-              'vehicleColour': 'Blue',
-              'plateNumber': 'CIR 24K',
-              'verificationStatus': 'verified',
-            },
-            performance: metric);
+    if (driver == null) {
+      return _GlassPanel(
+        colors: colors,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.person_search, color: colors.adminAccent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Rider not assigned yet',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Circum is matching your delivery with an eligible rider.',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final profile = driver!;
     final performance = metric ?? profile.performance;
     final orderRank = _circumOrderRankForPerformance(performance);
     final rating = performance.averageRating <= 0
