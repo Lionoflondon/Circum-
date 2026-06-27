@@ -821,6 +821,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _recurringPickupSchedules = const [];
   List<Map<String, dynamic>> _payoutRequests = const [];
   List<Map<String, dynamic>> _riderWallets = const [];
+  List<Map<String, dynamic>> _roleRothWallets = const [];
   List<Map<String, dynamic>> _walletTransactions = const [];
   List<Map<String, dynamic>> _rothWallets = const [];
   List<Map<String, dynamic>> _rothTransactions = const [];
@@ -1059,6 +1060,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             .limit(40),
       ),
     ]);
+    final roleRothWallets = _can(AdminPermission.viewFinance)
+        ? await _readRoleRothWallets(db)
+        : <Map<String, dynamic>>[];
     final deliveries = results[0];
     final senders = results[1];
     final drivers = results[2];
@@ -1092,6 +1096,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _recurringPickupSchedules = schedules;
       _payoutRequests = payouts;
       _riderWallets = riderWallets;
+      _roleRothWallets = roleRothWallets;
       _walletTransactions = walletTransactions;
       _rothWallets = rothWallets;
       _rothTransactions = rothTransactions;
@@ -1147,6 +1152,23 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final snapshot = await query.get();
     return snapshot.docs
         .map((doc) => {'id': doc.id, ...doc.data()})
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> _readRoleRothWallets(
+    FirebaseFirestore db,
+  ) async {
+    final snapshot = await db.collectionGroup('wallets').limit(240).get();
+    return snapshot.docs
+        .where((doc) {
+          final walletType = '${doc.data()['walletType'] ?? ''}'.toLowerCase();
+          return walletType == 'sender' || walletType == 'rider';
+        })
+        .map((doc) => {
+              'id': doc.id,
+              'userId': doc.reference.parent.parent?.id ?? '',
+              ...doc.data(),
+            })
         .toList(growable: false);
   }
 
@@ -2608,6 +2630,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 wallet: _walletForRider(
                   _driverId(_selectedDriverProfile!),
                 ),
+                senderRothBalance:
+                    _senderRothBalanceForDriver(_selectedDriverProfile!),
+                riderRothBalance:
+                    _roleRothBalanceForDriver(_selectedDriverProfile!, 'rider'),
                 walletTransactions: _walletTransactions
                     .where(
                       (item) =>
@@ -4803,6 +4829,45 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     );
   }
 
+  double _roleRothBalanceForDriver(
+    Map<String, dynamic> driver,
+    String walletType,
+  ) {
+    final riderId = _driverId(driver);
+    final wallet = _roleRothWallets.firstWhere(
+      (item) =>
+          '${item['walletType'] ?? ''}'.toLowerCase() ==
+              walletType.toLowerCase() &&
+          '${item['userId'] ?? ''}' == riderId,
+      orElse: () => const <String, dynamic>{},
+    );
+    return ((wallet['balance'] ?? 0) as num?)?.toDouble() ?? 0;
+  }
+
+  double _senderRothBalanceForDriver(Map<String, dynamic> driver) {
+    final roleSenderBalance = _roleRothBalanceForDriver(driver, 'sender');
+    if (roleSenderBalance > 0) return roleSenderBalance;
+    final email = '${driver['email'] ?? ''}'.trim().toLowerCase();
+    if (email.isEmpty) return 0;
+    final wallet = _rothWallets.firstWhere(
+      (item) {
+        final walletId =
+            '${item['id'] ?? item['walletId'] ?? item['userId'] ?? ''}'
+                .trim()
+                .toLowerCase();
+        final userEmail =
+            '${item['userEmail'] ?? item['normalizedEmail'] ?? ''}'
+                .trim()
+                .toLowerCase();
+        return walletId == email || userEmail == email;
+      },
+      orElse: () => const <String, dynamic>{},
+    );
+    return ((wallet['balance'] ?? wallet['rothCredit'] ?? 0) as num?)
+            ?.toDouble() ??
+        0;
+  }
+
   bool _riderCanWithdraw(String riderId, String riderEmail) {
     if (riderEmail.trim().toLowerCase() == RoleAccessPolicy.superAdminEmail) {
       return true;
@@ -6770,6 +6835,8 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
   final _CircumColors colors;
   final Map<String, dynamic> driver;
   final Map<String, dynamic> wallet;
+  final double senderRothBalance;
+  final double riderRothBalance;
   final List<Map<String, dynamic>> walletTransactions;
   final List<Map<String, dynamic>> documents;
   final String statusLabel;
@@ -6788,6 +6855,8 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     required this.colors,
     required this.driver,
     required this.wallet,
+    required this.senderRothBalance,
+    required this.riderRothBalance,
     required this.walletTransactions,
     required this.documents,
     required this.statusLabel,
@@ -6979,6 +7048,39 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 14),
+                  _GlassPanel(
+                    colors: colors,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Roth balances',
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _profileRow(
+                          'Sender Roth',
+                          _adminMoneyText(senderRothBalance),
+                        ),
+                        _profileRow(
+                          'Rider Roth',
+                          _adminMoneyText(riderRothBalance),
+                        ),
+                        Text(
+                          'Rider Roth is non-withdrawable and separate from rider earnings.',
+                          style: TextStyle(
+                            color: colors.mutedText,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   _GlassPanel(
                     colors: colors,
@@ -10627,8 +10729,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       });
     });
     _rothWalletSub = FirebaseFirestore.instance
-        .collection('wallets')
+        .collection('users')
         .doc(riderId)
+        .collection('wallets')
+        .doc('rider')
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
@@ -15133,7 +15237,20 @@ class _RiderEarningsSnapshot {
   }
 
   _RiderEarningsSnapshot withRothWallet(Map<String, dynamic>? data) {
-    if (data == null) return this;
+    if (data == null) {
+      return _RiderEarningsSnapshot(
+        availableBalance: availableBalance,
+        pendingBalance: pendingBalance,
+        pendingWithdrawal: pendingWithdrawal,
+        lifetimeEarnings: lifetimeEarnings,
+        tipsReceived: tipsReceived,
+        withdrawnEarnings: withdrawnEarnings,
+        rothCredit: 0,
+        rothPendingEarnings: 0,
+        rothAvailableEarnings: 0,
+        completedJobs: completedJobs,
+      );
+    }
     return _RiderEarningsSnapshot(
       availableBalance: availableBalance,
       pendingBalance: pendingBalance,
@@ -15141,10 +15258,9 @@ class _RiderEarningsSnapshot {
       lifetimeEarnings: lifetimeEarnings,
       tipsReceived: tipsReceived,
       withdrawnEarnings: withdrawnEarnings,
-      rothCredit: (data['rothCredit'] as num? ?? 0).toDouble(),
-      rothPendingEarnings: (data['pendingEarnings'] as num? ?? 0).toDouble(),
-      rothAvailableEarnings:
-          (data['availableEarnings'] as num? ?? 0).toDouble(),
+      rothCredit: (data['balance'] as num? ?? 0).toDouble(),
+      rothPendingEarnings: 0,
+      rothAvailableEarnings: 0,
       completedJobs: completedJobs,
     );
   }
