@@ -1,4 +1,3 @@
-import 'package:bot_toast/bot_toast.dart';
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/contact_info.dart';
@@ -6,10 +5,7 @@ import 'package:circum/helper/toast_helper.dart';
 import 'package:circum/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_keyboard_size/flutter_keyboard_size.dart';
-import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:intl_phone_field/countries.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/text_field.dart';
@@ -17,7 +13,7 @@ import '../../account/bloc/account_bloc.dart';
 import '../../account/view/payment.dart';
 
 class DeliveryReviewExpandedView extends StatefulWidget {
-  DeliveryReviewExpandedView({Key? key}) : super(key: key);
+  const DeliveryReviewExpandedView({super.key});
 
   @override
   State<DeliveryReviewExpandedView> createState() =>
@@ -27,15 +23,10 @@ class DeliveryReviewExpandedView extends StatefulWidget {
 class _DeliveryReviewExpandedViewState
     extends State<DeliveryReviewExpandedView> {
   final TextEditingController _textFieldController = TextEditingController();
-  final TextEditingController _phoneNumberController = TextEditingController();
-
-  bool isPhoneValid = false;
-  String completeNumber = '';
 
   String? username;
   String? phoneNumber;
   String? additonalPickupInformation;
-  String? additonalDeliveryInformation;
 
   String? dropoffContactName;
   String? dropoffContactPhoneNumber;
@@ -45,16 +36,16 @@ class _DeliveryReviewExpandedViewState
 
   @override
   void initState() {
-    final AuthBloc authBloc = context.read<AuthBloc>();
+    final authBloc = context.read<AuthBloc>();
     username = authBloc.state.username;
     phoneNumber = authBloc.state.phoneNumber;
     email = authBloc.state.email;
-    print('phoneNumber is ${authBloc.state.phoneNumber}');
     super.initState();
   }
 
   @override
   void dispose() {
+    _textFieldController.dispose();
     super.dispose();
   }
 
@@ -88,6 +79,55 @@ class _DeliveryReviewExpandedViewState
     );
   }
 
+  Widget reviewTile({
+    required String iconPath,
+    required String label,
+    required String? value,
+    String? placeholder,
+    VoidCallback? onTap,
+  }) {
+    final hasValue = value != null && value.trim().isNotEmpty;
+    final tileContent = Row(
+      children: [
+        SvgPicture.asset(
+          iconPath,
+          height: 32,
+          width: 32,
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+            child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppText.text(label, color: const Color(0xFFC9D2D7), fontSize: 12),
+            AppText.text(hasValue ? value.trim() : placeholder ?? '',
+                fontSize: 16,
+                color: hasValue ? Colors.white : const Color(0xFFC9D2D7)),
+          ],
+        )),
+        if (onTap != null)
+          const Icon(
+            Icons.arrow_forward_ios,
+            color: Color(0xFF415058),
+          )
+      ],
+    );
+
+    if (onTap == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: tileContent,
+      );
+    }
+
+    return ListTile(
+      onTap: onTap,
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+      title: tileContent,
+    );
+  }
+
   Widget pickupDetail() {
     return BlocBuilder<SendPackageBloc, SendPackageState>(
         builder: (context, state) {
@@ -99,182 +139,72 @@ class _DeliveryReviewExpandedViewState
               child: AppText.text('Pick-up details',
                   fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 24),
-          ListTile(
-              onTap: () async {
-                _textFieldController.text = username ?? '';
-                final String? contactName =
-                    await additioalDetailsBottomSheet(title: 'Contact name');
+          reviewTile(
+            iconPath: 'assets/svg/profile.svg',
+            label: 'Contact name',
+            value: username,
+            onTap: () async {
+              final contactName = await textDetailsBottomSheet(
+                title: 'Contact name',
+                initialText: username,
+              );
 
-                if (contactName != null) {
-                  setState(() {
-                    username = contactName;
-                  });
-                }
-              },
-              dense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/profile.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('Contact name',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(username ?? '', fontSize: 16)
-                        ],
-                      )
-                    ],
-                  ),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
+              if (contactName != null) {
+                setState(() {
+                  username = contactName;
+                });
+              }
+            },
+          ),
           const SizedBox(height: 20),
-          ListTile(
-              onTap: () {},
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/location.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                          child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('Address',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(
-                              '${state.pickupLocation}, ${state.pickupLocationSubAddress}',
-                              fontSize: 16)
-                        ],
-                      ))
-                    ],
-                  )),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
+          reviewTile(
+            iconPath: 'assets/svg/location.svg',
+            label: 'Address',
+            value: '${state.pickupLocation}, ${state.pickupLocationSubAddress}',
+          ),
           const SizedBox(height: 20),
-          ListTile(
-              onTap: () async {
-                _textFieldController.text = phoneNumber ?? '';
-                final String? newPhone =
-                    await additioalDetailsBottomSheet(title: 'Phone number');
+          reviewTile(
+            iconPath: 'assets/svg/phone.svg',
+            label: 'Phone number',
+            value: phoneNumber,
+            placeholder: 'Phone number',
+            onTap: () async {
+              final newPhone = await phoneBottomSheet(title: 'Phone number');
 
-                if (newPhone != null) {
-                  setState(() {
-                    phoneNumber = newPhone;
-                  });
-                  // ignore: use_build_context_synchronously
-                  context
-                      .read<AuthBloc>()
-                      .add(UpdatePhoneNumber(value: newPhone));
-                }
-              },
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/phone.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                          child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('Phone number',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(phoneNumber ?? 'Phone number',
-                              fontSize: 16)
-                        ],
-                      ))
-                    ],
-                  )),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
+              if (newPhone != null) {
+                if (!mounted) return;
+                setState(() {
+                  phoneNumber = newPhone;
+                });
+                if (!context.mounted) return;
+                context
+                    .read<AuthBloc>()
+                    .add(UpdatePhoneNumber(value: newPhone));
+              }
+            },
+          ),
           const SizedBox(height: 20),
-          ListTile(
-              onTap: () async {
-                _textFieldController.text = additonalPickupInformation ?? '';
-                final String? info = await additioalDetailsBottomSheet(
-                    title: 'More information');
+          reviewTile(
+            iconPath: 'assets/svg/legal.svg',
+            label: 'More information',
+            value: additonalPickupInformation,
+            placeholder: 'Add an additional information',
+            onTap: () async {
+              final info = await textDetailsBottomSheet(
+                title: 'More information',
+                initialText: additonalPickupInformation,
+                hintText: 'Add an additional information',
+                minLines: 4,
+                maxLines: 4,
+              );
 
-                if (info != null) {
-                  setState(() {
-                    additonalPickupInformation = info;
-                  });
-                }
-              },
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/legal.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                          child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('More information',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(
-                              additonalPickupInformation ??
-                                  'Add an additional information',
-                              fontSize: 16,
-                              color: additonalPickupInformation != null
-                                  ? Colors.white
-                                  : const Color(0xFFC9D2D7))
-                        ],
-                      ))
-                    ],
-                  )),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
+              if (info != null) {
+                setState(() {
+                  additonalPickupInformation = info;
+                });
+              }
+            },
+          ),
         ],
       );
     });
@@ -291,186 +221,69 @@ class _DeliveryReviewExpandedViewState
               child: AppText.text('Drop-off details',
                   fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 24),
-          ListTile(
-              onTap: () async {
-                _textFieldController.text = dropoffContactName ?? '';
-                final String? info =
-                    await additioalDetailsBottomSheet(title: 'Contact name');
+          reviewTile(
+            iconPath: 'assets/svg/profile.svg',
+            label: 'Contact name',
+            value: dropoffContactName,
+            placeholder: 'Full name',
+            onTap: () async {
+              final info = await textDetailsBottomSheet(
+                title: 'Contact name',
+                initialText: dropoffContactName,
+              );
 
-                if (info != null) {
-                  setState(() {
-                    dropoffContactName = info;
-                  });
-                }
-              },
-              dense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/profile.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('Contact name',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(dropoffContactName ?? 'Full name',
-                              fontSize: 16,
-                              color: dropoffContactName != null
-                                  ? Colors.white
-                                  : const Color(0xFFC9D2D7))
-                        ],
-                      )
-                    ],
-                  ),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
+              if (info != null) {
+                setState(() {
+                  dropoffContactName = info;
+                });
+              }
+            },
+          ),
           const SizedBox(height: 20),
-          ListTile(
-              onTap: () {},
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/location.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                          child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('Address',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(
-                              '${state.destinationLocation}, ${state.destinationLocationSubAddress}',
-                              fontSize: 16)
-                        ],
-                      ))
-                    ],
-                  )),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
+          reviewTile(
+            iconPath: 'assets/svg/location.svg',
+            label: 'Address',
+            value:
+                '${state.destinationLocation}, ${state.destinationLocationSubAddress}',
+          ),
           const SizedBox(height: 20),
-          ListTile(
-              onTap: () async {
-                _textFieldController.text = dropoffContactPhoneNumber ?? '';
-                final String? info =
-                    await additioalDetailsBottomSheet(title: 'Phone number');
+          reviewTile(
+            iconPath: 'assets/svg/phone.svg',
+            label: 'Phone number',
+            value: dropoffContactPhoneNumber,
+            placeholder: 'Phone number',
+            onTap: () async {
+              final info = await phoneBottomSheet(title: 'Phone number');
 
-                if (info != null) {
-                  setState(() {
-                    dropoffContactPhoneNumber = info;
-                  });
-                }
-              },
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/phone.svg',
-                        height: 32,
-                        width: 32,
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                          child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppText.text('Phone number',
-                              color: const Color(0xFFC9D2D7), fontSize: 12),
-                          AppText.text(
-                              dropoffContactPhoneNumber ?? 'Phone number',
-                              fontSize: 16,
-                              color: dropoffContactPhoneNumber != null
-                                  ? Colors.white
-                                  : const Color(0xFFC9D2D7))
-                        ],
-                      ))
-                    ],
-                  )),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF415058),
-                  )
-                ],
-              )),
-          // const SizedBox(height: 20),
-          // ListTile(
-          //     onTap: () async {
-          //       _textFieldController.text = additonalDeliveryInformation ?? '';
-          //       final String? info = await additioalDetailsBottomSheet(
-          //           title: 'More information');
+              if (info != null) {
+                setState(() {
+                  dropoffContactPhoneNumber = info;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 20),
+          reviewTile(
+            iconPath: 'assets/svg/legal.svg',
+            label: 'Delivery instructions',
+            value: dropoffAdditionalInformation,
+            placeholder: 'Access code, flat number…',
+            onTap: () async {
+              final info = await textDetailsBottomSheet(
+                title: 'Delivery instructions',
+                initialText: dropoffAdditionalInformation,
+                hintText: 'Access code, flat number…',
+                minLines: 4,
+                maxLines: 4,
+              );
 
-          //       if (info != null) {
-          //         setState(() {
-          //           additonalDeliveryInformation = info;
-          //         });
-          //       }
-          //     },
-          //     dense: true,
-          //     contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          //     title: Row(
-          //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          //       children: [
-          //         Expanded(
-          //             child: Row(
-          //           children: [
-          //             SvgPicture.asset(
-          //               'assets/svg/legal.svg',
-          //               height: 32,
-          //               width: 32,
-          //             ),
-          //             const SizedBox(width: 18),
-          //             Expanded(
-          //                 child: Column(
-          //               crossAxisAlignment: CrossAxisAlignment.start,
-          //               children: [
-          //                 AppText.text('More information',
-          //                     color: const Color(0xFFC9D2D7), fontSize: 12),
-          //                 AppText.text(
-          //                     additonalDeliveryInformation ??
-          //                         'Add an additional information',
-          //                     fontSize: 16,
-          //                     color: additonalDeliveryInformation != null
-          //                         ? Colors.white
-          //                         : const Color(0xFFC9D2D7))
-          //               ],
-          //             ))
-          //           ],
-          //         )),
-          //         const Icon(
-          //           Icons.arrow_forward_ios,
-          //           color: Color(0xFF415058),
-          //         )
-          //       ],
-          //     )),
+              if (info != null) {
+                setState(() {
+                  dropoffAdditionalInformation = info;
+                });
+              }
+            },
+          ),
         ],
       );
     });
@@ -487,10 +300,21 @@ class _DeliveryReviewExpandedViewState
                 child: AppText.text('Confirm delivery',
                     fontSize: 16, fontWeight: FontWeight.bold)),
             onPressed: () async {
-              if (phoneNumber == null || phoneNumber!.isEmpty) {
+              if (phoneNumber == null || phoneNumber!.trim().isEmpty) {
                 return ShowToast()
-                    .errorToast(title: 'Please add a pick up phone number');
+                    .errorToast(title: 'Please add a pick-up phone number');
               }
+              if (dropoffContactName == null ||
+                  dropoffContactName!.trim().length < 2) {
+                return ShowToast()
+                    .errorToast(title: 'Please add a drop-off contact name');
+              }
+              if (dropoffContactPhoneNumber == null ||
+                  dropoffContactPhoneNumber!.trim().isEmpty) {
+                return ShowToast()
+                    .errorToast(title: 'Please add a drop-off phone number');
+              }
+
               context.read<AccountBloc>().add(
                     PaymentCreateIntent(
                       amount: (state.price! * 100).round(),
@@ -501,33 +325,43 @@ class _DeliveryReviewExpandedViewState
               final payForDelivery = await showPaymentBottomSheet(context,
                   amount: state.price!, phone: phoneNumber);
 
-              if (payForDelivery == 'success') {
-                // ignore: use_build_context_synchronously
-                context.read<SendPackageBloc>().add(SendDeliveryRequest(
-                    pickupDetails: ContactInfo.fromJson(
-                        fullname: username,
-                        address: state.pickupCoordinate!,
-                        phoneNumber: phoneNumber,
-                        moreInformation: additonalPickupInformation,
-                        locality: state.pickupLocality),
-                    dropoffDetails: ContactInfo.fromJson(
-                        fullname: dropoffContactName,
-                        phoneNumber: dropoffContactPhoneNumber,
-                        address: state.desinationCoordinate!,
-                        moreInformation: dropoffAdditionalInformation,
-                        locality: state.destinationLocality)));
-                // The wait is required to avoid a glitch effect
-                await Future.delayed(const Duration(milliseconds: 300));
-                // ignore: use_build_context_synchronously
-                Navigator.pop(context);
+              if (payForDelivery != 'success') {
+                if (!context.mounted) return;
+                context.read<AccountBloc>().add(PaymentStart());
+                return;
               }
+
+              if (!context.mounted) return;
+              context.read<SendPackageBloc>().add(SendDeliveryRequest(
+                  pickupDetails: ContactInfo.fromJson(
+                      fullname: username,
+                      address: state.pickupCoordinate!,
+                      phoneNumber: phoneNumber,
+                      moreInformation: additonalPickupInformation,
+                      locality: state.pickupLocality),
+                  dropoffDetails: ContactInfo.fromJson(
+                      fullname: dropoffContactName,
+                      phoneNumber: dropoffContactPhoneNumber,
+                      address: state.desinationCoordinate!,
+                      moreInformation: dropoffAdditionalInformation,
+                      locality: state.destinationLocality)));
+              await Future.delayed(const Duration(milliseconds: 300));
+              if (!context.mounted) return;
+              Navigator.pop(context);
             }),
       );
     });
   }
 
-  additioalDetailsBottomSheet({required String title, String? initialText}) {
-    return showModalBottomSheet(
+  Future<String?> textDetailsBottomSheet({
+    required String title,
+    String? initialText,
+    String? hintText,
+    int minLines = 1,
+    int maxLines = 1,
+  }) {
+    _textFieldController.text = initialText ?? '';
+    return showModalBottomSheet<String>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
@@ -547,7 +381,7 @@ class _DeliveryReviewExpandedViewState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: AppText.text(title),
@@ -555,19 +389,14 @@ class _DeliveryReviewExpandedViewState
                       const SizedBox(height: 12),
                       Container(
                           margin: const EdgeInsets.symmetric(horizontal: 24),
-                          // height: 600,
-                          child: title == 'Phone number'
-                              ? phoneInput()
-                              : AppTextInput.input(
-                                  initialValue: initialText,
-                                  minLines: title == 'More information' ? 4 : 1,
-                                  maxLines: title == 'More information' ? 4 : 1,
-                                  keyboardType: title == 'Phone number'
-                                      ? TextInputType.phone
-                                      : TextInputType.text,
-                                  autofocus: true,
-                                  controller: _textFieldController)),
-                      SizedBox(height: 20),
+                          child: AppTextInput.input(
+                              hintText: hintText,
+                              minLines: minLines,
+                              maxLines: maxLines,
+                              keyboardType: TextInputType.text,
+                              autofocus: true,
+                              controller: _textFieldController)),
+                      const SizedBox(height: 20),
                       Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Row(
@@ -588,29 +417,18 @@ class _DeliveryReviewExpandedViewState
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600),
                                       onPressed: () async {
-                                        if (title == 'Phone number') {
-                                          if (isPhoneValid == true) {
-                                            Navigator.pop(
-                                                context, completeNumber);
-                                          }
+                                        final text =
+                                            _textFieldController.text.trim();
+                                        if (text.length > 2) {
+                                          Navigator.pop(context, text);
+                                          _textFieldController.clear();
                                         } else {
-                                          if (_textFieldController.text.length >
-                                              2) {
-                                            Navigator.pop(context,
-                                                _textFieldController.text);
-                                            _textFieldController.text = "";
-                                          } else {
-                                            await ShowToast().errorToast(
-                                                title: 'Name is too short');
-
-                                            // cancel();
-                                          }
+                                          await ShowToast().errorToast(
+                                              title: 'Name is too short');
                                         }
                                       })),
                             ],
                           )),
-                      // if (isKeyboardVisible == true)
-                      //   SizedBox(height: res.keyboardHeight),
                       const SizedBox(height: 60),
                     ],
                   ))
@@ -619,90 +437,117 @@ class _DeliveryReviewExpandedViewState
         });
   }
 
-  Widget phoneInput() {
-    const _initialCountryCode = 'GB';
-    var _country =
-        countries.firstWhere((element) => element.code == _initialCountryCode);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // AppText.text('Mobile Number', color: Colors.white),
-        // const SizedBox(height: 12),
-        IntlPhoneField(
-          style: const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
-          dropdownTextStyle:
-              const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
-          decoration: InputDecoration(
-            fillColor: AppColors.input,
-            filled: true,
-            labelStyle: const TextStyle(
-                fontFamily: 'Helvetica',
-                fontSize: 14.0,
-                fontWeight: FontWeight.w500,
-                color: AppColors.grey),
-            // hintText: '9020020222',
-            hintStyle: TextStyle(
-                color: const Color(0xFF050529).withOpacity(0.25),
-                fontFamily: 'Helvetica'),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(0)),
-              borderSide: BorderSide(width: 1, color: AppColors.primary),
-            ),
-            enabledBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(0)),
-              borderSide: BorderSide(color: Color(0xFF050529)),
-            ),
-          ),
-          initialCountryCode: _initialCountryCode,
-          // controller: phoneCo,
-          onCountryChanged: (country) {
-            print(country.name);
-            print('Phone Number: ${_phoneNumberController.text}');
-            _country = country;
-            if (_phoneNumberController.text.isNotEmpty) {
-              if (_phoneNumberController.text.length -
-                          country.dialCode.length -
-                          1 >=
-                      country.minLength &&
-                  _phoneNumberController.text.length -
-                          country.dialCode.length -
-                          1 <=
-                      country.maxLength) {
-                setState(() {
-                  isPhoneValid = true;
-                });
+  Future<String?> phoneBottomSheet({required String title}) {
+    return showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20), topRight: Radius.circular(20))),
+        builder: (_) {
+          bool isPhoneValid = false;
+          String? completeNumber;
 
-                print('valid');
-              } else {
-                setState(() {
-                  isPhoneValid = false;
-                });
-                print('invalid');
-              }
-            }
-          },
-          onChanged: (val) {
-            // print('Changed');
-            if (val.number.length >= _country.minLength &&
-                val.number.length <= _country.maxLength) {
-              setState(() {
-                isPhoneValid = true;
-              });
-            } else {
-              setState(() {
-                isPhoneValid = false;
-              });
-            }
-
-            setState(() {
-              completeNumber = val.completeNumber;
-            });
-            // context
-            //     .read<AuthBloc>()
-            //     .add(PhoneNumberChanged(phoneNumber: val.completeNumber));
-          },
-        )
-      ],
-    );
+          return StatefulBuilder(builder: (context, setSheetState) {
+            return Wrap(
+              children: [
+                Container(
+                    constraints: BoxConstraints(
+                      minHeight: MediaQuery.of(context).size.height * 0.8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: AppText.text(title),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 24),
+                          child: IntlPhoneField(
+                            style: const TextStyle(
+                                color: Colors.white, fontFamily: 'Helvetica'),
+                            dropdownTextStyle: const TextStyle(
+                                color: Colors.white, fontFamily: 'Helvetica'),
+                            decoration: InputDecoration(
+                              fillColor: AppColors.input,
+                              filled: true,
+                              labelStyle: const TextStyle(
+                                  fontFamily: 'Helvetica',
+                                  fontSize: 14.0,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.grey),
+                              hintStyle: TextStyle(
+                                  color: const Color(0xFF050529)
+                                      .withValues(alpha: 0.25),
+                                  fontFamily: 'Helvetica'),
+                              focusedBorder: const OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(0)),
+                                borderSide: BorderSide(
+                                    width: 1, color: AppColors.primary),
+                              ),
+                              enabledBorder: const OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(0)),
+                                borderSide:
+                                    BorderSide(color: Color(0xFF050529)),
+                              ),
+                            ),
+                            initialCountryCode: 'GB',
+                            onChanged: (val) {
+                              setSheetState(() {
+                                isPhoneValid = val.isValidNumber();
+                                completeNumber = val.completeNumber;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                    child: AppButton.button(
+                                        backgroundColor: Colors.grey[400],
+                                        widget: AppText.text('Cancel',
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600),
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                        })),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                    child: AppButton.button(
+                                        widget: AppText.text('Done',
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600),
+                                        onPressed: () async {
+                                          if (isPhoneValid &&
+                                              completeNumber != null) {
+                                            Navigator.pop(
+                                                context, completeNumber);
+                                          } else {
+                                            await ShowToast().errorToast(
+                                                title:
+                                                    'Please enter a valid phone number');
+                                          }
+                                        })),
+                              ],
+                            )),
+                        const SizedBox(height: 60),
+                      ],
+                    ))
+              ],
+            );
+          });
+        });
   }
 }
