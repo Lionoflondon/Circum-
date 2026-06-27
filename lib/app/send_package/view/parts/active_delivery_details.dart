@@ -204,6 +204,14 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
                     AppText.text('Delivery details',
                         fontSize: 16, fontWeight: FontWeight.w600),
                     const SizedBox(height: 24),
+                    if (state.itemDescription != null &&
+                        state.itemDescription!.trim().isNotEmpty) ...[
+                      AppText.text(state.itemDescription!.trim(),
+                          fontSize: 14,
+                          color: const Color(0xFFC9D2D7),
+                          fontWeight: FontWeight.w500),
+                      const SizedBox(height: 16),
+                    ],
                     Row(
                       children: [
                         SvgPicture.asset('assets/svg/location.svg'),
@@ -220,6 +228,49 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
                         ))
                       ],
                     ),
+                    if (state.irisResult != null ||
+                        state.parcelWeightKg > 0) ...[
+                      const Divider(
+                        color: AppColors.borderColor,
+                        height: 32,
+                        thickness: 1,
+                      ),
+                      Row(
+                        children: [
+                          SvgPicture.asset('assets/svg/legal.svg'),
+                          const SizedBox(width: 18),
+                          Expanded(
+                              child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AppText.text('Item & weight',
+                                  fontSize: 12, color: AppColors.textGrey),
+                              if (state.irisResult != null) ...[
+                                AppText.text(
+                                    '${state.irisResult!.matchedItemName} · ${state.irisResult!.weightKg.toStringAsFixed(2)}kg',
+                                    fontSize: 16),
+                                AppText.text(
+                                    state.irisResult!.vehicleSuitability,
+                                    fontSize: 12,
+                                    color: const Color(0xFFC9D2D7)),
+                                if (state.irisResult!.fragile)
+                                  AppText.text('Fragile item',
+                                      fontSize: 12,
+                                      color: const Color(0xFFE9B84C),
+                                      fontWeight: FontWeight.w600),
+                                if (state.irisResult!.handlingNotes.isNotEmpty)
+                                  AppText.text(state.irisResult!.handlingNotes,
+                                      fontSize: 12,
+                                      color: const Color(0xFFC9D2D7)),
+                              ] else
+                                AppText.text(
+                                    '${state.parcelWeightKg.toStringAsFixed(2)}kg',
+                                    fontSize: 16)
+                            ],
+                          ))
+                        ],
+                      ),
+                    ],
                     const Divider(
                       color: AppColors.borderColor,
                       height: 32,

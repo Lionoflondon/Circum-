@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:circum/app/iris/iris_learning_bridge.dart';
+import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/utils/theme/colors.dart';
@@ -294,9 +296,50 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetParcelWeight(
-      SetParcelWeight event, Emitter<SendPackageState> emit) {
-    emit(state.copyWith(parcelWeightKg: event.weightKg));
+      SetParcelWeight event, Emitter<SendPackageState> emit) async {
+    final itemDescription =
+        event.itemDescription ?? state.itemDescription ?? '';
+    final quickEstimate = itemDescription.trim().isEmpty
+        ? null
+        : IrisWeightEstimator.knownProductEstimate(itemDescription);
+    final quickWeight = DeliveryPricing.checkoutPricingWeightKg(
+      userEnteredWeightKg: event.weightKg,
+      irisEstimatedWeightKg: quickEstimate?.weightKg,
+    );
+    emit(state.copyWith(
+      parcelWeightKg: quickWeight,
+      irisResult: quickEstimate,
+      itemDescription: itemDescription.trim().isEmpty ? null : itemDescription,
+      isIrisResolving: quickEstimate != null,
+    ));
     add(SetPrice());
+    if (quickEstimate == null) return;
+    try {
+      final trusted = await IrisLearningBridge.resolveWithHistory(
+        description: itemDescription,
+        quantity: quickEstimate.quantity,
+        userWeightKg: event.weightKg,
+      );
+      final finalWeight = DeliveryPricing.checkoutPricingWeightKg(
+        userEnteredWeightKg: event.weightKg,
+        irisEstimatedWeightKg: trusted.pricingWeightKg,
+      );
+      emit(state.copyWith(
+        parcelWeightKg: finalWeight,
+        irisResult: quickEstimate,
+        itemDescription: itemDescription,
+        isIrisResolving: false,
+      ));
+      add(SetPrice());
+    } catch (_) {
+      emit(state.copyWith(
+        parcelWeightKg: quickWeight,
+        irisResult: quickEstimate,
+        itemDescription: itemDescription,
+        isIrisResolving: false,
+      ));
+      add(SetPrice());
+    }
   }
 
   void _handleSendDeliveryRequestEvent(

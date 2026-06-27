@@ -58,6 +58,9 @@ class SendPackageState {
   ChatStatus chatStatus;
   String? message;
   String? lastHistoryId;
+  final IrisWeightLookupResult? irisResult;
+  final String? itemDescription;
+  final bool isIrisResolving;
   SendPackageState(
       {this.suggestions = const [],
       this.ongoingRequests = const [],
@@ -89,7 +92,10 @@ class SendPackageState {
       this.chatMessages = const [],
       this.chatStatus = ChatStatus.initial,
       this.message,
-      this.lastHistoryId});
+      this.lastHistoryId,
+      this.irisResult,
+      this.itemDescription,
+      this.isIrisResolving = false});
 
   SendPackageState copyWith(
       {List<Suggestion>? suggestions,
@@ -122,7 +128,10 @@ class SendPackageState {
       List<Message>? chatMessages,
       ChatStatus? chatStatus,
       String? message,
-      String? lastHistoryId}) {
+      String? lastHistoryId,
+      IrisWeightLookupResult? irisResult,
+      String? itemDescription,
+      bool? isIrisResolving}) {
     return SendPackageState(
         suggestions: suggestions ?? this.suggestions,
         pickupLocation: pickupLocation ?? this.pickupLocation,
@@ -157,6 +166,9 @@ class SendPackageState {
         minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
         maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
         message: message ?? this.message,
-        lastHistoryId: lastHistoryId ?? this.lastHistoryId);
+        lastHistoryId: lastHistoryId ?? this.lastHistoryId,
+        irisResult: irisResult ?? this.irisResult,
+        itemDescription: itemDescription ?? this.itemDescription,
+        isIrisResolving: isIrisResolving ?? this.isIrisResolving);
   }
 }

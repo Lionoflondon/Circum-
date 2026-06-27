@@ -78,6 +78,10 @@ class IrisWeightEstimator {
   }) {
     final text = description.trim().toLowerCase();
     final quantity = extractQuantity(description);
+    if (text.contains('tv') || text.contains('television')) {
+      final tvEstimate = _estimateTvBySize(text, quantity);
+      if (tvEstimate != null) return tvEstimate;
+    }
     for (final product in _knownProducts) {
       if (product.patterns.any(text.contains)) {
         final electronics = product.packageType == 'Electronics';
@@ -154,6 +158,67 @@ class IrisWeightEstimator {
       );
     }
     return null;
+  }
+
+  static IrisWeightLookupResult? _estimateTvBySize(String text, int quantity) {
+    int? inches;
+    final beforeTv = RegExp(
+      r'\b(\d{2,3})\s*(?:"|in|inch|inches|-inch)?\s*(?:tv|television)\b',
+    ).firstMatch(text);
+    final afterTv = RegExp(
+      r'\b(?:tv|television)\s*(\d{2,3})\b',
+    ).firstMatch(text);
+    inches = int.tryParse(beforeTv?.group(1) ?? afterTv?.group(1) ?? '');
+    if (inches == null) {
+      if (text.contains('large tv') || text.contains('big tv')) {
+        inches = 65;
+      } else if (text.contains('small tv')) {
+        inches = 32;
+      }
+    }
+    if (inches == null) return null;
+
+    final double weightKg;
+    final String vehicle;
+    if (inches <= 32) {
+      weightKg = 5;
+      vehicle = 'Car';
+    } else if (inches <= 43) {
+      weightKg = 9;
+      vehicle = 'Car';
+    } else if (inches <= 55) {
+      weightKg = 15;
+      vehicle = 'Van';
+    } else if (inches <= 65) {
+      weightKg = 25;
+      vehicle = 'Van';
+    } else {
+      weightKg = 38;
+      vehicle = 'Van';
+    }
+    final safeQuantity = quantity <= 0 || quantity == inches ? 1 : quantity;
+    final totalWeight = weightKg * safeQuantity;
+    return IrisWeightLookupResult(
+      matchedItemName: '$inches" Television',
+      quantity: safeQuantity,
+      singleItemWeightKg: weightKg,
+      weightKg: totalWeight,
+      weightBand: DeliveryPricing.weightBandFor(totalWeight).category,
+      confidence: 'medium',
+      confidenceScore: 0.75,
+      explanation: 'IRIS estimated weight from screen size.',
+      packageType: 'Electronics',
+      weightSource: 'size_based_estimate',
+      truthBand: 'Size-Based Estimate',
+      requiresVehicleReview: inches >= 55,
+      typicalDimensions: null,
+      vehicleSuitability: vehicle,
+      fragile: true,
+      valueSensitive: false,
+      vanguardRecommended: false,
+      stackable: false,
+      handlingNotes: 'Screen item — keep upright, do not stack.',
+    );
   }
 
   static IrisTrustedPricingDecision resolveTrustedKnownItemPricing({
@@ -293,6 +358,18 @@ class IrisWeightEstimator {
 
   static const List<_KnownIrisProduct> _knownProducts = [
     _KnownIrisProduct(
+      patterns: ['iphone 16 pro max', 'apple iphone 16 pro max'],
+      name: 'Apple iPhone 16 Pro Max',
+      weightKg: 0.227,
+      packageType: 'Electronics',
+      truthBand: 'Exact Match',
+      typicalDimensions: ItemDimensionsCm(length: 16, width: 8, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Small fragile electronics package.',
+    ),
+    _KnownIrisProduct(
       patterns: ['iphone 16', 'apple iphone 16'],
       name: 'Apple iPhone 16',
       weightKg: 0.199,
@@ -352,11 +429,69 @@ class IrisWeightEstimator {
       handlingNotes: 'Small fragile electronics package.',
     ),
     _KnownIrisProduct(
-      patterns: ['macbook air 13', 'macbook air', 'macbook'],
+      patterns: ['macbook pro 16', 'macbook pro 16"'],
+      name: 'MacBook Pro 16',
+      weightKg: 2.15,
+      packageType: 'Electronics',
+      typicalDimensions: ItemDimensionsCm(length: 36, width: 25, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Protect from impact and rain.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['macbook pro 14', 'macbook pro 14"'],
+      name: 'MacBook Pro 14',
+      weightKg: 1.61,
+      packageType: 'Electronics',
+      typicalDimensions: ItemDimensionsCm(length: 32, width: 23, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Protect from impact and rain.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['macbook pro 13', 'macbook pro'],
+      name: 'MacBook Pro 13',
+      weightKg: 1.40,
+      packageType: 'Electronics',
+      typicalDimensions: ItemDimensionsCm(length: 31, width: 22, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Protect from impact and rain.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['macbook air 15', 'macbook air 15"'],
+      name: 'MacBook Air 15',
+      weightKg: 1.51,
+      packageType: 'Electronics',
+      typicalDimensions: ItemDimensionsCm(length: 34, width: 24, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Protect from impact and rain.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['macbook air 13', 'macbook air'],
       name: 'MacBook Air 13',
       weightKg: 1.24,
       packageType: 'Electronics',
       typicalDimensions: ItemDimensionsCm(length: 31, width: 22, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Protect from impact and rain.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['macbook', 'apple laptop'],
+      name: 'MacBook (unspecified model)',
+      weightKg: 1.51,
+      packageType: 'Electronics',
+      confidence: 'medium',
+      confidenceScore: 0.68,
+      truthBand: 'Medium Confidence',
+      typicalDimensions: ItemDimensionsCm(length: 34, width: 24, height: 2),
       vehicleSuitability: 'Bike',
       fragile: true,
       stackable: true,
@@ -388,17 +523,18 @@ class IrisWeightEstimator {
     ),
     _KnownIrisProduct(
       patterns: ['tv', 'television'],
-      name: 'Television',
+      name: 'Television (size unknown)',
       weightKg: 12,
-      packageType: 'Large item',
-      confidence: 'medium',
-      confidenceScore: 0.7,
-      truthBand: 'Medium Confidence',
+      packageType: 'Electronics',
+      confidence: 'low',
+      confidenceScore: 0.45,
+      truthBand: 'Low Confidence',
       typicalDimensions: ItemDimensionsCm(length: 110, width: 70, height: 15),
       vehicleSuitability: 'Car or Van',
       fragile: true,
       stackable: false,
-      handlingNotes: 'Screen item; vehicle depends on screen size.',
+      handlingNotes:
+          'Screen item — vehicle depends on size. If possible, confirm screen size with sender.',
     ),
     _KnownIrisProduct(
       patterns: ['sofa', 'couch'],

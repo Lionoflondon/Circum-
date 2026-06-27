@@ -62,7 +62,8 @@ class SetPrice extends SendPackageEvent {}
 
 class SetParcelWeight extends SendPackageEvent {
   final double weightKg;
-  const SetParcelWeight({required this.weightKg});
+  final String? itemDescription;
+  const SetParcelWeight({required this.weightKg, this.itemDescription});
 }
 
 class CheckForPushToken extends SendPackageEvent {}

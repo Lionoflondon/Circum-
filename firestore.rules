@@ -336,6 +336,16 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    match /iris_learning/{itemKey}/records/{recordId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['weightKg', 'source', 'timestamp'])
+        && request.resource.data.weightKg is number
+        && request.resource.data.weightKg > 0
+        && request.resource.data.weightKg < 2000;
+      allow update, delete: if false;
+    }
+
     match /deliveryAdjustments/{adjustmentId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||

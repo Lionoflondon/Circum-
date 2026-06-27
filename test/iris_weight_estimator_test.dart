@@ -156,6 +156,43 @@ void main() {
       expect(estimate.weightBand, 'Small Parcel');
     });
 
+    test('MacBook matching prefers specific models before catch-all', () {
+      final pro16 = IrisWeightEstimator.knownProductEstimate('MacBook Pro 16');
+      final air13 = IrisWeightEstimator.knownProductEstimate('MacBook Air 13');
+      final generic = IrisWeightEstimator.knownProductEstimate('MacBook');
+
+      expect(pro16, isNotNull);
+      expect(pro16!.matchedItemName, 'MacBook Pro 16');
+      expect(pro16.singleItemWeightKg, closeTo(2.15, 0.001));
+      expect(air13, isNotNull);
+      expect(air13!.matchedItemName, 'MacBook Air 13');
+      expect(air13.singleItemWeightKg, closeTo(1.24, 0.001));
+      expect(generic, isNotNull);
+      expect(generic!.matchedItemName, 'MacBook (unspecified model)');
+      expect(generic.singleItemWeightKg, closeTo(1.51, 0.001));
+      expect(generic.confidenceScore, closeTo(0.68, 0.001));
+    });
+
+    test('TV estimates use screen size before static fallback', () {
+      final largeTv = IrisWeightEstimator.knownProductEstimate('65 inch tv');
+      final compactTv = IrisWeightEstimator.knownProductEstimate('small tv');
+      final unknownTv = IrisWeightEstimator.knownProductEstimate('television');
+
+      expect(largeTv, isNotNull);
+      expect(largeTv!.matchedItemName, '65" Television');
+      expect(largeTv.weightKg, closeTo(25, 0.001));
+      expect(largeTv.vehicleSuitability, 'Van');
+      expect(largeTv.weightBand, DeliveryPricing.weightBandFor(25).category);
+      expect(largeTv.requiresVehicleReview, isTrue);
+      expect(compactTv, isNotNull);
+      expect(compactTv!.matchedItemName, '32" Television');
+      expect(compactTv.weightKg, closeTo(5, 0.001));
+      expect(compactTv.vehicleSuitability, 'Car');
+      expect(unknownTv, isNotNull);
+      expect(unknownTv!.matchedItemName, 'Television (size unknown)');
+      expect(unknownTv.confidenceScore, closeTo(0.45, 0.001));
+    });
+
     test('final chargeable weight still uses higher customer or Iris weight',
         () {
       final estimate =
@@ -346,11 +383,11 @@ void main() {
 
       expect(macBooks, isNotNull);
       expect(macBooks!.quantity, 5);
-      expect(macBooks.singleItemWeightKg, closeTo(1.24, 0.001));
-      expect(macBooks.weightKg, closeTo(6.2, 0.001));
+      expect(macBooks.singleItemWeightKg, closeTo(1.51, 0.001));
+      expect(macBooks.weightKg, closeTo(7.55, 0.001));
       expect(
         macBooks.weightBand,
-        DeliveryPricing.weightBandFor(6.2).category,
+        DeliveryPricing.weightBandFor(7.55).category,
       );
     });
 
