@@ -183,7 +183,6 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       final checkoutUrl = await _createCheckoutSession(
         pickupId: pickupId,
         profileId: id,
-        quote: quote,
       );
 
       if (!mounted) return;
@@ -222,20 +221,28 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   Future<String?> _createCheckoutSession({
     required String pickupId,
     required String profileId,
-    required HealthPlusPriceBreakdown quote,
   }) async {
     try {
+      final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (idToken == null) {
+        setState(() {
+          _message = 'Please sign in again to continue Health+ checkout.';
+        });
+        return null;
+      }
       final response = await http.post(
         Uri.parse(
           'https://us-central1-circum-2797c.cloudfunctions.net/createHealthPlusCheckoutSession',
         ),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
         body: jsonEncode({
           'bookingId': pickupId,
           'profileId': profileId,
           'email': _email.text.trim(),
           'frequency': _frequency.value,
-          'priceBreakdown': quote.toJson(),
           'successUrl':
               'https://circum-app-2797c.web.app/?app=health&health=success',
           'cancelUrl':

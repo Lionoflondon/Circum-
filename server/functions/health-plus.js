@@ -8,14 +8,26 @@ const stripe = require("stripe")(stripeConfig.livekey);
 const rothLedger = require("./roth-ledger");
 const {calculateWalletCheckout} = require("./wallet-core");
 const {
-  calculateHealthPlusAmountPence,
   normalizeSchedule,
   buildHealthPlusCheckoutParams,
   buildAdminStatusUpdate,
 } = require("./health-plus-core");
 
-function allowCors(res) {
-  res.set("Access-Control-Allow-Origin", "*");
+const ALLOWED_ORIGINS = new Set([
+  "https://circumuk.com",
+  "https://www.circumuk.com",
+  "https://circum-app-2797c.web.app",
+  "https://circum-2797c.web.app",
+  "https://admin.circumuk.com",
+  "https://circum-admin-2797c.web.app",
+]);
+
+function allowCors(req, res) {
+  const origin = req.get("origin");
+  if (ALLOWED_ORIGINS.has(origin)) {
+    res.set("Access-Control-Allow-Origin", origin);
+    res.set("Vary", "Origin");
+  }
   res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
 }
@@ -95,7 +107,7 @@ function sendHttpsError(res, error) {
 }
 
 exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, res) => {
-  allowCors(res);
+  allowCors(req, res);
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).send({error: "POST required"});
 
@@ -105,30 +117,50 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       profileId,
       email,
       frequency,
-      priceBreakdown,
       userId,
       paymentCurrency,
       successUrl,
       cancelUrl,
     } = req.body;
-    const breakdown = priceBreakdown || {};
 
     if (!bookingId || !profileId) {
       return res.status(400).send({error: "bookingId and profileId are required"});
     }
 
-    const amountPence = calculateHealthPlusAmountPence({
-      baseFarePence: Math.round((breakdown.baseFare || 6) * 100),
-      distanceFarePence:
-        Math.round((breakdown.distanceFare || 3.8) * 100),
-      weightSurchargePence:
-        Math.round((breakdown.weightSurcharge || 0) * 100),
-      serviceFeePence: Math.round((breakdown.serviceFee || 1.2) * 100),
-    });
+    const authHeader = req.get("Authorization") || "";
+    const match = authHeader.match(/^Bearer (.+)$/);
+    if (!match) {
+      return res.status(401).send({error: "Please sign in again to continue Health+ checkout."});
+    }
+
+    let decodedToken;
+    try {
+      decodedToken = await getAuth().verifyIdToken(match[1]);
+    } catch (error) {
+      return res.status(401).send({error: "Please sign in again to continue Health+ checkout."});
+    }
+    if (decodedToken.uid !== profileId) {
+      return res.status(403).send({error: "This Health+ checkout does not belong to your account."});
+    }
+
+    const paymentSnap = await getFirestore()
+        .collection("healthPlusPayments")
+        .doc(bookingId)
+        .get();
+    const payment = paymentSnap.exists ? paymentSnap.data() : null;
+    if (!payment || payment.profileId !== profileId) {
+      return res.status(400).send({error: "Health+ checkout is not ready yet. Please try again or contact Circum Support."});
+    }
+
+    const storedAmount = Number(payment.amount || 0);
+    if (!Number.isFinite(storedAmount) || storedAmount <= 0) {
+      return res.status(400).send({error: "Health+ checkout is not ready yet. Please try again or contact Circum Support."});
+    }
+    const amountPence = Math.max(1100, Math.round(storedAmount * 100));
     const recurring = normalizeSchedule(frequency) !== "one_off";
 
-    const walletUserId = userId || profileId;
-    const walletUserEmail = `${email || ""}`.trim().toLowerCase();
+    const walletUserId = userId || decodedToken.uid;
+    const walletUserEmail = `${email || decodedToken.email || ""}`.trim().toLowerCase();
     const walletLookupId = walletUserEmail || walletUserId;
     const walletSnap = walletUserId ?
       await getFirestore().collection("wallets").doc(walletLookupId).get() :
@@ -243,12 +275,12 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     });
   } catch (error) {
     console.error("Health+ checkout session error", error);
-    return res.status(500).send({error: error.message});
+    return res.status(500).send({error: "Health+ checkout is temporarily unavailable. Please try again or contact Circum Support."});
   }
 });
 
 exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res) => {
-  allowCors(res);
+  allowCors(req, res);
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).send({error: "POST required"});
 
