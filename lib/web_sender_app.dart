@@ -798,6 +798,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   final _rothUserId = TextEditingController();
   final _rothAmount = TextEditingController();
   final _rothReason = TextEditingController();
+  String _rothWalletTarget = 'sender';
   _AdminSection _section = _AdminSection.overview;
   AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   User? _adminUser;
@@ -4828,8 +4829,49 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       return;
     }
     try {
+      if (credit) {
+        final summary = _rothWalletTarget == 'both'
+            ? 'Issue ${amount.toStringAsFixed(2)} Roth to both Sender and Rider wallets?'
+            : 'Issue ${amount.toStringAsFixed(2)} Roth to ${_rothWalletTarget == 'sender' ? 'Sender' : 'Rider'} wallet?';
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Confirm Roth issue'),
+            content: Text('$summary\n\nRecipient: $userId\nReason: $reason'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Issue Roth'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true) return;
+        final idempotencyKey =
+            'admin_${_adminUser?.uid ?? _adminUser?.email}_${DateTime.now().microsecondsSinceEpoch}';
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('issueRothToWallets')
+            .call({
+          (userId.contains('@') ? 'recipientEmail' : 'recipientUid'): userId,
+          'walletTarget': _rothWalletTarget,
+          'amount': amount,
+          'reason': reason,
+          'idempotencyKey': idempotencyKey,
+        });
+        final data = Map<String, dynamic>.from(result.data as Map);
+        _rothAmount.clear();
+        _rothReason.clear();
+        setState(() => _message =
+            'Roth issued to ${data['walletTarget']} wallet(s). Admin issue ID: ${data['adminIssueId']}');
+        await _loadAdminData();
+        return;
+      }
       final callable = FirebaseFunctions.instance.httpsCallable(
-        credit ? 'issueRothCredit' : 'debitRothCredit',
+        'debitRothCredit',
       );
       await callable.call({
         'userId': userId,
@@ -4914,6 +4956,23 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   child: TextField(
                     controller: _rothUserId,
                     decoration: decoration('User email'),
+                  ),
+                ),
+                SizedBox(
+                  width: 180,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _rothWalletTarget,
+                    decoration: decoration('Wallet target'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'sender', child: Text('Sender wallet')),
+                      DropdownMenuItem(
+                          value: 'rider', child: Text('Rider wallet')),
+                      DropdownMenuItem(
+                          value: 'both', child: Text('Both wallets')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _rothWalletTarget = value ?? 'sender'),
                   ),
                 ),
                 SizedBox(

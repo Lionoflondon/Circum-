@@ -59,6 +59,7 @@ exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
 exports.issueRothCredit = rothLedger.issueRothCredit;
+exports.issueRothToWallets = rothLedger.issueRothToWallets;
 exports.debitRothCredit = rothLedger.debitRothCredit;
 exports.redeemGiftCard = rothLedger.redeemGiftCard;
 exports.setWalletFrozen = rothLedger.setWalletFrozen;

@@ -34,6 +34,31 @@ function requireRothAdmin(context) {
   }
 }
 
+async function requireTrustedRothAdmin(context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Roth admin authentication is required.");
+  }
+  if (hasAdminRole(context)) {
+    return {
+      uid: context.auth.uid,
+      email: context.auth.token.email || null,
+    };
+  }
+  const adminSnap = await getFirestore()
+      .collection("adminUsers")
+      .doc(context.auth.uid)
+      .get();
+  const admin = adminSnap.exists ? adminSnap.data() : {};
+  const role = `${admin.role || ""}`.toLowerCase();
+  if (admin.status === "active" && ["super_admin", "finance_admin", "operations_admin"].includes(role)) {
+    return {
+      uid: context.auth.uid,
+      email: context.auth.token.email || admin.email || null,
+    };
+  }
+  throw new functions.https.HttpsError("permission-denied", "Roth wallet access requires admin finance permissions.");
+}
+
 async function writeRothAudit({adminId, adminEmail, action, userId, amount = null, reason = null, metadata = {}}) {
   await getFirestore().collection("adminAuditLogs").add({
     adminUserId: adminId,
@@ -65,6 +90,28 @@ async function resolveWalletIdentity({userId = "", email = "", authUid = ""}) {
   const walletId = walletIdForEmail(normalizedEmail) || uid;
   if (!walletId) throw new Error("Wallet identity requires email or uid.");
   return {walletId, uid: uid || null, userEmail: normalizedEmail || null};
+}
+
+async function resolveRecipientUser({recipientUid = "", recipientEmail = ""}) {
+  const email = normalizeEmail(recipientEmail || "");
+  const uid = `${recipientUid || ""}`.trim();
+  try {
+    const user = email ? await getAuth().getUserByEmail(email) : await getAuth().getUser(uid);
+    return {
+      uid: user.uid,
+      email: normalizeEmail(user.email || email),
+    };
+  } catch (error) {
+    throw new functions.https.HttpsError("not-found", "Recipient user could not be found.");
+  }
+}
+
+function walletTargetsFor(value) {
+  const target = `${value || ""}`.trim().toLowerCase();
+  if (target === "sender") return ["sender"];
+  if (target === "rider") return ["rider"];
+  if (target === "both") return ["sender", "rider"];
+  throw new functions.https.HttpsError("invalid-argument", "Wallet target must be sender, rider, or both.");
 }
 
 async function recordRothMovement({
@@ -362,6 +409,189 @@ exports.applyCheckoutRoth = functions.https.onCall(async (data, context) => {
     transactionId: `wallet_${service}_${referenceId}`,
     metadata: {service, source: "checkout_roth"},
   });
+});
+
+exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
+  const admin = await requireTrustedRothAdmin(context);
+  const amount = roundWalletMoney(data.amount);
+  const reason = `${data.reason || ""}`.trim();
+  const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
+  const targets = walletTargetsFor(data.walletTarget);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Roth amount must be greater than zero.");
+  }
+  if (!reason) {
+    throw new functions.https.HttpsError("invalid-argument", "Reason is required.");
+  }
+  if (!idempotencyKey) {
+    throw new functions.https.HttpsError("invalid-argument", "Idempotency key is required.");
+  }
+  const recipient = await resolveRecipientUser({
+    recipientUid: data.recipientUid || data.userId,
+    recipientEmail: data.recipientEmail || data.email,
+  });
+  const db = getFirestore();
+  const adminIssueId = `${data.adminIssueId || idempotencyKey}`.trim();
+  const issueRef = db.collection("rothAdminIssues").doc(idempotencyKey);
+  const ledgerRefs = targets.map((walletType) => ({
+    walletType,
+    ref: db.collection("rothLedger").doc(`${adminIssueId}_${walletType}`),
+    walletRef: db.collection("users").doc(recipient.uid).collection("wallets").doc(walletType),
+  }));
+  const legacyIdentity = await resolveWalletIdentity({
+    userId: recipient.uid,
+    email: recipient.email,
+    authUid: recipient.uid,
+  });
+  let result = null;
+  await db.runTransaction(async (transaction) => {
+    const existingIssue = await transaction.get(issueRef);
+    if (existingIssue.exists) {
+      const existing = existingIssue.data();
+      result = {
+        adminIssueId: existing.adminIssueId,
+        idempotencyKey: existing.idempotencyKey,
+        recipientUid: existing.recipientUid,
+        recipientEmail: existing.recipientEmail,
+        walletTarget: existing.walletTarget,
+        amount: existing.amount,
+        credited: existing.credited || [],
+        idempotentReplay: true,
+      };
+      return;
+    }
+    const now = FieldValue.serverTimestamp();
+    const roleWalletSnaps = [];
+    const roleLedgerSnaps = [];
+    for (const item of ledgerRefs) {
+      roleWalletSnaps.push(await transaction.get(item.walletRef));
+      roleLedgerSnaps.push(await transaction.get(item.ref));
+    }
+    const legacyWalletRef = targets.includes("sender") ?
+      db.collection("wallets").doc(legacyIdentity.walletId) : null;
+    const legacyTxRef = targets.includes("sender") ?
+      db.collection("walletTransactions").doc(`${adminIssueId}_sender_legacy`) : null;
+    const legacyWalletSnap = legacyWalletRef ? await transaction.get(legacyWalletRef) : null;
+    const legacyTxSnap = legacyTxRef ? await transaction.get(legacyTxRef) : null;
+    const credited = [];
+    for (let index = 0; index < ledgerRefs.length; index++) {
+      const item = ledgerRefs[index];
+      const walletSnap = roleWalletSnaps[index];
+      const ledgerSnap = roleLedgerSnaps[index];
+      if (ledgerSnap.exists) {
+        throw new functions.https.HttpsError("already-exists", "Roth issue ledger entry already exists.");
+      }
+      const wallet = walletSnap.exists ? walletSnap.data() : {};
+      const before = roundWalletMoney(wallet.balance || 0);
+      const after = roundWalletMoney(before + amount);
+      transaction.set(item.walletRef, {
+        balance: after,
+        updatedAt: now,
+        createdAt: wallet.createdAt || now,
+        currency: "ROTH",
+        walletType: item.walletType,
+      }, {merge: true});
+      transaction.set(item.ref, {
+        uid: recipient.uid,
+        walletType: item.walletType,
+        amount,
+        direction: "credit",
+        reason,
+        source: "admin_issue",
+        adminId: admin.uid,
+        adminEmail: admin.email,
+        adminIssueId,
+        idempotencyKey,
+        createdAt: now,
+        metadata: {
+          recipientEmail: recipient.email,
+          walletTarget: data.walletTarget,
+        },
+      });
+      credited.push({
+        walletType: item.walletType,
+        ledgerEntryId: item.ref.id,
+        balanceAfter: after,
+      });
+    }
+    if (legacyWalletRef && legacyTxRef && legacyWalletSnap && legacyTxSnap) {
+      if (!legacyTxSnap.exists) {
+        const legacyWallet = legacyWalletSnap.exists ? legacyWalletSnap.data() : {};
+        const before = roundWalletMoney(legacyWallet.balance == null ? legacyWallet.rothCredit : legacyWallet.balance);
+        const after = roundWalletMoney(before + amount);
+        transaction.set(legacyWalletRef, {
+          userId: legacyIdentity.walletId,
+          uid: recipient.uid,
+          userEmail: recipient.email,
+          normalizedEmail: recipient.email,
+          balance: after,
+          rothCredit: after,
+          currency: "GBP",
+          isFrozen: legacyWallet.isFrozen === true,
+          pendingEarnings: roundWalletMoney(legacyWallet.pendingEarnings || 0),
+          availableEarnings: roundWalletMoney(legacyWallet.availableEarnings || 0),
+          createdAt: legacyWallet.createdAt || now,
+          updatedAt: now,
+        }, {merge: true});
+        transaction.set(legacyTxRef, {
+          id: legacyTxRef.id,
+          userId: legacyIdentity.walletId,
+          uid: recipient.uid,
+          userEmail: recipient.email,
+          normalizedEmail: recipient.email,
+          walletId: legacyIdentity.walletId,
+          amount,
+          direction: "credit",
+          source: "admin_issue",
+          balanceType: BALANCE_TYPES.rothCredit,
+          type: TRANSACTION_TYPES.adminCredit,
+          reason,
+          paymentProvider: "manual_admin",
+          issuedByAdminId: admin.uid,
+          issuedByAdminEmail: admin.email,
+          balanceBefore: before,
+          balanceAfter: after,
+          createdAt: now,
+          metadata: {adminIssueId, idempotencyKey, walletType: "sender"},
+        });
+      }
+    }
+    const issueRecord = {
+      adminIssueId,
+      idempotencyKey,
+      recipientUid: recipient.uid,
+      recipientEmail: recipient.email,
+      walletTarget: data.walletTarget,
+      amount,
+      credited,
+      createdAt: now,
+    };
+    result = {
+      adminIssueId,
+      idempotencyKey,
+      recipientUid: recipient.uid,
+      recipientEmail: recipient.email,
+      walletTarget: data.walletTarget,
+      amount,
+      credited,
+    };
+    transaction.set(issueRef, issueRecord);
+    transaction.set(db.collection("adminAuditLogs").doc(), {
+      action: "roth_issue",
+      actionType: "roth_issue",
+      adminId: admin.uid,
+      adminUserId: admin.uid,
+      adminEmail: admin.email,
+      recipientUid: recipient.uid,
+      walletTarget: data.walletTarget,
+      amount,
+      reason,
+      adminIssueId,
+      idempotencyKey,
+      createdAt: now,
+    });
+  });
+  return result;
 });
 
 exports.issueRothCredit = functions.https.onCall(async (data, context) => {

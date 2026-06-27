@@ -356,8 +356,7 @@ service cloud.firestore {
           resource.data.uid == request.auth.uid ||
           resource.data.userEmail == normalizedAuthEmail()
         ));
-      allow create, update: if isFinanceAdmin() || (signedIn() && userId == request.auth.uid);
-      allow delete: if hasRole('super_admin');
+      allow create, update, delete: if false;
     }
 
     match /walletTransactions/{transactionId} {
@@ -368,11 +367,24 @@ service cloud.firestore {
           resource.data.uid == request.auth.uid ||
           resource.data.userEmail == normalizedAuthEmail()
         ));
-      allow create: if isFinanceAdmin() ||
-        (signedIn() && request.resource.data.userId == request.auth.uid &&
-          request.resource.data.balanceType in ['pendingEarnings', 'availableEarnings']);
-      allow update: if isFinanceAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update, delete: if false;
+    }
+
+    match /users/{userId}/wallets/{walletType} {
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && request.auth.uid == userId);
+      allow create, update, delete: if false;
+    }
+
+    match /rothLedger/{ledgerEntryId} {
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /rothAdminIssues/{issueId} {
+      allow read: if isFinanceAdmin();
+      allow create, update, delete: if false;
     }
 
     match /giftCards/{code} {
