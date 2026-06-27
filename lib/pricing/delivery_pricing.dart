@@ -506,6 +506,7 @@ class DeliveryPricing {
       'customer_declared' || 'manual' => 'Customer Declared',
       'verified_parcel_history' => 'Past Verified Parcels',
       'keyword_override' => 'Item Type Rule',
+      'category_estimate' || 'category_fallback' => 'Category Estimate',
       _ => 'Not confirmed',
     };
   }

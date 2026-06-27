@@ -157,6 +157,44 @@ class IrisWeightEstimator {
         handlingNotes: repositoryItem.deliveryNotes,
       );
     }
+    final categoryEstimate = _categoryFallbackEstimate(text, quantity);
+    if (categoryEstimate != null) return categoryEstimate;
+    return null;
+  }
+
+  static IrisWeightLookupResult? _categoryFallbackEstimate(
+    String text,
+    int quantity,
+  ) {
+    for (final fallback in _categoryFallbacks) {
+      if (!fallback.patterns.any(text.contains)) continue;
+      final safeQuantity = quantity <= 0 ? 1 : quantity;
+      final totalWeightKg = fallback.weightKg * safeQuantity;
+      return IrisWeightLookupResult(
+        matchedItemName: fallback.name,
+        quantity: safeQuantity,
+        singleItemWeightKg: fallback.weightKg,
+        weightKg: totalWeightKg,
+        weightBand: DeliveryPricing.weightBandFor(totalWeightKg).category,
+        confidence: fallback.confidence,
+        confidenceScore: fallback.confidenceScore,
+        explanation:
+            'IRIS estimated this from the item category. Rider will verify at pickup.',
+        packageType: fallback.packageType,
+        weightSource: 'category_estimate',
+        truthBand: 'Category Estimate',
+        requiresVehicleReview: fallback.vehicleSuitability == 'Van' ||
+            totalWeightKg > 10 ||
+            fallback.requiresVehicleReview,
+        typicalDimensions: fallback.typicalDimensions,
+        vehicleSuitability: fallback.vehicleSuitability,
+        fragile: fallback.fragile,
+        valueSensitive: fallback.valueSensitive,
+        vanguardRecommended: fallback.vanguardRecommended,
+        stackable: fallback.stackable,
+        handlingNotes: fallback.handlingNotes,
+      );
+    }
     return null;
   }
 
@@ -648,6 +686,72 @@ class IrisWeightEstimator {
     ),
   ];
 
+  static const List<_CategoryIrisFallback> _categoryFallbacks = [
+    _CategoryIrisFallback(
+      patterns: ['bible', 'textbook', 'novel', 'book'],
+      name: 'Book / Bible',
+      weightKg: 0.8,
+      packageType: 'Books',
+      confidence: 'medium',
+      confidenceScore: 0.65,
+      vehicleSuitability: 'Bike',
+      fragile: false,
+      stackable: true,
+      handlingNotes: 'Keep dry and flat.',
+    ),
+    _CategoryIrisFallback(
+      patterns: ['acoustic guitar', 'electric guitar', 'guitar'],
+      name: 'Guitar',
+      weightKg: 4,
+      packageType: 'Musical Instrument',
+      confidence: 'medium',
+      confidenceScore: 0.7,
+      vehicleSuitability: 'Car',
+      fragile: true,
+      stackable: false,
+      handlingNotes: 'Fragile instrument — protect from impact, do not stack.',
+    ),
+    _CategoryIrisFallback(
+      patterns: [
+        'stanley cup',
+        'tumbler',
+        'flask',
+        'water bottle',
+        'travel mug',
+      ],
+      name: 'Tumbler / Bottle',
+      weightKg: 0.7,
+      packageType: 'Drinkware',
+      confidence: 'medium',
+      confidenceScore: 0.66,
+      vehicleSuitability: 'Bike',
+      fragile: false,
+      stackable: true,
+      handlingNotes: 'Ensure lid is secure if filled.',
+    ),
+    _CategoryIrisFallback(
+      patterns: [
+        'mobile phone',
+        'smartphone',
+        'android phone',
+        'iphone',
+        'phone'
+      ],
+      name: 'Mobile phone',
+      weightKg: 0.25,
+      packageType: 'Electronics',
+      confidence: 'medium',
+      confidenceScore: 0.72,
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      valueSensitive: true,
+      vanguardRecommended: true,
+      stackable: true,
+      handlingNotes:
+          'Protect from impact and rain. Vanguard recommended for value-sensitive electronics.',
+    ),
+  ];
+
   static const List<_KnownItemRule> _knownItemRules = [
     _KnownItemRule(
       patterns: ['iphone', 'mobile phone', 'smartphone'],
@@ -830,5 +934,39 @@ class _KnownIrisProduct {
     this.fragile = false,
     this.stackable = true,
     this.handlingNotes = '',
+  });
+}
+
+class _CategoryIrisFallback {
+  final List<String> patterns;
+  final String name;
+  final double weightKg;
+  final String packageType;
+  final String confidence;
+  final double confidenceScore;
+  final ItemDimensionsCm? typicalDimensions;
+  final String vehicleSuitability;
+  final bool fragile;
+  final bool valueSensitive;
+  final bool vanguardRecommended;
+  final bool stackable;
+  final bool requiresVehicleReview;
+  final String handlingNotes;
+
+  const _CategoryIrisFallback({
+    required this.patterns,
+    required this.name,
+    required this.weightKg,
+    required this.packageType,
+    required this.confidence,
+    required this.confidenceScore,
+    this.typicalDimensions,
+    required this.vehicleSuitability,
+    required this.fragile,
+    this.valueSensitive = false,
+    this.vanguardRecommended = false,
+    required this.stackable,
+    this.requiresVehicleReview = false,
+    required this.handlingNotes,
   });
 }

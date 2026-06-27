@@ -18044,9 +18044,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         ? 'keyword_override'
         : estimate.weightSource == 'known_product_lookup'
             ? 'repository_match'
-            : estimate.weightKg >= (senderWeightKg ?? 0)
-                ? 'photo_match'
-                : 'customer_declared';
+            : estimate.weightSource == 'category_estimate'
+                ? 'category_estimate'
+                : estimate.weightKg >= (senderWeightKg ?? 0)
+                    ? 'photo_match'
+                    : 'customer_declared';
 
     return _WeightPricingDecision(
       weightKg: higherWeight,

@@ -193,6 +193,59 @@ void main() {
       expect(unknownTv.confidenceScore, closeTo(0.45, 0.001));
     });
 
+    test('category fallback estimates common non-repository items', () {
+      final bible = IrisWeightEstimator.knownProductEstimate('1 bible');
+      final tenBibles = IrisWeightEstimator.knownProductEstimate('10 bible');
+      final guitar = IrisWeightEstimator.knownProductEstimate('1 guitar');
+      final tumbler = IrisWeightEstimator.knownProductEstimate('1 stanley cup');
+      final phone = IrisWeightEstimator.knownProductEstimate('1 phone');
+
+      expect(bible, isNotNull);
+      expect(bible!.matchedItemName, 'Book / Bible');
+      expect(bible.weightKg, closeTo(0.8, 0.001));
+      expect(bible.weightSource, 'category_estimate');
+      expect(bible.truthBand, 'Category Estimate');
+      expect(DeliveryPricing.weightSourceLabel(bible.weightSource),
+          'Category Estimate');
+
+      expect(tenBibles, isNotNull);
+      expect(tenBibles!.weightKg, closeTo(8, 0.001));
+      expect(tenBibles.quantity, 10);
+
+      expect(guitar, isNotNull);
+      expect(guitar!.matchedItemName, 'Guitar');
+      expect(guitar.weightKg, closeTo(4, 0.001));
+      expect(guitar.vehicleSuitability, 'Car');
+      expect(guitar.fragile, isTrue);
+      expect(guitar.stackable, isFalse);
+
+      expect(tumbler, isNotNull);
+      expect(tumbler!.matchedItemName, 'Tumbler / Bottle');
+      expect(tumbler.weightKg, closeTo(0.7, 0.001));
+
+      expect(phone, isNotNull);
+      expect(phone!.matchedItemName, 'Mobile phone');
+      expect(phone.weightKg, closeTo(0.25, 0.001));
+      expect(phone.vanguardRecommended, isTrue);
+      expect(phone.valueSensitive, isTrue);
+    });
+
+    test('specific products still win before generic category fallback', () {
+      final iphone16 = IrisWeightEstimator.knownProductEstimate('iphone 16');
+      final macbookPro16 =
+          IrisWeightEstimator.knownProductEstimate('macbook pro 16');
+
+      expect(iphone16, isNotNull);
+      expect(iphone16!.matchedItemName, 'Apple iPhone 16');
+      expect(iphone16.weightSource, 'known_product_lookup');
+      expect(iphone16.weightKg, closeTo(0.199, 0.001));
+
+      expect(macbookPro16, isNotNull);
+      expect(macbookPro16!.matchedItemName, 'MacBook Pro 16');
+      expect(macbookPro16.weightSource, 'known_product_lookup');
+      expect(macbookPro16.weightKg, closeTo(2.15, 0.001));
+    });
+
     test('final chargeable weight still uses higher customer or Iris weight',
         () {
       final estimate =
