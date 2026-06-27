@@ -2,6 +2,7 @@
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {getAuth} = require("firebase-admin/auth");
 const functions = require("firebase-functions/v1");
 const stripeConfig = functions.config().stripe || {};
 const stripe = require("stripe")(stripeConfig.livekey);
@@ -444,34 +445,29 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
   res.send({success: true});
 });
 
-exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
-  try {
-    const {
-      customerId,
-    } = req.body;
-    // const customer = await stripe.customers.retrieve(customerId);
-
-    const paymentMethods = await stripe.paymentMethods.list({
-      customer: customerId,
-      type: "card",
-    });
-
-    res.json(paymentMethods);
-    // const cards = customer.sources.data.filter((source) => source.object === "card");
-    // res.json(cards);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: "Unable to retrieve cards"});
-  }
-});
-
-
 exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
   try {
     const {riderId} = req.body;
+    const authHeader = req.get("Authorization") || "";
+    const match = authHeader.match(/^Bearer (.+)$/);
+
+    if (!match) {
+      return res.status(401).send({msg: "Authorization token is required"});
+    }
+
+    let decodedToken;
+    try {
+      decodedToken = await getAuth().verifyIdToken(match[1]);
+    } catch (error) {
+      return res.status(401).send({msg: "Invalid authorization token"});
+    }
 
     if (!riderId) {
       return res.status(404).send({msg: "riderId is required"});
+    }
+
+    if (decodedToken.uid !== riderId) {
+      return res.status(403).send({msg: "riderId does not match authenticated user"});
     }
 
     const paymentRef = await getFirestore().collection("payments").doc(riderId).get();
@@ -554,6 +550,19 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
 exports.endTrip = functions.https.onRequest(async (req, res) => {
   try {
     const {riderId, requestId, riderName} = req.body;
+    const authHeader = req.get("Authorization") || "";
+    const match = authHeader.match(/^Bearer (.+)$/);
+
+    if (!match) {
+      return res.status(401).send({msg: "Authorization token is required"});
+    }
+
+    let decodedToken;
+    try {
+      decodedToken = await getAuth().verifyIdToken(match[1]);
+    } catch (error) {
+      return res.status(401).send({msg: "Invalid authorization token"});
+    }
 
     if (!requestId) {
       return res.status(404).send({msg: "requestId is required"});
@@ -567,17 +576,29 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
       return res.status(404).send({msg: "riderName is required"});
     }
 
+    if (decodedToken.uid !== riderId) {
+      return res.status(403).send({msg: "riderId does not match authenticated user"});
+    }
+
     // Retrieve the 'history' database reference
     const ride = await getFirestore().collection("deliveryRequests").where("requestId", "==", requestId).get();
     const rideData = ride.docs[0];
-    const rideDataRes = rideData.data();
 
-    if (!rideData.exists) {
-      return res.status(404).send({msg: "Trip already completed"});
+    if (!rideData || !rideData.exists) {
+      return res.status(404).send({msg: "Trip not found"});
     }
 
-    if (rideDataRes.riderId != riderId) {
-      return res.status(400).send({msg: "riderId does not match"});
+    const rideDataRes = rideData.data();
+
+    if (rideDataRes.riderId !== riderId) {
+      return res.status(403).send({msg: "riderId does not match"});
+    }
+
+    if (rideDataRes.status === "completed") {
+      return res.status(409).send({
+        msg: "Trip already completed",
+        historyId: rideDataRes.historyId || "",
+      });
     }
 
     const rideCost = rideDataRes.price;
