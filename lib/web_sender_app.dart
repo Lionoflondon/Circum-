@@ -844,6 +844,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _giftRequests = const [];
   List<Map<String, dynamic>> _giftBrands = const [];
   List<Map<String, dynamic>> _businessAccounts = const [];
+  List<Map<String, dynamic>> _businessWallets = const [];
+  List<Map<String, dynamic>> _businessInvoices = const [];
   List<Map<String, dynamic>> _giftCampaignParticipants = const [];
   List<Map<String, dynamic>> _senders = const [];
   List<Map<String, dynamic>> _drivers = const [];
@@ -1087,6 +1089,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       ),
       _readCollection(db.collection('giftBrands').limit(100)),
       _readCollection(db.collection('businessAccounts').limit(100)),
+      _readCollection(db.collection('business_wallets').limit(100)),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(
+              db
+                  .collection('businessInvoices')
+                  .orderBy('createdAt', descending: true)
+                  .limit(50),
+            )
+          : Future.value(<Map<String, dynamic>>[]),
       _readCollection(db.collection('giftCampaignParticipants').limit(100)),
       _readCollection(
         db
@@ -1118,7 +1129,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final giftRequests = results[17];
     final giftBrands = results[18];
     final businessAccounts = results[19];
-    final giftCampaignParticipants = results[20];
+    final businessWallets = results[20];
+    final businessInvoices = results[21];
+    final giftCampaignParticipants = results[22];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -1141,6 +1154,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _giftRequests = giftRequests;
       _giftBrands = giftBrands;
       _businessAccounts = businessAccounts;
+      _businessWallets = businessWallets;
+      _businessInvoices = businessInvoices;
       _giftCampaignParticipants = giftCampaignParticipants;
       _auditLogs = results[21];
       _metrics = AdminMetricSnapshot.fromData(
@@ -2626,6 +2641,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return AdminAccessPolicy.can(_roles, permission);
   }
 
+  void _openAdminWarningDetails(_AdminWarning warning) {
+    setState(() {
+      _section = warning.section;
+      _search.text = warning.searchQuery;
+      if (warning.serviceFilter != null) {
+        _deliveryServiceFilter = warning.serviceFilter!;
+      }
+    });
+  }
+
   String _friendlyAdminAuthMessage(FirebaseAuthException error) {
     return switch (error.code) {
       'user-not-found' => 'No employee account found for that email.',
@@ -2811,6 +2836,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           deliveries: _deliveries,
           auditLogs: _auditLogs,
           supportTickets: _supportTickets,
+          businessAccounts: _businessAccounts,
+          giftRequests: _giftRequests,
+          healthPlusPickups: _healthPlusPickups,
+          businessInvoices: _businessInvoices,
+          rothTransactions: _rothTransactions,
+          drivers: _drivers,
+          onViewWarning: _openAdminWarningDetails,
         ),
       _AdminSection.adminUsers => _AdminUsersSection(
           colors: colors,
@@ -3063,6 +3095,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rothRowBuilder: _businessRothRow,
           analyticsRowBuilder: _businessAnalyticsRow,
           auditRowBuilder: _businessAuditRow,
+          onCreateInvoice: _createBusinessInvoice,
+          onAdjustRoth: _adjustBusinessRoth,
         ),
       _AdminSection.healthPlus => _AdminDataSection(
           colors: colors,
@@ -5191,8 +5225,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       .toList(growable: false);
 
   List<Map<String, dynamic>> _businessRothRows() => [
+        ..._businessWallets,
         ..._rothTransactions.where(_isBusinessRecord),
-        ..._rothWallets.where(_isBusinessRecord),
       ].toList(growable: false);
 
   List<Map<String, dynamic>> _businessAuditRows() => _auditLogs
@@ -5204,23 +5238,25 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       .toList(growable: false);
 
   List<Map<String, dynamic>> _businessInvoiceRows() =>
-      _businessAccounts.map((account) {
-        final id = _businessAccountId(account);
-        final deliveries = _businessDeliveryRows()
-            .where((item) => _businessRecordId(item) == id)
-            .toList(growable: false);
-        final amount = deliveries.fold<double>(
-          0,
-          (total, item) => total + _adminMoney(item),
-        );
-        return {
-          ...account,
-          'businessId': id,
-          'invoiceAmount': account['outstandingInvoiceAmount'] ?? amount,
-          'invoiceStatus': account['invoiceStatus'] ?? 'draft',
-          'invoiceDeliveryCount': deliveries.length,
-        };
-      }).toList(growable: false);
+      _businessInvoices.isNotEmpty
+          ? _businessInvoices
+          : _businessAccounts.map((account) {
+              final id = _businessAccountId(account);
+              final deliveries = _businessDeliveryRows()
+                  .where((item) => _businessRecordId(item) == id)
+                  .toList(growable: false);
+              final amount = deliveries.fold<double>(
+                0,
+                (total, item) => total + _adminMoney(item),
+              );
+              return {
+                ...account,
+                'businessId': id,
+                'invoiceAmount': account['outstandingInvoiceAmount'] ?? amount,
+                'invoiceStatus': account['invoiceStatus'] ?? 'draft',
+                'invoiceDeliveryCount': deliveries.length,
+              };
+            }).toList(growable: false);
 
   List<Map<String, dynamic>> _businessAnalyticsRows() =>
       _businessAccounts.map((account) {
@@ -5475,13 +5511,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Widget> _businessInvoiceRow(Map<String, dynamic> item) => [
         _AdminCell.primary(
-            '${item['businessName'] ?? 'Business'}\n${item['billingEmail'] ?? item['contactEmail'] ?? ''}'),
-        _AdminCell('${item['invoiceDeliveryCount'] ?? 0} delivery records'),
+            '${item['invoiceNumber'] ?? item['businessName'] ?? 'Business'}\n${item['businessName'] ?? ''}'),
+        _AdminCell(
+            '${item['billingPeriodStart'] ?? 'Period'} → ${item['billingPeriodEnd'] ?? ''}\n${(item['lineItems'] as List?)?.length ?? item['invoiceDeliveryCount'] ?? 0} line item(s)'),
         _AdminStatusCell(
             colors: widget.colors,
-            status: '${item['invoiceStatus'] ?? 'draft'}'),
-        _AdminCell(
-            _adminMoneyText((item['invoiceAmount'] as num?)?.toDouble() ?? 0)),
+            status: '${item['status'] ?? item['invoiceStatus'] ?? 'draft'}'),
+        _AdminCell(_adminMoneyText((item['total'] as num?)?.toDouble() ??
+            (item['invoiceAmount'] as num?)?.toDouble() ??
+            0)),
         _AdminActions(
           colors: widget.colors,
           actions: [
@@ -5503,15 +5541,41 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Widget> _businessRothRow(Map<String, dynamic> item) => [
         _AdminCell.primary(
-            '${_businessNameFor(item)}\n${item['uid'] ?? item['userId'] ?? item['businessId'] ?? ''}'),
+            '${_businessNameFor(item)}\n${item['businessId'] ?? item['id'] ?? ''}'),
         _AdminCell(
             '${item['source'] ?? 'business_roth'}\n${item['reason'] ?? ''}'),
         _AdminStatusCell(
-            colors: widget.colors,
-            status: '${item['direction'] ?? item['status'] ?? 'recorded'}'),
+            colors: widget.colors, status: '${item['status'] ?? 'active'}'),
         _AdminCell(_adminMoneyText((item['amount'] as num?)?.toDouble() ??
             (item['balance'] as num?)?.toDouble() ??
             0)),
+        _AdminActions(
+          colors: widget.colors,
+          actions: [
+            _AdminAction(
+              label: 'Credit',
+              enabled: _can(AdminPermission.viewFinance),
+              onTap: () => _adjustBusinessRoth(item, 'credit'),
+            ),
+            _AdminAction(
+              label: 'Debit',
+              enabled: _can(AdminPermission.viewFinance),
+              onTap: () => _adjustBusinessRoth(item, 'debit'),
+            ),
+            _AdminAction(
+              label: '${item['status'] ?? 'active'}' == 'frozen'
+                  ? 'Unfreeze'
+                  : 'Freeze',
+              enabled: _can(AdminPermission.viewFinance),
+              onTap: () => _setBusinessWalletStatus(
+                item,
+                '${item['status'] ?? 'active'}' == 'frozen'
+                    ? 'active'
+                    : 'frozen',
+              ),
+            ),
+          ],
+        ),
       ];
 
   List<Widget> _businessAnalyticsRow(Map<String, dynamic> item) => [
@@ -5539,28 +5603,499 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     String status,
   ) async {
     if (!_can(AdminPermission.viewFinance)) return;
-    final id = _businessRecordId(item);
-    if (id.isEmpty) return;
-    await FirebaseFirestore.instance
-        .collection('businessAccounts')
-        .doc(id)
-        .set({
-      'invoiceStatus': status,
-      'invoiceStatusUpdatedAt': FieldValue.serverTimestamp(),
-      'invoiceStatusUpdatedBy': _adminUser?.uid,
-      'invoiceStatusUpdatedByEmail': _adminUser?.email,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('adminAuditLogs').add({
+    final invoiceId = '${item['id'] ?? item['invoiceId'] ?? ''}';
+    final businessId = _businessRecordId(item);
+    if (invoiceId.isEmpty || businessId.isEmpty) return;
+    final previous = '${item['status'] ?? item['invoiceStatus'] ?? 'draft'}';
+    final db = FirebaseFirestore.instance;
+    final batch = db.batch();
+    batch.set(
+        db.collection('businessInvoices').doc(invoiceId),
+        {
+          'status': status,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedByAdminId': _adminUser?.uid,
+          'updatedByAdminEmail': _adminUser?.email,
+          if (status == 'issued') 'issueDate': FieldValue.serverTimestamp(),
+          if (status == 'paid_manually') 'amountPaid': item['total'] ?? 0,
+          if (status == 'paid_manually') 'balanceDue': 0,
+        },
+        SetOptions(merge: true));
+    batch.set(
+        db.collection('businessAccounts').doc(businessId),
+        {
+          'recentBusinessInvoices': FieldValue.arrayUnion([
+            {
+              'invoiceId': invoiceId,
+              'invoiceNumber': item['invoiceNumber'],
+              'status': status,
+              'total': item['total'] ?? item['invoiceAmount'] ?? 0,
+              'dueDate': item['dueDate'],
+            }
+          ]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true));
+    batch.set(db.collection('adminAuditLogs').doc(), {
       'action': 'business_invoice_$status',
       'actionType': 'business_invoice_$status',
-      'businessId': id,
-      'recordType': 'businessAccount',
-      'recordId': id,
+      'businessId': businessId,
+      'invoiceId': invoiceId,
+      'recordType': 'businessInvoice',
+      'recordId': invoiceId,
+      'previousStatus': previous,
+      'newStatus': status,
+      'amount': item['total'] ?? item['invoiceAmount'] ?? 0,
       'adminId': _adminUser?.uid,
       'adminEmail': _adminUser?.email,
       'createdAt': FieldValue.serverTimestamp(),
     });
+    await batch.commit();
+    await _loadAdminData();
+  }
+
+  Future<void> _adjustBusinessRoth(
+    Map<String, dynamic> item, [
+    String direction = 'credit',
+  ]) async {
+    if (!_can(AdminPermission.viewFinance)) return;
+    var businessId = _businessRecordId(item).isNotEmpty
+        ? _businessRecordId(item)
+        : '${item['businessId'] ?? item['id'] ?? ''}';
+    if (businessId.isEmpty && _businessAccounts.isNotEmpty) {
+      businessId = _businessAccountId(_businessAccounts.first);
+    }
+    if (businessId.isEmpty) return;
+    final amountController = TextEditingController();
+    final noteController = TextEditingController();
+    final result = await showDialog<(double, String)>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title:
+            Text('${direction == 'debit' ? 'Debit' : 'Credit'} Business Roth'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: businessId,
+              decoration: const InputDecoration(
+                labelText: 'Business account',
+                border: OutlineInputBorder(),
+              ),
+              items: _businessAccounts
+                  .map((account) => DropdownMenuItem(
+                        value: _businessAccountId(account),
+                        child: Text('${account['businessName'] ?? 'Business'}'),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) businessId = value;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Roth amount',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Reason / note',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = double.tryParse(amountController.text.trim());
+              final note = noteController.text.trim();
+              if (amount == null ||
+                  !amount.isFinite ||
+                  amount <= 0 ||
+                  note.isEmpty) {
+                return;
+              }
+              Navigator.of(dialogContext).pop((amount, note));
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    amountController.dispose();
+    noteController.dispose();
+    if (result == null) return;
+    await _writeBusinessRothTransaction(
+      businessId: businessId,
+      direction: direction,
+      amount: result.$1,
+      note: result.$2,
+      type: direction == 'debit' ? 'admin_debit' : 'admin_credit',
+    );
+    await _loadAdminData();
+  }
+
+  Future<void> _writeBusinessRothTransaction({
+    required String businessId,
+    required String direction,
+    required double amount,
+    required String note,
+    required String type,
+  }) async {
+    if (businessId.isEmpty || !amount.isFinite || amount <= 0) return;
+    final db = FirebaseFirestore.instance;
+    final walletRef = db.collection('business_wallets').doc(businessId);
+    final transactionRef = walletRef.collection('transactions').doc();
+    final auditRef = db.collection('adminAuditLogs').doc();
+    final accountRef = db.collection('businessAccounts').doc(businessId);
+    await db.runTransaction((transaction) async {
+      final walletSnap = await transaction.get(walletRef);
+      final data = walletSnap.data() ?? const <String, dynamic>{};
+      final previous = (data['balance'] as num?)?.toDouble() ?? 0;
+      final delta = direction == 'debit' ? -amount : amount;
+      final resulting = previous + delta;
+      if (resulting < 0) {
+        throw StateError('Business Roth balance cannot go below zero.');
+      }
+      transaction.set(
+          walletRef,
+          {
+            'businessId': businessId,
+            'balance': resulting,
+            'availableBalance': resulting,
+            'pendingBalance': 0,
+            'lifetimeReceived':
+                FieldValue.increment(direction == 'credit' ? amount : 0),
+            'lifetimeSpent':
+                FieldValue.increment(direction == 'debit' ? amount : 0),
+            'status': data['status'] ?? 'active',
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+      transaction.set(transactionRef, {
+        'transactionId': transactionRef.id,
+        'businessId': businessId,
+        'direction': direction,
+        'amount': amount,
+        'type': type,
+        'note': note,
+        'createdByAdminId': _adminUser?.uid,
+        'createdByAdminEmail': _adminUser?.email,
+        'createdAt': FieldValue.serverTimestamp(),
+        'previousBalance': previous,
+        'resultingBalance': resulting,
+      });
+      transaction.set(
+          accountRef,
+          {
+            'businessRothBalance': resulting,
+            'rothBalance': resulting,
+            'recentBusinessRothTransactions': FieldValue.arrayUnion([
+              {
+                'transactionId': transactionRef.id,
+                'direction': direction,
+                'amount': amount,
+                'source': type,
+                'reason': note,
+                'createdAt': Timestamp.now(),
+              }
+            ]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+      transaction.set(auditRef, {
+        'action': 'business_roth_$type',
+        'actionType': 'business_roth_$type',
+        'businessId': businessId,
+        'recordType': 'business_wallet',
+        'recordId': businessId,
+        'amount': amount,
+        'direction': direction,
+        'reason': note,
+        'adminId': _adminUser?.uid,
+        'adminEmail': _adminUser?.email,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> _setBusinessWalletStatus(
+    Map<String, dynamic> item,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.viewFinance)) return;
+    final businessId = '${item['businessId'] ?? item['id'] ?? ''}';
+    if (businessId.isEmpty) return;
+    final db = FirebaseFirestore.instance;
+    final batch = db.batch();
+    batch.set(
+        db.collection('business_wallets').doc(businessId),
+        {
+          'businessId': businessId,
+          'status': status,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true));
+    batch.set(db.collection('adminAuditLogs').doc(), {
+      'action': 'business_roth_wallet_$status',
+      'actionType': 'business_roth_wallet_$status',
+      'businessId': businessId,
+      'recordType': 'business_wallet',
+      'recordId': businessId,
+      'adminId': _adminUser?.uid,
+      'adminEmail': _adminUser?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    await _loadAdminData();
+  }
+
+  Future<void> _createBusinessInvoice() async {
+    if (!_can(AdminPermission.viewFinance) || _businessAccounts.isEmpty) return;
+    var selectedBusinessId = _businessAccountId(_businessAccounts.first);
+    final description =
+        TextEditingController(text: 'Business delivery services');
+    final quantity = TextEditingController(text: '1');
+    final unitPrice = TextEditingController();
+    final discount = TextEditingController(text: '0');
+    final vat = TextEditingController(text: '0');
+    final notes = TextEditingController();
+    final dueDate = DateTime.now().add(const Duration(days: 14));
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Generate Business invoice'),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedBusinessId,
+                    decoration: const InputDecoration(
+                      labelText: 'Business account',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _businessAccounts
+                        .map((account) => DropdownMenuItem(
+                              value: _businessAccountId(account),
+                              child: Text(
+                                  '${account['businessName'] ?? 'Business'}'),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => selectedBusinessId = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: description,
+                    decoration: const InputDecoration(
+                      labelText: 'Line item description',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: quantity,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Quantity',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: unitPrice,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Unit price',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: discount,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Discount',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: vat,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'VAT amount',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notes,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final qty = double.tryParse(quantity.text.trim()) ?? 0;
+                final price = double.tryParse(unitPrice.text.trim()) ?? 0;
+                if (selectedBusinessId.isEmpty ||
+                    description.text.trim().isEmpty ||
+                    qty <= 0 ||
+                    price < 0) {
+                  return;
+                }
+                Navigator.of(dialogContext).pop({
+                  'businessId': selectedBusinessId,
+                  'description': description.text.trim(),
+                  'quantity': qty,
+                  'unitPrice': price,
+                  'discount': double.tryParse(discount.text.trim()) ?? 0,
+                  'vat': double.tryParse(vat.text.trim()) ?? 0,
+                  'notes': notes.text.trim(),
+                  'dueDate': dueDate,
+                });
+              },
+              child: const Text('Create draft'),
+            ),
+          ],
+        ),
+      ),
+    );
+    description.dispose();
+    quantity.dispose();
+    unitPrice.dispose();
+    discount.dispose();
+    vat.dispose();
+    notes.dispose();
+    if (result == null) return;
+    final businessId = '${result['businessId']}';
+    final account = _businessAccountFor(businessId);
+    final invoiceRef =
+        FirebaseFirestore.instance.collection('businessInvoices').doc();
+    final invoiceNumber =
+        'CIR-BIZ-${DateTime.now().year}-${(_businessInvoices.length + 1).toString().padLeft(6, '0')}';
+    final qty = result['quantity'] as double;
+    final price = result['unitPrice'] as double;
+    final subtotal = qty * price;
+    final discountValue = result['discount'] as double;
+    final vatValue = result['vat'] as double;
+    final total = math.max(0, subtotal - discountValue + vatValue);
+    final lineItem = {
+      'description': result['description'],
+      'quantity': qty,
+      'unitPrice': price,
+      'total': subtotal,
+      'serviceType': 'manual',
+    };
+    final db = FirebaseFirestore.instance;
+    final batch = db.batch();
+    batch.set(invoiceRef, {
+      'invoiceId': invoiceRef.id,
+      'invoiceNumber': invoiceNumber,
+      'businessId': businessId,
+      'businessName': account['businessName'] ?? 'Business',
+      'billingEmail': account['billingEmail'] ?? account['contactEmail'],
+      'billingPeriodStart': Timestamp.fromDate(DateTime.now()),
+      'billingPeriodEnd': Timestamp.fromDate(DateTime.now()),
+      'issueDate': null,
+      'dueDate': Timestamp.fromDate(result['dueDate'] as DateTime),
+      'status': 'draft',
+      'lineItems': [lineItem],
+      'subtotal': subtotal,
+      'discount': discountValue,
+      'vatAmount': vatValue,
+      'total': total,
+      'amountPaid': 0,
+      'balanceDue': total,
+      'notes': result['notes'],
+      'createdByAdminId': _adminUser?.uid,
+      'createdByAdminEmail': _adminUser?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    batch.set(
+        db.collection('businessAccounts').doc(businessId),
+        {
+          'recentBusinessInvoices': FieldValue.arrayUnion([
+            {
+              'invoiceId': invoiceRef.id,
+              'invoiceNumber': invoiceNumber,
+              'status': 'draft',
+              'total': total,
+              'dueDate': Timestamp.fromDate(result['dueDate'] as DateTime),
+            }
+          ]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true));
+    batch.set(db.collection('adminAuditLogs').doc(), {
+      'action': 'invoice_created',
+      'actionType': 'invoice_created',
+      'businessId': businessId,
+      'invoiceId': invoiceRef.id,
+      'recordType': 'businessInvoice',
+      'recordId': invoiceRef.id,
+      'amount': total,
+      'adminId': _adminUser?.uid,
+      'adminEmail': _adminUser?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+      'reason': result['notes'],
+    });
+    await batch.commit();
     await _loadAdminData();
   }
 
@@ -7320,6 +7855,32 @@ class _AdminTopBar extends StatelessWidget {
   }
 }
 
+enum _AdminWarningSeverity { critical, warning, info }
+
+class _AdminWarning {
+  final String title;
+  final _AdminWarningSeverity severity;
+  final String reason;
+  final int count;
+  final String firstAffected;
+  final Object? updatedAt;
+  final _AdminSection section;
+  final String searchQuery;
+  final String? serviceFilter;
+
+  const _AdminWarning({
+    required this.title,
+    required this.severity,
+    required this.reason,
+    required this.count,
+    required this.firstAffected,
+    required this.updatedAt,
+    required this.section,
+    required this.searchQuery,
+    this.serviceFilter,
+  });
+}
+
 class _AdminOverviewSection extends StatelessWidget {
   final _CircumColors colors;
   final AdminMetricSnapshot metrics;
@@ -7327,6 +7888,13 @@ class _AdminOverviewSection extends StatelessWidget {
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> businessAccounts;
+  final List<Map<String, dynamic>> giftRequests;
+  final List<Map<String, dynamic>> healthPlusPickups;
+  final List<Map<String, dynamic>> businessInvoices;
+  final List<Map<String, dynamic>> rothTransactions;
+  final List<Map<String, dynamic>> drivers;
+  final ValueChanged<_AdminWarning> onViewWarning;
 
   const _AdminOverviewSection({
     required this.colors,
@@ -7335,6 +7903,13 @@ class _AdminOverviewSection extends StatelessWidget {
     required this.deliveries,
     required this.auditLogs,
     required this.supportTickets,
+    required this.businessAccounts,
+    required this.giftRequests,
+    required this.healthPlusPickups,
+    required this.businessInvoices,
+    required this.rothTransactions,
+    required this.drivers,
+    required this.onViewWarning,
   });
 
   @override
@@ -7344,18 +7919,25 @@ class _AdminOverviewSection extends StatelessWidget {
         : (metrics.completedDeliveries / metrics.totalDeliveries) * 100;
     final iris = _irisMetrics();
     final activity = _liveActivity();
+    final warnings = _warnings();
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
         // Mission Control status hero: uses the existing overview snapshot only.
         _AdminStatusHero(
           colors: colors,
-          marketplaceHealthy: issues.isEmpty,
+          warnings: warnings,
           activeDeliveries: metrics.activeDeliveries,
           activeRiders: metrics.activeDrivers,
           pendingDrivers: metrics.pendingDrivers,
           completionRate: completionRate,
           driverRating: metrics.averageDriverRating,
+        ),
+        const SizedBox(height: 18),
+        _AdminWarningCenter(
+          colors: colors,
+          warnings: warnings,
+          onView: onViewWarning,
         ),
         const SizedBox(height: 18),
         _AdminMetricGroup(
@@ -7497,6 +8079,192 @@ class _AdminOverviewSection extends StatelessWidget {
     );
   }
 
+  List<_AdminWarning> _warnings() {
+    final now = DateTime.now();
+    final warnings = <_AdminWarning>[];
+    void add({
+      required String title,
+      required _AdminWarningSeverity severity,
+      required String reason,
+      required List<Map<String, dynamic>> records,
+      required _AdminSection section,
+      required String searchQuery,
+      String? serviceFilter,
+    }) {
+      if (records.isEmpty) return;
+      warnings.add(_AdminWarning(
+        title: title,
+        severity: severity,
+        reason: reason,
+        count: records.length,
+        firstAffected: _warningRecordLabel(records.first),
+        updatedAt: records.first['updatedAt'] ?? records.first['createdAt'],
+        section: section,
+        searchQuery: searchQuery,
+        serviceFilter: serviceFilter,
+      ));
+    }
+
+    final unclaimed = deliveries.where((delivery) {
+      final status = '${delivery['status'] ?? ''}'.toLowerCase();
+      return const {
+        'requested',
+        'pending',
+        'broadcast',
+        'broadcasted',
+        'awaiting_rider',
+        'finding_rider',
+      }.contains(status);
+    }).toList(growable: false);
+    add(
+      title: 'Marketplace requires attention',
+      severity: _AdminWarningSeverity.critical,
+      reason: unclaimed.length == 1
+          ? '1 delivery has no rider assigned.'
+          : '${unclaimed.length} deliveries have no rider assigned.',
+      records: unclaimed,
+      section: _AdminSection.deliveries,
+      searchQuery: 'pending',
+    );
+
+    final broadcastTimeout = deliveries.where((delivery) {
+      final status = '${delivery['status'] ?? ''}'.toLowerCase();
+      final createdAt = _activityDate(delivery['createdAt']);
+      return const {'broadcast', 'broadcasted', 'finding_rider'}
+              .contains(status) &&
+          now.difference(createdAt).inMinutes >= 10;
+    }).toList(growable: false);
+    add(
+      title: 'Broadcast timeout',
+      severity: _AdminWarningSeverity.critical,
+      reason:
+          '${broadcastTimeout.length} Marketplace delivery(s) exceeded broadcast timeout.',
+      records: broadcastTimeout,
+      section: _AdminSection.deliveries,
+      searchQuery: 'broadcast',
+    );
+
+    final pendingBusinesses = businessAccounts
+        .where((item) =>
+            '${item['status'] ?? 'pending'}'.toLowerCase() == 'pending')
+        .toList(growable: false);
+    add(
+      title: 'Business approvals pending',
+      severity: _AdminWarningSeverity.warning,
+      reason: '${pendingBusinesses.length} Business account(s) await review.',
+      records: pendingBusinesses,
+      section: _AdminSection.businessAccounts,
+      searchQuery: 'pending',
+    );
+
+    final giftApprovals = giftRequests.where((item) {
+      final status = '${item['status'] ?? ''}'.toLowerCase();
+      return status.contains('await') ||
+          status.contains('approval') ||
+          status == 'pending';
+    }).toList(growable: false);
+    add(
+      title: 'Gifts awaiting approval',
+      severity: _AdminWarningSeverity.warning,
+      reason: '${giftApprovals.length} Gift request(s) require approval.',
+      records: giftApprovals,
+      section: _AdminSection.gifts,
+      searchQuery: 'pending',
+    );
+
+    final healthAction = healthPlusPickups.where((item) {
+      final status = '${item['status'] ?? ''}'.toLowerCase();
+      return status.contains('escalated') ||
+          status.contains('not_ready') ||
+          status.contains('unavailable') ||
+          status.contains('review');
+    }).toList(growable: false);
+    add(
+      title: 'Health+ requires action',
+      severity: _AdminWarningSeverity.critical,
+      reason: '${healthAction.length} Health+ record(s) require intervention.',
+      records: healthAction,
+      section: _AdminSection.healthPlus,
+      searchQuery: 'escalated',
+    );
+
+    final riderVerification = drivers.where((item) {
+      final status =
+          '${item['verificationStatus'] ?? item['approvalStatus'] ?? item['status'] ?? ''}'
+              .toLowerCase();
+      return status.contains('pending') ||
+          status.contains('review') ||
+          status.contains('required');
+    }).toList(growable: false);
+    add(
+      title: 'Rider verification required',
+      severity: _AdminWarningSeverity.warning,
+      reason:
+          '${riderVerification.length} Rider profile(s) need verification review.',
+      records: riderVerification,
+      section: _AdminSection.drivers,
+      searchQuery: 'pending',
+    );
+
+    final overdueInvoices = businessInvoices
+        .where((item) => '${item['status'] ?? ''}'.toLowerCase() == 'overdue')
+        .toList(growable: false);
+    add(
+      title: 'Invoices overdue',
+      severity: _AdminWarningSeverity.warning,
+      reason: '${overdueInvoices.length} Business invoice(s) are overdue.',
+      records: overdueInvoices,
+      section: _AdminSection.businessAccounts,
+      searchQuery: 'overdue',
+    );
+
+    final rothFailures = rothTransactions.where((item) {
+      final status = '${item['status'] ?? ''}'.toLowerCase();
+      return status.contains('failed') || status.contains('reversed');
+    }).toList(growable: false);
+    add(
+      title: 'Roth transaction issue',
+      severity: _AdminWarningSeverity.warning,
+      reason: '${rothFailures.length} Roth transaction(s) failed or reversed.',
+      records: rothFailures,
+      section: _AdminSection.finance,
+      searchQuery: 'failed',
+    );
+
+    final supportOpen = supportTickets
+        .where((ticket) =>
+            '${ticket['status'] ?? 'open'}'.toLowerCase() != 'resolved')
+        .toList(growable: false);
+    add(
+      title: 'Support queue open',
+      severity: _AdminWarningSeverity.info,
+      reason: '${supportOpen.length} support ticket(s) are open.',
+      records: supportOpen,
+      section: _AdminSection.support,
+      searchQuery: 'open',
+    );
+
+    final irisReview = deliveries.where((item) {
+      return item['weightReviewRequired'] == true ||
+          item['fraudFlag'] == true ||
+          item['riskFlag'] == true;
+    }).toList(growable: false);
+    add(
+      title: 'IRIS review recommended',
+      severity: _AdminWarningSeverity.info,
+      reason: '${irisReview.length} delivery record(s) have IRIS review flags.',
+      records: irisReview,
+      section: _AdminSection.deliveries,
+      searchQuery: 'review',
+    );
+
+    return warnings;
+  }
+
+  String _warningRecordLabel(Map<String, dynamic> item) {
+    return '${item['requestId'] ?? item['invoiceNumber'] ?? item['businessName'] ?? item['fullName'] ?? item['senderName'] ?? item['email'] ?? item['id'] ?? 'record'}';
+  }
+
   (int, int, int, int, double) _irisMetrics() {
     var analysed = 0;
     var corrections = 0;
@@ -7589,7 +8357,7 @@ class _AdminOverviewSection extends StatelessWidget {
 
 class _AdminStatusHero extends StatelessWidget {
   final _CircumColors colors;
-  final bool marketplaceHealthy;
+  final List<_AdminWarning> warnings;
   final int activeDeliveries;
   final int activeRiders;
   final int pendingDrivers;
@@ -7598,7 +8366,7 @@ class _AdminStatusHero extends StatelessWidget {
 
   const _AdminStatusHero({
     required this.colors,
-    required this.marketplaceHealthy,
+    required this.warnings,
     required this.activeDeliveries,
     required this.activeRiders,
     required this.pendingDrivers,
@@ -7608,6 +8376,13 @@ class _AdminStatusHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final critical = warnings
+        .where((item) => item.severity == _AdminWarningSeverity.critical)
+        .length;
+    final warning = warnings
+        .where((item) => item.severity == _AdminWarningSeverity.warning)
+        .length;
+    final healthy = warnings.isEmpty;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -7637,16 +8412,16 @@ class _AdminStatusHero extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                    color: marketplaceHealthy
+                    color: healthy
                         ? const Color(0xff34d399)
                         : const Color(0xfff59e0b),
                     shape: BoxShape.circle)),
             const SizedBox(width: 8),
             Expanded(
                 child: Text(
-                    marketplaceHealthy
+                    healthy
                         ? 'Marketplace healthy'
-                        : 'Marketplace needs attention',
+                        : 'Marketplace requires attention',
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 25,
@@ -7660,6 +8435,8 @@ class _AdminStatusHero extends StatelessWidget {
               _AdminHeroStat(
                   label: 'Active deliveries', value: '$activeDeliveries'),
               _AdminHeroStat(label: 'Active riders', value: '$activeRiders'),
+              _AdminHeroStat(label: 'Critical', value: '$critical'),
+              _AdminHeroStat(label: 'Warnings', value: '$warning'),
               _AdminHeroStat(
                   label: 'Pending drivers', value: '$pendingDrivers'),
               _AdminHeroStat(
@@ -7697,6 +8474,181 @@ class _AdminHeroStat extends StatelessWidget {
                   fontWeight: FontWeight.w700)),
         ]),
       );
+}
+
+class _AdminWarningCenter extends StatefulWidget {
+  final _CircumColors colors;
+  final List<_AdminWarning> warnings;
+  final ValueChanged<_AdminWarning> onView;
+
+  const _AdminWarningCenter({
+    required this.colors,
+    required this.warnings,
+    required this.onView,
+  });
+
+  @override
+  State<_AdminWarningCenter> createState() => _AdminWarningCenterState();
+}
+
+class _AdminWarningCenterState extends State<_AdminWarningCenter> {
+  _AdminWarningSeverity? _filter;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = _filter == null
+        ? widget.warnings
+        : widget.warnings
+            .where((warning) => warning.severity == _filter)
+            .toList(growable: false);
+    final critical = widget.warnings
+        .where((item) => item.severity == _AdminWarningSeverity.critical)
+        .length;
+    final warnings = widget.warnings
+        .where((item) => item.severity == _AdminWarningSeverity.warning)
+        .length;
+    final info = widget.warnings
+        .where((item) => item.severity == _AdminWarningSeverity.info)
+        .length;
+    return _GlassPanel(
+      colors: widget.colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: widget.colors, title: 'Actionable warnings'),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilterChip(
+                selected: _filter == _AdminWarningSeverity.critical,
+                onSelected: (_) => setState(() => _filter =
+                    _filter == _AdminWarningSeverity.critical
+                        ? null
+                        : _AdminWarningSeverity.critical),
+                label: Text('Critical: $critical'),
+              ),
+              FilterChip(
+                selected: _filter == _AdminWarningSeverity.warning,
+                onSelected: (_) => setState(() => _filter =
+                    _filter == _AdminWarningSeverity.warning
+                        ? null
+                        : _AdminWarningSeverity.warning),
+                label: Text('Warnings: $warnings'),
+              ),
+              FilterChip(
+                selected: _filter == _AdminWarningSeverity.info,
+                onSelected: (_) => setState(() => _filter =
+                    _filter == _AdminWarningSeverity.info
+                        ? null
+                        : _AdminWarningSeverity.info),
+                label: Text('Information: $info'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (visible.isEmpty)
+            Text(
+              'No actionable warnings for this filter.',
+              style: TextStyle(
+                color: widget.colors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            ...visible.map((warning) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _AdminWarningCard(
+                    colors: widget.colors,
+                    warning: warning,
+                    onView: () => widget.onView(warning),
+                  ),
+                )),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminWarningCard extends StatelessWidget {
+  final _CircumColors colors;
+  final _AdminWarning warning;
+  final VoidCallback onView;
+
+  const _AdminWarningCard({
+    required this.colors,
+    required this.warning,
+    required this.onView,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (warning.severity) {
+      _AdminWarningSeverity.critical => const Color(0xffef4444),
+      _AdminWarningSeverity.warning => const Color(0xfff59e0b),
+      _AdminWarningSeverity.info => const Color(0xff38bdf8),
+    };
+    final icon = switch (warning.severity) {
+      _AdminWarningSeverity.critical => Icons.error_outline,
+      _AdminWarningSeverity.warning => Icons.warning_amber_rounded,
+      _AdminWarningSeverity.info => Icons.info_outline,
+    };
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  warning.title,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  warning.reason,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Affected: ${warning.count} · First: ${warning.firstAffected} · Last updated: ${_adminDateText(warning.updatedAt)}',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          TextButton.icon(
+            onPressed: onView,
+            icon: const Icon(Icons.arrow_forward),
+            label: const Text('View Details'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AdminMetricGroup extends StatelessWidget {
@@ -7968,6 +8920,8 @@ class _AdminBusinessControlTowerSection extends StatelessWidget {
   final List<Widget> Function(Map<String, dynamic>) rothRowBuilder;
   final List<Widget> Function(Map<String, dynamic>) analyticsRowBuilder;
   final List<Widget> Function(Map<String, dynamic>) auditRowBuilder;
+  final VoidCallback onCreateInvoice;
+  final void Function(Map<String, dynamic>, String) onAdjustRoth;
 
   const _AdminBusinessControlTowerSection({
     required this.colors,
@@ -7991,6 +8945,8 @@ class _AdminBusinessControlTowerSection extends StatelessWidget {
     required this.rothRowBuilder,
     required this.analyticsRowBuilder,
     required this.auditRowBuilder,
+    required this.onCreateInvoice,
+    required this.onAdjustRoth,
   });
 
   @override
@@ -8133,6 +9089,13 @@ class _AdminBusinessControlTowerSection extends StatelessWidget {
                   ],
                   rowBuilder: invoiceRowBuilder,
                   emptyText: 'No Business invoices yet.',
+                  headerActions: [
+                    FilledButton.icon(
+                      onPressed: onCreateInvoice,
+                      icon: const Icon(Icons.add_card_outlined),
+                      label: const Text('Generate invoice'),
+                    ),
+                  ],
                 ),
                 _AdminDataSection(
                   colors: colors,
@@ -8140,9 +9103,22 @@ class _AdminBusinessControlTowerSection extends StatelessWidget {
                   subtitle:
                       'Business Roth balance and transaction visibility. Sender, Rider and Business wallets remain separate.',
                   records: roth,
-                  columns: const ['Business', 'Source', 'Status', 'Amount'],
+                  columns: const [
+                    'Business',
+                    'Source',
+                    'Status',
+                    'Amount',
+                    'Actions'
+                  ],
                   rowBuilder: rothRowBuilder,
                   emptyText: 'No Business Roth records yet.',
+                  headerActions: [
+                    FilledButton.icon(
+                      onPressed: () => onAdjustRoth(const {}, 'credit'),
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('Issue Roth'),
+                    ),
+                  ],
                 ),
                 _AdminDataSection(
                   colors: colors,
@@ -37133,6 +38109,10 @@ class _BusinessInvoicePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rothTransactions = _businessRothTransactions(account);
+    final invoices = ((account['recentBusinessInvoices'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
     return Column(children: [
       _BusinessInvoiceCard(deliveries: deliveries),
       const SizedBox(height: 14),
@@ -37176,12 +38156,34 @@ class _BusinessInvoicePage extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const _BusinessPanelHeader(
             title: 'Invoice history',
-            subtitle: 'Real invoice records will appear here when issued.'),
+            subtitle: 'Issued and manually managed Business invoices.'),
         const SizedBox(height: 12),
         _BusinessTextField(controller: invoiceSearch, label: 'Search invoices'),
         const SizedBox(height: 12),
-        const _BusinessEmptyState(
-            'No issued invoices yet. Delivery breakdown is shown from business jobs above.'),
+        if (invoices.isEmpty)
+          const _BusinessEmptyState('No business invoices yet.')
+        else
+          ...invoices.take(8).map((invoice) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(
+                      '${invoice['invoiceNumber'] ?? invoice['invoiceId'] ?? 'Invoice'} · ${invoice['status'] ?? 'draft'}',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '£${_num(invoice['total']).toStringAsFixed(2)}',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ]),
+              )),
         const SizedBox(height: 12),
         OutlinedButton.icon(
             onPressed: null,
