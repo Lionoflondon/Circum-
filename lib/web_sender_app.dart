@@ -776,6 +776,7 @@ class _LandingPage extends StatelessWidget {
             onBusinessLogin: onBusiness,
             onCreateBusiness: onBusinessAccess,
           ),
+          _HealthPlusLandingBand(colors: colors, onHealthPlus: onHealthPlus),
           _LandingFooter(colors: colors),
         ],
       ),
@@ -35842,6 +35843,122 @@ class _BusinessGlow extends StatelessWidget {
               color.withValues(alpha: 0.22),
               color.withValues(alpha: 0.05),
               Colors.transparent,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthPlusLandingBand extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onHealthPlus;
+
+  const _HealthPlusLandingBand({
+    required this.colors,
+    required this.onHealthPlus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 820;
+    return Container(
+      width: double.infinity,
+      color: const Color(0xff08111f),
+      padding: const EdgeInsets.fromLTRB(22, 58, 22, 64),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1080),
+          child: Flex(
+            direction: narrow ? Axis.vertical : Axis.horizontal,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: narrow ? 0 : 7,
+                child: Column(
+                  crossAxisAlignment: narrow
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.start,
+                  children: [
+                    const _BusinessEyebrow('Health+'),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Prescription logistics with business-grade visibility.',
+                      textAlign: narrow ? TextAlign.center : TextAlign.left,
+                      style: GoogleFonts.dmSerifDisplay(
+                        color: Colors.white,
+                        fontSize: narrow ? 38 : 48,
+                        height: 1.04,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Arrange one-off or recurring prescription pickups with sealed-package handling, reminders, and Vanguard-level care where it matters.',
+                      textAlign: narrow ? TextAlign.center : TextAlign.left,
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        height: 1.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: onHealthPlus,
+                      icon: const Icon(Icons.health_and_safety_outlined),
+                      label: const Text('Get started with Health+'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xff08111f),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 17,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: narrow ? 0 : 28, height: narrow ? 24 : 0),
+              Expanded(
+                flex: narrow ? 0 : 5,
+                child: _BusinessGlass(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _BusinessPanelHeader(
+                        title: 'Health+ operations',
+                        subtitle: 'Pickup, reminders, custody timeline',
+                      ),
+                      const SizedBox(height: 16),
+                      ...[
+                        ('Prescription pickup', Icons.medication_outlined),
+                        ('Recurring reminders', Icons.event_repeat_outlined),
+                        ('Secure checkout', Icons.lock_outline),
+                        ('Sealed packages only', Icons.inventory_2_outlined),
+                      ].map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            children: [
+                              Icon(item.$2,
+                                  color: const Color(0xff93c5fd), size: 20),
+                              const SizedBox(width: 10),
+                              Text(
+                                item.$1,
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
