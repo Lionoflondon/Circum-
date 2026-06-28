@@ -291,12 +291,14 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       _mode = _WebAppMode.sender;
                     }),
                     onGifts: () => setState(() => _mode = _WebAppMode.gifts),
-                    onBusiness: () =>
-                        setState(() => _mode = _WebAppMode.business),
-                    onBusinessAccess: () => setState(() {
-                      _senderInitialStep = _SenderStep.business;
-                      _mode = _WebAppMode.sender;
-                    }),
+                    onBusiness: () => unawaited(launchUrl(
+                      Uri.base.resolve('/business'),
+                      webOnlyWindowName: '_self',
+                    )),
+                    onBusinessAccess: () => unawaited(launchUrl(
+                      Uri.base.resolve('/?app=business'),
+                      webOnlyWindowName: '_self',
+                    )),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
               },
@@ -34814,7 +34816,7 @@ class _BusinessLandingBand extends StatelessWidget {
                   SizedBox(width: narrow ? 0 : 34, height: narrow ? 28 : 0),
                   Expanded(
                     flex: narrow ? 0 : 8,
-                    child: _BusinessDashboardPreview(onOpen: onBusinessLogin),
+                    child: _BusinessLandingPreview(onOpen: onBusinessLogin),
                   ),
                 ],
               ),
@@ -34848,6 +34850,120 @@ class _BusinessLandingBand extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BusinessLandingPreview extends StatelessWidget {
+  final VoidCallback onOpen;
+
+  const _BusinessLandingPreview({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      (Icons.local_shipping_outlined, 'Deliveries', 'Live jobs and routes'),
+      (Icons.receipt_long_outlined, 'Invoicing', 'Credit and billing'),
+      (Icons.groups_2_outlined, 'Team access', 'Owners, admins, members'),
+      (Icons.shield_outlined, 'Vanguard', 'Higher-trust handling'),
+    ];
+    return _BusinessGlass(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const _BusinessBadge('BUSINESS PAGE'),
+              const Spacer(),
+              IconButton(
+                onPressed: onOpen,
+                icon: const Icon(Icons.open_in_new_rounded),
+                color: Colors.white,
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Command centre lives on its own page.',
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: 34,
+              height: 1.04,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Open Business from the header to access the full dashboard, team controls, invoices, activity and ecosystem hub.',
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontWeight: FontWeight.w600,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 20),
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.10),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(row.$1, color: const Color(0xff7dd3fc), size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            row.$2,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            row.$3,
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.58),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_rounded,
+                        color: Colors.white54, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.business_center_rounded),
+              label: const Text('Open Business page'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xff07090f),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -35187,47 +35303,12 @@ class _BusinessStatsGrid extends StatelessWidget {
   }
 }
 
-class _BusinessDashboardPreview extends StatelessWidget {
-  final VoidCallback onOpen;
-
-  const _BusinessDashboardPreview({required this.onOpen});
-
-  @override
-  Widget build(BuildContext context) {
-    return _BusinessGlass(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _BusinessBadge('LIVE PREVIEW'),
-              const Spacer(),
-              IconButton(
-                onPressed: onOpen,
-                icon: const Icon(Icons.open_in_new_rounded),
-                color: Colors.white,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const _BusinessStatsGrid(),
-          const SizedBox(height: 14),
-          const _BusinessEcosystemHub(compact: true),
-        ],
-      ),
-    );
-  }
-}
-
 class _BusinessEcosystemHub extends StatelessWidget {
-  final bool compact;
-
-  const _BusinessEcosystemHub({this.compact = false});
+  const _BusinessEcosystemHub();
 
   @override
   Widget build(BuildContext context) {
-    final size = compact ? 310.0 : 400.0;
+    const size = 400.0;
     final nodes = [
       (Alignment.topCenter, Icons.local_shipping_outlined, 'Delivery'),
       (Alignment.centerRight, Icons.health_and_safety_outlined, 'Health+'),
@@ -35235,7 +35316,7 @@ class _BusinessEcosystemHub extends StatelessWidget {
       (Alignment.centerLeft, Icons.shield_outlined, 'Vanguard'),
     ];
     return SizedBox(
-      height: compact ? 300 : 390,
+      height: 390,
       child: Center(
         child: SizedBox(
           width: size,
@@ -35267,8 +35348,8 @@ class _BusinessEcosystemHub extends StatelessWidget {
                 ),
               ),
               Container(
-                width: compact ? 116 : 142,
-                height: compact ? 116 : 142,
+                width: 142,
+                height: 142,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
