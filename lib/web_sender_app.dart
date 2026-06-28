@@ -16425,8 +16425,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                                         ? 1100
                                         : 960,
                                   ),
-                                  child: SizedBox(
-                                    height: stageConstraints.maxHeight,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxHeight: stageConstraints.maxHeight,
+                                    ),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(28),
                                       child: BackdropFilter(
