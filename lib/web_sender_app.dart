@@ -296,7 +296,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       webOnlyWindowName: '_self',
                     )),
                     onBusinessAccess: () => unawaited(launchUrl(
-                      Uri.base.resolve('/?app=business'),
+                      Uri.base.resolve('/business'),
                       webOnlyWindowName: '_self',
                     )),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
@@ -34969,7 +34969,7 @@ class _BusinessLandingPreview extends StatelessWidget {
   }
 }
 
-class _BusinessCommandPage extends StatelessWidget {
+class _BusinessCommandPage extends StatefulWidget {
   final _CircumColors colors;
   final VoidCallback onHome;
   final VoidCallback onAccess;
@@ -34982,136 +34982,868 @@ class _BusinessCommandPage extends StatelessWidget {
   });
 
   @override
+  State<_BusinessCommandPage> createState() => _BusinessCommandPageState();
+}
+
+enum _BusinessPortalTab {
+  overview,
+  invoicing,
+  team,
+  deliveries,
+  healthPlus,
+  gifts,
+  vanguard,
+  analytics,
+  settings,
+}
+
+class _BusinessCommandPageState extends State<_BusinessCommandPage> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _businessName = TextEditingController();
+  final _contactName = TextEditingController();
+  final _phone = TextEditingController();
+  final _businessAddress = TextEditingController();
+  final _companyNumber = TextEditingController();
+  final _billingEmail = TextEditingController();
+  final _defaultPickupAddress = TextEditingController();
+  final _inviteEmail = TextEditingController();
+  final _inviteName = TextEditingController();
+  final _invoiceSearch = TextEditingController();
+  var _tab = _BusinessPortalTab.overview;
+  var _signupMode = false;
+  var _busy = false;
+  var _message = '';
+  var _selectedBusinessId = '';
+  var _inviteRole = 'operations';
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    _businessName.dispose();
+    _contactName.dispose();
+    _phone.dispose();
+    _businessAddress.dispose();
+    _companyNumber.dispose();
+    _billingEmail.dispose();
+    _defaultPickupAddress.dispose();
+    _inviteEmail.dispose();
+    _inviteName.dispose();
+    _invoiceSearch.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    final email = _email.text.trim();
+    final password = _password.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _message = 'Add your email and password.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = '';
+    });
+    try {
+      if (_signupMode) {
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      } else {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      }
+    } on FirebaseAuthException catch (error) {
+      setState(() => _message = error.message ?? 'Authentication failed.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    final email = _email.text.trim();
+    if (email.isEmpty) {
+      setState(() => _message = 'Enter your email first.');
+      return;
+    }
+    await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+    if (mounted) setState(() => _message = 'Password reset email sent.');
+  }
+
+  Future<void> _signOut() async {
+    await FirebaseAuth.instance.signOut();
+    if (mounted) {
+      setState(() {
+        _selectedBusinessId = '';
+        _tab = _BusinessPortalTab.overview;
+      });
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> _businessAccounts(User user) {
+    final email = (user.email ?? '').trim().toLowerCase();
+    return FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .where('teamMemberIds', arrayContainsAny: [
+          user.uid,
+          if (email.isNotEmpty) email,
+        ])
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+            .toList(growable: false)
+          ..sort((a, b) => '${a['businessName'] ?? ''}'
+              .compareTo('${b['businessName'] ?? ''}')));
+  }
+
+  Stream<List<Map<String, dynamic>>> _businessDeliveries(String businessId) {
+    if (businessId.isEmpty) return const Stream.empty();
+    return FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .where('businessId', isEqualTo: businessId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+            .toList(growable: false)
+          ..sort((a, b) => _businessDate(b).compareTo(_businessDate(a))));
+  }
+
+  Future<void> _createBusiness(User user) async {
+    final name = _businessName.text.trim();
+    final contactName = _contactName.text.trim();
+    final email = (user.email ?? _email.text).trim().toLowerCase();
+    if (name.isEmpty || contactName.isEmpty || email.isEmpty) {
+      setState(() =>
+          _message = 'Business name, contact name and email are required.');
+      return;
+    }
+    final doc = FirebaseFirestore.instance.collection('businessAccounts').doc();
+    final member = {
+      'userId': user.uid,
+      'email': email,
+      'name': contactName,
+      'role': 'owner',
+      'joinedAt': Timestamp.now(),
+      'status': 'active',
+    };
+    await doc.set({
+      'businessId': doc.id,
+      'businessName': name,
+      'contactName': contactName,
+      'contactEmail': email,
+      'phone': _phone.text.trim(),
+      'businessAddress': _businessAddress.text.trim(),
+      'companyNumber': _companyNumber.text.trim(),
+      'billingEmail': _billingEmail.text.trim().isEmpty
+          ? email
+          : _billingEmail.text.trim().toLowerCase(),
+      'defaultPickupAddresses': [
+        if (_defaultPickupAddress.text.trim().isNotEmpty)
+          _defaultPickupAddress.text.trim()
+        else if (_businessAddress.text.trim().isNotEmpty)
+          _businessAddress.text.trim(),
+      ],
+      'createdByUserId': user.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'status': 'pending',
+      'teamMemberIds': [user.uid],
+      'managerIds': [user.uid],
+      'teamMembers': [member],
+      'monthlySpendLimit': null,
+      'notes': '',
+    });
+    _businessName.clear();
+    _contactName.clear();
+    _phone.clear();
+    _businessAddress.clear();
+    _companyNumber.clear();
+    _billingEmail.clear();
+    _defaultPickupAddress.clear();
+    if (mounted) {
+      setState(() {
+        _selectedBusinessId = doc.id;
+        _message =
+            'Business account created. Circum admin approval unlocks booking.';
+      });
+    }
+  }
+
+  Future<void> _saveProfile(Map<String, dynamic> account) async {
+    final id = '${account['id'] ?? account['businessId'] ?? ''}';
+    if (id.isEmpty) return;
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'businessName': _businessName.text.trim(),
+      'contactName': _contactName.text.trim(),
+      'phone': _phone.text.trim(),
+      'businessAddress': _businessAddress.text.trim(),
+      'companyNumber': _companyNumber.text.trim(),
+      'billingEmail': _billingEmail.text.trim().toLowerCase(),
+      'defaultPickupAddresses': [
+        if (_defaultPickupAddress.text.trim().isNotEmpty)
+          _defaultPickupAddress.text.trim(),
+      ],
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    if (mounted) setState(() => _message = 'Business profile saved.');
+  }
+
+  Future<void> _inviteMember(Map<String, dynamic> account) async {
+    final id = '${account['id'] ?? account['businessId'] ?? ''}';
+    final email = _inviteEmail.text.trim().toLowerCase();
+    if (id.isEmpty || email.isEmpty) return;
+    final member = {
+      'userId': email,
+      'email': email,
+      'name': _inviteName.text.trim(),
+      'role': _inviteRole,
+      'joinedAt': Timestamp.now(),
+      'status': 'invited',
+    };
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'teamMemberIds': FieldValue.arrayUnion([email]),
+      if (_inviteRole == 'owner' || _inviteRole == 'admin')
+        'managerIds': FieldValue.arrayUnion([email]),
+      'teamMembers': FieldValue.arrayUnion([member]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    _inviteEmail.clear();
+    _inviteName.clear();
+    if (mounted) setState(() => _message = 'Team invite saved.');
+  }
+
+  Future<void> _updateMember(
+    Map<String, dynamic> account,
+    Map<String, dynamic> member, {
+    String? role,
+    bool remove = false,
+    bool cancelInvite = false,
+    bool resendInvite = false,
+  }) async {
+    final id = '${account['id'] ?? account['businessId'] ?? ''}';
+    final memberId = '${member['userId'] ?? member['email'] ?? ''}';
+    if (id.isEmpty || memberId.isEmpty) return;
+    final members = ((account['teamMembers'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((raw) => Map<String, dynamic>.from(raw))
+        .where((item) => '${item['userId'] ?? item['email'] ?? ''}' != memberId)
+        .toList(growable: true);
+    if (!remove && !cancelInvite) {
+      members.add({
+        ...member,
+        if (role != null) 'role': role,
+        if (resendInvite) 'resentAt': Timestamp.now(),
+        if (resendInvite) 'status': 'invited',
+      });
+    }
+    final memberIds = members
+        .map((item) => '${item['userId'] ?? item['email'] ?? ''}')
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    final managerIds = members
+        .where((item) => item['role'] == 'owner' || item['role'] == 'admin')
+        .map((item) => '${item['userId'] ?? item['email'] ?? ''}')
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'teamMembers': members,
+      'teamMemberIds': memberIds,
+      'managerIds': managerIds,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, auth) {
+        final user = auth.data;
+        if (auth.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Color(0xff07090f),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (user == null) {
+          return _BusinessAuthGate(
+            signupMode: _signupMode,
+            busy: _busy,
+            message: _message,
+            email: _email,
+            password: _password,
+            onToggleMode: () => setState(() => _signupMode = !_signupMode),
+            onSubmit: _signIn,
+            onResetPassword: _resetPassword,
+            onHome: widget.onHome,
+          );
+        }
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _businessAccounts(user),
+          builder: (context, accountsSnapshot) {
+            final accounts =
+                accountsSnapshot.data ?? const <Map<String, dynamic>>[];
+            final selected = _selectedAccount(accounts);
+            if (selected == null) {
+              return _BusinessOnboardingPage(
+                message: _message,
+                businessName: _businessName,
+                contactName: _contactName,
+                phone: _phone,
+                businessAddress: _businessAddress,
+                companyNumber: _companyNumber,
+                billingEmail: _billingEmail,
+                defaultPickupAddress: _defaultPickupAddress,
+                onCreate: () => _createBusiness(user),
+                onSignOut: _signOut,
+              );
+            }
+            return StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _businessDeliveries(
+                  '${selected['id'] ?? selected['businessId'] ?? ''}'),
+              builder: (context, deliveriesSnapshot) {
+                final deliveries =
+                    deliveriesSnapshot.data ?? const <Map<String, dynamic>>[];
+                return _BusinessPortalScaffold(
+                  user: user,
+                  accounts: accounts,
+                  selectedAccount: selected,
+                  selectedTab: _tab,
+                  deliveries: deliveries,
+                  message: _message,
+                  businessName: _businessName,
+                  contactName: _contactName,
+                  phone: _phone,
+                  businessAddress: _businessAddress,
+                  companyNumber: _companyNumber,
+                  billingEmail: _billingEmail,
+                  defaultPickupAddress: _defaultPickupAddress,
+                  inviteEmail: _inviteEmail,
+                  inviteName: _inviteName,
+                  inviteRole: _inviteRole,
+                  invoiceSearch: _invoiceSearch,
+                  onHome: widget.onHome,
+                  onAccess: widget.onAccess,
+                  onSignOut: _signOut,
+                  onSelectTab: (tab) => setState(() => _tab = tab),
+                  onSelectAccount: (id) =>
+                      setState(() => _selectedBusinessId = id),
+                  onSaveProfile: () => _saveProfile(selected),
+                  onInviteRole: (role) => setState(() => _inviteRole = role),
+                  onInviteMember: () => _inviteMember(selected),
+                  onUpdateMember: (member, role) =>
+                      _updateMember(selected, member, role: role),
+                  onRemoveMember: (member) =>
+                      _updateMember(selected, member, remove: true),
+                  onCancelInvite: (member) =>
+                      _updateMember(selected, member, cancelInvite: true),
+                  onResendInvite: (member) =>
+                      _updateMember(selected, member, resendInvite: true),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Map<String, dynamic>? _selectedAccount(List<Map<String, dynamic>> accounts) {
+    if (accounts.isEmpty) return null;
+    if (_selectedBusinessId.isEmpty) return accounts.first;
+    return accounts.cast<Map<String, dynamic>?>().firstWhere(
+          (item) =>
+              '${item?['id'] ?? item?['businessId'] ?? ''}' ==
+              _selectedBusinessId,
+          orElse: () => accounts.first,
+        );
+  }
+}
+
+class _BusinessPortalScaffold extends StatelessWidget {
+  final User user;
+  final List<Map<String, dynamic>> accounts;
+  final Map<String, dynamic> selectedAccount;
+  final _BusinessPortalTab selectedTab;
+  final List<Map<String, dynamic>> deliveries;
+  final String message;
+  final TextEditingController businessName;
+  final TextEditingController contactName;
+  final TextEditingController phone;
+  final TextEditingController businessAddress;
+  final TextEditingController companyNumber;
+  final TextEditingController billingEmail;
+  final TextEditingController defaultPickupAddress;
+  final TextEditingController inviteEmail;
+  final TextEditingController inviteName;
+  final String inviteRole;
+  final TextEditingController invoiceSearch;
+  final VoidCallback onHome;
+  final VoidCallback onAccess;
+  final VoidCallback onSignOut;
+  final ValueChanged<_BusinessPortalTab> onSelectTab;
+  final ValueChanged<String> onSelectAccount;
+  final VoidCallback onSaveProfile;
+  final ValueChanged<String> onInviteRole;
+  final VoidCallback onInviteMember;
+  final void Function(Map<String, dynamic>, String) onUpdateMember;
+  final ValueChanged<Map<String, dynamic>> onRemoveMember;
+  final ValueChanged<Map<String, dynamic>> onCancelInvite;
+  final ValueChanged<Map<String, dynamic>> onResendInvite;
+
+  const _BusinessPortalScaffold({
+    required this.user,
+    required this.accounts,
+    required this.selectedAccount,
+    required this.selectedTab,
+    required this.deliveries,
+    required this.message,
+    required this.businessName,
+    required this.contactName,
+    required this.phone,
+    required this.businessAddress,
+    required this.companyNumber,
+    required this.billingEmail,
+    required this.defaultPickupAddress,
+    required this.inviteEmail,
+    required this.inviteName,
+    required this.inviteRole,
+    required this.invoiceSearch,
+    required this.onHome,
+    required this.onAccess,
+    required this.onSignOut,
+    required this.onSelectTab,
+    required this.onSelectAccount,
+    required this.onSaveProfile,
+    required this.onInviteRole,
+    required this.onInviteMember,
+    required this.onUpdateMember,
+    required this.onRemoveMember,
+    required this.onCancelInvite,
+    required this.onResendInvite,
+  });
+
+  @override
   Widget build(BuildContext context) {
     final desktop = MediaQuery.sizeOf(context).width >= 980;
+    final role = _businessRole(selectedAccount, user);
+    final canManage = _businessCanManage(role);
     return Scaffold(
       backgroundColor: const Color(0xff07090f),
       body: Stack(
         children: [
           const Positioned(
-            top: -160,
-            right: -120,
-            child: _BusinessGlow(size: 420, color: Color(0xff3b82f6)),
-          ),
+              top: -160,
+              right: -120,
+              child: _BusinessGlow(size: 420, color: Color(0xff3b82f6))),
           const Positioned(
-            bottom: -180,
-            left: -120,
-            child: _BusinessGlow(size: 380, color: Color(0xff3b82f6)),
-          ),
+              bottom: -180,
+              left: -120,
+              child: _BusinessGlow(size: 380, color: Color(0xff3b82f6))),
           SafeArea(
             child: desktop
                 ? Row(
                     children: [
-                      _BusinessSidebar(onHome: onHome),
-                      Expanded(
-                          child: _BusinessDashboardMain(onAccess: onAccess)),
+                      _BusinessSidebar(
+                        onHome: onHome,
+                        selectedTab: selectedTab,
+                        onSelectTab: onSelectTab,
+                        role: role,
+                      ),
+                      Expanded(child: _main(context, role, canManage, false)),
                     ],
                   )
-                : _BusinessDashboardMain(
-                    onAccess: onAccess,
-                    onHome: onHome,
-                    compact: true,
-                  ),
+                : _main(context, role, canManage, true),
           ),
         ],
       ),
     );
   }
-}
 
-class _BusinessDashboardMain extends StatelessWidget {
-  final VoidCallback onAccess;
-  final VoidCallback? onHome;
-  final bool compact;
-
-  const _BusinessDashboardMain({
-    required this.onAccess,
-    this.onHome,
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _main(
+      BuildContext context, String role, bool canManage, bool compact) {
     return SingleChildScrollView(
       padding:
           EdgeInsets.fromLTRB(compact ? 18 : 26, 20, compact ? 18 : 30, 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _BusinessTopBar(onHome: onHome),
+          _BusinessTopBar(
+            onHome: compact ? onHome : null,
+            onSignOut: onSignOut,
+            companyName: '${selectedAccount['businessName'] ?? 'Business'}',
+            role: _businessRoleLabel(role),
+            accounts: accounts,
+            selectedAccountId:
+                '${selectedAccount['id'] ?? selectedAccount['businessId'] ?? ''}',
+            onSelectAccount: onSelectAccount,
+          ),
           const SizedBox(height: 28),
-          const _BusinessEyebrow('Business · Account overview'),
+          if (compact) ...[
+            _BusinessMobileTabs(
+                selectedTab: selectedTab, onSelectTab: onSelectTab, role: role),
+            const SizedBox(height: 16),
+          ],
+          if (message.trim().isNotEmpty) ...[
+            _BusinessGlass(
+                child: Text(message,
+                    style: GoogleFonts.inter(
+                        color: Colors.white, fontWeight: FontWeight.w800))),
+            const SizedBox(height: 14),
+          ],
+          _BusinessEyebrow(_tabEyebrow(selectedTab)),
           const SizedBox(height: 10),
-          Text(
-            'Good morning, Northstar Studio.',
-            style: GoogleFonts.dmSerifDisplay(
-              color: Colors.white,
-              fontSize: compact ? 40 : 54,
-              height: 1.02,
-            ),
-          ),
+          Text(_tabTitle(selectedTab, selectedAccount),
+              style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontSize: compact ? 40 : 54,
+                  height: 1.02)),
           const SizedBox(height: 10),
-          Text(
-            'Your command centre for deliveries, invoices, team access, Health+, Gifts, and Vanguard handling across the Circum ecosystem.',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.72),
-              fontSize: 16,
-              height: 1.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(_tabSubtitle(selectedTab),
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: 16,
+                  height: 1.5,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 24),
-          const _BusinessStatsGrid(),
-          const SizedBox(height: 18),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final stack = constraints.maxWidth < 900;
-              final ecosystem = _BusinessGlass(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    _BusinessPanelHeader(
-                      title: 'Your Circum ecosystem',
-                      subtitle: 'One account, every operational pillar.',
-                    ),
-                    SizedBox(height: 18),
-                    _BusinessEcosystemHub(),
-                  ],
-                ),
-              );
-              final side = Column(
-                children: [
-                  const _BusinessInvoiceCard(),
-                  const SizedBox(height: 14),
-                  const _BusinessTeamCard(),
-                ],
-              );
-              if (stack) {
-                return Column(
-                    children: [ecosystem, const SizedBox(height: 14), side]);
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 7, child: ecosystem),
-                  const SizedBox(width: 14),
-                  Expanded(flex: 4, child: side),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 18),
-          const _BusinessActivityTable(),
+          _tabBody(role, canManage, compact),
         ],
       ),
     );
+  }
+
+  Widget _tabBody(String role, bool canManage, bool compact) {
+    return switch (selectedTab) {
+      _BusinessPortalTab.overview => _BusinessOverviewPage(
+          account: selectedAccount,
+          deliveries: deliveries,
+          onAccess: onAccess,
+          onOpenInvoices: () => onSelectTab(_BusinessPortalTab.invoicing)),
+      _BusinessPortalTab.invoicing => _BusinessInvoicePage(
+          account: selectedAccount,
+          deliveries: deliveries,
+          invoiceSearch: invoiceSearch,
+          canManage: _businessCanFinance(role)),
+      _BusinessPortalTab.team => _BusinessTeamPage(
+          account: selectedAccount,
+          canManage: canManage,
+          inviteEmail: inviteEmail,
+          inviteName: inviteName,
+          inviteRole: inviteRole,
+          onInviteRole: onInviteRole,
+          onInviteMember: onInviteMember,
+          onUpdateMember: onUpdateMember,
+          onRemoveMember: onRemoveMember,
+          onCancelInvite: onCancelInvite,
+          onResendInvite: onResendInvite),
+      _BusinessPortalTab.deliveries => _BusinessDeliveriesPage(
+          deliveries: deliveries, onBookDelivery: onAccess),
+      _BusinessPortalTab.healthPlus => _BusinessServicePage(
+          title: 'Health+ business',
+          icon: Icons.health_and_safety_outlined,
+          rows: _healthRows(deliveries),
+          onCreate: onAccess),
+      _BusinessPortalTab.gifts => _BusinessServicePage(
+          title: 'Corporate Gifts',
+          icon: Icons.card_giftcard_outlined,
+          rows: _giftRows(deliveries),
+          onCreate: onAccess),
+      _BusinessPortalTab.vanguard => _BusinessServicePage(
+          title: 'Vanguard',
+          icon: Icons.shield_outlined,
+          rows: _vanguardRows(deliveries),
+          onCreate: onAccess),
+      _BusinessPortalTab.analytics => _BusinessAnalyticsPage(
+          deliveries: deliveries, account: selectedAccount),
+      _BusinessPortalTab.settings => _BusinessSettingsPage(
+          account: selectedAccount,
+          canManage: canManage,
+          businessName: businessName,
+          contactName: contactName,
+          phone: phone,
+          businessAddress: businessAddress,
+          companyNumber: companyNumber,
+          billingEmail: billingEmail,
+          defaultPickupAddress: defaultPickupAddress,
+          onSaveProfile: onSaveProfile,
+          onSignOut: onSignOut),
+    };
+  }
+}
+
+class _BusinessOverviewPage extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final List<Map<String, dynamic>> deliveries;
+  final VoidCallback onAccess;
+  final VoidCallback onOpenInvoices;
+
+  const _BusinessOverviewPage(
+      {required this.account,
+      required this.deliveries,
+      required this.onAccess,
+      required this.onOpenInvoices});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _BusinessStatsGrid(deliveries: deliveries, account: account),
+        const SizedBox(height: 18),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stack = constraints.maxWidth < 900;
+            final ecosystem = _BusinessGlass(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                  _BusinessPanelHeader(
+                      title: 'Your Circum ecosystem',
+                      subtitle: 'One account, every operational pillar.'),
+                  SizedBox(height: 18),
+                  _BusinessEcosystemHub()
+                ]));
+            final side = Column(children: [
+              _BusinessInvoiceCard(
+                  deliveries: deliveries, onOpen: onOpenInvoices),
+              const SizedBox(height: 14),
+              _BusinessTeamCard(account: account)
+            ]);
+            if (stack) {
+              return Column(
+                  children: [ecosystem, const SizedBox(height: 14), side]);
+            }
+            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(flex: 7, child: ecosystem),
+              const SizedBox(width: 14),
+              Expanded(flex: 4, child: side)
+            ]);
+          },
+        ),
+        const SizedBox(height: 18),
+        _BusinessIrisInsights(deliveries: deliveries),
+        const SizedBox(height: 18),
+        _BusinessActivityTable(deliveries: deliveries),
+        const SizedBox(height: 18),
+        Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+                onPressed: onAccess,
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: const Text('Book business delivery'))),
+      ],
+    );
+  }
+}
+
+class _BusinessAuthGate extends StatelessWidget {
+  final bool signupMode;
+  final bool busy;
+  final String message;
+  final TextEditingController email;
+  final TextEditingController password;
+  final VoidCallback onToggleMode;
+  final VoidCallback onSubmit;
+  final VoidCallback onResetPassword;
+  final VoidCallback onHome;
+
+  const _BusinessAuthGate(
+      {required this.signupMode,
+      required this.busy,
+      required this.message,
+      required this.email,
+      required this.password,
+      required this.onToggleMode,
+      required this.onSubmit,
+      required this.onResetPassword,
+      required this.onHome});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xff07090f),
+      body: Stack(children: [
+        const Positioned(
+            top: -140,
+            right: -120,
+            child: _BusinessGlow(size: 420, color: Color(0xff3b82f6))),
+        Center(
+            child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: _BusinessGlass(
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      IconButton(
+                          onPressed: onHome,
+                          icon: const Icon(Icons.arrow_back_rounded,
+                              color: Colors.white)),
+                      const _BusinessEyebrow('Business Accounts'),
+                      const SizedBox(height: 10),
+                      Text(
+                          signupMode
+                              ? 'Create your Business login.'
+                              : 'Business login.',
+                          style: GoogleFonts.dmSerifDisplay(
+                              color: Colors.white, fontSize: 42, height: 1.02)),
+                      const SizedBox(height: 10),
+                      Text(
+                          'Sign in to access the Business Account dashboard. Your session stays active across refreshes.',
+                          style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.72),
+                              height: 1.45,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 18),
+                      _BusinessTextField(controller: email, label: 'Email'),
+                      const SizedBox(height: 10),
+                      _BusinessTextField(
+                          controller: password,
+                          label: 'Password',
+                          obscure: true),
+                      if (message.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(message,
+                            style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800))
+                      ],
+                      const SizedBox(height: 18),
+                      SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                              onPressed: busy ? null : onSubmit,
+                              child: Text(signupMode
+                                  ? 'Register business account'
+                                  : 'Sign in'))),
+                      const SizedBox(height: 10),
+                      Wrap(spacing: 12, children: [
+                        TextButton(
+                            onPressed: onToggleMode,
+                            child: Text(signupMode
+                                ? 'I already have a login'
+                                : 'Register business account')),
+                        TextButton(
+                            onPressed: onResetPassword,
+                            child: const Text('Reset password'))
+                      ]),
+                    ]))))
+      ]),
+    );
+  }
+}
+
+class _BusinessOnboardingPage extends StatelessWidget {
+  final String message;
+  final TextEditingController businessName;
+  final TextEditingController contactName;
+  final TextEditingController phone;
+  final TextEditingController businessAddress;
+  final TextEditingController companyNumber;
+  final TextEditingController billingEmail;
+  final TextEditingController defaultPickupAddress;
+  final VoidCallback onCreate;
+  final VoidCallback onSignOut;
+
+  const _BusinessOnboardingPage(
+      {required this.message,
+      required this.businessName,
+      required this.contactName,
+      required this.phone,
+      required this.businessAddress,
+      required this.companyNumber,
+      required this.billingEmail,
+      required this.defaultPickupAddress,
+      required this.onCreate,
+      required this.onSignOut});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        backgroundColor: const Color(0xff07090f),
+        body: Center(
+            child: SingleChildScrollView(
+                padding: const EdgeInsets.all(22),
+                child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: _BusinessGlass(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Row(children: [
+                            const _BusinessBadge('BUSINESS'),
+                            const Spacer(),
+                            TextButton.icon(
+                                onPressed: onSignOut,
+                                icon: const Icon(Icons.logout),
+                                label: const Text('Sign out'))
+                          ]),
+                          const SizedBox(height: 14),
+                          Text('Create your business profile.',
+                              style: GoogleFonts.dmSerifDisplay(
+                                  color: Colors.white,
+                                  fontSize: 44,
+                                  height: 1.02)),
+                          const SizedBox(height: 10),
+                          Text(
+                              'Business accounts are reviewed by Circum before booking is enabled.',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.72),
+                                  fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 18),
+                          _BusinessTextField(
+                              controller: businessName, label: 'Business name'),
+                          _BusinessTextField(
+                              controller: contactName, label: 'Contact name'),
+                          _BusinessTextField(controller: phone, label: 'Phone'),
+                          _BusinessTextField(
+                              controller: businessAddress,
+                              label: 'Business address'),
+                          _BusinessTextField(
+                              controller: companyNumber,
+                              label: 'VAT / company number optional'),
+                          _BusinessTextField(
+                              controller: billingEmail, label: 'Billing email'),
+                          _BusinessTextField(
+                              controller: defaultPickupAddress,
+                              label: 'Default pickup address'),
+                          if (message.isNotEmpty)
+                            Text(message,
+                                style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                              onPressed: onCreate,
+                              icon: const Icon(Icons.add_business_rounded),
+                              label: const Text('Register business account')),
+                        ]))))));
   }
 }
 
 class _BusinessSidebar extends StatelessWidget {
   final VoidCallback onHome;
+  final _BusinessPortalTab selectedTab;
+  final ValueChanged<_BusinessPortalTab> onSelectTab;
+  final String role;
 
-  const _BusinessSidebar({required this.onHome});
+  const _BusinessSidebar(
+      {required this.onHome,
+      required this.selectedTab,
+      required this.onSelectTab,
+      required this.role});
 
   @override
   Widget build(BuildContext context) {
@@ -35120,169 +35852,229 @@ class _BusinessSidebar extends StatelessWidget {
       margin: const EdgeInsets.all(18),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
+          color: Colors.white.withValues(alpha: 0.055),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        InkWell(
             onTap: onHome,
             borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/images/circum_wordmark.png',
-                    width: 126,
-                    height: 30,
-                    fit: BoxFit.contain,
-                  ),
+                padding: const EdgeInsets.all(4),
+                child: Row(children: [
+                  Image.asset('assets/images/circum_wordmark.png',
+                      width: 126, height: 30, fit: BoxFit.contain),
                   const Spacer(),
-                  const _BusinessBadge('BUSINESS'),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-          const _BusinessNavGroup(
+                  const _BusinessBadge('BUSINESS')
+                ]))),
+        const SizedBox(height: 28),
+        _BusinessNavGroup(
             title: 'Account',
-            items: [
-              (Icons.dashboard_outlined, 'Overview', true),
-              (Icons.receipt_long_outlined, 'Invoicing', false),
-              (Icons.group_outlined, 'Team & access', false),
-            ],
-          ),
-          const SizedBox(height: 22),
-          const _BusinessNavGroup(
+            selectedTab: selectedTab,
+            onSelectTab: onSelectTab,
+            items: const [
+              (
+                Icons.dashboard_outlined,
+                'Overview',
+                _BusinessPortalTab.overview
+              ),
+              (
+                Icons.receipt_long_outlined,
+                'Invoicing',
+                _BusinessPortalTab.invoicing
+              ),
+              (Icons.group_outlined, 'Team & access', _BusinessPortalTab.team)
+            ]),
+        const SizedBox(height: 22),
+        _BusinessNavGroup(
             title: 'Ecosystem',
-            items: [
-              (Icons.local_shipping_outlined, 'Deliveries', false),
-              (Icons.health_and_safety_outlined, 'Health+', false),
-              (Icons.card_giftcard_outlined, 'Gifts', false),
-              (Icons.shield_outlined, 'Vanguard', false),
-            ],
-          ),
-          const SizedBox(height: 22),
-          const _BusinessNavGroup(
+            selectedTab: selectedTab,
+            onSelectTab: onSelectTab,
+            items: const [
+              (
+                Icons.local_shipping_outlined,
+                'Deliveries',
+                _BusinessPortalTab.deliveries
+              ),
+              (
+                Icons.health_and_safety_outlined,
+                'Health+',
+                _BusinessPortalTab.healthPlus
+              ),
+              (Icons.card_giftcard_outlined, 'Gifts', _BusinessPortalTab.gifts),
+              (Icons.shield_outlined, 'Vanguard', _BusinessPortalTab.vanguard)
+            ]),
+        const SizedBox(height: 22),
+        _BusinessNavGroup(
             title: 'System',
-            items: [
-              (Icons.analytics_outlined, 'Analytics', false),
-              (Icons.settings_outlined, 'Settings', false),
-            ],
-          ),
-          const Spacer(),
-          const _BusinessTierCard(),
-        ],
-      ),
+            selectedTab: selectedTab,
+            onSelectTab: onSelectTab,
+            items: const [
+              (
+                Icons.analytics_outlined,
+                'Analytics',
+                _BusinessPortalTab.analytics
+              ),
+              (Icons.settings_outlined, 'Settings', _BusinessPortalTab.settings)
+            ]),
+        const Spacer(),
+        _BusinessTierCard(deliveries: const []),
+      ]),
     );
   }
 }
 
 class _BusinessTopBar extends StatelessWidget {
   final VoidCallback? onHome;
+  final VoidCallback onSignOut;
+  final String companyName;
+  final String role;
+  final List<Map<String, dynamic>> accounts;
+  final String selectedAccountId;
+  final ValueChanged<String> onSelectAccount;
 
-  const _BusinessTopBar({this.onHome});
+  const _BusinessTopBar(
+      {this.onHome,
+      required this.onSignOut,
+      required this.companyName,
+      required this.role,
+      required this.accounts,
+      required this.selectedAccountId,
+      required this.onSelectAccount});
 
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (onHome != null)
+        spacing: 12,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (onHome != null)
+            IconButton.filledTonal(
+                onPressed: onHome,
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: 'Back to Circum'),
+          Container(
+              width: math.min(MediaQuery.sizeOf(context).width - 44, 430),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(18),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.10))),
+              child: Row(children: [
+                Icon(Icons.search, color: Colors.white.withValues(alpha: 0.62)),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: Text('Search jobs, invoices, riders…',
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.58),
+                            fontWeight: FontWeight.w600)))
+              ])),
+          if (accounts.length > 1)
+            DropdownButton<String>(
+                value: selectedAccountId,
+                dropdownColor: const Color(0xff111827),
+                style: const TextStyle(color: Colors.white),
+                items: accounts
+                    .map((account) => DropdownMenuItem(
+                        value:
+                            '${account['id'] ?? account['businessId'] ?? ''}',
+                        child:
+                            Text('${account['businessName'] ?? 'Business'}')))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) onSelectAccount(value);
+                }),
           IconButton.filledTonal(
-            onPressed: onHome,
-            icon: const Icon(Icons.arrow_back_rounded),
-            tooltip: 'Back to Circum',
-          ),
-        Container(
-          width: math.min(MediaQuery.sizeOf(context).width - 44, 430),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.search, color: Colors.white.withValues(alpha: 0.62)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Search jobs, invoices, riders…',
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.58),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        IconButton.filledTonal(
-          onPressed: () {},
-          icon: const Icon(Icons.notifications_none_rounded),
-          tooltip: 'Notifications',
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.065),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircleAvatar(
-                radius: 17,
-                backgroundColor: Color(0xff3b82f6),
-                child: Text('N', style: TextStyle(color: Colors.white)),
-              ),
-              const SizedBox(width: 9),
-              Text(
-                'Northstar Studio · Owner',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+              onPressed: () {},
+              icon: const Icon(Icons.notifications_none_rounded),
+              tooltip: 'Notifications'),
+          Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.065),
+                  borderRadius: BorderRadius.circular(999),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.10))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                CircleAvatar(
+                    radius: 17,
+                    backgroundColor: const Color(0xff3b82f6),
+                    child: Text(
+                        companyName.isEmpty
+                            ? 'B'
+                            : companyName.characters.first.toUpperCase(),
+                        style: const TextStyle(color: Colors.white))),
+                const SizedBox(width: 9),
+                Text('$companyName · $role',
+                    style: GoogleFonts.inter(
+                        color: Colors.white, fontWeight: FontWeight.w800))
+              ])),
+          TextButton.icon(
+              onPressed: onSignOut,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Logout')),
+        ]);
   }
 }
 
 class _BusinessStatsGrid extends StatelessWidget {
-  const _BusinessStatsGrid();
+  final List<Map<String, dynamic>> deliveries;
+  final Map<String, dynamic> account;
+
+  const _BusinessStatsGrid({
+    this.deliveries = const [],
+    this.account = const {},
+  });
 
   @override
   Widget build(BuildContext context) {
-    const stats = [
-      ('Available credit', '£4,820', '+12% this month', Icons.credit_score),
-      ('Active jobs this week', '27', '6 require action', Icons.route_outlined),
-      ('On-time delivery rate', '98.4%', 'Last 30 days', Icons.speed_outlined),
+    final active = deliveries
+        .where((item) => _businessStatusGroup(item) == 'active')
+        .length;
+    final week = deliveries
+        .where((item) =>
+            DateTime.now().difference(_businessDate(item)).inDays <= 7)
+        .length;
+    final completed = deliveries
+        .where((item) => _businessStatusGroup(item) == 'completed')
+        .length;
+    final onTime = completed == 0 ? '0%' : '100%';
+    final vanguard = deliveries.where(_businessIsVanguard).length;
+    final stats = [
+      (
+        'Roth balance',
+        '${_num(account['rothBalance']).toStringAsFixed(0)} Roth',
+        'Not withdrawable',
+        Icons.credit_score
+      ),
+      (
+        'Active jobs this week',
+        '$week',
+        '$active active now',
+        Icons.route_outlined
+      ),
+      (
+        'On-time delivery rate',
+        onTime,
+        completed == 0 ? 'No completed jobs yet' : 'Completed jobs',
+        Icons.speed_outlined
+      ),
       (
         'Jobs under Vanguard cover',
-        '9',
+        '$vanguard',
         'Sensitive items',
         Icons.shield_outlined
-      ),
+      )
     ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = constraints.maxWidth < 640
-            ? 1
-            : constraints.maxWidth < 980
-                ? 2
-                : 4;
-        return GridView.count(
+    return LayoutBuilder(builder: (context, constraints) {
+      final cols = constraints.maxWidth < 640
+          ? 1
+          : constraints.maxWidth < 980
+              ? 2
+              : 4;
+      return GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: cols,
@@ -35291,21 +36083,14 @@ class _BusinessStatsGrid extends StatelessWidget {
           childAspectRatio: cols == 1 ? 3.5 : 1.65,
           children: stats
               .map((stat) => _BusinessStatCard(
-                    label: stat.$1,
-                    value: stat.$2,
-                    note: stat.$3,
-                    icon: stat.$4,
-                  ))
-              .toList(),
-        );
-      },
-    );
+                  label: stat.$1, value: stat.$2, note: stat.$3, icon: stat.$4))
+              .toList());
+    });
   }
 }
 
 class _BusinessEcosystemHub extends StatelessWidget {
   const _BusinessEcosystemHub();
-
   @override
   Widget build(BuildContext context) {
     const size = 400.0;
@@ -35313,265 +36098,730 @@ class _BusinessEcosystemHub extends StatelessWidget {
       (Alignment.topCenter, Icons.local_shipping_outlined, 'Delivery'),
       (Alignment.centerRight, Icons.health_and_safety_outlined, 'Health+'),
       (Alignment.bottomCenter, Icons.card_giftcard_outlined, 'Gifts'),
-      (Alignment.centerLeft, Icons.shield_outlined, 'Vanguard'),
+      (Alignment.centerLeft, Icons.shield_outlined, 'Vanguard')
     ];
     return SizedBox(
-      height: 390,
-      child: Center(
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: size * 0.58,
-                height: size * 0.58,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    style: BorderStyle.solid,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xff3b82f6).withValues(alpha: 0.22),
-                      blurRadius: 54,
-                    ),
-                  ],
-                ),
-              ),
-              ...nodes.map(
-                (node) => Align(
-                  alignment: node.$1,
-                  child: _BusinessNode(icon: node.$2, label: node.$3),
-                ),
-              ),
-              Container(
-                width: 142,
-                height: 142,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xff3b82f6), Color(0xff3b82f6)],
-                  ),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.24)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xff3b82f6).withValues(alpha: 0.36),
-                      blurRadius: 44,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    'Account\nBusiness',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      height: 1.15,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+        height: 390,
+        child: Center(
+            child: SizedBox(
+                width: size,
+                height: size,
+                child: Stack(alignment: Alignment.center, children: [
+                  Container(
+                      width: size * 0.58,
+                      height: size * 0.58,
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.12),
+                              style: BorderStyle.solid),
+                          boxShadow: [
+                            BoxShadow(
+                                color: const Color(0xff3b82f6)
+                                    .withValues(alpha: 0.22),
+                                blurRadius: 54)
+                          ])),
+                  ...nodes.map((node) => Align(
+                      alignment: node.$1,
+                      child: _BusinessNode(icon: node.$2, label: node.$3))),
+                  Container(
+                      width: 142,
+                      height: 142,
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                              colors: [Color(0xff3b82f6), Color(0xff3b82f6)]),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.24)),
+                          boxShadow: [
+                            BoxShadow(
+                                color: const Color(0xff3b82f6)
+                                    .withValues(alpha: 0.36),
+                                blurRadius: 44)
+                          ]),
+                      child: Center(
+                          child: Text('Account\nBusiness',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.15))))
+                ]))));
   }
 }
 
 class _BusinessNode extends StatelessWidget {
   final IconData icon;
   final String label;
-
   const _BusinessNode({required this.icon, required this.label});
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
+  Widget build(BuildContext context) => Container(
       width: 112,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xff0b1220).withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: const Color(0xff3b82f6), size: 22),
-          const SizedBox(height: 5),
-          Text(
-            label,
+          color: const Color(0xff0b1220).withValues(alpha: 0.86),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: const Color(0xff3b82f6), size: 22),
+        const SizedBox(height: 5),
+        Text(label,
             style: GoogleFonts.inter(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+                color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))
+      ]));
 }
 
 class _BusinessInvoiceCard extends StatelessWidget {
-  const _BusinessInvoiceCard();
-
+  final List<Map<String, dynamic>> deliveries;
+  final VoidCallback? onOpen;
+  const _BusinessInvoiceCard({this.deliveries = const [], this.onOpen});
   @override
   Widget build(BuildContext context) {
-    return _BusinessGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final total = deliveries.fold<double>(
+        0, (runningTotal, item) => runningTotal + _businessAmount(item));
+    return InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(28),
+        child: _BusinessGlass(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const _BusinessPanelHeader(
-            title: 'Outstanding invoice',
-            subtitle: 'Due 30 Jun 2026',
-          ),
+              title: 'Outstanding invoice',
+              subtitle: 'Current business activity'),
           const SizedBox(height: 16),
-          Text(
-            '£1,284.40',
-            style: GoogleFonts.dmSerifDisplay(
-              color: Colors.white,
-              fontSize: 42,
-              height: 1,
-            ),
-          ),
+          Text(total == 0 ? '£0.00' : '£${total.toStringAsFixed(2)}',
+              style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white, fontSize: 42, height: 1)),
           const SizedBox(height: 8),
           Text(
-            'Includes 42 deliveries, 3 Health+ runs, and 4 Vanguard jobs.',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.68),
-              fontWeight: FontWeight.w600,
-              height: 1.35,
-            ),
-          ),
+              deliveries.isEmpty
+                  ? 'No invoiceable business deliveries yet.'
+                  : 'Includes deliveries, Health+, Gifts, Vanguard and Roth offsets where available.',
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.68),
+                  fontWeight: FontWeight.w600,
+                  height: 1.35)),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: null,
-            child: const Text('Pay invoice'),
-          ),
-        ],
-      ),
-    );
+              onPressed: null, child: const Text('Payment coming soon'))
+        ])));
   }
 }
 
 class _BusinessTeamCard extends StatelessWidget {
-  const _BusinessTeamCard();
+  final Map<String, dynamic> account;
+  const _BusinessTeamCard({this.account = const {}});
+  @override
+  Widget build(BuildContext context) {
+    final members = _businessMembers(account).take(3).toList();
+    return _BusinessGlass(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const _BusinessPanelHeader(
+          title: 'Team access', subtitle: 'Role-based account controls'),
+      const SizedBox(height: 12),
+      if (members.isEmpty)
+        const _BusinessEmptyState('No team members yet.')
+      else
+        ...members.map((member) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(children: [
+              CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.white.withValues(alpha: 0.10),
+                  child: Text(
+                      _initials('${member['name'] ?? member['email'] ?? 'B'}'),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 12))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text('${member['name'] ?? member['email'] ?? 'Team'}',
+                      style: GoogleFonts.inter(
+                          color: Colors.white, fontWeight: FontWeight.w800))),
+              _BusinessBadge('${member['role'] ?? 'viewer'}'.toUpperCase())
+            ])))
+    ]));
+  }
+}
+
+class _BusinessActivityTable extends StatelessWidget {
+  final List<Map<String, dynamic>> deliveries;
+  const _BusinessActivityTable({this.deliveries = const []});
+  @override
+  Widget build(BuildContext context) {
+    final rows = deliveries.take(12).toList();
+    return _BusinessGlass(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const _BusinessPanelHeader(
+          title: 'Recent activity',
+          subtitle: 'Business deliveries and ecosystem actions'),
+      const SizedBox(height: 12),
+      if (rows.isEmpty)
+        const _BusinessEmptyState('No business activity yet.')
+      else
+        SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+                headingTextStyle: GoogleFonts.jetBrainsMono(
+                    color: Colors.white.withValues(alpha: 0.58),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800),
+                dataTextStyle: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w700),
+                columns: const [
+                  DataColumn(label: Text('Job ID')),
+                  DataColumn(label: Text('Pillar')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Amount')),
+                  DataColumn(label: Text('Time'))
+                ],
+                rows: rows
+                    .map((row) => DataRow(cells: [
+                          DataCell(Text(
+                              '${row['trackingReference'] ?? row['id'] ?? 'Delivery'}')),
+                          DataCell(Text(_businessPillar(row))),
+                          DataCell(_BusinessBadge(
+                              '${row['status'] ?? 'pending'}'.toUpperCase())),
+                          DataCell(Text(
+                              '£${_businessAmount(row).toStringAsFixed(2)}')),
+                          DataCell(Text(_businessDateLabel(_businessDate(row))))
+                        ]))
+                    .toList()))
+    ]));
+  }
+}
+
+class _BusinessInvoicePage extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final List<Map<String, dynamic>> deliveries;
+  final TextEditingController invoiceSearch;
+  final bool canManage;
+  const _BusinessInvoicePage(
+      {required this.account,
+      required this.deliveries,
+      required this.invoiceSearch,
+      required this.canManage});
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      _BusinessInvoiceCard(deliveries: deliveries),
+      const SizedBox(height: 14),
+      _BusinessGlass(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _BusinessPanelHeader(
+            title: 'Invoice history',
+            subtitle: 'Real invoice records will appear here when issued.'),
+        const SizedBox(height: 12),
+        _BusinessTextField(controller: invoiceSearch, label: 'Search invoices'),
+        const SizedBox(height: 12),
+        const _BusinessEmptyState(
+            'No issued invoices yet. Delivery breakdown is shown from business jobs above.'),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+            onPressed: null,
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Download invoice PDF'))
+      ]))
+    ]);
+  }
+}
+
+class _BusinessTeamPage extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final bool canManage;
+  final TextEditingController inviteEmail;
+  final TextEditingController inviteName;
+  final String inviteRole;
+  final ValueChanged<String> onInviteRole;
+  final VoidCallback onInviteMember;
+  final void Function(Map<String, dynamic>, String) onUpdateMember;
+  final ValueChanged<Map<String, dynamic>> onRemoveMember;
+  final ValueChanged<Map<String, dynamic>> onCancelInvite;
+  final ValueChanged<Map<String, dynamic>> onResendInvite;
+  const _BusinessTeamPage(
+      {required this.account,
+      required this.canManage,
+      required this.inviteEmail,
+      required this.inviteName,
+      required this.inviteRole,
+      required this.onInviteRole,
+      required this.onInviteMember,
+      required this.onUpdateMember,
+      required this.onRemoveMember,
+      required this.onCancelInvite,
+      required this.onResendInvite});
+  @override
+  Widget build(BuildContext context) {
+    final members = _businessMembers(account);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _BusinessGlass(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _BusinessPanelHeader(
+            title: 'Team & access',
+            subtitle: 'Owner and Admin can manage access.'),
+        const SizedBox(height: 12),
+        if (members.isEmpty)
+          const _BusinessEmptyState('No team members yet.')
+        else
+          ...members.map((member) => _BusinessMemberRow(
+              member: member,
+              canManage: canManage,
+              onUpdateRole: (role) => onUpdateMember(member, role),
+              onRemove: () => onRemoveMember(member),
+              onCancelInvite: () => onCancelInvite(member),
+              onResendInvite: () => onResendInvite(member)))
+      ])),
+      if (canManage) ...[
+        const SizedBox(height: 14),
+        _BusinessGlass(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const _BusinessPanelHeader(
+              title: 'Invite team member',
+              subtitle: 'Create a pending invite by email.'),
+          const SizedBox(height: 12),
+          _BusinessTextField(controller: inviteEmail, label: 'Email'),
+          _BusinessTextField(controller: inviteName, label: 'Name optional'),
+          Wrap(
+              spacing: 8,
+              children: _businessRoles
+                  .map((role) => ChoiceChip(
+                      selected: inviteRole == role,
+                      label: Text(_businessRoleLabel(role)),
+                      onSelected: (_) => onInviteRole(role)))
+                  .toList()),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+              onPressed: onInviteMember,
+              icon: const Icon(Icons.person_add_alt),
+              label: const Text('Invite member'))
+        ]))
+      ]
+    ]);
+  }
+}
+
+class _BusinessMemberRow extends StatelessWidget {
+  final Map<String, dynamic> member;
+  final bool canManage;
+  final ValueChanged<String> onUpdateRole;
+  final VoidCallback onRemove;
+  final VoidCallback onCancelInvite;
+  final VoidCallback onResendInvite;
+  const _BusinessMemberRow(
+      {required this.member,
+      required this.canManage,
+      required this.onUpdateRole,
+      required this.onRemove,
+      required this.onCancelInvite,
+      required this.onResendInvite});
+  @override
+  Widget build(BuildContext context) {
+    final role = '${member['role'] ?? 'viewer'}';
+    final invited = '${member['status'] ?? ''}' == 'invited';
+    return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(children: [
+          Expanded(
+              child: Text(
+                  '${member['name'] ?? member['email'] ?? 'Team member'}\n${member['email'] ?? ''} · ${invited ? 'Pending invite' : 'Active'}',
+                  style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35))),
+          if (canManage)
+            DropdownButton<String>(
+                value: _businessRoles.contains(role) ? role : 'viewer',
+                dropdownColor: const Color(0xff111827),
+                style: const TextStyle(color: Colors.white),
+                items: _businessRoles
+                    .map((role) => DropdownMenuItem(
+                        value: role, child: Text(_businessRoleLabel(role))))
+                    .toList(),
+                onChanged: (next) {
+                  if (next != null) onUpdateRole(next);
+                })
+          else
+            _BusinessBadge(_businessRoleLabel(role).toUpperCase()),
+          if (canManage && invited)
+            TextButton(onPressed: onResendInvite, child: const Text('Resend')),
+          if (canManage && invited)
+            TextButton(onPressed: onCancelInvite, child: const Text('Cancel')),
+          if (canManage)
+            IconButton(
+                onPressed: onRemove,
+                icon: const Icon(Icons.remove_circle_outline,
+                    color: Colors.white70))
+        ]));
+  }
+}
+
+class _BusinessMobileTabs extends StatelessWidget {
+  final _BusinessPortalTab selectedTab;
+  final ValueChanged<_BusinessPortalTab> onSelectTab;
+  final String role;
+
+  const _BusinessMobileTabs({
+    required this.selectedTab,
+    required this.onSelectTab,
+    required this.role,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const members = [
-      ('JA', 'Jason', 'Owner'),
-      ('AM', 'Amina', 'Admin'),
-      ('RS', 'Rory', 'Member'),
+    final tabs = <(_BusinessPortalTab, String)>[
+      (_BusinessPortalTab.overview, 'Overview'),
+      (_BusinessPortalTab.deliveries, 'Deliveries'),
+      (_BusinessPortalTab.invoicing, 'Invoices'),
+      (_BusinessPortalTab.team, 'Team'),
+      (_BusinessPortalTab.healthPlus, 'Health+'),
+      (_BusinessPortalTab.gifts, 'Gifts'),
+      (_BusinessPortalTab.vanguard, 'Vanguard'),
+      (_BusinessPortalTab.analytics, 'Analytics'),
+      (_BusinessPortalTab.settings, 'Settings'),
     ];
-    return _BusinessGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _BusinessPanelHeader(
-            title: 'Team access',
-            subtitle: 'Role-based account controls',
-          ),
-          const SizedBox(height: 12),
-          ...members.map(
-            (member) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.white.withValues(alpha: 0.10),
-                    child: Text(
-                      member.$1,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: tabs
+            .map(
+              (tab) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  selected: selectedTab == tab.$1,
+                  label: Text(tab.$2),
+                  selectedColor:
+                      const Color(0xff3b82f6).withValues(alpha: 0.20),
+                  side: BorderSide(
+                    color: selectedTab == tab.$1
+                        ? const Color(0xff3b82f6).withValues(alpha: 0.68)
+                        : Colors.white.withValues(alpha: 0.12),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      member.$2,
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  _BusinessBadge(member.$3.toUpperCase()),
-                ],
+                  onSelected: (_) => onSelectTab(tab.$1),
+                ),
               ),
-            ),
-          ),
-        ],
+            )
+            .toList(),
       ),
     );
   }
 }
 
-class _BusinessActivityTable extends StatelessWidget {
-  const _BusinessActivityTable();
-
+class _BusinessDeliveriesPage extends StatelessWidget {
+  final List<Map<String, dynamic>> deliveries;
+  final VoidCallback onBookDelivery;
+  const _BusinessDeliveriesPage(
+      {required this.deliveries, required this.onBookDelivery});
   @override
   Widget build(BuildContext context) {
-    const rows = [
-      ('CIR-2841', 'Delivery', 'In transit', '£18.60', '09:42'),
-      ('CIR-2837', 'Vanguard', 'Delivered', '£31.99', 'Yesterday'),
-      ('HP-1182', 'Health+', 'Scheduled', '£15.00', '20 Jun'),
-      ('GFT-402', 'Gifts', 'Preparing', '£95.00', '18 Jun'),
-    ];
-    return _BusinessGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _BusinessPanelHeader(
-            title: 'Recent activity',
-            subtitle: 'Business deliveries and ecosystem actions',
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingTextStyle: GoogleFonts.jetBrainsMono(
-                color: Colors.white.withValues(alpha: 0.58),
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-              dataTextStyle: GoogleFonts.inter(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-              columns: const [
-                DataColumn(label: Text('Job ID')),
-                DataColumn(label: Text('Pillar')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('Amount')),
-                DataColumn(label: Text('Time')),
-              ],
-              rows: rows
-                  .map(
-                    (row) => DataRow(
-                      cells: [
-                        DataCell(Text(row.$1)),
-                        DataCell(Text(row.$2)),
-                        DataCell(_BusinessBadge(row.$3.toUpperCase())),
-                        DataCell(Text(row.$4)),
-                        DataCell(Text(row.$5)),
-                      ],
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-        ],
-      ),
-    );
+    final active = deliveries
+        .where((item) => _businessStatusGroup(item) == 'active')
+        .toList();
+    final scheduled = deliveries
+        .where((item) => _businessStatusGroup(item) == 'scheduled')
+        .toList();
+    final completed = deliveries
+        .where((item) => _businessStatusGroup(item) == 'completed')
+        .toList();
+    final cancelled = deliveries
+        .where((item) => _businessStatusGroup(item) == 'cancelled')
+        .toList();
+    return Column(children: [
+      _BusinessSegmentCounts(items: [
+        ('Active', active.length),
+        ('Scheduled', scheduled.length),
+        ('Completed', completed.length),
+        ('Cancelled', cancelled.length)
+      ]),
+      const SizedBox(height: 14),
+      _BusinessActivityTable(deliveries: deliveries),
+      const SizedBox(height: 14),
+      Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(spacing: 10, runSpacing: 10, children: [
+            FilledButton.icon(
+                onPressed: onBookDelivery,
+                icon: const Icon(Icons.add_road),
+                label: const Text('Book delivery')),
+            OutlinedButton.icon(
+                onPressed: null,
+                icon: const Icon(Icons.download),
+                label: const Text('Export delivery history'))
+          ]))
+    ]);
   }
+}
+
+class _BusinessServicePage extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Map<String, dynamic>> rows;
+  final VoidCallback onCreate;
+  const _BusinessServicePage(
+      {required this.title,
+      required this.icon,
+      required this.rows,
+      required this.onCreate});
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      _BusinessGlass(
+          child: Row(children: [
+        Icon(icon, color: const Color(0xff3b82f6), size: 32),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _BusinessPanelHeader(
+                title: title,
+                subtitle: 'Connected to the same Circum delivery ecosystem.')),
+        FilledButton(onPressed: onCreate, child: const Text('Create request'))
+      ])),
+      const SizedBox(height: 14),
+      _BusinessActivityTable(deliveries: rows)
+    ]);
+  }
+}
+
+class _BusinessAnalyticsPage extends StatelessWidget {
+  final List<Map<String, dynamic>> deliveries;
+  final Map<String, dynamic> account;
+  const _BusinessAnalyticsPage(
+      {required this.deliveries, required this.account});
+  @override
+  Widget build(BuildContext context) {
+    final spend = deliveries.fold<double>(
+        0, (runningTotal, item) => runningTotal + _businessAmount(item));
+    final avg = deliveries.isEmpty ? 0 : spend / deliveries.length;
+    final topRoutes = <String, int>{};
+    for (final item in deliveries) {
+      final route =
+          '${item['pickupAddress'] ?? 'Pickup'} → ${item['dropoffAddress'] ?? 'Drop-off'}';
+      topRoutes[route] = (topRoutes[route] ?? 0) + 1;
+    }
+    return Column(children: [
+      _BusinessStatsGrid(deliveries: deliveries, account: account),
+      const SizedBox(height: 14),
+      _BusinessGlass(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _BusinessPanelHeader(
+            title: 'Spend',
+            subtitle: 'Average delivery cost £${avg.toStringAsFixed(2)}'),
+        const SizedBox(height: 12),
+        Text('Total business spend: £${spend.toStringAsFixed(2)}',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 12),
+        if (topRoutes.isEmpty)
+          const _BusinessEmptyState(
+              'Top routes will appear after business bookings.')
+        else
+          ...topRoutes.entries.take(5).map((item) => Text(
+              '${item.key} · ${item.value}',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w700)))
+      ]))
+    ]);
+  }
+}
+
+class _BusinessSettingsPage extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final bool canManage;
+  final TextEditingController businessName;
+  final TextEditingController contactName;
+  final TextEditingController phone;
+  final TextEditingController businessAddress;
+  final TextEditingController companyNumber;
+  final TextEditingController billingEmail;
+  final TextEditingController defaultPickupAddress;
+  final VoidCallback onSaveProfile;
+  final VoidCallback onSignOut;
+  const _BusinessSettingsPage(
+      {required this.account,
+      required this.canManage,
+      required this.businessName,
+      required this.contactName,
+      required this.phone,
+      required this.businessAddress,
+      required this.companyNumber,
+      required this.billingEmail,
+      required this.defaultPickupAddress,
+      required this.onSaveProfile,
+      required this.onSignOut});
+  @override
+  Widget build(BuildContext context) {
+    businessName.text = businessName.text.isEmpty
+        ? '${account['businessName'] ?? ''}'
+        : businessName.text;
+    contactName.text = contactName.text.isEmpty
+        ? '${account['contactName'] ?? ''}'
+        : contactName.text;
+    phone.text = phone.text.isEmpty ? '${account['phone'] ?? ''}' : phone.text;
+    businessAddress.text = businessAddress.text.isEmpty
+        ? '${account['businessAddress'] ?? ''}'
+        : businessAddress.text;
+    companyNumber.text = companyNumber.text.isEmpty
+        ? '${account['companyNumber'] ?? ''}'
+        : companyNumber.text;
+    billingEmail.text = billingEmail.text.isEmpty
+        ? '${account['billingEmail'] ?? ''}'
+        : billingEmail.text;
+    final pickups = ((account['defaultPickupAddresses'] as List?) ?? const [])
+        .map((item) => '$item')
+        .toList();
+    defaultPickupAddress.text =
+        defaultPickupAddress.text.isEmpty && pickups.isNotEmpty
+            ? pickups.first
+            : defaultPickupAddress.text;
+    return _BusinessGlass(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const _BusinessPanelHeader(
+          title: 'Business profile',
+          subtitle: 'Editable account details and billing contact.'),
+      const SizedBox(height: 12),
+      _BusinessTextField(
+          controller: businessName, label: 'Business name', enabled: canManage),
+      _BusinessTextField(
+          controller: contactName, label: 'Contact name', enabled: canManage),
+      _BusinessTextField(controller: phone, label: 'Phone', enabled: canManage),
+      _BusinessTextField(
+          controller: businessAddress,
+          label: 'Business address',
+          enabled: canManage),
+      _BusinessTextField(
+          controller: companyNumber,
+          label: 'VAT / company number optional',
+          enabled: canManage),
+      _BusinessTextField(
+          controller: billingEmail, label: 'Billing email', enabled: canManage),
+      _BusinessTextField(
+          controller: defaultPickupAddress,
+          label: 'Default pickup address',
+          enabled: canManage),
+      const SizedBox(height: 12),
+      Wrap(spacing: 10, children: [
+        FilledButton.icon(
+            onPressed: canManage ? onSaveProfile : null,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Save profile')),
+        OutlinedButton.icon(
+            onPressed: onSignOut,
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('Logout'))
+      ])
+    ]));
+  }
+}
+
+class _BusinessIrisInsights extends StatelessWidget {
+  final List<Map<String, dynamic>> deliveries;
+  const _BusinessIrisInsights({required this.deliveries});
+  @override
+  Widget build(BuildContext context) {
+    final vanguard = deliveries.where(_businessIsVanguard).length;
+    final heavy = deliveries
+        .where((item) =>
+            item['heavyItemFlag'] == true || item['twoPersonFlag'] == true)
+        .length;
+    return _BusinessGlass(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const _BusinessPanelHeader(
+          title: 'IRIS insights',
+          subtitle: 'Operational intelligence, never an override.'),
+      const SizedBox(height: 12),
+      if (deliveries.isEmpty)
+        const _BusinessEmptyState(
+            'IRIS insights will appear once business deliveries are booked.')
+      else
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          _BusinessBadge('VANGUARD JOBS $vanguard'),
+          _BusinessBadge('HANDLING FLAGS $heavy'),
+          _BusinessBadge('ROUTES ${deliveries.length}')
+        ])
+    ]));
+  }
+}
+
+class _BusinessSegmentCounts extends StatelessWidget {
+  final List<(String, int)> items;
+  const _BusinessSegmentCounts({required this.items});
+  @override
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final cols = constraints.maxWidth < 680 ? 2 : 4;
+        return GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: cols,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 2.4,
+            children: items
+                .map((item) => _BusinessGlass(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(item.$1,
+                              style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.64),
+                                  fontWeight: FontWeight.w700)),
+                          Text('${item.$2}',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900))
+                        ])))
+                .toList());
+      });
+}
+
+class _BusinessTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final bool obscure;
+  final bool enabled;
+  const _BusinessTextField(
+      {required this.controller,
+      required this.label,
+      this.obscure = false,
+      this.enabled = true});
+  @override
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+          controller: controller,
+          obscureText: obscure,
+          enabled: enabled,
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+              labelText: label,
+              labelStyle:
+                  TextStyle(color: Colors.white.withValues(alpha: 0.58)),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.06),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide:
+                      BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.12))))));
+}
+
+class _BusinessEmptyState extends StatelessWidget {
+  final String text;
+  const _BusinessEmptyState(this.text);
+  @override
+  Widget build(BuildContext context) => Text(text,
+      style: GoogleFonts.inter(
+          color: Colors.white.withValues(alpha: 0.64),
+          fontWeight: FontWeight.w700,
+          height: 1.4));
 }
 
 class _BusinessStatCard extends StatelessWidget {
@@ -35579,358 +36829,395 @@ class _BusinessStatCard extends StatelessWidget {
   final String value;
   final String note;
   final IconData icon;
-
-  const _BusinessStatCard({
-    required this.label,
-    required this.value,
-    required this.note,
-    required this.icon,
-  });
-
+  const _BusinessStatCard(
+      {required this.label,
+      required this.value,
+      required this.note,
+      required this.icon});
   @override
-  Widget build(BuildContext context) {
-    return _BusinessGlass(
+  Widget build(BuildContext context) => _BusinessGlass(
       padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Container(
+      child: Row(children: [
+        Container(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xff3b82f6).withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-            ),
-            child: Icon(icon, color: const Color(0xff3b82f6), size: 21),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+                color: const Color(0xff3b82f6).withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(15),
+                border:
+                    Border.all(color: Colors.white.withValues(alpha: 0.10))),
+            child: Icon(icon, color: const Color(0xff3b82f6), size: 21)),
+        const SizedBox(width: 12),
+        Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+              Text(label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.jetBrainsMono(
-                    color: Colors.white.withValues(alpha: 0.52),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
+                      color: Colors.white.withValues(alpha: 0.52),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 3),
+              Text(value,
                   style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  note,
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900)),
+              Text(note,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.58),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+                      color: Colors.white.withValues(alpha: 0.58),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600))
+            ]))
+      ]));
 }
 
 class _BusinessGlass extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-
-  const _BusinessGlass({
-    required this.child,
-    this.padding = const EdgeInsets.all(18),
-  });
-
+  const _BusinessGlass(
+      {required this.child, this.padding = const EdgeInsets.all(18)});
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
+  Widget build(BuildContext context) => ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: double.infinity,
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.065),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.24),
-                blurRadius: 36,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
+          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+              width: double.infinity,
+              padding: padding,
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.065),
+                  borderRadius: BorderRadius.circular(28),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.24),
+                        blurRadius: 36,
+                        offset: const Offset(0, 18))
+                  ]),
+              child: child)));
 }
 
 class _BusinessPanelHeader extends StatelessWidget {
   final String title;
   final String subtitle;
-
   const _BusinessPanelHeader({required this.title, required this.subtitle});
-
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
+  Widget build(BuildContext context) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title,
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w900)),
         const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: GoogleFonts.inter(
-            color: Colors.white.withValues(alpha: 0.58),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
+        Text(subtitle,
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.58),
+                fontWeight: FontWeight.w600))
+      ]);
 }
 
 class _BusinessMiniCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String body;
-
-  const _BusinessMiniCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
+  const _BusinessMiniCard(
+      {required this.icon, required this.title, required this.body});
   @override
-  Widget build(BuildContext context) {
-    return _BusinessGlass(
+  Widget build(BuildContext context) => _BusinessGlass(
       padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xff3b82f6), size: 24),
-          const SizedBox(width: 12),
-          Expanded(
+      child: Row(children: [
+        Icon(icon, color: const Color(0xff3b82f6), size: 24),
+        const SizedBox(width: 12),
+        Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+              Text(title,
                   style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  body,
+                      color: Colors.white, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              Text(body,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.62),
-                    fontSize: 12,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+                      color: Colors.white.withValues(alpha: 0.62),
+                      fontSize: 12,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600))
+            ]))
+      ]));
 }
 
 class _BusinessNavGroup extends StatelessWidget {
   final String title;
-  final List<(IconData, String, bool)> items;
-
-  const _BusinessNavGroup({required this.title, required this.items});
-
+  final List<(IconData, String, _BusinessPortalTab)> items;
+  final _BusinessPortalTab selectedTab;
+  final ValueChanged<_BusinessPortalTab> onSelectTab;
+  const _BusinessNavGroup(
+      {required this.title,
+      required this.items,
+      required this.selectedTab,
+      required this.onSelectTab});
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title.toUpperCase(),
-          style: GoogleFonts.jetBrainsMono(
-            color: Colors.white.withValues(alpha: 0.42),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+  Widget build(BuildContext context) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title.toUpperCase(),
+            style: GoogleFonts.jetBrainsMono(
+                color: Colors.white.withValues(alpha: 0.42),
+                fontSize: 11,
+                fontWeight: FontWeight.w800)),
         const SizedBox(height: 9),
-        ...items.map(
-          (item) => Container(
-            margin: const EdgeInsets.only(bottom: 7),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            decoration: BoxDecoration(
-              color: item.$3
-                  ? const Color(0xff3b82f6).withValues(alpha: 0.12)
-                  : Colors.transparent,
+        ...items.map((item) {
+          final selected = item.$3 == selectedTab;
+          return InkWell(
+              onTap: () => onSelectTab(item.$3),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: item.$3
-                    ? const Color(0xff3b82f6).withValues(alpha: 0.68)
-                    : Colors.transparent,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(item.$1,
-                    color: Colors.white.withValues(alpha: 0.72), size: 19),
-                const SizedBox(width: 10),
-                Text(
-                  item.$2,
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: item.$3 ? 1 : 0.68),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+              child: Container(
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xff3b82f6).withValues(alpha: 0.12)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: selected
+                              ? const Color(0xff3b82f6).withValues(alpha: 0.68)
+                              : Colors.transparent)),
+                  child: Row(children: [
+                    Icon(item.$1,
+                        color: Colors.white.withValues(alpha: 0.72), size: 19),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: Text(item.$2,
+                            style: GoogleFonts.inter(
+                                color: Colors.white
+                                    .withValues(alpha: selected ? 1 : 0.68),
+                                fontWeight: FontWeight.w800)))
+                  ])));
+        })
+      ]);
 }
 
 class _BusinessTierCard extends StatelessWidget {
-  const _BusinessTierCard();
-
+  final List<Map<String, dynamic>> deliveries;
+  const _BusinessTierCard({required this.deliveries});
   @override
-  Widget build(BuildContext context) {
-    return _BusinessGlass(
+  Widget build(BuildContext context) => _BusinessGlass(
       padding: const EdgeInsets.all(15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _BusinessBadge('BUSINESS — GROWTH'),
-          const SizedBox(height: 12),
-          ClipRRect(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _BusinessBadge('BUSINESS — GROWTH'),
+        const SizedBox(height: 12),
+        ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              minHeight: 8,
-              value: 0.68,
-              backgroundColor: Colors.white.withValues(alpha: 0.08),
-              valueColor: const AlwaysStoppedAnimation(Color(0xff3b82f6)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '68 / 100 monthly jobs to Scale tier',
+                minHeight: 8,
+                value: (deliveries.length / 100).clamp(0, 1),
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                valueColor: const AlwaysStoppedAnimation(Color(0xff3b82f6)))),
+        const SizedBox(height: 8),
+        Text('${deliveries.length} / 100 monthly jobs to Scale tier',
             style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.68),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+                color: Colors.white.withValues(alpha: 0.68),
+                fontSize: 12,
+                fontWeight: FontWeight.w700))
+      ]));
 }
 
 class _BusinessEyebrow extends StatelessWidget {
   final String text;
-
   const _BusinessEyebrow(this.text);
-
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
+  Widget build(BuildContext context) => Text(text.toUpperCase(),
       style: GoogleFonts.jetBrainsMono(
-        color: const Color(0xff3b82f6),
-        fontSize: 12,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
+          color: const Color(0xff3b82f6),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.2));
 }
 
 class _BusinessBadge extends StatelessWidget {
   final String label;
-
   const _BusinessBadge(this.label);
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
+  Widget build(BuildContext context) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.jetBrainsMono(
-          color: Colors.white.withValues(alpha: 0.82),
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12))),
+      child: Text(label,
+          style: GoogleFonts.jetBrainsMono(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 10,
+              fontWeight: FontWeight.w800)));
 }
 
 class _BusinessGlow extends StatelessWidget {
   final double size;
   final Color color;
-
   const _BusinessGlow({required this.size, required this.color});
-
   @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
+  Widget build(BuildContext context) => IgnorePointer(
       child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              color.withValues(alpha: 0.22),
-              color.withValues(alpha: 0.05),
-              Colors.transparent,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [
+                color.withValues(alpha: 0.22),
+                color.withValues(alpha: 0.05),
+                Colors.transparent
+              ]))));
 }
+
+const _businessRoles = ['owner', 'admin', 'operations', 'finance', 'viewer'];
+
+String _businessRole(Map<String, dynamic> account, User user) {
+  final uid = user.uid;
+  final email = (user.email ?? '').toLowerCase();
+  for (final member in _businessMembers(account)) {
+    final id = '${member['userId'] ?? ''}'.toLowerCase();
+    final memberEmail = '${member['email'] ?? ''}'.toLowerCase();
+    if (id == uid.toLowerCase() || id == email || memberEmail == email)
+      return '${member['role'] ?? 'viewer'}';
+  }
+  return '${account['createdByUserId'] ?? ''}' == uid ? 'owner' : 'viewer';
+}
+
+bool _businessCanManage(String role) => role == 'owner' || role == 'admin';
+bool _businessCanFinance(String role) =>
+    role == 'owner' || role == 'admin' || role == 'finance';
+String _businessRoleLabel(String role) => switch (role) {
+      'owner' => 'Owner',
+      'admin' => 'Admin',
+      'operations' => 'Operations',
+      'finance' => 'Finance',
+      _ => 'Viewer'
+    };
+List<Map<String, dynamic>> _businessMembers(Map<String, dynamic> account) =>
+    ((account['teamMembers'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+DateTime _businessDate(Map<String, dynamic> item) {
+  final raw = item['scheduledDateTime'] ??
+      item['scheduledFor'] ??
+      item['deliveryDateTime'] ??
+      item['createdAt'] ??
+      item['updatedAt'];
+  if (raw is Timestamp) return raw.toDate();
+  if (raw is DateTime) return raw;
+  return DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+String _businessDateLabel(DateTime date) => date.millisecondsSinceEpoch == 0
+    ? 'Not dated'
+    : '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+double _num(dynamic value) =>
+    value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+double _businessAmount(Map<String, dynamic> item) =>
+    _num(item['businessAmount'] ??
+        item['amount'] ??
+        item['pricePaid'] ??
+        item['price'] ??
+        item['total']);
+bool _businessIsVanguard(Map<String, dynamic> item) =>
+    item['vanguardEnabled'] == true ||
+    '${item['serviceType'] ?? ''}'.toUpperCase() == 'VANGUARD' ||
+    ((item['vanguardProtection'] as Map?)?['enabled'] == true);
+String _businessPillar(Map<String, dynamic> item) {
+  final service =
+      '${item['serviceType'] ?? item['sourceModule'] ?? ''}'.toUpperCase();
+  if (service.contains('HEALTH')) return 'Health+';
+  if (service.contains('GIFT')) return 'Gifts';
+  if (_businessIsVanguard(item)) return 'Vanguard';
+  return 'Delivery';
+}
+
+String _businessStatusGroup(Map<String, dynamic> item) {
+  final status = '${item['status'] ?? ''}'.toLowerCase();
+  if (status.contains('cancel') || status.contains('failed'))
+    return 'cancelled';
+  if (status.contains('complete') || status.contains('deliver'))
+    return 'completed';
+  if (status.contains('sched')) return 'scheduled';
+  return 'active';
+}
+
+String _initials(String value) {
+  final parts = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return 'B';
+  return parts
+      .take(2)
+      .map((part) => part.characters.first.toUpperCase())
+      .join();
+}
+
+String _tabEyebrow(_BusinessPortalTab tab) => switch (tab) {
+      _BusinessPortalTab.overview => 'Business · Account overview',
+      _BusinessPortalTab.invoicing => 'Business · Invoicing',
+      _BusinessPortalTab.team => 'Business · Team & access',
+      _BusinessPortalTab.deliveries => 'Business · Deliveries',
+      _BusinessPortalTab.healthPlus => 'Business · Health+',
+      _BusinessPortalTab.gifts => 'Business · Gifts',
+      _BusinessPortalTab.vanguard => 'Business · Vanguard',
+      _BusinessPortalTab.analytics => 'Business · Analytics',
+      _BusinessPortalTab.settings => 'Business · Settings'
+    };
+String _tabTitle(_BusinessPortalTab tab, Map<String, dynamic> account) =>
+    switch (tab) {
+      _BusinessPortalTab.overview =>
+        'Good morning, ${account['businessName'] ?? 'Business'}.',
+      _BusinessPortalTab.invoicing => 'Invoices and Roth offsets.',
+      _BusinessPortalTab.team => 'Team access.',
+      _BusinessPortalTab.deliveries => 'Business deliveries.',
+      _BusinessPortalTab.healthPlus => 'Health+ operations.',
+      _BusinessPortalTab.gifts => 'Corporate gifts.',
+      _BusinessPortalTab.vanguard => 'Vanguard coverage.',
+      _BusinessPortalTab.analytics => 'Business analytics.',
+      _BusinessPortalTab.settings => 'Business profile.'
+    };
+String _tabSubtitle(_BusinessPortalTab tab) => switch (tab) {
+      _BusinessPortalTab.overview =>
+        'Your command centre for deliveries, invoices, team access, Health+, Gifts, Vanguard and IRIS insights.',
+      _BusinessPortalTab.invoicing =>
+        'View invoice history, delivery breakdowns and Roth credits where available.',
+      _BusinessPortalTab.team =>
+        'Invite, remove and permission team members by role.',
+      _BusinessPortalTab.deliveries =>
+        'Book, track, rebook and export business movement history.',
+      _BusinessPortalTab.healthPlus =>
+        'Create and monitor Health+ business requests with Vanguard included.',
+      _BusinessPortalTab.gifts =>
+        'Create and monitor corporate gift requests without exposing surprise details.',
+      _BusinessPortalTab.vanguard =>
+        'Review sensitive deliveries and Vanguard-covered jobs.',
+      _BusinessPortalTab.analytics =>
+        'Real delivery and spend patterns appear here as business activity grows.',
+      _BusinessPortalTab.settings =>
+        'Manage account details, billing email and default pickup address.'
+    };
+List<Map<String, dynamic>> _healthRows(List<Map<String, dynamic>> rows) =>
+    rows.where((item) => _businessPillar(item) == 'Health+').toList();
+List<Map<String, dynamic>> _giftRows(List<Map<String, dynamic>> rows) =>
+    rows.where((item) => _businessPillar(item) == 'Gifts').toList();
+List<Map<String, dynamic>> _vanguardRows(List<Map<String, dynamic>> rows) =>
+    rows.where(_businessIsVanguard).toList();
 
 class _HealthPlusLandingBand extends StatelessWidget {
   final _CircumColors colors;
