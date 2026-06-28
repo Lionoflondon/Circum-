@@ -15706,62 +15706,71 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                         ? Container(
                             color: colors.stage,
                             padding: const EdgeInsets.symmetric(vertical: 24),
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth:
-                                      constraints.maxWidth >= 1100 ? 560 : 430,
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(28),
-                                  child: BackdropFilter(
-                                    filter: ui.ImageFilter.blur(
-                                      sigmaX: colors.dark ? 14 : 8,
-                                      sigmaY: colors.dark ? 14 : 8,
-                                    ),
-                                    child: Container(
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            colors.panel.withOpacity(
-                                                colors.dark ? 0.82 : 0.95),
-                                            colors.adminAccent.withOpacity(
-                                                colors.dark ? 0.13 : 0.07),
-                                            colors.panel.withOpacity(
-                                                colors.dark ? 0.74 : 0.93),
-                                          ],
+                            child: LayoutBuilder(
+                              builder: (context, stageConstraints) => Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: constraints.maxWidth >= 1100
+                                        ? 560
+                                        : 430,
+                                  ),
+                                  child: SizedBox(
+                                    height: stageConstraints.maxHeight,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(28),
+                                      child: BackdropFilter(
+                                        filter: ui.ImageFilter.blur(
+                                          sigmaX: colors.dark ? 14 : 8,
+                                          sigmaY: colors.dark ? 14 : 8,
                                         ),
-                                        borderRadius: BorderRadius.circular(28),
-                                        border: Border.all(
-                                          color: Color.alphaBlend(
-                                            colors.adminAccent.withOpacity(
-                                                colors.dark ? 0.18 : 0.12),
-                                            Colors.white.withOpacity(
-                                                colors.dark ? 0.08 : 0.18),
+                                        child: Container(
+                                          width: double.infinity,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                colors.panel.withOpacity(
+                                                    colors.dark ? 0.82 : 0.95),
+                                                colors.adminAccent.withOpacity(
+                                                    colors.dark ? 0.13 : 0.07),
+                                                colors.panel.withOpacity(
+                                                    colors.dark ? 0.74 : 0.93),
+                                              ],
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(28),
+                                            border: Border.all(
+                                              color: Color.alphaBlend(
+                                                colors.adminAccent.withOpacity(
+                                                    colors.dark ? 0.18 : 0.12),
+                                                Colors.white.withOpacity(
+                                                    colors.dark ? 0.08 : 0.18),
+                                              ),
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                    colors.dark ? 0.24 : 0.06),
+                                                blurRadius: 20,
+                                                offset: const Offset(0, 10),
+                                              ),
+                                              BoxShadow(
+                                                color: colors.adminGlow
+                                                    .withOpacity(colors.dark
+                                                        ? 0.14
+                                                        : 0.06),
+                                                blurRadius: 28,
+                                                offset: const Offset(0, 14),
+                                              ),
+                                            ],
+                                          ),
+                                          child: SingleChildScrollView(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                18, 18, 18, 36),
+                                            child: _buildAnimatedStep(colors),
                                           ),
                                         ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                                colors.dark ? 0.24 : 0.06),
-                                            blurRadius: 20,
-                                            offset: const Offset(0, 10),
-                                          ),
-                                          BoxShadow(
-                                            color: colors.adminGlow.withOpacity(
-                                                colors.dark ? 0.14 : 0.06),
-                                            blurRadius: 28,
-                                            offset: const Offset(0, 14),
-                                          ),
-                                        ],
-                                      ),
-                                      child: SingleChildScrollView(
-                                        padding: const EdgeInsets.fromLTRB(
-                                            18, 18, 18, 36),
-                                        child: _buildAnimatedStep(colors),
                                       ),
                                     ),
                                   ),
