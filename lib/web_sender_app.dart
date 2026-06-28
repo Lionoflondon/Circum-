@@ -17586,15 +17586,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (!_dropoffAddressVerified) {
       return 'Choose a verified drop-off address from the suggestions.';
     }
-    final pickup = _validatedPickup!;
-    final dropoff = _validatedDropoff!;
+    final pickup = _validatedPickup;
+    final dropoff = _validatedDropoff;
+    if (pickup == null || dropoff == null) {
+      return 'Address information is missing. Please re-enter your addresses.';
+    }
     if (_coordinatesAreSame(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)) {
       return 'Pickup and drop-off cannot be the same place.';
     }
-    if (_confirmedRouteDistanceMiles == null) {
-      return 'Route distance not confirmed';
+    final routeDistance = _confirmedRouteDistanceMiles;
+    if (routeDistance == null) {
+      return 'Route distance not confirmed.';
     }
-    return 'Verified route: ${_confirmedRouteDistanceMiles!.toStringAsFixed(1)} miles.';
+    return 'Verified route: ${routeDistance.toStringAsFixed(1)} miles.';
   }
 
   double? get _confirmedRouteDistanceMiles {
@@ -17656,13 +17660,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       weightKg: classification.finalWeightKg,
       description: _description.text,
       itemCategory: _irisMatchedItemName ?? _inferPackageType(),
-      dimensions: _irisTypicalDimensions == null
-          ? null
-          : DeliveryItemDimensions(
-              lengthCm: _irisTypicalDimensions!.length,
-              widthCm: _irisTypicalDimensions!.width,
-              heightCm: _irisTypicalDimensions!.height,
-            ),
+      dimensions: () {
+        final dims = _irisTypicalDimensions;
+        if (dims == null) return null;
+        return DeliveryItemDimensions(
+          lengthCm: dims.length,
+          widthCm: dims.width,
+          heightCm: dims.height,
+        );
+      }(),
       repositoryVehicleSuitability: _irisVehicleSuitability,
       fragile: _irisFragile,
       highValue: _irisValueSensitive,
@@ -17935,6 +17941,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<void> _showLegendCelebration(SenderProfile profile) async {
     if (!mounted || _legendCelebrationShowing) return;
+    if (profile.legendNumber == null) return;
+    final legendNumber = profile.legendNumber!;
     _legendCelebrationShowing = true;
     await showDialog<void>(
       context: context,
@@ -17946,7 +17954,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           child: _LegendCard(
             colors: widget.colors,
             name: profile.fullName.isEmpty ? 'Circum member' : profile.fullName,
-            number: profile.legendNumber!,
+            number: legendNumber,
             awardedAt: profile.legendAwardedAt,
             celebratory: true,
             onClose: () => Navigator.of(context).pop(),
@@ -23473,15 +23481,16 @@ class _SenderProfileStep extends StatelessWidget {
   }
 
   Widget _profileTab(SenderProfileSummary summary) {
+    final legendNumber = profile?.legendNumber;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (profile?.isLegend == true && profile?.legendNumber != null) ...[
+        if (profile?.isLegend == true && legendNumber != null) ...[
           _LegendCard(
             colors: colors,
             name:
                 profile!.fullName.isEmpty ? 'Circum member' : profile!.fullName,
-            number: profile!.legendNumber!,
+            number: legendNumber,
             awardedAt: profile!.legendAwardedAt,
           ),
           const SizedBox(height: 16),
