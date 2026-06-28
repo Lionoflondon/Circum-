@@ -111,6 +111,7 @@ enum _WebAppMode {
   terms,
   privacy,
   vanguard,
+  business,
 }
 
 bool _isPublicHostingHost() {
@@ -140,6 +141,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
   late _SenderStep _senderInitialStep =
       switch (Uri.base.queryParameters['app']) {
     'health' => _SenderStep.healthPlus,
+    'business' => _SenderStep.business,
     'profile' => _SenderStep.profile,
     _ => _SenderStep.dashboard,
   };
@@ -158,8 +160,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
     if (path == '/terms') return _WebAppMode.terms;
     if (path == '/privacy') return _WebAppMode.privacy;
     if (path == '/vanguard') return _WebAppMode.vanguard;
+    if (path == '/business') return _WebAppMode.business;
     return switch (Uri.base.queryParameters['app']) {
-      'sender' || 'health' || 'profile' => _WebAppMode.sender,
+      'sender' || 'health' || 'business' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
       'gifts' => _WebAppMode.gifts,
       _ => _WebAppMode.landing,
@@ -265,6 +268,15 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     key: const ValueKey('vanguard'),
                     onHome: () => setState(() => _mode = _WebAppMode.landing),
                   ),
+                _WebAppMode.business => _BusinessCommandPage(
+                    key: const ValueKey('business-command'),
+                    colors: colors,
+                    onHome: () => setState(() => _mode = _WebAppMode.landing),
+                    onAccess: () => setState(() {
+                      _senderInitialStep = _SenderStep.business;
+                      _mode = _WebAppMode.sender;
+                    }),
+                  ),
                 _WebAppMode.landing => _LandingPage(
                     key: const ValueKey('landing'),
                     colors: colors,
@@ -279,6 +291,12 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       _mode = _WebAppMode.sender;
                     }),
                     onGifts: () => setState(() => _mode = _WebAppMode.gifts),
+                    onBusiness: () =>
+                        setState(() => _mode = _WebAppMode.business),
+                    onBusinessAccess: () => setState(() {
+                      _senderInitialStep = _SenderStep.business;
+                      _mode = _WebAppMode.sender;
+                    }),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
               },
@@ -606,6 +624,8 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
   final VoidCallback? onGifts;
+  final VoidCallback onBusiness;
+  final VoidCallback onBusinessAccess;
   final VoidCallback onToggleTheme;
 
   const _LandingPage({
@@ -616,6 +636,8 @@ class _LandingPage extends StatelessWidget {
     required this.onRider,
     required this.onHealthPlus,
     this.onGifts,
+    required this.onBusiness,
+    required this.onBusinessAccess,
     required this.onToggleTheme,
   });
 
@@ -631,6 +653,7 @@ class _LandingPage extends StatelessWidget {
             onRider: onRider,
             onHealthPlus: onHealthPlus,
             onGifts: onGifts,
+            onBusiness: onBusiness,
             onToggleTheme: onToggleTheme,
           ),
           Container(
@@ -748,6 +771,11 @@ class _LandingPage extends StatelessWidget {
           ),
           _FeatureBand(colors: colors),
           _VanguardLandingBand(colors: colors),
+          _BusinessLandingBand(
+            colors: colors,
+            onBusinessLogin: onBusiness,
+            onCreateBusiness: onBusinessAccess,
+          ),
           _LandingFooter(colors: colors),
         ],
       ),
@@ -9278,6 +9306,7 @@ class _LandingNav extends StatelessWidget {
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
   final VoidCallback? onGifts;
+  final VoidCallback onBusiness;
   final VoidCallback onToggleTheme;
 
   const _LandingNav({
@@ -9287,11 +9316,13 @@ class _LandingNav extends StatelessWidget {
     required this.onRider,
     required this.onHealthPlus,
     this.onGifts,
+    required this.onBusiness,
     required this.onToggleTheme,
   });
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -9316,7 +9347,7 @@ class _LandingNav extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (MediaQuery.sizeOf(context).width >= 560)
+              if (width >= 560)
                 TextButton(
                   onPressed: onRider,
                   child: Text(
@@ -9327,7 +9358,7 @@ class _LandingNav extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (MediaQuery.sizeOf(context).width >= 680)
+              if (width >= 680)
                 TextButton(
                   onPressed: onHealthPlus,
                   child: Text(
@@ -9338,7 +9369,32 @@ class _LandingNav extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (onGifts != null && MediaQuery.sizeOf(context).width >= 760)
+              if (width >= 720)
+                TextButton(
+                  onPressed: onBusiness,
+                  child: Text(
+                    'Business',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else if (width >= 520)
+                IconButton(
+                  tooltip: 'Business',
+                  onPressed: onBusiness,
+                  icon:
+                      Icon(Icons.business_center_outlined, color: colors.text),
+                )
+              else
+                IconButton(
+                  tooltip: 'Business',
+                  onPressed: onBusiness,
+                  icon:
+                      Icon(Icons.business_center_outlined, color: colors.text),
+                ),
+              if (onGifts != null && width >= 760)
                 TextButton.icon(
                   onPressed: onGifts,
                   icon: const Icon(Icons.card_giftcard, size: 18),
@@ -9357,19 +9413,30 @@ class _LandingNav extends StatelessWidget {
                   icon: Icon(Icons.card_giftcard, color: colors.text),
                 ),
               const SizedBox(width: 8),
-              FilledButton(
-                onPressed: onStart,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.text,
-                  foregroundColor: colors.inverseText,
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
+              if (width < 520)
+                IconButton.filled(
+                  tooltip: 'Book delivery',
+                  onPressed: onStart,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  style: IconButton.styleFrom(
+                    backgroundColor: colors.text,
+                    foregroundColor: colors.inverseText,
                   ),
+                )
+              else
+                FilledButton(
+                  onPressed: onStart,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.text,
+                    foregroundColor: colors.inverseText,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                  ),
+                  child: const Text('Send a Parcel'),
                 ),
-                child: const Text('Send a Parcel'),
-              ),
             ],
           ),
         ),
@@ -23103,114 +23170,216 @@ class _BusinessAccountsStep extends StatelessWidget {
     final businessDeliveries = deliveries
         .where((delivery) => delivery.serviceType.toUpperCase() == 'BUSINESS')
         .toList(growable: false);
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final desktop = MediaQuery.sizeOf(context).width >= 940;
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(
+        minHeight: MediaQuery.sizeOf(context).height,
+      ),
+      color: const Color(0xff07090f),
+      child: Stack(
         children: [
-          _StepTopBar(
-              colors: colors, title: 'Business Accounts', onBack: onBack),
-          const SizedBox(height: 14),
-          _GlassPanel(
-            colors: colors,
+          const Positioned(
+            top: -170,
+            right: -150,
+            child: _BusinessGlow(size: 420, color: Color(0xff3b82f6)),
+          ),
+          const Positioned(
+            bottom: -170,
+            left: -130,
+            child: _BusinessGlow(size: 360, color: Color(0xff8b5cf6)),
+          ),
+          SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              desktop ? 26 : 18,
+              18,
+              desktop ? 26 : 18,
+              34,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Back',
+                      onPressed: onBack,
+                      icon: const Icon(Icons.arrow_back_rounded,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(width: 8),
+                    Image.asset(
+                      'assets/images/circum_wordmark.png',
+                      width: 126,
+                      height: 30,
+                      fit: BoxFit.contain,
+                    ),
+                    const Spacer(),
+                    const _BusinessBadge('BUSINESS'),
+                  ],
+                ),
+                const SizedBox(height: 26),
+                const _BusinessEyebrow('Business · Account overview'),
+                const SizedBox(height: 10),
                 Text(
-                  'Create Business Account',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
+                  'Your business command centre.',
+                  style: GoogleFonts.dmSerifDisplay(
+                    color: Colors.white,
+                    fontSize: desktop ? 52 : 39,
+                    height: 1.02,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Set up a company profile for team deliveries. Circum admin approves accounts before business booking is enabled.',
-                  style: TextStyle(
-                    color: colors.mutedText,
-                    height: 1.4,
+                  'Create and manage company profiles, team access, business deliveries, invoices, and the Circum ecosystem from one account.',
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    height: 1.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 14),
-                _InputBox(
-                    colors: colors,
-                    controller: businessName,
-                    hint: 'Business name',
-                    glassStyle: true),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: companyNumber,
-                    hint: 'Company number (optional)',
-                    glassStyle: true),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: contactName,
-                    hint: 'Contact name',
-                    glassStyle: true),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: contactEmail,
-                    hint: 'Contact email',
-                    glassStyle: true),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: phone,
-                    hint: 'Phone',
-                    glassStyle: true),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: billingEmail,
-                    hint: 'Billing email',
-                    glassStyle: true),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: businessAddress,
-                    hint: 'Business address',
-                    glassStyle: true),
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: onCreate,
-                  icon: const Icon(Icons.add_business),
-                  label: const Text('Create Business Account'),
+                const SizedBox(height: 22),
+                const _BusinessStatsGrid(),
+                const SizedBox(height: 16),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final stack = constraints.maxWidth < 900;
+                    final ecosystem = _BusinessGlass(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          _BusinessPanelHeader(
+                            title: 'Your Circum ecosystem',
+                            subtitle:
+                                'Business deliveries reuse the same Circum movement engine.',
+                          ),
+                          SizedBox(height: 18),
+                          _BusinessEcosystemHub(),
+                        ],
+                      ),
+                    );
+                    final side = Column(
+                      children: [
+                        const _BusinessInvoiceCard(),
+                        const SizedBox(height: 14),
+                        const _BusinessTeamCard(),
+                      ],
+                    );
+                    if (stack) {
+                      return Column(
+                        children: [
+                          ecosystem,
+                          const SizedBox(height: 14),
+                          side,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 7, child: ecosystem),
+                        const SizedBox(width: 14),
+                        Expanded(flex: 4, child: side),
+                      ],
+                    );
+                  },
                 ),
+                const SizedBox(height: 16),
+                const _BusinessActivityTable(),
+                const SizedBox(height: 16),
+                _BusinessGlass(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _BusinessPanelHeader(
+                        title: 'Create Business Account',
+                        subtitle:
+                            'Set up a company profile. Circum admin approves accounts before business booking is enabled.',
+                      ),
+                      const SizedBox(height: 14),
+                      _InputBox(
+                          colors: colors,
+                          controller: businessName,
+                          hint: 'Business name',
+                          glassStyle: true),
+                      const SizedBox(height: 10),
+                      _InputBox(
+                          colors: colors,
+                          controller: companyNumber,
+                          hint: 'Company number (optional)',
+                          glassStyle: true),
+                      const SizedBox(height: 10),
+                      _InputBox(
+                          colors: colors,
+                          controller: contactName,
+                          hint: 'Contact name',
+                          glassStyle: true),
+                      const SizedBox(height: 10),
+                      _InputBox(
+                          colors: colors,
+                          controller: contactEmail,
+                          hint: 'Contact email',
+                          glassStyle: true),
+                      const SizedBox(height: 10),
+                      _InputBox(
+                          colors: colors,
+                          controller: phone,
+                          hint: 'Phone',
+                          glassStyle: true),
+                      const SizedBox(height: 10),
+                      _InputBox(
+                          colors: colors,
+                          controller: billingEmail,
+                          hint: 'Billing email',
+                          glassStyle: true),
+                      const SizedBox(height: 10),
+                      _InputBox(
+                          colors: colors,
+                          controller: businessAddress,
+                          hint: 'Business address',
+                          glassStyle: true),
+                      const SizedBox(height: 14),
+                      FilledButton.icon(
+                        onPressed: onCreate,
+                        icon: const Icon(Icons.add_business),
+                        label: const Text('Create Business Account'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (message != null && message!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _BusinessGlass(
+                    child: Text(
+                      message!,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                if (accounts.isEmpty)
+                  _BusinessGlass(
+                    child: Text(
+                      'No business accounts yet.',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.68),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                else
+                  ...accounts.map(
+                    (account) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _businessAccountCard(account, businessDeliveries),
+                    ),
+                  ),
               ],
             ),
           ),
-          if (message != null && message!.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _GlassPanel(
-              colors: colors,
-              child: Text(
-                message!,
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          if (accounts.isEmpty)
-            _GlassPanel(
-              colors: colors,
-              child: Text(
-                'No business accounts yet.',
-                style: TextStyle(
-                    color: colors.mutedText, fontWeight: FontWeight.w700),
-              ),
-            )
-          else
-            ...accounts.map(
-              (account) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _businessAccountCard(account, businessDeliveries),
-              ),
-            ),
         ],
       ),
     );
@@ -34516,6 +34685,1171 @@ class _VanguardLandingBand extends StatelessWidget {
   }
 }
 
+class _BusinessLandingBand extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onBusinessLogin;
+  final VoidCallback onCreateBusiness;
+
+  const _BusinessLandingBand({
+    required this.colors,
+    required this.onBusinessLogin,
+    required this.onCreateBusiness,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 920;
+    const uses = [
+      (
+        Icons.groups_2_outlined,
+        'Team deliveries',
+        'Book, track, and manage deliveries across departments.'
+      ),
+      (
+        Icons.receipt_long_outlined,
+        'Invoicing',
+        'Centralised billing, outstanding invoices, and account credit.'
+      ),
+      (
+        Icons.health_and_safety_outlined,
+        'Health+',
+        'Manage prescription and medical deliveries for staff or clients.'
+      ),
+      (
+        Icons.card_giftcard_outlined,
+        'Gifts',
+        'Send approved corporate gifts through Gifts by Circum.'
+      ),
+      (
+        Icons.shield_outlined,
+        'Vanguard',
+        'Add higher-trust delivery assurance for sensitive items.'
+      ),
+      (
+        Icons.dashboard_customize_outlined,
+        'Dashboard',
+        'Access the Business Account overview and ecosystem hub.'
+      ),
+    ];
+    return Container(
+      width: double.infinity,
+      color: const Color(0xff07090f),
+      padding: const EdgeInsets.fromLTRB(22, 64, 22, 68),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Column(
+            children: [
+              Flex(
+                direction: narrow ? Axis.vertical : Axis.horizontal,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: narrow ? 0 : 9,
+                    child: Column(
+                      crossAxisAlignment: narrow
+                          ? CrossAxisAlignment.center
+                          : CrossAxisAlignment.start,
+                      children: [
+                        const _BusinessEyebrow('Business Accounts'),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Built for companies that move things.',
+                          textAlign: narrow ? TextAlign.center : TextAlign.left,
+                          style: GoogleFonts.dmSerifDisplay(
+                            color: Colors.white,
+                            fontSize: narrow ? 42 : 58,
+                            height: 1.02,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Manage deliveries, invoices, team access, Health+, Gifts, and Vanguard from one business account. Circum gives companies a single command centre for everything they send.',
+                          textAlign: narrow ? TextAlign.center : TextAlign.left,
+                          style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.76),
+                            fontSize: 17,
+                            height: 1.55,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          alignment: narrow
+                              ? WrapAlignment.center
+                              : WrapAlignment.start,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: onBusinessLogin,
+                              icon: const Icon(Icons.login_rounded),
+                              label: const Text('Business login'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xff07090f),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 17),
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: onCreateBusiness,
+                              icon: const Icon(Icons.add_business_rounded),
+                              label: const Text('Create business account'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.24),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 22, vertical: 17),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: narrow ? 0 : 34, height: narrow ? 28 : 0),
+                  Expanded(
+                    flex: narrow ? 0 : 8,
+                    child: _BusinessDashboardPreview(onOpen: onBusinessLogin),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cols = constraints.maxWidth < 720
+                      ? 1
+                      : constraints.maxWidth < 1040
+                          ? 2
+                          : 3;
+                  return GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: cols,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: cols == 1 ? 3.15 : 2.2,
+                    children: uses
+                        .map(
+                          (item) => _BusinessMiniCard(
+                            icon: item.$1,
+                            title: item.$2,
+                            body: item.$3,
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessCommandPage extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onHome;
+  final VoidCallback onAccess;
+
+  const _BusinessCommandPage({
+    super.key,
+    required this.colors,
+    required this.onHome,
+    required this.onAccess,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = MediaQuery.sizeOf(context).width >= 980;
+    return Scaffold(
+      backgroundColor: const Color(0xff07090f),
+      body: Stack(
+        children: [
+          const Positioned(
+            top: -160,
+            right: -120,
+            child: _BusinessGlow(size: 420, color: Color(0xff3b82f6)),
+          ),
+          const Positioned(
+            bottom: -180,
+            left: -120,
+            child: _BusinessGlow(size: 380, color: Color(0xff8b5cf6)),
+          ),
+          SafeArea(
+            child: desktop
+                ? Row(
+                    children: [
+                      _BusinessSidebar(onHome: onHome),
+                      Expanded(
+                          child: _BusinessDashboardMain(onAccess: onAccess)),
+                    ],
+                  )
+                : _BusinessDashboardMain(
+                    onAccess: onAccess,
+                    onHome: onHome,
+                    compact: true,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessDashboardMain extends StatelessWidget {
+  final VoidCallback onAccess;
+  final VoidCallback? onHome;
+  final bool compact;
+
+  const _BusinessDashboardMain({
+    required this.onAccess,
+    this.onHome,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding:
+          EdgeInsets.fromLTRB(compact ? 18 : 26, 20, compact ? 18 : 30, 30),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _BusinessTopBar(onHome: onHome),
+          const SizedBox(height: 28),
+          const _BusinessEyebrow('Business · Account overview'),
+          const SizedBox(height: 10),
+          Text(
+            'Good morning, Northstar Studio.',
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: compact ? 40 : 54,
+              height: 1.02,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Your command centre for deliveries, invoices, team access, Health+, Gifts, and Vanguard handling across the Circum ecosystem.',
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 16,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const _BusinessStatsGrid(),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 900;
+              final ecosystem = _BusinessGlass(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    _BusinessPanelHeader(
+                      title: 'Your Circum ecosystem',
+                      subtitle: 'One account, every operational pillar.',
+                    ),
+                    SizedBox(height: 18),
+                    _BusinessEcosystemHub(),
+                  ],
+                ),
+              );
+              final side = Column(
+                children: [
+                  const _BusinessInvoiceCard(),
+                  const SizedBox(height: 14),
+                  const _BusinessTeamCard(),
+                ],
+              );
+              if (stack) {
+                return Column(
+                    children: [ecosystem, const SizedBox(height: 14), side]);
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 7, child: ecosystem),
+                  const SizedBox(width: 14),
+                  Expanded(flex: 4, child: side),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
+          const _BusinessActivityTable(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessSidebar extends StatelessWidget {
+  final VoidCallback onHome;
+
+  const _BusinessSidebar({required this.onHome});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 282,
+      margin: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onHome,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  Image.asset(
+                    'assets/images/circum_wordmark.png',
+                    width: 126,
+                    height: 30,
+                    fit: BoxFit.contain,
+                  ),
+                  const Spacer(),
+                  const _BusinessBadge('BUSINESS'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+          const _BusinessNavGroup(
+            title: 'Account',
+            items: [
+              (Icons.dashboard_outlined, 'Overview', true),
+              (Icons.receipt_long_outlined, 'Invoicing', false),
+              (Icons.group_outlined, 'Team & access', false),
+            ],
+          ),
+          const SizedBox(height: 22),
+          const _BusinessNavGroup(
+            title: 'Ecosystem',
+            items: [
+              (Icons.local_shipping_outlined, 'Deliveries', false),
+              (Icons.health_and_safety_outlined, 'Health+', false),
+              (Icons.card_giftcard_outlined, 'Gifts', false),
+              (Icons.shield_outlined, 'Vanguard', false),
+            ],
+          ),
+          const SizedBox(height: 22),
+          const _BusinessNavGroup(
+            title: 'System',
+            items: [
+              (Icons.analytics_outlined, 'Analytics', false),
+              (Icons.settings_outlined, 'Settings', false),
+            ],
+          ),
+          const Spacer(),
+          const _BusinessTierCard(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessTopBar extends StatelessWidget {
+  final VoidCallback? onHome;
+
+  const _BusinessTopBar({this.onHome});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (onHome != null)
+          IconButton.filledTonal(
+            onPressed: onHome,
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: 'Back to Circum',
+          ),
+        Container(
+          width: math.min(MediaQuery.sizeOf(context).width - 44, 430),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.search, color: Colors.white.withValues(alpha: 0.62)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Search jobs, invoices, riders…',
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.58),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton.filledTonal(
+          onPressed: () {},
+          icon: const Icon(Icons.notifications_none_rounded),
+          tooltip: 'Notifications',
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.065),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircleAvatar(
+                radius: 17,
+                backgroundColor: Color(0xff3b82f6),
+                child: Text('N', style: TextStyle(color: Colors.white)),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                'Northstar Studio · Owner',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BusinessStatsGrid extends StatelessWidget {
+  const _BusinessStatsGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    const stats = [
+      ('Available credit', '£4,820', '+12% this month', Icons.credit_score),
+      ('Active jobs this week', '27', '6 require action', Icons.route_outlined),
+      ('On-time delivery rate', '98.4%', 'Last 30 days', Icons.speed_outlined),
+      (
+        'Jobs under Vanguard cover',
+        '9',
+        'Sensitive items',
+        Icons.shield_outlined
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = constraints.maxWidth < 640
+            ? 1
+            : constraints.maxWidth < 980
+                ? 2
+                : 4;
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: cols,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: cols == 1 ? 3.5 : 1.65,
+          children: stats
+              .map((stat) => _BusinessStatCard(
+                    label: stat.$1,
+                    value: stat.$2,
+                    note: stat.$3,
+                    icon: stat.$4,
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+}
+
+class _BusinessDashboardPreview extends StatelessWidget {
+  final VoidCallback onOpen;
+
+  const _BusinessDashboardPreview({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    return _BusinessGlass(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const _BusinessBadge('LIVE PREVIEW'),
+              const Spacer(),
+              IconButton(
+                onPressed: onOpen,
+                icon: const Icon(Icons.open_in_new_rounded),
+                color: Colors.white,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const _BusinessStatsGrid(),
+          const SizedBox(height: 14),
+          const _BusinessEcosystemHub(compact: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessEcosystemHub extends StatelessWidget {
+  final bool compact;
+
+  const _BusinessEcosystemHub({this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 310.0 : 400.0;
+    final nodes = [
+      (Alignment.topCenter, Icons.local_shipping_outlined, 'Delivery'),
+      (Alignment.centerRight, Icons.health_and_safety_outlined, 'Health+'),
+      (Alignment.bottomCenter, Icons.card_giftcard_outlined, 'Gifts'),
+      (Alignment.centerLeft, Icons.shield_outlined, 'Vanguard'),
+    ];
+    return SizedBox(
+      height: compact ? 300 : 390,
+      child: Center(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: size * 0.58,
+                height: size * 0.58,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    style: BorderStyle.solid,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff3b82f6).withValues(alpha: 0.22),
+                      blurRadius: 54,
+                    ),
+                  ],
+                ),
+              ),
+              ...nodes.map(
+                (node) => Align(
+                  alignment: node.$1,
+                  child: _BusinessNode(icon: node.$2, label: node.$3),
+                ),
+              ),
+              Container(
+                width: compact ? 116 : 142,
+                height: compact ? 116 : 142,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff3b82f6), Color(0xff8b5cf6)],
+                  ),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.24)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff3b82f6).withValues(alpha: 0.36),
+                      blurRadius: 44,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    'Account\nBusiness',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessNode extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _BusinessNode({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 112,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xff0b1220).withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: const Color(0xff7dd3fc), size: 22),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessInvoiceCard extends StatelessWidget {
+  const _BusinessInvoiceCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _BusinessGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _BusinessPanelHeader(
+            title: 'Outstanding invoice',
+            subtitle: 'Due 30 Jun 2026',
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '£1,284.40',
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: 42,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Includes 42 deliveries, 3 Health+ runs, and 4 Vanguard jobs.',
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.68),
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: null,
+            child: const Text('Pay invoice'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessTeamCard extends StatelessWidget {
+  const _BusinessTeamCard();
+
+  @override
+  Widget build(BuildContext context) {
+    const members = [
+      ('JA', 'Jason', 'Owner'),
+      ('AM', 'Amina', 'Admin'),
+      ('RS', 'Rory', 'Member'),
+    ];
+    return _BusinessGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _BusinessPanelHeader(
+            title: 'Team access',
+            subtitle: 'Role-based account controls',
+          ),
+          const SizedBox(height: 12),
+          ...members.map(
+            (member) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white.withValues(alpha: 0.10),
+                    child: Text(
+                      member.$1,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      member.$2,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  _BusinessBadge(member.$3.toUpperCase()),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessActivityTable extends StatelessWidget {
+  const _BusinessActivityTable();
+
+  @override
+  Widget build(BuildContext context) {
+    const rows = [
+      ('CIR-2841', 'Delivery', 'In transit', '£18.60', '09:42'),
+      ('CIR-2837', 'Vanguard', 'Delivered', '£31.99', 'Yesterday'),
+      ('HP-1182', 'Health+', 'Scheduled', '£15.00', '20 Jun'),
+      ('GFT-402', 'Gifts', 'Preparing', '£95.00', '18 Jun'),
+    ];
+    return _BusinessGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _BusinessPanelHeader(
+            title: 'Recent activity',
+            subtitle: 'Business deliveries and ecosystem actions',
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingTextStyle: GoogleFonts.jetBrainsMono(
+                color: Colors.white.withValues(alpha: 0.58),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+              dataTextStyle: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+              columns: const [
+                DataColumn(label: Text('Job ID')),
+                DataColumn(label: Text('Pillar')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Amount')),
+                DataColumn(label: Text('Time')),
+              ],
+              rows: rows
+                  .map(
+                    (row) => DataRow(
+                      cells: [
+                        DataCell(Text(row.$1)),
+                        DataCell(Text(row.$2)),
+                        DataCell(_BusinessBadge(row.$3.toUpperCase())),
+                        DataCell(Text(row.$4)),
+                        DataCell(Text(row.$5)),
+                      ],
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessStatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final String note;
+  final IconData icon;
+
+  const _BusinessStatCard({
+    required this.label,
+    required this.value,
+    required this.note,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _BusinessGlass(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xff3b82f6).withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+            ),
+            child: Icon(icon, color: const Color(0xff93c5fd), size: 21),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.jetBrainsMono(
+                    color: Colors.white.withValues(alpha: 0.52),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  note,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.58),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessGlass extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _BusinessGlass({
+    required this.child,
+    this.padding = const EdgeInsets.all(18),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          width: double.infinity,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.065),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.24),
+                blurRadius: 36,
+                offset: const Offset(0, 18),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessPanelHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _BusinessPanelHeader({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: GoogleFonts.inter(
+            color: Colors.white.withValues(alpha: 0.58),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BusinessMiniCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _BusinessMiniCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _BusinessGlass(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xff93c5fd), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.62),
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessNavGroup extends StatelessWidget {
+  final String title;
+  final List<(IconData, String, bool)> items;
+
+  const _BusinessNavGroup({required this.title, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: GoogleFonts.jetBrainsMono(
+            color: Colors.white.withValues(alpha: 0.42),
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 9),
+        ...items.map(
+          (item) => Container(
+            margin: const EdgeInsets.only(bottom: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: item.$3
+                  ? const Color(0xff3b82f6).withValues(alpha: 0.18)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: item.$3
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.transparent,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(item.$1,
+                    color: Colors.white.withValues(alpha: 0.72), size: 19),
+                const SizedBox(width: 10),
+                Text(
+                  item.$2,
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: item.$3 ? 1 : 0.68),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BusinessTierCard extends StatelessWidget {
+  const _BusinessTierCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _BusinessGlass(
+      padding: const EdgeInsets.all(15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _BusinessBadge('BUSINESS — GROWTH'),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: 0.68,
+              backgroundColor: Colors.white.withValues(alpha: 0.08),
+              valueColor: const AlwaysStoppedAnimation(Color(0xff60a5fa)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '68 / 100 monthly jobs to Scale tier',
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.68),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessEyebrow extends StatelessWidget {
+  final String text;
+
+  const _BusinessEyebrow(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: GoogleFonts.jetBrainsMono(
+        color: const Color(0xff93c5fd),
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.2,
+      ),
+    );
+  }
+}
+
+class _BusinessBadge extends StatelessWidget {
+  final String label;
+
+  const _BusinessBadge(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.jetBrainsMono(
+          color: Colors.white.withValues(alpha: 0.82),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessGlow extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _BusinessGlow({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withValues(alpha: 0.22),
+              color.withValues(alpha: 0.05),
+              Colors.transparent,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LandingFooter extends StatelessWidget {
   final _CircumColors colors;
 
@@ -34615,7 +35949,7 @@ class _GlobalLegalFooter extends StatelessWidget {
                     child: const Text('Gifts by Circum'),
                   ),
                   TextButton(
-                    onPressed: () => _open('/?app=sender'),
+                    onPressed: () => _open('/business'),
                     child: const Text('Business'),
                   ),
                   TextButton(
