@@ -329,6 +329,31 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /businessAccounts/{businessId} {
+      allow read: if isAdmin() ||
+        (signedIn() && (
+          resource.data.createdByUserId == request.auth.uid ||
+          request.auth.uid in resource.data.teamMemberIds ||
+          normalizedAuthEmail() in resource.data.teamMemberIds
+        ));
+      allow create: if signedIn() &&
+        request.resource.data.createdByUserId == request.auth.uid &&
+        request.auth.uid in request.resource.data.teamMemberIds &&
+        request.auth.uid in request.resource.data.managerIds;
+      allow update: if isAdmin() ||
+        (signedIn() && (
+          resource.data.createdByUserId == request.auth.uid ||
+          request.auth.uid in resource.data.managerIds ||
+          normalizedAuthEmail() in resource.data.managerIds
+        ) &&
+        !request.resource.data.diff(resource.data).changedKeys().hasAny([
+          'status',
+          'notes',
+          'monthlySpendLimit'
+        ]));
+      allow delete: if hasRole('super_admin');
+    }
+
     match /irisLearningOutliers/{outlierId} {
       allow create: if signedIn() &&
         request.resource.data.senderId == request.auth.uid &&

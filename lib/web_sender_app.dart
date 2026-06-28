@@ -763,6 +763,7 @@ enum _AdminSection {
   deliveries,
   gifts,
   finance,
+  businessAccounts,
   healthPlus,
   support,
   issues,
@@ -811,6 +812,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _deliveries = const [];
   List<Map<String, dynamic>> _giftRequests = const [];
   List<Map<String, dynamic>> _giftBrands = const [];
+  List<Map<String, dynamic>> _businessAccounts = const [];
   List<Map<String, dynamic>> _giftCampaignParticipants = const [];
   List<Map<String, dynamic>> _senders = const [];
   List<Map<String, dynamic>> _drivers = const [];
@@ -1053,6 +1055,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             .limit(80),
       ),
       _readCollection(db.collection('giftBrands').limit(100)),
+      _readCollection(db.collection('businessAccounts').limit(100)),
       _readCollection(db.collection('giftCampaignParticipants').limit(100)),
       _readCollection(
         db
@@ -1083,7 +1086,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final riderDocuments = results[16];
     final giftRequests = results[17];
     final giftBrands = results[18];
-    final giftCampaignParticipants = results[19];
+    final businessAccounts = results[19];
+    final giftCampaignParticipants = results[20];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -1105,8 +1109,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _riderDocuments = riderDocuments;
       _giftRequests = giftRequests;
       _giftBrands = giftBrands;
+      _businessAccounts = businessAccounts;
       _giftCampaignParticipants = giftCampaignParticipants;
-      _auditLogs = results[20];
+      _auditLogs = results[21];
       _metrics = AdminMetricSnapshot.fromData(
         deliveries: deliveries,
         senders: senders,
@@ -2953,6 +2958,22 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           lifetime: _walletTotal('lifetimeEarnings'),
           rothTools: _rothCreditTools(colors),
           rowBuilder: _financeRow,
+        ),
+      _AdminSection.businessAccounts => _AdminDataSection(
+          colors: colors,
+          title: 'Business Accounts',
+          subtitle:
+              'Company profiles, approval status, team members, and linked business deliveries.',
+          records: adminSearch(_businessAccounts, query, [
+            'businessName',
+            'contactName',
+            'contactEmail',
+            'billingEmail',
+            'status',
+          ]),
+          columns: const ['Business', 'Contact', 'Team', 'Status', 'Actions'],
+          rowBuilder: _businessAccountRow,
+          emptyText: 'No business accounts yet.',
         ),
       _AdminSection.healthPlus => _AdminDataSection(
           colors: colors,
@@ -5047,6 +5068,122 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         ],
       ),
     ];
+  }
+
+  List<Widget> _businessAccountRow(Map<String, dynamic> item) {
+    final id = '${item['id'] ?? item['businessId'] ?? ''}';
+    final memberIds =
+        (item['teamMemberIds'] as List?)?.whereType<Object>().length ?? 0;
+    final deliveries = _deliveries
+        .where((delivery) =>
+            '${delivery['businessId'] ?? delivery['businessAccountId'] ?? ''}' ==
+            id)
+        .length;
+    return [
+      _AdminCell.primary(
+        '${item['businessName'] ?? 'Business'}\n$id',
+      ),
+      _AdminCell(
+        '${item['contactName'] ?? ''}\n${item['contactEmail'] ?? item['billingEmail'] ?? ''}\n${item['phone'] ?? ''}',
+      ),
+      _AdminCell('$memberIds members\n$deliveries deliveries'),
+      _AdminStatusCell(
+        colors: widget.colors,
+        status: '${item['status'] ?? 'pending'}',
+      ),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Approve',
+            enabled: _can(AdminPermission.editCustomers) &&
+                '${item['status'] ?? ''}' != 'approved',
+            onTap: () => _updateBusinessAccountStatus(item, 'approved'),
+          ),
+          _AdminAction(
+            label: 'Suspend',
+            enabled: _can(AdminPermission.editCustomers) &&
+                '${item['status'] ?? ''}' != 'suspended',
+            onTap: () => _updateBusinessAccountStatus(item, 'suspended'),
+          ),
+          _AdminAction(
+            label: 'Notes',
+            enabled: _can(AdminPermission.editCustomers),
+            onTap: () => _editBusinessAccountNotes(item),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Future<void> _updateBusinessAccountStatus(
+    Map<String, dynamic> item,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.editCustomers)) return;
+    final id = '${item['id'] ?? item['businessId'] ?? ''}';
+    if (id.isEmpty) return;
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _adminUser?.uid,
+      'updatedByEmail': _adminUser?.email,
+    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('adminAuditLogs').add({
+      'action': 'business_account_$status',
+      'businessId': id,
+      'adminId': _adminUser?.uid,
+      'adminEmail': _adminUser?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await _loadAdminData();
+  }
+
+  Future<void> _editBusinessAccountNotes(Map<String, dynamic> item) async {
+    if (!_can(AdminPermission.editCustomers)) return;
+    final id = '${item['id'] ?? item['businessId'] ?? ''}';
+    if (id.isEmpty) return;
+    final notes = TextEditingController(text: '${item['notes'] ?? ''}');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Business admin notes'),
+        content: TextField(
+          controller: notes,
+          minLines: 4,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            labelText: 'Internal notes',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(notes.text),
+            child: const Text('Save notes'),
+          ),
+        ],
+      ),
+    );
+    notes.dispose();
+    if (result == null) return;
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'notes': result.trim(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _adminUser?.uid,
+      'updatedByEmail': _adminUser?.email,
+    }, SetOptions(merge: true));
+    await _loadAdminData();
   }
 
   String _adminPickupWaitSummary(Map<String, dynamic> item) {
@@ -8341,6 +8478,7 @@ String _adminSectionLabel(_AdminSection section) {
     _AdminSection.deliveries => 'Deliveries',
     _AdminSection.gifts => 'Gifts',
     _AdminSection.finance => 'Finance',
+    _AdminSection.businessAccounts => 'Business',
     _AdminSection.healthPlus => 'Health+',
     _AdminSection.support => 'Support',
     _AdminSection.issues => 'Troubleshooting',
@@ -8359,6 +8497,7 @@ IconData _adminSectionIcon(_AdminSection section) {
     _AdminSection.deliveries => Icons.local_shipping,
     _AdminSection.gifts => Icons.card_giftcard,
     _AdminSection.finance => Icons.payments,
+    _AdminSection.businessAccounts => Icons.business_center,
     _AdminSection.healthPlus => Icons.health_and_safety,
     _AdminSection.support => Icons.support_agent,
     _AdminSection.issues => Icons.report_problem,
@@ -16565,6 +16704,7 @@ enum _SenderStep {
   payment,
   tracking,
   healthPlus,
+  business,
   profile,
 }
 
@@ -16622,6 +16762,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _healthPreferredDay = TextEditingController();
   final _healthPreferredTime = TextEditingController();
   final _healthCustomSchedule = TextEditingController();
+  final _businessName = TextEditingController();
+  final _businessCompanyNumber = TextEditingController();
+  final _businessContactName = TextEditingController();
+  final _businessContactEmail = TextEditingController();
+  final _businessPhone = TextEditingController();
+  final _businessBillingEmail = TextEditingController();
+  final _businessAddress = TextEditingController();
+  final _businessTeamEmail = TextEditingController();
+  final _businessTeamName = TextEditingController();
+  final _businessCostCentre = TextEditingController();
+  final _businessReference = TextEditingController();
   final _ratingFeedback = TextEditingController();
   final _senderEmail = TextEditingController();
   final _senderPassword = TextEditingController();
@@ -16695,6 +16846,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _healthScheduleId;
   String? _healthMessage;
   String? _healthCheckoutUrl;
+  String? _businessMessage;
+  String? _activeBusinessId;
+  String? _activeBusinessName;
+  String _businessTeamRole = 'member';
   String? _firebaseError;
   String? _ratingMessage;
   String? _senderProfileMessage;
@@ -16721,6 +16876,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   double _senderRothBalance = 0;
   bool _legendCelebrationShowing = false;
   List<SenderDeliveryRecord> _senderDeliveries = const [];
+  List<Map<String, dynamic>> _senderBusinessAccounts = const [];
   SenderDeliveryRecord? _selectedSenderDelivery;
   DriverProfile? _assignedDriver;
   DriverPerformanceMetric? _assignedDriverMetric;
@@ -16818,6 +16974,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _healthPreferredDay.dispose();
     _healthPreferredTime.dispose();
     _healthCustomSchedule.dispose();
+    _businessName.dispose();
+    _businessCompanyNumber.dispose();
+    _businessContactName.dispose();
+    _businessContactEmail.dispose();
+    _businessPhone.dispose();
+    _businessBillingEmail.dispose();
+    _businessAddress.dispose();
+    _businessTeamEmail.dispose();
+    _businessTeamName.dispose();
+    _businessCostCentre.dispose();
+    _businessReference.dispose();
     _ratingFeedback.dispose();
     _senderEmail.dispose();
     _senderPassword.dispose();
@@ -16989,7 +17156,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           colors: colors,
           profile: _senderProfile,
           deliveries: _senderDeliveries,
-          onSendParcel: () => setState(() => _step = _SenderStep.details),
+          businessAccounts: _senderBusinessAccounts,
+          onSendParcel: () => setState(() {
+            _activeBusinessId = null;
+            _activeBusinessName = null;
+            _businessCostCentre.clear();
+            _businessReference.clear();
+            _step = _SenderStep.details;
+          }),
+          onBusiness: () => setState(() => _step = _SenderStep.business),
           onHealthPlus: () => setState(() {
             _roleChoiceConfirmed = true;
             _healthRouteDismissed = false;
@@ -17214,6 +17389,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           }),
         ),
       _SenderStep.healthPlus => _buildHealthPlusStep(colors),
+      _SenderStep.business => _BusinessAccountsStep(
+          key: const ValueKey('business-accounts'),
+          colors: colors,
+          accounts: _senderBusinessAccounts,
+          deliveries: _senderDeliveries,
+          businessName: _businessName,
+          companyNumber: _businessCompanyNumber,
+          contactName: _businessContactName,
+          contactEmail: _businessContactEmail,
+          phone: _businessPhone,
+          billingEmail: _businessBillingEmail,
+          businessAddress: _businessAddress,
+          teamEmail: _businessTeamEmail,
+          teamName: _businessTeamName,
+          teamRole: _businessTeamRole,
+          costCentre: _businessCostCentre,
+          reference: _businessReference,
+          message: _businessMessage,
+          onBack: () => setState(() => _step = _SenderStep.dashboard),
+          onCreate: _createBusinessAccount,
+          onTeamRole: (role) => setState(() => _businessTeamRole = role),
+          onAddTeamMember: _addBusinessTeamMember,
+          onRemoveTeamMember: _removeBusinessTeamMember,
+          onBookDelivery: _startBusinessDelivery,
+        ),
       _SenderStep.profile => _SenderProfileStep(
           key: const ValueKey('sender-profile'),
           colors: colors,
@@ -17817,6 +18017,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _attachIncomingReferralIfPresent();
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
+      await _loadSenderBusinessAccounts(user.uid);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -18099,6 +18300,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
+      await _loadSenderBusinessAccounts(user.uid);
       setState(() => _senderProfileMessage = 'Profile ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
@@ -18138,6 +18340,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
+      await _loadSenderBusinessAccounts(user.uid);
       setState(() => _senderProfileMessage = 'Your sender profile is ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
@@ -18332,6 +18535,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderProfile = null;
       _senderRothBalance = 0;
       _senderDeliveries = const [];
+      _senderBusinessAccounts = const [];
+      _activeBusinessId = null;
+      _activeBusinessName = null;
       _selectedSenderDelivery = null;
       _senderDeliveryLoadError = null;
       _availableRoles = const {};
@@ -18507,6 +18713,206 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'We could not load your delivery status. Please refresh or contact support.';
       });
     }
+  }
+
+  Future<void> _loadSenderBusinessAccounts(String uid) async {
+    try {
+      final email = (_senderUser?.email ?? '').trim().toLowerCase();
+      final db = FirebaseFirestore.instance;
+      final snapshots = await Future.wait([
+        db
+            .collection('businessAccounts')
+            .where('teamMemberIds', arrayContains: uid)
+            .limit(20)
+            .get(),
+        if (email.isNotEmpty)
+          db
+              .collection('businessAccounts')
+              .where('teamMemberIds', arrayContains: email)
+              .limit(20)
+              .get(),
+      ]);
+      final byId = <String, Map<String, dynamic>>{};
+      for (final snapshot in snapshots) {
+        for (final doc in snapshot.docs) {
+          byId[doc.id] = <String, dynamic>{'id': doc.id, ...doc.data()};
+        }
+      }
+      final records = byId.values.toList(growable: false)
+        ..sort((a, b) => '${a['businessName'] ?? ''}'
+            .compareTo('${b['businessName'] ?? ''}'));
+      if (!mounted) return;
+      setState(() => _senderBusinessAccounts = records);
+    } catch (error) {
+      debugPrint('Could not load business accounts: $error');
+      if (!mounted) return;
+      setState(() => _senderBusinessAccounts = const []);
+    }
+  }
+
+  Future<void> _createBusinessAccount() async {
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(
+          () => _businessMessage = 'Sign in to create a business account.');
+      return;
+    }
+    final name = _businessName.text.trim();
+    final contactName = _businessContactName.text.trim();
+    final contactEmail = _businessContactEmail.text.trim().toLowerCase();
+    if (name.isEmpty || contactName.isEmpty || contactEmail.isEmpty) {
+      setState(() =>
+          _businessMessage = 'Add business name, contact name, and email.');
+      return;
+    }
+    final doc = FirebaseFirestore.instance.collection('businessAccounts').doc();
+    final owner = {
+      'userId': user.uid,
+      'email': (user.email ?? contactEmail).toLowerCase(),
+      'name': contactName,
+      'role': 'owner',
+      'joinedAt': Timestamp.now(),
+      'status': 'active',
+    };
+    await doc.set({
+      'businessId': doc.id,
+      'businessName': name,
+      'companyNumber': _businessCompanyNumber.text.trim(),
+      'contactName': contactName,
+      'contactEmail': contactEmail,
+      'phone': _businessPhone.text.trim(),
+      'billingEmail': _businessBillingEmail.text.trim().isEmpty
+          ? contactEmail
+          : _businessBillingEmail.text.trim().toLowerCase(),
+      'businessAddress': _businessAddress.text.trim(),
+      'createdByUserId': user.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'status': 'pending',
+      'teamMemberIds': [user.uid],
+      'managerIds': [user.uid],
+      'teamMembers': [owner],
+      'defaultPickupAddresses': [
+        if (_businessAddress.text.trim().isNotEmpty)
+          _businessAddress.text.trim(),
+      ],
+      'monthlySpendLimit': null,
+      'notes': '',
+    });
+    _businessName.clear();
+    _businessCompanyNumber.clear();
+    _businessContactName.clear();
+    _businessContactEmail.clear();
+    _businessPhone.clear();
+    _businessBillingEmail.clear();
+    _businessAddress.clear();
+    await _loadSenderBusinessAccounts(user.uid);
+    if (!mounted) return;
+    setState(() =>
+        _businessMessage = 'Business account created and pending approval.');
+  }
+
+  Future<void> _addBusinessTeamMember(Map<String, dynamic> account) async {
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    if (!_canManageBusinessAccount(account, user.uid)) {
+      setState(() => _businessMessage =
+          'Only business owners and admins can manage team members.');
+      return;
+    }
+    final id = '${account['id'] ?? account['businessId'] ?? ''}';
+    final email = _businessTeamEmail.text.trim().toLowerCase();
+    if (id.isEmpty || email.isEmpty) return;
+    final member = {
+      'userId': email,
+      'email': email,
+      'name': _businessTeamName.text.trim(),
+      'role': _businessTeamRole,
+      'joinedAt': Timestamp.now(),
+      'status': 'invited',
+    };
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'teamMemberIds': FieldValue.arrayUnion([email]),
+      if (_businessTeamRole == 'owner' || _businessTeamRole == 'admin')
+        'managerIds': FieldValue.arrayUnion([email]),
+      'teamMembers': FieldValue.arrayUnion([member]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    _businessTeamEmail.clear();
+    _businessTeamName.clear();
+    await _loadSenderBusinessAccounts(user.uid);
+    if (!mounted) return;
+    setState(() => _businessMessage = 'Team member invited.');
+  }
+
+  Future<void> _removeBusinessTeamMember(
+    Map<String, dynamic> account,
+    Map<String, dynamic> member,
+  ) async {
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    if (!_canManageBusinessAccount(account, user.uid)) return;
+    final id = '${account['id'] ?? account['businessId'] ?? ''}';
+    final memberId = '${member['userId'] ?? member['email'] ?? ''}';
+    if (id.isEmpty || memberId.isEmpty || memberId == user.uid) return;
+    final members = ((account['teamMembers'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => '${item['userId'] ?? item['email'] ?? ''}' != memberId)
+        .toList(growable: false);
+    final memberIds = ((account['teamMemberIds'] as List?) ?? const [])
+        .map((item) => '$item')
+        .where((item) => item != memberId)
+        .toList(growable: false);
+    final managerIds = ((account['managerIds'] as List?) ?? const [])
+        .map((item) => '$item')
+        .where((item) => item != memberId)
+        .toList(growable: false);
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'teamMembers': members,
+      'teamMemberIds': memberIds,
+      'managerIds': managerIds,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _loadSenderBusinessAccounts(user.uid);
+    if (!mounted) return;
+    setState(() => _businessMessage = 'Team member removed.');
+  }
+
+  void _startBusinessDelivery(Map<String, dynamic> account) {
+    final status = '${account['status'] ?? 'pending'}';
+    if (status != 'approved') {
+      setState(() =>
+          _businessMessage = 'This business account must be approved first.');
+      return;
+    }
+    setState(() {
+      _activeBusinessId = '${account['id'] ?? account['businessId'] ?? ''}';
+      _activeBusinessName = '${account['businessName'] ?? 'Business'}';
+      _step = _SenderStep.details;
+      _businessMessage = null;
+    });
+  }
+
+  bool _canManageBusinessAccount(Map<String, dynamic> account, String uid) {
+    if ('${account['createdByUserId'] ?? ''}' == uid) return true;
+    if (((account['managerIds'] as List?) ?? const [])
+        .map((item) => '$item')
+        .contains(uid)) {
+      return true;
+    }
+    final members = (account['teamMembers'] as List?) ?? const [];
+    return members.whereType<Map>().any((member) {
+      final memberId = '${member['userId'] ?? member['email'] ?? ''}';
+      final role = '${member['role'] ?? ''}';
+      return memberId == uid && (role == 'owner' || role == 'admin');
+    });
   }
 
   Future<void> _syncSenderTrustBaseline(
@@ -20398,6 +20804,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final vanguardAddon = _vanguardAddonSelected ? _vanguardAddonPriceGbp : 0.0;
     final customerTotal = quote.total + vanguardAddon;
     final platformRevenue = quote.totalCircumRevenue + vanguardAddon;
+    final isBusinessDelivery = _activeBusinessId != null;
+    final businessAccount = isBusinessDelivery
+        ? _senderBusinessAccounts.firstWhere(
+            (account) =>
+                '${account['id'] ?? account['businessId'] ?? ''}' ==
+                _activeBusinessId,
+            orElse: () => <String, dynamic>{},
+          )
+        : <String, dynamic>{};
+    final businessStatus =
+        '${businessAccount['status'] ?? (isBusinessDelivery ? 'approved' : '')}';
     final driverJobSummary = {
       'pickupDisplay': pickupAddress.compactDisplay,
       'dropoffDisplay': dropoffAddress.compactDisplay,
@@ -20522,11 +20939,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
                   : ''),
       'vanguardEnabled': vanguardEnabled,
-      'serviceType': selectedServiceLevel == 'express'
-          ? 'Express Delivery'
-          : selectedServiceLevel == 'economy'
-              ? 'Economy Delivery'
-              : 'Normal Delivery',
+      'serviceType': isBusinessDelivery
+          ? 'BUSINESS'
+          : selectedServiceLevel == 'express'
+              ? 'Express Delivery'
+              : selectedServiceLevel == 'economy'
+                  ? 'Economy Delivery'
+                  : 'Normal Delivery',
+      'isBusinessDelivery': isBusinessDelivery,
+      'businessDelivery': isBusinessDelivery,
+      'businessId': _activeBusinessId,
+      'businessAccountId': _activeBusinessId,
+      'businessName': _activeBusinessName,
+      'bookedByUserId': senderId,
+      'costCentre': _businessCostCentre.text.trim(),
+      'reference': _businessReference.text.trim(),
+      'businessAccountStatusAtBooking':
+          isBusinessDelivery ? businessStatus : null,
     };
     return {
       'requestId': id,
@@ -20703,8 +21132,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'matchingStatus': 'available',
       'role': 'user',
       'source': 'circum-web',
-      'serviceType': 'sender_delivery',
+      'sourceModule': isBusinessDelivery ? 'business' : 'deliveries',
+      'serviceType': isBusinessDelivery ? 'BUSINESS' : 'sender_delivery',
       'jobType': 'parcel_delivery',
+      'isBusinessDelivery': isBusinessDelivery,
+      'businessDelivery': isBusinessDelivery,
+      'businessId': _activeBusinessId,
+      'businessAccountId': _activeBusinessId,
+      'businessName': _activeBusinessName,
+      'bookedByUserId': senderId,
+      'costCentre': _businessCostCentre.text.trim(),
+      'reference': _businessReference.text.trim(),
+      'businessAccountStatusAtBooking':
+          isBusinessDelivery ? businessStatus : null,
       'senderId': senderId,
       'userId': senderId,
       'senderName': senderName,
@@ -21917,6 +22357,7 @@ class _StepBadge extends StatelessWidget {
       _SenderStep.payment => 'Payment',
       _SenderStep.tracking => 'Tracking',
       _SenderStep.healthPlus => 'Health+',
+      _SenderStep.business => 'Business',
       _SenderStep.profile => 'Profile',
     };
 
@@ -22429,7 +22870,9 @@ class _SenderDashboardStep extends StatelessWidget {
   final _CircumColors colors;
   final SenderProfile? profile;
   final List<SenderDeliveryRecord> deliveries;
+  final List<Map<String, dynamic>> businessAccounts;
   final VoidCallback onSendParcel;
+  final VoidCallback onBusiness;
   final VoidCallback onHealthPlus;
   final VoidCallback onProfile;
   final VoidCallback onSupport;
@@ -22439,7 +22882,9 @@ class _SenderDashboardStep extends StatelessWidget {
     required this.colors,
     required this.profile,
     required this.deliveries,
+    required this.businessAccounts,
     required this.onSendParcel,
+    required this.onBusiness,
     required this.onHealthPlus,
     required this.onProfile,
     required this.onSupport,
@@ -22485,6 +22930,13 @@ class _SenderDashboardStep extends StatelessWidget {
                       onPressed: onSendParcel,
                       icon: const Icon(Icons.add_box_outlined),
                       label: const Text('Send a parcel'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: onBusiness,
+                      icon: const Icon(Icons.business_center_outlined),
+                      label: Text(businessAccounts.isEmpty
+                          ? 'Create Business Account'
+                          : 'Business Accounts'),
                     ),
                     OutlinedButton.icon(
                       onPressed: onHealthPlus,
@@ -22537,6 +22989,25 @@ class _SenderDashboardStep extends StatelessWidget {
                 const SizedBox(height: 8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
+                  leading:
+                      Icon(Icons.business_center_outlined, color: colors.text),
+                  title: Text(
+                    'Business Accounts',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  subtitle: Text(
+                    businessAccounts.isEmpty
+                        ? 'Create a company profile for team deliveries.'
+                        : '${businessAccounts.length} business account${businessAccounts.length == 1 ? '' : 's'} available.',
+                    style: TextStyle(color: colors.mutedText),
+                  ),
+                  onTap: onBusiness,
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.person_outline, color: colors.text),
                   title: Text(
                     'Profile and saved addresses',
@@ -22570,6 +23041,344 @@ class _SenderDashboardStep extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessAccountsStep extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> accounts;
+  final List<SenderDeliveryRecord> deliveries;
+  final TextEditingController businessName;
+  final TextEditingController companyNumber;
+  final TextEditingController contactName;
+  final TextEditingController contactEmail;
+  final TextEditingController phone;
+  final TextEditingController billingEmail;
+  final TextEditingController businessAddress;
+  final TextEditingController teamEmail;
+  final TextEditingController teamName;
+  final String teamRole;
+  final TextEditingController costCentre;
+  final TextEditingController reference;
+  final String? message;
+  final VoidCallback onBack;
+  final VoidCallback onCreate;
+  final ValueChanged<String> onTeamRole;
+  final ValueChanged<Map<String, dynamic>> onAddTeamMember;
+  final void Function(Map<String, dynamic>, Map<String, dynamic>)
+      onRemoveTeamMember;
+  final ValueChanged<Map<String, dynamic>> onBookDelivery;
+
+  const _BusinessAccountsStep({
+    super.key,
+    required this.colors,
+    required this.accounts,
+    required this.deliveries,
+    required this.businessName,
+    required this.companyNumber,
+    required this.contactName,
+    required this.contactEmail,
+    required this.phone,
+    required this.billingEmail,
+    required this.businessAddress,
+    required this.teamEmail,
+    required this.teamName,
+    required this.teamRole,
+    required this.costCentre,
+    required this.reference,
+    required this.message,
+    required this.onBack,
+    required this.onCreate,
+    required this.onTeamRole,
+    required this.onAddTeamMember,
+    required this.onRemoveTeamMember,
+    required this.onBookDelivery,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final businessDeliveries = deliveries
+        .where((delivery) => delivery.serviceType.toUpperCase() == 'BUSINESS')
+        .toList(growable: false);
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StepTopBar(
+              colors: colors, title: 'Business Accounts', onBack: onBack),
+          const SizedBox(height: 14),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Create Business Account',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Set up a company profile for team deliveries. Circum admin approves accounts before business booking is enabled.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _InputBox(
+                    colors: colors,
+                    controller: businessName,
+                    hint: 'Business name',
+                    glassStyle: true),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: companyNumber,
+                    hint: 'Company number (optional)',
+                    glassStyle: true),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: contactName,
+                    hint: 'Contact name',
+                    glassStyle: true),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: contactEmail,
+                    hint: 'Contact email',
+                    glassStyle: true),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: phone,
+                    hint: 'Phone',
+                    glassStyle: true),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: billingEmail,
+                    hint: 'Billing email',
+                    glassStyle: true),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: businessAddress,
+                    hint: 'Business address',
+                    glassStyle: true),
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add_business),
+                  label: const Text('Create Business Account'),
+                ),
+              ],
+            ),
+          ),
+          if (message != null && message!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _GlassPanel(
+              colors: colors,
+              child: Text(
+                message!,
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          if (accounts.isEmpty)
+            _GlassPanel(
+              colors: colors,
+              child: Text(
+                'No business accounts yet.',
+                style: TextStyle(
+                    color: colors.mutedText, fontWeight: FontWeight.w700),
+              ),
+            )
+          else
+            ...accounts.map(
+              (account) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _businessAccountCard(account, businessDeliveries),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _businessAccountCard(
+    Map<String, dynamic> account,
+    List<SenderDeliveryRecord> businessDeliveries,
+  ) {
+    final status = '${account['status'] ?? 'pending'}';
+    final defaultPickupAddresses =
+        ((account['defaultPickupAddresses'] as List?) ?? const [])
+            .map((item) => '$item')
+            .where((item) => item.trim().isNotEmpty)
+            .toList(growable: false);
+    final members = ((account['teamMembers'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+    final recent = businessDeliveries.take(3).toList(growable: false);
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${account['businessName'] ?? 'Business'}',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Chip(label: Text(status)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${account['contactEmail'] ?? account['billingEmail'] ?? ''}',
+            style:
+                TextStyle(color: colors.mutedText, fontWeight: FontWeight.w700),
+          ),
+          if (defaultPickupAddresses.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Default pickup: ${defaultPickupAddresses.first}',
+              style: TextStyle(
+                  color: colors.mutedText, fontWeight: FontWeight.w700),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _MetricPill(
+                  colors: colors, label: 'Team', value: '${members.length}'),
+              _MetricPill(
+                colors: colors,
+                label: 'Recent',
+                value: '${recent.length}',
+              ),
+              _MetricPill(
+                  colors: colors, label: 'Monthly spend', value: 'Soon'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _SectionTitle(colors: colors, title: 'Book business delivery'),
+          const SizedBox(height: 10),
+          _InputBox(
+              colors: colors,
+              controller: costCentre,
+              hint: 'Cost centre (optional)',
+              glassStyle: true),
+          const SizedBox(height: 10),
+          _InputBox(
+              colors: colors,
+              controller: reference,
+              hint: 'Reference (optional)',
+              glassStyle: true),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed:
+                status == 'approved' ? () => onBookDelivery(account) : null,
+            icon: const Icon(Icons.local_shipping_outlined),
+            label: const Text('Book business delivery'),
+          ),
+          if (status != 'approved') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Business booking unlocks after admin approval.',
+              style: TextStyle(
+                  color: colors.mutedText, fontWeight: FontWeight.w700),
+            ),
+          ],
+          const SizedBox(height: 16),
+          _SectionTitle(colors: colors, title: 'Team members'),
+          const SizedBox(height: 8),
+          ...members.map(
+            (member) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                '${member['name'] ?? member['email'] ?? 'Team member'}',
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                '${member['email'] ?? ''} · ${member['role'] ?? 'member'} · ${member['status'] ?? 'active'}',
+                style: TextStyle(color: colors.mutedText),
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.remove_circle_outline),
+                onPressed: () => onRemoveTeamMember(account, member),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _InputBox(
+              colors: colors,
+              controller: teamEmail,
+              hint: 'Team member email',
+              glassStyle: true),
+          const SizedBox(height: 10),
+          _InputBox(
+              colors: colors,
+              controller: teamName,
+              hint: 'Team member name',
+              glassStyle: true),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            children: ['owner', 'admin', 'member']
+                .map(
+                  (role) => ChoiceChip(
+                    selected: teamRole == role,
+                    label: Text(role),
+                    onSelected: (_) => onTeamRole(role),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => onAddTeamMember(account),
+            icon: const Icon(Icons.person_add_alt),
+            label: const Text('Add team member'),
+          ),
+          const SizedBox(height: 16),
+          _SectionTitle(colors: colors, title: 'Recent business deliveries'),
+          const SizedBox(height: 8),
+          if (recent.isEmpty)
+            Text(
+              'Business deliveries will appear here after booking.',
+              style: TextStyle(
+                  color: colors.mutedText, fontWeight: FontWeight.w700),
+            )
+          else
+            ...recent.map(
+              (delivery) => Text(
+                '${delivery.requestId} · ${delivery.status}',
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w700),
+              ),
+            ),
         ],
       ),
     );
