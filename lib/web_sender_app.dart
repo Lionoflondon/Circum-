@@ -34918,7 +34918,7 @@ class _BusinessLandingPreview extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(row.$1, color: const Color(0xff7dd3fc), size: 20),
+                    Icon(row.$1, color: const Color(0xff3b82f6), size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -34996,7 +34996,7 @@ class _BusinessCommandPage extends StatelessWidget {
           const Positioned(
             bottom: -180,
             left: -120,
-            child: _BusinessGlow(size: 380, color: Color(0xff8b5cf6)),
+            child: _BusinessGlow(size: 380, color: Color(0xff3b82f6)),
           ),
           SafeArea(
             child: desktop
@@ -35353,7 +35353,7 @@ class _BusinessEcosystemHub extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(
-                    colors: [Color(0xff3b82f6), Color(0xff8b5cf6)],
+                    colors: [Color(0xff3b82f6), Color(0xff3b82f6)],
                   ),
                   border:
                       Border.all(color: Colors.white.withValues(alpha: 0.24)),
@@ -35403,7 +35403,7 @@ class _BusinessNode extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: const Color(0xff7dd3fc), size: 22),
+          Icon(icon, color: const Color(0xff3b82f6), size: 22),
           const SizedBox(height: 5),
           Text(
             label,
@@ -35601,7 +35601,7 @@ class _BusinessStatCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(15),
               border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
             ),
-            child: Icon(icon, color: const Color(0xff93c5fd), size: 21),
+            child: Icon(icon, color: const Color(0xff3b82f6), size: 21),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -35733,7 +35733,7 @@ class _BusinessMiniCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xff93c5fd), size: 24),
+          Icon(icon, color: const Color(0xff3b82f6), size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -35794,12 +35794,12 @@ class _BusinessNavGroup extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             decoration: BoxDecoration(
               color: item.$3
-                  ? const Color(0xff3b82f6).withValues(alpha: 0.18)
+                  ? const Color(0xff3b82f6).withValues(alpha: 0.12)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: item.$3
-                    ? Colors.white.withValues(alpha: 0.12)
+                    ? const Color(0xff3b82f6).withValues(alpha: 0.68)
                     : Colors.transparent,
               ),
             ),
@@ -35842,7 +35842,7 @@ class _BusinessTierCard extends StatelessWidget {
               minHeight: 8,
               value: 0.68,
               backgroundColor: Colors.white.withValues(alpha: 0.08),
-              valueColor: const AlwaysStoppedAnimation(Color(0xff60a5fa)),
+              valueColor: const AlwaysStoppedAnimation(Color(0xff3b82f6)),
             ),
           ),
           const SizedBox(height: 8),
@@ -35870,7 +35870,7 @@ class _BusinessEyebrow extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: GoogleFonts.jetBrainsMono(
-        color: const Color(0xff93c5fd),
+        color: const Color(0xff3b82f6),
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 1.2,
