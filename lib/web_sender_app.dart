@@ -16915,6 +16915,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                                   ),
                                   child: ConstrainedBox(
                                     constraints: BoxConstraints(
+                                      minHeight: stageConstraints.maxHeight,
                                       maxHeight: stageConstraints.maxHeight,
                                     ),
                                     child: ClipRRect(
