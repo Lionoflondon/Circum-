@@ -16905,74 +16905,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                                   constraints.maxWidth >= 1100 ? 40 : 24,
                               vertical: 24,
                             ),
-                            child: LayoutBuilder(
-                              builder: (context, stageConstraints) => Center(
+                            child: SafeArea(
+                              child: Center(
                                 child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: stageConstraints.maxWidth,
-                                  ),
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      minHeight: stageConstraints.maxHeight,
-                                      maxHeight: stageConstraints.maxHeight,
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(28),
-                                      child: BackdropFilter(
-                                        filter: ui.ImageFilter.blur(
-                                          sigmaX: colors.dark ? 14 : 8,
-                                          sigmaY: colors.dark ? 14 : 8,
-                                        ),
-                                        child: Container(
-                                          width: double.infinity,
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [
-                                                colors.panel.withOpacity(
-                                                    colors.dark ? 0.82 : 0.95),
-                                                colors.adminAccent.withOpacity(
-                                                    colors.dark ? 0.13 : 0.07),
-                                                colors.panel.withOpacity(
-                                                    colors.dark ? 0.74 : 0.93),
-                                              ],
-                                            ),
-                                            borderRadius:
-                                                BorderRadius.circular(28),
-                                            border: Border.all(
-                                              color: Color.alphaBlend(
-                                                colors.adminAccent.withOpacity(
-                                                    colors.dark ? 0.18 : 0.12),
-                                                Colors.white.withOpacity(
-                                                    colors.dark ? 0.08 : 0.18),
-                                              ),
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(
-                                                    colors.dark ? 0.24 : 0.06),
-                                                blurRadius: 20,
-                                                offset: const Offset(0, 10),
-                                              ),
-                                              BoxShadow(
-                                                color: colors.adminGlow
-                                                    .withOpacity(colors.dark
-                                                        ? 0.14
-                                                        : 0.06),
-                                                blurRadius: 28,
-                                                offset: const Offset(0, 14),
-                                              ),
-                                            ],
-                                          ),
-                                          child: SingleChildScrollView(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                18, 18, 18, 36),
-                                            child: _buildAnimatedStep(colors),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 760),
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        18, 18, 18, 36),
+                                    child: _buildCurrentStep(colors),
                                   ),
                                 ),
                               ),
