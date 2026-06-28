@@ -2990,21 +2990,79 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rothTools: _rothCreditTools(colors),
           rowBuilder: _financeRow,
         ),
-      _AdminSection.businessAccounts => _AdminDataSection(
+      _AdminSection.businessAccounts => _AdminBusinessControlTowerSection(
           colors: colors,
-          title: 'Business Accounts',
-          subtitle:
-              'Company profiles, approval status, team members, and linked business deliveries.',
-          records: adminSearch(_businessAccounts, query, [
+          companies: adminSearch(_businessAccounts, query, [
             'businessName',
             'contactName',
             'contactEmail',
             'billingEmail',
             'status',
           ]),
-          columns: const ['Business', 'Contact', 'Team', 'Status', 'Actions'],
-          rowBuilder: _businessAccountRow,
-          emptyText: 'No business accounts yet.',
+          members: adminSearch(_businessMemberRows(), query, [
+            'businessName',
+            'email',
+            'name',
+            'role',
+            'status',
+          ]),
+          deliveries: adminSearch(_businessDeliveryRows(), query, [
+            'businessName',
+            'requestId',
+            'status',
+            'serviceType',
+            'sourceModule',
+          ]),
+          healthPlus: adminSearch(_businessHealthPlusRows(), query, [
+            'businessName',
+            'fullName',
+            'status',
+            'pharmacyAddress',
+            'deliveryAddress',
+          ]),
+          gifts: adminSearch(_businessGiftRows(), query, [
+            'businessName',
+            'senderName',
+            'recipientName',
+            'status',
+            'occasion',
+          ]),
+          vanguard: adminSearch(_businessVanguardRows(), query, [
+            'businessName',
+            'requestId',
+            'status',
+            'vanguardSource',
+            'serviceType',
+          ]),
+          invoices: adminSearch(_businessInvoiceRows(), query, [
+            'businessName',
+            'invoiceStatus',
+            'billingEmail',
+          ]),
+          roth: adminSearch(_businessRothRows(), query, [
+            'businessName',
+            'reason',
+            'source',
+            'walletType',
+          ]),
+          analytics: _businessAnalyticsRows(),
+          audit: adminSearch(_businessAuditRows(), query, [
+            'businessName',
+            'actionType',
+            'action',
+            'reason',
+            'adminEmail',
+          ]),
+          companyRowBuilder: _businessAccountRow,
+          memberRowBuilder: _businessMemberRow,
+          deliveryRowBuilder: _businessDeliveryRow,
+          healthPlusRowBuilder: _businessHealthPlusRow,
+          giftRowBuilder: _businessGiftRow,
+          vanguardRowBuilder: _businessVanguardRow,
+          invoiceRowBuilder: _businessInvoiceRow,
+          rothRowBuilder: _businessRothRow,
+          analyticsRowBuilder: _businessAnalyticsRow,
+          auditRowBuilder: _businessAuditRow,
         ),
       _AdminSection.healthPlus => _AdminDataSection(
           colors: colors,
@@ -5101,6 +5159,170 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     ];
   }
 
+  List<Map<String, dynamic>> _businessDeliveryRows() =>
+      _deliveries.where(_isBusinessRecord).toList(growable: false);
+
+  List<Map<String, dynamic>> _businessHealthPlusRows() => [
+        ..._businessDeliveryRows().where(
+          (item) =>
+              _movementServiceType(item) == 'HEALTH_PLUS' ||
+              '${item['sourceModule'] ?? ''}'.toLowerCase() == 'health_plus',
+        ),
+        ..._healthPlusRows().where(_isBusinessRecord),
+      ].toList(growable: false);
+
+  List<Map<String, dynamic>> _businessGiftRows() => [
+        ..._businessDeliveryRows().where(
+          (item) =>
+              _movementServiceType(item) == 'GIFTS' ||
+              '${item['sourceModule'] ?? ''}'.toLowerCase() == 'gifts',
+        ),
+        ..._giftRequests.where(_isBusinessRecord),
+      ].toList(growable: false);
+
+  List<Map<String, dynamic>> _businessVanguardRows() => _businessDeliveryRows()
+      .where(
+        (item) =>
+            _movementServiceType(item) == 'VANGUARD' ||
+            item['vanguardEnabled'] == true ||
+            item['vanguardIncluded'] == true ||
+            item['vanguardRequired'] == true,
+      )
+      .toList(growable: false);
+
+  List<Map<String, dynamic>> _businessRothRows() => [
+        ..._rothTransactions.where(_isBusinessRecord),
+        ..._rothWallets.where(_isBusinessRecord),
+      ].toList(growable: false);
+
+  List<Map<String, dynamic>> _businessAuditRows() => _auditLogs
+      .where((item) =>
+          _isBusinessRecord(item) ||
+          '${item['action'] ?? item['actionType'] ?? ''}'
+              .toLowerCase()
+              .contains('business'))
+      .toList(growable: false);
+
+  List<Map<String, dynamic>> _businessInvoiceRows() =>
+      _businessAccounts.map((account) {
+        final id = _businessAccountId(account);
+        final deliveries = _businessDeliveryRows()
+            .where((item) => _businessRecordId(item) == id)
+            .toList(growable: false);
+        final amount = deliveries.fold<double>(
+          0,
+          (total, item) => total + _adminMoney(item),
+        );
+        return {
+          ...account,
+          'businessId': id,
+          'invoiceAmount': account['outstandingInvoiceAmount'] ?? amount,
+          'invoiceStatus': account['invoiceStatus'] ?? 'draft',
+          'invoiceDeliveryCount': deliveries.length,
+        };
+      }).toList(growable: false);
+
+  List<Map<String, dynamic>> _businessAnalyticsRows() =>
+      _businessAccounts.map((account) {
+        final id = _businessAccountId(account);
+        final deliveries = _businessDeliveryRows()
+            .where((item) => _businessRecordId(item) == id)
+            .toList(growable: false);
+        final completed = deliveries
+            .where((item) =>
+                '${item['status'] ?? ''}'.toLowerCase().contains('complete') ||
+                '${item['status'] ?? ''}'.toLowerCase().contains('deliver'))
+            .length;
+        final vanguard = deliveries
+            .where((item) =>
+                item['vanguardEnabled'] == true ||
+                item['vanguardIncluded'] == true ||
+                item['vanguardRequired'] == true)
+            .length;
+        final health = deliveries
+            .where((item) => _movementServiceType(item) == 'HEALTH_PLUS')
+            .length;
+        final gifts = deliveries
+            .where((item) => _movementServiceType(item) == 'GIFTS')
+            .length;
+        final spend = deliveries.fold<double>(
+            0, (total, item) => total + _adminMoney(item));
+        return {
+          ...account,
+          'businessId': id,
+          'monthlyDeliveries': deliveries.length,
+          'completedDeliveries': completed,
+          'onTimeRate':
+              deliveries.isEmpty ? 0 : (completed / deliveries.length) * 100,
+          'spend': spend,
+          'vanguardUsage': vanguard,
+          'healthUsage': health,
+          'giftsUsage': gifts,
+        };
+      }).toList(growable: false);
+
+  List<Map<String, dynamic>> _businessMemberRows() {
+    final rows = <Map<String, dynamic>>[];
+    for (final account in _businessAccounts) {
+      final id = _businessAccountId(account);
+      final members = account['teamMembers'];
+      if (members is List) {
+        for (var index = 0; index < members.length; index++) {
+          final member = members[index];
+          if (member is Map) {
+            rows.add({
+              ...member.cast<String, dynamic>(),
+              'businessId': id,
+              'businessName': account['businessName'],
+              'memberIndex': index,
+            });
+          }
+        }
+      }
+      final ownerId = '${account['createdByUserId'] ?? ''}';
+      if (ownerId.isNotEmpty) {
+        rows.add({
+          'businessId': id,
+          'businessName': account['businessName'],
+          'userId': ownerId,
+          'email': account['contactEmail'] ?? account['billingEmail'],
+          'name': account['contactName'],
+          'role': 'owner',
+          'status': 'active',
+          'memberIndex': -1,
+        });
+      }
+    }
+    return rows;
+  }
+
+  bool _isBusinessRecord(Map<String, dynamic> item) =>
+      item['isBusinessDelivery'] == true ||
+      item['businessDelivery'] == true ||
+      '${item['sourceModule'] ?? ''}'.toLowerCase() == 'business' ||
+      _businessRecordId(item).isNotEmpty;
+
+  String _businessRecordId(Map<String, dynamic> item) =>
+      '${item['businessId'] ?? item['businessAccountId'] ?? item['companyId'] ?? ''}';
+
+  String _businessAccountId(Map<String, dynamic> item) =>
+      '${item['businessId'] ?? item['businessAccountId'] ?? item['companyId'] ?? item['id'] ?? ''}';
+
+  Map<String, dynamic> _businessAccountFor(String businessId) {
+    return _businessAccounts.firstWhere(
+      (item) => _businessAccountId(item) == businessId,
+      orElse: () => const {},
+    );
+  }
+
+  String _businessNameFor(Map<String, dynamic> item) {
+    final direct =
+        '${item['businessName'] ?? item['companyName'] ?? ''}'.trim();
+    if (direct.isNotEmpty) return direct;
+    final account = _businessAccountFor(_businessRecordId(item));
+    return '${account['businessName'] ?? 'Business'}';
+  }
+
   List<Widget> _businessAccountRow(Map<String, dynamic> item) {
     final id = '${item['id'] ?? item['businessId'] ?? ''}';
     final memberIds =
@@ -5126,6 +5348,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         colors: widget.colors,
         actions: [
           _AdminAction(
+            label: 'View',
+            enabled: _can(AdminPermission.editCustomers),
+            onTap: () => _showBusinessCompanyDetail(item),
+          ),
+          _AdminAction(
             label: 'Approve',
             enabled: _can(AdminPermission.editCustomers) &&
                 '${item['status'] ?? ''}' != 'approved',
@@ -5138,6 +5365,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             onTap: () => _updateBusinessAccountStatus(item, 'suspended'),
           ),
           _AdminAction(
+            label: 'Pending',
+            enabled: _can(AdminPermission.editCustomers) &&
+                '${item['status'] ?? ''}' != 'pending',
+            onTap: () => _updateBusinessAccountStatus(item, 'pending'),
+          ),
+          _AdminAction(
             label: 'Notes',
             enabled: _can(AdminPermission.editCustomers),
             onTap: () => _editBusinessAccountNotes(item),
@@ -5145,6 +5378,348 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         ],
       ),
     ];
+  }
+
+  List<Widget> _businessMemberRow(Map<String, dynamic> item) {
+    return [
+      _AdminCell.primary(
+          '${item['name'] ?? item['email'] ?? 'Member'}\n${item['businessName'] ?? 'Business'}'),
+      _AdminCell('${item['email'] ?? item['userId'] ?? ''}'),
+      _AdminStatusCell(
+          colors: widget.colors, status: '${item['role'] ?? 'member'}'),
+      _AdminStatusCell(
+          colors: widget.colors, status: '${item['status'] ?? 'active'}'),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Role',
+            enabled: _can(AdminPermission.editCustomers) &&
+                (item['memberIndex'] as int? ?? -1) >= 0,
+            onTap: () => _changeBusinessMemberRole(item),
+          ),
+          _AdminAction(
+            label: 'Remove',
+            enabled: _can(AdminPermission.editCustomers) &&
+                (item['memberIndex'] as int? ?? -1) >= 0,
+            onTap: () => _removeBusinessMember(item),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  List<Widget> _businessDeliveryRow(Map<String, dynamic> item) =>
+      _deliveryRow(item);
+
+  List<Widget> _businessHealthPlusRow(Map<String, dynamic> item) => [
+        _AdminCell.primary(
+            '${item['id'] ?? item['requestId'] ?? 'Health+'}\n${_businessNameFor(item)}'),
+        _AdminCell(
+            '${item['fullName'] ?? item['customerName'] ?? item['senderName'] ?? ''}'),
+        _AdminStatusCell(
+            colors: widget.colors, status: '${item['status'] ?? 'scheduled'}'),
+        _AdminCell(
+            '${item['pharmacyAddress'] ?? item['pickupAddress'] ?? ''}\n→ ${item['deliveryAddress'] ?? item['dropoffAddress'] ?? ''}'),
+        _AdminActions(
+          colors: widget.colors,
+          actions: [
+            _AdminAction(
+              label: 'Review',
+              enabled: _can(AdminPermission.manageHealthPlus),
+              onTap: () => setState(() => _section = _AdminSection.healthPlus),
+            ),
+          ],
+        ),
+      ];
+
+  List<Widget> _businessGiftRow(Map<String, dynamic> item) => [
+        _AdminCell.primary(
+            '${item['id'] ?? item['giftOrderId'] ?? 'Gift'}\n${_businessNameFor(item)}'),
+        _AdminCell(
+            '${item['senderName'] ?? ''}\n→ ${item['recipientName'] ?? ''}'),
+        _AdminCell('${item['occasion'] ?? item['relationship'] ?? 'Gift'}'),
+        _AdminStatusCell(
+            colors: widget.colors, status: '${item['status'] ?? 'pending'}'),
+        _AdminActions(
+          colors: widget.colors,
+          actions: [
+            _AdminAction(
+              label: 'Open Gifts',
+              enabled: _can(AdminPermission.editCustomers),
+              onTap: () => setState(() => _section = _AdminSection.gifts),
+            ),
+          ],
+        ),
+      ];
+
+  List<Widget> _businessVanguardRow(Map<String, dynamic> item) => [
+        _AdminCell.primary(
+            '${item['requestId'] ?? item['id'] ?? 'Delivery'}\n${_businessNameFor(item)}'),
+        _AdminCell(_movementServiceLabel(_movementServiceType(item))),
+        _AdminStatusCell(
+            colors: widget.colors, status: '${item['status'] ?? 'active'}'),
+        _AdminCell(
+            '${item['vanguardSource'] ?? item['vanguardPolicySource'] ?? (item['vanguardRequired'] == true ? 'required' : 'selected')}'),
+        _AdminActions(
+          colors: widget.colors,
+          actions: [
+            _AdminAction(
+              label: 'Delivery',
+              enabled: _can(AdminPermission.editDeliveries),
+              onTap: () => setState(() => _section = _AdminSection.deliveries),
+            ),
+          ],
+        ),
+      ];
+
+  List<Widget> _businessInvoiceRow(Map<String, dynamic> item) => [
+        _AdminCell.primary(
+            '${item['businessName'] ?? 'Business'}\n${item['billingEmail'] ?? item['contactEmail'] ?? ''}'),
+        _AdminCell('${item['invoiceDeliveryCount'] ?? 0} delivery records'),
+        _AdminStatusCell(
+            colors: widget.colors,
+            status: '${item['invoiceStatus'] ?? 'draft'}'),
+        _AdminCell(
+            _adminMoneyText((item['invoiceAmount'] as num?)?.toDouble() ?? 0)),
+        _AdminActions(
+          colors: widget.colors,
+          actions: [
+            for (final status in const [
+              'draft',
+              'issued',
+              'paid_manually',
+              'overdue',
+              'cancelled'
+            ])
+              _AdminAction(
+                label: status.replaceAll('_', ' '),
+                enabled: _can(AdminPermission.viewFinance),
+                onTap: () => _updateBusinessInvoiceStatus(item, status),
+              ),
+          ],
+        ),
+      ];
+
+  List<Widget> _businessRothRow(Map<String, dynamic> item) => [
+        _AdminCell.primary(
+            '${_businessNameFor(item)}\n${item['uid'] ?? item['userId'] ?? item['businessId'] ?? ''}'),
+        _AdminCell(
+            '${item['source'] ?? 'business_roth'}\n${item['reason'] ?? ''}'),
+        _AdminStatusCell(
+            colors: widget.colors,
+            status: '${item['direction'] ?? item['status'] ?? 'recorded'}'),
+        _AdminCell(_adminMoneyText((item['amount'] as num?)?.toDouble() ??
+            (item['balance'] as num?)?.toDouble() ??
+            0)),
+      ];
+
+  List<Widget> _businessAnalyticsRow(Map<String, dynamic> item) => [
+        _AdminCell.primary('${item['businessName'] ?? 'Business'}'),
+        _AdminCell(
+            '${item['monthlyDeliveries'] ?? 0} deliveries\n${_adminMoneyText((item['spend'] as num?)?.toDouble() ?? 0)} spend'),
+        _AdminCell(
+            '${(item['onTimeRate'] as num?)?.toStringAsFixed(1) ?? '0.0'}% complete/on-time proxy'),
+        _AdminCell(
+            'Vanguard ${item['vanguardUsage'] ?? 0}\nHealth+ ${item['healthUsage'] ?? 0}\nGifts ${item['giftsUsage'] ?? 0}'),
+      ];
+
+  List<Widget> _businessAuditRow(Map<String, dynamic> item) => [
+        _AdminCell.primary(
+            '${item['actionType'] ?? item['action'] ?? 'Business action'}\n${_businessNameFor(item)}'),
+        _AdminCell(
+            '${item['recordType'] ?? ''}\n${item['recordId'] ?? item['businessId'] ?? ''}'),
+        _AdminCell(
+            '${item['adminEmail'] ?? item['adminUserId'] ?? item['adminId'] ?? ''}'),
+        _AdminCell('${item['reason'] ?? item['createdAt'] ?? ''}'),
+      ];
+
+  Future<void> _updateBusinessInvoiceStatus(
+    Map<String, dynamic> item,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.viewFinance)) return;
+    final id = _businessRecordId(item);
+    if (id.isEmpty) return;
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'invoiceStatus': status,
+      'invoiceStatusUpdatedAt': FieldValue.serverTimestamp(),
+      'invoiceStatusUpdatedBy': _adminUser?.uid,
+      'invoiceStatusUpdatedByEmail': _adminUser?.email,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('adminAuditLogs').add({
+      'action': 'business_invoice_$status',
+      'actionType': 'business_invoice_$status',
+      'businessId': id,
+      'recordType': 'businessAccount',
+      'recordId': id,
+      'adminId': _adminUser?.uid,
+      'adminEmail': _adminUser?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await _loadAdminData();
+  }
+
+  void _showBusinessCompanyDetail(Map<String, dynamic> item) {
+    final id = _businessAccountId(item);
+    final members = _businessMemberRows()
+        .where((row) => _businessRecordId(row) == id)
+        .toList();
+    final deliveries = _businessDeliveryRows()
+        .where((row) => _businessRecordId(row) == id)
+        .toList();
+    final health = _businessHealthPlusRows()
+        .where((row) => _businessRecordId(row) == id)
+        .toList();
+    final gifts = _businessGiftRows()
+        .where((row) => _businessRecordId(row) == id)
+        .toList();
+    final vanguard = _businessVanguardRows()
+        .where((row) => _businessRecordId(row) == id)
+        .toList();
+    final roth = _businessRothRows()
+        .where((row) => _businessRecordId(row) == id)
+        .toList();
+    final audit = _businessAuditRows()
+        .where((row) => _businessRecordId(row) == id)
+        .toList();
+    final invoice = _businessInvoiceRows().firstWhere(
+      (row) => _businessRecordId(row) == id,
+      orElse: () => const {},
+    );
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${item['businessName'] ?? 'Business'}'),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _businessDetailLine('Status', '${item['status'] ?? 'pending'}'),
+                _businessDetailLine('Contact',
+                    '${item['contactName'] ?? ''} · ${item['contactEmail'] ?? item['billingEmail'] ?? ''}'),
+                _businessDetailLine('Phone', '${item['phone'] ?? ''}'),
+                _businessDetailLine('Address',
+                    '${item['businessAddress'] ?? item['defaultPickupAddress'] ?? ''}'),
+                _businessDetailLine('Invoice',
+                    '${invoice['invoiceStatus'] ?? 'draft'} · ${_adminMoneyText((invoice['invoiceAmount'] as num?)?.toDouble() ?? 0)}'),
+                _businessDetailLine('Operations',
+                    '${members.length} member(s), ${deliveries.length} delivery record(s), ${health.length} Health+, ${gifts.length} Gifts, ${vanguard.length} Vanguard'),
+                _businessDetailLine('Roth records', '${roth.length}'),
+                _businessDetailLine('Audit events', '${audit.length}'),
+                if ('${item['notes'] ?? ''}'.trim().isNotEmpty)
+                  _businessDetailLine('Admin notes', '${item['notes']}'),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _editBusinessAccountNotes(item);
+            },
+            child: const Text('Edit notes'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _businessDetailLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 3),
+          Text(value.trim().isEmpty ? 'Not recorded' : value),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changeBusinessMemberRole(Map<String, dynamic> item) async {
+    if (!_can(AdminPermission.editCustomers)) return;
+    final businessId = _businessRecordId(item);
+    final index = item['memberIndex'] as int? ?? -1;
+    if (businessId.isEmpty || index < 0) return;
+    final role = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Change business role'),
+        children: [
+          for (final role in const [
+            'owner',
+            'admin',
+            'operations',
+            'finance',
+            'viewer'
+          ])
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(role),
+              child: Text(role),
+            ),
+        ],
+      ),
+    );
+    if (role == null) return;
+    final account = _businessAccountFor(businessId);
+    final members = ((account['teamMembers'] as List?) ?? const [])
+        .map((member) => member is Map
+            ? Map<String, dynamic>.from(member)
+            : <String, dynamic>{})
+        .toList();
+    if (index >= members.length) return;
+    members[index]['role'] = role;
+    members[index]['updatedAt'] = Timestamp.now();
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(businessId)
+        .set({
+      'teamMembers': members,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _adminUser?.uid,
+      'updatedByEmail': _adminUser?.email,
+    }, SetOptions(merge: true));
+    await _loadAdminData();
+  }
+
+  Future<void> _removeBusinessMember(Map<String, dynamic> item) async {
+    if (!_can(AdminPermission.editCustomers)) return;
+    final businessId = _businessRecordId(item);
+    final index = item['memberIndex'] as int? ?? -1;
+    if (businessId.isEmpty || index < 0) return;
+    final account = _businessAccountFor(businessId);
+    final members = ((account['teamMembers'] as List?) ?? const [])
+        .map((member) => member is Map
+            ? Map<String, dynamic>.from(member)
+            : <String, dynamic>{})
+        .toList();
+    if (index >= members.length) return;
+    members.removeAt(index);
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(businessId)
+        .set({
+      'teamMembers': members,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _adminUser?.uid,
+      'updatedByEmail': _adminUser?.email,
+    }, SetOptions(merge: true));
+    await _loadAdminData();
   }
 
   Future<void> _updateBusinessAccountStatus(
@@ -7364,6 +7939,238 @@ class _AdminGiftsSection extends StatelessWidget {
                 ],
               ),
             ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminBusinessControlTowerSection extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> companies;
+  final List<Map<String, dynamic>> members;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> healthPlus;
+  final List<Map<String, dynamic>> gifts;
+  final List<Map<String, dynamic>> vanguard;
+  final List<Map<String, dynamic>> invoices;
+  final List<Map<String, dynamic>> roth;
+  final List<Map<String, dynamic>> analytics;
+  final List<Map<String, dynamic>> audit;
+  final List<Widget> Function(Map<String, dynamic>) companyRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) memberRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) deliveryRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) healthPlusRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) giftRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) vanguardRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) invoiceRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) rothRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) analyticsRowBuilder;
+  final List<Widget> Function(Map<String, dynamic>) auditRowBuilder;
+
+  const _AdminBusinessControlTowerSection({
+    required this.colors,
+    required this.companies,
+    required this.members,
+    required this.deliveries,
+    required this.healthPlus,
+    required this.gifts,
+    required this.vanguard,
+    required this.invoices,
+    required this.roth,
+    required this.analytics,
+    required this.audit,
+    required this.companyRowBuilder,
+    required this.memberRowBuilder,
+    required this.deliveryRowBuilder,
+    required this.healthPlusRowBuilder,
+    required this.giftRowBuilder,
+    required this.vanguardRowBuilder,
+    required this.invoiceRowBuilder,
+    required this.rothRowBuilder,
+    required this.analyticsRowBuilder,
+    required this.auditRowBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 10,
+      child: Column(
+        children: [
+          Material(
+            color: colors.adminChrome,
+            child: const TabBar(
+              isScrollable: true,
+              tabs: [
+                Tab(text: 'Companies'),
+                Tab(text: 'Members'),
+                Tab(text: 'Deliveries'),
+                Tab(text: 'Health+'),
+                Tab(text: 'Gifts'),
+                Tab(text: 'Vanguard'),
+                Tab(text: 'Invoices'),
+                Tab(text: 'Roth'),
+                Tab(text: 'Analytics'),
+                Tab(text: 'Audit Log'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Companies',
+                  subtitle:
+                      'Company profiles, approval status, team members, and linked business deliveries.',
+                  records: companies,
+                  columns: const [
+                    'Business',
+                    'Contact',
+                    'Team',
+                    'Status',
+                    'Actions'
+                  ],
+                  rowBuilder: companyRowBuilder,
+                  emptyText: 'No business accounts yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Members',
+                  subtitle:
+                      'Owners, admins, operations, finance and viewer access across Business accounts.',
+                  records: members,
+                  columns: const [
+                    'Member',
+                    'Email / UID',
+                    'Role',
+                    'Status',
+                    'Actions'
+                  ],
+                  rowBuilder: memberRowBuilder,
+                  emptyText: 'No business members yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Deliveries',
+                  subtitle:
+                      'Business-created deliveries using the shared Circum delivery engine.',
+                  records: deliveries,
+                  columns: const [
+                    'ID',
+                    'Received',
+                    'Route',
+                    'Status',
+                    'Weight / IRIS',
+                    'Price',
+                    'Actions'
+                  ],
+                  rowBuilder: deliveryRowBuilder,
+                  emptyText: 'No business deliveries yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Health+',
+                  subtitle:
+                      'Health+ jobs created under Business accounts, with intervention kept in existing Health+ tools.',
+                  records: healthPlus,
+                  columns: const [
+                    'Record',
+                    'Customer',
+                    'Status',
+                    'Route',
+                    'Actions'
+                  ],
+                  rowBuilder: healthPlusRowBuilder,
+                  emptyText: 'No Business Health+ records yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Gifts',
+                  subtitle:
+                      'Corporate gift requests and linked gift delivery records.',
+                  records: gifts,
+                  columns: const [
+                    'Gift',
+                    'Sender / Recipient',
+                    'Occasion',
+                    'Status',
+                    'Actions'
+                  ],
+                  rowBuilder: giftRowBuilder,
+                  emptyText: 'No Business Gifts yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Vanguard',
+                  subtitle:
+                      'Vanguard status across business deliveries, including selected, policy-applied, and required handling.',
+                  records: vanguard,
+                  columns: const [
+                    'Delivery',
+                    'Service',
+                    'Status',
+                    'Vanguard Source',
+                    'Actions'
+                  ],
+                  rowBuilder: vanguardRowBuilder,
+                  emptyText: 'No Business Vanguard records yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Invoices',
+                  subtitle:
+                      'Manual invoice status control until Stripe invoicing is connected.',
+                  records: invoices,
+                  columns: const [
+                    'Business',
+                    'Breakdown',
+                    'Status',
+                    'Amount',
+                    'Actions'
+                  ],
+                  rowBuilder: invoiceRowBuilder,
+                  emptyText: 'No Business invoices yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Roth',
+                  subtitle:
+                      'Business Roth balance and transaction visibility. Sender, Rider and Business wallets remain separate.',
+                  records: roth,
+                  columns: const ['Business', 'Source', 'Status', 'Amount'],
+                  rowBuilder: rothRowBuilder,
+                  emptyText: 'No Business Roth records yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Analytics',
+                  subtitle:
+                      'Per-business delivery volume, spend, service mix, Vanguard usage, Health+ and Gifts volume.',
+                  records: analytics,
+                  columns: const [
+                    'Business',
+                    'Volume / Spend',
+                    'On-time',
+                    'Service Mix'
+                  ],
+                  rowBuilder: analyticsRowBuilder,
+                  emptyText: 'No Business analytics yet.',
+                ),
+                _AdminDataSection(
+                  colors: colors,
+                  title: 'Business Audit Log',
+                  subtitle:
+                      'Company, member, delivery, invoice, Roth and admin intervention events tied to Business accounts.',
+                  records: audit,
+                  columns: const ['Action', 'Record', 'Admin', 'Reason / Time'],
+                  rowBuilder: auditRowBuilder,
+                  emptyText: 'No Business audit events yet.',
+                ),
+              ],
+            ),
           ),
         ],
       ),
