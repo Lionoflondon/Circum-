@@ -113,6 +113,8 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     accepted: ["Rider accepted", "A rider has accepted your delivery."],
     arrived: ["Rider arrived", "Your rider has arrived at the pickup."],
     arrived_at_pickup: ["Rider arrived", "Your rider has arrived at the pickup."],
+    rider_arrived_pickup: ["Rider arrived", "Your Circum rider has arrived at the pickup address."],
+    sender_no_show_pickup: ["Pickup no-show", "Pickup was marked as no-show after the waiting period. A £5.00 waiting/no-show surcharge has been applied because the rider could not make contact."],
     collected: ["Parcel collected", "Your parcel has been collected."],
     picked_up: ["Parcel collected", "Your parcel has been collected."],
     delivered: ["Parcel delivered", "Your parcel has been delivered."],

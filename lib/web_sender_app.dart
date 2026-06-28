@@ -4524,6 +4524,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       return details.isEmpty ? address : '$address\n${details.join(' • ')}';
     }
 
+    final waitSummary = _adminPickupWaitSummary(item);
+
     return [
       _AdminCell.primary(
         '${item['requestId'] ?? id}\n${_movementServiceLabel(_movementServiceType(item))}'
@@ -4531,7 +4533,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       ),
       _AdminCell(_jobReceivedText(item)),
       _AdminCell(
-        '${addressSummary('${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}', pickupCanonical)}\n→ ${addressSummary('${item['dropoffAddress'] ?? ''}', dropoffCanonical)}',
+        '${addressSummary('${item['pickupAddress'] ?? item['pickupLocality'] ?? ''}', pickupCanonical)}\n→ ${addressSummary('${item['dropoffAddress'] ?? ''}', dropoffCanonical)}${waitSummary.isEmpty ? '' : '\n$waitSummary'}',
       ),
       _AdminStatusCell(
         colors: widget.colors,
@@ -4573,6 +4575,38 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         ],
       ),
     ];
+  }
+
+  String _adminPickupWaitSummary(Map<String, dynamic> item) {
+    final parts = <String>[];
+    if (item['riderArrivedAtPickupAt'] != null) {
+      parts.add('Arrived ${_adminDateText(item['riderArrivedAtPickupAt'])}');
+    }
+    if (item['pickupWaitStartedAt'] != null) {
+      parts.add('Wait started ${_adminDateText(item['pickupWaitStartedAt'])}');
+    }
+    if (item['pickupWaitDeadlineAt'] != null) {
+      parts.add('Deadline ${_adminDateText(item['pickupWaitDeadlineAt'])}');
+    }
+    if (item.containsKey('senderContactEstablished')) {
+      parts.add(
+          'Contact established: ${item['senderContactEstablished'] == true ? 'yes' : 'no'}');
+    }
+    if (item['pickupWaitExtended'] == true) {
+      final minutes = item['pickupWaitExtensionMinutes'] ?? '';
+      final charge = ((item['pickupWaitExtensionChargeGbp'] ??
+              item['pickupWaitExtensionCharge'] ??
+              0) as num)
+          .toDouble();
+      parts.add('Waiting extended ${minutes}m · £${charge.toStringAsFixed(2)}');
+    }
+    if (item['pickupNoShowAt'] != null) {
+      final charge =
+          ((item['pickupNoShowSurchargeGbp'] ?? 0) as num).toDouble();
+      parts.add(
+          'No-show ${_adminDateText(item['pickupNoShowAt'])} · £${charge.toStringAsFixed(2)}');
+    }
+    return parts.join('\n');
   }
 
   List<Widget> _financeRow(Map<String, dynamic> item) {
@@ -8019,6 +8053,9 @@ bool _isActiveSenderDeliveryStatus(String status) {
     'assigned',
     'accepted',
     'en_route_to_pickup',
+    'rider_arrived_pickup',
+    'arrived_at_pickup',
+    'sender_no_show_pickup',
     'collected',
     'picked_up',
     'in_transit',
@@ -8063,6 +8100,11 @@ String _customerDeliveryStatusLabel(String status) {
   if (normalized == 'en_route_pickup' || normalized == 'en_route_to_pickup') {
     return 'Rider travelling to pickup';
   }
+  if (normalized == 'rider_arrived_pickup' ||
+      normalized == 'arrived_at_pickup') {
+    return 'Rider arrived at pickup';
+  }
+  if (normalized == 'sender_no_show_pickup') return 'Sender no-show';
   if (normalized == 'collected' || normalized == 'picked_up') {
     return 'Parcel collected';
   }
@@ -10994,10 +11036,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'accepted',
             'en_route_to_pickup',
             'arrived_at_pickup',
+            'rider_arrived_pickup',
             'collected',
             'picked_up',
             'in_transit',
             'arriving',
+            'sender_no_show_pickup',
           ],
         )
         .limit(20)
@@ -11100,6 +11144,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     ) {
       final status = '${job?['status'] ?? ''}'.toLowerCase();
       return status == 'accepted' ||
+          status == 'rider_arrived_pickup' ||
+          status == 'arrived_at_pickup' ||
           status == 'picked_up' ||
           status == 'in_transit' ||
           status == 'in_progress';
@@ -11257,6 +11303,40 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     setState(() => _jobMessage = 'Updating job $requestId...');
     try {
       final db = FirebaseFirestore.instance;
+      if (status == 'rider_arrived_pickup') {
+        await _markRiderArrivedAtPickup(db, requestId, user.uid);
+        if (!mounted) return;
+        setState(() => _jobMessage = 'Sender notified. Waiting timer started.');
+        return;
+      }
+      if (status == 'sender_contact_established' ||
+          status == 'sender_no_contact') {
+        await _updateSenderContactStatus(
+          db,
+          requestId,
+          user.uid,
+          established: status == 'sender_contact_established',
+        );
+        if (!mounted) return;
+        setState(() => _jobMessage = status == 'sender_contact_established'
+            ? 'Contact marked as established.'
+            : 'No contact marked.');
+        return;
+      }
+      if (status.startsWith('extend_wait_')) {
+        final minutes = int.tryParse(status.replaceFirst('extend_wait_', ''));
+        if (minutes == null) return;
+        await _extendPickupWaiting(db, job, requestId, user.uid, minutes);
+        if (!mounted) return;
+        setState(() => _jobMessage = 'Waiting time extended.');
+        return;
+      }
+      if (status == 'sender_no_show_pickup') {
+        await _markSenderNoShowAtPickup(db, requestId, user.uid);
+        if (!mounted) return;
+        setState(() => _jobMessage = 'Sender no-show recorded.');
+        return;
+      }
       final vanguardPatch = await _collectVanguardPinVerification(
         job,
         requestId,
@@ -11403,6 +11483,251 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not update this job. Try again.');
     }
+  }
+
+  Future<void> _markRiderArrivedAtPickup(
+    FirebaseFirestore db,
+    String requestId,
+    String riderId,
+  ) async {
+    final now = DateTime.now();
+    final deadline = now.add(const Duration(minutes: 3));
+    final deliveryRef = db.collection('deliveryRequests').doc(requestId);
+    var alreadyArrived = false;
+    await db.runTransaction((transaction) async {
+      final snap = await transaction.get(deliveryRef);
+      final data = snap.data();
+      if (data == null) throw StateError('Delivery not found.');
+      if (data['riderArrivedAtPickupAt'] != null ||
+          '${data['status'] ?? ''}' == 'rider_arrived_pickup') {
+        alreadyArrived = true;
+        return;
+      }
+      transaction.set(
+          deliveryRef,
+          {
+            'status': 'rider_arrived_pickup',
+            'dispatchStatus': 'rider_arrived_pickup',
+            'riderArrivedAtPickupAt': FieldValue.serverTimestamp(),
+            'pickupWaitStartedAt': FieldValue.serverTimestamp(),
+            'pickupWaitDeadlineAt': Timestamp.fromDate(deadline),
+            'senderContactEstablished': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'auditTrail': FieldValue.arrayUnion([
+              _deliveryAuditEvent(
+                type: 'rider_arrived_pickup',
+                label: 'Rider arrived at pickup',
+                riderId: riderId,
+                status: 'rider_arrived_pickup',
+              ),
+              _deliveryAuditEvent(
+                type: 'pickup_wait_started',
+                label: 'Waiting period started',
+                riderId: riderId,
+                status: 'rider_arrived_pickup',
+              ),
+            ]),
+          },
+          SetOptions(merge: true));
+    });
+    if (alreadyArrived) return;
+    await _sendDeliverySystemMessage(
+      requestId,
+      'Your rider is waiting at the pickup address. Please meet them within 3 minutes.',
+    );
+  }
+
+  Future<void> _updateSenderContactStatus(
+    FirebaseFirestore db,
+    String requestId,
+    String riderId, {
+    required bool established,
+  }) async {
+    await db.collection('deliveryRequests').doc(requestId).set({
+      'senderContactEstablished': established,
+      'senderContactEstablishedAt':
+          established ? FieldValue.serverTimestamp() : FieldValue.delete(),
+      'senderContactStatusUpdatedBy': riderId,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'auditTrail': FieldValue.arrayUnion([
+        _deliveryAuditEvent(
+          type:
+              established ? 'sender_contact_established' : 'sender_no_contact',
+          label: established ? 'Contact established' : 'No contact',
+          riderId: riderId,
+          status: 'rider_arrived_pickup',
+        ),
+      ]),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _extendPickupWaiting(
+    FirebaseFirestore db,
+    Map<String, dynamic> job,
+    String requestId,
+    String riderId,
+    int minutes,
+  ) async {
+    const charges = {5: 2.0, 10: 4.0, 15: 6.0};
+    final charge = charges[minutes];
+    if (charge == null) return;
+    if (job['senderContactEstablished'] != true) {
+      setState(() => _jobMessage =
+          'Waiting can only be extended after contact is established.');
+      return;
+    }
+    if (job['pickupWaitExtended'] == true) {
+      setState(() => _jobMessage = 'Waiting has already been extended.');
+      return;
+    }
+    final currentDeadline = _timestampDate(job['pickupWaitDeadlineAt']);
+    final base =
+        currentDeadline != null && currentDeadline.isAfter(DateTime.now())
+            ? currentDeadline
+            : DateTime.now();
+    final newDeadline = base.add(Duration(minutes: minutes));
+    await db.collection('deliveryRequests').doc(requestId).set({
+      'pickupWaitExtended': true,
+      'pickupWaitExtensionMinutes': minutes,
+      'pickupWaitExtensionCharge': charge,
+      'pickupWaitExtensionChargeGbp': charge,
+      'pickupWaitExtensionReason': 'Contact established',
+      'pickupWaitExtendedAt': FieldValue.serverTimestamp(),
+      'pickupWaitDeadlineAt': Timestamp.fromDate(newDeadline),
+      'waitingSurchargeTotalGbp': FieldValue.increment(charge),
+      'currency': 'GBP',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'auditTrail': FieldValue.arrayUnion([
+        _deliveryAuditEvent(
+          type: 'pickup_wait_extended',
+          label: 'Waiting extended by $minutes minutes',
+          riderId: riderId,
+          status: 'rider_arrived_pickup',
+          amountGbp: charge,
+        ),
+        _deliveryAuditEvent(
+          type: 'waiting_charge_applied',
+          label:
+              'Additional waiting charge applied: £${charge.toStringAsFixed(2)}',
+          riderId: riderId,
+          status: 'rider_arrived_pickup',
+          amountGbp: charge,
+        ),
+      ]),
+    }, SetOptions(merge: true));
+    await _sendDeliverySystemMessage(
+      requestId,
+      'Your rider is still waiting. Extra waiting time has been approved. Additional waiting charge: £${charge.toStringAsFixed(2)}.',
+    );
+  }
+
+  Future<void> _markSenderNoShowAtPickup(
+    FirebaseFirestore db,
+    String requestId,
+    String riderId,
+  ) async {
+    final deliveryRef = db.collection('deliveryRequests').doc(requestId);
+    await db.runTransaction((transaction) async {
+      final snap = await transaction.get(deliveryRef);
+      final data = snap.data();
+      if (data == null) {
+        throw StateError('Delivery not found.');
+      }
+      if (data['senderContactEstablished'] == true) {
+        throw StateError('Contact was established. Extend waiting instead.');
+      }
+      final deadline = _timestampDate(data['pickupWaitDeadlineAt']);
+      if (deadline == null || DateTime.now().isBefore(deadline)) {
+        throw StateError('The 3-minute waiting period is still active.');
+      }
+      if (data['pickupNoShowSurchargeApplied'] == true) {
+        return;
+      }
+      transaction.set(
+          deliveryRef,
+          {
+            'status': 'sender_no_show_pickup',
+            'dispatchStatus': 'sender_no_show_pickup',
+            'pickupNoShowAt': FieldValue.serverTimestamp(),
+            'pickupNoShowReason': 'No contact after pickup waiting period',
+            'pickupNoShowSurchargeApplied': true,
+            'pickupNoShowSurchargeGbp': 5.0,
+            'waitingSurchargeTotalGbp': FieldValue.increment(5.0),
+            'currency': 'GBP',
+            'updatedAt': FieldValue.serverTimestamp(),
+            'auditTrail': FieldValue.arrayUnion([
+              _deliveryAuditEvent(
+                type: 'sender_no_show_pickup',
+                label: 'Sender no-show marked',
+                riderId: riderId,
+                status: 'sender_no_show_pickup',
+              ),
+              _deliveryAuditEvent(
+                type: 'no_show_surcharge_applied',
+                label: 'No-show surcharge applied: £5.00',
+                riderId: riderId,
+                status: 'sender_no_show_pickup',
+                amountGbp: 5.0,
+              ),
+            ]),
+          },
+          SetOptions(merge: true));
+    });
+    await _sendDeliverySystemMessage(
+      requestId,
+      'Pickup was marked as no-show after the waiting period. A £5.00 waiting/no-show surcharge has been applied because the rider could not make contact.',
+    );
+  }
+
+  Map<String, dynamic> _deliveryAuditEvent({
+    required String type,
+    required String label,
+    required String riderId,
+    required String status,
+    double? amountGbp,
+  }) {
+    return {
+      'type': type,
+      'label': label,
+      'event': label,
+      'actorType': 'rider',
+      'actorId': riderId,
+      'statusAfterEvent': status,
+      'currency': 'GBP',
+      if (amountGbp != null) 'amountGbp': amountGbp,
+      'createdAt': Timestamp.now(),
+    };
+  }
+
+  Future<void> _sendDeliverySystemMessage(
+    String requestId,
+    String message,
+  ) async {
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(requestId)
+        .collection('messages')
+        .add({
+      'threadId': requestId,
+      'bookingId': requestId,
+      'requestId': requestId,
+      'senderId': 'circum-system',
+      'senderRole': 'system',
+      'senderType': 'support',
+      'messageText': message,
+      'message': message,
+      'system': true,
+      'status': 'sent',
+      'createdAt': FieldValue.serverTimestamp(),
+      'timeStamp': DateTime.now().toIso8601String(),
+    });
+  }
+
+  DateTime? _timestampDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   Future<Map<String, dynamic>?> _collectVanguardPinVerification(
@@ -14799,6 +15124,7 @@ class _DriverJobCard extends StatelessWidget {
       'rider_assigned',
       'en_route_to_pickup',
       'arrived_at_pickup',
+      'rider_arrived_pickup',
     }.contains(jobStatus);
 
     return Container(
@@ -14985,6 +15311,20 @@ class _DriverJobCard extends StatelessWidget {
                   'PIN verification required at collection and final delivery.',
             ),
           ],
+          if (_pickupWaitingVisible(job)) ...[
+            const SizedBox(height: 12),
+            _PickupWaitingPanel(
+              colors: colors,
+              job: job,
+              onContactEstablished: () =>
+                  onUpdateStatus?.call('sender_contact_established'),
+              onNoContact: () => onUpdateStatus?.call('sender_no_contact'),
+              onExtend: (minutes) =>
+                  onUpdateStatus?.call('extend_wait_$minutes'),
+              onNoShow: () => onUpdateStatus?.call('sender_no_show_pickup'),
+              onContactSender: onOpenChat,
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -15004,6 +15344,12 @@ class _DriverJobCard extends StatelessWidget {
                 label: const Text('Messages'),
               ),
               if (onUpdateStatus != null && !completed) ...[
+                if (!_pickupWaitingVisible(job))
+                  OutlinedButton.icon(
+                    onPressed: () => onUpdateStatus!('rider_arrived_pickup'),
+                    icon: const Icon(Icons.pin_drop_outlined),
+                    label: const Text("I've Arrived"),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () => onUpdateStatus!('picked_up'),
                   icon: const Icon(Icons.inventory),
@@ -15071,6 +15417,14 @@ class _DriverJobCard extends StatelessWidget {
       ? 'not set'
       : value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1);
 
+  static bool _pickupWaitingVisible(Map<String, dynamic> job) {
+    final status = '${job['status'] ?? ''}'.toLowerCase();
+    return status == 'rider_arrived_pickup' ||
+        status == 'arrived_at_pickup' ||
+        job['pickupWaitStartedAt'] != null ||
+        status == 'sender_no_show_pickup';
+  }
+
   static String _contactValue(
     Map<String, dynamic> job,
     Map<String, dynamic> summary,
@@ -15108,6 +15462,176 @@ class _DriverJobCard extends StatelessWidget {
       warnings.add('Check weight at pickup');
     }
     return warnings;
+  }
+}
+
+class _PickupWaitingPanel extends StatefulWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> job;
+  final VoidCallback? onContactEstablished;
+  final VoidCallback? onNoContact;
+  final ValueChanged<int>? onExtend;
+  final VoidCallback? onNoShow;
+  final VoidCallback? onContactSender;
+
+  const _PickupWaitingPanel({
+    required this.colors,
+    required this.job,
+    required this.onContactEstablished,
+    required this.onNoContact,
+    required this.onExtend,
+    required this.onNoShow,
+    required this.onContactSender,
+  });
+
+  @override
+  State<_PickupWaitingPanel> createState() => _PickupWaitingPanelState();
+}
+
+class _PickupWaitingPanelState extends State<_PickupWaitingPanel> {
+  late Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final deadline = _date(widget.job['pickupWaitDeadlineAt']);
+    final remaining =
+        deadline == null ? Duration.zero : deadline.difference(DateTime.now());
+    final remainingSeconds = remaining.inSeconds.clamp(0, 9999);
+    final minutes = (remainingSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (remainingSeconds % 60).toString().padLeft(2, '0');
+    final contactEstablished = widget.job['senderContactEstablished'] == true;
+    final noShow = '${widget.job['status'] ?? ''}' == 'sender_no_show_pickup';
+    final canNoShow = !noShow && !contactEstablished && remainingSeconds == 0;
+    final extended = widget.job['pickupWaitExtended'] == true;
+    final extensionCharge =
+        (widget.job['pickupWaitExtensionChargeGbp'] as num?)?.toDouble() ??
+            (widget.job['pickupWaitExtensionCharge'] as num?)?.toDouble() ??
+            0;
+    final noShowCharge =
+        (widget.job['pickupNoShowSurchargeGbp'] as num?)?.toDouble() ?? 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.timer_outlined, color: colors.adminAccent, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  noShow ? 'Sender no-show recorded' : 'Pickup waiting time',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                noShow
+                    ? '£${noShowCharge.toStringAsFixed(2)}'
+                    : '$minutes:$seconds',
+                style: TextStyle(
+                  color: canNoShow ? colors.warning : colors.text,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            contactEstablished
+                ? 'Contact established. You may extend waiting if needed.'
+                : canNoShow
+                    ? 'Free waiting has ended. You may mark Sender No Show if no contact was established.'
+                    : 'Free waiting is active. Contact the sender and wait for the timer to finish before no-show.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+          if (extended && extensionCharge > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Waiting extended by ${widget.job['pickupWaitExtensionMinutes'] ?? ''} minutes · £${extensionCharge.toStringAsFixed(2)} GBP',
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: widget.onContactSender,
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Contact Sender'),
+              ),
+              OutlinedButton.icon(
+                onPressed: widget.onContactEstablished,
+                icon: const Icon(Icons.call),
+                label: const Text('Contact established'),
+              ),
+              OutlinedButton.icon(
+                onPressed: widget.onNoContact,
+                icon: const Icon(Icons.phone_disabled_outlined),
+                label: const Text('No contact'),
+              ),
+              for (final option in const [
+                (5, 2),
+                (10, 4),
+                (15, 6),
+              ])
+                OutlinedButton(
+                  onPressed: contactEstablished && !extended
+                      ? () => widget.onExtend?.call(option.$1)
+                      : null,
+                  child: Text('+${option.$1} min · £${option.$2}.00'),
+                ),
+              FilledButton.icon(
+                onPressed: canNoShow ? widget.onNoShow : null,
+                icon: const Icon(Icons.person_off_outlined),
+                label: const Text('Mark Sender No Show'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  DateTime? _date(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 }
 
