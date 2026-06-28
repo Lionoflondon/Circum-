@@ -15705,14 +15705,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                             constraints.maxWidth >= _desktopWebBreakpoint
                         ? Container(
                             color: colors.stage,
-                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            padding: EdgeInsets.symmetric(
+                              horizontal:
+                                  constraints.maxWidth >= 1100 ? 40 : 24,
+                              vertical: 24,
+                            ),
                             child: LayoutBuilder(
                               builder: (context, stageConstraints) => Center(
                                 child: ConstrainedBox(
                                   constraints: BoxConstraints(
                                     maxWidth: constraints.maxWidth >= 1100
-                                        ? 560
-                                        : 430,
+                                        ? 1100
+                                        : 960,
                                   ),
                                   child: SizedBox(
                                     height: stageConstraints.maxHeight,
