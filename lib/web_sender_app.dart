@@ -2918,12 +2918,18 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ]),
           brands: adminSearch(_giftBrands, query, [
             'brandName',
+            'partnerName',
             'category',
             'partnershipStatus',
+            'status',
+            'approvedFor',
+            'IRISTags',
           ]),
           requestRowBuilder: _giftRequestRow,
           participantRowBuilder: _giftCampaignParticipantRow,
           brandRowBuilder: _giftBrandRow,
+          onCreateBrand: () => _openGiftBrandPartner(),
+          onSeedBirdBlend: _seedBirdBlendPartner,
         ),
       _AdminSection.finance => _AdminFinanceSection(
           colors: colors,
@@ -3385,16 +3391,482 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Widget> _giftBrandRow(Map<String, dynamic> item) {
     return [
-      _AdminCell.primary('${item['brandName'] ?? 'Brand'}'),
-      _AdminCell('${item['category'] ?? ''}'),
+      _AdminCell.primary(
+          '${item['partnerName'] ?? item['brandName'] ?? 'Brand'}${item['curatedGiftsOnly'] == true ? '\nApproved for curated gifts only' : ''}'),
+      _AdminCell(
+          '${item['category'] ?? ''}${item['doNotListStandalone'] == true ? '\nDo not list standalone' : ''}'),
       _AdminStatusCell(
           colors: widget.colors,
-          status: '${item['partnershipStatus'] ?? 'none'}'),
-      _AdminCell('${item['timesFeatured'] ?? 0}'),
-      _AdminCell('${item['totalViews'] ?? 0}'),
-      _AdminCell('${item['totalEngagement'] ?? 0}'),
+          status:
+              '${item['status'] ?? item['partnershipStatus'] ?? 'pending'}'),
+      _AdminCell(((item['approvedFor'] as List?) ?? const []).join(', ')),
+      _AdminCell('${item['restrictions'] ?? ''}'),
+      _AdminActions(colors: widget.colors, actions: [
+        _AdminAction(
+          label: 'Open',
+          enabled: true,
+          onTap: () => _openGiftBrandPartner(item),
+        ),
+        _AdminAction(
+          label: 'Approve',
+          enabled: '${item['status'] ?? ''}' != 'approved',
+          onTap: () => _setGiftBrandStatus(item, 'approved'),
+        ),
+        _AdminAction(
+          label: 'Pause',
+          enabled: '${item['status'] ?? ''}' != 'paused',
+          onTap: () => _setGiftBrandStatus(item, 'paused'),
+        ),
+        _AdminAction(
+          label: 'Reject',
+          enabled: '${item['status'] ?? ''}' != 'rejected',
+          onTap: () => _setGiftBrandStatus(item, 'rejected'),
+        ),
+        _AdminAction(
+          label: 'Remove',
+          enabled: true,
+          onTap: () => _removeGiftBrandPartner(item),
+        ),
+      ]),
     ];
   }
+
+  Future<void> _setGiftBrandStatus(
+    Map<String, dynamic> item,
+    String status,
+  ) async {
+    final id = '${item['id'] ?? item['partnerId'] ?? ''}';
+    if (id.isEmpty) return;
+    await FirebaseFirestore.instance.collection('giftBrands').doc(id).set({
+      'status': status,
+      'partnershipStatus': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _adminUser?.uid ?? _adminUser?.email,
+    }, SetOptions(merge: true));
+    await _loadAdminData();
+  }
+
+  Future<void> _removeGiftBrandPartner(Map<String, dynamic> item) async {
+    final id = '${item['id'] ?? item['partnerId'] ?? ''}';
+    if (id.isEmpty) return;
+    await FirebaseFirestore.instance.collection('giftBrands').doc(id).set({
+      'status': 'rejected',
+      'partnershipStatus': 'rejected',
+      'removedAt': FieldValue.serverTimestamp(),
+      'removedBy': _adminUser?.uid ?? _adminUser?.email,
+      'active': false,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _loadAdminData();
+  }
+
+  Future<void> _openGiftBrandPartner([Map<String, dynamic>? item]) async {
+    final existing = item ?? const <String, dynamic>{};
+    final partnerName = TextEditingController(
+        text: '${existing['partnerName'] ?? existing['brandName'] ?? ''}');
+    final contactName =
+        TextEditingController(text: '${existing['contactName'] ?? ''}');
+    final contactEmail =
+        TextEditingController(text: '${existing['contactEmail'] ?? ''}');
+    final phone = TextEditingController(text: '${existing['phone'] ?? ''}');
+    final website = TextEditingController(text: '${existing['website'] ?? ''}');
+    final category =
+        TextEditingController(text: '${existing['category'] ?? ''}');
+    final approvedFor = TextEditingController(
+        text: ((existing['approvedFor'] as List?) ?? const []).join(', '));
+    final minimumOrderSpend =
+        TextEditingController(text: '${existing['minimumOrderSpend'] ?? ''}');
+    final moqNotes =
+        TextEditingController(text: '${existing['MOQNotes'] ?? ''}');
+    final deliveryTerms =
+        TextEditingController(text: '${existing['deliveryTerms'] ?? ''}');
+    final paymentTerms =
+        TextEditingController(text: '${existing['paymentTerms'] ?? ''}');
+    final restrictions =
+        TextEditingController(text: '${existing['restrictions'] ?? ''}');
+    final internalNotes =
+        TextEditingController(text: '${existing['internalNotes'] ?? ''}');
+    final priceGuide = TextEditingController(
+        text: '${existing['uploadedPriceGuideUrl'] ?? ''}');
+    final wholesalePrices =
+        TextEditingController(text: '${existing['wholesalePrices'] ?? ''}');
+    final rrp = TextEditingController(text: '${existing['RRP'] ?? ''}');
+    final productGroups = TextEditingController(
+        text: ((existing['productGroups'] as List?) ?? const []).join('\n'));
+    final irisTags = TextEditingController(
+        text: ((existing['IRISTags'] as List?) ?? const []).join(', '));
+    final triggers = TextEditingController(
+        text: ((existing['recommendationTriggers'] as List?) ?? const [])
+            .join(', '));
+    String status =
+        '${existing['status'] ?? existing['partnershipStatus'] ?? 'pending'}';
+    bool wholesaleAvailable = existing['wholesaleAvailable'] == true;
+    bool curatedGiftsOnly = existing['curatedGiftsOnly'] == true;
+    bool doNotListStandalone = existing['doNotListStandalone'] == true;
+    bool hideWholesaleFromCustomers =
+        existing['hideWholesaleFromCustomers'] != false;
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title:
+              Text(item == null ? 'Add Brand Partner' : 'Edit Brand Partner'),
+          content: SizedBox(
+            width: 720,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                      controller: partnerName,
+                      decoration:
+                          const InputDecoration(labelText: 'partnerName')),
+                  TextField(
+                      controller: contactName,
+                      decoration:
+                          const InputDecoration(labelText: 'contactName')),
+                  TextField(
+                      controller: contactEmail,
+                      decoration:
+                          const InputDecoration(labelText: 'contactEmail')),
+                  TextField(
+                      controller: phone,
+                      decoration: const InputDecoration(labelText: 'phone')),
+                  TextField(
+                      controller: website,
+                      decoration: const InputDecoration(labelText: 'website')),
+                  TextField(
+                      controller: category,
+                      decoration: const InputDecoration(labelText: 'category')),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    decoration: const InputDecoration(labelText: 'status'),
+                    items: const ['pending', 'approved', 'paused', 'rejected']
+                        .map((value) =>
+                            DropdownMenuItem(value: value, child: Text(value)))
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => status = value ?? status),
+                  ),
+                  TextField(
+                      controller: approvedFor,
+                      decoration: const InputDecoration(
+                          labelText: 'approvedFor (comma separated)')),
+                  SwitchListTile(
+                    value: wholesaleAvailable,
+                    onChanged: (value) =>
+                        setDialogState(() => wholesaleAvailable = value),
+                    title: const Text('wholesaleAvailable'),
+                  ),
+                  TextField(
+                      controller: wholesalePrices,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: 'wholesale prices (admin-only)')),
+                  TextField(
+                      controller: rrp,
+                      decoration: const InputDecoration(labelText: 'RRP')),
+                  TextField(
+                      controller: minimumOrderSpend,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                          labelText: 'minimumOrderSpend')),
+                  TextField(
+                      controller: moqNotes,
+                      decoration: const InputDecoration(labelText: 'MOQNotes')),
+                  TextField(
+                      controller: deliveryTerms,
+                      maxLines: 2,
+                      decoration:
+                          const InputDecoration(labelText: 'deliveryTerms')),
+                  TextField(
+                      controller: paymentTerms,
+                      maxLines: 2,
+                      decoration:
+                          const InputDecoration(labelText: 'paymentTerms')),
+                  TextField(
+                      controller: restrictions,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'restrictions')),
+                  TextField(
+                      controller: internalNotes,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'internalNotes')),
+                  TextField(
+                      controller: priceGuide,
+                      decoration: const InputDecoration(
+                          labelText:
+                              'uploadedPriceGuideUrl (manual URL for now)')),
+                  SwitchListTile(
+                    value: curatedGiftsOnly,
+                    onChanged: (value) =>
+                        setDialogState(() => curatedGiftsOnly = value),
+                    title: const Text('curatedGiftsOnly'),
+                  ),
+                  SwitchListTile(
+                    value: doNotListStandalone,
+                    onChanged: (value) =>
+                        setDialogState(() => doNotListStandalone = value),
+                    title: const Text('doNotListStandalone'),
+                  ),
+                  SwitchListTile(
+                    value: hideWholesaleFromCustomers,
+                    onChanged: (value) => setDialogState(
+                        () => hideWholesaleFromCustomers = value),
+                    title: const Text('hideWholesaleFromCustomers'),
+                  ),
+                  TextField(
+                      controller: productGroups,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                          labelText: 'productGroups (one per line)')),
+                  TextField(
+                      controller: irisTags,
+                      decoration: const InputDecoration(
+                          labelText: 'IRIS tags (comma separated)')),
+                  TextField(
+                      controller: triggers,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText:
+                              'recommendation triggers (comma separated)')),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'partnerName': partnerName.text.trim(),
+                'brandName': partnerName.text.trim(),
+                'contactName': contactName.text.trim(),
+                'contactEmail': contactEmail.text.trim(),
+                'phone': phone.text.trim(),
+                'website': website.text.trim(),
+                'category': category.text.trim(),
+                'status': status,
+                'partnershipStatus': status,
+                'approvedFor': _csv(approvedFor.text),
+                'wholesaleAvailable': wholesaleAvailable,
+                'minimumOrderSpend':
+                    double.tryParse(minimumOrderSpend.text.trim()) ?? 0,
+                'MOQNotes': moqNotes.text.trim(),
+                'deliveryTerms': deliveryTerms.text.trim(),
+                'paymentTerms': paymentTerms.text.trim(),
+                'restrictions': restrictions.text.trim(),
+                'internalNotes': internalNotes.text.trim(),
+                'uploadedPriceGuideUrl': priceGuide.text.trim(),
+                'wholesalePrices': wholesalePrices.text.trim(),
+                'RRP': rrp.text.trim(),
+                'productGroups': productGroups.text
+                    .split('\n')
+                    .map((value) => value.trim())
+                    .where((value) => value.isNotEmpty)
+                    .toList(),
+                'IRISTags': _csv(irisTags.text),
+                'recommendationTriggers': _csv(triggers.text),
+                'curatedGiftsOnly': curatedGiftsOnly,
+                'doNotListStandalone': doNotListStandalone,
+                'hideWholesaleFromCustomers': hideWholesaleFromCustomers,
+              }),
+              child: const Text('Save partner'),
+            ),
+          ],
+        ),
+      ),
+    );
+    for (final controller in [
+      partnerName,
+      contactName,
+      contactEmail,
+      phone,
+      website,
+      category,
+      approvedFor,
+      minimumOrderSpend,
+      moqNotes,
+      deliveryTerms,
+      paymentTerms,
+      restrictions,
+      internalNotes,
+      priceGuide,
+      wholesalePrices,
+      rrp,
+      productGroups,
+      irisTags,
+      triggers,
+    ]) {
+      controller.dispose();
+    }
+    if (result == null || '${result['partnerName']}'.trim().isEmpty) return;
+    final id = '${existing['id'] ?? result['partnerName']}'
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    await FirebaseFirestore.instance.collection('giftBrands').doc(id).set({
+      'partnerId': id,
+      ...result,
+      if (item == null) ...{
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': _adminUser?.uid ?? _adminUser?.email,
+      },
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _adminUser?.uid ?? _adminUser?.email,
+    }, SetOptions(merge: true));
+    await _loadAdminData();
+  }
+
+  List<String> _csv(String value) => value
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList();
+
+  Future<void> _seedBirdBlendPartner() async {
+    await FirebaseFirestore.instance
+        .collection('giftBrands')
+        .doc('bird-and-blend-tea-co')
+        .set(_birdBlendBrandPartnerSeed(), SetOptions(merge: true));
+    await _loadAdminData();
+  }
+
+  Map<String, dynamic> _birdBlendBrandPartnerSeed() => {
+        'partnerId': 'bird-and-blend-tea-co',
+        'partnerName': 'Bird & Blend Tea Co.',
+        'brandName': 'Bird & Blend Tea Co.',
+        'contactName': '',
+        'contactEmail': '',
+        'phone': '',
+        'website': 'https://www.birdandblendtea.com',
+        'category': 'Premium Tea & Wellness',
+        'status': 'approved',
+        'partnershipStatus': 'approved',
+        'approvedFor': [
+          'Gifts',
+          'Corporate Gifts',
+          'Wellness Gifts',
+          'Health+',
+          'Subscription Gifts',
+          'Seasonal Collections',
+        ],
+        'wholesaleAvailable': true,
+        'minimumOrderSpend': 0,
+        'MOQNotes':
+            'No minimum order spend. Some products have MOQ by product/variant.',
+        'deliveryTerms':
+            'Free UK delivery over £80. £6.95 delivery under £80. DHL Next Working Day where available.',
+        'paymentTerms': 'Upfront payment required.',
+        'restrictions':
+            'Curated gifts only. Do not sell standalone. Do not expose wholesale pricing to customers. Do not list as marketplace standalone products.',
+        'internalNotes':
+            'Strong fit for low wholesale cost / high perceived value gifts. Ideal for emotional gifting, wellness, thank you, self-care, cosy, seasonal and corporate gifting.',
+        'uploadedPriceGuideUrl': '',
+        'wholesalePrices':
+            'Tea Gift Cubes £6.75; Moment of Calm Cube £6.75; Luxury Chocolate Gift Cube £6.75; Tea & Biscuits Cube £6.75; 15 Tea Bag Gift Packs £2.83-£4.65; Sticky Chai Collection £7.80; Matcha Collection £14-£35.',
+        'RRP':
+            'Gift Cubes estimated £11.00; 15 Tea Bag Gift Packs estimated £5.50-£9.45; Sticky Chai estimated £15.00; Matcha estimated £22.00-£58.00.',
+        'curatedGiftsOnly': true,
+        'doNotListStandalone': true,
+        'hideWholesaleFromCustomers': true,
+        'productGroups': [
+          'Tea Gift Cubes',
+          'Moment of Calm Cube',
+          'Luxury Chocolate Gift Cube',
+          'Tea & Biscuits Cube',
+          '15 Tea Bag Gift Packs',
+          'Sticky Chai Collection',
+          'Matcha Collection',
+          'Tea Tools',
+        ],
+        'IRISTags': [
+          'Comfort',
+          'Calm',
+          'Warmth',
+          'Wellness',
+          'Cosy Evening',
+          'Self Care',
+          'Thinking of You',
+          'Recovery',
+          'New Home',
+          'Gratitude',
+          'Slow Morning',
+          'Productivity',
+        ],
+        'recommendationTriggers': [
+          'tea',
+          'matcha',
+          'coffee alternative',
+          'reading',
+          'book lover',
+          'quiet evenings',
+          'wellness',
+          'yoga',
+          'meditation',
+          'fitness',
+          'healthy living',
+          'slow mornings',
+          'working from home',
+          'stress',
+          'relaxation',
+          'comfort',
+          'cosy',
+          'thoughtful',
+          'new home',
+          'teacher',
+          'student',
+          'entrepreneur',
+          'get well soon',
+          'thank you',
+          'birthday',
+          'congratulations',
+        ],
+        'seasonalWeighting': [
+          'Christmas',
+          'Autumn',
+          'Winter',
+          'Mother’s Day',
+          'Father’s Day',
+          'Valentine’s Day',
+          'Exam Season',
+          'Flu Season',
+          'New Year wellness period',
+          'Teacher appreciation period',
+        ],
+        'pairingRules': [
+          'Luxury candles',
+          'Books',
+          'Chocolate',
+          'Biscuits',
+          'Honey',
+          'Mugs',
+          'Blankets',
+          'Flowers',
+          'Journals',
+          'Bath products',
+          'Spa products',
+          'Cookies',
+          'Brownies',
+          'Scent diffusers',
+          'Personalised notes',
+          'Gift Stories',
+          'Handwritten cards',
+        ],
+        'recommendationScore': 96,
+        'priceEfficiencyScore': 98,
+        'packagingQualityScore': 95,
+        'emotionalVersatilityScore': 100,
+        'corporateSuitabilityScore': 95,
+        'repeatPurchasePotentialScore': 98,
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdBy': _adminUser?.uid ?? _adminUser?.email,
+        'updatedBy': _adminUser?.uid ?? _adminUser?.email,
+      };
 
   Future<void> _suggestCampaignMatch(Map<String, dynamic> participant) async {
     Map<String, dynamic>? best;
@@ -6626,6 +7098,8 @@ class _AdminGiftsSection extends StatelessWidget {
   final List<Widget> Function(Map<String, dynamic>) requestRowBuilder;
   final List<Widget> Function(Map<String, dynamic>) participantRowBuilder;
   final List<Widget> Function(Map<String, dynamic>) brandRowBuilder;
+  final VoidCallback onCreateBrand;
+  final VoidCallback onSeedBirdBlend;
 
   const _AdminGiftsSection({
     required this.colors,
@@ -6635,6 +7109,8 @@ class _AdminGiftsSection extends StatelessWidget {
     required this.requestRowBuilder,
     required this.participantRowBuilder,
     required this.brandRowBuilder,
+    required this.onCreateBrand,
+    required this.onSeedBirdBlend,
   });
 
   @override
@@ -6692,20 +7168,32 @@ class _AdminGiftsSection extends StatelessWidget {
               ),
               _AdminDataSection(
                 colors: colors,
-                title: 'Partner brand exposure',
+                title: 'Brand Partners',
                 subtitle:
-                    'Approved tags and manually entered social performance only.',
+                    'Admin-only supplier controls for curated Gifts by Circum experiences.',
                 records: brands,
                 columns: const [
-                  'Brand',
+                  'Partner',
                   'Category',
                   'Status',
-                  'Featured',
-                  'Views',
-                  'Engagement'
+                  'Approved for',
+                  'Restrictions',
+                  'Actions'
                 ],
                 rowBuilder: brandRowBuilder,
-                emptyText: 'No featured brands yet.',
+                emptyText: 'No brand partners yet.',
+                headerActions: [
+                  FilledButton.icon(
+                    onPressed: onCreateBrand,
+                    icon: const Icon(Icons.add_business),
+                    label: const Text('Add Brand Partner'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onSeedBirdBlend,
+                    icon: const Icon(Icons.local_cafe_outlined),
+                    label: const Text('Add Bird & Blend'),
+                  ),
+                ],
               ),
             ]),
           ),

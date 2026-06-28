@@ -27,6 +27,21 @@ class GiftRepositoryItem {
   final int surpriseScore;
   final String supplierType;
   final String procurementDifficulty;
+  final String? linkedBrandPartnerName;
+  final String? supplierStatus;
+  final String? wholesalePrice;
+  final String? estimatedRrp;
+  final String? marginProfile;
+  final List<String> pairings;
+  final List<String> phraseTriggers;
+  final List<String> seasonalWeighting;
+  final List<String> supplierRestrictions;
+  final int recommendationScore;
+  final int priceEfficiencyScore;
+  final int packagingQualityScore;
+  final int emotionalVersatilityScore;
+  final int corporateSuitabilityScore;
+  final int repeatPurchasePotentialScore;
   final bool active;
   final bool internalOnly;
 
@@ -59,6 +74,21 @@ class GiftRepositoryItem {
     required this.surpriseScore,
     required this.supplierType,
     required this.procurementDifficulty,
+    this.linkedBrandPartnerName,
+    this.supplierStatus,
+    this.wholesalePrice,
+    this.estimatedRrp,
+    this.marginProfile,
+    this.pairings = const [],
+    this.phraseTriggers = const [],
+    this.seasonalWeighting = const [],
+    this.supplierRestrictions = const [],
+    this.recommendationScore = 0,
+    this.priceEfficiencyScore = 0,
+    this.packagingQualityScore = 0,
+    this.emotionalVersatilityScore = 0,
+    this.corporateSuitabilityScore = 0,
+    this.repeatPurchasePotentialScore = 0,
     this.active = true,
     this.internalOnly = true,
   });
@@ -92,6 +122,22 @@ class GiftRepositoryItem {
         'surpriseScore': surpriseScore,
         'supplierType': supplierType,
         'procurementDifficulty': procurementDifficulty,
+        if (linkedBrandPartnerName != null)
+          'linkedBrandPartnerName': linkedBrandPartnerName,
+        if (supplierStatus != null) 'supplierStatus': supplierStatus,
+        if (wholesalePrice != null) 'wholesalePrice': wholesalePrice,
+        if (estimatedRrp != null) 'estimatedRRP': estimatedRrp,
+        if (marginProfile != null) 'marginProfile': marginProfile,
+        'pairings': pairings,
+        'phraseTriggers': phraseTriggers,
+        'seasonalWeighting': seasonalWeighting,
+        'supplierRestrictions': supplierRestrictions,
+        'recommendationScore': recommendationScore,
+        'priceEfficiencyScore': priceEfficiencyScore,
+        'packagingQualityScore': packagingQualityScore,
+        'emotionalVersatilityScore': emotionalVersatilityScore,
+        'corporateSuitabilityScore': corporateSuitabilityScore,
+        'repeatPurchasePotentialScore': repeatPurchasePotentialScore,
         'active': active,
         'internalOnly': internalOnly,
       };
@@ -227,6 +273,66 @@ const giftsExpandedInterests = <String>{
   'Wine Appreciation',
   'Whisky Appreciation',
   'Craft Beverages',
+  'Comfort',
+  'Warmth',
+  'Calm',
+  'Relaxation',
+  'Appreciation',
+  'Birthday',
+  'Thank You',
+  'New Home',
+  'Thinking of You',
+  'Get Well Soon',
+  'Anxiety Relief',
+  'Self Care',
+  'Mindfulness',
+  'Burnout Recovery',
+  'Exam Stress',
+  'Mental Wellness',
+  'Sympathy',
+  'Recovery',
+  'Wellness',
+  'Celebration',
+  'Romance',
+  'Anniversary',
+  'Congratulations',
+  'Treat',
+  'Indulgence',
+  'Chocolate',
+  'Cosy Evening',
+  'Family',
+  'Housewarming',
+  'Retirement',
+  'Grandparent Gift',
+  'Biscuits',
+  'Everyday Luxury',
+  'Book Lover',
+  'Office Worker',
+  'Coffee Alternative',
+  'Teacher Gift',
+  'Mother’s Day',
+  'Father’s Day',
+  'Reading',
+  'Autumn',
+  'Christmas',
+  'Winter',
+  'Cosy',
+  'Fireside',
+  'Hygge',
+  'Productivity',
+  'Fitness',
+  'New Job',
+  'Promotion',
+  'Entrepreneur',
+  'Student',
+  'Healthy Living',
+  'Morning Routine',
+  'Matcha Lover',
+  'Matcha',
+  'Premium Upgrade',
+  'Tea Ritual',
+  'Home Comfort',
+  'Slow Morning',
 };
 
 const _occasions = <String>[
@@ -362,12 +468,350 @@ const _categories = <_GiftCategorySeed>[
       ['Wellness Retreats', 'Books'], 'retailer'),
 ];
 
+const _birdBlendRestrictions = <String>[
+  'Do not list as standalone marketplace products.',
+  'Do not expose wholesale pricing to customers.',
+  'Use only inside curated gift experiences.',
+];
+
+const _birdBlendPairings = <String>[
+  'Luxury candles',
+  'Books',
+  'Chocolate',
+  'Biscuits',
+  'Honey',
+  'Mugs',
+  'Blankets',
+  'Flowers',
+  'Journals',
+  'Bath products',
+  'Spa products',
+  'Cookies',
+  'Brownies',
+  'Scent diffusers',
+  'Personalised notes',
+  'Gift Stories',
+  'Handwritten cards',
+];
+
+const _birdBlendPhraseTriggers = <String>[
+  'she loves tea',
+  'he loves tea',
+  'they love tea',
+  'she drinks matcha',
+  'he works from home',
+  'she works from home',
+  'she deserves a relaxing evening',
+  'he deserves a relaxing evening',
+  'she has been stressed',
+  'he has been stressed',
+  'she loves reading',
+  'he loves reading',
+  'she is into wellness',
+  'he is into fitness',
+  'they just moved house',
+  'i want something comforting',
+  'i want something thoughtful',
+  'i want something cosy',
+  'something relaxing',
+  'something warm',
+  'a self-care gift',
+];
+
+const _birdBlendSeasonal = <String>[
+  'Christmas',
+  'Autumn',
+  'Winter',
+  'Mother’s Day',
+  'Father’s Day',
+  'Valentine’s Day',
+  'Exam Season',
+  'Flu Season',
+  'New Year wellness period',
+  'Teacher appreciation period',
+];
+
+final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
+  _birdBlendItem(
+    id: 'bird_blend_tea_gift_cubes',
+    name: 'Bird & Blend Tea Gift Cubes',
+    description:
+        'Internal curated tea cube option for comfort, warmth, appreciation and thoughtful low-cost/high-perceived-value gift builds.',
+    wholesalePrice: '£6.75',
+    estimatedRrp: '£11.00',
+    marginProfile: 'high',
+    min: 50,
+    max: 90,
+    interests: const [
+      'Tea',
+      'Comfort',
+      'Warmth',
+      'Calm',
+      'Relaxation',
+      'Appreciation',
+      'New Home',
+      'Thinking of You',
+      'Get Well Soon',
+      'Birthday',
+      'Thank You',
+    ],
+    occasions: const ['Birthday', 'Thank You', 'Get Well Soon', 'New Home'],
+  ),
+  _birdBlendItem(
+    id: 'bird_blend_moment_of_calm_cube',
+    name: 'Bird & Blend Moment of Calm Cube',
+    description:
+        'Internal calm and self-care option for stress, recovery, sympathy, burnout and mindful gifting.',
+    wholesalePrice: '£6.75',
+    estimatedRrp: '£11.00',
+    marginProfile: 'high',
+    min: 50,
+    max: 90,
+    interests: const [
+      'Anxiety Relief',
+      'Self Care',
+      'Mindfulness',
+      'Burnout Recovery',
+      'Exam Stress',
+      'Mental Wellness',
+      'Sympathy',
+      'Recovery',
+      'Relaxation',
+      'Wellness',
+    ],
+    occasions: const ['Get Well Soon', 'Thank You', 'Just Because'],
+  ),
+  _birdBlendItem(
+    id: 'bird_blend_luxury_chocolate_cube',
+    name: 'Bird & Blend Luxury Chocolate Gift Cube',
+    description:
+        'Internal celebratory tea-and-treat option for romance, birthdays, congratulations and indulgent thank-you gifts.',
+    wholesalePrice: '£6.75',
+    estimatedRrp: '£11.00',
+    marginProfile: 'high',
+    min: 50,
+    max: 100,
+    interests: const [
+      'Celebration',
+      'Romance',
+      'Anniversary',
+      'Birthday',
+      'Congratulations',
+      'Thank You',
+      'Treat',
+      'Indulgence',
+      'Chocolate',
+      'Tea',
+    ],
+    occasions: const [
+      'Birthday',
+      'Anniversary',
+      'Congratulations',
+      'Thank You'
+    ],
+  ),
+  _birdBlendItem(
+    id: 'bird_blend_tea_biscuits_cube',
+    name: 'Bird & Blend Tea & Biscuits Cube',
+    description:
+        'Internal cosy evening and home-comfort option for housewarming, family, retirement and grandparent gift builds.',
+    wholesalePrice: '£6.75',
+    estimatedRrp: '£11.00',
+    marginProfile: 'high',
+    min: 50,
+    max: 100,
+    interests: const [
+      'Cosy Evening',
+      'Family',
+      'Housewarming',
+      'Retirement',
+      'New Home',
+      'Comfort',
+      'Afternoon Tea',
+      'Grandparent Gift',
+      'Tea',
+      'Biscuits',
+    ],
+    occasions: const ['New Home', 'Retirement', 'Thank You', 'Just Because'],
+  ),
+  _birdBlendItem(
+    id: 'bird_blend_15_tea_bag_gift_packs',
+    name: 'Bird & Blend 15 Tea Bag Gift Packs',
+    description:
+        'Internal everyday luxury option with excellent low wholesale / high perceived value fit.',
+    wholesalePrice: '£2.83-£4.65',
+    estimatedRrp: '£5.50-£9.45',
+    marginProfile: 'excellent',
+    min: 40,
+    max: 90,
+    interests: const [
+      'Everyday Luxury',
+      'Book Lover',
+      'Office Worker',
+      'Coffee Alternative',
+      'Teacher Gift',
+      'Mother’s Day',
+      'Father’s Day',
+      'Thank You',
+      'Tea',
+      'Reading',
+    ],
+    occasions: const ['Thank You', 'Birthday', 'Mother’s Day', 'Father’s Day'],
+    recommendationScore: 98,
+    priceEfficiencyScore: 100,
+  ),
+  _birdBlendItem(
+    id: 'bird_blend_sticky_chai_collection',
+    name: 'Bird & Blend Sticky Chai Collection',
+    description:
+        'Internal seasonal cosy and indulgent option for winter, Christmas, romance and comfort-led experiences.',
+    wholesalePrice: '£7.80',
+    estimatedRrp: '£15.00',
+    marginProfile: 'excellent',
+    min: 60,
+    max: 120,
+    interests: const [
+      'Autumn',
+      'Christmas',
+      'Winter',
+      'Cosy',
+      'Luxury',
+      'Fireside',
+      'Hygge',
+      'Comfort',
+      'Indulgence',
+      'Tea',
+    ],
+    occasions: const ['Christmas', 'Anniversary', 'Birthday', 'Just Because'],
+  ),
+  _birdBlendItem(
+    id: 'bird_blend_matcha_collection',
+    name: 'Bird & Blend Matcha Collection',
+    description:
+        'Internal premium wellness and productivity option for matcha lovers, fitness, new jobs, students and entrepreneurs.',
+    wholesalePrice: '£14.00-£35.00',
+    estimatedRrp: '£22.00-£58.00',
+    marginProfile: 'premium',
+    min: 75,
+    max: 180,
+    interests: const [
+      'Productivity',
+      'Fitness',
+      'Wellness',
+      'New Job',
+      'Promotion',
+      'Entrepreneur',
+      'Student',
+      'Healthy Living',
+      'Morning Routine',
+      'Matcha Lover',
+      'Matcha',
+    ],
+    occasions: const ['Promotion', 'Graduation', 'Thank You', 'Just Because'],
+    recommendationScore: 97,
+  ),
+  _birdBlendItem(
+    id: 'bird_blend_tea_tools',
+    name: 'Bird & Blend Tea Tools',
+    description:
+        'Internal premium upgrade option for tea ritual, slow mornings, new home and wellness-focused gift builds.',
+    wholesalePrice: 'varies',
+    estimatedRrp: 'varies',
+    marginProfile: 'premium upgrade',
+    min: 75,
+    max: 200,
+    interests: const [
+      'Premium Upgrade',
+      'Tea Ritual',
+      'Home Comfort',
+      'New Home',
+      'Self Care',
+      'Wellness',
+      'Slow Morning',
+      'Tea',
+    ],
+    occasions: const ['New Home', 'Birthday', 'Thank You', 'Just Because'],
+  ),
+];
+
+GiftRepositoryItem _birdBlendItem({
+  required String id,
+  required String name,
+  required String description,
+  required String wholesalePrice,
+  required String estimatedRrp,
+  required String marginProfile,
+  required int min,
+  required int max,
+  required List<String> interests,
+  required List<String> occasions,
+  int recommendationScore = 96,
+  int priceEfficiencyScore = 98,
+}) {
+  return GiftRepositoryItem(
+    id: id,
+    name: name,
+    category: 'Premium Tea & Wellness',
+    subcategory: name.replaceFirst('Bird & Blend ', ''),
+    description: description,
+    estimatedPriceMin: min,
+    estimatedPriceMax: max,
+    priceBand: max <= 100 ? 'thoughtful' : 'premium',
+    suitableBudgets: ['£$min-£$max'],
+    interests: interests,
+    occasions: occasions,
+    relationships: const [
+      'Friend',
+      'Partner',
+      'Mother',
+      'Father',
+      'Colleague',
+      'Teacher',
+      'Client'
+    ],
+    genderFit: const ['all'],
+    ageRanges: const ['18-24', '25-34', '35-44', '45-64', '65+'],
+    styleTags: const ['comfort', 'calm', 'wellness', 'curated gifts only'],
+    allergyFlags: const ['food allergy review', 'caffeine suitability review'],
+    medicalWarnings: const ['caffeine and medication suitability review'],
+    religiousConsiderations: const ['dietary suitability review'],
+    avoidIf: const ['allergy', 'caffeine sensitivity'],
+    goodFor: interests.take(6).toList(),
+    luxuryScore: 76,
+    sentimentScore: 88,
+    recoveryScore:
+        interests.contains('Recovery') || interests.contains('Self Care')
+            ? 92
+            : 74,
+    romanceScore: interests.contains('Romance') ? 86 : 54,
+    practicalityScore: 82,
+    surpriseScore: 78,
+    supplierType: 'approved_wholesale_partner',
+    procurementDifficulty: 'easy',
+    linkedBrandPartnerName: 'Bird & Blend Tea Co.',
+    supplierStatus: 'Approved Wholesale Partner',
+    wholesalePrice: wholesalePrice,
+    estimatedRrp: estimatedRrp,
+    marginProfile: marginProfile,
+    pairings: _birdBlendPairings,
+    phraseTriggers: _birdBlendPhraseTriggers,
+    seasonalWeighting: _birdBlendSeasonal,
+    supplierRestrictions: _birdBlendRestrictions,
+    recommendationScore: recommendationScore,
+    priceEfficiencyScore: priceEfficiencyScore,
+    packagingQualityScore: 95,
+    emotionalVersatilityScore: 100,
+    corporateSuitabilityScore: 95,
+    repeatPurchasePotentialScore: 98,
+  );
+}
+
 final List<GiftRepositoryItem> internalGiftRepository =
     List<GiftRepositoryItem>.unmodifiable(_buildRepository());
 
 List<GiftRepositoryItem> _buildRepository() {
-  final items = <GiftRepositoryItem>[];
-  for (var i = 0; i < 1000; i++) {
+  final items = <GiftRepositoryItem>[..._birdBlendRepositoryItems];
+  for (var i = 0; i < 1000 - _birdBlendRepositoryItems.length; i++) {
     final seed = _categories[i % _categories.length];
     final tier = i % 5;
     final min =
@@ -452,6 +896,8 @@ class GiftsRecommendationEngine {
   }) {
     final sourceRepository = repository ?? internalGiftRepository;
     final selectedInterests = interests.map(_normalise).toSet();
+    final promptText = _normalise(
+        '${interests.join(' ')} $relationship $occasion ${notes ?? ''}');
     final riskTerms = _riskTerms(notes ?? '', selectedInterests);
     final spendableBudget = budget * 0.82;
     final urgent = deliveryDate != null &&
@@ -500,16 +946,39 @@ class GiftsRecommendationEngine {
         reasons.add(
             'Matches ${matchedInterests.length} selected interest${matchedInterests.length == 1 ? '' : 's'}.');
       }
-      if (ageRange != null && item.ageRanges.contains(ageRange)) score += 4;
-      if (gender != null &&
-          item.genderFit.map(_normalise).contains(_normalise(gender)))
+      if (ageRange != null && item.ageRanges.contains(ageRange)) {
         score += 4;
+      }
+      if (gender != null &&
+          item.genderFit.map(_normalise).contains(_normalise(gender))) {
+        score += 4;
+      }
       if (urgent && item.procurementDifficulty == 'easy') {
         score += 8;
         reasons.add('Practical for a shorter delivery window.');
       } else if (urgent && item.procurementDifficulty == 'hard') {
         score -= 10;
         warnings.add('Hard procurement may be risky for the requested date.');
+      }
+      if (item.linkedBrandPartnerName == 'Bird & Blend Tea Co.') {
+        final triggerHits = {
+          ...item.phraseTriggers.map(_normalise),
+          ...item.interests.map(_normalise),
+        }.where(
+            (trigger) => trigger.isNotEmpty && promptText.contains(trigger));
+        if (triggerHits.isNotEmpty) {
+          score += 22 + triggerHits.take(4).length * 6;
+          reasons.add(
+              'Chosen because the recipient appears drawn to comfort, calm, tea, wellness or thoughtful self-care.');
+        } else {
+          score -= 18;
+        }
+        if (item.seasonalWeighting
+            .map(_normalise)
+            .any((season) => promptText.contains(season))) {
+          score += 10;
+          reasons.add('Seasonal fit for a warm curated gift build.');
+        }
       }
 
       for (final avoid in item.avoidIf) {
@@ -629,8 +1098,9 @@ List<String> _medicalWarnings(String category) {
       lower.contains('whisky')) {
     return const ['diabetes and medication suitability review'];
   }
-  if (lower.contains('fitness') || lower.contains('sports'))
+  if (lower.contains('fitness') || lower.contains('sports')) {
     return const ['mobility suitability review'];
+  }
   return const [];
 }
 
