@@ -35443,32 +35443,22 @@ class _BusinessPortalScaffold extends StatelessWidget {
     final canManage = _businessCanManage(role);
     return Scaffold(
       backgroundColor: const Color(0xff07090f),
-      body: Stack(
-        children: [
-          const Positioned(
-              top: -160,
-              right: -120,
-              child: _BusinessGlow(size: 420, color: Color(0xff3b82f6))),
-          const Positioned(
-              bottom: -180,
-              left: -120,
-              child: _BusinessGlow(size: 380, color: Color(0xff3b82f6))),
-          SafeArea(
-            child: desktop
-                ? Row(
-                    children: [
-                      _BusinessSidebar(
-                        onHome: onHome,
-                        selectedTab: selectedTab,
-                        onSelectTab: onSelectTab,
-                        role: role,
-                      ),
-                      Expanded(child: _main(context, role, canManage, false)),
-                    ],
-                  )
-                : _main(context, role, canManage, true),
-          ),
-        ],
+      body: _VanguardPageBackground(
+        child: SafeArea(
+          child: desktop
+              ? Row(
+                  children: [
+                    _BusinessSidebar(
+                      onHome: onHome,
+                      selectedTab: selectedTab,
+                      onSelectTab: onSelectTab,
+                      role: role,
+                    ),
+                    Expanded(child: _main(context, role, canManage, false)),
+                  ],
+                )
+              : _main(context, role, canManage, true),
+        ),
       ),
     );
   }
@@ -37671,7 +37661,6 @@ class _VanguardExplainerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const navy = Color(0xff07090f);
     const blue = Color(0xff3b82f6);
     const features = [
       (
@@ -37739,15 +37728,8 @@ class _VanguardExplainerPage extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: navy,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topCenter,
-            radius: 1.15,
-            colors: [blue.withValues(alpha: 0.10), navy],
-          ),
-        ),
+      backgroundColor: const Color(0xff07090f),
+      body: _VanguardPageBackground(
         child: SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -37949,6 +37931,28 @@ class _VanguardExplainerPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _VanguardPageBackground extends StatelessWidget {
+  final Widget child;
+
+  const _VanguardPageBackground({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    const navy = Color(0xff07090f);
+    const blue = Color(0xff3b82f6);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.topCenter,
+          radius: 1.15,
+          colors: [blue.withValues(alpha: 0.10), navy],
+        ),
+      ),
+      child: child,
     );
   }
 }
