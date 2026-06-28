@@ -16908,8 +16908,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                             child: LayoutBuilder(
                               builder: (context, stageConstraints) => Center(
                                 child: ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 760),
+                                  constraints: BoxConstraints(
+                                    maxWidth: stageConstraints.maxWidth,
+                                  ),
                                   child: ConstrainedBox(
                                     constraints: BoxConstraints(
                                       minHeight: stageConstraints.maxHeight,
