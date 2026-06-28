@@ -35526,10 +35526,13 @@ class _BusinessPortalScaffold extends StatelessWidget {
   }
 
   Widget _tabBody(String role, bool canManage, bool compact) {
+    final approved = '${selectedAccount['status'] ?? ''}' == 'approved';
+    final canOperate = _businessCanOperate(role) && approved;
     return switch (selectedTab) {
       _BusinessPortalTab.overview => _BusinessOverviewPage(
           account: selectedAccount,
           deliveries: deliveries,
+          canOperate: canOperate,
           onAccess: onAccess,
           onOpenInvoices: () => onSelectTab(_BusinessPortalTab.invoicing)),
       _BusinessPortalTab.invoicing => _BusinessInvoicePage(
@@ -35550,21 +35553,26 @@ class _BusinessPortalScaffold extends StatelessWidget {
           onCancelInvite: onCancelInvite,
           onResendInvite: onResendInvite),
       _BusinessPortalTab.deliveries => _BusinessDeliveriesPage(
-          deliveries: deliveries, onBookDelivery: onAccess),
+          deliveries: deliveries,
+          canOperate: canOperate,
+          onBookDelivery: onAccess),
       _BusinessPortalTab.healthPlus => _BusinessServicePage(
           title: 'Health+ business',
           icon: Icons.health_and_safety_outlined,
           rows: _healthRows(deliveries),
+          canCreate: canOperate,
           onCreate: onAccess),
       _BusinessPortalTab.gifts => _BusinessServicePage(
           title: 'Corporate Gifts',
           icon: Icons.card_giftcard_outlined,
           rows: _giftRows(deliveries),
+          canCreate: canOperate,
           onCreate: onAccess),
       _BusinessPortalTab.vanguard => _BusinessServicePage(
           title: 'Vanguard',
           icon: Icons.shield_outlined,
           rows: _vanguardRows(deliveries),
+          canCreate: canOperate,
           onCreate: onAccess),
       _BusinessPortalTab.analytics => _BusinessAnalyticsPage(
           deliveries: deliveries, account: selectedAccount),
@@ -35587,12 +35595,14 @@ class _BusinessPortalScaffold extends StatelessWidget {
 class _BusinessOverviewPage extends StatelessWidget {
   final Map<String, dynamic> account;
   final List<Map<String, dynamic>> deliveries;
+  final bool canOperate;
   final VoidCallback onAccess;
   final VoidCallback onOpenInvoices;
 
   const _BusinessOverviewPage(
       {required this.account,
       required this.deliveries,
+      required this.canOperate,
       required this.onAccess,
       required this.onOpenInvoices});
 
@@ -35640,7 +35650,7 @@ class _BusinessOverviewPage extends StatelessWidget {
         Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.icon(
-                onPressed: onAccess,
+                onPressed: canOperate ? onAccess : null,
                 icon: const Icon(Icons.local_shipping_outlined),
                 label: const Text('Book business delivery'))),
       ],
@@ -36245,7 +36255,15 @@ class _BusinessTeamCard extends StatelessWidget {
 
 class _BusinessActivityTable extends StatelessWidget {
   final List<Map<String, dynamic>> deliveries;
-  const _BusinessActivityTable({this.deliveries = const []});
+  final bool showActions;
+  final bool canRebook;
+  final VoidCallback? onRebook;
+  const _BusinessActivityTable({
+    this.deliveries = const [],
+    this.showActions = false,
+    this.canRebook = false,
+    this.onRebook,
+  });
   @override
   Widget build(BuildContext context) {
     final rows = deliveries.take(12).toList();
@@ -36267,12 +36285,13 @@ class _BusinessActivityTable extends StatelessWidget {
                     fontWeight: FontWeight.w800),
                 dataTextStyle: GoogleFonts.inter(
                     color: Colors.white, fontWeight: FontWeight.w700),
-                columns: const [
+                columns: [
                   DataColumn(label: Text('Job ID')),
                   DataColumn(label: Text('Pillar')),
                   DataColumn(label: Text('Status')),
                   DataColumn(label: Text('Amount')),
-                  DataColumn(label: Text('Time'))
+                  DataColumn(label: Text('Time')),
+                  if (showActions) DataColumn(label: Text('Actions'))
                 ],
                 rows: rows
                     .map((row) => DataRow(cells: [
@@ -36283,7 +36302,21 @@ class _BusinessActivityTable extends StatelessWidget {
                               '${row['status'] ?? 'pending'}'.toUpperCase())),
                           DataCell(Text(
                               '£${_businessAmount(row).toStringAsFixed(2)}')),
-                          DataCell(Text(_businessDateLabel(_businessDate(row))))
+                          DataCell(
+                              Text(_businessDateLabel(_businessDate(row)))),
+                          if (showActions)
+                            DataCell(Wrap(spacing: 6, children: [
+                              TextButton(
+                                  onPressed: () => _showBusinessDeliveryDetails(
+                                      context, row),
+                                  child: const Text('Details')),
+                              TextButton(
+                                  onPressed: () => _openBusinessTracking(row),
+                                  child: const Text('Track')),
+                              TextButton(
+                                  onPressed: canRebook ? onRebook : null,
+                                  child: const Text('Rebook')),
+                            ]))
                         ]))
                     .toList()))
     ]));
@@ -36302,8 +36335,44 @@ class _BusinessInvoicePage extends StatelessWidget {
       required this.canManage});
   @override
   Widget build(BuildContext context) {
+    final rothTransactions = _businessRothTransactions(account);
     return Column(children: [
       _BusinessInvoiceCard(deliveries: deliveries),
+      const SizedBox(height: 14),
+      _BusinessGlass(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _BusinessPanelHeader(
+            title: 'Business Roth wallet',
+            subtitle:
+                '${_num(account['rothBalance'] ?? account['businessRothBalance']).toStringAsFixed(2)} Roth available · not withdrawable'),
+        const SizedBox(height: 12),
+        if (rothTransactions.isEmpty)
+          const _BusinessEmptyState(
+              'Business Roth credits, gift card conversions and offsets will appear here when recorded.')
+        else
+          ...rothTransactions.take(8).map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(children: [
+                Expanded(
+                    child: Text(
+                        '${item['source'] ?? 'business_roth'} · ${item['reason'] ?? 'Business Roth movement'}',
+                        style: GoogleFonts.inter(
+                            color: Colors.white, fontWeight: FontWeight.w700))),
+                Text(
+                    '${item['direction'] == 'debit' ? '-' : '+'}${_num(item['amount']).toStringAsFixed(2)} Roth',
+                    style: GoogleFonts.jetBrainsMono(
+                        color: Colors.white, fontWeight: FontWeight.w800))
+              ]))),
+        const SizedBox(height: 8),
+        Text(
+            '1 Roth = £1 equivalent internal credit. Roth is not withdrawable, not crypto, and can offset eligible business payments where enabled.',
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.62),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w600))
+      ])),
       const SizedBox(height: 14),
       _BusinessGlass(
           child:
@@ -36510,9 +36579,12 @@ class _BusinessMobileTabs extends StatelessWidget {
 
 class _BusinessDeliveriesPage extends StatelessWidget {
   final List<Map<String, dynamic>> deliveries;
+  final bool canOperate;
   final VoidCallback onBookDelivery;
   const _BusinessDeliveriesPage(
-      {required this.deliveries, required this.onBookDelivery});
+      {required this.deliveries,
+      required this.canOperate,
+      required this.onBookDelivery});
   @override
   Widget build(BuildContext context) {
     final active = deliveries
@@ -36535,17 +36607,23 @@ class _BusinessDeliveriesPage extends StatelessWidget {
         ('Cancelled', cancelled.length)
       ]),
       const SizedBox(height: 14),
-      _BusinessActivityTable(deliveries: deliveries),
+      _BusinessActivityTable(
+          deliveries: deliveries,
+          showActions: true,
+          canRebook: canOperate,
+          onRebook: onBookDelivery),
       const SizedBox(height: 14),
       Align(
           alignment: Alignment.centerLeft,
           child: Wrap(spacing: 10, runSpacing: 10, children: [
             FilledButton.icon(
-                onPressed: onBookDelivery,
+                onPressed: canOperate ? onBookDelivery : null,
                 icon: const Icon(Icons.add_road),
                 label: const Text('Book delivery')),
             OutlinedButton.icon(
-                onPressed: null,
+                onPressed: deliveries.isEmpty
+                    ? null
+                    : () => _downloadBusinessDeliveriesCsv(deliveries),
                 icon: const Icon(Icons.download),
                 label: const Text('Export delivery history'))
           ]))
@@ -36557,11 +36635,13 @@ class _BusinessServicePage extends StatelessWidget {
   final String title;
   final IconData icon;
   final List<Map<String, dynamic>> rows;
+  final bool canCreate;
   final VoidCallback onCreate;
   const _BusinessServicePage(
       {required this.title,
       required this.icon,
       required this.rows,
+      required this.canCreate,
       required this.onCreate});
   @override
   Widget build(BuildContext context) {
@@ -36574,10 +36654,12 @@ class _BusinessServicePage extends StatelessWidget {
             child: _BusinessPanelHeader(
                 title: title,
                 subtitle: 'Connected to the same Circum delivery ecosystem.')),
-        FilledButton(onPressed: onCreate, child: const Text('Create request'))
+        FilledButton(
+            onPressed: canCreate ? onCreate : null,
+            child: const Text('Create request'))
       ])),
       const SizedBox(height: 14),
-      _BusinessActivityTable(deliveries: rows)
+      _BusinessActivityTable(deliveries: rows, showActions: true)
     ]);
   }
 }
@@ -37089,13 +37171,16 @@ String _businessRole(Map<String, dynamic> account, User user) {
   for (final member in _businessMembers(account)) {
     final id = '${member['userId'] ?? ''}'.toLowerCase();
     final memberEmail = '${member['email'] ?? ''}'.toLowerCase();
-    if (id == uid.toLowerCase() || id == email || memberEmail == email)
+    if (id == uid.toLowerCase() || id == email || memberEmail == email) {
       return '${member['role'] ?? 'viewer'}';
+    }
   }
   return '${account['createdByUserId'] ?? ''}' == uid ? 'owner' : 'viewer';
 }
 
 bool _businessCanManage(String role) => role == 'owner' || role == 'admin';
+bool _businessCanOperate(String role) =>
+    role == 'owner' || role == 'admin' || role == 'operations';
 bool _businessCanFinance(String role) =>
     role == 'owner' || role == 'admin' || role == 'finance';
 String _businessRoleLabel(String role) => switch (role) {
@@ -37107,6 +37192,15 @@ String _businessRoleLabel(String role) => switch (role) {
     };
 List<Map<String, dynamic>> _businessMembers(Map<String, dynamic> account) =>
     ((account['teamMembers'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+List<Map<String, dynamic>> _businessRothTransactions(
+        Map<String, dynamic> account) =>
+    ((account['rothTransactions'] ??
+                account['businessRothTransactions'] ??
+                account['rothLedger']) as List? ??
+            const [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
@@ -37147,10 +37241,12 @@ String _businessPillar(Map<String, dynamic> item) {
 
 String _businessStatusGroup(Map<String, dynamic> item) {
   final status = '${item['status'] ?? ''}'.toLowerCase();
-  if (status.contains('cancel') || status.contains('failed'))
+  if (status.contains('cancel') || status.contains('failed')) {
     return 'cancelled';
-  if (status.contains('complete') || status.contains('deliver'))
+  }
+  if (status.contains('complete') || status.contains('deliver')) {
     return 'completed';
+  }
   if (status.contains('sched')) return 'scheduled';
   return 'active';
 }
@@ -37218,6 +37314,77 @@ List<Map<String, dynamic>> _giftRows(List<Map<String, dynamic>> rows) =>
     rows.where((item) => _businessPillar(item) == 'Gifts').toList();
 List<Map<String, dynamic>> _vanguardRows(List<Map<String, dynamic>> rows) =>
     rows.where(_businessIsVanguard).toList();
+
+void _openBusinessTracking(Map<String, dynamic> delivery) {
+  final id =
+      '${delivery['id'] ?? delivery['deliveryId'] ?? delivery['requestId'] ?? ''}';
+  final uri = Uri.base
+      .resolve(id.isEmpty ? '/?app=profile' : '/?app=profile&deliveryId=$id');
+  unawaited(launchUrl(uri, webOnlyWindowName: '_self'));
+}
+
+void _downloadBusinessDeliveriesCsv(List<Map<String, dynamic>> deliveries) {
+  final rows = [
+    ['Job ID', 'Pillar', 'Status', 'Amount', 'Date'],
+    ...deliveries.map((item) => [
+          '${item['trackingReference'] ?? item['id'] ?? item['requestId'] ?? ''}',
+          _businessPillar(item),
+          '${item['status'] ?? 'pending'}',
+          _businessAmount(item).toStringAsFixed(2),
+          _businessDateLabel(_businessDate(item)),
+        ])
+  ];
+  final csv = rows
+      .map((row) =>
+          row.map((cell) => '"${cell.replaceAll('"', '""')}"').join(','))
+      .join('\n');
+  final blob = html.Blob([csv], 'text/csv;charset=utf-8');
+  final url = html.Url.createObjectUrlFromBlob(blob);
+  html.AnchorElement(href: url)
+    ..download = 'circum-business-deliveries.csv'
+    ..click();
+  html.Url.revokeObjectUrl(url);
+}
+
+void _showBusinessDeliveryDetails(
+    BuildContext context, Map<String, dynamic> delivery) {
+  final rows = <(String, String)>[
+    (
+      'Reference',
+      '${delivery['trackingReference'] ?? delivery['id'] ?? delivery['requestId'] ?? 'Delivery'}'
+    ),
+    ('Pillar', _businessPillar(delivery)),
+    ('Status', '${delivery['status'] ?? 'pending'}'),
+    ('Amount', '£${_businessAmount(delivery).toStringAsFixed(2)}'),
+    ('Pickup', '${delivery['pickupAddress'] ?? 'Not recorded'}'),
+    ('Drop-off', '${delivery['dropoffAddress'] ?? 'Not recorded'}'),
+    ('Vanguard', _businessIsVanguard(delivery) ? 'Included' : 'Not included'),
+    ('Date', _businessDateLabel(_businessDate(delivery))),
+  ];
+  showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xff0b1220),
+            title: const Text('Business delivery details'),
+            content: SingleChildScrollView(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: rows
+                        .map((row) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text('${row.$1}: ${row.$2}'),
+                            ))
+                        .toList())),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close')),
+              FilledButton(
+                  onPressed: () => _openBusinessTracking(delivery),
+                  child: const Text('View tracking')),
+            ],
+          ));
+}
 
 class _HealthPlusLandingBand extends StatelessWidget {
   final _CircumColors colors;
