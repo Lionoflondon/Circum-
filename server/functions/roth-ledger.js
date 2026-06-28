@@ -486,6 +486,9 @@ exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
       const after = roundWalletMoney(before + amount);
       transaction.set(item.walletRef, {
         balance: after,
+        balanceRoth: after,
+        lifetimeIssuedRoth: roundWalletMoney((wallet.lifetimeIssuedRoth || 0) + amount),
+        lifetimeSpentRoth: roundWalletMoney(wallet.lifetimeSpentRoth || 0),
         updatedAt: now,
         createdAt: wallet.createdAt || now,
         currency: "ROTH",

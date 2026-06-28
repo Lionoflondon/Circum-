@@ -2342,6 +2342,93 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     });
   }
 
+  Future<void> _issueRothToRider(Map<String, dynamic> driver) async {
+    if (!_can(AdminPermission.viewFinance)) {
+      setState(() => _message = 'Only finance admins can issue Rider Roth.');
+      return;
+    }
+    final riderId = _driverId(driver);
+    if (riderId.isEmpty) {
+      setState(() => _message = 'Rider account ID is missing.');
+      return;
+    }
+    final amountController = TextEditingController();
+    final reasonController = TextEditingController();
+    final riderName = '${driver['fullName'] ?? driver['name'] ?? 'this rider'}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Issue Rider Roth'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Rider account: $riderName'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Roth amount'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(labelText: 'Reason/note'),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'This credits the Rider wallet only. Roth is Circum internal credit and cannot be withdrawn as cash.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Issue Roth'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      amountController.dispose();
+      reasonController.dispose();
+      return;
+    }
+    final amount = double.tryParse(amountController.text.trim()) ?? 0;
+    final reason = reasonController.text.trim();
+    amountController.dispose();
+    reasonController.dispose();
+    if (amount <= 0 || reason.isEmpty) {
+      setState(() => _message = 'Rider Roth issue requires amount and reason.');
+      return;
+    }
+    try {
+      final idempotencyKey =
+          'admin_rider_${_adminUser?.uid ?? _adminUser?.email}_${riderId}_${DateTime.now().microsecondsSinceEpoch}';
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('issueRothToWallets')
+          .call({
+        'recipientUid': riderId,
+        'walletTarget': 'rider',
+        'amount': amount,
+        'reason': reason,
+        'idempotencyKey': idempotencyKey,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      setState(() => _message =
+          'Rider Roth issued. Admin issue ID: ${data['adminIssueId']}');
+      await _loadAdminData();
+    } catch (error) {
+      setState(() => _message = 'Rider Roth issue failed: $error');
+    }
+  }
+
   Future<void> _openDriverMessage(Map<String, dynamic> driver) async {
     final id = _driverId(driver);
     if (id.isEmpty) return;
@@ -2669,6 +2756,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 rank: RiderRankPolicy.fromProfile(_selectedDriverProfile!),
                 canManageRank: _can(AdminPermission.manageDriverRanks),
                 onChangeRank: () => _changeDriverRank(_selectedDriverProfile!),
+                onIssueRoth: () => _issueRothToRider(_selectedDriverProfile!),
                 onClose: () => setState(() => _driverProfileOpen = false),
               ),
           ],
@@ -4842,7 +4930,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           '${item['userId'] ?? ''}' == riderId,
       orElse: () => const <String, dynamic>{},
     );
-    return ((wallet['balance'] ?? 0) as num?)?.toDouble() ?? 0;
+    return ((wallet['balanceRoth'] ?? wallet['balance'] ?? 0) as num?)
+            ?.toDouble() ??
+        0;
   }
 
   double _senderRothBalanceForDriver(Map<String, dynamic> driver) {
@@ -6850,6 +6940,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
   final String rank;
   final bool canManageRank;
   final VoidCallback onChangeRank;
+  final VoidCallback onIssueRoth;
   final VoidCallback onClose;
 
   const _AdminDriverProfileDrawer({
@@ -6870,6 +6961,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     required this.rank,
     required this.canManageRank,
     required this.onChangeRank,
+    required this.onIssueRoth,
     required this.onClose,
   });
 
@@ -7072,6 +7164,16 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                           'Rider Roth',
                           _adminMoneyText(riderRothBalance),
                         ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: FilledButton.icon(
+                            onPressed: onIssueRoth,
+                            icon: const Icon(Icons.add_card_outlined),
+                            label: const Text('Issue Rider Roth'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Text(
                           'Rider Roth is non-withdrawable and separate from rider earnings.',
                           style: TextStyle(
@@ -10014,13 +10116,13 @@ class _RiderEarningsTab extends StatelessWidget {
             ),
             _RiderStatTile(
               colors: colors,
-              label: 'Roth Credit',
-              value: _RiderWorkspace._money(earnings.rothCredit),
+              label: 'Available Roth',
+              value: '${earnings.rothCredit.toStringAsFixed(2)} Roth',
             ),
             _RiderStatTile(
               colors: colors,
-              label: 'Roth pending',
-              value: _RiderWorkspace._money(earnings.rothPendingEarnings),
+              label: 'Roth issued',
+              value: '${earnings.rothLifetimeIssued.toStringAsFixed(2)} Roth',
             ),
           ],
         ),
@@ -10028,7 +10130,7 @@ class _RiderEarningsTab extends StatelessWidget {
         _GlassPanel(
           colors: colors,
           child: Text(
-            'Drivers earn 65% of each completed delivery. Roth Credit is non-withdrawable; only Available Earnings can be withdrawn.',
+            'Drivers earn 65% of each completed delivery. Roth is Circum internal credit and cannot be withdrawn; only Available Earnings can be withdrawn.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.4,
@@ -13633,6 +13735,74 @@ class _RiderWorkspace extends StatelessWidget {
                     label: 'Withdrawn',
                     value: _money(earnings.withdrawnEarnings),
                   ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: colors.panel.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.adminGlow.withValues(alpha: 0.12),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Roth Wallet',
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Roth is Circum internal credit and cannot be withdrawn.',
+                          style: TextStyle(
+                            color: colors.mutedText,
+                            height: 1.35,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _RiderStatTile(
+                                colors: colors,
+                                label: 'Available Roth',
+                                value:
+                                    '${earnings.rothCredit.toStringAsFixed(2)} Roth',
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _RiderStatTile(
+                                colors: colors,
+                                label: 'Lifetime issued',
+                                value:
+                                    '${earnings.rothLifetimeIssued.toStringAsFixed(2)} Roth',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _RiderStatTile(
+                          colors: colors,
+                          label: 'Lifetime spent',
+                          value:
+                              '${earnings.rothLifetimeSpent.toStringAsFixed(2)} Roth',
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -15180,6 +15350,8 @@ class _RiderEarningsSnapshot {
   final double tipsReceived;
   final double withdrawnEarnings;
   final double rothCredit;
+  final double rothLifetimeIssued;
+  final double rothLifetimeSpent;
   final double rothPendingEarnings;
   final double rothAvailableEarnings;
   final int completedJobs;
@@ -15192,6 +15364,8 @@ class _RiderEarningsSnapshot {
     required this.tipsReceived,
     required this.withdrawnEarnings,
     required this.rothCredit,
+    required this.rothLifetimeIssued,
+    required this.rothLifetimeSpent,
     required this.rothPendingEarnings,
     required this.rothAvailableEarnings,
     required this.completedJobs,
@@ -15205,6 +15379,8 @@ class _RiderEarningsSnapshot {
         tipsReceived: 0,
         withdrawnEarnings: 0,
         rothCredit: 0,
+        rothLifetimeIssued: 0,
+        rothLifetimeSpent: 0,
         rothPendingEarnings: 0,
         rothAvailableEarnings: 0,
         completedJobs: 0,
@@ -15229,6 +15405,8 @@ class _RiderEarningsSnapshot {
               0)
           .toDouble(),
       rothCredit: 0,
+      rothLifetimeIssued: 0,
+      rothLifetimeSpent: 0,
       rothPendingEarnings: 0,
       rothAvailableEarnings: 0,
       completedJobs:
@@ -15247,6 +15425,8 @@ class _RiderEarningsSnapshot {
         tipsReceived: tipsReceived,
         withdrawnEarnings: withdrawnEarnings,
         rothCredit: 0,
+        rothLifetimeIssued: 0,
+        rothLifetimeSpent: 0,
         rothPendingEarnings: 0,
         rothAvailableEarnings: 0,
         completedJobs: completedJobs,
@@ -15259,7 +15439,10 @@ class _RiderEarningsSnapshot {
       lifetimeEarnings: lifetimeEarnings,
       tipsReceived: tipsReceived,
       withdrawnEarnings: withdrawnEarnings,
-      rothCredit: (data['balance'] as num? ?? 0).toDouble(),
+      rothCredit: (data['balanceRoth'] as num? ?? data['balance'] as num? ?? 0)
+          .toDouble(),
+      rothLifetimeIssued: (data['lifetimeIssuedRoth'] as num? ?? 0).toDouble(),
+      rothLifetimeSpent: (data['lifetimeSpentRoth'] as num? ?? 0).toDouble(),
       rothPendingEarnings: 0,
       rothAvailableEarnings: 0,
       completedJobs: completedJobs,
