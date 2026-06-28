@@ -846,6 +846,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _businessAccounts = const [];
   List<Map<String, dynamic>> _businessWallets = const [];
   List<Map<String, dynamic>> _businessInvoices = const [];
+  List<Map<String, dynamic>> _businessRothPurchases = const [];
   List<Map<String, dynamic>> _giftCampaignParticipants = const [];
   List<Map<String, dynamic>> _senders = const [];
   List<Map<String, dynamic>> _drivers = const [];
@@ -1098,6 +1099,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   .limit(50),
             )
           : Future.value(<Map<String, dynamic>>[]),
+      _can(AdminPermission.viewFinance)
+          ? _readCollection(
+              db
+                  .collection('businessRothPurchases')
+                  .orderBy('createdAt', descending: true)
+                  .limit(50),
+            )
+          : Future.value(<Map<String, dynamic>>[]),
       _readCollection(db.collection('giftCampaignParticipants').limit(100)),
       _readCollection(
         db
@@ -1131,7 +1140,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final businessAccounts = results[19];
     final businessWallets = results[20];
     final businessInvoices = results[21];
-    final giftCampaignParticipants = results[22];
+    final businessRothPurchases = results[22];
+    final giftCampaignParticipants = results[23];
     setState(() {
       _deliveries = deliveries;
       _senders = senders;
@@ -1156,6 +1166,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _businessAccounts = businessAccounts;
       _businessWallets = businessWallets;
       _businessInvoices = businessInvoices;
+      _businessRothPurchases = businessRothPurchases;
       _giftCampaignParticipants = giftCampaignParticipants;
       _auditLogs = results[21];
       _metrics = AdminMetricSnapshot.fromData(
@@ -5226,6 +5237,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Map<String, dynamic>> _businessRothRows() => [
         ..._businessWallets,
+        ..._businessRothPurchases,
         ..._rothTransactions.where(_isBusinessRecord),
       ].toList(growable: false);
 
@@ -5541,39 +5553,56 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Widget> _businessRothRow(Map<String, dynamic> item) => [
         _AdminCell.primary(
-            '${_businessNameFor(item)}\n${item['businessId'] ?? item['id'] ?? ''}'),
+            '${_businessNameFor(item)}\n${item['purchaseId'] ?? item['businessId'] ?? item['id'] ?? ''}'),
         _AdminCell(
-            '${item['source'] ?? 'business_roth'}\n${item['reason'] ?? ''}'),
+            '${item['type'] ?? item['source'] ?? 'business_roth'}\n${item['note'] ?? item['reason'] ?? ''}'),
         _AdminStatusCell(
-            colors: widget.colors, status: '${item['status'] ?? 'active'}'),
+            colors: widget.colors,
+            status: '${item['status'] ?? item['direction'] ?? 'active'}'),
         _AdminCell(_adminMoneyText((item['amount'] as num?)?.toDouble() ??
+            (item['amountGbp'] as num?)?.toDouble() ??
             (item['balance'] as num?)?.toDouble() ??
             0)),
         _AdminActions(
           colors: widget.colors,
           actions: [
-            _AdminAction(
-              label: 'Credit',
-              enabled: _can(AdminPermission.viewFinance),
-              onTap: () => _adjustBusinessRoth(item, 'credit'),
-            ),
-            _AdminAction(
-              label: 'Debit',
-              enabled: _can(AdminPermission.viewFinance),
-              onTap: () => _adjustBusinessRoth(item, 'debit'),
-            ),
-            _AdminAction(
-              label: '${item['status'] ?? 'active'}' == 'frozen'
-                  ? 'Unfreeze'
-                  : 'Freeze',
-              enabled: _can(AdminPermission.viewFinance),
-              onTap: () => _setBusinessWalletStatus(
-                item,
-                '${item['status'] ?? 'active'}' == 'frozen'
-                    ? 'active'
-                    : 'frozen',
+            if (item['purchaseId'] != null) ...[
+              _AdminAction(
+                label: 'Mark paid',
+                enabled: _can(AdminPermission.viewFinance) &&
+                    '${item['status'] ?? ''}' == 'pending',
+                onTap: () => _markBusinessRothPurchase(item, 'paid'),
               ),
-            ),
+              _AdminAction(
+                label: 'Cancel',
+                enabled: _can(AdminPermission.viewFinance) &&
+                    '${item['status'] ?? ''}' == 'pending',
+                onTap: () => _markBusinessRothPurchase(item, 'cancelled'),
+              ),
+            ] else ...[
+              _AdminAction(
+                label: 'Credit',
+                enabled: _can(AdminPermission.viewFinance),
+                onTap: () => _adjustBusinessRoth(item, 'credit'),
+              ),
+              _AdminAction(
+                label: 'Debit',
+                enabled: _can(AdminPermission.viewFinance),
+                onTap: () => _adjustBusinessRoth(item, 'debit'),
+              ),
+              _AdminAction(
+                label: '${item['status'] ?? 'active'}' == 'frozen'
+                    ? 'Unfreeze'
+                    : 'Freeze',
+                enabled: _can(AdminPermission.viewFinance),
+                onTap: () => _setBusinessWalletStatus(
+                  item,
+                  '${item['status'] ?? 'active'}' == 'frozen'
+                      ? 'active'
+                      : 'frozen',
+                ),
+              ),
+            ],
           ],
         ),
       ];
@@ -5749,25 +5778,28 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await _loadAdminData();
   }
 
-  Future<void> _writeBusinessRothTransaction({
+  Future<double?> _writeBusinessRothTransaction({
     required String businessId,
     required String direction,
     required double amount,
     required String note,
     required String type,
+    bool writeAudit = true,
   }) async {
-    if (businessId.isEmpty || !amount.isFinite || amount <= 0) return;
+    if (businessId.isEmpty || !amount.isFinite || amount <= 0) return null;
     final db = FirebaseFirestore.instance;
     final walletRef = db.collection('business_wallets').doc(businessId);
     final transactionRef = walletRef.collection('transactions').doc();
-    final auditRef = db.collection('adminAuditLogs').doc();
+    final auditRef = writeAudit ? db.collection('adminAuditLogs').doc() : null;
     final accountRef = db.collection('businessAccounts').doc(businessId);
+    double? resultingBalance;
     await db.runTransaction((transaction) async {
       final walletSnap = await transaction.get(walletRef);
       final data = walletSnap.data() ?? const <String, dynamic>{};
       final previous = (data['balance'] as num?)?.toDouble() ?? 0;
       final delta = direction == 'debit' ? -amount : amount;
       final resulting = previous + delta;
+      resultingBalance = resulting;
       if (resulting < 0) {
         throw StateError('Business Roth balance cannot go below zero.');
       }
@@ -5817,20 +5849,23 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true));
-      transaction.set(auditRef, {
-        'action': 'business_roth_$type',
-        'actionType': 'business_roth_$type',
-        'businessId': businessId,
-        'recordType': 'business_wallet',
-        'recordId': businessId,
-        'amount': amount,
-        'direction': direction,
-        'reason': note,
-        'adminId': _adminUser?.uid,
-        'adminEmail': _adminUser?.email,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      if (auditRef != null) {
+        transaction.set(auditRef, {
+          'action': 'business_roth_$type',
+          'actionType': 'business_roth_$type',
+          'businessId': businessId,
+          'recordType': 'business_wallet',
+          'recordId': businessId,
+          'amount': amount,
+          'direction': direction,
+          'reason': note,
+          'adminId': _adminUser?.uid,
+          'adminEmail': _adminUser?.email,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
     });
+    return resultingBalance;
   }
 
   Future<void> _setBusinessWalletStatus(
@@ -5856,6 +5891,74 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'businessId': businessId,
       'recordType': 'business_wallet',
       'recordId': businessId,
+      'adminId': _adminUser?.uid,
+      'adminEmail': _adminUser?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    await _loadAdminData();
+  }
+
+  Future<void> _markBusinessRothPurchase(
+    Map<String, dynamic> item,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.viewFinance)) return;
+    final purchaseId = '${item['purchaseId'] ?? item['id'] ?? ''}';
+    final businessId = _businessRecordId(item);
+    if (purchaseId.isEmpty || businessId.isEmpty) return;
+    final amount = (item['rothAmount'] as num?)?.toDouble() ??
+        (item['amountGbp'] as num?)?.toDouble() ??
+        0;
+    double? resultingBalance;
+    if (status == 'paid') {
+      resultingBalance = await _writeBusinessRothTransaction(
+        businessId: businessId,
+        direction: 'credit',
+        amount: amount,
+        note: 'Manual Roth purchase confirmed: $purchaseId',
+        type: 'roth_purchase',
+        writeAudit: false,
+      );
+    }
+    final db = FirebaseFirestore.instance;
+    final batch = db.batch();
+    batch.set(
+        db.collection('businessRothPurchases').doc(purchaseId),
+        {
+          'status': status,
+          if (status == 'paid') 'paidAt': FieldValue.serverTimestamp(),
+          if (status == 'paid') 'paymentProvider': 'manual',
+          if (status == 'paid') 'resultingBalance': resultingBalance,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedByAdminId': _adminUser?.uid,
+          'updatedByAdminEmail': _adminUser?.email,
+        },
+        SetOptions(merge: true));
+    batch.set(
+        db.collection('businessAccounts').doc(businessId),
+        {
+          'recentBusinessRothPurchases': FieldValue.arrayUnion([
+            {
+              'purchaseId': purchaseId,
+              'amountGbp': item['amountGbp'],
+              'rothAmount': amount,
+              'status': status,
+              'paymentProvider':
+                  status == 'paid' ? 'manual' : item['paymentProvider'],
+            }
+          ]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true));
+    batch.set(db.collection('adminAuditLogs').doc(), {
+      'action': 'roth_purchase_$status',
+      'actionType': 'roth_purchase_$status',
+      'businessId': businessId,
+      'purchaseId': purchaseId,
+      'recordType': 'businessRothPurchase',
+      'recordId': purchaseId,
+      'amount': amount,
       'adminId': _adminUser?.uid,
       'adminEmail': _adminUser?.email,
       'createdAt': FieldValue.serverTimestamp(),
@@ -18702,6 +18805,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _businessMessage;
   String? _activeBusinessId;
   String? _activeBusinessName;
+  String? _activeBusinessRole;
   String _businessTeamRole = 'member';
   String? _firebaseError;
   String? _ratingMessage;
@@ -19013,6 +19117,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onSendParcel: () => setState(() {
             _activeBusinessId = null;
             _activeBusinessName = null;
+            _activeBusinessRole = null;
             _businessCostCentre.clear();
             _businessReference.clear();
             _step = _SenderStep.details;
@@ -20391,6 +20496,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderBusinessAccounts = const [];
       _activeBusinessId = null;
       _activeBusinessName = null;
+      _activeBusinessRole = null;
       _selectedSenderDelivery = null;
       _senderDeliveryLoadError = null;
       _availableRoles = const {};
@@ -20575,6 +20681,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final snapshots = await Future.wait([
         db
             .collection('businessAccounts')
+            .where('createdByUserId', isEqualTo: uid)
+            .limit(20)
+            .get(),
+        db
+            .collection('businessAccounts')
             .where('teamMemberIds', arrayContains: uid)
             .limit(20)
             .get(),
@@ -20748,6 +20859,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     setState(() {
       _activeBusinessId = '${account['id'] ?? account['businessId'] ?? ''}';
       _activeBusinessName = '${account['businessName'] ?? 'Business'}';
+      final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+      _activeBusinessRole =
+          user == null ? 'member' : _businessRole(account, user);
       _step = _SenderStep.details;
       _businessMessage = null;
     });
@@ -22668,6 +22782,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         : <String, dynamic>{};
     final businessStatus =
         '${businessAccount['status'] ?? (isBusinessDelivery ? 'approved' : '')}';
+    final businessRole = isBusinessDelivery
+        ? (_activeBusinessRole ??
+            (senderUser == null
+                ? 'member'
+                : _businessRole(businessAccount, senderUser)))
+        : null;
     final driverJobSummary = {
       'pickupDisplay': pickupAddress.compactDisplay,
       'dropoffDisplay': dropoffAddress.compactDisplay,
@@ -22805,8 +22925,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'businessAccountId': _activeBusinessId,
       'businessName': _activeBusinessName,
       'bookedByUserId': senderId,
+      'teamMemberId': isBusinessDelivery ? senderId : null,
+      'teamMemberRole': businessRole,
       'costCentre': _businessCostCentre.text.trim(),
       'reference': _businessReference.text.trim(),
+      'invoiceAccount': isBusinessDelivery,
+      'origin': isBusinessDelivery ? 'Business' : 'Circum',
       'businessAccountStatusAtBooking':
           isBusinessDelivery ? businessStatus : null,
     };
@@ -22994,8 +23118,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'businessAccountId': _activeBusinessId,
       'businessName': _activeBusinessName,
       'bookedByUserId': senderId,
+      'teamMemberId': isBusinessDelivery ? senderId : null,
+      'teamMemberRole': businessRole,
       'costCentre': _businessCostCentre.text.trim(),
       'reference': _businessReference.text.trim(),
+      'invoiceAccount': isBusinessDelivery,
+      'origin': isBusinessDelivery ? 'Business' : 'Circum',
       'businessAccountStatusAtBooking':
           isBusinessDelivery ? businessStatus : null,
       'senderId': senderId,
@@ -36869,18 +36997,43 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
 
   Stream<List<Map<String, dynamic>>> _businessAccounts(User user) {
     final email = (user.email ?? '').trim().toLowerCase();
-    return FirebaseFirestore.instance
-        .collection('businessAccounts')
-        .where('teamMemberIds', arrayContainsAny: [
-          user.uid,
-          if (email.isNotEmpty) email,
-        ])
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-            .toList(growable: false)
-          ..sort((a, b) => '${a['businessName'] ?? ''}'
-              .compareTo('${b['businessName'] ?? ''}')));
+    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
+    final records = <String, Map<String, dynamic>>{};
+
+    void emit() {
+      if (controller.isClosed) return;
+      controller.add(records.values.toList(growable: false)
+        ..sort((a, b) => '${a['businessName'] ?? ''}'
+            .compareTo('${b['businessName'] ?? ''}')));
+    }
+
+    void addSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+      for (final doc in snapshot.docs) {
+        records[doc.id] = <String, dynamic>{'id': doc.id, ...doc.data()};
+      }
+      emit();
+    }
+
+    final db = FirebaseFirestore.instance.collection('businessAccounts');
+    final subscriptions = <StreamSubscription>[
+      db
+          .where('createdByUserId', isEqualTo: user.uid)
+          .limit(20)
+          .snapshots()
+          .listen(addSnapshot, onError: (_) => emit()),
+      db
+          .where('teamMemberIds',
+              arrayContainsAny: [user.uid, if (email.isNotEmpty) email])
+          .limit(20)
+          .snapshots()
+          .listen(addSnapshot, onError: (_) => emit()),
+    ];
+    controller.onCancel = () {
+      for (final subscription in subscriptions) {
+        subscription.cancel();
+      }
+    };
+    return controller.stream;
   }
 
   Stream<List<Map<String, dynamic>>> _businessDeliveries(String businessId) {
@@ -36950,6 +37103,8 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     if (mounted) {
       setState(() {
         _selectedBusinessId = doc.id;
+        _tab = _BusinessPortalTab.overview;
+        _signupMode = false;
         _message =
             'Business account created. Circum admin approval unlocks booking.';
       });
@@ -37049,6 +37204,60 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     }, SetOptions(merge: true));
   }
 
+  Future<void> _requestBusinessRothPurchase(
+    Map<String, dynamic> account,
+    User user,
+  ) async {
+    final businessId = '${account['id'] ?? account['businessId'] ?? ''}';
+    if (businessId.isEmpty) return;
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (context) => const _BusinessRothPurchaseDialog(),
+    );
+    if (amount == null || amount <= 0 || !amount.isFinite) return;
+    final purchaseRef =
+        FirebaseFirestore.instance.collection('businessRothPurchases').doc();
+    final purchase = {
+      'purchaseId': purchaseRef.id,
+      'businessId': businessId,
+      'businessName': account['businessName'],
+      'amountGbp': amount,
+      'rothAmount': amount,
+      'status': 'pending',
+      'paymentProvider': 'manual',
+      'createdAt': FieldValue.serverTimestamp(),
+      'paidAt': null,
+      'createdByBusinessMemberId': user.uid,
+      'createdByBusinessMemberEmail': user.email,
+      'resultingBalance': null,
+    };
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(purchaseRef, purchase);
+    batch.set(
+        FirebaseFirestore.instance
+            .collection('businessAccounts')
+            .doc(businessId),
+        {
+          'recentBusinessRothPurchases': FieldValue.arrayUnion([
+            {
+              'purchaseId': purchaseRef.id,
+              'amountGbp': amount,
+              'rothAmount': amount,
+              'status': 'pending',
+              'paymentProvider': 'manual',
+              'createdAt': Timestamp.now(),
+            }
+          ]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true));
+    await batch.commit();
+    if (mounted) {
+      setState(() => _message =
+          'Roth purchase request created. Circum admin will confirm manual payment before crediting Roth.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -37077,6 +37286,13 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
         return StreamBuilder<List<Map<String, dynamic>>>(
           stream: _businessAccounts(user),
           builder: (context, accountsSnapshot) {
+            if (!accountsSnapshot.hasData &&
+                accountsSnapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                backgroundColor: Color(0xff07090f),
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
             final accounts =
                 accountsSnapshot.data ?? const <Map<String, dynamic>>[];
             final selected = _selectedAccount(accounts);
@@ -37135,6 +37351,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
                       _updateMember(selected, member, cancelInvite: true),
                   onResendInvite: (member) =>
                       _updateMember(selected, member, resendInvite: true),
+                  onBuyRoth: () => _requestBusinessRothPurchase(selected, user),
                 );
               },
             );
@@ -37186,6 +37403,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onRemoveMember;
   final ValueChanged<Map<String, dynamic>> onCancelInvite;
   final ValueChanged<Map<String, dynamic>> onResendInvite;
+  final VoidCallback onBuyRoth;
 
   const _BusinessPortalScaffold({
     required this.user,
@@ -37217,6 +37435,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
     required this.onRemoveMember,
     required this.onCancelInvite,
     required this.onResendInvite,
+    required this.onBuyRoth,
   });
 
   @override
@@ -37277,6 +37496,21 @@ class _BusinessPortalScaffold extends StatelessWidget {
                         color: Colors.white, fontWeight: FontWeight.w800))),
             const SizedBox(height: 14),
           ],
+          if (_statusMessage(selectedAccount).isNotEmpty) ...[
+            _BusinessGlass(
+                child: Row(children: [
+              Icon(_statusIcon(selectedAccount),
+                  color: Colors.white.withValues(alpha: 0.9)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Text(_statusMessage(selectedAccount),
+                      style: GoogleFonts.inter(
+                          color: Colors.white,
+                          height: 1.4,
+                          fontWeight: FontWeight.w800))),
+            ])),
+            const SizedBox(height: 14),
+          ],
           _BusinessEyebrow(_tabEyebrow(selectedTab)),
           const SizedBox(height: 10),
           Text(_tabTitle(selectedTab, selectedAccount),
@@ -37312,7 +37546,8 @@ class _BusinessPortalScaffold extends StatelessWidget {
           account: selectedAccount,
           deliveries: deliveries,
           invoiceSearch: invoiceSearch,
-          canManage: _businessCanFinance(role)),
+          canManage: _businessCanFinance(role),
+          onBuyRoth: onBuyRoth),
       _BusinessPortalTab.team => _BusinessTeamPage(
           account: selectedAccount,
           canManage: canManage,
@@ -37362,6 +37597,24 @@ class _BusinessPortalScaffold extends StatelessWidget {
           onSaveProfile: onSaveProfile,
           onSignOut: onSignOut),
     };
+  }
+
+  String _statusMessage(Map<String, dynamic> account) {
+    final status = '${account['status'] ?? 'pending'}'.toLowerCase();
+    if (status == 'pending') {
+      return 'Pending review. Your Business dashboard is ready; booking unlocks after Circum approval.';
+    }
+    if (status == 'suspended') {
+      return 'Account suspended. Your dashboard remains visible, but booking is restricted.';
+    }
+    return '';
+  }
+
+  IconData _statusIcon(Map<String, dynamic> account) {
+    final status = '${account['status'] ?? 'pending'}'.toLowerCase();
+    return status == 'suspended'
+        ? Icons.lock_outline
+        : Icons.hourglass_top_rounded;
   }
 }
 
@@ -38101,14 +38354,21 @@ class _BusinessInvoicePage extends StatelessWidget {
   final List<Map<String, dynamic>> deliveries;
   final TextEditingController invoiceSearch;
   final bool canManage;
+  final VoidCallback onBuyRoth;
   const _BusinessInvoicePage(
       {required this.account,
       required this.deliveries,
       required this.invoiceSearch,
-      required this.canManage});
+      required this.canManage,
+      required this.onBuyRoth});
   @override
   Widget build(BuildContext context) {
     final rothTransactions = _businessRothTransactions(account);
+    final rothPurchases =
+        ((account['recentBusinessRothPurchases'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false);
     final invoices = ((account['recentBusinessInvoices'] as List?) ?? const [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -38124,6 +38384,38 @@ class _BusinessInvoicePage extends StatelessWidget {
             subtitle:
                 '${_num(account['rothBalance'] ?? account['businessRothBalance']).toStringAsFixed(2)} Roth available · not withdrawable'),
         const SizedBox(height: 12),
+        FilledButton.icon(
+            onPressed: onBuyRoth,
+            icon: const Icon(Icons.add_card_outlined),
+            label: const Text('Buy Roth')),
+        const SizedBox(height: 10),
+        Text('Roth can be used for Circum services but cannot be withdrawn.',
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        if (rothPurchases.isNotEmpty) ...[
+          Text('Purchase requests',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          ...rothPurchases.take(4).map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(children: [
+                Expanded(
+                    child: Text(
+                        '${item['status'] ?? 'pending'} · ${item['paymentProvider'] ?? 'manual'}',
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            fontWeight: FontWeight.w700))),
+                Text('£${_num(item['amountGbp']).toStringAsFixed(2)}',
+                    style: GoogleFonts.jetBrainsMono(
+                        color: Colors.white, fontWeight: FontWeight.w800))
+              ]))),
+          const SizedBox(height: 8),
+        ],
         if (rothTransactions.isEmpty)
           const _BusinessEmptyState(
               'Business Roth credits, gift card conversions and offsets will appear here when recorded.')
@@ -38191,6 +38483,79 @@ class _BusinessInvoicePage extends StatelessWidget {
             label: const Text('Download invoice PDF'))
       ]))
     ]);
+  }
+}
+
+class _BusinessRothPurchaseDialog extends StatefulWidget {
+  const _BusinessRothPurchaseDialog();
+
+  @override
+  State<_BusinessRothPurchaseDialog> createState() =>
+      _BusinessRothPurchaseDialogState();
+}
+
+class _BusinessRothPurchaseDialogState
+    extends State<_BusinessRothPurchaseDialog> {
+  final _custom = TextEditingController();
+  double _selected = 100;
+
+  @override
+  void dispose() {
+    _custom.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customAmount = double.tryParse(_custom.text.trim());
+    final amount =
+        customAmount != null && customAmount > 0 ? customAmount : _selected;
+    return AlertDialog(
+      backgroundColor: const Color(0xff101826),
+      title: Text('Buy Roth',
+          style: GoogleFonts.dmSerifDisplay(color: Colors.white)),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Roth can be used for Circum services but cannot be withdrawn.',
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.72),
+                height: 1.4,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(height: 14),
+        Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [50, 100, 250, 500]
+                .map((value) => ChoiceChip(
+                    selected: _selected == value && _custom.text.isEmpty,
+                    label: Text('£$value'),
+                    onSelected: (_) => setState(() {
+                          _selected = value.toDouble();
+                          _custom.clear();
+                        })))
+                .toList()),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _custom,
+          keyboardType: TextInputType.number,
+          style: GoogleFonts.inter(color: Colors.white),
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: 'Custom amount',
+            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.68)),
+            prefixText: '£',
+            prefixStyle: const TextStyle(color: Colors.white),
+          ),
+        )
+      ]),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: amount > 0 ? () => Navigator.pop(context, amount) : null,
+            child: Text('Request £${amount.toStringAsFixed(2)}')),
+      ],
+    );
   }
 }
 
@@ -38998,6 +39363,7 @@ List<Map<String, dynamic>> _businessRothTransactions(
         Map<String, dynamic> account) =>
     ((account['rothTransactions'] ??
                 account['businessRothTransactions'] ??
+                account['recentBusinessRothTransactions'] ??
                 account['rothLedger']) as List? ??
             const [])
         .whereType<Map>()
