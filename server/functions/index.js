@@ -21,6 +21,7 @@ const platformNotifications = require("./platform-notifications");
 const legends = require("./legends");
 const giftsPayment = require("./gifts-payment");
 const rothLedger = require("./roth-ledger");
+const businessPayments = require("./business-payments");
 const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
@@ -65,6 +66,8 @@ exports.redeemGiftCard = rothLedger.redeemGiftCard;
 exports.setWalletFrozen = rothLedger.setWalletFrozen;
 exports.createWalletTopUp = rothLedger.createWalletTopUp(stripe);
 exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
+exports.createBusinessRothCheckout = businessPayments.createBusinessRothCheckout(stripe);
+exports.createBusinessInvoiceCheckout = businessPayments.createBusinessInvoiceCheckout(stripe);
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.ensureReferralCode = referrals.ensureReferralCode;
 exports.attachReferralCode = referrals.attachReferralCode;
@@ -315,6 +318,9 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     if (metadata && metadata.type === "wallet_top_up") {
       await rothLedger.recordWalletTopUpFromStripeSession(sessionData, event.id);
     }
+    if (metadata && (metadata.type === "business_roth_purchase" || metadata.type === "business_invoice_payment")) {
+      await businessPayments.handleBusinessCheckoutSession(sessionData, event.id);
+    }
     if (metadata && metadata.walletApplied === "true" && metadata.walletContributionGbp) {
       const service = metadata.paymentType === "gifts" ? "gifts" :
         metadata.feature === "health_plus" ? "health_plus" :
@@ -426,6 +432,9 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
       // console.log('new error')
     });
     const userId = metadata && (metadata.senderId || metadata.userId || metadata.uid);
+    if (metadata && (metadata.type === "business_roth_purchase" || metadata.type === "business_invoice_payment")) {
+      await businessPayments.handleBusinessCheckoutSession(sessionData, event.id);
+    }
     if (userId) {
       await rothLedger.safeRecordRothMovement({
         userId,

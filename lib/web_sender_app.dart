@@ -37231,24 +37231,55 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
   ) async {
     final businessId = '${account['id'] ?? account['businessId'] ?? ''}';
     if (businessId.isEmpty) return;
-    final amount = await showDialog<double>(
+    final request = await showDialog<_BusinessRothPurchaseRequest>(
       context: context,
       builder: (context) => const _BusinessRothPurchaseDialog(),
     );
-    if (amount == null || amount <= 0 || !amount.isFinite) return;
+    if (request == null || request.amount <= 0 || !request.amount.isFinite) {
+      return;
+    }
+    if (request.method == 'card') {
+      try {
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('createBusinessRothCheckout')
+            .call({
+          'businessId': businessId,
+          'amount': request.amount,
+          'returnUrl': '${html.window.location.origin}/?app=business',
+        });
+        final checkoutUrl = '${result.data['checkoutUrl'] ?? ''}';
+        if (checkoutUrl.isEmpty) {
+          throw StateError('Missing checkout URL');
+        }
+        if (mounted) {
+          setState(() => _message =
+              'Payment received by Stripe will show as Awaiting Verification until Circum confirms it.');
+        }
+        html.window.location.assign(checkoutUrl);
+      } catch (_) {
+        if (mounted) {
+          setState(() =>
+              _message = 'Could not open Stripe Checkout. Please try again.');
+        }
+      }
+      return;
+    }
     final purchaseRef =
         FirebaseFirestore.instance.collection('businessRothPurchases').doc();
     final purchase = {
       'purchaseId': purchaseRef.id,
       'businessId': businessId,
       'businessName': account['businessName'],
-      'amountGbp': amount,
-      'rothAmount': amount,
+      'amountGbp': request.amount,
+      'amountRoth': request.amount,
+      'rothAmount': request.amount,
       'status': 'pending',
+      'paymentMethod': 'manual',
       'paymentProvider': 'manual',
       'createdAt': FieldValue.serverTimestamp(),
       'paidAt': null,
       'createdByBusinessMemberId': user.uid,
+      'createdByUserId': user.uid,
       'createdByBusinessMemberEmail': user.email,
       'resultingBalance': null,
     };
@@ -37262,8 +37293,8 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
           'recentBusinessRothPurchases': FieldValue.arrayUnion([
             {
               'purchaseId': purchaseRef.id,
-              'amountGbp': amount,
-              'rothAmount': amount,
+              'amountGbp': request.amount,
+              'rothAmount': request.amount,
               'status': 'pending',
               'paymentProvider': 'manual',
               'createdAt': Timestamp.now(),
@@ -37276,6 +37307,61 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     if (mounted) {
       setState(() => _message =
           'Roth purchase request created. Circum admin will confirm manual payment before crediting Roth.');
+    }
+  }
+
+  Future<void> _payBusinessInvoice(
+    Map<String, dynamic> account,
+    Map<String, dynamic> invoice,
+    String method,
+  ) async {
+    final businessId = '${account['id'] ?? account['businessId'] ?? ''}';
+    final invoiceId = '${invoice['invoiceId'] ?? invoice['id'] ?? ''}';
+    final balance = _num(invoice['balanceDue'] ?? invoice['total']);
+    if (businessId.isEmpty || invoiceId.isEmpty || balance <= 0) return;
+    var rothAmount = 0.0;
+    if (method == 'roth') {
+      rothAmount = balance;
+    } else if (method == 'part') {
+      final result = await showDialog<double>(
+        context: context,
+        builder: (context) => _BusinessRothAmountDialog(
+          maxAmount: math.min(
+            balance,
+            _num(account['rothBalance'] ?? account['businessRothBalance']),
+          ),
+        ),
+      );
+      if (result == null || result <= 0) return;
+      rothAmount = result;
+    }
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createBusinessInvoiceCheckout')
+          .call({
+        'businessId': businessId,
+        'invoiceId': invoiceId,
+        'rothAmount': rothAmount,
+        'returnUrl': '${html.window.location.origin}/?app=business',
+      });
+      if (result.data['paid'] == true) {
+        if (mounted) {
+          setState(() => _message = 'Invoice paid with Business Roth.');
+        }
+        return;
+      }
+      final checkoutUrl = '${result.data['checkoutUrl'] ?? ''}';
+      if (checkoutUrl.isEmpty) throw StateError('Missing checkout URL');
+      if (mounted) {
+        setState(
+            () => _message = 'Invoice payment started. Awaiting verification.');
+      }
+      html.window.location.assign(checkoutUrl);
+    } catch (_) {
+      if (mounted) {
+        setState(
+            () => _message = 'Could not start invoice payment. Please retry.');
+      }
     }
   }
 
@@ -37373,6 +37459,8 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
                   onResendInvite: (member) =>
                       _updateMember(selected, member, resendInvite: true),
                   onBuyRoth: () => _requestBusinessRothPurchase(selected, user),
+                  onPayInvoice: (invoice, method) =>
+                      _payBusinessInvoice(selected, invoice, method),
                 );
               },
             );
@@ -37425,6 +37513,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onCancelInvite;
   final ValueChanged<Map<String, dynamic>> onResendInvite;
   final VoidCallback onBuyRoth;
+  final void Function(Map<String, dynamic>, String) onPayInvoice;
 
   const _BusinessPortalScaffold({
     required this.user,
@@ -37457,6 +37546,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
     required this.onCancelInvite,
     required this.onResendInvite,
     required this.onBuyRoth,
+    required this.onPayInvoice,
   });
 
   @override
@@ -37568,7 +37658,8 @@ class _BusinessPortalScaffold extends StatelessWidget {
           deliveries: deliveries,
           invoiceSearch: invoiceSearch,
           canManage: _businessCanFinance(role),
-          onBuyRoth: onBuyRoth),
+          onBuyRoth: onBuyRoth,
+          onPayInvoice: onPayInvoice),
       _BusinessPortalTab.team => _BusinessTeamPage(
           account: selectedAccount,
           canManage: canManage,
@@ -38376,12 +38467,14 @@ class _BusinessInvoicePage extends StatelessWidget {
   final TextEditingController invoiceSearch;
   final bool canManage;
   final VoidCallback onBuyRoth;
+  final void Function(Map<String, dynamic>, String) onPayInvoice;
   const _BusinessInvoicePage(
       {required this.account,
       required this.deliveries,
       required this.invoiceSearch,
       required this.canManage,
-      required this.onBuyRoth});
+      required this.onBuyRoth,
+      required this.onPayInvoice});
   @override
   Widget build(BuildContext context) {
     final rothTransactions = _businessRothTransactions(account);
@@ -38474,37 +38567,93 @@ class _BusinessInvoicePage extends StatelessWidget {
         _BusinessTextField(controller: invoiceSearch, label: 'Search invoices'),
         const SizedBox(height: 12),
         if (invoices.isEmpty)
-          const _BusinessEmptyState('No business invoices yet.')
+          const _BusinessEmptyState('No outstanding invoices.')
         else
           ...invoices.take(8).map((invoice) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: Row(children: [
-                  Expanded(
-                    child: Text(
-                      '${invoice['invoiceNumber'] ?? invoice['invoiceId'] ?? 'Invoice'} · ${invoice['status'] ?? 'draft'}',
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '£${_num(invoice['total']).toStringAsFixed(2)}',
-                    style: GoogleFonts.jetBrainsMono(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ]),
+                child: _BusinessInvoicePaymentRow(
+                  invoice: invoice,
+                  rothBalance: _num(
+                      account['rothBalance'] ?? account['businessRothBalance']),
+                  onPay: (method) => onPayInvoice(invoice, method),
+                ),
               )),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            label: const Text('Download invoice PDF'))
       ]))
     ]);
   }
+}
+
+class _BusinessInvoicePaymentRow extends StatelessWidget {
+  final Map<String, dynamic> invoice;
+  final double rothBalance;
+  final ValueChanged<String> onPay;
+  const _BusinessInvoicePaymentRow({
+    required this.invoice,
+    required this.rothBalance,
+    required this.onPay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final status = '${invoice['status'] ?? 'draft'}'.toLowerCase();
+    final balance = _num(invoice['balanceDue'] ?? invoice['total']);
+    final payable =
+        balance > 0 && !['paid', 'paid_manually', 'cancelled'].contains(status);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text(
+              '${invoice['invoiceNumber'] ?? invoice['invoiceId'] ?? 'Invoice'} · ${invoice['status'] ?? 'draft'}',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w900),
+            ),
+          ),
+          Text('£${balance.toStringAsFixed(2)}',
+              style: GoogleFonts.jetBrainsMono(
+                  color: Colors.white, fontWeight: FontWeight.w900)),
+        ]),
+        const SizedBox(height: 10),
+        if (payable)
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            FilledButton.icon(
+                onPressed: () => onPay('card'),
+                icon: const Icon(Icons.credit_card_rounded),
+                label: const Text('Pay by Card')),
+            OutlinedButton.icon(
+                onPressed: rothBalance >= balance ? () => onPay('roth') : null,
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Pay with Roth')),
+            OutlinedButton.icon(
+                onPressed: rothBalance > 0 && rothBalance < balance
+                    ? () => onPay('part')
+                    : null,
+                icon: const Icon(Icons.call_split_rounded),
+                label: const Text('Part Pay')),
+          ])
+        else
+          Text('Paid',
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+}
+
+class _BusinessRothPurchaseRequest {
+  final double amount;
+  final String method;
+  const _BusinessRothPurchaseRequest({
+    required this.amount,
+    required this.method,
+  });
 }
 
 class _BusinessRothPurchaseDialog extends StatefulWidget {
@@ -38519,6 +38668,7 @@ class _BusinessRothPurchaseDialogState
     extends State<_BusinessRothPurchaseDialog> {
   final _custom = TextEditingController();
   double _selected = 100;
+  String _method = 'card';
 
   @override
   void dispose() {
@@ -38531,50 +38681,146 @@ class _BusinessRothPurchaseDialogState
     final customAmount = double.tryParse(_custom.text.trim());
     final amount =
         customAmount != null && customAmount > 0 ? customAmount : _selected;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+          constraints: const BoxConstraints(maxWidth: 520),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            gradient: LinearGradient(colors: [
+              const Color(0xff3b82f6).withValues(alpha: 0.22),
+              const Color(0xff101826).withValues(alpha: 0.94),
+            ]),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff3b82f6).withValues(alpha: 0.24),
+                blurRadius: 42,
+                offset: const Offset(0, 24),
+              )
+            ],
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Buy Roth',
+                style: GoogleFonts.dmSerifDisplay(
+                    color: Colors.white, fontSize: 36, height: 1.02)),
+            const SizedBox(height: 10),
+            Text(
+                'Roth can be used for Circum services but cannot be withdrawn.',
+                style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    height: 1.4,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [50, 100, 250, 500]
+                    .map((value) => ChoiceChip(
+                        selected: _selected == value && _custom.text.isEmpty,
+                        label: Text('£$value'),
+                        onSelected: (_) => setState(() {
+                              _selected = value.toDouble();
+                              _custom.clear();
+                            })))
+                    .toList()),
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              ChoiceChip(
+                  selected: _method == 'card',
+                  label: const Text('Pay by Card'),
+                  onSelected: (_) => setState(() => _method = 'card')),
+              ChoiceChip(
+                  selected: _method == 'manual',
+                  label: const Text('Manual Payment Request'),
+                  onSelected: (_) => setState(() => _method = 'manual')),
+            ]),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _custom,
+              keyboardType: TextInputType.number,
+              style: GoogleFonts.inter(color: Colors.white),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Custom amount',
+                labelStyle:
+                    TextStyle(color: Colors.white.withValues(alpha: 0.68)),
+                prefixText: '£',
+                prefixStyle: const TextStyle(color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                  child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: FilledButton(
+                      onPressed: amount > 0
+                          ? () => Navigator.pop(
+                              context,
+                              _BusinessRothPurchaseRequest(
+                                  amount: amount, method: _method))
+                          : null,
+                      child: Text(_method == 'card'
+                          ? 'Continue to Stripe'
+                          : 'Request £${amount.toStringAsFixed(2)}'))),
+            ]),
+          ])),
+    );
+  }
+}
+
+class _BusinessRothAmountDialog extends StatefulWidget {
+  final double maxAmount;
+  const _BusinessRothAmountDialog({required this.maxAmount});
+
+  @override
+  State<_BusinessRothAmountDialog> createState() =>
+      _BusinessRothAmountDialogState();
+}
+
+class _BusinessRothAmountDialogState extends State<_BusinessRothAmountDialog> {
+  final _amount = TextEditingController();
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = math.min(
+      widget.maxAmount,
+      double.tryParse(_amount.text.trim()) ?? 0,
+    );
     return AlertDialog(
       backgroundColor: const Color(0xff101826),
-      title: Text('Buy Roth',
+      title: Text('Use Business Roth',
           style: GoogleFonts.dmSerifDisplay(color: Colors.white)),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('Roth can be used for Circum services but cannot be withdrawn.',
-            style: GoogleFonts.inter(
-                color: Colors.white.withValues(alpha: 0.72),
-                height: 1.4,
-                fontWeight: FontWeight.w700)),
-        const SizedBox(height: 14),
-        Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [50, 100, 250, 500]
-                .map((value) => ChoiceChip(
-                    selected: _selected == value && _custom.text.isEmpty,
-                    label: Text('£$value'),
-                    onSelected: (_) => setState(() {
-                          _selected = value.toDouble();
-                          _custom.clear();
-                        })))
-                .toList()),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _custom,
-          keyboardType: TextInputType.number,
-          style: GoogleFonts.inter(color: Colors.white),
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            labelText: 'Custom amount',
-            labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.68)),
-            prefixText: '£',
-            prefixStyle: const TextStyle(color: Colors.white),
-          ),
-        )
-      ]),
+      content: TextField(
+        controller: _amount,
+        keyboardType: TextInputType.number,
+        style: GoogleFonts.inter(color: Colors.white),
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          labelText: 'Roth amount, max ${widget.maxAmount.toStringAsFixed(2)}',
+          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+          prefixText: '£',
+          prefixStyle: const TextStyle(color: Colors.white),
+        ),
+      ),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel')),
         FilledButton(
-            onPressed: amount > 0 ? () => Navigator.pop(context, amount) : null,
-            child: Text('Request £${amount.toStringAsFixed(2)}')),
+            onPressed: value > 0 ? () => Navigator.pop(context, value) : null,
+            child: const Text('Continue')),
       ],
     );
   }
