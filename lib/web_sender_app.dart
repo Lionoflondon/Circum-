@@ -36927,6 +36927,11 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
   var _message = '';
   var _selectedBusinessId = '';
   var _inviteRole = 'operations';
+  final Stream<User?> _authStream = FirebaseAuth.instance.authStateChanges();
+  Stream<List<Map<String, dynamic>>>? _cachedBusinessAccountsStream;
+  String? _cachedBusinessAccountsUserId;
+  Stream<List<Map<String, dynamic>>>? _cachedBusinessDeliveriesStream;
+  String? _cachedBusinessDeliveriesId;
 
   @override
   void dispose() {
@@ -36991,11 +36996,19 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
       setState(() {
         _selectedBusinessId = '';
         _tab = _BusinessPortalTab.overview;
+        _cachedBusinessAccountsStream = null;
+        _cachedBusinessAccountsUserId = null;
+        _cachedBusinessDeliveriesStream = null;
+        _cachedBusinessDeliveriesId = null;
       });
     }
   }
 
   Stream<List<Map<String, dynamic>>> _businessAccounts(User user) {
+    if (_cachedBusinessAccountsUserId == user.uid &&
+        _cachedBusinessAccountsStream != null) {
+      return _cachedBusinessAccountsStream!;
+    }
     final email = (user.email ?? '').trim().toLowerCase();
     final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
     final records = <String, Map<String, dynamic>>{};
@@ -37033,12 +37046,19 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
         subscription.cancel();
       }
     };
-    return controller.stream;
+    _cachedBusinessAccountsUserId = user.uid;
+    _cachedBusinessAccountsStream = controller.stream;
+    return _cachedBusinessAccountsStream!;
   }
 
   Stream<List<Map<String, dynamic>>> _businessDeliveries(String businessId) {
     if (businessId.isEmpty) return const Stream.empty();
-    return FirebaseFirestore.instance
+    if (_cachedBusinessDeliveriesId == businessId &&
+        _cachedBusinessDeliveriesStream != null) {
+      return _cachedBusinessDeliveriesStream!;
+    }
+    _cachedBusinessDeliveriesId = businessId;
+    _cachedBusinessDeliveriesStream = FirebaseFirestore.instance
         .collection('deliveryRequests')
         .where('businessId', isEqualTo: businessId)
         .snapshots()
@@ -37046,6 +37066,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
             .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
             .toList(growable: false)
           ..sort((a, b) => _businessDate(b).compareTo(_businessDate(a))));
+    return _cachedBusinessDeliveriesStream!;
   }
 
   Future<void> _createBusiness(User user) async {
@@ -37261,7 +37282,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: _authStream,
       builder: (context, auth) {
         final user = auth.data;
         if (auth.connectionState == ConnectionState.waiting) {
