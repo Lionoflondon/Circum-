@@ -37229,6 +37229,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     Map<String, dynamic> account,
     User user,
   ) async {
+    if (_busy) return;
     final businessId = '${account['id'] ?? account['businessId'] ?? ''}';
     if (businessId.isEmpty) return;
     final request = await showDialog<_BusinessRothPurchaseRequest>(
@@ -37239,10 +37240,15 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
       return;
     }
     if (request.method == 'card') {
+      setState(() {
+        _busy = true;
+        _message = 'Starting Stripe checkout...';
+      });
       try {
-        final result = await FirebaseFunctions.instance
-            .httpsCallable('createBusinessRothCheckout')
-            .call({
+        final result =
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('createBusinessRothCheckout')
+                .call({
           'businessId': businessId,
           'amount': request.amount,
           'returnUrl': '${html.window.location.origin}/?app=business',
@@ -37256,14 +37262,22 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
               'Payment received by Stripe will show as Awaiting Verification until Circum confirms it.');
         }
         html.window.location.assign(checkoutUrl);
-      } catch (_) {
+      } catch (error) {
+        debugPrint('createBusinessRothCheckout failed: $error');
         if (mounted) {
-          setState(() =>
-              _message = 'Could not open Stripe Checkout. Please try again.');
+          setState(() {
+            _busy = false;
+            _message =
+                'Stripe checkout could not be started. Please try again.';
+          });
         }
       }
       return;
     }
+    setState(() {
+      _busy = true;
+      _message = 'Submitting manual payment request...';
+    });
     final purchaseRef =
         FirebaseFirestore.instance.collection('businessRothPurchases').doc();
     final purchase = {
@@ -37303,10 +37317,24 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true));
-    await batch.commit();
-    if (mounted) {
-      setState(() => _message =
-          'Roth purchase request created. Circum admin will confirm manual payment before crediting Roth.');
+    try {
+      await batch.commit();
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _message =
+              'Roth purchase request created. Circum admin will confirm manual payment before crediting Roth.';
+        });
+      }
+    } catch (error) {
+      debugPrint('business manual Roth request failed: $error');
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _message =
+              'Manual payment request could not be submitted. Please try again.';
+        });
+      }
     }
   }
 
@@ -37315,6 +37343,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     Map<String, dynamic> invoice,
     String method,
   ) async {
+    if (_busy) return;
     final businessId = '${account['id'] ?? account['businessId'] ?? ''}';
     final invoiceId = '${invoice['invoiceId'] ?? invoice['id'] ?? ''}';
     final balance = _num(invoice['balanceDue'] ?? invoice['total']);
@@ -37335,8 +37364,14 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
       if (result == null || result <= 0) return;
       rothAmount = result;
     }
+    setState(() {
+      _busy = true;
+      _message = method == 'roth'
+          ? 'Paying invoice with Business Roth...'
+          : 'Starting Stripe checkout...';
+    });
     try {
-      final result = await FirebaseFunctions.instance
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createBusinessInvoiceCheckout')
           .call({
         'businessId': businessId,
@@ -37346,7 +37381,10 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
       });
       if (result.data['paid'] == true) {
         if (mounted) {
-          setState(() => _message = 'Invoice paid with Business Roth.');
+          setState(() {
+            _busy = false;
+            _message = 'Invoice paid with Business Roth.';
+          });
         }
         return;
       }
@@ -37357,10 +37395,13 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
             () => _message = 'Invoice payment started. Awaiting verification.');
       }
       html.window.location.assign(checkoutUrl);
-    } catch (_) {
+    } catch (error) {
+      debugPrint('createBusinessInvoiceCheckout failed: $error');
       if (mounted) {
-        setState(
-            () => _message = 'Could not start invoice payment. Please retry.');
+        setState(() {
+          _busy = false;
+          _message = 'Stripe checkout could not be started. Please try again.';
+        });
       }
     }
   }
@@ -37461,6 +37502,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
                   onBuyRoth: () => _requestBusinessRothPurchase(selected, user),
                   onPayInvoice: (invoice, method) =>
                       _payBusinessInvoice(selected, invoice, method),
+                  busy: _busy,
                 );
               },
             );
@@ -37514,6 +37556,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onResendInvite;
   final VoidCallback onBuyRoth;
   final void Function(Map<String, dynamic>, String) onPayInvoice;
+  final bool busy;
 
   const _BusinessPortalScaffold({
     required this.user,
@@ -37547,6 +37590,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
     required this.onResendInvite,
     required this.onBuyRoth,
     required this.onPayInvoice,
+    required this.busy,
   });
 
   @override
@@ -37659,7 +37703,8 @@ class _BusinessPortalScaffold extends StatelessWidget {
           invoiceSearch: invoiceSearch,
           canManage: _businessCanFinance(role),
           onBuyRoth: onBuyRoth,
-          onPayInvoice: onPayInvoice),
+          onPayInvoice: onPayInvoice,
+          busy: busy),
       _BusinessPortalTab.team => _BusinessTeamPage(
           account: selectedAccount,
           canManage: canManage,
@@ -37765,7 +37810,9 @@ class _BusinessOverviewPage extends StatelessWidget {
                 ]));
             final side = Column(children: [
               _BusinessInvoiceCard(
-                  deliveries: deliveries, onOpen: onOpenInvoices),
+                  account: account,
+                  deliveries: deliveries,
+                  onOpen: onOpenInvoices),
               const SizedBox(height: 14),
               _BusinessTeamCard(account: account)
             ]);
@@ -38320,39 +38367,78 @@ class _BusinessNode extends StatelessWidget {
 }
 
 class _BusinessInvoiceCard extends StatelessWidget {
+  final Map<String, dynamic> account;
   final List<Map<String, dynamic>> deliveries;
   final VoidCallback? onOpen;
-  const _BusinessInvoiceCard({this.deliveries = const [], this.onOpen});
+  const _BusinessInvoiceCard({
+    this.account = const {},
+    this.deliveries = const [],
+    this.onOpen,
+  });
   @override
   Widget build(BuildContext context) {
-    final total = deliveries.fold<double>(
-        0, (runningTotal, item) => runningTotal + _businessAmount(item));
+    final invoices = _businessInvoices(account);
+    final outstanding = invoices.fold<double>(0, (runningTotal, item) {
+      final status = '${item['status'] ?? 'draft'}'.toLowerCase();
+      if (['paid', 'paid_manually', 'cancelled'].contains(status)) {
+        return runningTotal;
+      }
+      return runningTotal + _num(item['balanceDue'] ?? item['total']);
+    });
+    final nextDue = _businessNextInvoiceDue(invoices);
+    final overdue = nextDue != null && nextDue.isBefore(DateTime.now());
+    final dueSoon = nextDue != null &&
+        !overdue &&
+        nextDue.difference(DateTime.now()).inDays <= 7;
+    final borderColor = overdue
+        ? Colors.redAccent.withValues(alpha: 0.42)
+        : dueSoon
+            ? Colors.amberAccent.withValues(alpha: 0.34)
+            : Colors.white.withValues(alpha: 0.12);
     return InkWell(
         onTap: onOpen,
         borderRadius: BorderRadius.circular(28),
         child: _BusinessGlass(
+            borderColor: borderColor,
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const _BusinessPanelHeader(
-              title: 'Outstanding invoice',
-              subtitle: 'Current business activity'),
-          const SizedBox(height: 16),
-          Text(total == 0 ? '£0.00' : '£${total.toStringAsFixed(2)}',
-              style: GoogleFonts.dmSerifDisplay(
-                  color: Colors.white, fontSize: 42, height: 1)),
-          const SizedBox(height: 8),
-          Text(
-              deliveries.isEmpty
-                  ? 'No invoiceable business deliveries yet.'
-                  : 'Includes deliveries, Health+, Gifts, Vanguard and Roth offsets where available.',
-              style: GoogleFonts.inter(
-                  color: Colors.white.withValues(alpha: 0.68),
-                  fontWeight: FontWeight.w600,
-                  height: 1.35)),
-          const SizedBox(height: 16),
-          FilledButton(
-              onPressed: null, child: const Text('Payment coming soon'))
-        ])));
+              const _BusinessPanelHeader(
+                  title: 'Outstanding invoice',
+                  subtitle: 'Current business activity'),
+              const SizedBox(height: 16),
+              Text(
+                  outstanding <= 0
+                      ? '£0.00'
+                      : '£${outstanding.toStringAsFixed(2)}',
+                  style: GoogleFonts.dmSerifDisplay(
+                      color: Colors.white, fontSize: 42, height: 1)),
+              const SizedBox(height: 8),
+              Text(
+                  outstanding <= 0
+                      ? 'No payment due. Your invoice history remains available.'
+                      : overdue
+                          ? 'Invoice overdue. Open invoicing to pay by card or eligible Business Roth.'
+                          : dueSoon
+                              ? 'Invoice due within 7 days. Card and eligible Roth payments are available.'
+                              : 'Card and eligible Business Roth payments are available.',
+                  style: GoogleFonts.inter(
+                      color: Colors.white.withValues(alpha: 0.68),
+                      fontWeight: FontWeight.w600,
+                      height: 1.35)),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(
+                    child: FilledButton(
+                        onPressed: outstanding > 0 ? onOpen : null,
+                        child: Text(outstanding > 0
+                            ? 'Pay invoice'
+                            : 'No payment due'))),
+                const SizedBox(width: 10),
+                TextButton(
+                    onPressed: onOpen,
+                    child: const Text('View invoice history')),
+              ])
+            ])));
   }
 }
 
@@ -38474,7 +38560,9 @@ class _BusinessInvoicePage extends StatelessWidget {
       required this.invoiceSearch,
       required this.canManage,
       required this.onBuyRoth,
-      required this.onPayInvoice});
+      required this.onPayInvoice,
+      required this.busy});
+  final bool busy;
   @override
   Widget build(BuildContext context) {
     final rothTransactions = _businessRothTransactions(account);
@@ -38483,12 +38571,9 @@ class _BusinessInvoicePage extends StatelessWidget {
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
             .toList(growable: false);
-    final invoices = ((account['recentBusinessInvoices'] as List?) ?? const [])
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
+    final invoices = _businessInvoices(account);
     return Column(children: [
-      _BusinessInvoiceCard(deliveries: deliveries),
+      _BusinessInvoiceCard(account: account, deliveries: deliveries),
       const SizedBox(height: 14),
       _BusinessGlass(
           child:
@@ -38499,11 +38584,12 @@ class _BusinessInvoicePage extends StatelessWidget {
                 '${_num(account['rothBalance'] ?? account['businessRothBalance']).toStringAsFixed(2)} Roth available · not withdrawable'),
         const SizedBox(height: 12),
         FilledButton.icon(
-            onPressed: onBuyRoth,
+            onPressed: busy ? null : onBuyRoth,
             icon: const Icon(Icons.add_card_outlined),
-            label: const Text('Buy Roth')),
+            label: Text(busy ? 'Starting Stripe checkout...' : 'Top Up Roth')),
         const SizedBox(height: 10),
-        Text('Roth can be used for Circum services but cannot be withdrawn.',
+        Text(
+            'Roth can be used for eligible Circum business services but cannot be withdrawn.',
             style: GoogleFonts.inter(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 12,
@@ -38575,6 +38661,7 @@ class _BusinessInvoicePage extends StatelessWidget {
                   invoice: invoice,
                   rothBalance: _num(
                       account['rothBalance'] ?? account['businessRothBalance']),
+                  busy: busy,
                   onPay: (method) => onPayInvoice(invoice, method),
                 ),
               )),
@@ -38586,10 +38673,12 @@ class _BusinessInvoicePage extends StatelessWidget {
 class _BusinessInvoicePaymentRow extends StatelessWidget {
   final Map<String, dynamic> invoice;
   final double rothBalance;
+  final bool busy;
   final ValueChanged<String> onPay;
   const _BusinessInvoicePaymentRow({
     required this.invoice,
     required this.rothBalance,
+    required this.busy,
     required this.onPay,
   });
 
@@ -38623,15 +38712,18 @@ class _BusinessInvoicePaymentRow extends StatelessWidget {
         if (payable)
           Wrap(spacing: 8, runSpacing: 8, children: [
             FilledButton.icon(
-                onPressed: () => onPay('card'),
+                onPressed: busy ? null : () => onPay('card'),
                 icon: const Icon(Icons.credit_card_rounded),
-                label: const Text('Pay by Card')),
+                label:
+                    Text(busy ? 'Starting Stripe checkout...' : 'Pay invoice')),
             OutlinedButton.icon(
-                onPressed: rothBalance >= balance ? () => onPay('roth') : null,
+                onPressed: !busy && rothBalance >= balance
+                    ? () => onPay('roth')
+                    : null,
                 icon: const Icon(Icons.account_balance_wallet_outlined),
                 label: const Text('Pay with Roth')),
             OutlinedButton.icon(
-                onPressed: rothBalance > 0 && rothBalance < balance
+                onPressed: !busy && rothBalance > 0 && rothBalance < balance
                     ? () => onPay('part')
                     : null,
                 icon: const Icon(Icons.call_split_rounded),
@@ -38681,6 +38773,7 @@ class _BusinessRothPurchaseDialogState
     final customAmount = double.tryParse(_custom.text.trim());
     final amount =
         customAmount != null && customAmount > 0 ? customAmount : _selected;
+    final validAmount = amount > 0 && amount.isFinite;
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
@@ -38702,12 +38795,12 @@ class _BusinessRothPurchaseDialogState
             ],
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('Buy Roth',
+            Text('Top Up Roth',
                 style: GoogleFonts.dmSerifDisplay(
                     color: Colors.white, fontSize: 36, height: 1.02)),
             const SizedBox(height: 10),
             Text(
-                'Roth can be used for Circum services but cannot be withdrawn.',
+                'Roth can be used for eligible Circum business services but cannot be withdrawn.',
                 style: GoogleFonts.inter(
                     color: Colors.white.withValues(alpha: 0.72),
                     height: 1.4,
@@ -38729,11 +38822,11 @@ class _BusinessRothPurchaseDialogState
             Wrap(spacing: 8, runSpacing: 8, children: [
               ChoiceChip(
                   selected: _method == 'card',
-                  label: const Text('Pay by Card'),
+                  label: const Text('Card payment'),
                   onSelected: (_) => setState(() => _method = 'card')),
               ChoiceChip(
                   selected: _method == 'manual',
-                  label: const Text('Manual Payment Request'),
+                  label: const Text('Manual payment request'),
                   onSelected: (_) => setState(() => _method = 'manual')),
             ]),
             const SizedBox(height: 12),
@@ -38750,6 +38843,14 @@ class _BusinessRothPurchaseDialogState
                 prefixStyle: const TextStyle(color: Colors.white),
               ),
             ),
+            const SizedBox(height: 10),
+            Text(
+                validAmount
+                    ? 'You will receive ${amount.toStringAsFixed(0)} Roth'
+                    : 'Choose an amount to continue.',
+                style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.68),
+                    fontWeight: FontWeight.w800)),
             const SizedBox(height: 20),
             Row(children: [
               Expanded(
@@ -38759,7 +38860,7 @@ class _BusinessRothPurchaseDialogState
               const SizedBox(width: 10),
               Expanded(
                   child: FilledButton(
-                      onPressed: amount > 0
+                      onPressed: validAmount
                           ? () => Navigator.pop(
                               context,
                               _BusinessRothPurchaseRequest(
@@ -38767,7 +38868,7 @@ class _BusinessRothPurchaseDialogState
                           : null,
                       child: Text(_method == 'card'
                           ? 'Continue to Stripe'
-                          : 'Request £${amount.toStringAsFixed(2)}'))),
+                          : 'Submit manual request'))),
             ]),
           ])),
     );
@@ -39393,8 +39494,12 @@ class _BusinessStatCard extends StatelessWidget {
 class _BusinessGlass extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  const _BusinessGlass(
-      {required this.child, this.padding = const EdgeInsets.all(18)});
+  final Color? borderColor;
+  const _BusinessGlass({
+    required this.child,
+    this.padding = const EdgeInsets.all(18),
+    this.borderColor,
+  });
   @override
   Widget build(BuildContext context) => ClipRRect(
       borderRadius: BorderRadius.circular(28),
@@ -39406,8 +39511,9 @@ class _BusinessGlass extends StatelessWidget {
               decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.065),
                   borderRadius: BorderRadius.circular(28),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  border: Border.all(
+                      color:
+                          borderColor ?? Colors.white.withValues(alpha: 0.12)),
                   boxShadow: [
                     BoxShadow(
                         color: Colors.black.withValues(alpha: 0.24),
@@ -39636,10 +39742,31 @@ List<Map<String, dynamic>> _businessRothTransactions(
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
+List<Map<String, dynamic>> _businessInvoices(Map<String, dynamic> account) =>
+    ((account['recentBusinessInvoices'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+
+DateTime? _businessNextInvoiceDue(List<Map<String, dynamic>> invoices) {
+  final dueDates = invoices
+      .where((item) {
+        final status = '${item['status'] ?? 'draft'}'.toLowerCase();
+        return !['paid', 'paid_manually', 'cancelled'].contains(status) &&
+            _num(item['balanceDue'] ?? item['total']) > 0;
+      })
+      .map((item) => _businessDate({'dueDate': item['dueDate']}))
+      .where((date) => date.millisecondsSinceEpoch != 0)
+      .toList()
+    ..sort();
+  return dueDates.isEmpty ? null : dueDates.first;
+}
+
 DateTime _businessDate(Map<String, dynamic> item) {
   final raw = item['scheduledDateTime'] ??
       item['scheduledFor'] ??
       item['deliveryDateTime'] ??
+      item['dueDate'] ??
       item['createdAt'] ??
       item['updatedAt'];
   if (raw is Timestamp) return raw.toDate();
@@ -39709,8 +39836,7 @@ String _tabEyebrow(_BusinessPortalTab tab) => switch (tab) {
     };
 String _tabTitle(_BusinessPortalTab tab, Map<String, dynamic> account) =>
     switch (tab) {
-      _BusinessPortalTab.overview =>
-        'Good morning, ${account['businessName'] ?? 'Business'}.',
+      _BusinessPortalTab.overview => _businessGreeting(account),
       _BusinessPortalTab.invoicing => 'Invoices and Roth offsets.',
       _BusinessPortalTab.team => 'Team access.',
       _BusinessPortalTab.deliveries => 'Business deliveries.',
@@ -39720,6 +39846,19 @@ String _tabTitle(_BusinessPortalTab tab, Map<String, dynamic> account) =>
       _BusinessPortalTab.analytics => 'Business analytics.',
       _BusinessPortalTab.settings => 'Business profile.'
     };
+String _businessGreeting(Map<String, dynamic> account, [DateTime? now]) {
+  final hour = (now ?? DateTime.now()).hour;
+  final greeting = hour >= 5 && hour < 12
+      ? 'Good morning'
+      : hour >= 12 && hour < 17
+          ? 'Good afternoon'
+          : hour >= 17 && hour < 22
+              ? 'Good evening'
+              : 'Working late';
+  final name = '${account['businessName'] ?? ''}'.trim();
+  return name.isEmpty ? '$greeting.' : '$greeting, $name.';
+}
+
 String _tabSubtitle(_BusinessPortalTab tab) => switch (tab) {
       _BusinessPortalTab.overview =>
         'Your command centre for deliveries, invoices, team access, Health+, Gifts, Vanguard and IRIS insights.',
