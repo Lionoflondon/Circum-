@@ -1726,6 +1726,78 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         .trim();
   }
 
+  Map<String, dynamic> _driverVehicle(Map<String, dynamic> driver) {
+    final nested = driver['vehicle'];
+    final vehicle = nested is Map ? Map<String, dynamic>.from(nested) : {};
+    String read(List<String> keys) {
+      for (final key in keys) {
+        final value = '${vehicle[key] ?? driver[key] ?? ''}'.trim();
+        if (value.isNotEmpty && value != 'null') return value;
+      }
+      return '';
+    }
+
+    return {
+      'type': read(['type', 'vehicleType', 'typeOfVehicle']),
+      'makeModel': read(['makeModel', 'vehicleMakeModel']),
+      'colour': read(['colour', 'color', 'vehicleColour']),
+      'plateNumber':
+          read(['plateNumber', 'vehicleRegistration', 'registration']),
+    };
+  }
+
+  String _driverVehicleSummary(Map<String, dynamic> driver) {
+    final vehicle = _driverVehicle(driver);
+    final parts = [
+      '${vehicle['colour'] ?? ''}'.trim(),
+      '${vehicle['makeModel'] ?? ''}'.trim(),
+      '${vehicle['type'] ?? ''}'.trim(),
+    ].where((part) => part.isNotEmpty).toList();
+    return parts.isEmpty ? 'Vehicle not provided' : parts.join(' ');
+  }
+
+  String _driverPlateSummary(Map<String, dynamic> driver) {
+    final plate = '${_driverVehicle(driver)['plateNumber'] ?? ''}'.trim();
+    return plate.isEmpty ? 'Plate not provided' : plate;
+  }
+
+  String _driverPhone(Map<String, dynamic> driver) {
+    final phone = '${driver['phone'] ?? driver['phoneNumber'] ?? ''}'.trim();
+    return phone.isEmpty ? 'Phone not provided' : phone;
+  }
+
+  List<String> _driverApprovalBlockers(Map<String, dynamic> driver) {
+    final blockers = <String>[];
+    final vehicle = _driverVehicle(driver);
+    if (_driverPhone(driver) == 'Phone not provided') {
+      blockers.add('Phone missing');
+    }
+    if (driver['phoneVerified'] != true) {
+      blockers.add('Phone not verified');
+    }
+    if ('${vehicle['type'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle type missing');
+    }
+    if ('${vehicle['makeModel'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle make/model missing');
+    }
+    if ('${vehicle['colour'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle colour missing');
+    }
+    if ('${vehicle['plateNumber'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle registration missing');
+    }
+    final hasRequiredDocument = driver['verificationData'] != null ||
+        driver['idUploaded'] == true ||
+        driver['licenceUploaded'] == true ||
+        driver['insuranceUploaded'] == true ||
+        driver['documentsUploaded'] == true;
+    if (!hasRequiredDocument) {
+      blockers.add('Required documents missing');
+    }
+    return blockers;
+  }
+
   String _driverWorkflowStatus(Map<String, dynamic> driver) {
     if (driver.containsKey('onboardingStatus')) {
       return switch (RiderOnboardingPolicy.status(driver)) {
@@ -1776,6 +1848,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final id = _driverId(driver);
     if (id.isEmpty) return;
     final previous = _driverWorkflowStatus(driver);
+    if (nextStatus == 'approved') {
+      final blockers = _driverApprovalBlockers(driver);
+      if (blockers.isNotEmpty) {
+        setState(() {
+          _message = 'Cannot approve rider:\n- ${blockers.join('\n- ')}';
+        });
+        return;
+      }
+    }
     final action = switch (nextStatus) {
       'approved' => previous == 'suspended' || previous == 'rejected'
           ? 'driver_reactivated'
@@ -1783,6 +1864,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'rejected' => 'driver_rejected',
       'suspended' => 'driver_suspended',
       _ => 'driver_status_updated',
+    };
+    final riderEventAction = switch (nextStatus) {
+      'approved' => previous == 'suspended' || previous == 'rejected'
+          ? 'rider_reactivated'
+          : 'rider_approved',
+      'rejected' => 'rider_rejected',
+      'suspended' => 'rider_suspended',
+      _ => 'rider_status_updated',
     };
     final driverStatus = switch (nextStatus) {
       'approved' => 'active',
@@ -1835,6 +1924,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             : rejectionReason,
       ),
     );
+    await FirebaseFirestore.instance.collection('riderAdminEvents').add({
+      'riderId': id,
+      'adminId': _adminUser?.uid ?? 'unknown-admin',
+      'adminEmail': _adminUser?.email,
+      'action': riderEventAction,
+      'previousStatus': previous,
+      'newStatus': nextStatus,
+      'note': rejectionReason.isEmpty ? null : rejectionReason,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
     setState(() {
       _message = 'Driver $id updated to $nextStatus.';
       if (_selectedDriverProfile != null &&
@@ -1980,6 +2079,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'newValue': {'rank': newRank},
       'createdAt': timestamp,
     });
+    await _writeRiderAdminEvent(
+      riderId,
+      'rank_changed',
+      previousStatus: previousRank,
+      newStatus: newRank,
+      note: reason,
+    );
     if (!mounted) return;
     setState(() {
       _message =
@@ -1994,6 +2100,154 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         };
       }
     });
+    await _loadAdminData();
+  }
+
+  Future<void> _writeRiderAdminEvent(
+    String riderId,
+    String action, {
+    String? previousStatus,
+    String? newStatus,
+    String? note,
+  }) async {
+    await FirebaseFirestore.instance.collection('riderAdminEvents').add({
+      'riderId': riderId,
+      'adminId': _adminUser?.uid ?? 'unknown-admin',
+      'adminEmail': _adminUser?.email,
+      'action': action,
+      'previousStatus': previousStatus,
+      'newStatus': newStatus,
+      'note': note,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> _markDriverTrustField(
+    Map<String, dynamic> driver,
+    String field,
+    String action,
+  ) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot manage rider trust checks.');
+      return;
+    }
+    final riderId = _driverId(driver);
+    if (riderId.isEmpty) return;
+    await FirebaseFirestore.instance
+        .collection('riderProfiles')
+        .doc(riderId)
+        .set({
+      field: true,
+      '${field}At': FieldValue.serverTimestamp(),
+      '${field}By': _adminUser?.uid ?? _adminUser?.email,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('riders').doc(riderId).set({
+      field: true,
+      '${field}At': FieldValue.serverTimestamp(),
+      '${field}By': _adminUser?.uid ?? _adminUser?.email,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeRiderAdminEvent(riderId, action);
+    setState(() => _message = 'Updated rider trust check.');
+    await _loadAdminData();
+  }
+
+  Future<void> _requestDriverMoreInformation(
+      Map<String, dynamic> driver) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot request rider corrections.');
+      return;
+    }
+    final riderId = _driverId(driver);
+    if (riderId.isEmpty) return;
+    final noteController = TextEditingController();
+    final fields = <String>{};
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Request more information'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final field in const [
+                  'phone',
+                  'vehicle',
+                  'ID',
+                  'licence',
+                  'insurance',
+                  'proof of address',
+                  'bank details',
+                ])
+                  CheckboxListTile(
+                    value: fields.contains(field),
+                    onChanged: (selected) => setDialogState(() {
+                      if (selected == true) {
+                        fields.add(field);
+                      } else {
+                        fields.remove(field);
+                      }
+                    }),
+                    title: Text(field),
+                  ),
+                TextField(
+                  controller: noteController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Internal note',
+                    hintText: 'Explain what the rider needs to correct.',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: fields.isEmpty
+                  ? null
+                  : () => Navigator.pop(dialogContext, {
+                        'fields': fields.toList(),
+                        'note': noteController.text.trim(),
+                      }),
+              child: const Text('Request'),
+            ),
+          ],
+        ),
+      ),
+    );
+    noteController.dispose();
+    if (result == null) return;
+    final note = '${result['note'] ?? ''}'.trim();
+    final patch = {
+      'approvalStatus': 'needs_information',
+      'driverStatus': 'pending',
+      'adminReviewNote': note,
+      'needsInformationFields': result['fields'],
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await FirebaseFirestore.instance
+        .collection('riderProfiles')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await FirebaseFirestore.instance
+        .collection('riders')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await _writeRiderAdminEvent(
+      riderId,
+      'more_info_requested',
+      previousStatus: _driverWorkflowStatus(driver),
+      newStatus: 'needs_information',
+      note: note,
+    );
+    setState(() => _message = 'Requested more information from rider.');
     await _loadAdminData();
   }
 
@@ -2057,6 +2311,40 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         onTap: () => _changeDriverRank(driver),
       ),
     );
+    actions.addAll([
+      _AdminAction(
+        label: 'Mark Phone Verified',
+        enabled: canApprove && driver['phoneVerified'] != true,
+        onTap: () => _markDriverTrustField(
+          driver,
+          'phoneVerified',
+          'phone_verified_manually',
+        ),
+      ),
+      _AdminAction(
+        label: 'Mark Vehicle Verified',
+        enabled: canApprove && driver['vehicleVerified'] != true,
+        onTap: () => _markDriverTrustField(
+          driver,
+          'vehicleVerified',
+          'vehicle_verified',
+        ),
+      ),
+      _AdminAction(
+        label: 'Mark Documents Verified',
+        enabled: canApprove && driver['documentsVerified'] != true,
+        onTap: () => _markDriverTrustField(
+          driver,
+          'documentsVerified',
+          'documents_verified',
+        ),
+      ),
+      _AdminAction(
+        label: 'Request Info',
+        enabled: canApprove,
+        onTap: () => _requestDriverMoreInformation(driver),
+      ),
+    ]);
     actions.add(
       _AdminAction(
         label: 'View Profile',
@@ -5117,7 +5405,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         '${item['fullName'] ?? item['name'] ?? 'Driver'}\n${_riderRankLabel(rank)}',
       ),
       _AdminCell(
-        '${item['vehicleColour'] ?? ''} ${item['vehicleMakeModel'] ?? item['vehicleType'] ?? ''}\n${item['plateNumber'] ?? item['vehicleRegistration'] ?? ''}',
+        '${_driverVehicleSummary(item)}\n${_driverPlateSummary(item)}',
       ),
       _AdminStatusCell(colors: widget.colors, status: _driverStatusLabel(item)),
       _AdminCell('${item['averageRating'] ?? item['rating'] ?? 'New'}'),
@@ -9541,10 +9829,86 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     required this.onClose,
   });
 
+  Map<String, dynamic> _vehicle() {
+    final nested = driver['vehicle'];
+    final vehicle = nested is Map ? Map<String, dynamic>.from(nested) : {};
+    String read(List<String> keys) {
+      for (final key in keys) {
+        final value = '${vehicle[key] ?? driver[key] ?? ''}'.trim();
+        if (value.isNotEmpty && value != 'null') return value;
+      }
+      return '';
+    }
+
+    return {
+      'type': read(['type', 'vehicleType', 'typeOfVehicle']),
+      'makeModel': read(['makeModel', 'vehicleMakeModel']),
+      'colour': read(['colour', 'color', 'vehicleColour']),
+      'plateNumber':
+          read(['plateNumber', 'vehicleRegistration', 'registration']),
+    };
+  }
+
+  String _phone() {
+    final phone = '${driver['phone'] ?? driver['phoneNumber'] ?? ''}'.trim();
+    return phone.isEmpty ? 'Phone not provided' : phone;
+  }
+
+  String _displayOrMissing(Object? value, String missing) {
+    final text = '$value'.trim();
+    return text.isEmpty || text == 'null' ? missing : text;
+  }
+
+  String _dateText(Object? value) {
+    if (value is Timestamp) {
+      final date = value.toDate();
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    }
+    return '$value'.trim().isEmpty || '$value' == 'null'
+        ? 'not recorded'
+        : '$value';
+  }
+
+  List<String> _approvalBlockers() {
+    final vehicle = _vehicle();
+    final blockers = <String>[];
+    if (_phone() == 'Phone not provided') blockers.add('Phone missing');
+    if (driver['phoneVerified'] != true) blockers.add('Phone not verified');
+    if ('${vehicle['type'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle type missing');
+    }
+    if ('${vehicle['makeModel'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle make/model missing');
+    }
+    if ('${vehicle['colour'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle colour missing');
+    }
+    if ('${vehicle['plateNumber'] ?? ''}'.trim().isEmpty) {
+      blockers.add('Vehicle registration missing');
+    }
+    if (driver['verificationData'] == null &&
+        driver['idUploaded'] != true &&
+        driver['licenceUploaded'] != true &&
+        driver['insuranceUploaded'] != true &&
+        driver['documentsUploaded'] != true) {
+      blockers.add('Required documents missing');
+    }
+    return blockers;
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final drawerWidth = width < 720 ? width : 520.0;
+    final vehicle = _vehicle();
+    final phone = _phone();
+    final blockers = _approvalBlockers();
+    final customerReady =
+        '${driver['fullName'] ?? driver['name'] ?? ''}'.trim().isNotEmpty &&
+            driver['phoneVerified'] == true &&
+            driver['vehicleVerified'] == true &&
+            '${vehicle['plateNumber'] ?? ''}'.trim().isNotEmpty &&
+            statusLabel == 'approved';
     return Positioned.fill(
       child: Material(
         color: Colors.black.withOpacity(0.42),
@@ -9616,22 +9980,91 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                     child: Column(
                       children: [
                         _profileRow('Email', '${driver['email'] ?? ''}'),
+                        _profileRow('Phone', phone),
                         _profileRow(
-                          'Phone',
-                          '${driver['phone'] ?? driver['phoneNumber'] ?? ''}',
+                          'Phone verified',
+                          driver['phoneVerified'] == true
+                              ? 'Yes · ${_dateText(driver['phoneVerifiedAt'])}'
+                              : 'No',
                         ),
                         _profileRow(
-                          'Vehicle type',
-                          '${driver['vehicleType'] ?? driver['typeOfVehicle'] ?? ''}',
-                        ),
+                            'Vehicle type',
+                            _displayOrMissing(
+                                vehicle['type'], 'Vehicle not provided')),
+                        _profileRow(
+                            'Vehicle make/model',
+                            _displayOrMissing(
+                                vehicle['makeModel'], 'Vehicle not provided')),
+                        _profileRow(
+                            'Vehicle colour',
+                            _displayOrMissing(
+                                vehicle['colour'], 'Vehicle not provided')),
                         _profileRow(
                           'Vehicle registration',
-                          '${driver['plateNumber'] ?? driver['vehicleRegistration'] ?? ''}',
+                          _displayOrMissing(
+                              vehicle['plateNumber'], 'Plate not provided'),
                         ),
+                        _profileRow(
+                          'Vehicle verified',
+                          driver['vehicleVerified'] == true
+                              ? 'Yes · ${_dateText(driver['vehicleVerifiedAt'])}'
+                              : 'No',
+                        ),
+                        _profileRow(
+                          'Customer-visible identity ready',
+                          customerReady ? 'Yes' : 'No',
+                        ),
+                        _profileRow(
+                          'Approval status',
+                          '${driver['approvalStatus'] ?? statusLabel}',
+                        ),
+                        _profileRow(
+                          'Verification status',
+                          '${driver['verificationStatus'] ?? 'pending'}',
+                        ),
+                        _profileRow(
+                          'Driver status',
+                          '${driver['driverStatus'] ?? statusLabel}',
+                        ),
+                        _profileRow(
+                          'Onboarding status',
+                          '${driver['onboardingStatus'] ?? 'not provided'}',
+                        ),
+                        if (blockers.isNotEmpty)
+                          _profileRow(
+                            'Cannot approve rider',
+                            blockers.map((item) => '- $item').join('\n'),
+                          ),
                         _profileRow('Signup date', signupDate),
                         _profileRow(
                           'Rating',
                           '${driver['averageRating'] ?? driver['rating'] ?? 'New'}',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _GlassPanel(
+                    colors: colors,
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: phone == 'Phone not provided'
+                              ? null
+                              : () => Clipboard.setData(
+                                    ClipboardData(text: phone),
+                                  ),
+                          icon: const Icon(Icons.copy),
+                          label: const Text('Copy phone'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: phone == 'Phone not provided'
+                              ? null
+                              : () => html.window.open('tel:$phone', '_self'),
+                          icon: const Icon(Icons.call),
+                          label: const Text('Call phone'),
                         ),
                       ],
                     ),
@@ -12937,10 +13370,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _newEmail = TextEditingController();
   final _emailChangePassword = TextEditingController();
   final _postcode = TextEditingController(text: 'E1 6AN');
-  final _vehicle = TextEditingController(text: 'Bike');
-  final _vehicleMakeModel = TextEditingController(text: 'Volt London e-bike');
-  final _vehicleColour = TextEditingController(text: 'Blue');
-  final _plateNumber = TextEditingController(text: 'CIR 24K');
+  final _vehicle = TextEditingController();
+  final _vehicleMakeModel = TextEditingController();
+  final _vehicleColour = TextEditingController();
+  final _plateNumber = TextEditingController();
   final _availability = TextEditingController(text: 'Weekdays, evenings');
   final _notes = TextEditingController(text: 'Experienced London courier.');
   final _withdrawAmount = TextEditingController();
@@ -13429,9 +13862,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'status': 'offline',
       'rating': _performance.averageRating.toStringAsFixed(2),
       'plateNumber': _plateNumber.text.trim(),
+      'vehicleRegistration': _plateNumber.text.trim(),
+      'vehicleType': _vehicle.text.trim(),
       'typeOfVehicle': _vehicle.text.trim(),
       'vehicleMakeModel': _vehicleMakeModel.text.trim(),
       'vehicleColour': _vehicleColour.text.trim(),
+      'vehicle': DriverVehicle(
+        type: _vehicle.text.trim(),
+        makeModel: _vehicleMakeModel.text.trim(),
+        colour: _vehicleColour.text.trim(),
+        plateNumber: _plateNumber.text.trim(),
+      ).toJson(),
       'verificationStatus': 'pending',
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -15516,6 +15957,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'email': _email.text.trim(),
         'postcode': _postcode.text.trim(),
         'vehicleType': _vehicle.text.trim(),
+        'vehicleMakeModel': _vehicleMakeModel.text.trim(),
+        'vehicleColour': _vehicleColour.text.trim(),
+        'vehicleRegistration': _plateNumber.text.trim(),
+        'plateNumber': _plateNumber.text.trim(),
+        'vehicle': DriverVehicle(
+          type: _vehicle.text.trim(),
+          makeModel: _vehicleMakeModel.text.trim(),
+          colour: _vehicleColour.text.trim(),
+          plateNumber: _plateNumber.text.trim(),
+        ).toJson(),
         'availability': _availability.text.trim(),
         'notes': _notes.text.trim(),
         'rightToWorkConfirmed': _rightToWork,
@@ -15533,8 +15984,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'fullName': _fullName.text.trim(),
             'email': _riderUser!.email ?? _email.text.trim(),
             'phoneNumber': _phone.text.trim(),
-            'vehicleType': _vehicle.text.trim().toLowerCase(),
+            'vehicleType': _vehicle.text.trim(),
+            'vehicleMakeModel': _vehicleMakeModel.text.trim(),
+            'vehicleColour': _vehicleColour.text.trim(),
             'vehicleRegistration': _plateNumber.text.trim(),
+            'plateNumber': _plateNumber.text.trim(),
+            'vehicle': DriverVehicle(
+              type: _vehicle.text.trim(),
+              makeModel: _vehicleMakeModel.text.trim(),
+              colour: _vehicleColour.text.trim(),
+              plateNumber: _plateNumber.text.trim(),
+            ).toJson(),
             'onboardingStatus': 'submitted',
             'approvalStatus': 'pending',
             'verificationStatus': 'pending',
