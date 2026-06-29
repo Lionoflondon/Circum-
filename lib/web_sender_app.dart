@@ -12970,6 +12970,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _earningsSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _rothWalletSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _performanceSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _riderProfileSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ratingSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _acceptedJobsSub;
@@ -13035,6 +13036,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _earningsSub?.cancel();
     _rothWalletSub?.cancel();
     _performanceSub?.cancel();
+    _riderProfileSub?.cancel();
     _ratingSub?.cancel();
     _availableJobsSub?.cancel();
     _acceptedJobsSub?.cancel();
@@ -13096,13 +13098,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _email.text = user.email ?? _email.text;
         _roleChoiceConfirmed = false;
       });
-      _listenToRiderEarnings(user.uid);
-      _listenToRiderPerformance(user.uid);
+      _listenToRiderProfile(user.uid);
       if (RiderOnboardingPolicy.canViewJobs(
         email: user.email,
         profile: riderProfile,
         verifiedSuperAdmin: _superAdminRiderBypass,
       )) {
+        _listenToRiderEarnings(user.uid);
+        _listenToRiderPerformance(user.uid);
         _listenToAvailableJobs();
         _listenToRiderJobs(user.uid);
       }
@@ -13161,13 +13164,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         await _attachIncomingReferralIfPresent();
         _riderProfile = await _loadRiderProfile(user.uid);
       }
-      _listenToRiderEarnings(user.uid);
-      _listenToRiderPerformance(user.uid);
       if (RiderOnboardingPolicy.canViewJobs(
         email: user.email,
         profile: _riderProfile,
         verifiedSuperAdmin: _superAdminRiderBypass,
       )) {
+        _listenToRiderEarnings(user.uid);
+        _listenToRiderPerformance(user.uid);
         _listenToAvailableJobs();
         _listenToRiderJobs(user.uid);
       }
@@ -13178,10 +13181,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _authMessage =
             _signupMode ? 'Your rider account is ready.' : 'You are signed in.';
       });
+      _listenToRiderProfile(user.uid);
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(() => _authMessage = _friendlyAuthMessage(error));
-    } catch (_) {
+    } catch (error) {
+      _logRiderFirestoreError(
+        error,
+        path:
+            'riderProfiles/${FirebaseAuth.instance.currentUser?.uid ?? 'unknown'}',
+        riderDocumentId: FirebaseAuth.instance.currentUser?.uid,
+      );
       if (!mounted) return;
       setState(() => _authMessage = 'We could not continue. Please try again.');
     } finally {
@@ -13352,12 +13362,22 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<Map<String, dynamic>?> _loadRiderProfile(String uid) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('riderProfiles')
-        .doc(uid)
-        .get();
-    if (!snapshot.exists) return null;
-    return {'id': snapshot.id, ...?snapshot.data()};
+    const collectionPath = 'riderProfiles';
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection(collectionPath)
+          .doc(uid)
+          .get();
+      if (!snapshot.exists) return null;
+      return {'id': snapshot.id, ...?snapshot.data()};
+    } catch (error) {
+      _logRiderFirestoreError(
+        error,
+        path: '$collectionPath/$uid',
+        riderDocumentId: uid,
+      );
+      rethrow;
+    }
   }
 
   String _riderApprovalStatus() {
@@ -13393,7 +13413,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'onboardingStatus': 'not_started',
       'verificationStatus': 'pending',
       'riderRank': 'agent',
-      'driverStatus': 'active',
+      'driverStatus': 'pending',
       'role': 'rider',
       'roles': ['rider'],
       'source': 'circum-web',
@@ -13426,19 +13446,44 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'completedJobs': FieldValue.increment(0),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await db.collection('wallets').doc(user.uid).set({
-      'userId': user.uid,
-      'rothCredit': FieldValue.increment(0),
-      'pendingEarnings': FieldValue.increment(0),
-      'availableEarnings': FieldValue.increment(0),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await db.collection('driverPerformanceMetrics').doc(user.uid).set(
-          DriverPerformanceMetric.empty(user.uid).toJson()
-            ..addAll({'updatedAt': FieldValue.serverTimestamp()}),
-          SetOptions(merge: true),
-        );
+  }
+
+  void _listenToRiderProfile(String riderId) {
+    _riderProfileSub?.cancel();
+    final path = 'riderProfiles/$riderId';
+    _riderProfileSub = FirebaseFirestore.instance
+        .collection('riderProfiles')
+        .doc(riderId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _riderProfile =
+            snapshot.exists ? {'id': snapshot.id, ...?snapshot.data()} : null;
+      });
+    }, onError: (error) {
+      _logRiderFirestoreError(
+        error,
+        path: path,
+        riderDocumentId: riderId,
+      );
+      if (!mounted) return;
+      setState(() => _authMessage =
+          'We could not load your rider profile. Please try again.');
+    });
+  }
+
+  void _logRiderFirestoreError(
+    Object error, {
+    required String path,
+    String? riderDocumentId,
+  }) {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final code = error is FirebaseException ? error.code : error.runtimeType;
+    final message = error is FirebaseException ? error.message : '$error';
+    debugPrint(
+      'Rider Firestore failure | code=$code | message=$message | path=$path | authUid=$currentUid | riderDocId=${riderDocumentId ?? 'unknown'}',
+    );
   }
 
   void _listenToRiderEarnings(String riderId) {
@@ -13446,6 +13491,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _rothWalletSub?.cancel();
     _performanceSub?.cancel();
     _ratingSub?.cancel();
+    final earningsPath = 'riderEarnings/$riderId';
     _earningsSub = FirebaseFirestore.instance
         .collection('riderEarnings')
         .doc(riderId)
@@ -13455,7 +13501,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
       });
+    }, onError: (error) {
+      _logRiderFirestoreError(
+        error,
+        path: earningsPath,
+        riderDocumentId: riderId,
+      );
     });
+    final walletPath = 'users/$riderId/wallets/rider';
     _rothWalletSub = FirebaseFirestore.instance
         .collection('users')
         .doc(riderId)
@@ -13467,12 +13520,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _earnings = _earnings.withRothWallet(snapshot.data());
       });
+    }, onError: (error) {
+      _logRiderFirestoreError(
+        error,
+        path: walletPath,
+        riderDocumentId: riderId,
+      );
     });
   }
 
   void _listenToRiderPerformance(String riderId) {
     _performanceSub?.cancel();
     _ratingSub?.cancel();
+    final performancePath = 'driverPerformanceMetrics/$riderId';
     _performanceSub = FirebaseFirestore.instance
         .collection('driverPerformanceMetrics')
         .doc(riderId)
@@ -13485,7 +13545,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           snapshot.data(),
         );
       });
+    }, onError: (error) {
+      _logRiderFirestoreError(
+        error,
+        path: performancePath,
+        riderDocumentId: riderId,
+      );
     });
+    const ratingsPath = 'driverRatings where driverId == riderId';
     _ratingSub = FirebaseFirestore.instance
         .collection('driverRatings')
         .where('driverId', isEqualTo: riderId)
@@ -13498,6 +13565,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             .map((doc) => DriverRating.fromMap(doc.data()))
             .toList();
       });
+    }, onError: (error) {
+      _logRiderFirestoreError(
+        error,
+        path: ratingsPath,
+        riderDocumentId: riderId,
+      );
     });
   }
 
@@ -15462,9 +15535,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'phoneNumber': _phone.text.trim(),
             'vehicleType': _vehicle.text.trim().toLowerCase(),
             'vehicleRegistration': _plateNumber.text.trim(),
-            'onboardingStatus': 'pending_review',
+            'onboardingStatus': 'submitted',
             'approvalStatus': 'pending',
+            'verificationStatus': 'pending',
+            'driverStatus': 'pending',
             'riderRank': 'agent',
+            'role': 'rider',
+            'roles': ['rider'],
             'onboardingSubmittedAt': FieldValue.serverTimestamp(),
             'termsAcceptedAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
@@ -15474,6 +15551,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
       batch.set(db.collection('riderOnboardingEvents').doc(), {
         'applicationId': id,
+        'riderId': _riderUser?.uid,
         'type': 'rider_application_submitted',
         'status': 'submitted',
         'source': 'circum-web',
@@ -15489,7 +15567,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _message =
             'Thanks. Your rider application has been sent to the Circum team.';
       });
-    } catch (_) {
+    } catch (error) {
+      _logRiderFirestoreError(
+        error,
+        path:
+            'riderApplications/$id + riderProfiles/${_riderUser?.uid ?? 'unknown'} + riderOnboardingEvents',
+        riderDocumentId: _riderUser?.uid,
+      );
       if (!mounted) return;
       setState(() {
         _message =
@@ -15925,7 +16009,7 @@ class _RiderAccessPanel extends StatelessWidget {
               colors: colors,
               controller: password,
               hint: 'Password',
-              obscureText: true,
+              obscureText: false,
             ),
             Align(
               alignment: Alignment.centerRight,
@@ -16005,7 +16089,7 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
     final title = switch (normalized) {
       'rejected' => 'Application needs attention',
       'suspended' => 'Rider account suspended',
-      _ => 'Application pending',
+      _ => 'Application submitted',
     };
     final body = switch (normalized) {
       'rejected' =>
@@ -16013,7 +16097,7 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
       'suspended' =>
         'This rider account cannot accept jobs right now. Contact Circum support for the next step.',
       _ =>
-        'Your rider profile has been created. Circum will review your details and documents before jobs appear here.',
+        'Your rider application has been received and is awaiting review. We’ll notify you once you’re approved.',
     };
     final note = [
       profile['adminMessage'],
@@ -16044,7 +16128,11 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
               Expanded(
                 child: _SectionTitle(colors: colors, title: title),
               ),
-              _HealthChip(label: normalized),
+              _HealthChip(
+                label: normalized == 'pending' || normalized == 'submitted'
+                    ? 'Pending approval'
+                    : _displayStatusLabel(normalized),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -16075,7 +16163,9 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
             colors: colors,
             icon: Icons.verified_user_outlined,
             label: 'Approval status',
-            value: normalized,
+            value: normalized == 'pending' || normalized == 'submitted'
+                ? 'Pending approval'
+                : _displayStatusLabel(normalized),
           ),
           if (note.isNotEmpty) ...[
             const SizedBox(height: 12),
