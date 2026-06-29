@@ -68,14 +68,14 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
     transaction.set(accountRef, {
       businessRothBalance: resulting,
       rothBalance: resulting,
-      recentBusinessRothTransactions: FieldValue.arrayUnion([{
+      recentBusinessRothTransactions: FieldValue.arrayUnion({
         transactionId: txRef.id,
         direction: "credit",
         amount,
         source: type,
         reason: note,
         createdAt: new Date(),
-      }]),
+      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   });
@@ -117,7 +117,7 @@ async function debitBusinessRoth({businessId, amount, invoiceId, metadata = {}})
     transaction.set(accountRef, {
       businessRothBalance: resulting,
       rothBalance: resulting,
-      recentBusinessRothTransactions: FieldValue.arrayUnion([{
+      recentBusinessRothTransactions: FieldValue.arrayUnion({
         transactionId: txRef.id,
         direction: "debit",
         amount,
@@ -125,7 +125,7 @@ async function debitBusinessRoth({businessId, amount, invoiceId, metadata = {}})
         reason: "Business invoice paid with Roth.",
         invoiceId,
         createdAt: new Date(),
-      }]),
+      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   });
@@ -164,13 +164,13 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
       createdAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(db.collection("businessAccounts").doc(businessId), {
-      recentBusinessInvoices: FieldValue.arrayUnion([{
+      recentBusinessInvoices: FieldValue.arrayUnion({
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
         status: "paid",
         total: invoice.total || amount,
         paidAt: new Date(),
-      }]),
+      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(db.collection("adminAuditLogs").doc(), {
@@ -238,14 +238,14 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
     createdByUserId: context.auth.uid,
   });
   await db.collection("businessAccounts").doc(businessId).set({
-    recentBusinessRothPurchases: FieldValue.arrayUnion([{
+    recentBusinessRothPurchases: FieldValue.arrayUnion({
       purchaseId: purchaseRef.id,
       amountGbp: amount,
       rothAmount: amount,
       status: "pending_verification",
       paymentProvider: "stripe",
       createdAt: new Date(),
-    }]),
+    }),
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   return {checkoutUrl: session.url, sessionId: session.id, purchaseId: purchaseRef.id};
