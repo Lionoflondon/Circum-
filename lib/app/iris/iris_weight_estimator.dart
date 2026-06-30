@@ -87,6 +87,20 @@ class IrisWeightEstimator {
         final electronics = product.packageType == 'Electronics';
         final totalWeightKg = product.weightKg * quantity;
         final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
+        final vehicle = _resolveCanonicalVehicle(
+          totalWeightKg: totalWeightKg,
+          description: description,
+          packageType: product.packageType,
+          dimensions: product.typicalDimensions,
+          repositoryVehicleSuitability: product.vehicleSuitability,
+          fragile: product.fragile,
+          highValue: electronics,
+          vanguardRequired: electronics,
+          stackable: product.stackable,
+          quantity: quantity,
+          singleItemWeightKg: product.weightKg,
+          handlingNotes: product.handlingNotes,
+        );
         return IrisWeightLookupResult(
           matchedItemName: product.name,
           quantity: quantity,
@@ -102,9 +116,9 @@ class IrisWeightEstimator {
           weightSource: 'known_product_lookup',
           truthBand: product.truthBand,
           requiresVehicleReview:
-              totalWeightKg > 10 || product.vehicleSuitability == 'Van',
+              totalWeightKg > 10 || vehicle.recommendedVehicle == 'Van',
           typicalDimensions: product.typicalDimensions,
-          vehicleSuitability: product.vehicleSuitability,
+          vehicleSuitability: vehicle.recommendedVehicle,
           fragile: product.fragile,
           valueSensitive: electronics,
           vanguardRecommended: electronics,
@@ -121,6 +135,25 @@ class IrisWeightEstimator {
       final totalWeightKg = repositoryItem.estimatedWeightKg * quantity;
       final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
       final dimensions = repositoryItem.typicalDimensionsCm;
+      final typicalDimensions = ItemDimensionsCm(
+        length: dimensions.lengthCm,
+        width: dimensions.widthCm,
+        height: dimensions.heightCm,
+      );
+      final vehicle = _resolveCanonicalVehicle(
+        totalWeightKg: totalWeightKg,
+        description: description,
+        packageType: repositoryItem.category,
+        dimensions: typicalDimensions,
+        repositoryVehicleSuitability: repositoryItem.vehicleSuitability,
+        fragile: repositoryItem.fragile,
+        highValue: repositoryItem.highValue,
+        vanguardRequired: repositoryItem.requiresVanguard,
+        stackable: repositoryItem.stackable,
+        quantity: quantity,
+        singleItemWeightKg: repositoryItem.estimatedWeightKg,
+        handlingNotes: repositoryItem.deliveryNotes,
+      );
       return IrisWeightLookupResult(
         matchedItemName: repositoryItem.itemName,
         quantity: quantity,
@@ -143,13 +176,9 @@ class IrisWeightEstimator {
             : 'Medium Confidence',
         requiresVehicleReview: repositoryItem.requiresIRISReview ||
             totalWeightKg > 10 ||
-            repositoryItem.vehicleSuitability == 'Van',
-        typicalDimensions: ItemDimensionsCm(
-          length: dimensions.lengthCm,
-          width: dimensions.widthCm,
-          height: dimensions.heightCm,
-        ),
-        vehicleSuitability: repositoryItem.vehicleSuitability,
+            vehicle.recommendedVehicle == 'Van',
+        typicalDimensions: typicalDimensions,
+        vehicleSuitability: vehicle.recommendedVehicle,
         fragile: repositoryItem.fragile,
         valueSensitive: repositoryItem.highValue,
         vanguardRecommended: repositoryItem.requiresVanguard,
@@ -170,6 +199,20 @@ class IrisWeightEstimator {
       if (!fallback.patterns.any(text.contains)) continue;
       final safeQuantity = quantity <= 0 ? 1 : quantity;
       final totalWeightKg = fallback.weightKg * safeQuantity;
+      final vehicle = _resolveCanonicalVehicle(
+        totalWeightKg: totalWeightKg,
+        description: text,
+        packageType: fallback.packageType,
+        dimensions: fallback.typicalDimensions,
+        repositoryVehicleSuitability: fallback.vehicleSuitability,
+        fragile: fallback.fragile,
+        highValue: fallback.valueSensitive,
+        vanguardRequired: fallback.vanguardRecommended,
+        stackable: fallback.stackable,
+        quantity: safeQuantity,
+        singleItemWeightKg: fallback.weightKg,
+        handlingNotes: fallback.handlingNotes,
+      );
       return IrisWeightLookupResult(
         matchedItemName: fallback.name,
         quantity: safeQuantity,
@@ -183,11 +226,11 @@ class IrisWeightEstimator {
         packageType: fallback.packageType,
         weightSource: 'category_estimate',
         truthBand: 'Category Estimate',
-        requiresVehicleReview: fallback.vehicleSuitability == 'Van' ||
+        requiresVehicleReview: vehicle.recommendedVehicle == 'Van' ||
             totalWeightKg > 10 ||
             fallback.requiresVehicleReview,
         typicalDimensions: fallback.typicalDimensions,
-        vehicleSuitability: fallback.vehicleSuitability,
+        vehicleSuitability: vehicle.recommendedVehicle,
         fragile: fallback.fragile,
         valueSensitive: fallback.valueSensitive,
         vanguardRecommended: fallback.vanguardRecommended,
@@ -196,6 +239,42 @@ class IrisWeightEstimator {
       );
     }
     return null;
+  }
+
+  static VehicleSuitability _resolveCanonicalVehicle({
+    required double totalWeightKg,
+    required String description,
+    required String packageType,
+    required ItemDimensionsCm? dimensions,
+    required String repositoryVehicleSuitability,
+    required bool fragile,
+    required bool highValue,
+    required bool vanguardRequired,
+    required bool stackable,
+    required int quantity,
+    required double singleItemWeightKg,
+    required String handlingNotes,
+  }) {
+    return DeliveryPricing.resolveVehicleSuitability(
+      weightKg: totalWeightKg,
+      description: description,
+      itemCategory: packageType,
+      dimensions: dimensions == null
+          ? null
+          : DeliveryItemDimensions(
+              lengthCm: dimensions.length,
+              widthCm: dimensions.width,
+              heightCm: dimensions.height,
+            ),
+      repositoryVehicleSuitability: repositoryVehicleSuitability,
+      fragile: fragile,
+      highValue: highValue,
+      vanguardRequired: vanguardRequired,
+      stackable: stackable,
+      quantity: quantity,
+      singleItemWeightKg: singleItemWeightKg,
+      handlingNotes: handlingNotes,
+    );
   }
 
   static IrisWeightLookupResult? _estimateTvBySize(String text, int quantity) {

@@ -584,11 +584,21 @@ class DeliveryPricing {
     final compactBikeItem = [
       'keys',
       'key set',
-      'phone',
-      'iphone',
       'small electronics',
       'lightweight gift',
     ].any(text.contains);
+    final highValueElectronic = highValue &&
+        (categoryText.contains('electronics') ||
+            [
+              'iphone',
+              'phone',
+              'smartphone',
+              'mobile',
+              'laptop',
+              'macbook',
+              'tablet',
+              'ipad',
+            ].any(text.contains));
     final resolvedQuantity = max(1, quantity ?? _quantityFromDescription(text));
     final largestItemWeightKg = singleItemWeightKg ??
         (resolvedQuantity > 1 ? weightKg / resolvedQuantity : weightKg);
@@ -710,7 +720,9 @@ class DeliveryPricing {
       explanation: recommended == 'Van'
           ? 'Recommended because this item may be bulky or needs extra loading space.'
           : recommended == 'Car'
-              ? 'Recommended because this item fits safely in a car.'
+              ? highValueElectronic
+                  ? 'Car recommended because this is a high-value electronic item requiring safer enclosed handling.'
+                  : 'Recommended because this item fits safely in a car.'
               : 'Recommended as a faster option for this small, lightweight delivery.',
       handlingNotes: compactLuggage && weightKg > 20
           ? 'Heavy item - rider must confirm they can lift safely.'

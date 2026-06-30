@@ -23601,14 +23601,63 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   String _irisSuggestedVehicle() {
-    final recommendation = _vehicleSuitability.recommendedVehicle.trim();
-    if (recommendation.isNotEmpty) return recommendation;
-    final estimateVehicle = (_irisVehicleSuitability ?? '').trim();
-    if (estimateVehicle.isNotEmpty) return estimateVehicle;
+    final override =
+        '${_activeRequestData?['adminVehicleOverride'] ?? ''}'.trim();
+    if (override.isNotEmpty) return override;
+    final canonical = _vehicleSuitability.recommendedVehicle.trim();
+    if (canonical.isNotEmpty) return canonical;
     final weight = _deliveryClassification.finalWeightKg > 0
         ? _deliveryClassification.finalWeightKg
         : (_irisEstimatedWeightKg ?? _senderEnteredWeightKg ?? 0);
     return DeliveryPricing.recommendedVehicleForWeight(weight);
+  }
+
+  Map<String, dynamic> _irisVehicleDecision() {
+    final suitability = _vehicleSuitability;
+    final activeVehicle = _irisSuggestedVehicle();
+    final disqualifiers = <String>[];
+    final text = _description.text.toLowerCase();
+    if (activeVehicle.toLowerCase() != 'bike') {
+      if (_irisValueSensitive ||
+          _containsAny(text, const [
+            'iphone',
+            'phone',
+            'smartphone',
+            'mobile',
+            'laptop',
+            'macbook',
+            'tablet',
+            'ipad',
+          ])) {
+        disqualifiers.add('bike_disallowed_high_value_electronics');
+      }
+      if (_irisFragile) {
+        disqualifiers.add('bike_disallowed_fragile_item');
+      }
+      if (_irisBundleDetected(text)) {
+        disqualifiers.add('bike_disallowed_bundle');
+      }
+      if ((_irisEstimatedWeightKg ?? _deliveryClassification.finalWeightKg) >
+          10) {
+        disqualifiers.add('bike_disallowed_weight');
+      }
+    }
+    if (activeVehicle.toLowerCase() == 'van') {
+      disqualifiers.add('car_disallowed_size_or_weight');
+    }
+    return {
+      'recommendedVehicle': activeVehicle.toLowerCase(),
+      'minimumVehicle': suitability.recommendedVehicle.toLowerCase(),
+      'vehicleReason': suitability.explanation,
+      'vehicleConfidence': suitability.score,
+      'vehicleDisqualifiers': disqualifiers,
+      'vehicleFlags': _irisDeliveryFlags(),
+      'vehicleDecisionSource': 'delivery_pricing_vehicle_suitability',
+      'adminVehicleOverride': _activeRequestData?['adminVehicleOverride'],
+      'overrideReason': _activeRequestData?['overrideReason'],
+      'overrideBy': _activeRequestData?['overrideBy'],
+      'overrideAt': _activeRequestData?['overrideAt'],
+    };
   }
 
   List<String> _irisDeliveryFlags() {
@@ -23792,8 +23841,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_irisBundleDetected(_description.text)) {
       factors.add(_irisBundlePrompt);
     }
-    final vehicle = _irisSuggestedVehicle();
-    factors.add('Suggested vehicle: $vehicle.');
+    final vehicleDecision = _irisVehicleDecision();
+    factors.add(
+      'Recommended vehicle: ${vehicleDecision['recommendedVehicle']}. ${vehicleDecision['vehicleReason']}',
+    );
     final flags = _irisDeliveryFlags();
     if (flags.contains('vanguard_required')) {
       factors.add(
@@ -23822,6 +23873,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final classification = _deliveryClassification;
     final confidenceScore = _irisConfidencePoints();
     final flags = _irisDeliveryFlags();
+    final vehicleDecision = _irisVehicleDecision();
     final requiresVanguard = flags.contains('vanguard_required');
     final requiresAdminReview = flags.contains('admin_review_required');
     final hasPhoto = parcelPhotoData['hasPhoto'] == true ||
@@ -23858,7 +23910,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'truthBand': _irisTruthBand(),
           },
       ],
-      'suggestedVehicle': _irisSuggestedVehicle(),
+      'suggestedVehicle': vehicleDecision['recommendedVehicle'],
+      'recommendedVehicle': vehicleDecision['recommendedVehicle'],
+      'minimumVehicle': vehicleDecision['minimumVehicle'],
+      'vehicleReason': vehicleDecision['vehicleReason'],
+      'vehicleConfidence': vehicleDecision['vehicleConfidence'],
+      'vehicleDisqualifiers': vehicleDecision['vehicleDisqualifiers'],
+      'vehicleFlags': vehicleDecision['vehicleFlags'],
+      'vehicleDecisionSource': vehicleDecision['vehicleDecisionSource'],
+      'adminVehicleOverride': vehicleDecision['adminVehicleOverride'],
+      'overrideReason': vehicleDecision['overrideReason'],
+      'overrideBy': vehicleDecision['overrideBy'],
+      'overrideAt': vehicleDecision['overrideAt'],
       'flags': flags,
       'requiresVanguard': requiresVanguard,
       'requiresAdminReview': requiresAdminReview,
@@ -24705,8 +24768,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final parcelPhotoUrl =
         parcelPhotoData['imageUrl'] ?? parcelPhotoData['photoUrl'];
     final suitability = _vehicleSuitability;
+    final vehicleDecision = _irisVehicleDecision();
     final safeVehicleName = _effectiveVehicle.name;
-    final irisRecommendedVehicle = suitability.recommendedVehicle;
+    final irisRecommendedVehicle = '${vehicleDecision['recommendedVehicle']}';
     final vehicleWasUpgraded = DeliveryPricing.vehicleWasUpgraded(
       safeVehicleName,
       irisRecommendedVehicle,
@@ -24766,6 +24830,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'handlingNotes': suitability.handlingNotes,
         'fragile': suitability.fragile,
         'stackable': suitability.stackable,
+        'minimumVehicle': vehicleDecision['minimumVehicle'],
+        'vehicleReason': vehicleDecision['vehicleReason'],
+        'vehicleConfidence': vehicleDecision['vehicleConfidence'],
+        'vehicleDisqualifiers': vehicleDecision['vehicleDisqualifiers'],
+        'vehicleFlags': vehicleDecision['vehicleFlags'],
+        'vehicleDecisionSource': vehicleDecision['vehicleDecisionSource'],
       },
       'finalWeightKg': classification.finalWeightKg,
       'finalWeightBand': classification.finalWeightBand,
@@ -24782,6 +24852,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'totalEstimatedWeightKg': _irisEstimatedWeightKg,
       'weightClass': _irisWeightBand,
       'irisRecommendedVehicle': irisRecommendedVehicle,
+      'irisVehicleDecision': vehicleDecision,
       'userSelectedVehicle': safeVehicleName,
       'vehicleWasUpgraded': vehicleWasUpgraded,
       'hasPhoto': hasPhoto,
@@ -24955,6 +25026,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisWeightConfidence': _irisWeightConfidence,
       'irisWeightExplanation': _irisWeightExplanation,
       'irisPhotoInsight': _irisImageInsight?.toJson(),
+      'recommendedVehicle': vehicleDecision['recommendedVehicle'],
+      'minimumVehicle': vehicleDecision['minimumVehicle'],
+      'vehicleReason': vehicleDecision['vehicleReason'],
+      'vehicleConfidence': vehicleDecision['vehicleConfidence'],
+      'vehicleDisqualifiers': vehicleDecision['vehicleDisqualifiers'],
+      'vehicleFlags': vehicleDecision['vehicleFlags'],
+      'vehicleDecisionSource': vehicleDecision['vehicleDecisionSource'],
       'irisImageConfidenceScore': _irisImageInsight?.confidenceScore,
       'irisImageNeedsHumanReview': _irisImageInsight?.needsHumanReview,
       'irisImageHandlingNotes': _irisImageInsight?.handlingNotes,

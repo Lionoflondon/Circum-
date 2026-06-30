@@ -129,7 +129,7 @@ void main() {
       expect(estimate.matchedItemName, 'Apple iPhone 15');
       expect(estimate.truthBand, 'Exact Match');
       expect(estimate.typicalDimensions?.label, '15 x 8 x 2 cm');
-      expect(estimate.vehicleSuitability, 'Bike');
+      expect(estimate.vehicleSuitability, 'Car');
       expect(estimate.fragile, isTrue);
     });
 
@@ -478,8 +478,74 @@ void main() {
       expect(makeup?.matchedItemName, 'Makeup Kit');
       expect(phone?.matchedItemName, 'Apple iPhone 13');
       expect(phone?.matchedItemName, isNot(contains('Suitcase')));
+      expect(phone?.vehicleSuitability, 'Car');
       expect(documents?.packageType, 'Documents');
       expect(documents?.vehicleSuitability, 'Bike');
+    });
+
+    test('vehicle recommendation keeps high-value electronics enclosed', () {
+      final iphone = IrisWeightEstimator.knownProductEstimate('iPhone 16');
+      final laptop = IrisWeightEstimator.knownProductEstimate('MacBook Pro 16');
+      final genericPhone = IrisWeightEstimator.knownProductEstimate('1 phone');
+
+      expect(iphone?.vehicleSuitability, 'Car');
+      expect(laptop?.vehicleSuitability, 'Car');
+      expect(genericPhone?.vehicleSuitability, 'Car');
+    });
+
+    test('vehicle recommendation keeps documents bike eligible', () {
+      final documents =
+          IrisWeightEstimator.knownProductEstimate('documents for solicitor');
+
+      expect(documents?.vehicleSuitability, 'Bike');
+    });
+
+    test('vehicle recommendation escalates bulky and appliance items to van',
+        () {
+      final sofa = IrisWeightEstimator.knownProductEstimate('sofa');
+      final appliance = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 70,
+        description: 'large appliance washing machine',
+        itemCategory: 'Kitchen appliance',
+        repositoryVehicleSuitability: 'Van',
+      );
+
+      expect(sofa?.vehicleSuitability, 'Van');
+      expect(appliance.recommendedVehicle, 'Van');
+    });
+
+    test('vehicle recommendation escalates multiple small electronics to car',
+        () {
+      final bundle = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 8,
+        description: 'electronics bundle with multiple small items',
+        itemCategory: 'Electronics',
+        repositoryVehicleSuitability: 'Bike',
+        highValue: true,
+        vanguardRequired: true,
+        fragile: true,
+        quantity: 6,
+        singleItemWeightKg: 1.3,
+      );
+
+      expect(bundle.recommendedVehicle, 'Car');
+      expect(bundle.explanation.toLowerCase(), isNot(contains('bike')));
+    });
+
+    test('vehicle reasoning cannot contradict recommendation', () {
+      final suitability = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 0.2,
+        description: 'iPhone 16',
+        itemCategory: 'Electronics',
+        repositoryVehicleSuitability: 'Bike',
+        highValue: true,
+        vanguardRequired: true,
+        fragile: true,
+      );
+
+      expect(suitability.recommendedVehicle, 'Car');
+      expect(suitability.explanation, contains('Car recommended'));
+      expect(suitability.explanation.toLowerCase(), isNot(contains('bike')));
     });
 
     test('bulky known items use realistic weights and quantity', () {
