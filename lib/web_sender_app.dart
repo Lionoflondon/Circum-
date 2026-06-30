@@ -38,6 +38,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
@@ -39005,6 +39006,26 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     if (mounted) setState(() => _message = 'Business profile saved.');
   }
 
+  Future<void> _addBusinessMoment(Map<String, dynamic> account) async {
+    final id = '${account['id'] ?? account['businessId'] ?? ''}';
+    if (id.isEmpty) return;
+    final moment = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const _BusinessMomentDialog(),
+    );
+    if (moment == null) return;
+    await FirebaseFirestore.instance
+        .collection('businessAccounts')
+        .doc(id)
+        .set({
+      'irisMoments': FieldValue.arrayUnion([moment]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    if (mounted) {
+      setState(() => _message = 'IRIS Moment added.');
+    }
+  }
+
   Future<void> _inviteMember(Map<String, dynamic> account) async {
     final id = '${account['id'] ?? account['businessId'] ?? ''}';
     final email = _inviteEmail.text.trim().toLowerCase();
@@ -39351,6 +39372,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
                   onSelectAccount: (id) =>
                       setState(() => _selectedBusinessId = id),
                   onSaveProfile: () => _saveProfile(selected),
+                  onAddMoment: () => _addBusinessMoment(selected),
                   onInviteRole: (role) => setState(() => _inviteRole = role),
                   onInviteMember: () => _inviteMember(selected),
                   onUpdateMember: (member, role) =>
@@ -39418,6 +39440,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
   final ValueChanged<_BusinessPortalTab> onSelectTab;
   final ValueChanged<String> onSelectAccount;
   final VoidCallback onSaveProfile;
+  final VoidCallback onAddMoment;
   final ValueChanged<String> onInviteRole;
   final VoidCallback onInviteMember;
   final void Function(Map<String, dynamic>, String) onUpdateMember;
@@ -39456,6 +39479,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
     required this.onSelectTab,
     required this.onSelectAccount,
     required this.onSaveProfile,
+    required this.onAddMoment,
     required this.onInviteRole,
     required this.onInviteMember,
     required this.onUpdateMember,
@@ -39606,6 +39630,7 @@ class _BusinessPortalScaffold extends StatelessWidget {
           onOpenGifts: () => onSelectTab(_BusinessPortalTab.gifts),
           onOpenVanguard: () => onSelectTab(_BusinessPortalTab.vanguard),
           onOpenAnalytics: () => onSelectTab(_BusinessPortalTab.analytics),
+          onAddMoment: onAddMoment,
           onPayInvoice: onPayInvoice,
           busy: busy),
       _BusinessPortalTab.invoicing => _BusinessInvoicePage(
@@ -39830,6 +39855,7 @@ class _BusinessOverviewPage extends StatelessWidget {
   final VoidCallback onOpenGifts;
   final VoidCallback onOpenVanguard;
   final VoidCallback onOpenAnalytics;
+  final VoidCallback onAddMoment;
   final void Function(Map<String, dynamic>, String) onPayInvoice;
   final bool busy;
 
@@ -39845,6 +39871,7 @@ class _BusinessOverviewPage extends StatelessWidget {
       required this.onOpenGifts,
       required this.onOpenVanguard,
       required this.onOpenAnalytics,
+      required this.onAddMoment,
       required this.onPayInvoice,
       required this.busy});
 
@@ -39868,9 +39895,18 @@ class _BusinessOverviewPage extends StatelessWidget {
           onOpenDeliveries: onOpenDeliveries,
           onOpenGifts: onOpenGifts,
           onOpenHealthPlus: onOpenHealthPlus,
-          onOpenMarketplace: onAccess,
+          onOpenMoments: onAddMoment,
           onOpenVanguard: onOpenVanguard,
           onOpenAnalytics: onOpenAnalytics,
+        ),
+        const SizedBox(height: 18),
+        _BusinessIrisMomentsPanel(
+          account: account,
+          canOperate: canOperate,
+          onAddMoment: onAddMoment,
+          onSendGift: onOpenGifts,
+          onCreateDelivery: onAccess,
+          onScheduleHealthPlus: onOpenHealthPlus,
         ),
         const SizedBox(height: 18),
         _BusinessRecentActivityFeed(
@@ -39889,7 +39925,7 @@ class _BusinessOverviewPage extends StatelessWidget {
           onHealthPlus: onOpenHealthPlus,
           onCreateInvoice: onOpenInvoices,
           onInviteTeam: onOpenTeam,
-          onMarketplace: onAccess,
+          onAddMoment: onAddMoment,
         ),
         const SizedBox(height: 18),
         _BusinessOverviewInvoicesTable(
@@ -40014,7 +40050,7 @@ class _BusinessEcosystemCards extends StatelessWidget {
   final VoidCallback onOpenDeliveries;
   final VoidCallback onOpenGifts;
   final VoidCallback onOpenHealthPlus;
-  final VoidCallback onOpenMarketplace;
+  final VoidCallback onOpenMoments;
   final VoidCallback onOpenVanguard;
   final VoidCallback onOpenAnalytics;
 
@@ -40022,7 +40058,7 @@ class _BusinessEcosystemCards extends StatelessWidget {
     required this.onOpenDeliveries,
     required this.onOpenGifts,
     required this.onOpenHealthPlus,
-    required this.onOpenMarketplace,
+    required this.onOpenMoments,
     required this.onOpenVanguard,
     required this.onOpenAnalytics,
   });
@@ -40049,10 +40085,10 @@ class _BusinessEcosystemCards extends StatelessWidget {
         onOpenHealthPlus
       ),
       (
-        Icons.storefront_outlined,
-        'Marketplace',
-        'Browse approved business services.',
-        onOpenMarketplace
+        Icons.auto_awesome_outlined,
+        'IRIS Moments',
+        'Turn people, dates and reminders into thoughtful actions.',
+        onOpenMoments
       ),
       (
         Icons.shield_outlined,
@@ -40140,6 +40176,292 @@ class _BusinessEcosystemCard extends StatelessWidget {
           ]),
         ),
       );
+}
+
+class _BusinessIrisMomentsPanel extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final bool canOperate;
+  final VoidCallback onAddMoment;
+  final VoidCallback onSendGift;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onScheduleHealthPlus;
+
+  const _BusinessIrisMomentsPanel({
+    required this.account,
+    required this.canOperate,
+    required this.onAddMoment,
+    required this.onSendGift,
+    required this.onCreateDelivery,
+    required this.onScheduleHealthPlus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final moments = _businessMoments(account);
+    final openMoments = moments
+        .where((moment) => _momentStatus(moment) != 'completed')
+        .toList(growable: false);
+    final completed = moments
+        .where((moment) => _momentStatus(moment) == 'completed')
+        .take(3)
+        .toList(growable: false);
+    final today = openMoments
+        .where((moment) => _momentBucket(moment) == 'today')
+        .toList(growable: false);
+    final thisWeek = openMoments
+        .where((moment) => _momentBucket(moment) == 'week')
+        .toList(growable: false);
+    final thisMonth = openMoments
+        .where((moment) => _momentBucket(moment) == 'month')
+        .toList(growable: false);
+    final suggested = openMoments.take(4).toList(growable: false);
+
+    return _BusinessGlass(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Expanded(
+            child: _BusinessPanelHeader(
+              title: 'IRIS Moments',
+              subtitle:
+                  'Relationship intelligence for birthdays, renewals, Health+ reminders and company milestones.',
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: canOperate ? onAddMoment : null,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Add Moment'),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 860;
+          final summary = [
+            _BusinessMomentBucket(
+              title: 'Today',
+              moments: today,
+              emptyText: 'No moments today.',
+            ),
+            _BusinessMomentBucket(
+              title: 'This Week',
+              moments: thisWeek,
+              emptyText: 'Nothing due this week.',
+            ),
+            _BusinessMomentBucket(
+              title: 'This Month',
+              moments: thisMonth,
+              emptyText: 'No later moments this month.',
+            ),
+          ];
+          return compact
+              ? Column(
+                  children: summary
+                      .map((item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: item,
+                          ))
+                      .toList(growable: false),
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: summary
+                      .map((item) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: item,
+                            ),
+                          ))
+                      .toList(growable: false),
+                );
+        }),
+        const SizedBox(height: 16),
+        Text('Suggested Actions',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        if (suggested.isEmpty)
+          const _BusinessEmptyState(
+              'Add people and dates so IRIS can recommend thoughtful next steps.')
+        else
+          ...suggested.map((moment) => _BusinessMomentSuggestion(
+                moment: moment,
+                onSendGift: onSendGift,
+                onCreateDelivery: onCreateDelivery,
+                onScheduleHealthPlus: onScheduleHealthPlus,
+                onCreateReminder: onAddMoment,
+              )),
+        const SizedBox(height: 16),
+        Text('Recently Completed',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        if (completed.isEmpty)
+          const _BusinessEmptyState(
+              'Completed gifts, deliveries, cards and reminders will appear here.')
+        else
+          ...completed.map((moment) => _BusinessMomentLine(moment: moment)),
+      ]),
+    );
+  }
+}
+
+class _BusinessMomentBucket extends StatelessWidget {
+  final String title;
+  final List<Map<String, dynamic>> moments;
+  final String emptyText;
+
+  const _BusinessMomentBucket({
+    required this.title,
+    required this.moments,
+    required this.emptyText,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.045),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.auto_awesome_outlined,
+                color: const Color(0xff3b82f6), size: 18),
+            const SizedBox(width: 8),
+            Text(title,
+                style: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w900)),
+          ]),
+          const SizedBox(height: 10),
+          if (moments.isEmpty)
+            Text(emptyText,
+                style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.58),
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700))
+          else
+            ...moments.take(3).map((moment) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _BusinessMomentLine(moment: moment),
+                )),
+        ]),
+      );
+}
+
+class _BusinessMomentLine extends StatelessWidget {
+  final Map<String, dynamic> moment;
+
+  const _BusinessMomentLine({required this.moment});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _momentName(moment);
+    final type = _momentTypeLabel(moment);
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        width: 8,
+        height: 8,
+        margin: const EdgeInsets.only(top: 7),
+        decoration: const BoxDecoration(
+            color: Color(0xff60a5fa), shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w900)),
+          Text('$type · ${_momentDateLabel(moment)}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.58),
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700)),
+        ]),
+      ),
+    ]);
+  }
+}
+
+class _BusinessMomentSuggestion extends StatelessWidget {
+  final Map<String, dynamic> moment;
+  final VoidCallback onSendGift;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onScheduleHealthPlus;
+  final VoidCallback onCreateReminder;
+
+  const _BusinessMomentSuggestion({
+    required this.moment,
+    required this.onSendGift,
+    required this.onCreateDelivery,
+    required this.onScheduleHealthPlus,
+    required this.onCreateReminder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final recommendation = _momentRecommendation(moment);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.052),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.psychology_alt_outlined,
+              color: Color(0xff60a5fa), size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(recommendation.$1,
+                style: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w900)),
+          ),
+          _BusinessBadge(_momentDateLabel(moment).toUpperCase()),
+        ]),
+        const SizedBox(height: 8),
+        Text(recommendation.$2,
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.68),
+                height: 1.42,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          OutlinedButton.icon(
+              onPressed: onSendGift,
+              icon: const Icon(Icons.card_giftcard_outlined),
+              label: const Text('Send Gift')),
+          OutlinedButton.icon(
+              onPressed: onCreateDelivery,
+              icon: const Icon(Icons.local_shipping_outlined),
+              label: const Text('Create Delivery')),
+          OutlinedButton.icon(
+              onPressed: onScheduleHealthPlus,
+              icon: const Icon(Icons.health_and_safety_outlined),
+              label: const Text('Schedule Health+ Delivery')),
+          OutlinedButton.icon(
+              onPressed: onCreateReminder,
+              icon: const Icon(Icons.notifications_active_outlined),
+              label: const Text('Create Reminder')),
+          OutlinedButton.icon(
+              onPressed: onSendGift,
+              icon: const Icon(Icons.mail_outline_rounded),
+              label: const Text('Send Card')),
+          OutlinedButton.icon(
+              onPressed: onCreateReminder,
+              icon: const Icon(Icons.snooze_outlined),
+              label: const Text('Snooze')),
+        ])
+      ]),
+    );
+  }
 }
 
 class _BusinessRecentActivityFeed extends StatelessWidget {
@@ -40339,7 +40661,7 @@ class _BusinessQuickActions extends StatelessWidget {
   final VoidCallback onHealthPlus;
   final VoidCallback onCreateInvoice;
   final VoidCallback onInviteTeam;
-  final VoidCallback onMarketplace;
+  final VoidCallback onAddMoment;
 
   const _BusinessQuickActions({
     required this.canOperate,
@@ -40348,7 +40670,7 @@ class _BusinessQuickActions extends StatelessWidget {
     required this.onHealthPlus,
     required this.onCreateInvoice,
     required this.onInviteTeam,
-    required this.onMarketplace,
+    required this.onAddMoment,
   });
 
   @override
@@ -40372,9 +40694,9 @@ class _BusinessQuickActions extends StatelessWidget {
       (Icons.receipt_long_outlined, 'Create Invoice', onCreateInvoice),
       (Icons.person_add_alt_1_outlined, 'Invite Team Member', onInviteTeam),
       (
-        Icons.storefront_outlined,
-        'Marketplace',
-        canOperate ? onMarketplace : null
+        Icons.auto_awesome_outlined,
+        'Add Moment',
+        canOperate ? onAddMoment : null
       ),
     ];
     return _BusinessGlass(
@@ -41625,6 +41947,145 @@ class _BusinessPartPaymentDialogState
   }
 }
 
+class _BusinessMomentDialog extends StatefulWidget {
+  const _BusinessMomentDialog();
+
+  @override
+  State<_BusinessMomentDialog> createState() => _BusinessMomentDialogState();
+}
+
+class _BusinessMomentDialogState extends State<_BusinessMomentDialog> {
+  final _name = TextEditingController();
+  final _relationship = TextEditingController();
+  final _date = TextEditingController();
+  var _type = 'Employee birthday';
+  var _action = 'Send Gift';
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _relationship.dispose();
+    _date.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parsedDate = DateTime.tryParse(_date.text.trim());
+    final valid = _name.text.trim().isNotEmpty && parsedDate != null;
+    const types = [
+      'Employee birthday',
+      'Work anniversary',
+      'Client birthday',
+      'Supplier anniversary',
+      'Contract renewal',
+      'Medication reminder',
+      'Company milestone',
+      'Custom reminder',
+    ];
+    const actions = [
+      'Send Gift',
+      'Create Delivery',
+      'Schedule Health+ Delivery',
+      'Create Reminder',
+      'Send Card',
+      'Snooze',
+    ];
+    return AlertDialog(
+      backgroundColor: const Color(0xff101826),
+      title: Text('Add IRIS Moment',
+          style: GoogleFonts.dmSerifDisplay(color: Colors.white)),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            'Add a person, company date or reminder. IRIS will suggest the best Circum action when it becomes relevant.',
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.72),
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _name,
+            style: GoogleFonts.inter(color: Colors.white),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'Person or company'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _relationship,
+            style: GoogleFonts.inter(color: Colors.white),
+            decoration:
+                const InputDecoration(labelText: 'Relationship optional'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _type,
+            dropdownColor: const Color(0xff101826),
+            decoration: const InputDecoration(labelText: 'Moment type'),
+            items: types
+                .map((type) => DropdownMenuItem(
+                      value: type,
+                      child: Text(type,
+                          style: GoogleFonts.inter(color: Colors.white)),
+                    ))
+                .toList(growable: false),
+            onChanged: (value) => setState(() => _type = value ?? _type),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _date,
+            style: GoogleFonts.inter(color: Colors.white),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Date',
+              hintText: 'YYYY-MM-DD',
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _action,
+            dropdownColor: const Color(0xff101826),
+            decoration: const InputDecoration(labelText: 'Preferred action'),
+            items: actions
+                .map((action) => DropdownMenuItem(
+                      value: action,
+                      child: Text(action,
+                          style: GoogleFonts.inter(color: Colors.white)),
+                    ))
+                .toList(growable: false),
+            onChanged: (value) => setState(() => _action = value ?? _action),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(
+          onPressed: valid
+              ? () {
+                  Navigator.pop(context, {
+                    'momentId': const Uuid().v4(),
+                    'name': _name.text.trim(),
+                    'relationship': _relationship.text.trim(),
+                    'type': _type,
+                    'eventDate': Timestamp.fromDate(parsedDate),
+                    'preferredAction': _action,
+                    'status': 'upcoming',
+                    'createdAt': Timestamp.now(),
+                    'lastUpdated': Timestamp.now(),
+                  });
+                }
+              : null,
+          child: const Text('Add Moment'),
+        ),
+      ],
+    );
+  }
+}
+
 class _BusinessTeamPage extends StatelessWidget {
   final Map<String, dynamic> account;
   final bool canManage;
@@ -42567,6 +43028,108 @@ DateTime _businessDate(Map<String, dynamic> item) {
 String _businessDateLabel(DateTime date) => date.millisecondsSinceEpoch == 0
     ? 'Not dated'
     : '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+List<Map<String, dynamic>> _businessMoments(Map<String, dynamic> account) {
+  final raw = ((account['irisMoments'] ??
+          account['moments'] ??
+          account['businessMoments']) as List?) ??
+      const [];
+  return raw
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList(growable: false)
+    ..sort((a, b) => _momentDate(a).compareTo(_momentDate(b)));
+}
+
+DateTime _momentDate(Map<String, dynamic> moment) {
+  final raw = moment['eventDate'] ??
+      moment['date'] ??
+      moment['dueAt'] ??
+      moment['reminderAt'] ??
+      moment['createdAt'];
+  if (raw is Timestamp) return raw.toDate();
+  if (raw is DateTime) return raw;
+  return DateTime.tryParse('$raw') ?? DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+String _momentStatus(Map<String, dynamic> moment) =>
+    '${moment['status'] ?? 'upcoming'}'.trim().toLowerCase();
+
+String _momentName(Map<String, dynamic> moment) {
+  final name =
+      '${moment['name'] ?? moment['personName'] ?? moment['companyName'] ?? ''}'
+          .trim();
+  return name.isEmpty ? 'Important moment' : name;
+}
+
+String _momentTypeLabel(Map<String, dynamic> moment) {
+  final type =
+      '${moment['type'] ?? moment['eventType'] ?? 'Custom reminder'}'.trim();
+  return type.isEmpty ? 'Custom reminder' : type;
+}
+
+String _momentDateLabel(Map<String, dynamic> moment) {
+  final date = _momentDate(moment);
+  if (date.millisecondsSinceEpoch == 0) return 'Date to confirm';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(date.year, date.month, date.day);
+  final diff = day.difference(today).inDays;
+  if (diff == 0) return 'Today';
+  if (diff == 1) return 'Tomorrow';
+  if (diff > 1 && diff < 7) return 'In $diff days';
+  return _businessDateLabel(date);
+}
+
+String _momentBucket(Map<String, dynamic> moment) {
+  final date = _momentDate(moment);
+  if (date.millisecondsSinceEpoch == 0) return 'later';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(date.year, date.month, date.day);
+  final diff = day.difference(today).inDays;
+  if (diff == 0) return 'today';
+  if (diff > 0 && diff < 7) return 'week';
+  if (diff >= 7 && diff < 31) return 'month';
+  return 'later';
+}
+
+(String, String) _momentRecommendation(Map<String, dynamic> moment) {
+  final name = _momentName(moment);
+  final type = _momentTypeLabel(moment).toLowerCase();
+  final action = '${moment['preferredAction'] ?? ''}'.trim();
+  if (type.contains('medication')) {
+    return (
+      '$name has a Health+ reminder ${_momentDateLabel(moment).toLowerCase()}.',
+      'Recommended because recurring Health+ reminders should be handled before the due date.'
+    );
+  }
+  if (type.contains('contract') || type.contains('supplier')) {
+    return (
+      '$name has a relationship milestone coming up.',
+      'Recommended based on previous client appreciation and supplier relationship care.'
+    );
+  }
+  if (type.contains('birthday') || type.contains('anniversary')) {
+    return (
+      '$name has an important date ${_momentDateLabel(moment).toLowerCase()}.',
+      action == 'Send Card'
+          ? 'Recommended based on company policy for recognition moments.'
+          : 'Recommended based on previous gifts and thoughtful business relationship patterns.'
+    );
+  }
+  if (type.contains('milestone')) {
+    return (
+      '$name has a company milestone coming up.',
+      'Recommended because company milestones are strong moments for appreciation, gifts or cards.'
+    );
+  }
+  return (
+    '$name has a moment ${_momentDateLabel(moment).toLowerCase()}.',
+    'Recommended because IRIS found a saved business reminder that may need action.'
+  );
+}
+
 double _num(dynamic value) =>
     value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
 double _businessAmount(Map<String, dynamic> item) =>
