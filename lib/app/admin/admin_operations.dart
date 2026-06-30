@@ -393,10 +393,23 @@ class AdminDeliveryTools {
   }) {
     final copy = Map<String, dynamic>.from(source);
     copy
+      ..remove('_docId')
+      ..remove('id')
       ..remove('historyId')
       ..remove('driverRatingId')
       ..remove('ratedAt')
       ..remove('proofOfDelivery')
+      ..remove('deletedAt')
+      ..remove('deletedBy')
+      ..remove('archived')
+      ..remove('archivedAt')
+      ..remove('archivedByAdminId')
+      ..remove('staleArchived')
+      ..remove('staleCleanupReason')
+      ..remove('resolvedAt')
+      ..remove('resolvedBy')
+      ..remove('active')
+      ..['id'] = newId
       ..['requestId'] = newId
       ..['status'] = 'requested'
       ..['dispatchStatus'] = 'requested'
@@ -404,6 +417,7 @@ class AdminDeliveryTools {
       ..['createdAt'] = createdAt
       ..['updatedAt'] = createdAt
       ..['source'] = '${source['source'] ?? 'circum'}-admin-duplicate'
+      ..['originalRequestId'] = source['requestId'] ?? source['id']
       ..['adminDuplicatedFrom'] = source['requestId'] ?? source['id'];
     return copy;
   }

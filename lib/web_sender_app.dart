@@ -1214,7 +1214,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   ) async {
     final snapshot = await query.get();
     return snapshot.docs
-        .map((doc) => {'id': doc.id, ...doc.data()})
+        .map((doc) => {
+              ...doc.data(),
+              '_docId': doc.id,
+              'id': doc.data()['id'] ?? doc.id,
+            })
         .toList(growable: false);
   }
 
@@ -1375,7 +1379,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       setState(() => _message = 'Your role cannot delete deliveries.');
       return;
     }
-    final id = '${delivery['id'] ?? delivery['requestId'] ?? ''}'.trim();
+    final id =
+        '${delivery['_docId'] ?? delivery['requestId'] ?? delivery['id'] ?? ''}'
+            .trim();
     if (id.isEmpty) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1433,7 +1439,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       setState(() => _message = 'Your role cannot archive stale orders.');
       return;
     }
-    final id = '${delivery['id'] ?? delivery['requestId'] ?? ''}'.trim();
+    final id =
+        '${delivery['_docId'] ?? delivery['requestId'] ?? delivery['id'] ?? ''}'
+            .trim();
     if (id.isEmpty) return;
     final reasonController = TextEditingController();
     var reasonError = '';
@@ -1809,7 +1817,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     Map<String, dynamic> record,
     String status,
   ) async {
-    final id = '${record['id'] ?? record['requestId'] ?? ''}';
+    final id =
+        '${collection == 'deliveryRequests' ? (record['_docId'] ?? record['requestId'] ?? record['id']) : (record['id'] ?? record['requestId']) ?? ''}';
     if (id.isEmpty) return;
     final oldStatus = '${record['status'] ?? record['driverStatus'] ?? ''}';
     await FirebaseFirestore.instance.collection(collection).doc(id).set({
@@ -3351,10 +3360,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ],
           records: adminSearch(
               _deliveries.where((delivery) {
-                final status = '${delivery['status'] ?? ''}'.toLowerCase();
                 final visible = _showDeletedDeliveries ||
-                    (status != 'deleted' &&
-                        !_isArchivedDeliveryRecord(delivery));
+                    !_isArchivedDeliveryRecord(delivery);
                 final serviceMatches = _deliveryServiceFilter == 'ALL' ||
                     _movementServiceType(delivery) == _deliveryServiceFilter;
                 return visible && serviceMatches;
@@ -11154,9 +11161,13 @@ bool _isArchivedDeliveryRecord(Map<String, dynamic> delivery) {
     'voided',
     'cancelled_by_admin',
     'deleted',
+    'resolved',
   };
   return delivery['archived'] == true ||
       delivery['active'] == false ||
+      delivery['deletedAt'] != null ||
+      delivery['archivedAt'] != null ||
+      delivery['resolvedAt'] != null ||
       archivedStatuses.contains(status) ||
       archivedStatuses.contains(matchingStatus) ||
       archivedStatuses.contains(dispatchStatus);
