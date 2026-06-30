@@ -19527,6 +19527,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
+    if (!_isHealthPlusRoute && !_senderAuthLoading && _senderUser == null) {
+      return _buildSenderAccessGate(colors);
+    }
     return Stack(
       children: [
         LayoutBuilder(builder: (context, constraints) {
@@ -19630,21 +19633,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_senderUser == null) {
-      return _SenderAccessGate(
-        colors: colors,
-        signupMode: _senderSignupMode,
-        busy: _senderAuthBusy,
-        message: _senderProfileMessage,
-        email: _senderEmail,
-        password: _senderPassword,
-        fullName: _senderName,
-        phone: _senderPhone,
-        onToggleMode: () =>
-            setState(() => _senderSignupMode = !_senderSignupMode),
-        onSignIn: _signInSender,
-        onSignUp: _signUpSender,
-        onForgotPassword: _sendSenderPasswordReset,
-      );
+      return _buildSenderAccessGate(colors);
     }
     if (!_roleChoiceConfirmed &&
         _availableRoles.length > 1 &&
@@ -19977,6 +19966,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onCancelBooking: _cancelSenderBooking,
         ),
     };
+  }
+
+  Widget _buildSenderAccessGate(_CircumColors colors) {
+    return _SenderAccessGate(
+      colors: colors,
+      signupMode: _senderSignupMode,
+      busy: _senderAuthBusy,
+      message: _senderProfileMessage,
+      email: _senderEmail,
+      password: _senderPassword,
+      fullName: _senderName,
+      phone: _senderPhone,
+      onToggleMode: () =>
+          setState(() => _senderSignupMode = !_senderSignupMode),
+      onSignIn: _signInSender,
+      onSignUp: _signUpSender,
+      onForgotPassword: _sendSenderPasswordReset,
+    );
   }
 
   Widget _buildHealthPlusStep(_CircumColors colors) {
@@ -24910,7 +24917,7 @@ class _StepBadge extends StatelessWidget {
   }
 }
 
-class _SenderAccessGate extends StatelessWidget {
+class _SenderAccessGate extends StatefulWidget {
   final _CircumColors colors;
   final bool signupMode;
   final bool busy;
@@ -24940,115 +24947,432 @@ class _SenderAccessGate extends StatelessWidget {
   });
 
   @override
+  State<_SenderAccessGate> createState() => _SenderAccessGateState();
+}
+
+class _SenderAccessGateState extends State<_SenderAccessGate> {
+  final _identifier = TextEditingController();
+  bool _detailsVisible = false;
+  String? _localMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _identifier.addListener(_handleIdentifierChanged);
+  }
+
+  @override
+  void dispose() {
+    _identifier.removeListener(_handleIdentifierChanged);
+    _identifier.dispose();
+    super.dispose();
+  }
+
+  void _handleIdentifierChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _identifierValid {
+    final value = _identifier.text.trim();
+    return value.contains('@')
+        ? RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)
+        : RegExp(r'^\+?[0-9\s()\-]{8,}$').hasMatch(value);
+  }
+
+  bool get _identifierIsEmail => _identifier.text.trim().contains('@');
+
+  Future<void> _continue() async {
+    final value = _identifier.text.trim();
+    if (!_identifierValid) {
+      setState(
+          () => _localMessage = 'Enter a valid email address or phone number.');
+      return;
+    }
+    if (_identifierIsEmail) {
+      widget.email.text = value;
+      try {
+        final auth = FirebaseAuth.instance;
+        // ignore: deprecated_member_use
+        final methods = await auth.fetchSignInMethodsForEmail(value);
+        if (!mounted) return;
+        if (methods.isEmpty && !widget.signupMode) {
+          widget.onToggleMode();
+        } else if (methods.isNotEmpty && widget.signupMode) {
+          widget.onToggleMode();
+        }
+      } catch (_) {
+        if (!mounted) return;
+      }
+      setState(() {
+        _detailsVisible = true;
+        _localMessage = null;
+      });
+      return;
+    }
+    widget.phone.text = value;
+    if (!widget.signupMode) {
+      widget.onToggleMode();
+    }
+    setState(() {
+      _detailsVisible = true;
+      _localMessage = 'Add your email to create your Circum account.';
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(
-                colors: colors,
-                title: signupMode ? 'Create a sender account' : 'Sender login',
-              ),
-              const SizedBox(height: 8),
-              Text(
-                signupMode
-                    ? 'Create your account first. Then you can book parcels, see history, save addresses, and talk to support.'
-                    : 'Sign in to send parcels, track jobs, manage payments, and view your Circum history.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.45,
-                  fontWeight: FontWeight.w600,
+    final colors = widget.colors;
+    final message = _localMessage ?? widget.message;
+    return SizedBox(
+      width: double.infinity,
+      height: MediaQuery.sizeOf(context).height,
+      child: Stack(
+        children: [
+          Positioned(
+            bottom: -180,
+            left: -90,
+            right: -90,
+            child: Container(
+              height: 340,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    colors.adminAccent.withValues(alpha: 0.18),
+                    const Color(0xff8b5cf6).withValues(alpha: 0.07),
+                    Colors.transparent,
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              if (signupMode) ...[
-                _InputBox(
-                  colors: colors,
-                  controller: fullName,
-                  hint: 'Full name',
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: phone,
-                  hint: 'Phone number',
-                ),
-                const SizedBox(height: 10),
-              ],
-              _InputBox(
-                colors: colors,
-                controller: email,
-                hint: 'Email address',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: password,
-                hint: 'Password',
-                obscureText: true,
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: busy ? null : onForgotPassword,
-                  child: const Text('Forgot Password?'),
-                ),
-              ),
-              if (message != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  message!,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Row(
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: busy
-                          ? null
-                          : signupMode
-                              ? onSignUp
-                              : onSignIn,
-                      icon: busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.lock_open),
-                      label: Text(
-                        busy
-                            ? 'Please wait'
-                            : signupMode
-                                ? 'Create account'
-                                : 'Sign in',
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/circum_wordmark.png',
+                        width: 126,
+                        height: 30,
+                        fit: BoxFit.contain,
                       ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.text,
-                        foregroundColor: colors.inverseText,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
+                      const Spacer(),
+                      Icon(Icons.shield_outlined,
+                          color: colors.adminAccent, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Delivering trust, every time.',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: BackdropFilter(
+                            filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                            child: Container(
+                              padding: const EdgeInsets.all(30),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.065),
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: colors.adminAccent
+                                      .withValues(alpha: 0.22),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: colors.adminGlow
+                                        .withValues(alpha: 0.18),
+                                    blurRadius: 54,
+                                    offset: const Offset(0, 24),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 54,
+                                    height: 54,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: colors.adminAccent
+                                          .withValues(alpha: 0.14),
+                                      border: Border.all(
+                                        color: colors.adminAccent
+                                            .withValues(alpha: 0.28),
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'C',
+                                        style: GoogleFonts.dmSerifDisplay(
+                                          color: Colors.white,
+                                          fontSize: 30,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 22),
+                                  Text(
+                                    "What's your phone number\nor email?",
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.dmSerifDisplay(
+                                      color: colors.text,
+                                      fontSize: 40,
+                                      height: 1.04,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'Enter your details to sign in or create your Circum account.',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.inter(
+                                      color: colors.mutedText,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  if (!_detailsVisible) ...[
+                                    _InputBox(
+                                      colors: colors,
+                                      controller: _identifier,
+                                      hint: 'Enter phone number or email',
+                                      keyboardType: TextInputType.emailAddress,
+                                      glassStyle: true,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: FilledButton.icon(
+                                        onPressed:
+                                            widget.busy || !_identifierValid
+                                                ? null
+                                                : _continue,
+                                        iconAlignment: IconAlignment.end,
+                                        icon: const Icon(
+                                            Icons.arrow_forward_rounded),
+                                        label: const Text('Continue'),
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: colors.adminAccent,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 18),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Row(children: [
+                                      Expanded(
+                                          child: Divider(color: colors.border)),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12),
+                                        child: Text('or',
+                                            style: TextStyle(
+                                                color: colors.mutedText,
+                                                fontWeight: FontWeight.w800)),
+                                      ),
+                                      Expanded(
+                                          child: Divider(color: colors.border)),
+                                    ]),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: const [
+                                        Expanded(
+                                          child: _AuthSocialButton(
+                                            icon: Icons.g_mobiledata_rounded,
+                                            label: 'Continue with Google',
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: _AuthSocialButton(
+                                            icon: Icons.apple,
+                                            label: 'Continue with Apple',
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: _AuthSocialButton(
+                                            icon: Icons.qr_code_2_rounded,
+                                            label: 'Log in with QR code',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ] else ...[
+                                    if (widget.signupMode) ...[
+                                      _InputBox(
+                                          colors: colors,
+                                          controller: widget.fullName,
+                                          hint: 'Full name',
+                                          glassStyle: true),
+                                      const SizedBox(height: 10),
+                                      _InputBox(
+                                          colors: colors,
+                                          controller: widget.phone,
+                                          hint: 'Phone number',
+                                          glassStyle: true),
+                                      const SizedBox(height: 10),
+                                    ],
+                                    _InputBox(
+                                      colors: colors,
+                                      controller: widget.email,
+                                      hint: 'Email address',
+                                      keyboardType: TextInputType.emailAddress,
+                                      glassStyle: true,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _InputBox(
+                                      colors: colors,
+                                      controller: widget.password,
+                                      hint: 'Password',
+                                      obscureText: true,
+                                      glassStyle: true,
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: widget.busy
+                                            ? null
+                                            : widget.onForgotPassword,
+                                        child: const Text('Forgot password?'),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: FilledButton.icon(
+                                        onPressed: widget.busy
+                                            ? null
+                                            : widget.signupMode
+                                                ? widget.onSignUp
+                                                : widget.onSignIn,
+                                        iconAlignment: IconAlignment.end,
+                                        icon: widget.busy
+                                            ? const SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 2),
+                                              )
+                                            : const Icon(
+                                                Icons.arrow_forward_rounded),
+                                        label: Text(widget.busy
+                                            ? 'Please wait'
+                                            : widget.signupMode
+                                                ? 'Create account'
+                                                : 'Continue'),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: widget.busy
+                                          ? null
+                                          : widget.onToggleMode,
+                                      child: Text(widget.signupMode
+                                          ? 'I already have an account'
+                                          : 'Create a new account'),
+                                    ),
+                                  ],
+                                  if (message != null &&
+                                      message.trim().isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      message,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: colors.text,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 18),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.lock_outline,
+                                          color: colors.mutedText, size: 15),
+                                      const SizedBox(width: 7),
+                                      Text(
+                                        "We'll keep your data safe and secure.",
+                                        style: TextStyle(
+                                          color: colors.mutedText,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  TextButton(
-                    onPressed: busy ? null : onToggleMode,
-                    child: Text(signupMode ? 'Sign in' : 'Sign up'),
+                  Row(
+                    children: [
+                      Text(
+                        '© 2026 Circum Technologies Ltd.',
+                        style: TextStyle(color: colors.mutedText, fontSize: 12),
+                      ),
+                      const Spacer(),
+                      for (final item in const [
+                        'Terms of Service',
+                        'Privacy Policy',
+                        'Help',
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(left: 14),
+                          child: Text(item,
+                              style: TextStyle(
+                                  color: colors.mutedText,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthSocialButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _AuthSocialButton({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: null,
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        maxLines: 2,
+        textAlign: TextAlign.center,
+      ),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
       ),
     );
   }
@@ -25797,11 +26121,15 @@ class _BusinessAccountsStep extends StatelessWidget {
                           hint: 'Billing email',
                           glassStyle: true),
                       const SizedBox(height: 10),
-                      _InputBox(
-                          colors: colors,
-                          controller: businessAddress,
-                          hint: 'Business address',
-                          glassStyle: true),
+                      _AddressField(
+                        colors: colors,
+                        icon: Icons.business_outlined,
+                        label: 'Business address',
+                        controller: businessAddress,
+                        glassStyle: true,
+                        onSelected: (address) =>
+                            businessAddress.text = address.displayAddress,
+                      ),
                       const SizedBox(height: 14),
                       FilledButton.icon(
                         onPressed: onCreate,
@@ -31487,7 +31815,13 @@ class _ValidatedAddress {
   Map<String, dynamic> toJson() => {
         'rawInput': rawInput,
         'displayAddress': displayAddress,
+        'formattedAddress': displayAddress,
+        'addressLine1': [buildingNumber, street]
+            .whereType<String>()
+            .where((value) => value.trim().isNotEmpty)
+            .join(' '),
         'postcode': postcode,
+        'cityTown': city,
         'lat': lat,
         'lng': lng,
         'geocodeConfidence': confidence,
@@ -34280,74 +34614,105 @@ class _AddressFieldState extends State<_AddressField> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _suggestions
-                .map(
-                  (suggestion) => InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: _resolvingSuggestion
-                        ? null
-                        : () => _selectSuggestion(suggestion),
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 340),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 9,
+            children: [
+              ..._suggestions.map(
+                (suggestion) => InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: _resolvingSuggestion
+                      ? null
+                      : () => _selectSuggestion(suggestion),
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 340),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.field,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: suggestion.isPopularPlace
+                            ? colors.adminAccent
+                            : colors.border,
                       ),
-                      decoration: BoxDecoration(
-                        color: colors.field,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: suggestion.isPopularPlace
-                              ? colors.adminAccent
-                              : colors.border,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          suggestion.isPopularPlace
+                              ? Icons.star_rounded
+                              : widget.pharmacyMode
+                                  ? Icons.local_pharmacy
+                                  : Icons.place_outlined,
+                          color: colors.text,
+                          size: 16,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            suggestion.isPopularPlace
-                                ? Icons.star_rounded
-                                : widget.pharmacyMode
-                                    ? Icons.local_pharmacy
-                                    : Icons.place_outlined,
-                            color: colors.text,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                suggestion.displayAddress,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.text,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              if (suggestion.isPopularPlace)
                                 Text(
-                                  suggestion.displayAddress,
-                                  overflow: TextOverflow.ellipsis,
+                                  _resolvingSuggestion
+                                      ? 'Verifying with Google Places...'
+                                      : 'Popular place${suggestion.category == null ? '' : ' • ${suggestion.category}'}',
                                   style: TextStyle(
-                                    color: colors.text,
+                                    color: colors.mutedText,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                if (suggestion.isPopularPlace)
-                                  Text(
-                                    _resolvingSuggestion
-                                        ? 'Verifying with Google Places...'
-                                        : 'Popular place${suggestion.category == null ? '' : ' • ${suggestion.category}'}',
-                                    style: TextStyle(
-                                      color: colors.mutedText,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                              ],
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                )
-                .toList(),
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () {
+                  widget.onEdited?.call(widget.controller.text);
+                  setState(() => _suggestions = const []);
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: colors.panel.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_location_alt_outlined,
+                          color: colors.text, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Enter address manually',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
         if (_loadingSuggestions || _resolvingSuggestion) ...[
@@ -38553,17 +38918,31 @@ class _BusinessOnboardingPage extends StatelessWidget {
                           _BusinessTextField(
                               controller: contactName, label: 'Contact name'),
                           _BusinessTextField(controller: phone, label: 'Phone'),
-                          _BusinessTextField(
-                              controller: businessAddress,
-                              label: 'Business address'),
+                          _AddressField(
+                            colors: const _CircumColors(true),
+                            icon: Icons.business_outlined,
+                            label: 'Business address',
+                            controller: businessAddress,
+                            glassStyle: true,
+                            onSelected: (address) =>
+                                businessAddress.text = address.displayAddress,
+                          ),
+                          const SizedBox(height: 10),
                           _BusinessTextField(
                               controller: companyNumber,
                               label: 'VAT / company number optional'),
                           _BusinessTextField(
                               controller: billingEmail, label: 'Billing email'),
-                          _BusinessTextField(
-                              controller: defaultPickupAddress,
-                              label: 'Default pickup address'),
+                          _AddressField(
+                            colors: const _CircumColors(true),
+                            icon: Icons.radio_button_checked,
+                            label: 'Default pickup address',
+                            controller: defaultPickupAddress,
+                            glassStyle: true,
+                            onSelected: (address) => defaultPickupAddress.text =
+                                address.displayAddress,
+                          ),
+                          const SizedBox(height: 10),
                           if (message.isNotEmpty)
                             Text(message,
                                 style: GoogleFonts.inter(
@@ -39849,20 +40228,44 @@ class _BusinessSettingsPage extends StatelessWidget {
       _BusinessTextField(
           controller: contactName, label: 'Contact name', enabled: canManage),
       _BusinessTextField(controller: phone, label: 'Phone', enabled: canManage),
-      _BusinessTextField(
-          controller: businessAddress,
+      if (canManage)
+        _AddressField(
+          colors: const _CircumColors(true),
+          icon: Icons.business_outlined,
           label: 'Business address',
-          enabled: canManage),
+          controller: businessAddress,
+          glassStyle: true,
+          onSelected: (address) =>
+              businessAddress.text = address.displayAddress,
+        )
+      else
+        _BusinessTextField(
+            controller: businessAddress,
+            label: 'Business address',
+            enabled: false),
+      const SizedBox(height: 10),
       _BusinessTextField(
           controller: companyNumber,
           label: 'VAT / company number optional',
           enabled: canManage),
       _BusinessTextField(
           controller: billingEmail, label: 'Billing email', enabled: canManage),
-      _BusinessTextField(
-          controller: defaultPickupAddress,
+      if (canManage)
+        _AddressField(
+          colors: const _CircumColors(true),
+          icon: Icons.radio_button_checked,
           label: 'Default pickup address',
-          enabled: canManage),
+          controller: defaultPickupAddress,
+          glassStyle: true,
+          onSelected: (address) =>
+              defaultPickupAddress.text = address.displayAddress,
+        )
+      else
+        _BusinessTextField(
+            controller: defaultPickupAddress,
+            label: 'Default pickup address',
+            enabled: false),
+      const SizedBox(height: 10),
       const SizedBox(height: 12),
       Wrap(spacing: 10, children: [
         FilledButton.icon(
