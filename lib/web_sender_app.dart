@@ -32,6 +32,7 @@ import 'package:circum/app/gifts/gifts_social_policy.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -139,13 +140,17 @@ class WebSenderApp extends StatefulWidget {
 class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
   late _WebAppMode _mode = _initialMode();
-  late _SenderStep _senderInitialStep =
-      switch (Uri.base.queryParameters['app']) {
-    'health' => _SenderStep.healthPlus,
-    'business' => _SenderStep.business,
-    'profile' => _SenderStep.profile,
-    _ => _SenderStep.dashboard,
-  };
+  late _SenderStep _senderInitialStep = _initialSenderStep();
+
+  bool get _senderArchitecturePreview {
+    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    return path == '/sender' || Uri.base.queryParameters['app'] == 'sender';
+  }
+
+  bool get _riderArchitecturePreview {
+    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    return path == '/rider' || Uri.base.queryParameters['app'] == 'rider';
+  }
 
   @override
   void initState() {
@@ -158,6 +163,8 @@ class _WebSenderAppState extends State<WebSenderApp> {
       return _WebAppMode.admin;
     }
     final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    if (path == '/sender') return _WebAppMode.sender;
+    if (path == '/rider') return _WebAppMode.rider;
     if (path == '/terms') return _WebAppMode.terms;
     if (path == '/privacy') return _WebAppMode.privacy;
     if (path == '/vanguard') return _WebAppMode.vanguard;
@@ -167,6 +174,17 @@ class _WebSenderAppState extends State<WebSenderApp> {
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
       'gifts' => _WebAppMode.gifts,
       _ => _WebAppMode.landing,
+    };
+  }
+
+  _SenderStep _initialSenderStep() {
+    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    if (path == '/sender') return _SenderStep.dashboard;
+    return switch (Uri.base.queryParameters['app']) {
+      'health' => _SenderStep.healthPlus,
+      'business' => _SenderStep.business,
+      'profile' => _SenderStep.account,
+      _ => _SenderStep.dashboard,
     };
   }
 
@@ -215,27 +233,39 @@ class _WebSenderAppState extends State<WebSenderApp> {
                 _WebAppMode.sender => _PhoneStage(
                     key: const ValueKey('sender-app'),
                     colors: colors,
-                    child: _CustomerPortal(
-                      darkMode: _darkMode,
-                      colors: colors,
-                      initialStep: _senderInitialStep,
-                      onBack: () => setState(() => _mode = _WebAppMode.landing),
-                      onRoleSelected: _openRole,
-                      onToggleTheme: () =>
-                          setState(() => _darkMode = !_darkMode),
-                    ),
+                    child: _senderArchitecturePreview
+                        ? _SenderArchitecturePreviewApp(
+                            colors: colors,
+                            onOpenGifts: () =>
+                                setState(() => _mode = _WebAppMode.gifts),
+                          )
+                        : _CustomerPortal(
+                            darkMode: _darkMode,
+                            colors: colors,
+                            initialStep: _senderInitialStep,
+                            onBack: () =>
+                                setState(() => _mode = _WebAppMode.landing),
+                            onRoleSelected: _openRole,
+                            onOpenGifts: () =>
+                                setState(() => _mode = _WebAppMode.gifts),
+                            onToggleTheme: () =>
+                                setState(() => _darkMode = !_darkMode),
+                          ),
                   ),
                 _WebAppMode.rider => _PhoneStage(
                     key: const ValueKey('rider-app'),
                     colors: colors,
-                    child: _RiderEnrollmentPortal(
-                      darkMode: _darkMode,
-                      colors: colors,
-                      onBack: () => setState(() => _mode = _WebAppMode.landing),
-                      onRoleSelected: _openRole,
-                      onToggleTheme: () =>
-                          setState(() => _darkMode = !_darkMode),
-                    ),
+                    child: _riderArchitecturePreview
+                        ? _RiderArchitecturePreviewApp(colors: colors)
+                        : _RiderEnrollmentPortal(
+                            darkMode: _darkMode,
+                            colors: colors,
+                            onBack: () =>
+                                setState(() => _mode = _WebAppMode.landing),
+                            onRoleSelected: _openRole,
+                            onToggleTheme: () =>
+                                setState(() => _darkMode = !_darkMode),
+                          ),
                   ),
                 _WebAppMode.admin => _AdminOperationsPanel(
                     key: const ValueKey('admin-ops'),
@@ -13730,34 +13760,28 @@ class _RiderOrderProfileCard extends StatelessWidget {
 enum _RiderPortalTab {
   dashboard,
   jobs,
+  schedule,
   earnings,
-  referrals,
-  documents,
-  settings,
-  order,
+  profile,
 }
 
 String _riderTabLabel(_RiderPortalTab tab) {
   return switch (tab) {
-    _RiderPortalTab.dashboard => 'Dashboard',
+    _RiderPortalTab.dashboard => 'Home',
     _RiderPortalTab.jobs => 'Jobs',
-    _RiderPortalTab.earnings => 'Earnings',
-    _RiderPortalTab.referrals => 'Referrals',
-    _RiderPortalTab.documents => 'Documents',
-    _RiderPortalTab.settings => 'Settings',
-    _RiderPortalTab.order => 'The Circum Order',
+    _RiderPortalTab.schedule => 'Schedule',
+    _RiderPortalTab.earnings => 'Earnings/Roth',
+    _RiderPortalTab.profile => 'Profile',
   };
 }
 
 IconData _riderTabIcon(_RiderPortalTab tab) {
   return switch (tab) {
-    _RiderPortalTab.dashboard => Icons.dashboard_outlined,
+    _RiderPortalTab.dashboard => Icons.home_outlined,
     _RiderPortalTab.jobs => Icons.route_outlined,
+    _RiderPortalTab.schedule => Icons.event_available_outlined,
     _RiderPortalTab.earnings => Icons.payments_outlined,
-    _RiderPortalTab.referrals => Icons.group_add_outlined,
-    _RiderPortalTab.documents => Icons.folder_copy_outlined,
-    _RiderPortalTab.settings => Icons.settings_outlined,
-    _RiderPortalTab.order => Icons.auto_awesome,
+    _RiderPortalTab.profile => Icons.person_outline,
   };
 }
 
@@ -14092,22 +14116,22 @@ class _RiderEnrollmentPortal extends StatefulWidget {
 }
 
 class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
-  final _fullName = TextEditingController(text: 'Alex Rider');
-  final _phone = TextEditingController(text: '+44 7700 900456');
-  final _email = TextEditingController(text: 'rider@circum.app');
+  final _fullName = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
   final _password = TextEditingController();
   final _currentPassword = TextEditingController();
   final _newPassword = TextEditingController();
   final _confirmNewPassword = TextEditingController();
   final _newEmail = TextEditingController();
   final _emailChangePassword = TextEditingController();
-  final _postcode = TextEditingController(text: 'E1 6AN');
+  final _postcode = TextEditingController();
   final _vehicle = TextEditingController();
   final _vehicleMakeModel = TextEditingController();
   final _vehicleColour = TextEditingController();
   final _plateNumber = TextEditingController();
-  final _availability = TextEditingController(text: 'Weekdays, evenings');
-  final _notes = TextEditingController(text: 'Experienced London courier.');
+  final _availability = TextEditingController();
+  final _notes = TextEditingController();
   final _withdrawAmount = TextEditingController();
   final _bankName = TextEditingController();
   final _sortCode = TextEditingController();
@@ -14188,10 +14212,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     return switch (section) {
       'earnings' => _RiderPortalTab.earnings,
       'jobs' => _RiderPortalTab.jobs,
-      'referrals' => _RiderPortalTab.referrals,
-      'documents' => _RiderPortalTab.documents,
-      'settings' => _RiderPortalTab.settings,
-      'circum-order' || 'order' => _RiderPortalTab.order,
+      'schedule' => _RiderPortalTab.schedule,
+      'documents' || 'settings' || 'profile' => _RiderPortalTab.profile,
       _ => _RiderPortalTab.dashboard,
     };
   }
@@ -17123,15 +17145,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 ),
                 Expanded(
                   child: switch (_riderTab) {
-                    _RiderPortalTab.order => _CircumOrderContent(
-                        colors: colors,
-                        onBecomeRider: () => setState(
-                            () => _riderTab = _RiderPortalTab.dashboard),
-                      ),
-                    _RiderPortalTab.referrals => _RiderReferralsTab(
-                        colors: colors,
-                        user: _riderUser,
-                      ),
                     _ => _riderUser == null
                         ? ListView(
                             padding: EdgeInsets.fromLTRB(
@@ -17907,7 +17920,7 @@ class _RiderWorkspace extends StatelessWidget {
               performance: performance,
               recentRatings: recentRatings,
             ),
-          if (section == _RiderPortalTab.settings)
+          if (section == _RiderPortalTab.profile)
             _AccountSecurityPanel(
               colors: colors,
               title: 'Security',
@@ -17921,8 +17934,8 @@ class _RiderWorkspace extends StatelessWidget {
               onChangePassword: onChangePassword,
               onChangeEmail: onChangeEmail,
             ),
-          if (section == _RiderPortalTab.settings) const SizedBox(height: 14),
-          if (section == _RiderPortalTab.settings)
+          if (section == _RiderPortalTab.profile) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.profile)
             _RiderSettingsActions(
               colors: colors,
               newJobSoundEnabled: newJobSoundEnabled,
@@ -17946,6 +17959,23 @@ class _RiderWorkspace extends StatelessWidget {
               title: 'Accepted jobs',
               emptyText: 'Accepted jobs will appear here.',
               jobs: acceptedJobs,
+              onUpdateJobStatus: onUpdateJobStatus,
+              onReportIssue: onReportIssue,
+              onOpenChat: onOpenChat,
+            ),
+          if (section == _RiderPortalTab.schedule)
+            _RiderJobListPanel(
+              colors: colors,
+              title: 'Schedule',
+              emptyText: 'Scheduled deliveries you accept will appear here.',
+              jobs: acceptedJobs
+                  .where((job) => _DriverJobCard._deliveryTimingLabel(
+                        (job['driverJobSummary'] as Map?)
+                                ?.cast<String, dynamic>() ??
+                            const <String, dynamic>{},
+                        job,
+                      ).toLowerCase().contains('scheduled'))
+                  .toList(growable: false),
               onUpdateJobStatus: onUpdateJobStatus,
               onReportIssue: onReportIssue,
               onOpenChat: onOpenChat,
@@ -18219,7 +18249,7 @@ class _RiderWorkspace extends StatelessWidget {
                 ],
               ),
             ),
-          if (section == _RiderPortalTab.documents)
+          if (section == _RiderPortalTab.profile)
             _GlassPanel(
               colors: colors,
               child: Column(
@@ -18292,8 +18322,8 @@ class _RiderWorkspace extends StatelessWidget {
                 ],
               ),
             ),
-          if (section == _RiderPortalTab.documents) const SizedBox(height: 14),
-          if (section == _RiderPortalTab.documents)
+          if (section == _RiderPortalTab.profile) const SizedBox(height: 14),
+          if (section == _RiderPortalTab.profile)
             _GlassPanel(
               colors: colors,
               child: Column(
@@ -18816,8 +18846,7 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
                     colors: colors,
                     job: job,
                     onAccept: () => onAcceptJob(job),
-                    onReject: () => onRejectJob(job),
-                    onIgnore: () => onIgnoreJob(job),
+                    showContactDetails: false,
                     onReportDiscrepancy: () =>
                         onReportIssue(job, 'discrepancy'),
                     onOpenChat: () => onOpenChat(job),
@@ -18974,23 +19003,21 @@ class _DriverJobCard extends StatelessWidget {
   final _CircumColors colors;
   final Map<String, dynamic> job;
   final VoidCallback onAccept;
-  final VoidCallback? onReject;
-  final VoidCallback? onIgnore;
   final void Function(String status)? onUpdateStatus;
   final VoidCallback onReportDiscrepancy;
   final VoidCallback onOpenChat;
   final bool completed;
+  final bool showContactDetails;
 
   const _DriverJobCard({
     required this.colors,
     required this.job,
     required this.onAccept,
-    this.onReject,
-    this.onIgnore,
     this.onUpdateStatus,
     required this.onReportDiscrepancy,
     required this.onOpenChat,
     this.completed = false,
+    this.showContactDetails = true,
   });
 
   @override
@@ -19060,7 +19087,6 @@ class _DriverJobCard extends StatelessWidget {
         '${summary['packageDimensions'] ?? job['packageDimensions'] ?? job['dimensions'] ?? ''}'
             .trim();
     final warnings = _warnings(chargeableWeight, category, job);
-    final showContactDetails = onReject == null && onIgnore == null;
     final senderName = _contactValue(
       job,
       summary,
@@ -19354,18 +19380,6 @@ class _DriverJobCard extends StatelessWidget {
                   label: const Text('Complete'),
                 ),
               ],
-              if (onReject != null)
-                OutlinedButton.icon(
-                  onPressed: onReject,
-                  icon: const Icon(Icons.close),
-                  label: const Text('Reject'),
-                ),
-              if (onIgnore != null)
-                OutlinedButton.icon(
-                  onPressed: onIgnore,
-                  icon: const Icon(Icons.visibility_off),
-                  label: const Text('Ignore'),
-                ),
               if (!completed && canReportDiscrepancy) ...[
                 OutlinedButton.icon(
                   onPressed: onReportDiscrepancy,
@@ -20064,6 +20078,9 @@ enum _SenderStep {
   vehicle,
   payment,
   tracking,
+  history,
+  roth,
+  account,
   healthPlus,
   business,
   profile,
@@ -20087,6 +20104,7 @@ class _CustomerPortal extends StatefulWidget {
   final _SenderStep initialStep;
   final VoidCallback onBack;
   final ValueChanged<CircumRole> onRoleSelected;
+  final VoidCallback onOpenGifts;
   final VoidCallback onToggleTheme;
 
   const _CustomerPortal({
@@ -20095,6 +20113,7 @@ class _CustomerPortal extends StatefulWidget {
     required this.initialStep,
     required this.onBack,
     required this.onRoleSelected,
+    required this.onOpenGifts,
     required this.onToggleTheme,
   });
 
@@ -20469,8 +20488,57 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             onClose: () => setState(() => _chatOpen = false),
             onSend: _sendMessage,
           ),
+        if (_showSenderBottomNav)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _SenderBottomNav(
+              colors: colors,
+              selected: _senderNavStep,
+              onSelected: _selectSenderNavStep,
+            ),
+          ),
       ],
     );
+  }
+
+  bool get _showSenderBottomNav {
+    if (_isHealthPlusRoute || _senderAuthLoading || _senderUser == null) {
+      return false;
+    }
+    return {
+      _SenderStep.dashboard,
+      _SenderStep.tracking,
+      _SenderStep.history,
+      _SenderStep.roth,
+      _SenderStep.account,
+      _SenderStep.profile,
+      _SenderStep.business,
+    }.contains(_step);
+  }
+
+  _SenderStep get _senderNavStep {
+    return switch (_step) {
+      _SenderStep.history => _SenderStep.history,
+      _SenderStep.roth => _SenderStep.roth,
+      _SenderStep.account ||
+      _SenderStep.profile ||
+      _SenderStep.business =>
+        _SenderStep.account,
+      _SenderStep.tracking => _SenderStep.tracking,
+      _ => _SenderStep.dashboard,
+    };
+  }
+
+  void _selectSenderNavStep(_SenderStep step) {
+    setState(() {
+      _selectedSenderDelivery = null;
+      if (step == _SenderStep.history) _senderProfileTab = 1;
+      if (step == _SenderStep.roth) _senderProfileTab = 3;
+      if (step == _SenderStep.account) _senderProfileTab = 0;
+      _step = step;
+    });
   }
 
   Widget _buildAnimatedStep(_CircumColors colors) {
@@ -20517,6 +20585,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _step = _SenderStep.details;
           }),
           onBusiness: () => setState(() => _step = _SenderStep.business),
+          onGifts: widget.onOpenGifts,
           onHealthPlus: () => setState(() {
             _roleChoiceConfirmed = true;
             _healthRouteDismissed = false;
@@ -20742,9 +20811,51 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           }),
           onNewOrder: _reset,
           onViewHistory: () => setState(() {
-            _step = _SenderStep.profile;
+            _step = _SenderStep.history;
             _senderProfileTab = 1;
           }),
+        ),
+      _SenderStep.history => _buildSenderProfileStep(
+          colors,
+          tabIndex: 1,
+          key: const ValueKey('sender-history'),
+        ),
+      _SenderStep.roth => _buildSenderProfileStep(
+          colors,
+          tabIndex: 3,
+          key: const ValueKey('sender-roth'),
+        ),
+      _SenderStep.account => _SenderAccountHubStep(
+          key: const ValueKey('sender-account-hub'),
+          colors: colors,
+          user: _senderUser,
+          profile: _senderProfile,
+          rothBalance: _senderRothBalance,
+          businessAccounts: _senderBusinessAccounts,
+          onProfile: () => setState(() {
+            _senderProfileTab = 0;
+            _step = _SenderStep.profile;
+          }),
+          onRoth: () => _selectSenderNavStep(_SenderStep.roth),
+          onBusiness: () => setState(() => _step = _SenderStep.business),
+          onHealthPlus: () => setState(() {
+            _roleChoiceConfirmed = true;
+            _healthRouteDismissed = false;
+            _step = _SenderStep.healthPlus;
+          }),
+          onGifts: widget.onOpenGifts,
+          onSettings: () => setState(() {
+            _senderProfileTab = 6;
+            _step = _SenderStep.profile;
+          }),
+          onSupport: () => setState(() {
+            _supportChat = true;
+            _chatOpen = true;
+          }),
+          onLegal: () => unawaited(launchUrl(
+            Uri.base.resolve('/terms'),
+            webOnlyWindowName: '_self',
+          )),
         ),
       _SenderStep.healthPlus => _buildHealthPlusStep(colors),
       _SenderStep.business => _BusinessAccountsStep(
@@ -20772,61 +20883,72 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onRemoveTeamMember: _removeBusinessTeamMember,
           onBookDelivery: _startBusinessDelivery,
         ),
-      _SenderStep.profile => _SenderProfileStep(
-          key: const ValueKey('sender-profile'),
-          colors: colors,
-          user: _senderUser,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          selectedDelivery: _selectedSenderDelivery,
-          loading: _senderAuthLoading,
-          busy: _senderAuthBusy || _senderProfileSaving,
-          message: _senderProfileMessage,
-          rothBalance: _senderRothBalance,
+      _SenderStep.profile => _buildSenderProfileStep(
+          colors,
           tabIndex: _senderProfileTab,
-          email: _senderEmail,
-          password: _senderPassword,
-          fullName: _senderName,
-          phone: _senderPhone,
-          currentPassword: _senderCurrentPassword,
-          newPassword: _senderNewPassword,
-          confirmNewPassword: _senderConfirmNewPassword,
-          newEmail: _senderNewEmail,
-          emailChangePassword: _senderEmailChangePassword,
-          securitySubmitting: _senderSecurityBusy,
-          securityMessage: _senderSecurityMessage,
-          savedAddressLabel: _savedAddressLabel,
-          savedAddress: _savedAddress,
-          savedAddressType: _savedAddressType,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onTab: (index) => setState(() => _senderProfileTab = index),
-          onSignIn: _signInSender,
-          onSignUp: _signUpSender,
-          onForgotPassword: _sendSenderPasswordReset,
-          onChangePassword: _changeSenderPassword,
-          onChangeEmail: _changeSenderEmail,
-          onSignOut: _signOutSender,
-          onRequestDeletion: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-          onUploadProfilePhoto: _uploadSenderProfilePhoto,
-          onSaveProfile: _saveSenderProfile,
-          onAddAddress: _addSenderAddress,
-          onSavedAddressType: (type) =>
-              setState(() => _savedAddressType = type),
-          onSavedAddressSelected: (address) => setState(() {
-            _validatedSavedAddress = address;
-            _savedAddress.text = address.displayAddress;
-          }),
-          onSavedAddressEdited: (_) =>
-              setState(() => _validatedSavedAddress = null),
-          onSelectDelivery: (delivery) =>
-              setState(() => _selectedSenderDelivery = delivery),
-          onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
-          onCancelBooking: _cancelSenderBooking,
+          key: const ValueKey('sender-profile'),
         ),
     };
+  }
+
+  Widget _buildSenderProfileStep(
+    _CircumColors colors, {
+    required int tabIndex,
+    required Key key,
+  }) {
+    return _SenderProfileStep(
+      key: key,
+      colors: colors,
+      user: _senderUser,
+      profile: _senderProfile,
+      deliveries: _senderDeliveries,
+      selectedDelivery: _selectedSenderDelivery,
+      loading: _senderAuthLoading,
+      busy: _senderAuthBusy || _senderProfileSaving,
+      message: _senderProfileMessage,
+      rothBalance: _senderRothBalance,
+      tabIndex: tabIndex,
+      email: _senderEmail,
+      password: _senderPassword,
+      fullName: _senderName,
+      phone: _senderPhone,
+      currentPassword: _senderCurrentPassword,
+      newPassword: _senderNewPassword,
+      confirmNewPassword: _senderConfirmNewPassword,
+      newEmail: _senderNewEmail,
+      emailChangePassword: _senderEmailChangePassword,
+      securitySubmitting: _senderSecurityBusy,
+      securityMessage: _senderSecurityMessage,
+      savedAddressLabel: _savedAddressLabel,
+      savedAddress: _savedAddress,
+      savedAddressType: _savedAddressType,
+      onBack: () => setState(() => _step = _SenderStep.account),
+      onTab: (index) => setState(() => _senderProfileTab = index),
+      onSignIn: _signInSender,
+      onSignUp: _signUpSender,
+      onForgotPassword: _sendSenderPasswordReset,
+      onChangePassword: _changeSenderPassword,
+      onChangeEmail: _changeSenderEmail,
+      onSignOut: _signOutSender,
+      onRequestDeletion: () => setState(() {
+        _supportChat = true;
+        _chatOpen = true;
+      }),
+      onUploadProfilePhoto: _uploadSenderProfilePhoto,
+      onSaveProfile: _saveSenderProfile,
+      onAddAddress: _addSenderAddress,
+      onSavedAddressType: (type) => setState(() => _savedAddressType = type),
+      onSavedAddressSelected: (address) => setState(() {
+        _validatedSavedAddress = address;
+        _savedAddress.text = address.displayAddress;
+      }),
+      onSavedAddressEdited: (_) =>
+          setState(() => _validatedSavedAddress = null),
+      onSelectDelivery: (delivery) =>
+          setState(() => _selectedSenderDelivery = delivery),
+      onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
+      onCancelBooking: _cancelSenderBooking,
+    );
   }
 
   Widget _buildSenderAccessGate(_CircumColors colors) {
@@ -26397,6 +26519,9 @@ class _StepBadge extends StatelessWidget {
       _SenderStep.vehicle => 'Vehicle',
       _SenderStep.payment => 'Payment',
       _SenderStep.tracking => 'Tracking',
+      _SenderStep.history => 'History',
+      _SenderStep.roth => 'Roth',
+      _SenderStep.account => 'Account',
       _SenderStep.healthPlus => 'Health+',
       _SenderStep.business => 'Business',
       _SenderStep.profile => 'Profile',
@@ -27513,6 +27638,7 @@ class _SenderDashboardStep extends StatelessWidget {
   final List<Map<String, dynamic>> businessAccounts;
   final VoidCallback onSendParcel;
   final VoidCallback onBusiness;
+  final VoidCallback onGifts;
   final VoidCallback onHealthPlus;
   final VoidCallback onProfile;
   final VoidCallback onSupport;
@@ -27525,6 +27651,7 @@ class _SenderDashboardStep extends StatelessWidget {
     required this.businessAccounts,
     required this.onSendParcel,
     required this.onBusiness,
+    required this.onGifts,
     required this.onHealthPlus,
     required this.onProfile,
     required this.onSupport,
@@ -27572,16 +27699,21 @@ class _SenderDashboardStep extends StatelessWidget {
                       label: const Text('Send a parcel'),
                     ),
                     OutlinedButton.icon(
+                      onPressed: onHealthPlus,
+                      icon: const Icon(Icons.local_pharmacy_outlined),
+                      label: const Text('Health+'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: onGifts,
+                      icon: const Icon(Icons.card_giftcard_outlined),
+                      label: const Text('Gifts'),
+                    ),
+                    OutlinedButton.icon(
                       onPressed: onBusiness,
                       icon: const Icon(Icons.business_center_outlined),
                       label: Text(businessAccounts.isEmpty
-                          ? 'Create Business Account'
-                          : 'Business Accounts'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onHealthPlus,
-                      icon: const Icon(Icons.local_pharmacy_outlined),
-                      label: const Text('Health+ pickup'),
+                          ? 'Business · optional'
+                          : 'Business'),
                     ),
                   ],
                 ),
@@ -27682,6 +27814,2568 @@ class _SenderDashboardStep extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+const _senderGlyphHome =
+    '<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>';
+const _senderGlyphTruck =
+    '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="1.5"/><path d="M16 10h3.2a1 1 0 0 1 .9.5l1.9 3.2V17h-2"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="17.5" cy="18.5" r="1.5"/></svg>';
+const _senderGlyphHistory =
+    '<svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>';
+const _senderGlyphWallet =
+    '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M16 11h5v4h-5a2 2 0 0 1 0-4z"/><path d="M6 9h9"/></svg>';
+const _senderGlyphAccount =
+    '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>';
+const _senderGlyphHealth =
+    '<svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/><path d="M12 9v6M9 12h6"/></svg>';
+const _senderGlyphBusiness =
+    '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2M12 12v4M10 14h4"/></svg>';
+const _senderGlyphGift =
+    '<svg viewBox="0 0 24 24"><path d="M12 22V7M12 7S9 1 6 3s2 4 6 4 9-2 6-4-6 4-6 4z"/><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/></svg>';
+const _senderGlyphBell =
+    '<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
+const _senderGlyphChat =
+    '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H6l-3 3v-7a8 8 0 1 1 18-4z"/><path d="M8 11h8M8 15h5"/></svg>';
+const _senderGlyphSettings =
+    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.3h-4v-.3a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.2.1-2-3.4.1-.1A1.7 1.7 0 0 0 4 15a1.7 1.7 0 0 0-1.4-1H2.3v-4h.3A1.7 1.7 0 0 0 4 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-3.4.2.1A1.7 1.7 0 0 0 7.7 4a1.7 1.7 0 0 0 1-1.5v-.3h4v.3a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.2-.1 2 3.4-.1.1A1.7 1.7 0 0 0 20 9a1.7 1.7 0 0 0 1.4 1h.3v4h-.3a1.7 1.7 0 0 0-2 1z"/></svg>';
+const _senderGlyphSupport =
+    '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 16 0v4a2 2 0 0 1-2 2h-2"/><path d="M6 12v3a2 2 0 0 0 2 2h1"/><path d="M15 18h-4"/><rect x="2" y="11" width="4" height="6" rx="2"/><rect x="18" y="11" width="4" height="6" rx="2"/></svg>';
+const _senderGlyphLegal =
+    '<svg viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M7 7l-4 7h8L7 7zM17 7l-4 7h8l-4-7z"/><path d="M8 21h8"/></svg>';
+const _senderGlyphLogout =
+    '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M13 5V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-1"/></svg>';
+
+class _SenderLineGlyph extends StatelessWidget {
+  final String svg;
+  final Color color;
+  final double size;
+
+  const _SenderLineGlyph(
+    this.svg, {
+    required this.color,
+    this.size = 22,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final outlinedSvg = svg.replaceFirst(
+      '<svg ',
+      '<svg fill="none" stroke="currentColor" stroke-width="2" '
+          'stroke-linecap="round" stroke-linejoin="round" ',
+    );
+    return SvgPicture.string(
+      outlinedSvg,
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      theme: const SvgTheme(currentColor: Colors.white),
+    );
+  }
+}
+
+class _SenderArchitecturePreviewApp extends StatefulWidget {
+  final _CircumColors colors;
+  final VoidCallback onOpenGifts;
+
+  const _SenderArchitecturePreviewApp({
+    required this.colors,
+    required this.onOpenGifts,
+  });
+
+  @override
+  State<_SenderArchitecturePreviewApp> createState() =>
+      _SenderArchitecturePreviewAppState();
+}
+
+class _SenderArchitecturePreviewAppState
+    extends State<_SenderArchitecturePreviewApp> {
+  _SenderStep _selected = _SenderStep.dashboard;
+  bool _showNotifications = false;
+
+  void _showStub(String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$label will be connected in the next UI milestone.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    return Stack(
+      children: [
+        Column(
+          children: [
+            _SenderPreviewTopBar(
+              colors: colors,
+              hasUnread: true,
+              onNotifications: () => setState(() => _showNotifications = true),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 108),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: _showNotifications
+                      ? _SenderPreviewNotifications(
+                          key: const ValueKey('sender-preview-notifications'),
+                          colors: colors,
+                          onBack: () =>
+                              setState(() => _showNotifications = false),
+                        )
+                      : _selected == _SenderStep.dashboard
+                          ? _SenderPreviewHome(
+                              key: const ValueKey('sender-preview-home'),
+                              colors: colors,
+                              onSendParcel: () => _showStub('Send a Parcel'),
+                              onGifts: widget.onOpenGifts,
+                              onHealthPlus: () => _showStub('Health+'),
+                              onBusiness: () => _showStub('Business'),
+                            )
+                          : _SenderPreviewMilestonePanel(
+                              key: ValueKey(_selected.name),
+                              colors: colors,
+                              step: _selected,
+                              onHome: () => setState(
+                                  () => _selected = _SenderStep.dashboard),
+                              onGifts: widget.onOpenGifts,
+                              onHealthPlus: () => _showStub('Health+'),
+                              onBusiness: () => _showStub('Business'),
+                            ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _SenderBottomNav(
+            colors: colors,
+            selected: _selected,
+            onSelected: (step) => setState(() {
+              _showNotifications = false;
+              _selected = step;
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderPreviewTopBar extends StatelessWidget {
+  final _CircumColors colors;
+  final bool hasUnread;
+  final VoidCallback onNotifications;
+
+  const _SenderPreviewTopBar({
+    required this.colors,
+    required this.hasUnread,
+    required this.onNotifications,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CIRCUM',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.6,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Sender App preview',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onNotifications,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xff111827),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: .07)),
+                    ),
+                    child: Center(
+                      child: _SenderLineGlyph(
+                        _senderGlyphBell,
+                        color: colors.mutedText,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  if (hasUnread)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: const Color(0xffff3b30),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xffff3b30)
+                                  .withValues(alpha: .45),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderPreviewHome extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onSendParcel;
+  final VoidCallback onGifts;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+
+  const _SenderPreviewHome({
+    super.key,
+    required this.colors,
+    required this.onSendParcel,
+    required this.onGifts,
+    required this.onHealthPlus,
+    required this.onBusiness,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send anything, anywhere.',
+                style: GoogleFonts.dmSerifDisplay(
+                  color: colors.text,
+                  fontSize: 29,
+                  height: 1.12,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                'Real-time booking for parcels, gifts, healthcare and optional business sending.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.5,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _SenderPreviewPrimaryCard(
+            colors: colors,
+            onTap: onSendParcel,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: _SenderPreviewServiceChip(
+                  colors: colors,
+                  glyph: _senderGlyphHealth,
+                  title: 'Health+',
+                  accent: const Color(0xff4ade80),
+                  onTap: onHealthPlus,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: _SenderPreviewServiceChip(
+                  colors: colors,
+                  glyph: _senderGlyphBusiness,
+                  title: 'Business',
+                  accent: colors.adminAccent,
+                  onTap: onBusiness,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: _SenderPreviewServiceChip(
+                  colors: colors,
+                  glyph: _senderGlyphGift,
+                  title: 'Gifts',
+                  accent: const Color(0xffa78bfa),
+                  onTap: onGifts,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _SenderPreviewEmptyState(colors: colors),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderPreviewNotifications extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onBack;
+
+  const _SenderPreviewNotifications({
+    super.key,
+    required this.colors,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: onBack,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xff111827),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .07)),
+                  ),
+                  child: Icon(Icons.arrow_back, color: colors.mutedText),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Notifications',
+                  style: GoogleFonts.dmSerifDisplay(
+                    color: colors.text,
+                    fontSize: 31,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Important delivery and account updates will appear here.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 18),
+          _SenderPreviewNotificationTile(
+            colors: colors,
+            unread: true,
+            title: 'Booking updates ready',
+            subtitle:
+                'Delivery status alerts will appear here once you have an active booking.',
+            time: 'New',
+          ),
+          _SenderPreviewNotificationTile(
+            colors: colors,
+            unread: false,
+            title: 'No messages yet',
+            subtitle:
+                'You are all clear. We will notify you when something needs your attention.',
+            time: 'Now',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderPreviewNotificationTile extends StatelessWidget {
+  final _CircumColors colors;
+  final bool unread;
+  final String title;
+  final String subtitle;
+  final String time;
+
+  const _SenderPreviewNotificationTile({
+    required this.colors,
+    required this.unread,
+    required this.title,
+    required this.subtitle,
+    required this.time,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xff111827),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: unread
+                ? const Color(0xffff3b30).withValues(alpha: .24)
+                : Colors.white.withValues(alpha: .07),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 9,
+              height: 9,
+              margin: const EdgeInsets.only(top: 5),
+              decoration: BoxDecoration(
+                color: unread ? const Color(0xffff3b30) : colors.adminAccent,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      height: 1.35,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              time,
+              style: TextStyle(
+                color: unread ? const Color(0xffffb4ad) : colors.mutedText,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderPreviewContextChatCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final bool disabled;
+
+  const _SenderPreviewContextChatCard({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    this.disabled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xff111827),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colors.adminAccent.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(
+              child: _SenderLineGlyph(
+                _senderGlyphChat,
+                color: colors.adminAccent,
+                size: 22,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.35,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Opacity(
+            opacity: disabled ? .45 : 1,
+            child: OutlinedButton(
+              onPressed: disabled ? null : () {},
+              child: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderPreviewTimelineCard extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _SenderPreviewTimelineCard({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    final updates = [
+      'Booking updates appear in this timeline.',
+      'Rider messages stay attached to the active delivery.',
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xff111827),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Delivery updates',
+            style: TextStyle(
+              color: colors.text,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final update in updates)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: colors.adminAccent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      update,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderPreviewPrimaryCard extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onTap;
+
+  const _SenderPreviewPrimaryCard({
+    required this.colors,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xff1d4ed8),
+              const Color(0xff1e40af),
+              const Color(0xff07090f),
+            ],
+          ),
+          border: Border.all(color: colors.adminAccent.withValues(alpha: .3)),
+          boxShadow: [
+            BoxShadow(
+              color: colors.adminAccent.withValues(alpha: .28),
+              blurRadius: 28,
+              offset: const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'PRIMARY SERVICE',
+              style: TextStyle(
+                color: Color(0x8cffffff),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Send a parcel',
+              style: GoogleFonts.dmSerifDisplay(
+                color: Colors.white,
+                fontSize: 22,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Start the existing booking flow for a customer delivery.',
+                    style: TextStyle(
+                      color: Color(0xa6ffffff),
+                      height: 1.4,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Color(0xff2563eb),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderPreviewServiceChip extends StatelessWidget {
+  final _CircumColors colors;
+  final String glyph;
+  final String title;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _SenderPreviewServiceChip({
+    required this.colors,
+    required this.glyph,
+    required this.title,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xff111827),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: _SenderLineGlyph(
+                  glyph,
+                  color: accent,
+                  size: 19,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderPreviewEmptyState extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _SenderPreviewEmptyState({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xff111827),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: colors.adminAccent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No active deliveries',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Your live delivery will appear here after booking.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderPreviewMilestonePanel extends StatelessWidget {
+  final _CircumColors colors;
+  final _SenderStep step;
+  final VoidCallback onHome;
+  final VoidCallback onGifts;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+
+  const _SenderPreviewMilestonePanel({
+    super.key,
+    required this.colors,
+    required this.step,
+    required this.onHome,
+    required this.onGifts,
+    required this.onHealthPlus,
+    required this.onBusiness,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      child: switch (step) {
+        _SenderStep.tracking => _SenderPreviewTracking(colors: colors),
+        _SenderStep.history => _SenderPreviewHistory(colors: colors),
+        _SenderStep.roth => _SenderPreviewRoth(colors: colors),
+        _SenderStep.account => _SenderPreviewAccount(
+            colors: colors,
+            onGifts: onGifts,
+            onHealthPlus: onHealthPlus,
+            onBusiness: onBusiness,
+          ),
+        _ => _SenderPreviewHomeRedirect(colors: colors, onHome: onHome),
+      },
+    );
+  }
+}
+
+class _SenderPreviewTracking extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _SenderPreviewTracking({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SenderPreviewSectionHeader(
+          colors: colors,
+          title: 'Tracking',
+          subtitle: 'Live delivery tracking appears here after you book.',
+        ),
+        const SizedBox(height: 16),
+        _SenderPreviewMapPanel(colors: colors),
+        const SizedBox(height: 12),
+        _SenderPreviewInfoPanel(
+          colors: colors,
+          glyph: _senderGlyphTruck,
+          title: 'No active delivery',
+          subtitle:
+              'When a rider is assigned, this screen shows route progress, rider identity, vehicle details and delivery status.',
+        ),
+        const SizedBox(height: 12),
+        _SenderPreviewContextChatCard(
+          colors: colors,
+          title: 'Active delivery chat',
+          subtitle:
+              'Chat appears here only after a rider is assigned to your delivery.',
+          actionLabel: 'Open delivery chat',
+          disabled: true,
+        ),
+        const SizedBox(height: 12),
+        _SenderPreviewTimelineCard(colors: colors),
+      ],
+    );
+  }
+}
+
+class _SenderPreviewHistory extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _SenderPreviewHistory({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SenderPreviewSectionHeader(
+          colors: colors,
+          title: 'History',
+          subtitle: 'Completed and cancelled deliveries will be listed here.',
+        ),
+        const SizedBox(height: 16),
+        _SenderPreviewInfoPanel(
+          colors: colors,
+          glyph: _senderGlyphHistory,
+          title: 'No delivery history yet',
+          subtitle:
+              'Your previous parcels, Gifts, Health+ and Business deliveries will appear once they exist.',
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderPreviewRoth extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _SenderPreviewRoth({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SenderPreviewSectionHeader(
+          colors: colors,
+          title: 'Roth Wallet',
+          subtitle:
+              'Internal Circum credit for eligible services. Roth is not withdrawable.',
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xff111827),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: .07)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Available Roth',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '0 Roth',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No Roth activity yet.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderPreviewAccount extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onGifts;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+
+  const _SenderPreviewAccount({
+    required this.colors,
+    required this.onGifts,
+    required this.onHealthPlus,
+    required this.onBusiness,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SenderPreviewSectionHeader(
+          colors: colors,
+          title: 'Account',
+          subtitle: 'Manage your customer services and preferences.',
+        ),
+        const SizedBox(height: 16),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphAccount,
+          title: 'Profile',
+          subtitle: 'Name, phone, email and saved addresses.',
+        ),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphWallet,
+          title: 'Roth Wallet',
+          subtitle: 'View your internal Circum credit.',
+        ),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphBusiness,
+          title: 'Business',
+          subtitle: 'Optional · Not activated',
+          onTap: onBusiness,
+        ),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphHealth,
+          title: 'Health+',
+          subtitle: 'Prescription and medical delivery preferences.',
+          onTap: onHealthPlus,
+        ),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphGift,
+          title: 'Gifts',
+          subtitle: 'Gift requests and recipient moments.',
+          onTap: onGifts,
+        ),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphSettings,
+          title: 'Settings',
+          subtitle: 'Notifications and app preferences.',
+        ),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphSupport,
+          title: 'Support',
+          subtitle: 'Get help with your account or deliveries.',
+        ),
+        _SenderPreviewContextChatCard(
+          colors: colors,
+          title: 'Support chat',
+          subtitle:
+              'Account support lives here. Delivery chat remains inside Tracking.',
+          actionLabel: 'Open support chat',
+        ),
+        const SizedBox(height: 10),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphLegal,
+          title: 'Legal',
+          subtitle: 'Terms, privacy and service policies.',
+        ),
+        _SenderPreviewAccountTile(
+          colors: colors,
+          glyph: _senderGlyphLogout,
+          title: 'Logout',
+          subtitle: 'Sign out of this device.',
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderPreviewHomeRedirect extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onHome;
+
+  const _SenderPreviewHomeRedirect({
+    required this.colors,
+    required this.onHome,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderPreviewInfoPanel(
+      colors: colors,
+      glyph: _senderGlyphHome,
+      title: 'Sender',
+      subtitle: 'Return to Home to send a parcel.',
+      actionLabel: 'Home',
+      onAction: onHome,
+    );
+  }
+}
+
+class _SenderPreviewSectionHeader extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String subtitle;
+
+  const _SenderPreviewSectionHeader({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.dmSerifDisplay(
+            color: colors.text,
+            fontSize: 31,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.45,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderPreviewMapPanel extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _SenderPreviewMapPanel({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 220,
+      decoration: BoxDecoration(
+        color: const Color(0xff0a0f1e),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+        gradient: RadialGradient(
+          center: const Alignment(-.3, .2),
+          radius: 1.1,
+          colors: [
+            colors.adminAccent.withValues(alpha: .16),
+            const Color(0xff0a0f1e),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.route_outlined,
+          color: colors.adminAccent.withValues(alpha: .75),
+          size: 42,
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderPreviewInfoPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final String glyph;
+  final String title;
+  final String subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _SenderPreviewInfoPanel({
+    required this.colors,
+    required this.glyph,
+    required this.title,
+    required this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xff111827),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SenderLineGlyph(glyph, color: colors.adminAccent, size: 30),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 14),
+            FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderPreviewAccountTile extends StatelessWidget {
+  final _CircumColors colors;
+  final String glyph;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  const _SenderPreviewAccountTile({
+    required this.colors,
+    required this.glyph,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xff111827),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: .07)),
+          ),
+          child: Row(
+            children: [
+              _SenderLineGlyph(glyph, color: colors.adminAccent, size: 23),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 12,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colors.mutedText),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderBottomNav extends StatelessWidget {
+  final _CircumColors colors;
+  final _SenderStep selected;
+  final ValueChanged<_SenderStep> onSelected;
+
+  const _SenderBottomNav({
+    required this.colors,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = const [
+      (step: _SenderStep.dashboard, glyph: _senderGlyphHome, label: 'Home'),
+      (step: _SenderStep.tracking, glyph: _senderGlyphTruck, label: 'Tracking'),
+      (step: _SenderStep.history, glyph: _senderGlyphHistory, label: 'History'),
+      (step: _SenderStep.roth, glyph: _senderGlyphWallet, label: 'Roth'),
+      (step: _SenderStep.account, glyph: _senderGlyphAccount, label: 'Account'),
+    ];
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xff0d1117).withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.36),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            for (final item in items)
+              Expanded(
+                child: _SenderBottomNavItem(
+                  colors: colors,
+                  glyph: item.glyph,
+                  label: item.label,
+                  selected: selected == item.step,
+                  onTap: () => onSelected(item.step),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderBottomNavItem extends StatelessWidget {
+  final _CircumColors colors;
+  final String glyph;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SenderBottomNavItem({
+    required this.colors,
+    required this.glyph,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? colors.adminAccent : colors.mutedText;
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SenderLineGlyph(glyph, color: color, size: 22),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _RiderPreviewTab {
+  home,
+  jobs,
+  schedule,
+  earnings,
+  profile,
+}
+
+class _RiderArchitecturePreviewApp extends StatefulWidget {
+  final _CircumColors colors;
+
+  const _RiderArchitecturePreviewApp({required this.colors});
+
+  @override
+  State<_RiderArchitecturePreviewApp> createState() =>
+      _RiderArchitecturePreviewAppState();
+}
+
+class _RiderArchitecturePreviewAppState
+    extends State<_RiderArchitecturePreviewApp> {
+  _RiderPreviewTab _tab = _RiderPreviewTab.home;
+  bool _signedIn = false;
+  bool _onboarding = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    if (!_signedIn) {
+      return _RiderPreviewWelcome(
+        colors: colors,
+        onSignIn: () => setState(() => _signedIn = true),
+        onCreateAccount: () => setState(() => _onboarding = true),
+      );
+    }
+    if (_onboarding) {
+      return _RiderPreviewOnboarding(
+        colors: colors,
+        onDone: () => setState(() {
+          _signedIn = true;
+          _onboarding = false;
+        }),
+      );
+    }
+    return Stack(
+      children: [
+        Column(
+          children: [
+            _RiderPreviewTopBar(colors: colors),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(22, 8, 22, 108),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: switch (_tab) {
+                    _RiderPreviewTab.home => _RiderPreviewHome(
+                        key: const ValueKey('rider-home'), colors: colors),
+                    _RiderPreviewTab.jobs => _RiderPreviewJobs(
+                        key: const ValueKey('rider-jobs'), colors: colors),
+                    _RiderPreviewTab.schedule => _RiderPreviewSchedule(
+                        key: const ValueKey('rider-schedule'), colors: colors),
+                    _RiderPreviewTab.earnings => _RiderPreviewEarnings(
+                        key: const ValueKey('rider-earnings'), colors: colors),
+                    _RiderPreviewTab.profile => _RiderPreviewProfile(
+                        key: const ValueKey('rider-profile'), colors: colors),
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _RiderPreviewBottomNav(
+            colors: colors,
+            selected: _tab,
+            onSelected: (tab) => setState(() => _tab = tab),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewWelcome extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onSignIn;
+  final VoidCallback onCreateAccount;
+
+  const _RiderPreviewWelcome({
+    required this.colors,
+    required this.onSignIn,
+    required this.onCreateAccount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xff0f1318),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 38),
+          child: Column(
+            children: [
+              const Spacer(),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff2d89d4), Color(0xff235ca1)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff2d89d4).withValues(alpha: .38),
+                      blurRadius: 34,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.delivery_dining, color: Colors.white),
+              ),
+              const SizedBox(height: 26),
+              Text(
+                'Deliver on your\nown schedule',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 26,
+                  height: 1.25,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Join CIRCUM riders and manage fulfilment work from one operations app.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.6,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              _RiderPreviewPrimaryButton(
+                label: 'Create rider account',
+                onTap: onCreateAccount,
+              ),
+              const SizedBox(height: 10),
+              _RiderPreviewGhostButton(label: 'Sign in', onTap: onSignIn),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderPreviewOnboarding extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onDone;
+
+  const _RiderPreviewOnboarding({
+    required this.colors,
+    required this.onDone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xff0f1318),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 46, 24, 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _RiderStepProgress(colors: colors, step: 1),
+              const SizedBox(height: 24),
+              Text(
+                'Create your rider profile',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 24,
+                  height: 1.25,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Complete your profile first. Verification documents can be uploaded from your dashboard.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.55,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 22),
+              _RiderPreviewField(colors: colors, label: 'Full legal name'),
+              _RiderPreviewField(colors: colors, label: 'Mobile number'),
+              _RiderPreviewField(colors: colors, label: 'Email address'),
+              _RiderPreviewField(colors: colors, label: 'Vehicle type'),
+              _RiderPreviewField(colors: colors, label: 'Availability'),
+              const SizedBox(height: 14),
+              _RiderPreviewPrimaryButton(
+                label: 'Finish profile',
+                onTap: onDone,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderPreviewTopBar extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderPreviewTopBar({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 24, 22, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'CIRCUM Rider',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xff171c22),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white.withValues(alpha: .08)),
+              ),
+              child: const Text(
+                'Pending approval',
+                style: TextStyle(
+                  color: Color(0xffe0a93a),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderPreviewHome extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderPreviewHome({super.key, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RiderPreviewHeader(
+          colors: colors,
+          title: 'Rider Home',
+          subtitle: 'Complete verification before going online.',
+        ),
+        const SizedBox(height: 16),
+        _RiderPreviewCard(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Complete your verification to start earning.',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  )),
+              const SizedBox(height: 10),
+              Text(
+                'Go Online unlocks after required documents are approved by Circum operations.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _RiderPreviewGhostButton(label: 'Go Online unavailable'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewJobs extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderPreviewJobs({super.key, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RiderPreviewHeader(
+          colors: colors,
+          title: 'Jobs',
+          subtitle: 'Eligible delivery offers appear here when you are online.',
+        ),
+        const SizedBox(height: 16),
+        _RiderPreviewCard(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _RiderPreviewFlagRow(colors: colors),
+              const SizedBox(height: 14),
+              Text(
+                'No available jobs',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'When approved and online, job cards show pickup, drop-off, vehicle needed, flags, earnings and one Accept Delivery action.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _RiderPreviewPrimaryButton(label: 'Accept Delivery'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _RiderPreviewContextChatCard(
+          colors: colors,
+          title: 'Accepted delivery chat',
+          subtitle:
+              'Once you accept a delivery, sender/receiver chat appears inside the active job screen.',
+          actionLabel: 'Open job chat',
+          disabled: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewSchedule extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderPreviewSchedule({super.key, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return _RiderPreviewSimpleScreen(
+      colors: colors,
+      title: 'Schedule',
+      subtitle: 'Accepted scheduled jobs and upcoming commitments.',
+      empty: 'No scheduled jobs yet.',
+    );
+  }
+}
+
+class _RiderPreviewEarnings extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderPreviewEarnings({super.key, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return _RiderPreviewSimpleScreen(
+      colors: colors,
+      title: 'Earnings/Roth',
+      subtitle: 'Cash earnings, payouts, Roth rewards and referral Roth.',
+      empty: 'Earnings appear after completed deliveries.',
+    );
+  }
+}
+
+class _RiderPreviewProfile extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderPreviewProfile({super.key, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      'Profile photo',
+      'Rider rank',
+      'Documents',
+      'Vehicle',
+      'Payout details',
+      'Availability settings',
+      'Support',
+      'Legal',
+      'Logout',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RiderPreviewHeader(
+          colors: colors,
+          title: 'Profile',
+          subtitle: 'Manage your rider identity, documents and vehicle.',
+        ),
+        const SizedBox(height: 16),
+        for (final row in rows)
+          _RiderPreviewProfileRow(colors: colors, label: row),
+        _RiderPreviewContextChatCard(
+          colors: colors,
+          title: 'Support/Admin chat',
+          subtitle:
+              'Operations support lives in Profile. Active job chat stays inside Accepted Delivery.',
+          actionLabel: 'Open support',
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewSimpleScreen extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String subtitle;
+  final String empty;
+
+  const _RiderPreviewSimpleScreen({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+    required this.empty,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RiderPreviewHeader(colors: colors, title: title, subtitle: subtitle),
+        const SizedBox(height: 16),
+        _RiderPreviewCard(
+          colors: colors,
+          child: Text(
+            empty,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewBottomNav extends StatelessWidget {
+  final _CircumColors colors;
+  final _RiderPreviewTab selected;
+  final ValueChanged<_RiderPreviewTab> onSelected;
+
+  const _RiderPreviewBottomNav({
+    required this.colors,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = const [
+      (_RiderPreviewTab.home, _senderGlyphHome, 'Home'),
+      (_RiderPreviewTab.jobs, _senderGlyphTruck, 'Jobs'),
+      (_RiderPreviewTab.schedule, _senderGlyphHistory, 'Schedule'),
+      (_RiderPreviewTab.earnings, _senderGlyphWallet, 'Earnings'),
+      (_RiderPreviewTab.profile, _senderGlyphAccount, 'Profile'),
+    ];
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xff171c22),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: .08)),
+        ),
+        child: Row(
+          children: [
+            for (final item in items)
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => onSelected(item.$1),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _SenderLineGlyph(
+                          item.$2,
+                          color: selected == item.$1
+                              ? const Color(0xff2d89d4)
+                              : colors.mutedText,
+                          size: 21,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.$3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: selected == item.$1
+                                ? const Color(0xff2d89d4)
+                                : colors.mutedText,
+                            fontSize: 9.2,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderPreviewHeader extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String subtitle;
+
+  const _RiderPreviewHeader({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 24,
+            height: 1.2,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Widget child;
+
+  const _RiderPreviewCard({
+    required this.colors,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xff171c22),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _RiderPreviewContextChatCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final bool disabled;
+
+  const _RiderPreviewContextChatCard({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    this.disabled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xff171c22),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xff2d89d4).withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Center(
+              child: _SenderLineGlyph(
+                _senderGlyphChat,
+                color: Color(0xff2d89d4),
+                size: 22,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.35,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Opacity(
+            opacity: disabled ? .45 : 1,
+            child: OutlinedButton(
+              onPressed: disabled ? null : () {},
+              child: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RiderPreviewField extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+
+  const _RiderPreviewField({
+    required this.colors,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: const Color(0xff171c22),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: Colors.white.withValues(alpha: .08)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RiderStepProgress extends StatelessWidget {
+  final _CircumColors colors;
+  final int step;
+
+  const _RiderStepProgress({
+    required this.colors,
+    required this.step,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var index = 1; index <= 4; index++)
+          Expanded(
+            child: Container(
+              height: 4,
+              margin: EdgeInsets.only(right: index == 4 ? 0 : 6),
+              decoration: BoxDecoration(
+                color: index <= step
+                    ? const Color(0xff2d89d4)
+                    : Colors.white.withValues(alpha: .18),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+        const SizedBox(width: 10),
+        Text(
+          '$step of 4',
+          style: TextStyle(
+            color: colors.mutedText,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewPrimaryButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+
+  const _RiderPreviewPrimaryButton({
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xff2d89d4),
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        onPressed: onTap,
+        child: Text(label),
+      ),
+    );
+  }
+}
+
+class _RiderPreviewGhostButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+
+  const _RiderPreviewGhostButton({
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: BorderSide(color: Colors.white.withValues(alpha: .18)),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        onPressed: onTap,
+        child: Text(label),
+      ),
+    );
+  }
+}
+
+class _RiderPreviewFlagRow extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _RiderPreviewFlagRow({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    final flags = ['Vanguard', 'Health+', 'Gift', 'Business', 'Heavy'];
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final flag in flags)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xff1d242b),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Text(
+              flag,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RiderPreviewProfileRow extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+
+  const _RiderPreviewProfileRow({
+    required this.colors,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: _RiderPreviewCard(
+        colors: colors,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right, color: colors.mutedText),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderAccountHubStep extends StatelessWidget {
+  final _CircumColors colors;
+  final User? user;
+  final SenderProfile? profile;
+  final double rothBalance;
+  final List<Map<String, dynamic>> businessAccounts;
+  final VoidCallback onProfile;
+  final VoidCallback onRoth;
+  final VoidCallback onBusiness;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onSettings;
+  final VoidCallback onSupport;
+  final VoidCallback onLegal;
+
+  const _SenderAccountHubStep({
+    super.key,
+    required this.colors,
+    required this.user,
+    required this.profile,
+    required this.rothBalance,
+    required this.businessAccounts,
+    required this.onProfile,
+    required this.onRoth,
+    required this.onBusiness,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onSettings,
+    required this.onSupport,
+    required this.onLegal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final businessActive = businessAccounts.any(
+      (account) => '${account['status'] ?? ''}'.toLowerCase() == 'approved',
+    );
+    final name = (profile?.fullName ?? user?.email ?? 'Circum sender').trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: colors.adminAccent.withValues(alpha: 0.22),
+                backgroundImage: profile?.photoUrl.isNotEmpty == true
+                    ? NetworkImage(profile!.photoUrl)
+                    : null,
+                child: profile?.photoUrl.isNotEmpty == true
+                    ? null
+                    : Icon(Icons.person, color: colors.text),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name.isEmpty ? 'Circum sender' : name,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Account, services, Roth and support.',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.person_outline,
+          title: 'Profile',
+          subtitle: 'Personal details and sender trust.',
+          onTap: onProfile,
+        ),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Roth Wallet',
+          subtitle: '${rothBalance.toStringAsFixed(2)} Roth available.',
+          onTap: onRoth,
+        ),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.business_center_outlined,
+          title: 'Business',
+          subtitle: businessActive
+              ? 'Dashboard, invoices, team members and reports unlocked.'
+              : 'Not activated. Optional for company accounts.',
+          trailingLabel: businessActive ? 'Active' : 'Not activated',
+          onTap: onBusiness,
+        ),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.local_pharmacy_outlined,
+          title: 'Health+',
+          subtitle: 'Prescription and medical delivery requests.',
+          onTap: onHealthPlus,
+        ),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.card_giftcard_outlined,
+          title: 'Gifts',
+          subtitle: 'Curated gift requests and recipient experiences.',
+          onTap: onGifts,
+        ),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.settings_outlined,
+          title: 'Settings',
+          subtitle: 'Security, saved addresses and preferences.',
+          onTap: onSettings,
+        ),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.support_agent,
+          title: 'Support',
+          subtitle: 'Get help with deliveries, services or payments.',
+          onTap: onSupport,
+        ),
+        _SenderAccountTile(
+          colors: colors,
+          icon: Icons.gavel_outlined,
+          title: 'Legal',
+          subtitle: 'Terms, privacy and customer policies.',
+          onTap: onLegal,
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderAccountTile extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String? trailingLabel;
+  final VoidCallback onTap;
+
+  const _SenderAccountTile({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.trailingLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: colors.field.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: colors.adminAccent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        height: 1.3,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (trailingLabel != null) ...[
+                const SizedBox(width: 8),
+                _GlassMiniChip(colors: colors, label: trailingLabel!),
+              ] else
+                Icon(Icons.chevron_right, color: colors.mutedText),
+            ],
+          ),
+        ),
       ),
     );
   }
