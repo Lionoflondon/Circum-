@@ -303,6 +303,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   const paymentRef = db.collection("businessInvoicePayments").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
   const separator = baseUrl.includes("?") ? "&" : "?";
+  const bookingId = `${invoice.bookingId || invoice.deliveryId || invoice.requestId || ""}`;
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -317,16 +318,19 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
         },
       },
     }],
-    success_url: `${baseUrl}${separator}invoice_payment=success&invoiceId=${invoiceId}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}${separator}invoice_payment=cancelled&invoiceId=${invoiceId}`,
+    success_url: `${baseUrl}${separator}paymentStatus=payment-success&invoiceId=${invoiceId}&businessId=${businessId}&paymentId=${paymentRef.id}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}${separator}paymentStatus=payment-cancelled&invoiceId=${invoiceId}&businessId=${businessId}&paymentId=${paymentRef.id}`,
     metadata: {
       type: "business_invoice_payment",
       businessId,
       invoiceId,
+      bookingId,
       paymentId: paymentRef.id,
       cardAmountGbp: `${cardAmount}`,
       rothAmountGbp: `${rothAmount}`,
       paymentAmountGbp: `${paymentAmount}`,
+      returnUrl: baseUrl,
+      paymentStatus: "pending_verification",
       createdByUserId: context.auth.uid,
     },
   });
@@ -334,11 +338,16 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
     paymentId: paymentRef.id,
     businessId,
     invoiceId,
+    bookingId,
     amount: cardAmount,
     rothAmount,
     method: rothAmount > 0 ? "roth_card" : "card",
     status: "pending_verification",
+    paymentStatus: "pending_verification",
     stripeSessionId: session.id,
+    checkoutSessionId: session.id,
+    paymentIntentId: session.payment_intent || null,
+    returnUrl: baseUrl,
     createdAt: FieldValue.serverTimestamp(),
     createdByUserId: context.auth.uid,
   });

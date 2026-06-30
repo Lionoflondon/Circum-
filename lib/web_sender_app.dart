@@ -38332,11 +38332,20 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
   var _message = '';
   var _selectedBusinessId = '';
   var _inviteRole = 'operations';
+  var _returnPaymentStatus = '';
+  var _returnInvoiceId = '';
+  Map<String, dynamic>? _returnInvoice;
   final Stream<User?> _authStream = FirebaseAuth.instance.authStateChanges();
   Stream<List<Map<String, dynamic>>>? _cachedBusinessAccountsStream;
   String? _cachedBusinessAccountsUserId;
   Stream<List<Map<String, dynamic>>>? _cachedBusinessDeliveriesStream;
   String? _cachedBusinessDeliveriesId;
+
+  @override
+  void initState() {
+    super.initState();
+    _captureBusinessPaymentReturn();
+  }
 
   @override
   void dispose() {
@@ -38353,6 +38362,38 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     _inviteName.dispose();
     _invoiceSearch.dispose();
     super.dispose();
+  }
+
+  void _captureBusinessPaymentReturn() {
+    final params = Uri.base.queryParameters;
+    final invoiceId = '${params['invoiceId'] ?? ''}'.trim();
+    var status = '${params['paymentStatus'] ?? ''}'.trim();
+    final legacyStatus = '${params['invoice_payment'] ?? ''}'.trim();
+    if (status.isEmpty && legacyStatus == 'success') {
+      status = 'payment-success';
+    } else if (status.isEmpty && legacyStatus == 'cancelled') {
+      status = 'payment-cancelled';
+    }
+    if (invoiceId.isEmpty && status.isEmpty) return;
+    _tab = _BusinessPortalTab.invoicing;
+    _returnInvoiceId = invoiceId;
+    _returnPaymentStatus = status;
+    if (invoiceId.isNotEmpty) {
+      unawaited(_hydrateReturnedInvoice(invoiceId));
+    }
+  }
+
+  Future<void> _hydrateReturnedInvoice(String invoiceId) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('businessInvoices')
+          .doc(invoiceId)
+          .get();
+      if (!mounted || !snap.exists) return;
+      setState(() => _returnInvoice = {'id': snap.id, ...?snap.data()});
+    } catch (error) {
+      debugPrint('business invoice return recovery failed: $error');
+    }
   }
 
   Future<void> _signIn() async {
@@ -38918,6 +38959,14 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
                   onBuyRoth: () => _requestBusinessRothPurchase(selected, user),
                   onPayInvoice: (invoice, method) =>
                       _payBusinessInvoice(selected, invoice, method),
+                  paymentReturnStatus: _returnPaymentStatus,
+                  paymentReturnInvoiceId: _returnInvoiceId,
+                  paymentReturnInvoice: _returnInvoice,
+                  onClearPaymentReturn: () => setState(() {
+                    _returnPaymentStatus = '';
+                    _returnInvoiceId = '';
+                    _returnInvoice = null;
+                  }),
                   busy: _busy,
                 );
               },
@@ -38972,6 +39021,10 @@ class _BusinessPortalScaffold extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onResendInvite;
   final VoidCallback onBuyRoth;
   final void Function(Map<String, dynamic>, String) onPayInvoice;
+  final String paymentReturnStatus;
+  final String paymentReturnInvoiceId;
+  final Map<String, dynamic>? paymentReturnInvoice;
+  final VoidCallback onClearPaymentReturn;
   final bool busy;
 
   const _BusinessPortalScaffold({
@@ -39006,6 +39059,10 @@ class _BusinessPortalScaffold extends StatelessWidget {
     required this.onResendInvite,
     required this.onBuyRoth,
     required this.onPayInvoice,
+    required this.paymentReturnStatus,
+    required this.paymentReturnInvoiceId,
+    required this.paymentReturnInvoice,
+    required this.onClearPaymentReturn,
     required this.busy,
   });
 
@@ -39082,21 +39139,46 @@ class _BusinessPortalScaffold extends StatelessWidget {
             ])),
             const SizedBox(height: 14),
           ],
-          _BusinessEyebrow(_tabEyebrow(selectedTab)),
-          const SizedBox(height: 10),
-          Text(_tabTitle(selectedTab, selectedAccount),
-              style: GoogleFonts.dmSerifDisplay(
-                  color: Colors.white,
-                  fontSize: compact ? 40 : 54,
-                  height: 1.02)),
-          const SizedBox(height: 10),
-          Text(_tabSubtitle(selectedTab),
-              style: GoogleFonts.inter(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  fontSize: 16,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 24),
+          if (selectedTab != _BusinessPortalTab.overview) ...[
+            _BusinessEyebrow(_tabEyebrow(selectedTab)),
+            const SizedBox(height: 10),
+            Text(_tabTitle(selectedTab, selectedAccount),
+                style: GoogleFonts.dmSerifDisplay(
+                    color: Colors.white,
+                    fontSize: compact ? 40 : 54,
+                    height: 1.02)),
+            const SizedBox(height: 10),
+            Text(_tabSubtitle(selectedTab),
+                style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: 16,
+                    height: 1.5,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 24),
+          ],
+          if (paymentReturnStatus.isNotEmpty) ...[
+            _BusinessPaymentReturnPanel(
+              status: paymentReturnStatus,
+              invoice: paymentReturnInvoice ??
+                  _businessInvoices(selectedAccount).firstWhere(
+                    (item) =>
+                        '${item['invoiceId'] ?? item['id'] ?? ''}' ==
+                        paymentReturnInvoiceId,
+                    orElse: () => paymentReturnInvoiceId.isEmpty
+                        ? const <String, dynamic>{}
+                        : <String, dynamic>{
+                            'invoiceId': paymentReturnInvoiceId
+                          },
+                  ),
+              busy: busy,
+              rothBalance: _num(selectedAccount['rothBalance'] ??
+                  selectedAccount['businessRothBalance']),
+              onPayInvoice: onPayInvoice,
+              onBackToInvoices: () => onSelectTab(_BusinessPortalTab.invoicing),
+              onClear: onClearPaymentReturn,
+            ),
+            const SizedBox(height: 18),
+          ],
           _tabBody(role, canManage, compact),
         ],
       ),
@@ -39112,7 +39194,15 @@ class _BusinessPortalScaffold extends StatelessWidget {
           deliveries: deliveries,
           canOperate: canOperate,
           onAccess: onAccess,
-          onOpenInvoices: () => onSelectTab(_BusinessPortalTab.invoicing)),
+          onOpenInvoices: () => onSelectTab(_BusinessPortalTab.invoicing),
+          onOpenTeam: () => onSelectTab(_BusinessPortalTab.team),
+          onOpenDeliveries: () => onSelectTab(_BusinessPortalTab.deliveries),
+          onOpenHealthPlus: () => onSelectTab(_BusinessPortalTab.healthPlus),
+          onOpenGifts: () => onSelectTab(_BusinessPortalTab.gifts),
+          onOpenVanguard: () => onSelectTab(_BusinessPortalTab.vanguard),
+          onOpenAnalytics: () => onSelectTab(_BusinessPortalTab.analytics),
+          onPayInvoice: onPayInvoice,
+          busy: busy),
       _BusinessPortalTab.invoicing => _BusinessInvoicePage(
           account: selectedAccount,
           deliveries: deliveries,
@@ -39191,70 +39281,798 @@ class _BusinessPortalScaffold extends StatelessWidget {
   }
 }
 
+class _BusinessPaymentReturnPanel extends StatelessWidget {
+  final String status;
+  final Map<String, dynamic> invoice;
+  final bool busy;
+  final double rothBalance;
+  final void Function(Map<String, dynamic>, String) onPayInvoice;
+  final VoidCallback onBackToInvoices;
+  final VoidCallback onClear;
+
+  const _BusinessPaymentReturnPanel({
+    required this.status,
+    required this.invoice,
+    required this.busy,
+    required this.rothBalance,
+    required this.onPayInvoice,
+    required this.onBackToInvoices,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = status.toLowerCase();
+    final success = normalized == 'payment-success';
+    final cancelled = normalized == 'payment-cancelled';
+    final failed = normalized == 'payment-failed';
+    final title = success
+        ? 'Payment successful'
+        : failed
+            ? 'Payment failed'
+            : 'Payment was not completed';
+    final body = success
+        ? 'Your invoice is paid. Your receipt is available from your invoice details.'
+        : failed
+            ? 'Payment failed. No money was taken.'
+            : 'Payment wasn’t completed. Your invoice is still awaiting payment.';
+    final icon = success
+        ? Icons.check_circle_rounded
+        : failed
+            ? Icons.error_outline_rounded
+            : Icons.info_outline_rounded;
+    final color = success
+        ? Colors.greenAccent
+        : failed
+            ? Colors.redAccent
+            : Colors.amberAccent;
+    final payable = invoice.isNotEmpty && _businessInvoiceIsPayable(invoice);
+    return _BusinessGlass(
+      borderColor: color.withValues(alpha: 0.42),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Text(title,
+                  style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900))),
+          IconButton(
+              onPressed: onClear,
+              tooltip: 'Dismiss',
+              icon: const Icon(Icons.close_rounded, color: Colors.white)),
+        ]),
+        const SizedBox(height: 8),
+        Text(body,
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.74),
+                height: 1.45,
+                fontWeight: FontWeight.w700)),
+        if (invoice.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _BusinessBadge(_businessInvoiceDisplayTitle(invoice).toUpperCase()),
+        ],
+        const SizedBox(height: 14),
+        if (success)
+          Wrap(spacing: 10, runSpacing: 10, children: [
+            FilledButton.icon(
+                onPressed: onBackToInvoices,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('View invoice')),
+            OutlinedButton.icon(
+                onPressed: onBackToInvoices,
+                icon: const Icon(Icons.download_done_rounded),
+                label: const Text('Receipt available')),
+          ])
+        else if (cancelled)
+          Wrap(spacing: 10, runSpacing: 10, children: [
+            FilledButton(
+                onPressed: payable && !busy
+                    ? () => onPayInvoice(invoice, 'card')
+                    : null,
+                child: const Text('Pay Invoice')),
+            OutlinedButton(
+                onPressed: payable && !busy && rothBalance > 0
+                    ? () => onPayInvoice(invoice, 'roth')
+                    : null,
+                child: const Text('Pay with Roth')),
+            OutlinedButton(
+                onPressed: payable && !busy
+                    ? () => onPayInvoice(invoice, 'part')
+                    : null,
+                child: const Text('Choose another payment method')),
+            TextButton(
+                onPressed: onBackToInvoices,
+                child: const Text('Back to invoices')),
+          ])
+        else
+          Wrap(spacing: 10, runSpacing: 10, children: [
+            FilledButton(
+                onPressed: payable && !busy
+                    ? () => onPayInvoice(invoice, 'card')
+                    : null,
+                child: const Text('Try Again')),
+            OutlinedButton(
+                onPressed: payable && !busy && rothBalance > 0
+                    ? () => onPayInvoice(invoice, 'roth')
+                    : null,
+                child: const Text('Use Roth')),
+            OutlinedButton(
+                onPressed: () => unawaited(launchUrl(
+                    Uri.parse('mailto:support@circumuk.com'),
+                    webOnlyWindowName: '_self')),
+                child: const Text('Contact Support')),
+            TextButton(
+                onPressed: onBackToInvoices,
+                child: const Text('Back to invoices')),
+          ])
+      ]),
+    );
+  }
+}
+
 class _BusinessOverviewPage extends StatelessWidget {
   final Map<String, dynamic> account;
   final List<Map<String, dynamic>> deliveries;
   final bool canOperate;
   final VoidCallback onAccess;
   final VoidCallback onOpenInvoices;
+  final VoidCallback onOpenTeam;
+  final VoidCallback onOpenDeliveries;
+  final VoidCallback onOpenHealthPlus;
+  final VoidCallback onOpenGifts;
+  final VoidCallback onOpenVanguard;
+  final VoidCallback onOpenAnalytics;
+  final void Function(Map<String, dynamic>, String) onPayInvoice;
+  final bool busy;
 
   const _BusinessOverviewPage(
       {required this.account,
       required this.deliveries,
       required this.canOperate,
       required this.onAccess,
-      required this.onOpenInvoices});
+      required this.onOpenInvoices,
+      required this.onOpenTeam,
+      required this.onOpenDeliveries,
+      required this.onOpenHealthPlus,
+      required this.onOpenGifts,
+      required this.onOpenVanguard,
+      required this.onOpenAnalytics,
+      required this.onPayInvoice,
+      required this.busy});
 
   @override
   Widget build(BuildContext context) {
+    final invoices = _businessInvoices(account);
+    final activeDeliveries =
+        deliveries.where((item) => _businessStatusGroup(item) == 'active');
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _BusinessStatsGrid(deliveries: deliveries, account: account),
+        const _BusinessDashboardHero(),
         const SizedBox(height: 18),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final stack = constraints.maxWidth < 900;
-            final ecosystem = _BusinessGlass(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                  _BusinessPanelHeader(
-                      title: 'Your Circum ecosystem',
-                      subtitle: 'One account, every operational pillar.'),
-                  SizedBox(height: 18),
-                  _BusinessEcosystemHub()
-                ]));
-            final side = Column(children: [
-              _BusinessInvoiceCard(
-                  account: account,
-                  deliveries: deliveries,
-                  onOpen: onOpenInvoices),
-              const SizedBox(height: 14),
-              _BusinessTeamCard(account: account)
-            ]);
-            if (stack) {
-              return Column(
-                  children: [ecosystem, const SizedBox(height: 14), side]);
-            }
-            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(flex: 7, child: ecosystem),
-              const SizedBox(width: 14),
-              Expanded(flex: 4, child: side)
-            ]);
-          },
+        _BusinessOverviewMetrics(
+            account: account,
+            deliveries: deliveries,
+            invoices: invoices,
+            activeDeliveries: activeDeliveries.length),
+        const SizedBox(height: 18),
+        _BusinessEcosystemCards(
+          onOpenDeliveries: onOpenDeliveries,
+          onOpenGifts: onOpenGifts,
+          onOpenHealthPlus: onOpenHealthPlus,
+          onOpenMarketplace: onAccess,
+          onOpenVanguard: onOpenVanguard,
+          onOpenAnalytics: onOpenAnalytics,
         ),
         const SizedBox(height: 18),
-        _BusinessIrisInsights(deliveries: deliveries),
+        _BusinessRecentActivityFeed(
+            account: account, deliveries: deliveries, invoices: invoices),
         const SizedBox(height: 18),
-        _BusinessActivityTable(deliveries: deliveries),
+        _BusinessActiveDeliveryCards(
+          deliveries: activeDeliveries.take(4).toList(growable: false),
+          canOperate: canOperate,
+          onBookDelivery: onAccess,
+        ),
         const SizedBox(height: 18),
-        Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-                onPressed: canOperate ? onAccess : null,
-                icon: const Icon(Icons.local_shipping_outlined),
-                label: const Text('Book business delivery'))),
+        _BusinessQuickActions(
+          canOperate: canOperate,
+          onNewDelivery: onAccess,
+          onSendGift: onOpenGifts,
+          onHealthPlus: onOpenHealthPlus,
+          onCreateInvoice: onOpenInvoices,
+          onInviteTeam: onOpenTeam,
+          onMarketplace: onAccess,
+        ),
+        const SizedBox(height: 18),
+        _BusinessOverviewInvoicesTable(
+          account: account,
+          invoices: invoices,
+          busy: busy,
+          onOpenInvoices: onOpenInvoices,
+          onPayInvoice: onPayInvoice,
+        ),
       ],
+    );
+  }
+}
+
+class _BusinessDashboardHero extends StatelessWidget {
+  const _BusinessDashboardHero();
+
+  @override
+  Widget build(BuildContext context) => _BusinessGlass(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 26),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _BusinessEyebrow('Business Centre'),
+                  const SizedBox(height: 10),
+                  Text('Your Business Centre',
+                      style: GoogleFonts.dmSerifDisplay(
+                          color: Colors.white, fontSize: 54, height: 1)),
+                  const SizedBox(height: 10),
+                  Text('Everything your business needs in one place.',
+                      style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.72),
+                          fontSize: 16,
+                          height: 1.45,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 18),
+            Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                        colors: [Color(0xff3b82f6), Color(0xff60a5fa)]),
+                    boxShadow: [
+                      BoxShadow(
+                          color:
+                              const Color(0xff3b82f6).withValues(alpha: 0.38),
+                          blurRadius: 46)
+                    ]),
+                child: const Icon(Icons.business_center_rounded,
+                    color: Colors.white, size: 32)),
+          ],
+        ),
+      );
+}
+
+class _BusinessOverviewMetrics extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> invoices;
+  final int activeDeliveries;
+
+  const _BusinessOverviewMetrics({
+    required this.account,
+    required this.deliveries,
+    required this.invoices,
+    required this.activeDeliveries,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final outstanding = invoices.fold<double>(
+        0,
+        (total, invoice) => _businessInvoiceIsPayable(invoice)
+            ? total + _num(invoice['balanceDue'] ?? invoice['total'])
+            : total);
+    final stats = [
+      _BusinessStatCard(
+          label: 'Roth Balance',
+          value:
+              '${_num(account['rothBalance'] ?? account['businessRothBalance']).toStringAsFixed(2)}',
+          note: 'Available to use',
+          icon: Icons.account_balance_wallet_outlined),
+      _BusinessStatCard(
+          label: 'Invoices',
+          value: '£${outstanding.toStringAsFixed(2)}',
+          note: outstanding > 0 ? 'Outstanding' : 'No payment due',
+          icon: Icons.receipt_long_outlined),
+      _BusinessStatCard(
+          label: 'Active Jobs',
+          value: '$activeDeliveries',
+          note: 'In progress',
+          icon: Icons.local_shipping_outlined),
+      _BusinessStatCard(
+          label: 'Team Members',
+          value: '${_businessMembers(account).length}',
+          note: 'People with access',
+          icon: Icons.groups_2_outlined),
+    ];
+    return LayoutBuilder(builder: (context, constraints) {
+      final columns = constraints.maxWidth < 760 ? 1 : 4;
+      return GridView.count(
+        crossAxisCount: columns,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: columns == 1 ? 4.0 : 2.05,
+        children: stats,
+      );
+    });
+  }
+}
+
+class _BusinessEcosystemCards extends StatelessWidget {
+  final VoidCallback onOpenDeliveries;
+  final VoidCallback onOpenGifts;
+  final VoidCallback onOpenHealthPlus;
+  final VoidCallback onOpenMarketplace;
+  final VoidCallback onOpenVanguard;
+  final VoidCallback onOpenAnalytics;
+
+  const _BusinessEcosystemCards({
+    required this.onOpenDeliveries,
+    required this.onOpenGifts,
+    required this.onOpenHealthPlus,
+    required this.onOpenMarketplace,
+    required this.onOpenVanguard,
+    required this.onOpenAnalytics,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      (
+        Icons.local_shipping_outlined,
+        'Deliveries',
+        'Book, track and manage deliveries.',
+        onOpenDeliveries
+      ),
+      (
+        Icons.card_giftcard_outlined,
+        'Business Gifts',
+        'Send thoughtful gifts from your company.',
+        onOpenGifts
+      ),
+      (
+        Icons.health_and_safety_outlined,
+        'Health+',
+        'Arrange trusted medical deliveries.',
+        onOpenHealthPlus
+      ),
+      (
+        Icons.storefront_outlined,
+        'Marketplace',
+        'Browse approved business services.',
+        onOpenMarketplace
+      ),
+      (
+        Icons.shield_outlined,
+        'Vanguard',
+        'Add extra care for sensitive deliveries.',
+        onOpenVanguard
+      ),
+      (
+        Icons.query_stats_outlined,
+        'Analytics',
+        'See spend and delivery trends.',
+        onOpenAnalytics
+      ),
+    ];
+    return _BusinessGlass(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _BusinessPanelHeader(
+            title: 'Your Circum Ecosystem',
+            subtitle:
+                'One Business account for everything your company sends.'),
+        const SizedBox(height: 14),
+        LayoutBuilder(builder: (context, constraints) {
+          final columns = constraints.maxWidth < 720 ? 1 : 3;
+          return GridView.count(
+            crossAxisCount: columns,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: columns == 1 ? 3.6 : 1.62,
+            children: cards
+                .map((card) => _BusinessEcosystemCard(
+                      icon: card.$1,
+                      title: card.$2,
+                      body: card.$3,
+                      onTap: card.$4,
+                    ))
+                .toList(growable: false),
+          );
+        })
+      ]),
+    );
+  }
+}
+
+class _BusinessEcosystemCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+  final VoidCallback onTap;
+
+  const _BusinessEcosystemCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.055),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.10))),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, color: const Color(0xff3b82f6), size: 24),
+            const Spacer(),
+            Text(title,
+                style: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text(body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.62),
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      );
+}
+
+class _BusinessRecentActivityFeed extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> invoices;
+
+  const _BusinessRecentActivityFeed({
+    required this.account,
+    required this.deliveries,
+    required this.invoices,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <(IconData, String, String)>[];
+    final paidInvoices = invoices.where((item) => {
+          'paid',
+          'paid_manually',
+          'paid_with_roth'
+        }.contains(_businessInvoiceStatus(item)));
+    final paidInvoice = paidInvoices.isEmpty ? null : paidInvoices.first;
+    if (paidInvoice != null) {
+      items.add((
+        Icons.receipt_long_outlined,
+        'Invoice paid',
+        _businessInvoiceDisplayTitle(paidInvoice)
+      ));
+    }
+    final pickedUpRows = deliveries.where((item) =>
+        '${item['status'] ?? ''}'.toLowerCase().contains('pickup') ||
+        '${item['status'] ?? ''}'.toLowerCase().contains('picked'));
+    final pickedUp = pickedUpRows.isEmpty ? null : pickedUpRows.first;
+    if (pickedUp != null) {
+      items.add((
+        Icons.inventory_2_outlined,
+        'Delivery picked up',
+        '${pickedUp['trackingReference'] ?? pickedUp['id'] ?? 'Delivery'}'
+      ));
+    }
+    final giftRows = deliveries.where((item) =>
+        _businessPillar(item) == 'Gifts' &&
+        _businessStatusGroup(item) == 'completed');
+    final gift = giftRows.isEmpty ? null : giftRows.first;
+    if (gift != null) {
+      items.add((
+        Icons.card_giftcard_outlined,
+        'Gift delivered',
+        '${gift['trackingReference'] ?? gift['id'] ?? 'Gift'}'
+      ));
+    }
+    final healthRows =
+        deliveries.where((item) => _businessPillar(item) == 'Health+');
+    final health = healthRows.isEmpty ? null : healthRows.first;
+    if (health != null) {
+      items.add((
+        Icons.health_and_safety_outlined,
+        'Health+ renewed',
+        '${health['trackingReference'] ?? health['id'] ?? 'Health+'}'
+      ));
+    }
+    final invitedRows = _businessMembers(account)
+        .where((item) => '${item['status'] ?? ''}' == 'invited');
+    final invited = invitedRows.isEmpty ? null : invitedRows.first;
+    if (invited != null) {
+      items.add((
+        Icons.person_add_alt_1_outlined,
+        'Team member invited',
+        '${invited['email'] ?? invited['name'] ?? 'Team member'}'
+      ));
+    }
+    return _BusinessGlass(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _BusinessPanelHeader(
+            title: 'Recent Activity',
+            subtitle: 'Invoices, deliveries, gifts, Health+ and team updates.'),
+        const SizedBox(height: 12),
+        if (items.isEmpty)
+          const _BusinessEmptyState(
+              'Your latest invoices, deliveries and team updates will appear here.')
+        else
+          ...items.take(5).map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(children: [
+                  Icon(item.$1, color: const Color(0xff3b82f6), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text(item.$2,
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900))),
+                  Text(item.$3,
+                      style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.62),
+                          fontWeight: FontWeight.w700)),
+                ]),
+              ))
+      ]),
+    );
+  }
+}
+
+class _BusinessActiveDeliveryCards extends StatelessWidget {
+  final List<Map<String, dynamic>> deliveries;
+  final bool canOperate;
+  final VoidCallback onBookDelivery;
+
+  const _BusinessActiveDeliveryCards({
+    required this.deliveries,
+    required this.canOperate,
+    required this.onBookDelivery,
+  });
+
+  @override
+  Widget build(BuildContext context) => _BusinessGlass(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const _BusinessPanelHeader(
+              title: 'Active Deliveries',
+              subtitle: 'Open any delivery to see the full tracking page.'),
+          const SizedBox(height: 12),
+          if (deliveries.isEmpty)
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const _BusinessEmptyState(
+                  'You do not have any active deliveries right now.'),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                  onPressed: canOperate ? onBookDelivery : null,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('New Delivery')),
+            ])
+          else
+            ...deliveries.map((delivery) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _BusinessActiveDeliveryCard(delivery: delivery),
+                )),
+        ]),
+      );
+}
+
+class _BusinessActiveDeliveryCard extends StatelessWidget {
+  final Map<String, dynamic> delivery;
+
+  const _BusinessActiveDeliveryCard({required this.delivery});
+
+  @override
+  Widget build(BuildContext context) {
+    final pickup =
+        '${delivery['pickupAddress'] ?? delivery['pickup'] ?? 'Pickup'}';
+    final dropoff =
+        '${delivery['dropoffAddress'] ?? delivery['dropoff'] ?? 'Drop-off'}';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10))),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 10,
+        children: [
+          SizedBox(
+            width: 170,
+            child: Text(
+                '${delivery['trackingReference'] ?? delivery['id'] ?? delivery['requestId'] ?? 'Delivery'}',
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.jetBrainsMono(
+                    color: Colors.white, fontWeight: FontWeight.w900)),
+          ),
+          _BusinessBadge(_businessPillar(delivery).toUpperCase()),
+          SizedBox(
+            width: 280,
+            child: Text('$pickup → $dropoff',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.74),
+                    fontWeight: FontWeight.w700)),
+          ),
+          _BusinessBadge('${delivery['status'] ?? 'pending'}'.toUpperCase()),
+          Text('£${_businessAmount(delivery).toStringAsFixed(2)}',
+              style: GoogleFonts.jetBrainsMono(
+                  color: Colors.white, fontWeight: FontWeight.w900)),
+          TextButton(
+              onPressed: () => _openBusinessTracking(delivery),
+              child: const Text('View')),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessQuickActions extends StatelessWidget {
+  final bool canOperate;
+  final VoidCallback onNewDelivery;
+  final VoidCallback onSendGift;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onCreateInvoice;
+  final VoidCallback onInviteTeam;
+  final VoidCallback onMarketplace;
+
+  const _BusinessQuickActions({
+    required this.canOperate,
+    required this.onNewDelivery,
+    required this.onSendGift,
+    required this.onHealthPlus,
+    required this.onCreateInvoice,
+    required this.onInviteTeam,
+    required this.onMarketplace,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      (
+        Icons.add_road_rounded,
+        'New Delivery',
+        canOperate ? onNewDelivery : null
+      ),
+      (
+        Icons.card_giftcard_outlined,
+        'Send Business Gift',
+        canOperate ? onSendGift : null
+      ),
+      (
+        Icons.health_and_safety_outlined,
+        'Health+ Delivery',
+        canOperate ? onHealthPlus : null
+      ),
+      (Icons.receipt_long_outlined, 'Create Invoice', onCreateInvoice),
+      (Icons.person_add_alt_1_outlined, 'Invite Team Member', onInviteTeam),
+      (
+        Icons.storefront_outlined,
+        'Marketplace',
+        canOperate ? onMarketplace : null
+      ),
+    ];
+    return _BusinessGlass(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _BusinessPanelHeader(
+            title: 'Quick Actions',
+            subtitle: 'Start the next thing your company needs.'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: actions
+              .map((item) => OutlinedButton.icon(
+                    onPressed: item.$3,
+                    icon: Icon(item.$1),
+                    label: Text(item.$2),
+                  ))
+              .toList(growable: false),
+        )
+      ]),
+    );
+  }
+}
+
+class _BusinessOverviewInvoicesTable extends StatelessWidget {
+  final Map<String, dynamic> account;
+  final List<Map<String, dynamic>> invoices;
+  final bool busy;
+  final VoidCallback onOpenInvoices;
+  final void Function(Map<String, dynamic>, String) onPayInvoice;
+
+  const _BusinessOverviewInvoicesTable({
+    required this.account,
+    required this.invoices,
+    required this.busy,
+    required this.onOpenInvoices,
+    required this.onPayInvoice,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = invoices.take(6).toList(growable: false);
+    return _BusinessGlass(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Expanded(
+              child: _BusinessPanelHeader(
+                  title: 'Invoices',
+                  subtitle: 'Review and pay your Business invoices.')),
+          TextButton(onPressed: onOpenInvoices, child: const Text('View all')),
+        ]),
+        const SizedBox(height: 12),
+        if (rows.isEmpty)
+          const _BusinessEmptyState(
+              'You do not have any Business invoices yet.')
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingTextStyle: GoogleFonts.jetBrainsMono(
+                  color: Colors.white.withValues(alpha: 0.58),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800),
+              dataTextStyle: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+              columns: const [
+                DataColumn(label: Text('Invoice number')),
+                DataColumn(label: Text('Customer')),
+                DataColumn(label: Text('Issue date')),
+                DataColumn(label: Text('Due date')),
+                DataColumn(label: Text('Amount')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Pay Invoice')),
+              ],
+              rows: rows
+                  .map((invoice) => DataRow(cells: [
+                        DataCell(Text(_businessInvoiceDisplayTitle(invoice))),
+                        DataCell(Text(
+                            '${invoice['customerName'] ?? account['businessName'] ?? 'Business'}')),
+                        DataCell(Text(_businessDateLabel(_businessDate({
+                          'createdAt':
+                              invoice['issueDate'] ?? invoice['createdAt']
+                        })))),
+                        DataCell(Text(_businessDateLabel(
+                            _businessDate({'dueDate': invoice['dueDate']})))),
+                        DataCell(Text(
+                            '£${_num(invoice['balanceDue'] ?? invoice['total']).toStringAsFixed(2)}')),
+                        DataCell(_BusinessBadge(
+                            _businessInvoiceCustomerStatus(invoice)
+                                .toUpperCase())),
+                        DataCell(FilledButton(
+                          onPressed: !busy && _businessInvoiceIsPayable(invoice)
+                              ? () => onPayInvoice(invoice, 'card')
+                              : null,
+                          child: Text(_businessInvoiceIsPayable(invoice)
+                              ? 'Pay Invoice'
+                              : _businessInvoiceCustomerStatus(invoice)),
+                        )),
+                      ]))
+                  .toList(growable: false),
+            ),
+          ),
+      ]),
     );
   }
 }
@@ -39799,11 +40617,9 @@ class _BusinessNode extends StatelessWidget {
 class _BusinessInvoiceCard extends StatelessWidget {
   final Map<String, dynamic> account;
   final List<Map<String, dynamic>> deliveries;
-  final VoidCallback? onOpen;
   const _BusinessInvoiceCard({
     this.account = const {},
     this.deliveries = const [],
-    this.onOpen,
   });
   @override
   Widget build(BuildContext context) {
@@ -39824,59 +40640,47 @@ class _BusinessInvoiceCard extends StatelessWidget {
         : dueSoon
             ? Colors.amberAccent.withValues(alpha: 0.34)
             : Colors.white.withValues(alpha: 0.12);
-    return InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(28),
-        child: _BusinessGlass(
-            borderColor: borderColor,
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const _BusinessPanelHeader(
-                  title: 'Outstanding invoice',
-                  subtitle: 'Current business activity'),
-              const SizedBox(height: 16),
-              Text(
-                  outstanding <= 0
-                      ? '£0.00'
-                      : '£${outstanding.toStringAsFixed(2)}',
-                  style: GoogleFonts.dmSerifDisplay(
-                      color: Colors.white, fontSize: 42, height: 1)),
-              const SizedBox(height: 8),
-              Text(
-                  outstanding <= 0
-                      ? 'No payment due. Your invoice history remains available.'
-                      : overdue
-                          ? 'Invoice overdue. Open invoicing to pay by card or eligible Business Roth.'
-                          : dueSoon
-                              ? 'Invoice due within 7 days. Card and eligible Roth payments are available.'
-                              : 'Card and eligible Business Roth payments are available.',
-                  style: GoogleFonts.inter(
-                      color: Colors.white.withValues(alpha: 0.68),
-                      fontWeight: FontWeight.w600,
-                      height: 1.35)),
-              const SizedBox(height: 16),
-              Row(children: [
-                Expanded(
-                    child: FilledButton(
-                        onPressed: outstanding > 0 ? onOpen : null,
-                        child: Text(outstanding > 0
-                            ? 'Pay invoice'
-                            : 'No payment due'))),
-                const SizedBox(width: 10),
-                TextButton(
-                    onPressed: onOpen,
-                    child: const Text('View invoice history')),
-              ])
-            ])));
+    return _BusinessGlass(
+        borderColor: borderColor,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const _BusinessPanelHeader(
+              title: 'Outstanding invoice',
+              subtitle: 'Current business activity'),
+          const SizedBox(height: 16),
+          Text(
+              outstanding <= 0 ? '£0.00' : '£${outstanding.toStringAsFixed(2)}',
+              style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white, fontSize: 42, height: 1)),
+          const SizedBox(height: 8),
+          Text(
+              outstanding <= 0
+                  ? 'No payment due. Your invoice history remains available.'
+                  : overdue
+                      ? 'Invoice overdue. Open invoicing to pay by card or eligible Business Roth.'
+                      : dueSoon
+                          ? 'Invoice due within 7 days. Card and eligible Roth payments are available.'
+                          : 'Card and eligible Business Roth payments are available.',
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.68),
+                  fontWeight: FontWeight.w600,
+                  height: 1.35)),
+          const SizedBox(height: 16),
+          Text(
+              outstanding > 0
+                  ? 'Choose an invoice below to pay securely.'
+                  : 'Your invoice history is shown below.',
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w800))
+        ]));
   }
 }
 
 class _BusinessTeamCard extends StatelessWidget {
-  final Map<String, dynamic> account;
-  const _BusinessTeamCard({this.account = const {}});
+  const _BusinessTeamCard();
   @override
   Widget build(BuildContext context) {
-    final members = _businessMembers(account).take(3).toList();
+    const members = <Map<String, dynamic>>[];
     return _BusinessGlass(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _BusinessPanelHeader(
@@ -40062,7 +40866,7 @@ class _BusinessInvoicePage extends StatelessWidget {
               ]))),
         const SizedBox(height: 8),
         Text(
-            '1 Roth = £1 equivalent internal credit. Roth is not withdrawable, not crypto, and can offset eligible business payments where enabled.',
+            '1 Roth = £1 to use inside Circum. Roth is not withdrawable, not crypto, and can reduce eligible Business payments where enabled.',
             style: GoogleFonts.inter(
                 color: Colors.white.withValues(alpha: 0.62),
                 fontSize: 12,
@@ -40837,35 +41641,6 @@ class _BusinessSettingsPage extends StatelessWidget {
             icon: const Icon(Icons.logout_rounded),
             label: const Text('Logout'))
       ])
-    ]));
-  }
-}
-
-class _BusinessIrisInsights extends StatelessWidget {
-  final List<Map<String, dynamic>> deliveries;
-  const _BusinessIrisInsights({required this.deliveries});
-  @override
-  Widget build(BuildContext context) {
-    final vanguard = deliveries.where(_businessIsVanguard).length;
-    final heavy = deliveries
-        .where((item) =>
-            item['heavyItemFlag'] == true || item['twoPersonFlag'] == true)
-        .length;
-    return _BusinessGlass(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const _BusinessPanelHeader(
-          title: 'IRIS insights',
-          subtitle: 'Operational intelligence, never an override.'),
-      const SizedBox(height: 12),
-      if (deliveries.isEmpty)
-        const _BusinessEmptyState(
-            'IRIS insights will appear once business deliveries are booked.')
-      else
-        Wrap(spacing: 10, runSpacing: 10, children: [
-          _BusinessBadge('VANGUARD JOBS $vanguard'),
-          _BusinessBadge('HANDLING FLAGS $heavy'),
-          _BusinessBadge('ROUTES ${deliveries.length}')
-        ])
     ]));
   }
 }
