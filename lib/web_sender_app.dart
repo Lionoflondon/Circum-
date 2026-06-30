@@ -1891,6 +1891,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<String> _driverApprovalBlockers(Map<String, dynamic> driver) {
     final blockers = <String>[];
     final vehicle = _driverVehicle(driver);
+    final documents = _documentsForDriver(_driverId(driver));
     if (_driverPhone(driver) == 'Phone not provided') {
       blockers.add('Phone missing');
     }
@@ -1909,15 +1910,59 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     if ('${vehicle['plateNumber'] ?? ''}'.trim().isEmpty) {
       blockers.add('Vehicle registration missing');
     }
-    final hasRequiredDocument = driver['verificationData'] != null ||
-        driver['idUploaded'] == true ||
-        driver['licenceUploaded'] == true ||
-        driver['insuranceUploaded'] == true ||
-        driver['documentsUploaded'] == true;
-    if (!hasRequiredDocument) {
-      blockers.add('Required documents missing');
+    if (!_hasApprovedRiderDocument(documents, const [
+      'identity',
+      'international passport',
+      'passport',
+      'id',
+    ])) {
+      blockers.add('Identity document missing');
+    }
+    if (!_hasApprovedRiderDocument(documents, const [
+      'right_to_work',
+      'right to work',
+      'work permit',
+    ])) {
+      blockers.add('Right to work document missing');
+    }
+    if (!_hasApprovedRiderDocument(documents, const [
+      'driving_licence',
+      'drivers license',
+      'driver license',
+      'driving licence',
+    ])) {
+      blockers.add('Driving licence missing');
+    }
+    if (!_hasApprovedRiderDocument(documents, const ['insurance'])) {
+      blockers.add('Insurance document missing');
+    }
+    final vehicleType = '${vehicle['type'] ?? ''}'.toLowerCase();
+    if ((vehicleType.contains('car') || vehicleType.contains('van')) &&
+        !_hasApprovedRiderDocument(documents, const [
+          'vehicle_registration',
+          'vehicle registration',
+          'v5c',
+          'mot',
+        ])) {
+      blockers.add('Vehicle Registration (V5C/MOT) missing');
     }
     return blockers;
+  }
+
+  bool _hasApprovedRiderDocument(
+    List<Map<String, dynamic>> documents,
+    List<String> typeHints,
+  ) {
+    return documents.any((document) {
+      final type =
+          '${document['documentType'] ?? document['type'] ?? document['idType'] ?? ''}'
+              .toLowerCase();
+      final status =
+          '${document['status'] ?? document['verificationStatus'] ?? ''}'
+              .toLowerCase();
+      return status == 'approved' &&
+          typeHints.any((hint) => type.contains(hint));
+    });
   }
 
   String _driverWorkflowStatus(Map<String, dynamic> driver) {
@@ -2272,6 +2317,171 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     }, SetOptions(merge: true));
     await _writeRiderAdminEvent(riderId, action);
     setState(() => _message = 'Updated rider trust check.');
+    await _loadAdminData();
+  }
+
+  Future<void> _reviewRiderDocument(
+    Map<String, dynamic> document,
+    String nextStatus,
+  ) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot review rider documents.');
+      return;
+    }
+    final documentId =
+        '${document['_docId'] ?? document['id'] ?? document['documentId'] ?? ''}';
+    final riderId =
+        '${document['riderId'] ?? document['driverId'] ?? document['uid'] ?? ''}';
+    if (documentId.isEmpty || riderId.isEmpty) return;
+    String note = '';
+    if (nextStatus == 'rejected' || nextStatus == 'replacement_requested') {
+      final controller = TextEditingController();
+      note = await showDialog<String>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(nextStatus == 'rejected'
+                  ? 'Reject document'
+                  : 'Request replacement'),
+              content: TextField(
+                controller: controller,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Review note',
+                  hintText: 'Explain what the rider needs to update.',
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel')),
+                FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(context, controller.text.trim()),
+                    child: const Text('Save')),
+              ],
+            ),
+          ) ??
+          '';
+      controller.dispose();
+      if (note.isEmpty) return;
+    }
+    final previous =
+        '${document['status'] ?? document['verificationStatus'] ?? 'missing'}';
+    final reviewAt = FieldValue.serverTimestamp();
+    final historyEntry = {
+      'previousStatus': previous,
+      'status': nextStatus,
+      'timestamp': Timestamp.now(),
+      'reviewer': _adminUser?.uid ?? _adminUser?.email,
+      if (note.isNotEmpty) 'note': note,
+    };
+    final patch = {
+      'status': nextStatus,
+      'verificationStatus': nextStatus,
+      'reviewedAt': reviewAt,
+      'reviewTimestamp': reviewAt,
+      'reviewedBy': _adminUser?.uid ?? _adminUser?.email,
+      'reviewer': _adminUser?.email ?? _adminUser?.uid,
+      if (nextStatus == 'approved') 'active': true,
+      if (nextStatus == 'approved') 'rejectionReason': FieldValue.delete(),
+      if (nextStatus == 'rejected' || nextStatus == 'replacement_requested')
+        'rejectionReason': note,
+      'reviewNotes': note,
+      'statusHistory': FieldValue.arrayUnion([historyEntry]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await FirebaseFirestore.instance
+        .collection('riderDocuments')
+        .doc(documentId)
+        .set(patch, SetOptions(merge: true));
+    final type =
+        '${document['documentType'] ?? document['type'] ?? ''}'.toLowerCase();
+    String? riderStatusField;
+    String? checklistKey;
+    if (type.contains('vehicle_registration') ||
+        type.contains('vehicle registration') ||
+        type.contains('v5c') ||
+        type.contains('mot')) {
+      riderStatusField = 'vehicleRegistrationDocumentStatus';
+      checklistKey = 'vehicle_registration';
+    } else if (type.contains('driving_licence') ||
+        type.contains('drivers license') ||
+        type.contains('driver license') ||
+        type.contains('driving licence')) {
+      riderStatusField = 'drivingLicenceStatus';
+      checklistKey = 'driving_licence';
+    } else if (type.contains('right_to_work') ||
+        type.contains('right to work') ||
+        type.contains('work permit')) {
+      riderStatusField = 'rightToWorkStatus';
+      checklistKey = 'right_to_work';
+    } else if (type.contains('identity') ||
+        type.contains('passport') ||
+        type == 'id') {
+      riderStatusField = 'identityDocumentStatus';
+      checklistKey = 'identity_document';
+    } else if (type.contains('insurance')) {
+      riderStatusField = 'insuranceStatus';
+      checklistKey = 'insurance';
+    }
+    if (riderStatusField != null && checklistKey != null) {
+      await FirebaseFirestore.instance.collection('riders').doc(riderId).set({
+        riderStatusField: nextStatus,
+        'documentChecklist.$checklistKey': nextStatus,
+        'verificationStatus':
+            nextStatus == 'approved' ? 'verification_pending' : 'under_review',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('riderProfiles')
+          .doc(riderId)
+          .set({
+        riderStatusField: nextStatus,
+        'documentChecklist.$checklistKey': nextStatus,
+        'verificationStatus':
+            nextStatus == 'approved' ? 'verification_pending' : 'under_review',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+    if (type.contains('vehicle_registration') ||
+        type.contains('vehicle registration') ||
+        type.contains('v5c') ||
+        type.contains('mot')) {
+      final riderPatch = {
+        'vehicleRegistrationDocumentStatus': nextStatus,
+        'vehicleRegistrationDocument': {
+          'status': nextStatus,
+          'reviewedAt': reviewAt,
+          'reviewedBy': _adminUser?.uid ?? _adminUser?.email,
+          if (nextStatus == 'rejected' || nextStatus == 'replacement_requested')
+            'rejectionReason': note,
+        },
+        if (nextStatus == 'approved') 'vehicleVerified': true,
+        if (nextStatus == 'approved') 'vehicleVerifiedAt': reviewAt,
+        if (nextStatus != 'approved') 'vehicleVerified': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      await FirebaseFirestore.instance
+          .collection('riderProfiles')
+          .doc(riderId)
+          .set(riderPatch, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('riders')
+          .doc(riderId)
+          .set(riderPatch, SetOptions(merge: true));
+    }
+    await _writeRiderAdminEvent(
+      riderId,
+      nextStatus == 'approved'
+          ? 'document_approved'
+          : nextStatus == 'rejected'
+              ? 'document_rejected'
+              : 'document_replacement_requested',
+      previousStatus: previous,
+      newStatus: nextStatus,
+      note: note,
+    );
+    setState(() => _message = 'Rider document updated.');
     await _loadAdminData();
   }
 
@@ -3239,6 +3449,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 canManageRank: _can(AdminPermission.manageDriverRanks),
                 onChangeRank: () => _changeDriverRank(_selectedDriverProfile!),
                 onIssueRoth: () => _issueRothToRider(_selectedDriverProfile!),
+                onApproveDocument: (document) =>
+                    _reviewRiderDocument(document, 'approved'),
+                onRejectDocument: (document) =>
+                    _reviewRiderDocument(document, 'rejected'),
+                onRequestReplacement: (document) =>
+                    _reviewRiderDocument(document, 'replacement_requested'),
                 onClose: () => setState(() => _driverProfileOpen = false),
               ),
           ],
@@ -9935,6 +10151,9 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
   final bool canManageRank;
   final VoidCallback onChangeRank;
   final VoidCallback onIssueRoth;
+  final ValueChanged<Map<String, dynamic>> onApproveDocument;
+  final ValueChanged<Map<String, dynamic>> onRejectDocument;
+  final ValueChanged<Map<String, dynamic>> onRequestReplacement;
   final VoidCallback onClose;
 
   const _AdminDriverProfileDrawer({
@@ -9956,6 +10175,9 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     required this.canManageRank,
     required this.onChangeRank,
     required this.onIssueRoth,
+    required this.onApproveDocument,
+    required this.onRejectDocument,
+    required this.onRequestReplacement,
     required this.onClose,
   });
 
@@ -10016,14 +10238,56 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     if ('${vehicle['plateNumber'] ?? ''}'.trim().isEmpty) {
       blockers.add('Vehicle registration missing');
     }
-    if (driver['verificationData'] == null &&
-        driver['idUploaded'] != true &&
-        driver['licenceUploaded'] != true &&
-        driver['insuranceUploaded'] != true &&
-        driver['documentsUploaded'] != true) {
-      blockers.add('Required documents missing');
+    if (!_hasApprovedDocument(const [
+      'identity',
+      'international passport',
+      'passport',
+      'id',
+    ])) {
+      blockers.add('Identity document missing');
+    }
+    if (!_hasApprovedDocument(const [
+      'right_to_work',
+      'right to work',
+      'work permit',
+    ])) {
+      blockers.add('Right to work document missing');
+    }
+    if (!_hasApprovedDocument(const [
+      'driving_licence',
+      'drivers license',
+      'driver license',
+      'driving licence',
+    ])) {
+      blockers.add('Driving licence missing');
+    }
+    if (!_hasApprovedDocument(const ['insurance'])) {
+      blockers.add('Insurance document missing');
+    }
+    final vehicleType = '${vehicle['type'] ?? ''}'.toLowerCase();
+    if ((vehicleType.contains('car') || vehicleType.contains('van')) &&
+        !_hasApprovedDocument(const [
+          'vehicle_registration',
+          'vehicle registration',
+          'v5c',
+          'mot',
+        ])) {
+      blockers.add('Vehicle Registration (V5C/MOT) missing');
     }
     return blockers;
+  }
+
+  bool _hasApprovedDocument(List<String> typeHints) {
+    return documents.any((document) {
+      final type =
+          '${document['documentType'] ?? document['type'] ?? document['idType'] ?? ''}'
+              .toLowerCase();
+      final status =
+          '${document['status'] ?? document['verificationStatus'] ?? ''}'
+              .toLowerCase();
+      return status == 'approved' &&
+          typeHints.any((hint) => type.contains(hint));
+    });
   }
 
   @override
@@ -10348,7 +10612,20 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                           )
                         else
                           ...documents.map((document) {
-                            final url = '${document['downloadUrl'] ?? ''}';
+                            final url =
+                                '${document['downloadUrl'] ?? document['imageURL'] ?? ''}';
+                            final status =
+                                '${document['status'] ?? document['verificationStatus'] ?? 'missing'}'
+                                    .toLowerCase();
+                            final versions = ((document['archivedVersions']
+                                        as List?) ??
+                                    const [])
+                                .whereType<Map>()
+                                .map((item) => Map<String, dynamic>.from(item))
+                                .toList();
+                            final rejectionReason =
+                                '${document['rejectionReason'] ?? document['reviewNotes'] ?? ''}'
+                                    .trim();
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.all(12),
@@ -10369,28 +10646,76 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '${document['type'] ?? document['documentType'] ?? 'Document'}',
+                                          _documentDisplayName(document),
                                           style: TextStyle(
                                             color: colors.text,
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
                                         Text(
-                                          '${document['verificationStatus'] ?? document['status'] ?? 'pending'}',
+                                          _documentStatusLabel(status),
                                           style: TextStyle(
                                             color: colors.mutedText,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        if (rejectionReason.isNotEmpty)
+                                          Text(
+                                            rejectionReason,
+                                            style: TextStyle(
+                                              color: Colors.redAccent,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        Text(
+                                          'Uploaded ${_dateText(document['uploadedAt'] ?? document['uploadTimestamp'])}',
+                                          style: TextStyle(
+                                            color: colors.mutedText,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  if (url.startsWith('http'))
-                                    TextButton(
-                                      onPressed: () =>
-                                          launchUrl(Uri.parse(url)),
-                                      child: const Text('Open'),
-                                    ),
+                                  Wrap(
+                                    spacing: 6,
+                                    children: [
+                                      if (url.startsWith('http'))
+                                        TextButton(
+                                          onPressed: () =>
+                                              launchUrl(Uri.parse(url)),
+                                          child: const Text('View'),
+                                        ),
+                                      if (versions.isNotEmpty)
+                                        TextButton(
+                                          onPressed: () =>
+                                              _showPreviousDocumentVersions(
+                                            context,
+                                            document,
+                                          ),
+                                          child: const Text('Previous'),
+                                        ),
+                                      if (status != 'approved')
+                                        TextButton(
+                                          onPressed: () =>
+                                              onApproveDocument(document),
+                                          child: const Text('Approve'),
+                                        ),
+                                      if (status != 'rejected')
+                                        TextButton(
+                                          onPressed: () =>
+                                              onRejectDocument(document),
+                                          child: const Text('Reject'),
+                                        ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            onRequestReplacement(document),
+                                        child:
+                                            const Text('Request replacement'),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             );
@@ -10422,6 +10747,86 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  String _documentDisplayName(Map<String, dynamic> document) {
+    final raw =
+        '${document['displayName'] ?? document['type'] ?? document['documentType'] ?? 'Document'}';
+    final normalized = raw.toLowerCase();
+    if (normalized.contains('vehicle_registration') ||
+        normalized.contains('vehicle registration') ||
+        normalized.contains('v5c') ||
+        normalized.contains('mot')) {
+      return 'Vehicle Registration (V5C/MOT)';
+    }
+    return raw;
+  }
+
+  String _documentStatusLabel(String status) {
+    return switch (status) {
+      'approved' => 'Approved',
+      'under_review' || 'pending' => 'Under Review',
+      'rejected' => 'Rejected',
+      'expired' => 'Expired',
+      'replacement_requested' => 'Replacement Requested',
+      _ => 'Missing',
+    };
+  }
+
+  void _showPreviousDocumentVersions(
+    BuildContext context,
+    Map<String, dynamic> document,
+  ) {
+    final versions = ((document['archivedVersions'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: colors.background,
+        title: Text(
+          'Previous versions',
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+        ),
+        content: SizedBox(
+          width: 420,
+          child: versions.isEmpty
+              ? Text('No previous versions.',
+                  style: TextStyle(color: colors.mutedText))
+              : ListView(
+                  shrinkWrap: true,
+                  children: versions.map((version) {
+                    final url =
+                        '${version['downloadUrl'] ?? version['imageURL'] ?? ''}';
+                    return ListTile(
+                      title: Text(
+                        _documentStatusLabel(
+                            '${version['status'] ?? version['verificationStatus'] ?? ''}'),
+                        style: TextStyle(
+                            color: colors.text, fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(
+                        'Uploaded ${_dateText(version['uploadedAt'])}\nReviewed ${_dateText(version['reviewedAt'])}',
+                        style: TextStyle(color: colors.mutedText),
+                      ),
+                      trailing: url.startsWith('http')
+                          ? TextButton(
+                              onPressed: () => launchUrl(Uri.parse(url)),
+                              child: const Text('View'),
+                            )
+                          : null,
+                    );
+                  }).toList(),
+                ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close')),
+        ],
       ),
     );
   }
