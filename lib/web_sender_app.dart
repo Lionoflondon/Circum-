@@ -1428,6 +1428,119 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await _loadAdminData();
   }
 
+  Future<void> _archiveStaleDelivery(Map<String, dynamic> delivery) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot archive stale orders.');
+      return;
+    }
+    final id = '${delivery['id'] ?? delivery['requestId'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    final reasonController = TextEditingController();
+    var reasonError = '';
+    try {
+      final reason = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Archive stale order?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This removes order ${delivery['trackingReference'] ?? delivery['reference'] ?? id} '
+                  'from active matching, sender tracking, dispatch and active admin views. '
+                  'Payment records and audit logs are preserved.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: 'Cleanup reason',
+                    errorText: reasonError.isEmpty ? null : reasonError,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final reason = reasonController.text.trim();
+                  if (reason.length < 4) {
+                    setDialogState(
+                      () => reasonError = 'Add a clear cleanup reason.',
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, reason);
+                },
+                child: const Text('Archive stale order'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (reason == null || reason.trim().isEmpty) return;
+      final previousStatus = '${delivery['status'] ?? ''}';
+      final reference =
+          '${delivery['trackingReference'] ?? delivery['reference'] ?? delivery['requestId'] ?? id}';
+      final adminId = _adminUser?.uid ?? _adminUser?.email ?? 'unknown-admin';
+      final batch = FirebaseFirestore.instance.batch();
+      final deliveryRef =
+          FirebaseFirestore.instance.collection('deliveryRequests').doc(id);
+      final cleanupRef = FirebaseFirestore.instance
+          .collection('deliveryStaleCleanupEvents')
+          .doc();
+      batch.set(
+          deliveryRef,
+          {
+            'status': 'archived',
+            'matchingStatus': 'archived',
+            'dispatchStatus': 'archived',
+            'archived': true,
+            'staleArchived': true,
+            'active': false,
+            'archivedAt': FieldValue.serverTimestamp(),
+            'archivedByAdminId': adminId,
+            'archivedByAdminEmail': _adminUser?.email,
+            'staleCleanupReason': reason,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+      final auditPayload = {
+        'adminId': adminId,
+        'adminEmail': _adminUser?.email,
+        'orderId': id,
+        'reference': reference,
+        'previousStatus': previousStatus,
+        'newStatus': 'archived',
+        'reason': reason,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      batch.set(cleanupRef, auditPayload);
+      batch.set(FirebaseFirestore.instance.collection('adminAuditLogs').doc(), {
+        ...auditPayload,
+        'action': 'stale_delivery_archived',
+        'actionType': 'stale_delivery_archived',
+        'recordType': 'deliveryRequests',
+        'recordId': id,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+      setState(() =>
+          _message = 'Order $reference was archived from active system views.');
+      await _loadAdminData();
+    } finally {
+      reasonController.dispose();
+    }
+  }
+
   Future<List<String>> _uploadGiftStoryPhotoFiles(
     String giftRequestId,
     List<XFile> files,
@@ -3239,7 +3352,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           records: adminSearch(
               _deliveries.where((delivery) {
                 final status = '${delivery['status'] ?? ''}'.toLowerCase();
-                final visible = _showDeletedDeliveries || status != 'deleted';
+                final visible = _showDeletedDeliveries ||
+                    (status != 'deleted' &&
+                        !_isArchivedDeliveryRecord(delivery));
                 final serviceMatches = _deliveryServiceFilter == 'ALL' ||
                     _movementServiceType(delivery) == _deliveryServiceFilter;
                 return visible && serviceMatches;
@@ -5480,6 +5595,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             label: 'Chat',
             enabled: _can(AdminPermission.viewSupport),
             onTap: () => _openAdminChat(item),
+          ),
+          _AdminAction(
+            label: 'Archive stale order',
+            enabled: _can(AdminPermission.editDeliveries) &&
+                (_isStaleDeliveryArchiveEligible(item) ||
+                    (_roles.contains(AdminRole.superAdmin.value) &&
+                        _isStaleDeliveryCandidate(item))),
+            onTap: () => _archiveStaleDelivery(item),
           ),
           _AdminAction(
             label: 'Delete',
@@ -11019,6 +11142,64 @@ String _jobReceivedTextFromDate(DateTime? date) {
   return 'Received: ${local.day} $month, $hour:$minute';
 }
 
+bool _isArchivedDeliveryRecord(Map<String, dynamic> delivery) {
+  final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+  final matchingStatus =
+      '${delivery['matchingStatus'] ?? ''}'.toLowerCase().trim();
+  final dispatchStatus =
+      '${delivery['dispatchStatus'] ?? ''}'.toLowerCase().trim();
+  const archivedStatuses = {
+    'archived',
+    'void',
+    'voided',
+    'cancelled_by_admin',
+    'deleted',
+  };
+  return delivery['archived'] == true ||
+      delivery['active'] == false ||
+      archivedStatuses.contains(status) ||
+      archivedStatuses.contains(matchingStatus) ||
+      archivedStatuses.contains(dispatchStatus);
+}
+
+bool _isStaleDeliveryArchiveEligible(Map<String, dynamic> delivery) {
+  if (_isArchivedDeliveryRecord(delivery)) return false;
+  if (delivery['stale'] == true || delivery['manuallyMarkedStale'] == true) {
+    return true;
+  }
+  if (!_isStaleDeliveryCandidate(delivery)) return false;
+  final createdAt = _deliveryRecordDate(delivery);
+  if (createdAt == null) return false;
+  return DateTime.now().difference(createdAt).inHours >= 24;
+}
+
+bool _isStaleDeliveryCandidate(Map<String, dynamic> delivery) {
+  if (_isArchivedDeliveryRecord(delivery)) return false;
+  final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+  final matchingStatus =
+      '${delivery['matchingStatus'] ?? ''}'.toLowerCase().trim();
+  const staleStatuses = {
+    'finding_rider',
+    'pending',
+    'unmatched',
+    'requested',
+  };
+  return staleStatuses.contains(status) ||
+      staleStatuses.contains(matchingStatus);
+}
+
+DateTime? _deliveryRecordDate(Map<String, dynamic> delivery) {
+  final raw = delivery['createdAt'] ??
+      delivery['receivedAt'] ??
+      delivery['requestedAt'] ??
+      delivery['timestamp'] ??
+      delivery['updatedAt'];
+  if (raw is Timestamp) return raw.toDate();
+  if (raw is DateTime) return raw;
+  if (raw is String) return DateTime.tryParse(raw);
+  return null;
+}
+
 bool _isActiveSenderDeliveryStatus(String status) {
   final normalized = status.toLowerCase().trim().replaceAll('-', '_');
   const activeStatuses = {
@@ -11049,6 +11230,10 @@ bool _isActiveSenderDeliveryStatus(String status) {
     'failed',
     'refunded',
     'archived',
+    'voided',
+    'void',
+    'cancelled_by_admin',
+    'deleted',
   };
   if (inactiveStatuses.contains(normalized)) return false;
   return activeStatuses.contains(normalized);
@@ -14031,6 +14216,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
               .where((job) {
             final matchingStatus =
                 '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
+            if (_isArchivedDeliveryRecord(job)) return false;
             final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
             final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
             final currentRider = _riderUser?.uid;
@@ -38450,7 +38636,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     if (request.method == 'card') {
       setState(() {
         _busy = true;
-        _message = 'Starting Stripe checkout...';
+        _message = 'Starting secure checkout...';
       });
       try {
         final result =
@@ -38459,7 +38645,8 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
                 .call({
           'businessId': businessId,
           'amount': request.amount,
-          'returnUrl': '${html.window.location.origin}/?app=business',
+          'returnUrl':
+              '${html.window.location.origin}/?app=business&section=invoicing',
         });
         final checkoutUrl = '${result.data['checkoutUrl'] ?? ''}';
         if (checkoutUrl.isEmpty) {
@@ -38467,7 +38654,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
         }
         if (mounted) {
           setState(() => _message =
-              'Payment received by Stripe will show as Awaiting Verification until Circum confirms it.');
+              'Payment received. Roth will appear once confirmation completes.');
         }
         html.window.location.assign(checkoutUrl);
       } catch (error) {
@@ -38484,7 +38671,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     }
     setState(() {
       _busy = true;
-      _message = 'Submitting manual payment request...';
+      _message = 'Submitting payment request...';
     });
     final purchaseRef =
         FirebaseFirestore.instance.collection('businessRothPurchases').doc();
@@ -38531,7 +38718,7 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
         setState(() {
           _busy = false;
           _message =
-              'Roth purchase request created. Circum admin will confirm manual payment before crediting Roth.';
+              'Roth top-up request created. Circum will confirm payment before crediting Roth.';
         });
       }
     } catch (error) {
@@ -38556,27 +38743,33 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
     final invoiceId = '${invoice['invoiceId'] ?? invoice['id'] ?? ''}';
     final balance = _num(invoice['balanceDue'] ?? invoice['total']);
     if (businessId.isEmpty || invoiceId.isEmpty || balance <= 0) return;
+    final rothBalance =
+        _num(account['rothBalance'] ?? account['businessRothBalance']);
+    var paymentAmount = balance;
     var rothAmount = 0.0;
     if (method == 'roth') {
-      rothAmount = balance;
+      paymentAmount = math.min(balance, rothBalance);
+      rothAmount = paymentAmount;
+      if (rothAmount <= 0) return;
     } else if (method == 'part') {
-      final result = await showDialog<double>(
+      final result = await showDialog<_BusinessInvoicePartPaymentRequest>(
         context: context,
-        builder: (context) => _BusinessRothAmountDialog(
-          maxAmount: math.min(
-            balance,
-            _num(account['rothBalance'] ?? account['businessRothBalance']),
-          ),
+        builder: (context) => _BusinessPartPaymentDialog(
+          maxAmount: balance,
+          rothBalance: rothBalance,
         ),
       );
-      if (result == null || result <= 0) return;
-      rothAmount = result;
+      if (result == null || result.amount <= 0) return;
+      paymentAmount = result.amount;
+      if (result.method == 'roth') {
+        rothAmount = result.amount;
+      }
     }
     setState(() {
       _busy = true;
       _message = method == 'roth'
           ? 'Paying invoice with Business Roth...'
-          : 'Starting Stripe checkout...';
+          : 'Starting secure checkout...';
     });
     try {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -38584,14 +38777,18 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
           .call({
         'businessId': businessId,
         'invoiceId': invoiceId,
+        'paymentAmount': paymentAmount,
         'rothAmount': rothAmount,
-        'returnUrl': '${html.window.location.origin}/?app=business',
+        'returnUrl':
+            '${html.window.location.origin}/?app=business&section=invoicing&invoiceId=$invoiceId',
       });
       if (result.data['paid'] == true) {
         if (mounted) {
           setState(() {
             _busy = false;
-            _message = 'Invoice paid with Business Roth.';
+            _message = paymentAmount >= balance
+                ? 'Invoice paid using Roth.'
+                : 'Part payment made. Your remaining balance has been updated.';
           });
         }
         return;
@@ -38599,8 +38796,8 @@ class _BusinessCommandPageState extends State<_BusinessCommandPage> {
       final checkoutUrl = '${result.data['checkoutUrl'] ?? ''}';
       if (checkoutUrl.isEmpty) throw StateError('Missing checkout URL');
       if (mounted) {
-        setState(
-            () => _message = 'Invoice payment started. Awaiting verification.');
+        setState(() => _message =
+            'Invoice payment started. Waiting for payment confirmation.');
       }
       html.window.location.assign(checkoutUrl);
     } catch (error) {
@@ -39601,8 +39798,7 @@ class _BusinessInvoiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final invoices = _businessInvoices(account);
     final outstanding = invoices.fold<double>(0, (runningTotal, item) {
-      final status = '${item['status'] ?? 'draft'}'.toLowerCase();
-      if (['paid', 'paid_manually', 'cancelled'].contains(status)) {
+      if (!_businessInvoiceIsPayable(item)) {
         return runningTotal;
       }
       return runningTotal + _num(item['balanceDue'] ?? item['total']);
@@ -39808,7 +40004,7 @@ class _BusinessInvoicePage extends StatelessWidget {
         FilledButton.icon(
             onPressed: busy ? null : onBuyRoth,
             icon: const Icon(Icons.add_card_outlined),
-            label: Text(busy ? 'Starting Stripe checkout...' : 'Top Up Roth')),
+            label: Text(busy ? 'Starting secure checkout...' : 'Top Up Roth')),
         const SizedBox(height: 10),
         Text(
             'Roth can be used for eligible Circum business services but cannot be withdrawn.',
@@ -39819,7 +40015,7 @@ class _BusinessInvoicePage extends StatelessWidget {
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
         if (rothPurchases.isNotEmpty) ...[
-          Text('Purchase requests',
+          Text('Recent activity',
               style: GoogleFonts.inter(
                   color: Colors.white, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
@@ -39827,8 +40023,7 @@ class _BusinessInvoicePage extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(children: [
                 Expanded(
-                    child: Text(
-                        '${item['status'] ?? 'pending'} · ${item['paymentProvider'] ?? 'manual'}',
+                    child: Text(_businessRothActivityLabel(item),
                         style: GoogleFonts.inter(
                             color: Colors.white.withValues(alpha: 0.78),
                             fontWeight: FontWeight.w700))),
@@ -39846,8 +40041,7 @@ class _BusinessInvoicePage extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(children: [
                 Expanded(
-                    child: Text(
-                        '${item['source'] ?? 'business_roth'} · ${item['reason'] ?? 'Business Roth movement'}',
+                    child: Text(_businessRothActivityLabel(item),
                         style: GoogleFonts.inter(
                             color: Colors.white, fontWeight: FontWeight.w700))),
                 Text(
@@ -39870,7 +40064,7 @@ class _BusinessInvoicePage extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const _BusinessPanelHeader(
             title: 'Invoice history',
-            subtitle: 'Issued and manually managed Business invoices.'),
+            subtitle: 'Issued Business invoices and payment history.'),
         const SizedBox(height: 12),
         _BusinessTextField(controller: invoiceSearch, label: 'Search invoices'),
         const SizedBox(height: 12),
@@ -39908,8 +40102,9 @@ class _BusinessInvoicePaymentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = '${invoice['status'] ?? 'draft'}'.toLowerCase();
     final balance = _num(invoice['balanceDue'] ?? invoice['total']);
-    final payable =
-        balance > 0 && !['paid', 'paid_manually', 'cancelled'].contains(status);
+    final payable = _businessInvoiceIsPayable(invoice);
+    final label = _businessInvoiceCustomerStatus(invoice);
+    final paidUsingRoth = _businessInvoicePaidWithRoth(invoice);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -39921,7 +40116,7 @@ class _BusinessInvoicePaymentRow extends StatelessWidget {
         Row(children: [
           Expanded(
             child: Text(
-              '${invoice['invoiceNumber'] ?? invoice['invoiceId'] ?? 'Invoice'} · ${invoice['status'] ?? 'draft'}',
+              _businessInvoiceDisplayTitle(invoice),
               style: GoogleFonts.inter(
                   color: Colors.white, fontWeight: FontWeight.w900),
             ),
@@ -39930,29 +40125,34 @@ class _BusinessInvoicePaymentRow extends StatelessWidget {
               style: GoogleFonts.jetBrainsMono(
                   color: Colors.white, fontWeight: FontWeight.w900)),
         ]),
+        const SizedBox(height: 4),
+        Text(label,
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),
         if (payable)
           Wrap(spacing: 8, runSpacing: 8, children: [
             FilledButton.icon(
                 onPressed: busy ? null : () => onPay('card'),
                 icon: const Icon(Icons.credit_card_rounded),
-                label:
-                    Text(busy ? 'Starting Stripe checkout...' : 'Pay invoice')),
+                label: Text(busy
+                    ? 'Starting secure checkout...'
+                    : status == 'partially_paid'
+                        ? 'Pay remaining balance'
+                        : 'Pay invoice')),
             OutlinedButton.icon(
-                onPressed: !busy && rothBalance >= balance
-                    ? () => onPay('roth')
-                    : null,
+                onPressed:
+                    !busy && rothBalance > 0 ? () => onPay('roth') : null,
                 icon: const Icon(Icons.account_balance_wallet_outlined),
                 label: const Text('Pay with Roth')),
             OutlinedButton.icon(
-                onPressed: !busy && rothBalance > 0 && rothBalance < balance
-                    ? () => onPay('part')
-                    : null,
+                onPressed: busy ? null : () => onPay('part'),
                 icon: const Icon(Icons.call_split_rounded),
                 label: const Text('Part Pay')),
           ])
         else
-          Text('Paid',
+          Text(paidUsingRoth ? 'Paid using Roth' : label,
               style: GoogleFonts.inter(
                   color: Colors.white.withValues(alpha: 0.7),
                   fontWeight: FontWeight.w800)),
@@ -40089,7 +40289,7 @@ class _BusinessRothPurchaseDialogState
                                   amount: amount, method: _method))
                           : null,
                       child: Text(_method == 'card'
-                          ? 'Continue to Stripe'
+                          ? 'Continue to secure checkout'
                           : 'Submit manual request'))),
             ]),
           ])),
@@ -40097,17 +40297,32 @@ class _BusinessRothPurchaseDialogState
   }
 }
 
-class _BusinessRothAmountDialog extends StatefulWidget {
-  final double maxAmount;
-  const _BusinessRothAmountDialog({required this.maxAmount});
-
-  @override
-  State<_BusinessRothAmountDialog> createState() =>
-      _BusinessRothAmountDialogState();
+class _BusinessInvoicePartPaymentRequest {
+  final double amount;
+  final String method;
+  const _BusinessInvoicePartPaymentRequest({
+    required this.amount,
+    required this.method,
+  });
 }
 
-class _BusinessRothAmountDialogState extends State<_BusinessRothAmountDialog> {
+class _BusinessPartPaymentDialog extends StatefulWidget {
+  final double maxAmount;
+  final double rothBalance;
+  const _BusinessPartPaymentDialog({
+    required this.maxAmount,
+    required this.rothBalance,
+  });
+
+  @override
+  State<_BusinessPartPaymentDialog> createState() =>
+      _BusinessPartPaymentDialogState();
+}
+
+class _BusinessPartPaymentDialogState
+    extends State<_BusinessPartPaymentDialog> {
   final _amount = TextEditingController();
+  String _method = 'card';
 
   @override
   void dispose() {
@@ -40117,32 +40332,73 @@ class _BusinessRothAmountDialogState extends State<_BusinessRothAmountDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final value = math.min(
-      widget.maxAmount,
-      double.tryParse(_amount.text.trim()) ?? 0,
-    );
+    final entered = double.tryParse(_amount.text.trim()) ?? 0;
+    final value = entered.isFinite ? entered : 0;
+    final validAmount = value > 0 && value <= widget.maxAmount;
+    final rothAvailable = widget.rothBalance > 0;
+    final canUseRoth =
+        _method != 'roth' || (rothAvailable && value <= widget.rothBalance);
     return AlertDialog(
       backgroundColor: const Color(0xff101826),
-      title: Text('Use Business Roth',
+      title: Text('Part Pay invoice',
           style: GoogleFonts.dmSerifDisplay(color: Colors.white)),
-      content: TextField(
-        controller: _amount,
-        keyboardType: TextInputType.number,
-        style: GoogleFonts.inter(color: Colors.white),
-        onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(
-          labelText: 'Roth amount, max ${widget.maxAmount.toStringAsFixed(2)}',
-          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-          prefixText: '£',
-          prefixStyle: const TextStyle(color: Colors.white),
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _amount,
+            keyboardType: TextInputType.number,
+            style: GoogleFonts.inter(color: Colors.white),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Amount, max £${widget.maxAmount.toStringAsFixed(2)}',
+              labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              prefixText: '£',
+              prefixStyle: const TextStyle(color: Colors.white),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            ChoiceChip(
+              selected: _method == 'card',
+              label: const Text('Pay by Card'),
+              onSelected: (_) => setState(() => _method = 'card'),
+            ),
+            ChoiceChip(
+              selected: _method == 'roth',
+              label: const Text('Pay with Roth'),
+              onSelected: rothAvailable
+                  ? (_) => setState(() => _method = 'roth')
+                  : null,
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            _method == 'roth' && !canUseRoth
+                ? 'Your Roth balance is lower than this amount.'
+                : 'Choose how much of the invoice balance to pay now.',
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.68),
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel')),
         FilledButton(
-            onPressed: value > 0 ? () => Navigator.pop(context, value) : null,
+            onPressed: validAmount && canUseRoth
+                ? () => Navigator.pop(
+                      context,
+                      _BusinessInvoicePartPaymentRequest(
+                        amount: value.toDouble(),
+                        method: _method,
+                      ),
+                    )
+                : null,
             child: const Text('Continue')),
       ],
     );
@@ -40989,17 +41245,114 @@ List<Map<String, dynamic>> _businessRothTransactions(
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
 List<Map<String, dynamic>> _businessInvoices(Map<String, dynamic> account) =>
-    ((account['recentBusinessInvoices'] as List?) ?? const [])
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
+    _dedupeBusinessInvoices(
+        ((account['recentBusinessInvoices'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false));
+
+List<Map<String, dynamic>> _dedupeBusinessInvoices(
+  List<Map<String, dynamic>> invoices,
+) {
+  final byId = <String, Map<String, dynamic>>{};
+  for (final invoice in invoices) {
+    final id =
+        '${invoice['invoiceId'] ?? invoice['id'] ?? invoice['invoiceNumber'] ?? ''}';
+    if (id.isEmpty) continue;
+    final existing = byId[id];
+    if (existing == null ||
+        _businessInvoiceRank(invoice) >= _businessInvoiceRank(existing)) {
+      byId[id] = invoice;
+    }
+  }
+  return byId.values.toList(growable: false);
+}
+
+int _businessInvoiceRank(Map<String, dynamic> invoice) {
+  final status = _businessInvoiceStatus(invoice);
+  final statusRank = switch (status) {
+    'paid' || 'paid_manually' || 'paid_with_roth' => 6,
+    'partially_paid' => 5,
+    'issued' || 'unpaid' => 4,
+    'draft' => 3,
+    'cancelled' || 'canceled' => 2,
+    'void' || 'voided' => 1,
+    _ => 0,
+  };
+  return statusRank * 10000000000000 +
+      _businessDate(invoice).millisecondsSinceEpoch;
+}
+
+String _businessInvoiceStatus(Map<String, dynamic> invoice) =>
+    '${invoice['status'] ?? 'draft'}'.toLowerCase().trim();
+
+bool _businessInvoicePaidWithRoth(Map<String, dynamic> invoice) {
+  final method = '${invoice['paymentMethod'] ?? invoice['method'] ?? ''}'
+      .toLowerCase()
+      .trim();
+  return _businessInvoiceStatus(invoice) == 'paid_with_roth' ||
+      method == 'roth' ||
+      method == 'roth_card';
+}
+
+bool _businessInvoiceIsPayable(Map<String, dynamic> invoice) {
+  final status = _businessInvoiceStatus(invoice);
+  final balance = _num(invoice['balanceDue'] ?? invoice['total']);
+  return balance > 0 &&
+      const {'issued', 'unpaid', 'partially_paid'}.contains(status);
+}
+
+String _businessInvoiceCustomerStatus(Map<String, dynamic> invoice) {
+  final status = _businessInvoiceStatus(invoice);
+  if (_businessInvoicePaidWithRoth(invoice) &&
+      const {'paid', 'paid_manually', 'paid_with_roth'}.contains(status)) {
+    return 'Paid using Roth';
+  }
+  return switch (status) {
+    'draft' => 'Preparing invoice',
+    'issued' || 'unpaid' => 'Ready for payment',
+    'partially_paid' => 'Partially paid',
+    'paid' || 'paid_manually' => 'Paid',
+    'cancelled' || 'canceled' => 'Cancelled',
+    'void' || 'voided' => 'Void',
+    _ => 'Ready for payment',
+  };
+}
+
+String _businessInvoiceDisplayTitle(Map<String, dynamic> invoice) {
+  final reference =
+      '${invoice['invoiceNumber'] ?? invoice['invoiceId'] ?? 'Invoice'}';
+  final match = RegExp(r'(\d{3,})$').firstMatch(reference);
+  if (match != null) return 'Invoice #${match.group(1)}';
+  return reference.startsWith('Invoice') ? reference : 'Invoice';
+}
+
+String _businessRothActivityLabel(Map<String, dynamic> item) {
+  final raw = '${item['source'] ?? item['type'] ?? item['status'] ?? ''}'
+      .toLowerCase()
+      .trim();
+  final reason = '${item['reason'] ?? item['note'] ?? ''}'.toLowerCase();
+  if (raw.contains('invoice_payment') || reason.contains('invoice')) {
+    return reason.contains('part')
+        ? 'Part payment made'
+        : 'Invoice paid using Roth';
+  }
+  if (raw.contains('admin_credit')) return 'Roth added by your administrator';
+  if (raw.contains('admin_debit')) return 'Roth adjusted by your administrator';
+  if (raw.contains('roth_purchase') || raw == 'paid') {
+    return 'Roth top-up completed';
+  }
+  if (raw.contains('pending') || raw.contains('verification')) {
+    return 'Waiting for payment confirmation';
+  }
+  if (raw.contains('cancel')) return 'Roth top-up cancelled';
+  return 'Business Roth activity';
+}
 
 DateTime? _businessNextInvoiceDue(List<Map<String, dynamic>> invoices) {
   final dueDates = invoices
       .where((item) {
-        final status = '${item['status'] ?? 'draft'}'.toLowerCase();
-        return !['paid', 'paid_manually', 'cancelled'].contains(status) &&
-            _num(item['balanceDue'] ?? item['total']) > 0;
+        return _businessInvoiceIsPayable(item);
       })
       .map((item) => _businessDate({'dueDate': item['dueDate']}))
       .where((date) => date.millisecondsSinceEpoch != 0)

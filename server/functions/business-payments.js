@@ -86,7 +86,9 @@ async function debitBusinessRoth({businessId, amount, invoiceId, metadata = {}})
   const walletRef = db.collection("business_wallets").doc(businessId);
   const txRef = walletRef.collection("transactions").doc(`invoice_roth_${invoiceId}_${metadata.paymentId || Date.now()}`);
   const accountRef = db.collection("businessAccounts").doc(businessId);
-  await db.runTransaction(async (transaction) => {
+  return db.runTransaction(async (transaction) => {
+    const existingTx = await transaction.get(txRef);
+    if (existingTx.exists) return false;
     const walletSnap = await transaction.get(walletRef);
     const previous = money(walletSnap.data() && walletSnap.data().balance);
     const resulting = money(previous - amount);
@@ -128,6 +130,7 @@ async function debitBusinessRoth({businessId, amount, invoiceId, metadata = {}})
       }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    return true;
   });
 }
 
@@ -140,14 +143,20 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
     if (!invoiceSnap.exists) return;
     const invoice = invoiceSnap.data() || {};
     if (`${invoice.status || ""}` === "paid" || `${invoice.status || ""}` === "paid_manually") return;
+    const total = money(invoice.total || invoice.subtotal || invoice.balanceDue || amount + rothAmount);
+    const previousPaid = money(invoice.amountPaid);
+    const paymentTotal = money(amount + rothAmount);
+    const nextPaid = money(Math.min(total, previousPaid + paymentTotal));
+    const nextBalance = money(Math.max(0, total - nextPaid));
+    const nextStatus = nextBalance <= 0 ? "paid" : "partially_paid";
     transaction.set(invoiceRef, {
-      status: "paid",
-      amountPaid: money((invoice.amountPaid || 0) + amount + rothAmount),
-      balanceDue: 0,
+      status: nextStatus,
+      amountPaid: nextPaid,
+      balanceDue: nextBalance,
       paymentMethod: method,
       stripeCheckoutSessionId: stripeSessionId,
       stripePaymentIntentId,
-      paidAt: FieldValue.serverTimestamp(),
+      ...(nextStatus === "paid" ? {paidAt: FieldValue.serverTimestamp()} : {}),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(paymentRef, {
@@ -167,19 +176,26 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
       recentBusinessInvoices: FieldValue.arrayUnion({
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
-        status: "paid",
-        total: invoice.total || amount,
-        paidAt: new Date(),
+        status: nextStatus,
+        total,
+        amountPaid: nextPaid,
+        balanceDue: nextBalance,
+        paymentMethod: method,
+        updatedAt: new Date(),
+        ...(nextStatus === "paid" ? {paidAt: new Date()} : {}),
       }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(db.collection("adminAuditLogs").doc(), {
-      action: "business_invoice_paid",
-      actionType: "business_invoice_paid",
+      action: nextStatus === "paid" ? "business_invoice_paid" : "business_invoice_part_payment",
+      actionType: nextStatus === "paid" ? "business_invoice_paid" : "business_invoice_part_payment",
       businessId,
       invoiceId,
-      amount: amount + rothAmount,
+      amount: paymentTotal,
       paymentMethod: method,
+      previousStatus: invoice.status || null,
+      newStatus: nextStatus,
+      balanceDue: nextBalance,
       stripeCheckoutSessionId: stripeSessionId,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -266,17 +282,23 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   }
   const invoice = invoiceSnap.data() || {};
   const balanceDue = money(invoice.balanceDue || invoice.total || 0);
+  const paymentAmount = money(data.paymentAmount || balanceDue);
   if (balanceDue <= 0) {
     throw new functions.https.HttpsError("failed-precondition", "This invoice is already paid.");
   }
-  if (rothAmount > balanceDue) {
-    throw new functions.https.HttpsError("invalid-argument", "Roth cannot exceed the invoice balance.");
+  if (paymentAmount <= 0 || paymentAmount > balanceDue) {
+    throw new functions.https.HttpsError("invalid-argument", "Payment amount must be greater than zero and no more than the invoice balance.");
   }
-  const cardAmount = money(balanceDue - rothAmount);
+  if (rothAmount > paymentAmount) {
+    throw new functions.https.HttpsError("invalid-argument", "Roth cannot exceed the selected payment amount.");
+  }
+  const cardAmount = money(paymentAmount - rothAmount);
   if (cardAmount <= 0) {
-    await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId: `roth_${invoiceId}`}});
-    await markInvoicePaid({invoiceId, businessId, amount: 0, rothAmount, method: "roth"});
-    return {paid: true, method: "roth"};
+    const paymentId = `roth_${invoiceId}_${Math.round(paymentAmount * 100)}`;
+    const debited = await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId}});
+    if (!debited) return {paid: true, method: "roth", paymentAmount, duplicate: true};
+    await markInvoicePaid({invoiceId, businessId, amount: 0, rothAmount, method: "roth", paymentId});
+    return {paid: true, method: "roth", paymentAmount};
   }
   const paymentRef = db.collection("businessInvoicePayments").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
@@ -304,6 +326,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
       paymentId: paymentRef.id,
       cardAmountGbp: `${cardAmount}`,
       rothAmountGbp: `${rothAmount}`,
+      paymentAmountGbp: `${paymentAmount}`,
       createdByUserId: context.auth.uid,
     },
   });
