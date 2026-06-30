@@ -8845,6 +8845,9 @@ class _AdminOverviewSection extends StatelessWidget {
             ('Weight corrections', '${iris.$2}'),
             ('Pricing adjustments', '${iris.$3}'),
             ('Fraud flags', '${iris.$4}'),
+            ('High confidence', '${iris.$6}'),
+            ('Medium confidence', '${iris.$7}'),
+            ('Low confidence', '${iris.$8}'),
             ('Revenue protected', _adminMoneyText(iris.$5)),
           ],
         ),
@@ -9078,18 +9081,34 @@ class _AdminOverviewSection extends StatelessWidget {
     return '${item['requestId'] ?? item['invoiceNumber'] ?? item['businessName'] ?? item['fullName'] ?? item['senderName'] ?? item['email'] ?? item['id'] ?? 'record'}';
   }
 
-  (int, int, int, int, double) _irisMetrics() {
+  (int, int, int, int, double, int, int, int) _irisMetrics() {
     var analysed = 0;
     var corrections = 0;
     var adjustments = 0;
     var fraudFlags = 0;
     var protectedRevenue = 0.0;
+    var highConfidence = 0;
+    var mediumConfidence = 0;
+    var lowConfidence = 0;
     for (final delivery in deliveries) {
       final iris = delivery['irisAnalysis'];
+      final productionIris =
+          (delivery['irisDeliveryEstimate'] as Map?)?.cast<String, dynamic>();
       if (iris is Map ||
+          productionIris != null ||
           delivery['irisEstimatedWeightKg'] != null ||
           delivery['irisWeight'] != null) {
         analysed++;
+      }
+      final band =
+          '${productionIris?['confidenceBand'] ?? delivery['irisConfidenceBand'] ?? delivery['irisConfidence'] ?? ''}'
+              .toLowerCase();
+      if (band == 'high') {
+        highConfidence++;
+      } else if (band == 'medium') {
+        mediumConfidence++;
+      } else if (band == 'low') {
+        lowConfidence++;
       }
       if (delivery['riderVerifiedWeight'] != null ||
           delivery['driverReportedWeightKg'] != null ||
@@ -9113,7 +9132,16 @@ class _AdminOverviewSection extends StatelessWidget {
         protectedRevenue += protected.toDouble();
       }
     }
-    return (analysed, corrections, adjustments, fraudFlags, protectedRevenue);
+    return (
+      analysed,
+      corrections,
+      adjustments,
+      fraudFlags,
+      protectedRevenue,
+      highConfidence,
+      mediumConfidence,
+      lowConfidence,
+    );
   }
 
   int _openSupportTickets() => supportTickets
@@ -15738,6 +15766,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       text: currentFinalWeight.toStringAsFixed(1),
     );
     final noteController = TextEditingController();
+    final irisEstimate =
+        (job['irisDeliveryEstimate'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final rawIrisFlags =
+        (irisEstimate['flags'] as List?) ?? (job['irisDeliveryFlags'] as List?);
+    final irisFlags = (rawIrisFlags ?? const [])
+        .map((flag) => '$flag')
+        .where((flag) => flag.trim().isNotEmpty)
+        .toList(growable: false);
     var option = 'accurate';
     var pickedPhotos = <XFile>[];
     String? errorText;
@@ -15756,13 +15793,40 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   'Before pickup, confirm whether the parcel matches the paid weight. Evidence is required for increases.',
                   style: TextStyle(color: Theme.of(context).hintColor),
                 ),
+                if (irisEstimate.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'IRIS estimate: ${irisEstimate['finalBillableWeightKg'] ?? irisEstimate['irisWeightKg'] ?? currentFinalWeight}kg'
+                    ' · ${irisEstimate['confidenceBand'] ?? job['irisConfidenceBand'] ?? 'pending'} confidence'
+                    ' · ${irisEstimate['suggestedVehicle'] ?? job['vehicleType'] ?? 'vehicle to verify'}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  if (irisFlags.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: irisFlags
+                          .map(
+                            (flag) => Chip(
+                              visualDensity: VisualDensity.compact,
+                              label: Text(
+                                flag.replaceAll('_', ' '),
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 12),
                 RadioListTile<String>(
                   value: 'accurate',
                   groupValue: option,
                   onChanged: (value) =>
                       setDialogState(() => option = value ?? option),
-                  title: const Text('Confirm weight is accurate'),
+                  title: const Text('Looks correct'),
                   contentPadding: EdgeInsets.zero,
                 ),
                 RadioListTile<String>(
@@ -15770,7 +15834,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   groupValue: option,
                   onChanged: (value) =>
                       setDialogState(() => option = value ?? option),
-                  title: const Text('Weight is heavier than declared'),
+                  title: const Text('Needs correction - weight is higher'),
                   contentPadding: EdgeInsets.zero,
                 ),
                 RadioListTile<String>(
@@ -15935,6 +15999,55 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'read': false,
         'source': 'circum-web',
       });
+    }
+
+    final correctionId =
+        'IC-$requestId-${DateTime.now().millisecondsSinceEpoch}';
+    final previousEstimateId =
+        '${job['irisDeliveryEstimateId'] ?? requestId}'.trim();
+    if (optionValue == 'accurate') {
+      await FirebaseFirestore.instance
+          .collection('irisDeliveryEstimates')
+          .doc(previousEstimateId.isEmpty ? requestId : previousEstimateId)
+          .set({
+        'riderVerificationStatus': 'looks_correct',
+        'riderVerifiedWeightKg': verifiedWeight,
+        'riderVerifiedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } else {
+      await FirebaseFirestore.instance
+          .collection('irisCorrections')
+          .doc(correctionId)
+          .set({
+        'correctionId': correctionId,
+        'estimateId':
+            previousEstimateId.isEmpty ? requestId : previousEstimateId,
+        'bookingId': requestId,
+        'correctedBy': 'rider',
+        'previousWeightKg': currentFinalWeight,
+        'correctedWeightKg': verifiedWeight,
+        'correctionReason': optionValue,
+        'correctionNotes': result['note'],
+        'evidenceUrls': evidenceUrls,
+        'storagePaths': storagePaths,
+        'riderId': riderId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'approvedByAdmin': false,
+        'appliedToRepository': false,
+      });
+      await FirebaseFirestore.instance
+          .collection('irisDeliveryEstimates')
+          .doc(previousEstimateId.isEmpty ? requestId : previousEstimateId)
+          .set({
+        'latestCorrectionId': correctionId,
+        'riderVerificationStatus': 'needs_correction',
+        'riderVerifiedWeightKg': verifiedWeight,
+        'adminReviewStatus': 'open',
+        'requiresAdminReview': true,
+        'flags': FieldValue.arrayUnion(['admin_review_required']),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
 
     return {
@@ -20457,6 +20570,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           irisMatchedItemName: _irisMatchedItemName,
           irisQuantity: _irisQuantity,
           irisTruthBand: _irisTruthBand(),
+          irisConfidenceScore: _irisConfidencePoints(),
+          irisReasoningFactors: _irisReasoningFactors(),
+          irisFlags: _irisDeliveryFlags(),
+          irisBundlePrompt:
+              _irisBundleDetected(_description.text) ? _irisBundlePrompt : null,
+          irisSuggestedVehicle: _irisSuggestedVehicle(),
           senderEnteredWeightKg: _senderEnteredWeightKg,
           pricingWeightKg: _confirmedWeightKg,
           weightSource: _weightSourceText,
@@ -23058,7 +23177,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     var explanation =
         'Iris could not estimate weight safely from the details provided.';
 
-    if (text.contains('document') ||
+    if (_irisBundleDetected(text)) {
+      estimate = 20;
+      confidence = 'low';
+      packageType = 'Grouped items';
+      vehicleReview = true;
+      explanation = _irisBundlePrompt;
+    } else if (text.contains('document') ||
         text.contains('letter') ||
         text.contains('passport')) {
       estimate = 0.5;
@@ -23378,6 +23503,377 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     };
   }
 
+  int _irisConfidencePoints() {
+    var score = 50;
+    final source = (_irisWeightSource ?? '').toLowerCase();
+    final text = _description.text.trim().toLowerCase();
+    final hasRepositoryMatch = source == 'known_product_lookup' ||
+        source == 'repository_match' ||
+        _irisMatchedItemName != null;
+    final hasPhoto = _parcelPhoto != null || _irisImageInsight != null;
+    final bundle = _irisBundleDetected(text);
+    final flags = _irisDeliveryFlags();
+    final risk = flags.any(const {
+      'fragile',
+      'high_value',
+      'medical',
+      'regulated',
+      'vanguard_required',
+      'admin_review_required',
+    }.contains);
+    final conflict = _irisWeightConflict();
+
+    if (source == 'known_product_lookup') {
+      score += 25;
+    } else if (hasRepositoryMatch) {
+      score += 15;
+    }
+    if (text.isNotEmpty) score += 5;
+    if (text.length >= 8) score += 5;
+    if (_irisTypicalDimensions != null) score += 10;
+    if ((_senderEnteredWeightKg ?? 0) > 0) score += 5;
+    if (hasPhoto) score += 10;
+    if (_irisHistoricalVerifiedWeightKg != null) score += 15;
+    if (_irisVagueDescription(text)) score -= 20;
+    if (bundle) score -= 15;
+    if (conflict) score -= 20;
+    if (!hasRepositoryMatch && source != 'photo_match') score -= 25;
+    if (risk) score -= 10;
+    if (bundle && _irisTypicalDimensions == null && !hasPhoto) {
+      score = math.min(score, 70);
+    }
+    return score.clamp(0, 100).toInt();
+  }
+
+  String _irisConfidenceBandFromPoints(int score) {
+    if (score >= 80) return 'high';
+    if (score >= 50) return 'medium';
+    return 'low';
+  }
+
+  bool _irisBundleDetected(String value) {
+    final text = value.toLowerCase();
+    return _containsAny(text, const [
+      'gaming setup',
+      'office move',
+      'bedroom set',
+      'kitchen appliances',
+      'home gym',
+      'wardrobe contents',
+      'multiple boxes',
+      'bags of clothes',
+      'assorted items',
+      'electronics bundle',
+      'several boxes',
+      'lots of boxes',
+      'mixed items',
+    ]);
+  }
+
+  static const String _irisBundlePrompt =
+      'This sounds like multiple items. Please add what is inside so IRIS can price it fairly.';
+
+  bool _irisVagueDescription(String text) {
+    final compact = text.trim();
+    if (compact.length < 4) return true;
+    return const {
+      'item',
+      'items',
+      'parcel',
+      'package',
+      'box',
+      'stuff',
+      'things',
+    }.contains(compact);
+  }
+
+  bool _irisWeightConflict() {
+    final sender = _senderEnteredWeightKg;
+    final iris = _irisEstimatedWeightKg;
+    if (sender == null || sender <= 0 || iris == null || iris <= 0) {
+      return false;
+    }
+    final ratio =
+        math.max(sender, iris) / math.max(0.1, math.min(sender, iris));
+    return ratio >= 2.0 ||
+        DeliveryPricing.weightBandFor(sender).category !=
+            DeliveryPricing.weightBandFor(iris).category;
+  }
+
+  String _irisSuggestedVehicle() {
+    final recommendation = _vehicleSuitability.recommendedVehicle.trim();
+    if (recommendation.isNotEmpty) return recommendation;
+    final estimateVehicle = (_irisVehicleSuitability ?? '').trim();
+    if (estimateVehicle.isNotEmpty) return estimateVehicle;
+    final weight = _deliveryClassification.finalWeightKg > 0
+        ? _deliveryClassification.finalWeightKg
+        : (_irisEstimatedWeightKg ?? _senderEnteredWeightKg ?? 0);
+    return DeliveryPricing.recommendedVehicleForWeight(weight);
+  }
+
+  List<String> _irisDeliveryFlags() {
+    final text = _description.text.toLowerCase();
+    final packageType = _inferPackageType().toLowerCase();
+    final finalWeight = _deliveryClassification.finalWeightKg > 0
+        ? _deliveryClassification.finalWeightKg
+        : (_irisEstimatedWeightKg ?? _senderEnteredWeightKg ?? 0);
+    final vehicle = _irisSuggestedVehicle().toLowerCase();
+    final flags = <String>{};
+
+    if (_irisFragile ||
+        _containsAny(text, const [
+          'fragile',
+          'glass',
+          'mirror',
+          'artwork',
+          'painting',
+          'ceramic',
+          'tv',
+          'television',
+          'wedding dress',
+          'flowers',
+        ])) {
+      flags.add('fragile');
+    }
+    if (_irisValueSensitive || _looksHighValue(text, packageType)) {
+      flags.add('high_value');
+    }
+    if (_containsAny(text, const [
+      'medicine',
+      'medical',
+      'medication',
+      'prescription',
+      'health+',
+      'health plus',
+    ])) {
+      flags.add('medical');
+    }
+    if (_containsAny(text, const [
+      'refrigerated',
+      'chilled',
+      'frozen',
+      'cold chain',
+    ])) {
+      flags.add('refrigerated');
+    }
+    if (_containsAny(text, const [
+      'passport',
+      'controlled',
+      'alcohol',
+      'tobacco',
+      'regulated',
+    ])) {
+      flags.add('regulated');
+    }
+    if (packageType.contains('document') ||
+        _containsAny(text, const [
+          'document',
+          'documents',
+          'paperwork',
+          'letter',
+          'passport',
+        ])) {
+      flags.add('document');
+    }
+    final dims = _irisTypicalDimensions;
+    final oversizedByDimensions = dims != null &&
+        (dims.length > 120 || dims.width > 80 || dims.height > 80);
+    if (oversizedByDimensions ||
+        _containsAny(text, const [
+          'mattress',
+          'sofa',
+          'wardrobe',
+          'dining table',
+          'table',
+          'furniture',
+          '65 inch',
+          'large tv',
+          'office move',
+        ])) {
+      flags.add('oversized');
+    }
+    if (finalWeight > 50) flags.add('heavy');
+    if (vehicle == 'van' || flags.contains('oversized') || finalWeight > 25) {
+      flags.add('van_required');
+    }
+    if (finalWeight > 50 ||
+        _containsAny(text, const [
+          'piano',
+          'mattress',
+          'wardrobe',
+          'sofa',
+          'dining table',
+          'home gym',
+        ])) {
+      flags.add('two_person_required');
+    }
+    if ((flags.contains('document') || finalWeight <= 5) &&
+        !flags.contains('oversized') &&
+        !flags.contains('heavy')) {
+      flags.add('bike_eligible');
+    }
+    if (flags.contains('fragile') ||
+        flags.contains('high_value') ||
+        flags.contains('medical') ||
+        _irisVanguardRecommended ||
+        _vanguardAddonSelected) {
+      flags.add('vanguard_required');
+    }
+    if (flags.contains('heavy') ||
+        flags.contains('regulated') ||
+        flags.contains('two_person_required') ||
+        _deliveryClassification.requiresManualReview ||
+        _irisBundleDetected(text) ||
+        _irisConfidenceBandFromPoints(_irisConfidencePointsWithoutRisk()) ==
+            'low') {
+      flags.add('admin_review_required');
+    }
+    return flags.toList(growable: false)..sort();
+  }
+
+  int _irisConfidencePointsWithoutRisk() {
+    var score = 50;
+    final source = (_irisWeightSource ?? '').toLowerCase();
+    final text = _description.text.trim().toLowerCase();
+    final hasRepositoryMatch = source == 'known_product_lookup' ||
+        source == 'repository_match' ||
+        _irisMatchedItemName != null;
+    if (source == 'known_product_lookup') {
+      score += 25;
+    } else if (hasRepositoryMatch) {
+      score += 15;
+    }
+    if (text.isNotEmpty) score += 5;
+    if (text.length >= 8) score += 5;
+    if (_irisTypicalDimensions != null) score += 10;
+    if ((_senderEnteredWeightKg ?? 0) > 0) score += 5;
+    if (_parcelPhoto != null || _irisImageInsight != null) score += 10;
+    if (_irisHistoricalVerifiedWeightKg != null) score += 15;
+    if (_irisVagueDescription(text)) score -= 20;
+    if (_irisBundleDetected(text)) score -= 15;
+    if (_irisWeightConflict()) score -= 20;
+    if (!hasRepositoryMatch && source != 'photo_match') score -= 25;
+    return score.clamp(0, 100).toInt();
+  }
+
+  List<String> _irisReasoningFactors() {
+    final factors = <String>[];
+    final matched = _irisMatchedItemName?.trim();
+    if (matched != null && matched.isNotEmpty) {
+      factors.add('Matched known item: $matched.');
+    } else {
+      factors.add('No exact repository item was found.');
+    }
+    if (_irisQuantity > 1) {
+      factors.add('Quantity multiplier applied: $_irisQuantity items.');
+    }
+    if (_irisTypicalDimensions != null) {
+      final dims = _irisTypicalDimensions!;
+      factors.add(
+        'Typical dimensions considered: ${dims.length.toStringAsFixed(0)} x ${dims.width.toStringAsFixed(0)} x ${dims.height.toStringAsFixed(0)} cm.',
+      );
+    }
+    if (_senderEnteredWeightKg != null && _senderEnteredWeightKg! > 0) {
+      factors.add(
+        'Sender-entered weight considered: ${_formatWeight(_senderEnteredWeightKg!)}kg.',
+      );
+    }
+    if (_irisImageInsight != null) {
+      factors.add('Parcel photo reviewed for handling and weight context.');
+    }
+    if (_irisHistoricalVerifiedWeightKg != null) {
+      factors.add(
+        'Similar completed deliveries were previously verified around ${_formatWeight(_irisHistoricalVerifiedWeightKg!)}kg.',
+      );
+    }
+    if (_irisWeightConflict()) {
+      factors.add('Entered weight and IRIS estimate differ enough for review.');
+    }
+    if (_irisBundleDetected(_description.text)) {
+      factors.add(_irisBundlePrompt);
+    }
+    final vehicle = _irisSuggestedVehicle();
+    factors.add('Suggested vehicle: $vehicle.');
+    final flags = _irisDeliveryFlags();
+    if (flags.contains('vanguard_required')) {
+      factors.add(
+          'Vanguard is recommended because this delivery has trust-sensitive flags.');
+    }
+    if (flags.contains('admin_review_required')) {
+      factors.add(
+          'Admin review is recommended before final authority is applied.');
+    }
+    return factors.toList(growable: false);
+  }
+
+  String _irisReasoningSummary() {
+    final weight = _deliveryClassification.finalWeightKg > 0
+        ? _deliveryClassification.finalWeightKg
+        : (_irisEstimatedWeightKg ?? 0);
+    return 'IRIS estimated this delivery at ${_formatWeight(weight)}kg because ${_irisReasoningFactors().take(3).join(' ')}';
+  }
+
+  Map<String, dynamic> _irisDeliveryEstimateDocument({
+    required String estimateId,
+    required String bookingId,
+    required Map<String, dynamic> parcelPhotoData,
+  }) {
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    final classification = _deliveryClassification;
+    final confidenceScore = _irisConfidencePoints();
+    final flags = _irisDeliveryFlags();
+    final requiresVanguard = flags.contains('vanguard_required');
+    final requiresAdminReview = flags.contains('admin_review_required');
+    final hasPhoto = parcelPhotoData['hasPhoto'] == true ||
+        _parcelPhoto != null ||
+        _irisImageInsight != null;
+    return {
+      'estimateId': estimateId,
+      'bookingId': bookingId,
+      'userId': user?.uid ?? 'web-sender',
+      'itemName': _irisMatchedItemName ?? _description.text.trim(),
+      'itemHint': _irisMatchedItemName,
+      'description': _description.text.trim(),
+      'quantity': _irisQuantity < 1 ? 1 : _irisQuantity,
+      'userWeightKg': _senderEnteredWeightKg,
+      'userDimensions': _irisTypicalDimensions == null
+          ? null
+          : {
+              'lengthCm': _irisTypicalDimensions!.length,
+              'widthCm': _irisTypicalDimensions!.width,
+              'heightCm': _irisTypicalDimensions!.height,
+            },
+      'irisWeightKg': _irisEstimatedWeightKg,
+      'finalBillableWeightKg': classification.finalWeightKg,
+      'confidenceScore': confidenceScore,
+      'confidenceBand': _irisConfidenceBandFromPoints(confidenceScore),
+      'reasoningSummary': _irisReasoningSummary(),
+      'reasoningFactors': _irisReasoningFactors(),
+      'matchedRepositoryItems': [
+        if ((_irisMatchedItemName ?? '').trim().isNotEmpty)
+          {
+            'name': _irisMatchedItemName,
+            'weightKg': _irisEstimatedWeightKg,
+            'source': _irisWeightSource,
+            'truthBand': _irisTruthBand(),
+          },
+      ],
+      'suggestedVehicle': _irisSuggestedVehicle(),
+      'flags': flags,
+      'requiresVanguard': requiresVanguard,
+      'requiresAdminReview': requiresAdminReview,
+      'bundleDetected': _irisBundleDetected(_description.text),
+      'itemBreakdownPrompt':
+          _irisBundleDetected(_description.text) ? _irisBundlePrompt : null,
+      'photoSupplied': hasPhoto,
+      'photoAnalysis': _irisImageInsight?.toJson(),
+      'riderVerificationStatus': 'pending_pickup',
+      'adminReviewStatus': requiresAdminReview ? 'open' : 'not_required',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
   bool _containsAny(String text, Iterable<String> needles) {
     return needles.any(text.contains);
   }
@@ -23459,6 +23955,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final db = FirebaseFirestore.instance;
       final parcelPhotoData = await _uploadParcelPhoto(id);
       final request = _requestPayload(id, parcelPhotoData);
+      final irisEstimate = _irisDeliveryEstimateDocument(
+        estimateId: id,
+        bookingId: id,
+        parcelPhotoData: parcelPhotoData,
+      );
+      request['irisDeliveryEstimateId'] = id;
+      request['irisDeliveryEstimate'] = irisEstimate;
+      request['irisDeliveryFlags'] = irisEstimate['flags'];
+      request['irisReasoningFactors'] = irisEstimate['reasoningFactors'];
+      request['irisConfidenceBand'] = irisEstimate['confidenceBand'];
+      request['irisRequiresAdminReview'] = irisEstimate['requiresAdminReview'];
+      request['irisRequiresVanguard'] = irisEstimate['requiresVanguard'];
       final paymentResult = await _collectDeliveryPayment(id, _quoteTotal);
       request.addAll(paymentResult);
       _activeVanguardData = request['vanguardEnabled'] == true
@@ -23469,6 +23977,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final batch = db.batch();
       batch.set(db.collection('webSenderRequests').doc(id), request);
       batch.set(db.collection('deliveryRequests').doc(id), request);
+      batch.set(
+        db.collection('irisDeliveryEstimates').doc(id),
+        irisEstimate,
+        SetOptions(merge: true),
+      );
       batch.set(
           db.collection('chats').doc(id),
           {
@@ -26550,6 +27063,11 @@ class _WeightConfirmationPanel extends StatelessWidget {
   final String? matchedItemName;
   final int quantity;
   final String truthBand;
+  final int confidenceScore;
+  final List<String> reasoningFactors;
+  final List<String> flags;
+  final String? bundlePrompt;
+  final String? suggestedVehicle;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
   final String weightSource;
@@ -26567,6 +27085,11 @@ class _WeightConfirmationPanel extends StatelessWidget {
     required this.matchedItemName,
     required this.quantity,
     required this.truthBand,
+    required this.confidenceScore,
+    required this.reasoningFactors,
+    required this.flags,
+    required this.bundlePrompt,
+    required this.suggestedVehicle,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
     required this.weightSource,
@@ -26600,6 +27123,26 @@ class _WeightConfirmationPanel extends StatelessWidget {
               '${weightBand == null ? '' : ' · $weightBand'}'
               '${confidence == null ? '' : ' · ${_confidenceDisplayText()}'}',
               style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _IrisPill(
+                  colors: colors,
+                  label:
+                      '${_confidenceBandLabel(confidenceScore)} confidence · $confidenceScore/100',
+                  icon: Icons.insights_outlined,
+                ),
+                if (suggestedVehicle != null &&
+                    suggestedVehicle!.trim().isNotEmpty)
+                  _IrisPill(
+                    colors: colors,
+                    label: 'Vehicle: $suggestedVehicle',
+                    icon: Icons.local_shipping_outlined,
+                  ),
+              ],
             ),
           ],
           if (matchedItemName != null &&
@@ -26638,6 +27181,50 @@ class _WeightConfirmationPanel extends StatelessWidget {
             Text(
               explanation!,
               style: TextStyle(color: colors.mutedText, height: 1.35),
+            ),
+          ],
+          if (bundlePrompt != null && bundlePrompt!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              bundlePrompt!,
+              style: TextStyle(
+                color: colors.warning,
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          if (reasoningFactors.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'IRIS estimated this because:',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            ...reasoningFactors.take(4).map(
+                  (factor) => Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text(
+                      '• $factor',
+                      style: TextStyle(color: colors.mutedText, height: 1.32),
+                    ),
+                  ),
+                ),
+          ],
+          if (flags.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: flags
+                  .map(
+                    (flag) => _IrisPill(
+                      colors: colors,
+                      label: _flagDisplayText(flag),
+                      icon: _flagIcon(flag),
+                    ),
+                  )
+                  .toList(),
             ),
           ],
           if (pricingReason != null && pricingReason!.trim().isNotEmpty) ...[
@@ -26707,6 +27294,38 @@ class _WeightConfirmationPanel extends StatelessWidget {
     return '$truthBand${confidence == null ? '' : ' (${confidence!} confidence)'}';
   }
 
+  static String _confidenceBandLabel(int score) {
+    if (score >= 80) return 'High';
+    if (score >= 50) return 'Medium';
+    return 'Low';
+  }
+
+  static String _flagDisplayText(String flag) {
+    return flag
+        .split('_')
+        .map((part) => part.isEmpty
+            ? part
+            : '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+
+  static IconData _flagIcon(String flag) {
+    return switch (flag) {
+      'fragile' => Icons.wine_bar_outlined,
+      'heavy' => Icons.fitness_center_outlined,
+      'oversized' => Icons.open_in_full_outlined,
+      'high_value' => Icons.diamond_outlined,
+      'medical' => Icons.medical_services_outlined,
+      'regulated' => Icons.verified_user_outlined,
+      'document' => Icons.description_outlined,
+      'van_required' => Icons.local_shipping_outlined,
+      'two_person_required' => Icons.groups_outlined,
+      'vanguard_required' => Icons.shield_outlined,
+      'admin_review_required' => Icons.admin_panel_settings_outlined,
+      _ => Icons.auto_awesome_outlined,
+    };
+  }
+
   void _showIrisInfo(BuildContext context) {
     showDialog<void>(
       context: context,
@@ -26730,6 +27349,45 @@ class _WeightConfirmationPanel extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IrisPill extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final IconData icon;
+
+  const _IrisPill({
+    required this.colors,
+    required this.label,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.adminAccent.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.adminAccent.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colors.adminAccent),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
@@ -30531,6 +31189,11 @@ class _DetailsStep extends StatelessWidget {
   final String? irisMatchedItemName;
   final int irisQuantity;
   final String irisTruthBand;
+  final int irisConfidenceScore;
+  final List<String> irisReasoningFactors;
+  final List<String> irisFlags;
+  final String? irisBundlePrompt;
+  final String? irisSuggestedVehicle;
   final double? senderEnteredWeightKg;
   final double? pricingWeightKg;
   final String weightSource;
@@ -30593,6 +31256,11 @@ class _DetailsStep extends StatelessWidget {
     required this.irisMatchedItemName,
     required this.irisQuantity,
     required this.irisTruthBand,
+    required this.irisConfidenceScore,
+    required this.irisReasoningFactors,
+    required this.irisFlags,
+    required this.irisBundlePrompt,
+    required this.irisSuggestedVehicle,
     required this.senderEnteredWeightKg,
     required this.pricingWeightKg,
     required this.weightSource,
@@ -31026,6 +31694,11 @@ class _DetailsStep extends StatelessWidget {
                   matchedItemName: irisMatchedItemName,
                   quantity: irisQuantity,
                   truthBand: irisTruthBand,
+                  confidenceScore: irisConfidenceScore,
+                  reasoningFactors: irisReasoningFactors,
+                  flags: irisFlags,
+                  bundlePrompt: irisBundlePrompt,
+                  suggestedVehicle: irisSuggestedVehicle,
                   senderEnteredWeightKg: senderEnteredWeightKg,
                   pricingWeightKg: pricingWeightKg,
                   weightSource: weightSource,
