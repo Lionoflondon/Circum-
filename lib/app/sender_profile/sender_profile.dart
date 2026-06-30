@@ -274,6 +274,7 @@ class SenderDeliveryRecord {
   final String serviceType;
   final String assignedDriverName;
   final String assignedDriverPhone;
+  final String assignedDriverPhotoUrl;
   final String assignedDriverVehicle;
   final double pricePaid;
   final String currency;
@@ -301,6 +302,7 @@ class SenderDeliveryRecord {
     required this.serviceType,
     required this.assignedDriverName,
     required this.assignedDriverPhone,
+    required this.assignedDriverPhotoUrl,
     required this.assignedDriverVehicle,
     required this.pricePaid,
     required this.currency,
@@ -331,6 +333,9 @@ class SenderDeliveryRecord {
         data['amount'] ??
         data['stripeAmount']);
     final rawPaymentStatus = '${data['paymentStatus'] ?? ''}'.trim();
+    final assignedRider = data['assignedRider'] is Map
+        ? Map<String, dynamic>.from(data['assignedRider'] as Map)
+        : const <String, dynamic>{};
     return SenderDeliveryRecord(
       id: id,
       senderId: '${data['senderId'] ?? data['userId'] ?? ''}',
@@ -348,6 +353,8 @@ class SenderDeliveryRecord {
           '${data['riderName'] ?? data['driverName'] ?? data['courierName'] ?? ''}',
       assignedDriverPhone:
           '${data['riderPhone'] ?? data['driverPhone'] ?? data['courierPhone'] ?? ''}',
+      assignedDriverPhotoUrl:
+          '${assignedRider['photoURL'] ?? data['riderPhotoURL'] ?? data['riderPhotoUrl'] ?? data['driverPhotoUrl'] ?? data['photoURL'] ?? data['photoUrl'] ?? ''}',
       assignedDriverVehicle:
           '${data['vehicleMakeModel'] ?? data['vehicleType'] ?? data['vehicle'] ?? ''}',
       pricePaid: price,

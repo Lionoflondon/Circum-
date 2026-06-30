@@ -10406,12 +10406,8 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     final photoUrl =
         '${driver['photoURL'] ?? driver['photoUrl'] ?? driver['profilePhotoUrl'] ?? ''}'
             .trim();
-    final hasPhoto = photoUrl.isNotEmpty && photoUrl != 'null';
     final initialSource =
         '${driver['fullName'] ?? driver['name'] ?? 'C'}'.trim();
-    final initials = initialSource.isEmpty
-        ? 'C'
-        : initialSource.substring(0, 1).toUpperCase();
     final customerReady =
         '${driver['fullName'] ?? driver['name'] ?? ''}'.trim().isNotEmpty &&
             driver['phoneVerified'] == true &&
@@ -10443,40 +10439,14 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        margin: const EdgeInsets.only(right: 12),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              colors.adminAccent.withValues(alpha: 0.86),
-                              const Color(0xff60a5fa).withValues(alpha: 0.52),
-                            ],
-                          ),
-                          border: Border.all(
-                            color: colors.adminAccent.withValues(alpha: 0.42),
-                          ),
-                          image: hasPhoto
-                              ? DecorationImage(
-                                  image: NetworkImage(photoUrl),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: _RiderAvatar(
+                          colors: colors,
+                          name: initialSource,
+                          photoUrl: photoUrl,
+                          size: 64,
                         ),
-                        child: hasPhoto
-                            ? null
-                            : Center(
-                                child: Text(
-                                  initials.isEmpty ? 'C' : initials,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
                       ),
                       Expanded(
                         child: Text(
@@ -10495,7 +10465,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (hasPhoto) ...[
+                  if (photoUrl.isNotEmpty && photoUrl != 'null') ...[
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
@@ -14960,6 +14930,34 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final db = FirebaseFirestore.instance;
       final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
       final rider = riderDoc.data() ?? const <String, dynamic>{};
+      final riderVehicle =
+          (rider['vehicle'] as Map?)?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+      final riderName =
+          '${rider['fullName'] ?? user.displayName ?? user.email}';
+      final riderPhotoUrl =
+          '${rider['photoURL'] ?? rider['photoUrl'] ?? user.photoURL ?? ''}'
+              .trim();
+      final riderRank = '${rider['riderRank'] ?? rider['rank'] ?? 'agent'}';
+      final vehicleType =
+          '${riderVehicle['type'] ?? rider['vehicleType'] ?? rider['vehicle'] ?? ''}';
+      final vehicleMakeModel =
+          '${riderVehicle['makeModel'] ?? rider['vehicleMakeModel'] ?? ''}';
+      final vehicleColour =
+          '${riderVehicle['colour'] ?? riderVehicle['color'] ?? rider['vehicleColour'] ?? ''}';
+      final registrationNumber =
+          '${riderVehicle['plateNumber'] ?? rider['plateNumber'] ?? rider['vehicleRegistration'] ?? ''}';
+      final assignedRider = {
+        'riderId': user.uid,
+        'name': riderName,
+        'photoURL': riderPhotoUrl,
+        'rank': riderRank,
+        'vehicleType': vehicleType,
+        'vehicleMakeModel': vehicleMakeModel,
+        'vehicleColour': vehicleColour,
+        'registrationNumber': registrationNumber,
+        'verified': true,
+      };
       await db.collection('deliveryRequests').doc(requestId).set({
         'status': 'accepted',
         'dispatchStatus': 'accepted',
@@ -14967,10 +14965,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'riderId': user.uid,
         'driverId': user.uid,
         'assignedDriverId': user.uid,
-        'riderName': rider['fullName'] ?? user.displayName ?? user.email,
-        'driverName': rider['fullName'] ?? user.displayName ?? user.email,
+        'assignedRider': assignedRider,
+        'riderName': riderName,
+        'driverName': riderName,
+        'riderPhotoURL': riderPhotoUrl,
+        'driverPhotoUrl': riderPhotoUrl,
+        'riderRank': riderRank,
         'driverVehicle': rider['vehicle'],
-        'driverPlateNumber': rider['plateNumber'],
+        'driverPlateNumber': registrationNumber,
+        'vehicleType': vehicleType,
+        'vehicleMakeModel': vehicleMakeModel,
+        'vehicleColour': vehicleColour,
+        'vehicleRegistration': registrationNumber,
+        'plateNumber': registrationNumber,
         'acceptedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -25429,22 +25436,41 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     String driverId,
     Map<String, dynamic> data,
   ) {
+    final assignedRider =
+        (data['assignedRider'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
     return DriverProfile.fromMap(
         driverId,
         {
-          'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
-          'photoURL': data['photoURL'] ??
+          'fullName': assignedRider['name'] ??
+              data['driverName'] ??
+              data['riderName'] ??
+              'Circum rider',
+          'photoURL': assignedRider['photoURL'] ??
               data['photoUrl'] ??
               data['driverPhotoUrl'] ??
               data['riderPhotoUrl'] ??
+              data['riderPhotoURL'] ??
               '',
-          'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
-          'vehicleType':
-              data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
-          'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
-          'vehicleColour': data['vehicleColour'] ?? '',
-          'plateNumber': data['plateNumber'] ?? '',
+          'phoneNumber': assignedRider['phoneNumber'] ??
+              data['driverPhone'] ??
+              data['riderPhone'] ??
+              '',
+          'vehicleType': assignedRider['vehicleType'] ??
+              data['vehicleType'] ??
+              data['vehicle'] ??
+              _selectedVehicle.name,
+          'vehicleMakeModel': assignedRider['vehicleMakeModel'] ??
+              data['vehicleMakeModel'] ??
+              '',
+          'vehicleColour':
+              assignedRider['vehicleColour'] ?? data['vehicleColour'] ?? '',
+          'plateNumber': assignedRider['registrationNumber'] ??
+              data['plateNumber'] ??
+              data['vehicleRegistration'] ??
+              '',
           'verificationStatus': data['verificationStatus'] ?? 'verified',
+          'riderRank': assignedRider['rank'] ?? data['riderRank'],
         },
         performance: _assignedDriverMetric);
   }
@@ -26264,10 +26290,17 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                hasDriver ? Icons.verified_user : Icons.person_search,
-                color: colors.text,
-              ),
+              hasDriver
+                  ? _RiderAvatar(
+                      colors: colors,
+                      name: delivery.assignedDriverName,
+                      photoUrl: delivery.assignedDriverPhotoUrl,
+                      size: 46,
+                    )
+                  : Icon(
+                      Icons.person_search,
+                      color: colors.text,
+                    ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -29070,9 +29103,21 @@ class _SenderProfileStep extends StatelessWidget {
                     label: '£${delivery.pricePaid.toStringAsFixed(2)}',
                   ),
                   if (delivery.assignedDriverName.isNotEmpty)
-                    _GlassMiniChip(
-                      colors: colors,
-                      label: 'Rider ${delivery.assignedDriverName}',
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _RiderAvatar(
+                          colors: colors,
+                          name: delivery.assignedDriverName,
+                          photoUrl: delivery.assignedDriverPhotoUrl,
+                          size: 26,
+                        ),
+                        const SizedBox(width: 6),
+                        _GlassMiniChip(
+                          colors: colors,
+                          label: 'Rider ${delivery.assignedDriverName}',
+                        ),
+                      ],
                     ),
                 ],
               ),
@@ -31115,6 +31160,29 @@ class _SenderDeliveryDetails extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+        if (delivery.assignedDriverName.isNotEmpty) ...[
+          Row(
+            children: [
+              _RiderAvatar(
+                colors: colors,
+                name: delivery.assignedDriverName,
+                photoUrl: delivery.assignedDriverPhotoUrl,
+                size: 48,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _driverAssignmentSummary(delivery),
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
         ...rows.entries.map(
           (row) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -38267,9 +38335,6 @@ class _DriverCard extends StatelessWidget {
     final rating = performance.averageRating <= 0
         ? 'New'
         : performance.averageRating.toStringAsFixed(1);
-    final initials = profile.fullName.trim().isEmpty
-        ? 'C'
-        : profile.fullName.trim().substring(0, 1).toUpperCase();
     return _GlassPanel(
       colors: colors,
       child: Column(
@@ -38277,31 +38342,11 @@ class _DriverCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  gradient: const LinearGradient(colors: _spectrumGradient),
-                  image: profile.photoUrl == null
-                      ? null
-                      : DecorationImage(
-                          image: NetworkImage(profile.photoUrl!),
-                          fit: BoxFit.cover,
-                        ),
-                ),
-                child: profile.photoUrl == null
-                    ? Center(
-                        child: Text(
-                          initials,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      )
-                    : null,
+              _RiderAvatar(
+                colors: colors,
+                name: profile.fullName,
+                photoUrl: profile.photoUrl,
+                size: 58,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -38500,6 +38545,104 @@ class _RiderRankPresentation extends StatelessWidget {
   }
 }
 
+class _RiderAvatar extends StatelessWidget {
+  final _CircumColors colors;
+  final String name;
+  final String? photoUrl;
+  final double size;
+
+  const _RiderAvatar({
+    required this.colors,
+    required this.name,
+    required this.photoUrl,
+    this.size = 56,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanUrl = (photoUrl ?? '').trim();
+    final initials = _initials(name);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(colors: _spectrumGradient),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.38)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.adminAccent.withValues(alpha: 0.16),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: cleanUrl.isEmpty || cleanUrl == 'null'
+            ? _RiderInitialsAvatar(initials: initials)
+            : Image.network(
+                cleanUrl,
+                fit: BoxFit.cover,
+                width: size,
+                height: size,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: colors.field.withValues(alpha: 0.65),
+                    ),
+                    child: Center(
+                      child: SizedBox(
+                        width: size * 0.34,
+                        height: size * 0.34,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.adminAccent,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) =>
+                    _RiderInitialsAvatar(initials: initials),
+              ),
+      ),
+    );
+  }
+
+  static String _initials(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) return 'C';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+        .toUpperCase();
+  }
+}
+
+class _RiderInitialsAvatar extends StatelessWidget {
+  final String initials;
+
+  const _RiderInitialsAvatar({required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
 class _DriverRatingPrompt extends StatelessWidget {
   static const _tags = [
     ('on_time', 'On time'),
@@ -38550,12 +38693,25 @@ class _DriverRatingPrompt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = driver?.fullName ?? 'your rider';
+    final photoUrl = driver?.photoUrl;
     return _GlassPanel(
       colors: colors,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(colors: colors, title: 'Rate $name'),
+          Row(
+            children: [
+              _RiderAvatar(
+                colors: colors,
+                name: name,
+                photoUrl: photoUrl,
+                size: 48,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _SectionTitle(colors: colors, title: 'Rate $name')),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(
             submitted

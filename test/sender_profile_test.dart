@@ -60,6 +60,38 @@ void main() {
       expect(own.map((delivery) => delivery.requestId), contains('CIR-2'));
     });
 
+    test('reads assigned rider photo snapshot for sender history', () {
+      final delivery = SenderDeliveryRecord.fromMap('CIR-1', {
+        'senderId': 'sender-1',
+        'requestId': 'CIR-1',
+        'status': 'accepted',
+        'assignedRider': {
+          'name': 'Ayo Rider',
+          'photoURL': 'https://example.com/rider.jpg',
+        },
+        'riderName': 'Ayo Rider',
+      });
+
+      expect(delivery.assignedDriverName, 'Ayo Rider');
+      expect(delivery.assignedDriverPhotoUrl, 'https://example.com/rider.jpg');
+    });
+
+    test('falls back to legacy rider photo fields for older deliveries', () {
+      final delivery = SenderDeliveryRecord.fromMap('CIR-OLD', {
+        'senderId': 'sender-1',
+        'requestId': 'CIR-OLD',
+        'status': 'completed',
+        'driverName': 'Legacy Rider',
+        'driverPhotoUrl': 'https://example.com/legacy-rider.jpg',
+      });
+
+      expect(delivery.assignedDriverName, 'Legacy Rider');
+      expect(
+        delivery.assignedDriverPhotoUrl,
+        'https://example.com/legacy-rider.jpg',
+      );
+    });
+
     test('summarises completed deliveries, value, and loyalty', () {
       final summary = SenderProfileService.summarize([
         SenderDeliveryRecord.fromMap('CIR-1', {

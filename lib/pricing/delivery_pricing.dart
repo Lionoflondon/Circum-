@@ -546,13 +546,21 @@ class DeliveryPricing {
       'fridge',
       'freezer',
       'sofa',
+      'chair',
       'wardrobe',
       'mattress',
+      'dining table',
       'bicycle',
       'bike',
+      'wheelchair',
       'piano',
+      'large tv',
+      'large television',
       'multi-box',
       'multiple boxes',
+      'bulk parcel',
+      'bulk parcels',
+      'commercial equipment',
       'liquid',
     ].any(text.contains);
     final compactByType = [
@@ -584,8 +592,27 @@ class DeliveryPricing {
     final compactBikeItem = [
       'keys',
       'key set',
+      'usb',
+      'usb drive',
+      'small accessory',
+      'small accessories',
+      'medication envelope',
       'small electronics',
       'lightweight gift',
+    ].any(text.contains);
+    final carFirstItem = [
+      'flowers',
+      'bouquet',
+      'birthday cake',
+      'cake',
+      'small medical equipment',
+      'prescription box',
+      'camera',
+      'gaming console',
+      'console',
+      'luxury handbag',
+      'designer fashion',
+      'fragile gift',
     ].any(text.contains);
     final highValueElectronic = highValue &&
         (categoryText.contains('electronics') ||
@@ -637,6 +664,7 @@ class DeliveryPricing {
 
     if (weightKg > 10 ||
         compactByType ||
+        carFirstItem ||
         fragile ||
         highValue ||
         vanguardRequired) {
@@ -722,8 +750,12 @@ class DeliveryPricing {
           : recommended == 'Car'
               ? highValueElectronic
                   ? 'Car recommended because this is a high-value electronic item requiring safer enclosed handling.'
-                  : 'Recommended because this item fits safely in a car.'
-              : 'Recommended as a faster option for this small, lightweight delivery.',
+                  : carFirstItem
+                      ? 'Car recommended because this item needs careful enclosed handling.'
+                      : 'Recommended because this item fits safely in a car.'
+              : documentDelivery
+                  ? 'Bike recommended because this is a lightweight document suitable for bicycle transport.'
+                  : 'Bike recommended because this is a small, lightweight item suitable for bicycle transport.',
       handlingNotes: compactLuggage && weightKg > 20
           ? 'Heavy item - rider must confirm they can lift safely.'
           : handlingNotes?.trim().isNotEmpty == true

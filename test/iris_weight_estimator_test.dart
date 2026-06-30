@@ -496,8 +496,19 @@ void main() {
     test('vehicle recommendation keeps documents bike eligible', () {
       final documents =
           IrisWeightEstimator.knownProductEstimate('documents for solicitor');
+      final passport = DeliveryPricing.resolveVehicleSuitability(
+          weightKg: 0.2,
+          description: 'passport documents',
+          itemCategory: 'Documents');
+      final keys = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 0.1,
+        description: 'keys and usb drive',
+        itemCategory: 'Small accessories',
+      );
 
       expect(documents?.vehicleSuitability, 'Bike');
+      expect(passport.recommendedVehicle, 'Bike');
+      expect(keys.recommendedVehicle, 'Bike');
     });
 
     test('vehicle recommendation escalates bulky and appliance items to van',
@@ -509,9 +520,35 @@ void main() {
         itemCategory: 'Kitchen appliance',
         repositoryVehicleSuitability: 'Van',
       );
+      final mattress = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 30,
+        description: 'mattress',
+        itemCategory: 'Furniture',
+      );
+      final diningTable = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 35,
+        description: 'dining table',
+        itemCategory: 'Furniture',
+      );
+      final bicycle = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 12,
+        description: 'bicycle',
+        itemCategory: 'Bike',
+      );
+      final wheelchair = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 28,
+        description: 'wheelchair where size requires van handling',
+        itemCategory: 'Medical equipment',
+      );
+      final largeTv = IrisWeightEstimator.knownProductEstimate('65 inch tv');
 
       expect(sofa?.vehicleSuitability, 'Van');
       expect(appliance.recommendedVehicle, 'Van');
+      expect(mattress.recommendedVehicle, 'Van');
+      expect(diningTable.recommendedVehicle, 'Van');
+      expect(bicycle.recommendedVehicle, 'Van');
+      expect(wheelchair.recommendedVehicle, 'Van');
+      expect(largeTv?.vehicleSuitability, 'Van');
     });
 
     test('vehicle recommendation escalates multiple small electronics to car',
@@ -530,6 +567,46 @@ void main() {
 
       expect(bundle.recommendedVehicle, 'Car');
       expect(bundle.explanation.toLowerCase(), isNot(contains('bike')));
+    });
+
+    test('vehicle recommendation keeps delicate care items in cars', () {
+      final flowers = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 2,
+        description: 'flowers requiring careful handling',
+        itemCategory: 'Flowers',
+      );
+      final cake = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 3,
+        description: 'birthday cake',
+        itemCategory: 'Food',
+      );
+      final medical = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 4,
+        description: 'small medical equipment',
+        itemCategory: 'Medical equipment',
+      );
+
+      expect(flowers.recommendedVehicle, 'Car');
+      expect(cake.recommendedVehicle, 'Car');
+      expect(medical.recommendedVehicle, 'Car');
+    });
+
+    test('vehicle recommendation uses highest requirement for mixed items', () {
+      final documentsAndPhone = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 1,
+        description: 'documents and iPhone',
+        itemCategory: 'Mixed items',
+        highValue: true,
+        vanguardRequired: true,
+      );
+      final chairAndDocuments = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 12,
+        description: 'chair and documents',
+        itemCategory: 'Mixed items',
+      );
+
+      expect(documentsAndPhone.recommendedVehicle, 'Car');
+      expect(chairAndDocuments.recommendedVehicle, 'Van');
     });
 
     test('vehicle reasoning cannot contradict recommendation', () {
