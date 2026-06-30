@@ -19982,6 +19982,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           setState(() => _senderSignupMode = !_senderSignupMode),
       onSignIn: _signInSender,
       onSignUp: _signUpSender,
+      onGoogleSignIn: _signInSenderWithGoogle,
+      onAppleSignIn: _signInSenderWithApple,
       onForgotPassword: _sendSenderPasswordReset,
     );
   }
@@ -20816,6 +20818,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
       await _loadSenderBusinessAccounts(user.uid);
+      _rememberLastLoginMethod('email', _senderEmail.text.trim());
       setState(() => _senderProfileMessage = 'Profile ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
@@ -20856,12 +20859,148 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
       await _loadSenderBusinessAccounts(user.uid);
+      _rememberLastLoginMethod('email', user.email ?? _senderEmail.text.trim());
       setState(() => _senderProfileMessage = 'Your sender profile is ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
+  }
+
+  Future<void> _signInSenderWithGoogle() async {
+    final provider = GoogleAuthProvider()
+      ..addScope('email')
+      ..addScope('profile');
+    await _signInSenderWithProvider(
+      provider: provider,
+      method: 'google',
+      startingMessage: 'Opening Google sign-in...',
+    );
+  }
+
+  Future<void> _signInSenderWithApple() async {
+    final provider = OAuthProvider('apple.com')
+      ..addScope('email')
+      ..addScope('name');
+    await _signInSenderWithProvider(
+      provider: provider,
+      method: 'apple',
+      startingMessage: 'Opening Apple sign-in...',
+    );
+  }
+
+  Future<void> _signInSenderWithProvider({
+    required AuthProvider provider,
+    required String method,
+    required String startingMessage,
+  }) async {
+    if (_senderAuthBusy) return;
+    setState(() {
+      _senderAuthBusy = true;
+      _senderProfileMessage = startingMessage;
+    });
+    try {
+      await _ensureFirebaseReady();
+      final credential = await FirebaseAuth.instance.signInWithPopup(provider);
+      final user = credential.user;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'provider-no-user');
+      }
+      if (!await _allowSenderUser(user)) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        setState(
+          () => _senderProfileMessage =
+              'This account is not a sender account. Use the rider or admin sign-in instead.',
+        );
+        return;
+      }
+      await _mergeProviderSenderProfile(user, method);
+      await _attachIncomingReferralIfPresent();
+      _availableRoles = {CircumRole.sender};
+      _attachSender(user);
+      await _loadSenderDeliveries(user.uid);
+      await _loadSenderBusinessAccounts(user.uid);
+      _rememberLastLoginMethod(method, user.email ?? user.phoneNumber);
+      if (!mounted) return;
+      setState(() => _senderProfileMessage = 'Profile ready.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _senderProfileMessage = _friendlyProviderAuthMessage(error),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _senderProfileMessage =
+            'Sign-in could not be completed. Please try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _senderAuthBusy = false);
+    }
+  }
+
+  Future<void> _mergeProviderSenderProfile(User user, String method) async {
+    final displayName = user.displayName?.trim() ?? '';
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final existing = await userRef.get();
+    await userRef.set({
+      if (displayName.isNotEmpty) 'fullName': displayName,
+      if (displayName.isNotEmpty) 'fullname': displayName,
+      'email': user.email,
+      'phoneNumber': user.phoneNumber,
+      'photoURL': user.photoURL,
+      'role': 'user',
+      'roles': ['sender'],
+      'userType': 'sender',
+      'status': 'active',
+      'authProvider': method,
+      'verificationStatus': user.emailVerified ? 'verified' : 'unverified',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastLoginAt': FieldValue.serverTimestamp(),
+      'lastLoginMethod': method,
+      if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  void _rememberLastLoginMethod(String method, String? rawHint) {
+    final hint = _maskedLoginHint(rawHint);
+    html.window.localStorage['lastLoginMethod'] = method;
+    if (hint != null) {
+      html.window.localStorage['lastLoginHint'] = hint;
+    }
+  }
+
+  static String? _maskedLoginHint(String? rawHint) {
+    final value = rawHint?.trim();
+    if (value == null || value.isEmpty) return null;
+    if (value.contains('@')) {
+      final parts = value.split('@');
+      final local = parts.first;
+      final domain = parts.length > 1 ? parts.sublist(1).join('@') : '';
+      final visible = local.isEmpty ? 'a' : local.characters.first;
+      return '$visible***@$domain';
+    }
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.length <= 4) return '••••';
+    return '+${digits.substring(0, math.min(2, digits.length))}••••${digits.substring(digits.length - 4)}';
+  }
+
+  String _friendlyProviderAuthMessage(FirebaseAuthException error) {
+    return switch (error.code) {
+      'popup-closed-by-user' ||
+      'cancelled-popup-request' =>
+        'Sign-in was cancelled before it completed.',
+      'popup-blocked' =>
+        'Your browser blocked the sign-in window. Allow pop-ups for Circum and try again.',
+      'operation-not-supported-in-this-environment' =>
+        'This sign-in method is not supported in this browser.',
+      'account-exists-with-different-credential' =>
+        'This email already uses another sign-in method. Continue with your original method.',
+      _ => _friendlySenderAuthMessage(error),
+    };
   }
 
   Future<void> _sendSenderPasswordReset() async {
@@ -24929,6 +25068,8 @@ class _SenderAccessGate extends StatefulWidget {
   final VoidCallback onToggleMode;
   final VoidCallback onSignIn;
   final VoidCallback onSignUp;
+  final VoidCallback onGoogleSignIn;
+  final VoidCallback onAppleSignIn;
   final VoidCallback onForgotPassword;
 
   const _SenderAccessGate({
@@ -24943,6 +25084,8 @@ class _SenderAccessGate extends StatefulWidget {
     required this.onToggleMode,
     required this.onSignIn,
     required this.onSignUp,
+    required this.onGoogleSignIn,
+    required this.onAppleSignIn,
     required this.onForgotPassword,
   });
 
@@ -24953,11 +25096,17 @@ class _SenderAccessGate extends StatefulWidget {
 class _SenderAccessGateState extends State<_SenderAccessGate> {
   final _identifier = TextEditingController();
   bool _detailsVisible = false;
+  bool _checkingAccount = false;
+  bool _passwordVisible = false;
   String? _localMessage;
+  String? _lastLoginMethod;
+  String? _lastLoginHint;
 
   @override
   void initState() {
     super.initState();
+    _lastLoginMethod = html.window.localStorage['lastLoginMethod'];
+    _lastLoginHint = html.window.localStorage['lastLoginHint'];
     _identifier.addListener(_handleIdentifierChanged);
   }
 
@@ -24988,24 +25137,31 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
           () => _localMessage = 'Enter a valid email address or phone number.');
       return;
     }
+    setState(() {
+      _checkingAccount = true;
+      _localMessage = 'Checking your account...';
+    });
     if (_identifierIsEmail) {
       widget.email.text = value;
+      var existingAccount = false;
       try {
         final auth = FirebaseAuth.instance;
         // ignore: deprecated_member_use
         final methods = await auth.fetchSignInMethodsForEmail(value);
         if (!mounted) return;
-        if (methods.isEmpty && !widget.signupMode) {
-          widget.onToggleMode();
-        } else if (methods.isNotEmpty && widget.signupMode) {
-          widget.onToggleMode();
-        }
+        existingAccount = methods.isNotEmpty;
       } catch (_) {
         if (!mounted) return;
       }
+      if (existingAccount && widget.signupMode) {
+        widget.onToggleMode();
+      } else if (!existingAccount && !widget.signupMode) {
+        widget.onToggleMode();
+      }
       setState(() {
+        _checkingAccount = false;
         _detailsVisible = true;
-        _localMessage = null;
+        _localMessage = existingAccount ? 'Welcome back 👋' : null;
       });
       return;
     }
@@ -25014,6 +25170,7 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
       widget.onToggleMode();
     }
     setState(() {
+      _checkingAccount = false;
       _detailsVisible = true;
       _localMessage = 'Add your email to create your Circum account.';
     });
@@ -25101,29 +25258,6 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  Container(
-                                    width: 54,
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: colors.adminAccent
-                                          .withValues(alpha: 0.14),
-                                      border: Border.all(
-                                        color: colors.adminAccent
-                                            .withValues(alpha: 0.28),
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        'C',
-                                        style: GoogleFonts.dmSerifDisplay(
-                                          color: Colors.white,
-                                          fontSize: 30,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 22),
                                   Text(
                                     "What's your phone number\nor email?",
                                     textAlign: TextAlign.center,
@@ -25151,24 +25285,80 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
                                       hint: 'Enter phone number or email',
                                       keyboardType: TextInputType.emailAddress,
                                       glassStyle: true,
+                                      autofillHints: const [
+                                        AutofillHints.username,
+                                        AutofillHints.email,
+                                        AutofillHints.telephoneNumber,
+                                      ],
+                                      textInputAction: TextInputAction.next,
+                                      onSubmitted: (_) {
+                                        if (_identifierValid &&
+                                            !widget.busy &&
+                                            !_checkingAccount) {
+                                          _continue();
+                                        }
+                                      },
+                                      semanticLabel:
+                                          'Enter phone number or email',
                                     ),
+                                    if (_lastLoginHint != null &&
+                                        _lastLoginHint!.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Last used: $_lastLoginHint',
+                                        style: TextStyle(
+                                          color: colors.mutedText,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 16),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: FilledButton.icon(
-                                        onPressed:
-                                            widget.busy || !_identifierValid
+                                    AnimatedSlide(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      curve: Curves.easeOut,
+                                      offset: _identifierValid
+                                          ? Offset.zero
+                                          : const Offset(0, 0.08),
+                                      child: AnimatedOpacity(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        curve: Curves.easeOut,
+                                        opacity: _identifierValid ? 1 : 0.48,
+                                        child: SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.icon(
+                                            onPressed: widget.busy ||
+                                                    !_identifierValid ||
+                                                    _checkingAccount
                                                 ? null
                                                 : _continue,
-                                        iconAlignment: IconAlignment.end,
-                                        icon: const Icon(
-                                            Icons.arrow_forward_rounded),
-                                        label: const Text('Continue'),
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: colors.adminAccent,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 18),
+                                            iconAlignment: IconAlignment.end,
+                                            icon: _checkingAccount
+                                                ? const SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white,
+                                                    ),
+                                                  )
+                                                : const Icon(Icons
+                                                    .arrow_forward_rounded),
+                                            label: Text(_checkingAccount
+                                                ? 'Checking your account...'
+                                                : 'Continue'),
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor:
+                                                  colors.adminAccent,
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 18),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -25189,25 +25379,28 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
                                     ]),
                                     const SizedBox(height: 16),
                                     Row(
-                                      children: const [
+                                      children: [
                                         Expanded(
                                           child: _AuthSocialButton(
-                                            icon: Icons.g_mobiledata_rounded,
+                                            icon: null,
                                             label: 'Continue with Google',
+                                            highlighted:
+                                                _lastLoginMethod == 'google',
+                                            onPressed: widget.busy
+                                                ? null
+                                                : widget.onGoogleSignIn,
                                           ),
                                         ),
-                                        SizedBox(width: 10),
+                                        const SizedBox(width: 10),
                                         Expanded(
                                           child: _AuthSocialButton(
                                             icon: Icons.apple,
                                             label: 'Continue with Apple',
-                                          ),
-                                        ),
-                                        SizedBox(width: 10),
-                                        Expanded(
-                                          child: _AuthSocialButton(
-                                            icon: Icons.qr_code_2_rounded,
-                                            label: 'Log in with QR code',
+                                            highlighted:
+                                                _lastLoginMethod == 'apple',
+                                            onPressed: widget.busy
+                                                ? null
+                                                : widget.onAppleSignIn,
                                           ),
                                         ),
                                       ],
@@ -25221,30 +25414,89 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
                                           glassStyle: true),
                                       const SizedBox(height: 10),
                                       _InputBox(
+                                        colors: colors,
+                                        controller: widget.email,
+                                        hint: 'Email address',
+                                        keyboardType:
+                                            TextInputType.emailAddress,
+                                        glassStyle: true,
+                                        autofillHints: const [
+                                          AutofillHints.username,
+                                          AutofillHints.email,
+                                        ],
+                                        textInputAction: TextInputAction.next,
+                                        semanticLabel: 'Email address',
+                                      ),
+                                      const SizedBox(height: 10),
+                                      _InputBox(
                                           colors: colors,
                                           controller: widget.phone,
                                           hint: 'Phone number',
+                                          keyboardType: TextInputType.phone,
+                                          autofillHints: const [
+                                            AutofillHints.telephoneNumber,
+                                          ],
                                           glassStyle: true),
+                                      const SizedBox(height: 10),
+                                    ] else ...[
+                                      _InputBox(
+                                        colors: colors,
+                                        controller: widget.email,
+                                        hint: 'Email address',
+                                        keyboardType:
+                                            TextInputType.emailAddress,
+                                        glassStyle: true,
+                                        autofillHints: const [
+                                          AutofillHints.username,
+                                          AutofillHints.email,
+                                        ],
+                                        textInputAction: TextInputAction.next,
+                                        semanticLabel: 'Email address',
+                                      ),
                                       const SizedBox(height: 10),
                                     ],
                                     _InputBox(
                                       colors: colors,
-                                      controller: widget.email,
-                                      hint: 'Email address',
-                                      keyboardType: TextInputType.emailAddress,
-                                      glassStyle: true,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _InputBox(
-                                      colors: colors,
                                       controller: widget.password,
                                       hint: 'Password',
-                                      obscureText: true,
+                                      obscureText: !_passwordVisible,
                                       glassStyle: true,
+                                      autofillHints: const [
+                                        AutofillHints.password,
+                                      ],
+                                      textInputAction: TextInputAction.done,
+                                      onSubmitted: (_) {
+                                        if (!widget.busy) {
+                                          widget.signupMode
+                                              ? widget.onSignUp()
+                                              : widget.onSignIn();
+                                        }
+                                      },
+                                      semanticLabel: 'Password',
+                                      suffixIcon: IconButton(
+                                        tooltip: _passwordVisible
+                                            ? 'Hide password'
+                                            : 'Show password',
+                                        onPressed: () => setState(() =>
+                                            _passwordVisible =
+                                                !_passwordVisible),
+                                        icon: Icon(
+                                          _passwordVisible
+                                              ? Icons.visibility_off_outlined
+                                              : Icons.visibility_outlined,
+                                          color: colors.mutedText,
+                                        ),
+                                      ),
                                     ),
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: TextButton(
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.only(
+                                            top: 2,
+                                            bottom: 4,
+                                          ),
+                                        ),
                                         onPressed: widget.busy
                                             ? null
                                             : widget.onForgotPassword,
@@ -25323,26 +25575,32 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
                       ),
                     ),
                   ),
-                  Row(
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 18,
+                    runSpacing: 8,
                     children: [
                       Text(
                         '© 2026 Circum Technologies Ltd.',
                         style: TextStyle(color: colors.mutedText, fontSize: 12),
                       ),
-                      const Spacer(),
-                      for (final item in const [
-                        'Terms of Service',
-                        'Privacy Policy',
-                        'Help',
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(left: 14),
-                          child: Text(item,
-                              style: TextStyle(
-                                  color: colors.mutedText,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700)),
-                        ),
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 8,
+                        children: [
+                          for (final item in const [
+                            'Terms of Service',
+                            'Privacy Policy',
+                            'Help',
+                          ])
+                            Text(item,
+                                style: TextStyle(
+                                    color: colors.mutedText,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700)),
+                        ],
+                      ),
                     ],
                   ),
                 ],
@@ -25356,23 +25614,41 @@ class _SenderAccessGateState extends State<_SenderAccessGate> {
 }
 
 class _AuthSocialButton extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final String label;
+  final bool highlighted;
+  final VoidCallback? onPressed;
 
-  const _AuthSocialButton({required this.icon, required this.label});
+  const _AuthSocialButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.highlighted = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = highlighted
+        ? const Color(0xff3b82f6).withValues(alpha: 0.62)
+        : Colors.white.withValues(alpha: 0.16);
     return OutlinedButton.icon(
-      onPressed: null,
-      icon: Icon(icon, size: 18),
+      onPressed: onPressed,
+      icon: icon == null
+          ? const SizedBox.shrink()
+          : Icon(icon, size: 18, color: Colors.white),
       label: Text(
         label,
         maxLines: 2,
         textAlign: TextAlign.center,
       ),
       style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white.withValues(alpha: 0.38),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+        side: BorderSide(color: borderColor),
+        backgroundColor: highlighted
+            ? const Color(0xff3b82f6).withValues(alpha: 0.12)
+            : Colors.white.withValues(alpha: 0.04),
       ),
     );
   }
@@ -35287,6 +35563,11 @@ class _InputBox extends StatelessWidget {
   final bool enabled;
   final TextInputType? keyboardType;
   final bool glassStyle;
+  final Widget? suffixIcon;
+  final Iterable<String>? autofillHints;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final String? semanticLabel;
 
   const _InputBox({
     required this.colors,
@@ -35297,6 +35578,11 @@ class _InputBox extends StatelessWidget {
     this.enabled = true,
     this.keyboardType,
     this.glassStyle = false,
+    this.suffixIcon,
+    this.autofillHints,
+    this.textInputAction,
+    this.onSubmitted,
+    this.semanticLabel,
   });
 
   @override
@@ -35307,9 +35593,13 @@ class _InputBox extends StatelessWidget {
       obscureText: obscureText,
       enabled: enabled,
       keyboardType: keyboardType,
+      autofillHints: autofillHints,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
       style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
       decoration: InputDecoration(
         hintText: hint,
+        suffixIcon: suffixIcon,
         hintStyle: TextStyle(color: colors.mutedText),
         filled: !glassStyle,
         fillColor: colors.field,
@@ -35335,7 +35625,10 @@ class _InputBox extends StatelessWidget {
               ),
       ),
     );
-    if (!glassStyle) return field;
+    final labelledField = semanticLabel == null
+        ? field
+        : Semantics(label: semanticLabel, textField: true, child: field);
+    if (!glassStyle) return labelledField;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
@@ -35354,7 +35647,7 @@ class _InputBox extends StatelessWidget {
           ),
         ],
       ),
-      child: field,
+      child: labelledField,
     );
   }
 }
