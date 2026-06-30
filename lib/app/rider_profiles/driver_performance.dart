@@ -72,7 +72,8 @@ class DriverProfile {
       driverId: driverId,
       fullName:
           _readString(map, ['fullName', 'name'], fallback: 'Circum rider'),
-      photoUrl: _readNullableString(map, ['photoUrl', 'profilePhotoUrl']),
+      photoUrl:
+          _readNullableString(map, ['photoURL', 'photoUrl', 'profilePhotoUrl']),
       phoneNumber: _readString(map, ['phoneNumber', 'phone']),
       verificationStatus:
           _readString(map, ['verificationStatus'], fallback: 'pending'),

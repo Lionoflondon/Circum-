@@ -2486,6 +2486,79 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await _loadAdminData();
   }
 
+  Future<void> _removeRiderProfilePhoto(Map<String, dynamic> driver) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot remove rider photos.');
+      return;
+    }
+    final riderId = _driverId(driver);
+    if (riderId.isEmpty) return;
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Remove profile photo'),
+            content: TextField(
+              controller: controller,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Reason',
+                hintText: 'Explain why this rider photo is being removed.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () =>
+                      Navigator.pop(context, controller.text.trim()),
+                  child: const Text('Remove')),
+            ],
+          ),
+        ) ??
+        '';
+    controller.dispose();
+    if (reason.isEmpty) return;
+    final photoPath =
+        '${driver['photoPath'] ?? 'rider-profile-photos/$riderId/profile.jpg'}';
+    await FirebaseStorage.instance.ref(photoPath).delete().catchError((_) {});
+    final patch = {
+      'photoURL': FieldValue.delete(),
+      'photoUrl': FieldValue.delete(),
+      'photoPath': FieldValue.delete(),
+      'profilePhotoUrl': FieldValue.delete(),
+      'photoRemovedAt': FieldValue.serverTimestamp(),
+      'photoRemovedBy': _adminUser?.uid ?? _adminUser?.email,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await FirebaseFirestore.instance
+        .collection('riders')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await FirebaseFirestore.instance
+        .collection('riderProfiles')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await _writeRiderAdminEvent(
+      riderId,
+      'profile_photo_removed',
+      previousStatus: '${driver['photoURL'] ?? driver['photoUrl'] ?? ''}',
+      newStatus: 'removed',
+      note: reason,
+    );
+    await FirebaseFirestore.instance.collection('adminAuditLogs').doc().set({
+      'action': 'rider_profile_photo_removed',
+      'riderId': riderId,
+      'adminId': _adminUser?.uid,
+      'adminEmail': _adminUser?.email,
+      'reason': reason,
+      'removedAt': FieldValue.serverTimestamp(),
+    });
+    setState(() => _message = 'Rider profile photo removed.');
+    await _loadAdminData();
+  }
+
   Future<void> _requestDriverMoreInformation(
       Map<String, dynamic> driver) async {
     if (!_can(AdminPermission.approveDrivers)) {
@@ -3450,6 +3523,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 canManageRank: _can(AdminPermission.manageDriverRanks),
                 onChangeRank: () => _changeDriverRank(_selectedDriverProfile!),
                 onIssueRoth: () => _issueRothToRider(_selectedDriverProfile!),
+                onRemoveProfilePhoto: () =>
+                    _removeRiderProfilePhoto(_selectedDriverProfile!),
                 onApproveDocument: (document) =>
                     _reviewRiderDocument(document, 'approved'),
                 onRejectDocument: (document) =>
@@ -10152,6 +10227,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
   final bool canManageRank;
   final VoidCallback onChangeRank;
   final VoidCallback onIssueRoth;
+  final VoidCallback onRemoveProfilePhoto;
   final ValueChanged<Map<String, dynamic>> onApproveDocument;
   final ValueChanged<Map<String, dynamic>> onRejectDocument;
   final ValueChanged<Map<String, dynamic>> onRequestReplacement;
@@ -10176,6 +10252,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     required this.canManageRank,
     required this.onChangeRank,
     required this.onIssueRoth,
+    required this.onRemoveProfilePhoto,
     required this.onApproveDocument,
     required this.onRejectDocument,
     required this.onRequestReplacement,
@@ -10298,6 +10375,15 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     final vehicle = _vehicle();
     final phone = _phone();
     final blockers = _approvalBlockers();
+    final photoUrl =
+        '${driver['photoURL'] ?? driver['photoUrl'] ?? driver['profilePhotoUrl'] ?? ''}'
+            .trim();
+    final hasPhoto = photoUrl.isNotEmpty && photoUrl != 'null';
+    final initialSource =
+        '${driver['fullName'] ?? driver['name'] ?? 'C'}'.trim();
+    final initials = initialSource.isEmpty
+        ? 'C'
+        : initialSource.substring(0, 1).toUpperCase();
     final customerReady =
         '${driver['fullName'] ?? driver['name'] ?? ''}'.trim().isNotEmpty &&
             driver['phoneVerified'] == true &&
@@ -10306,7 +10392,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
             statusLabel == 'approved';
     return Positioned.fill(
       child: Material(
-        color: Colors.black.withOpacity(0.42),
+        color: Colors.black.withValues(alpha: 0.42),
         child: Align(
           alignment: Alignment.centerRight,
           child: Container(
@@ -10317,7 +10403,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
               border: Border(left: BorderSide(color: colors.border)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.28),
+                  color: Colors.black.withValues(alpha: 0.28),
                   blurRadius: 28,
                   offset: const Offset(-10, 0),
                 ),
@@ -10329,6 +10415,41 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              colors.adminAccent.withValues(alpha: 0.86),
+                              const Color(0xff60a5fa).withValues(alpha: 0.52),
+                            ],
+                          ),
+                          border: Border.all(
+                            color: colors.adminAccent.withValues(alpha: 0.42),
+                          ),
+                          image: hasPhoto
+                              ? DecorationImage(
+                                  image: NetworkImage(photoUrl),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: hasPhoto
+                            ? null
+                            : Center(
+                                child: Text(
+                                  initials.isEmpty ? 'C' : initials,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                      ),
                       Expanded(
                         child: Text(
                           '${driver['fullName'] ?? driver['name'] ?? 'Driver profile'}',
@@ -10346,6 +10467,17 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (hasPhoto) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: onRemoveProfilePhoto,
+                        icon: const Icon(Icons.hide_image_outlined),
+                        label: const Text('Remove profile photo'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   _AdminStatusCell(colors: colors, status: statusLabel),
                   const SizedBox(height: 10),
@@ -24710,6 +24842,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         driverId,
         {
           'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
+          'photoURL': data['photoURL'] ??
+              data['photoUrl'] ??
+              data['driverPhotoUrl'] ??
+              data['riderPhotoUrl'] ??
+              '',
           'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
           'vehicleType':
               data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
@@ -40201,6 +40338,13 @@ class _BusinessIrisMomentsPanel extends StatelessWidget {
     final openMoments = moments
         .where((moment) => _momentStatus(moment) != 'completed')
         .toList(growable: false);
+    final thisWeekMoments = openMoments
+        .where((moment) => {'today', 'week'}.contains(_momentBucket(moment)))
+        .toList(growable: false);
+    final giftOpportunities =
+        thisWeekMoments.where(_momentIsGiftOpportunity).length;
+    final healthReminders = thisWeekMoments.where(_momentIsHealth).length;
+    final deliveryReminders = thisWeekMoments.where(_momentIsDelivery).length;
     final completed = moments
         .where((moment) => _momentStatus(moment) == 'completed')
         .take(3)
@@ -40214,7 +40358,12 @@ class _BusinessIrisMomentsPanel extends StatelessWidget {
     final thisMonth = openMoments
         .where((moment) => _momentBucket(moment) == 'month')
         .toList(growable: false);
-    final suggested = openMoments.take(4).toList(growable: false);
+    final suggested = [...openMoments]..sort((a, b) =>
+        _momentRecommendationConfidence(b, moments)
+            .compareTo(_momentRecommendationConfidence(a, moments)));
+    final businessName =
+        '${account['businessName'] ?? account['companyName'] ?? 'your business'}'
+            .trim();
 
     return _BusinessGlass(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -40233,75 +40382,214 @@ class _BusinessIrisMomentsPanel extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 14),
-        LayoutBuilder(builder: (context, constraints) {
-          final compact = constraints.maxWidth < 860;
-          final summary = [
-            _BusinessMomentBucket(
-              title: 'Today',
-              moments: today,
-              emptyText: 'No moments today.',
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xff0d1b2e).withValues(alpha: 0.62),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+                color: const Color(0xff60a5fa).withValues(alpha: 0.20)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff3b82f6).withValues(alpha: 0.10),
+                blurRadius: 30,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              '${_businessTimeGreeting()}, $businessName.',
+              style: GoogleFonts.dmSerifDisplay(
+                color: Colors.white,
+                fontSize: 28,
+                height: 1.05,
+              ),
             ),
-            _BusinessMomentBucket(
-              title: 'This Week',
-              moments: thisWeek,
-              emptyText: 'Nothing due this week.',
+            const SizedBox(height: 8),
+            Text(
+              'IRIS has reviewed your upcoming moments.',
+              style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.72),
+                height: 1.45,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            _BusinessMomentBucket(
-              title: 'This Month',
-              moments: thisMonth,
-              emptyText: 'No later moments this month.',
+            const SizedBox(height: 16),
+            Text(
+              'This week you have:',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ];
-          return compact
-              ? Column(
-                  children: summary
-                      .map((item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: item,
-                          ))
-                      .toList(growable: false),
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: summary
-                      .map((item) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 10),
+            const SizedBox(height: 10),
+            Wrap(spacing: 10, runSpacing: 10, children: [
+              _BusinessIrisMetricCard(
+                  value: '${thisWeekMoments.length}',
+                  label: 'Upcoming Moments'),
+              _BusinessIrisMetricCard(
+                  value: '$giftOpportunities', label: 'Gift Opportunities'),
+              _BusinessIrisMetricCard(
+                  value: '$healthReminders', label: 'Health+ Reminder'),
+              _BusinessIrisMetricCard(
+                  value: '$deliveryReminders', label: 'Delivery Reminder'),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        if (moments.isEmpty)
+          _BusinessIrisMomentsEmpty(onAddMoment: onAddMoment)
+        else ...[
+          LayoutBuilder(builder: (context, constraints) {
+            final compact = constraints.maxWidth < 860;
+            final summary = [
+              _BusinessMomentBucket(
+                title: 'Today',
+                moments: today,
+                emptyText: 'No moments today.',
+              ),
+              _BusinessMomentBucket(
+                title: 'This Week',
+                moments: thisWeek,
+                emptyText: 'Nothing due this week.',
+              ),
+              _BusinessMomentBucket(
+                title: 'This Month',
+                moments: thisMonth,
+                emptyText: 'No later moments this month.',
+              ),
+            ];
+            return compact
+                ? Column(
+                    children: summary
+                        .map((item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
                               child: item,
-                            ),
-                          ))
-                      .toList(growable: false),
-                );
-        }),
-        const SizedBox(height: 16),
-        Text('Suggested Actions',
-            style: GoogleFonts.inter(
-                color: Colors.white, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 10),
-        if (suggested.isEmpty)
-          const _BusinessEmptyState(
-              'Add people and dates so IRIS can recommend thoughtful next steps.')
-        else
-          ...suggested.map((moment) => _BusinessMomentSuggestion(
-                moment: moment,
-                onSendGift: onSendGift,
-                onCreateDelivery: onCreateDelivery,
-                onScheduleHealthPlus: onScheduleHealthPlus,
-                onCreateReminder: onAddMoment,
-              )),
-        const SizedBox(height: 16),
-        Text('Recently Completed',
-            style: GoogleFonts.inter(
-                color: Colors.white, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 10),
-        if (completed.isEmpty)
-          const _BusinessEmptyState(
-              'Completed gifts, deliveries, cards and reminders will appear here.')
-        else
-          ...completed.map((moment) => _BusinessMomentLine(moment: moment)),
+                            ))
+                        .toList(growable: false),
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: summary
+                        .map((item) => Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: item,
+                              ),
+                            ))
+                        .toList(growable: false),
+                  );
+          }),
+          const SizedBox(height: 16),
+          Text('IRIS Recommendations',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          if (suggested.isEmpty)
+            const _BusinessEmptyState(
+                'No recommendations are ready yet. IRIS will act once a moment becomes relevant.')
+          else
+            ...suggested.take(5).map((moment) => _BusinessMomentSuggestion(
+                  moment: moment,
+                  allMoments: moments,
+                  onSendGift: onSendGift,
+                  onCreateDelivery: onCreateDelivery,
+                  onScheduleHealthPlus: onScheduleHealthPlus,
+                  onCreateReminder: onAddMoment,
+                )),
+          const SizedBox(height: 16),
+          _BusinessRelationshipHealth(
+            moments: moments,
+            onSendGift: onSendGift,
+            onCreateDelivery: onCreateDelivery,
+            onDismiss: onAddMoment,
+          ),
+          const SizedBox(height: 16),
+          Text('Recently Completed',
+              style: GoogleFonts.inter(
+                  color: Colors.white, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          if (completed.isEmpty)
+            const _BusinessEmptyState(
+                'Completed gifts, deliveries, cards and reminders will appear here.')
+          else
+            ...completed.map((moment) => _BusinessMomentLine(moment: moment)),
+        ],
       ]),
     );
   }
+}
+
+class _BusinessIrisMetricCard extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _BusinessIrisMetricCard({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 150,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.055),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value,
+              style: GoogleFonts.jetBrainsMono(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(label,
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.64),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800)),
+        ]),
+      );
+}
+
+class _BusinessIrisMomentsEmpty extends StatelessWidget {
+  final VoidCallback onAddMoment;
+
+  const _BusinessIrisMomentsEmpty({required this.onAddMoment});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.045),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('No upcoming moments.',
+              style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(
+            'Create important moments once and let IRIS remind you at the right time with intelligent Circum recommendations.',
+            style: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: 0.68),
+                height: 1.42,
+                fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: onAddMoment,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Add First Moment'),
+          ),
+        ]),
+      );
 }
 
 class _BusinessMomentBucket extends StatelessWidget {
@@ -40390,6 +40678,7 @@ class _BusinessMomentLine extends StatelessWidget {
 
 class _BusinessMomentSuggestion extends StatelessWidget {
   final Map<String, dynamic> moment;
+  final List<Map<String, dynamic>> allMoments;
   final VoidCallback onSendGift;
   final VoidCallback onCreateDelivery;
   final VoidCallback onScheduleHealthPlus;
@@ -40397,6 +40686,7 @@ class _BusinessMomentSuggestion extends StatelessWidget {
 
   const _BusinessMomentSuggestion({
     required this.moment,
+    required this.allMoments,
     required this.onSendGift,
     required this.onCreateDelivery,
     required this.onScheduleHealthPlus,
@@ -40405,7 +40695,14 @@ class _BusinessMomentSuggestion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recommendation = _momentRecommendation(moment);
+    final recommendation = _momentRecommendation(moment, allMoments);
+    final confidence = _momentRecommendationConfidence(moment, allMoments);
+    final confidenceLabel = confidence >= 0.82
+        ? 'High confidence'
+        : confidence >= 0.66
+            ? 'Medium confidence'
+            : 'Low confidence';
+    final service = _momentRecommendedService(moment);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -40424,9 +40721,15 @@ class _BusinessMomentSuggestion extends StatelessWidget {
                 style: GoogleFonts.inter(
                     color: Colors.white, fontWeight: FontWeight.w900)),
           ),
-          _BusinessBadge(_momentDateLabel(moment).toUpperCase()),
+          _BusinessBadge(_momentCountdown(moment).toUpperCase()),
         ]),
         const SizedBox(height: 8),
+        Text(service,
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
         Text(recommendation.$2,
             style: GoogleFonts.inter(
                 color: Colors.white.withValues(alpha: 0.68),
@@ -40434,34 +40737,149 @@ class _BusinessMomentSuggestion extends StatelessWidget {
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          OutlinedButton.icon(
-              onPressed: onSendGift,
-              icon: const Icon(Icons.card_giftcard_outlined),
-              label: const Text('Send Gift')),
-          OutlinedButton.icon(
-              onPressed: onCreateDelivery,
-              icon: const Icon(Icons.local_shipping_outlined),
-              label: const Text('Create Delivery')),
-          OutlinedButton.icon(
-              onPressed: onScheduleHealthPlus,
-              icon: const Icon(Icons.health_and_safety_outlined),
-              label: const Text('Schedule Health+ Delivery')),
+          _BusinessBadge(confidenceLabel),
+          _BusinessBadge(
+              'WHY: ${_momentWhy(moment, allMoments).toUpperCase()}'),
+        ]),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          if (_momentIsGiftOpportunity(moment)) ...[
+            OutlinedButton.icon(
+                onPressed: onSendGift,
+                icon: const Icon(Icons.card_giftcard_outlined),
+                label: const Text('Open Gift Portal')),
+            OutlinedButton.icon(
+                onPressed: onSendGift,
+                icon: const Icon(Icons.mail_outline_rounded),
+                label: const Text('Send Card')),
+          ] else if (_momentIsHealth(moment))
+            OutlinedButton.icon(
+                onPressed: onScheduleHealthPlus,
+                icon: const Icon(Icons.health_and_safety_outlined),
+                label: const Text('Launch Health+ Delivery'))
+          else if (_momentIsDelivery(moment))
+            OutlinedButton.icon(
+                onPressed: onCreateDelivery,
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: const Text('Launch Delivery'))
+          else
+            OutlinedButton.icon(
+                onPressed: onCreateReminder,
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: const Text('Create Reminder')),
           OutlinedButton.icon(
               onPressed: onCreateReminder,
-              icon: const Icon(Icons.notifications_active_outlined),
-              label: const Text('Create Reminder')),
-          OutlinedButton.icon(
-              onPressed: onSendGift,
-              icon: const Icon(Icons.mail_outline_rounded),
-              label: const Text('Send Card')),
+              icon: const Icon(Icons.today_outlined),
+              label: const Text('Remind Tomorrow')),
           OutlinedButton.icon(
               onPressed: onCreateReminder,
               icon: const Icon(Icons.snooze_outlined),
               label: const Text('Snooze')),
+          OutlinedButton.icon(
+              onPressed: onCreateReminder,
+              icon: const Icon(Icons.close_rounded),
+              label: const Text('Dismiss')),
         ])
       ]),
     );
   }
+}
+
+class _BusinessRelationshipHealth extends StatelessWidget {
+  final List<Map<String, dynamic>> moments;
+  final VoidCallback onSendGift;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onDismiss;
+
+  const _BusinessRelationshipHealth({
+    required this.moments,
+    required this.onSendGift,
+    required this.onCreateDelivery,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final relationships = _relationshipHealthRows(moments).take(3).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Relationship Health',
+          style: GoogleFonts.inter(
+              color: Colors.white, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 10),
+      if (relationships.isEmpty)
+        const _BusinessEmptyState(
+            'IRIS will surface relationship health once moments or completed actions exist.')
+      else
+        ...relationships.map((row) => _BusinessRelationshipHealthCard(
+              row: row,
+              onSendGift: onSendGift,
+              onCreateDelivery: onCreateDelivery,
+              onDismiss: onDismiss,
+            )),
+    ]);
+  }
+}
+
+class _BusinessRelationshipHealthCard extends StatelessWidget {
+  final Map<String, dynamic> row;
+  final VoidCallback onSendGift;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onDismiss;
+
+  const _BusinessRelationshipHealthCard({
+    required this.row,
+    required this.onSendGift,
+    required this.onCreateDelivery,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.046),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Text('${row['name']}',
+                  style: GoogleFonts.inter(
+                      color: Colors.white, fontWeight: FontWeight.w900)),
+            ),
+            _BusinessBadge('${row['status']}'),
+          ]),
+          const SizedBox(height: 6),
+          Text('${row['detail']}',
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.66),
+                  height: 1.4,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          Text('IRIS: "${row['insight']}"',
+              style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.78),
+                  height: 1.4,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(
+                onPressed: onSendGift,
+                icon: const Icon(Icons.card_giftcard_outlined),
+                label: const Text('Open Gift Portal')),
+            OutlinedButton.icon(
+                onPressed: onCreateDelivery,
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: const Text('Launch Delivery')),
+            OutlinedButton.icon(
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close_rounded),
+                label: const Text('Dismiss')),
+          ])
+        ]),
+      );
 }
 
 class _BusinessRecentActivityFeed extends StatelessWidget {
@@ -41974,14 +42392,37 @@ class _BusinessMomentDialogState extends State<_BusinessMomentDialog> {
     final parsedDate = DateTime.tryParse(_date.text.trim());
     final valid = _name.text.trim().isNotEmpty && parsedDate != null;
     const types = [
-      'Employee birthday',
-      'Work anniversary',
-      'Client birthday',
-      'Supplier anniversary',
-      'Contract renewal',
-      'Medication reminder',
-      'Company milestone',
-      'Custom reminder',
+      'Birthday',
+      'Wedding',
+      'Engagement',
+      'Anniversary',
+      'New Baby',
+      'Graduation',
+      'Promotion',
+      'Retirement',
+      'New Home',
+      'Thank You',
+      'Congratulations',
+      'Get Well Soon',
+      'Sympathy / Condolence',
+      'Welcome',
+      'Farewell',
+      'Religious Celebration',
+      'Cultural Celebration',
+      'Employee Birthday',
+      'Employee Work Anniversary',
+      'Client Birthday',
+      'Client Anniversary',
+      'Supplier Anniversary',
+      'Investor Milestone',
+      'Company Milestone',
+      'Contract Renewal',
+      'Partnership Anniversary',
+      'Customer Appreciation',
+      'Staff Recognition',
+      'Health+ Reminder',
+      'Delivery Reminder',
+      'Custom Reminder',
     ];
     const actions = [
       'Send Gift',
@@ -43094,40 +43535,208 @@ String _momentBucket(Map<String, dynamic> moment) {
   return 'later';
 }
 
-(String, String) _momentRecommendation(Map<String, dynamic> moment) {
+(String, String) _momentRecommendation(
+  Map<String, dynamic> moment,
+  List<Map<String, dynamic>> allMoments,
+) {
   final name = _momentName(moment);
-  final type = _momentTypeLabel(moment).toLowerCase();
-  final action = '${moment['preferredAction'] ?? ''}'.trim();
-  if (type.contains('medication')) {
+  final service = _momentRecommendedService(moment);
+  if (_momentIsHealth(moment)) {
     return (
-      '$name has a Health+ reminder ${_momentDateLabel(moment).toLowerCase()}.',
-      'Recommended because recurring Health+ reminders should be handled before the due date.'
+      '$name has a Health+ reminder ${_momentCountdown(moment).toLowerCase()}.',
+      'Launch a Health+ Delivery request. ${_momentWhy(moment, allMoments)}.'
     );
   }
-  if (type.contains('contract') || type.contains('supplier')) {
+  if (_momentIsDelivery(moment)) {
     return (
-      '$name has a relationship milestone coming up.',
-      'Recommended based on previous client appreciation and supplier relationship care.'
+      '$name has a delivery reminder ${_momentCountdown(moment).toLowerCase()}.',
+      'Launch a Delivery request. ${_momentWhy(moment, allMoments)}.'
     );
   }
-  if (type.contains('birthday') || type.contains('anniversary')) {
+  if (_momentIsGiftOpportunity(moment)) {
     return (
-      '$name has an important date ${_momentDateLabel(moment).toLowerCase()}.',
-      action == 'Send Card'
-          ? 'Recommended based on company policy for recognition moments.'
-          : 'Recommended based on previous gifts and thoughtful business relationship patterns.'
-    );
-  }
-  if (type.contains('milestone')) {
-    return (
-      '$name has a company milestone coming up.',
-      'Recommended because company milestones are strong moments for appreciation, gifts or cards.'
+      '$name has an important relationship moment ${_momentCountdown(moment).toLowerCase()}.',
+      '$service ${_momentWhy(moment, allMoments)}.'
     );
   }
   return (
-    '$name has a moment ${_momentDateLabel(moment).toLowerCase()}.',
-    'Recommended because IRIS found a saved business reminder that may need action.'
+    '$name has a saved moment ${_momentCountdown(moment).toLowerCase()}.',
+    '$service ${_momentWhy(moment, allMoments)}.'
   );
+}
+
+String _businessTimeGreeting() {
+  final hour = DateTime.now().hour;
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 22) return 'Good evening';
+  return 'Working late';
+}
+
+String _momentCountdown(Map<String, dynamic> moment) =>
+    _momentDateLabel(moment).toLowerCase();
+
+bool _momentIsHealth(Map<String, dynamic> moment) {
+  final text = '${_momentTypeLabel(moment)} ${moment['preferredAction'] ?? ''}'
+      .toLowerCase();
+  return text.contains('health') ||
+      text.contains('medication') ||
+      text.contains('prescription');
+}
+
+bool _momentIsDelivery(Map<String, dynamic> moment) {
+  final text = '${_momentTypeLabel(moment)} ${moment['preferredAction'] ?? ''}'
+      .toLowerCase();
+  return text.contains('delivery') && !_momentIsHealth(moment);
+}
+
+bool _momentIsGiftOpportunity(Map<String, dynamic> moment) {
+  if (_momentIsHealth(moment) || _momentIsDelivery(moment)) return false;
+  final text = '${_momentTypeLabel(moment)} ${moment['preferredAction'] ?? ''}'
+      .toLowerCase();
+  const giftSignals = [
+    'birthday',
+    'wedding',
+    'engagement',
+    'anniversary',
+    'baby',
+    'graduation',
+    'promotion',
+    'retirement',
+    'home',
+    'thank',
+    'congratulations',
+    'get well',
+    'sympathy',
+    'condolence',
+    'welcome',
+    'farewell',
+    'celebration',
+    'milestone',
+    'appreciation',
+    'recognition',
+    'gift',
+    'card',
+  ];
+  return giftSignals.any(text.contains);
+}
+
+String _momentRecommendedService(Map<String, dynamic> moment) {
+  final type = _momentTypeLabel(moment);
+  if (_momentIsHealth(moment)) return 'Launch a Health+ Delivery request.';
+  if (_momentIsDelivery(moment)) return 'Launch a Delivery request.';
+  if (_momentIsGiftOpportunity(moment)) {
+    final cleanType =
+        type.replaceAll(RegExp(r'\s+'), ' ').replaceAll('/', '').trim();
+    return 'Launch a $cleanType Gift request via the Circum Gift Portal.';
+  }
+  return 'Create a reminder and choose the next Circum action.';
+}
+
+String _momentWhy(
+  Map<String, dynamic> moment,
+  List<Map<String, dynamic>> allMoments,
+) {
+  final type = _momentTypeLabel(moment).toLowerCase();
+  final name = _momentName(moment);
+  final sameTypeCompleted = allMoments.any((item) =>
+      _momentStatus(item) == 'completed' &&
+      _momentTypeLabel(item).toLowerCase() == type);
+  final acceptedBefore = allMoments.any((item) =>
+      '${item['lastAction'] ?? item['completedAction'] ?? item['preferredAction'] ?? ''}'
+          .trim()
+          .isNotEmpty &&
+      _momentStatus(item) == 'completed');
+  if (_momentIsHealth(moment)) return 'Based on a saved Health+ schedule';
+  if (_momentIsDelivery(moment)) {
+    return 'Based on a user-created delivery reminder';
+  }
+  if (sameTypeCompleted) return 'Based on previous Circum activity';
+  if (acceptedBefore) return 'Based on previous business behaviour';
+  if (type.contains('policy')) return 'Based on company policy';
+  if (type.contains('birthday')) return 'Upcoming birthday';
+  if (type.contains('anniversary')) return 'Upcoming anniversary';
+  if (type.contains('milestone')) return 'Company milestone';
+  return 'User-created reminder for $name';
+}
+
+double _momentRecommendationConfidence(
+  Map<String, dynamic> moment,
+  List<Map<String, dynamic>> allMoments,
+) {
+  var score =
+      _momentIsGiftOpportunity(moment) || _momentIsHealth(moment) ? 0.72 : 0.62;
+  final type = _momentTypeLabel(moment).toLowerCase();
+  final sameTypeCompleted = allMoments
+      .where((item) =>
+          _momentStatus(item) == 'completed' &&
+          _momentTypeLabel(item).toLowerCase() == type)
+      .length;
+  final dismissals = allMoments
+      .where((item) =>
+          _momentTypeLabel(item).toLowerCase() == type &&
+          {'dismissed', 'snoozed'}.contains(_momentStatus(item)))
+      .length;
+  score += (sameTypeCompleted * 0.06).clamp(0, 0.18);
+  score -= (dismissals * 0.08).clamp(0, 0.24);
+  if ('${moment['preferredAction'] ?? ''}'.trim().isNotEmpty) score += 0.04;
+  if (_momentBucket(moment) == 'today') score += 0.05;
+  return score.clamp(0.32, 0.94).toDouble();
+}
+
+List<Map<String, dynamic>> _relationshipHealthRows(
+  List<Map<String, dynamic>> moments,
+) {
+  final grouped = <String, List<Map<String, dynamic>>>{};
+  for (final moment in moments) {
+    final name = _momentName(moment);
+    grouped.putIfAbsent(name, () => []).add(moment);
+  }
+  final rows = <Map<String, dynamic>>[];
+  for (final entry in grouped.entries) {
+    final items = entry.value;
+    final completed = items
+        .where((item) => _momentStatus(item) == 'completed')
+        .toList(growable: false)
+      ..sort((a, b) => _momentDate(b).compareTo(_momentDate(a)));
+    final upcoming = items
+        .where((item) => _momentStatus(item) != 'completed')
+        .toList(growable: false)
+      ..sort((a, b) => _momentDate(a).compareTo(_momentDate(b)));
+    final lastCompleted =
+        completed.isEmpty ? null : _momentDate(completed.first);
+    final daysSince = lastCompleted == null
+        ? null
+        : DateTime.now().difference(lastCompleted).inDays;
+    final status = daysSince == null
+        ? (upcoming.isEmpty ? 'Growing' : 'Strong')
+        : daysSince > 300
+            ? 'Needs Attention'
+            : daysSince > 150
+                ? 'Growing'
+                : 'Strong';
+    final detail = daysSince == null
+        ? (upcoming.isEmpty
+            ? 'No completed Circum activity recorded yet.'
+            : 'Next moment: ${_momentTypeLabel(upcoming.first)} ${_momentDateLabel(upcoming.first).toLowerCase()}.')
+        : 'Last appreciation action: $daysSince days ago.';
+    final insight = status == 'Needs Attention'
+        ? 'This relationship may benefit from renewed engagement.'
+        : status == 'Growing'
+            ? 'A thoughtful Circum action could strengthen this relationship.'
+            : 'Recent activity suggests this relationship is being maintained.';
+    rows.add({
+      'name': entry.key,
+      'status': status,
+      'detail': detail,
+      'insight': insight,
+    });
+  }
+  rows.sort((a, b) {
+    const priority = {'Needs Attention': 0, 'Growing': 1, 'Strong': 2};
+    return (priority[a['status']] ?? 9).compareTo(priority[b['status']] ?? 9);
+  });
+  return rows;
 }
 
 double _num(dynamic value) =>
