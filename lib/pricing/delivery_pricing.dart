@@ -204,6 +204,87 @@ class VehicleSuitability {
   }
 }
 
+class CanonicalDeliveryDecision {
+  final String itemName;
+  final String canonicalItemType;
+  final int quantity;
+  final double? userDeclaredWeightKg;
+  final double? irisEstimatedWeightKg;
+  final double? confirmedWeightKg;
+  final double minimumBillableWeightKg;
+  final double finalPricingWeightKg;
+  final String parcelClass;
+  final String recommendedVehicle;
+  final List<String> allowedVehicles;
+  final List<String> disallowedVehicles;
+  final String vehicleReason;
+  final bool fragile;
+  final bool highValue;
+  final bool vanguardRequired;
+  final bool labourRequired;
+  final bool twoPersonRequired;
+  final int confidenceScore;
+  final String confidenceBand;
+  final String source;
+  final DeliveryPricingBreakdown pricingBreakdown;
+  final String explanation;
+  final bool riderVerificationRequired;
+
+  const CanonicalDeliveryDecision({
+    required this.itemName,
+    required this.canonicalItemType,
+    required this.quantity,
+    required this.userDeclaredWeightKg,
+    required this.irisEstimatedWeightKg,
+    required this.confirmedWeightKg,
+    required this.minimumBillableWeightKg,
+    required this.finalPricingWeightKg,
+    required this.parcelClass,
+    required this.recommendedVehicle,
+    required this.allowedVehicles,
+    required this.disallowedVehicles,
+    required this.vehicleReason,
+    required this.fragile,
+    required this.highValue,
+    required this.vanguardRequired,
+    required this.labourRequired,
+    required this.twoPersonRequired,
+    required this.confidenceScore,
+    required this.confidenceBand,
+    required this.source,
+    required this.pricingBreakdown,
+    required this.explanation,
+    required this.riderVerificationRequired,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'itemName': itemName,
+        'canonicalItemType': canonicalItemType,
+        'quantity': quantity,
+        'userDeclaredWeightKg': userDeclaredWeightKg,
+        'irisEstimatedWeightKg': irisEstimatedWeightKg,
+        'confirmedWeightKg': confirmedWeightKg,
+        'minimumBillableWeightKg': minimumBillableWeightKg,
+        'finalPricingWeightKg': finalPricingWeightKg,
+        'parcelClass': parcelClass,
+        'recommendedVehicle': recommendedVehicle,
+        'allowedVehicles': allowedVehicles,
+        'disallowedVehicles': disallowedVehicles,
+        'vehicleReason': vehicleReason,
+        'fragile': fragile,
+        'highValue': highValue,
+        'vanguardRequired': vanguardRequired,
+        'labourRequired': labourRequired,
+        'twoPersonRequired': twoPersonRequired,
+        'confidenceScore': confidenceScore,
+        'confidenceBand': confidenceBand,
+        'source': source,
+        'pricingBreakdown': pricingBreakdown.toJson(),
+        'explanation': explanation,
+        'riderVerificationRequired': riderVerificationRequired,
+      };
+}
+
 class HeavyHandlingAssessment {
   final double surchargeGbp;
   final bool twoPersonRecommended;
@@ -561,6 +642,7 @@ class DeliveryPricing {
       'piano',
       'large tv',
       'large television',
+      '65 inch',
       'multi-box',
       'multiple boxes',
       'bulk parcel',

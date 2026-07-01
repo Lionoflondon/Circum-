@@ -20199,6 +20199,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _weightPricingReason;
   bool _weightVerificationRequired = false;
   bool _settingWeightFromConfirmation = false;
+  CanonicalDeliveryDecision? _confirmedDeliveryDecision;
 
   late _SenderStep _step = widget.initialStep;
   _VehicleOption _selectedVehicle = _vehicles.first;
@@ -20316,6 +20317,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _healthRouteDismissed = false;
     }
     _weight.addListener(_handleWeightChanged);
+    _pickup.addListener(_invalidateCanonicalDeliveryDecision);
+    _dropoff.addListener(_invalidateCanonicalDeliveryDecision);
+    _description.addListener(_invalidateCanonicalDeliveryDecision);
     _senderName.addListener(_handleContactDetailsChanged);
     _senderPhone.addListener(_handleContactDetailsChanged);
     _receiverName.addListener(_handleContactDetailsChanged);
@@ -20329,6 +20333,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   void dispose() {
     _weight.removeListener(_handleWeightChanged);
+    _pickup.removeListener(_invalidateCanonicalDeliveryDecision);
+    _dropoff.removeListener(_invalidateCanonicalDeliveryDecision);
+    _description.removeListener(_invalidateCanonicalDeliveryDecision);
     _senderName.removeListener(_handleContactDetailsChanged);
     _senderPhone.removeListener(_handleContactDetailsChanged);
     _receiverName.removeListener(_handleContactDetailsChanged);
@@ -20396,6 +20403,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _handleContactDetailsChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _invalidateCanonicalDeliveryDecision() {
+    _confirmedDeliveryDecision = null;
   }
 
   @override
@@ -20683,19 +20694,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           colors: colors,
           pickup: _pickup.text,
           dropoff: _dropoff.text,
-          chargeableWeightKg: _deliveryClassification.finalWeightKg,
+          chargeableWeightKg: _canonicalDeliveryDecision.finalPricingWeightKg,
           vehicleSuitability: _vehicleSuitability,
           selectedVehicle: _effectiveVehicle,
           selectedSpeed: _selectedSpeed,
           locationsConfirmed: _hasValidatedRoute,
           priceReady: _quoteTotal > 0,
-          weightReady: _deliveryClassification.finalWeightKg > 0,
+          weightReady: _canonicalDeliveryDecision.finalPricingWeightKg > 0,
           specialHandling: _specialHandling,
           vanguardSelected: _vanguardAddonSelected,
           pickupAccess: _pickupAccess,
           dropoffAccess: _dropoffAccess,
-          onPickupAccess: (value) => setState(() => _pickupAccess = value),
-          onDropoffAccess: (value) => setState(() => _dropoffAccess = value),
+          onPickupAccess: (value) => setState(() {
+            _confirmedDeliveryDecision = null;
+            _pickupAccess = value;
+          }),
+          onDropoffAccess: (value) => setState(() {
+            _confirmedDeliveryDecision = null;
+            _dropoffAccess = value;
+          }),
           onVehicle: (vehicle) {
             final suitability = _vehicleSuitability;
             if (!DeliveryPricing.vehicleCanCarryDelivery(
@@ -20703,6 +20720,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               suitability,
             )) {
               setState(() {
+                _confirmedDeliveryDecision = null;
                 _selectedVehicle = _effectiveVehicle;
                 _weightMessage =
                     'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
@@ -20710,15 +20728,18 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               return;
             }
             setState(() {
+              _confirmedDeliveryDecision = null;
               _selectedVehicle = vehicle;
               _checkoutState = _CheckoutState.awaitingPayment;
             });
           },
           onSpeed: (speed) => setState(() {
+            _confirmedDeliveryDecision = null;
             _selectedSpeed = speed;
             _checkoutState = _CheckoutState.awaitingPayment;
           }),
           onVanguardChanged: (selected) => setState(() {
+            _confirmedDeliveryDecision = null;
             _vanguardAddonSelected = selected;
             _checkoutState = _CheckoutState.awaitingPayment;
           }),
@@ -20739,7 +20760,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           routeMessage: _locationValidationMessage,
           irisEstimatedWeightKg: _irisEstimatedWeightKg,
           senderEnteredWeightKg: _senderEnteredWeightKg,
-          weightKg: _deliveryClassification.finalWeightKg,
+          weightKg: _canonicalDeliveryDecision.finalPricingWeightKg,
           total: _quoteTotal,
           rothAvailable: _senderRothBalance,
           checkoutState: _checkoutState,
@@ -20781,12 +20802,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           irisItemName: _irisMatchedItemName,
           irisQuantity: _irisQuantity,
           irisConfidence: _irisWeightConfidence,
-          irisWeightKg: _deliveryClassification.finalWeightKg,
-          irisWeightBand: _deliveryClassification.finalWeightBand,
+          irisWeightKg: _canonicalDeliveryDecision.finalPricingWeightKg,
+          irisWeightBand: _canonicalDeliveryDecision.parcelClass,
           irisRepositoryMatched: _irisMatchedItemName != null,
           irisCorrected: _weightSource == 'sender_confirmed' ||
               _weightSource == 'manual_sender_entry',
-          recommendedVehicle: _vehicleSuitability.recommendedVehicle,
+          recommendedVehicle: _canonicalDeliveryDecision.recommendedVehicle,
           breakdown: _quoteBreakdown,
           assignedDriver: _assignedDriver,
           assignedDriverMetric: _assignedDriverMetric,
@@ -21170,6 +21191,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   void _setDeliveryTimingType(String value) {
     final today = _dateInputValue(DateTime.now());
     setState(() {
+      _confirmedDeliveryDecision = null;
       _deliveryTimingType = value;
       _scheduledPickupDate.clear();
       _scheduledPickupWindow.clear();
@@ -21334,14 +21356,64 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return _canonicalVehicleSuitability;
   }
 
-  DeliveryPricingBreakdown get _quoteBreakdown {
+  CanonicalDeliveryDecision get _canonicalDeliveryDecision {
+    return _confirmedDeliveryDecision ?? _buildCanonicalDeliveryDecision();
+  }
+
+  CanonicalDeliveryDecision _buildCanonicalDeliveryDecision() {
     final classification = _deliveryClassification;
-    final chargeableWeightKg = classification.finalWeightKg;
+    final suitability = _vehicleSuitability;
+    final quote = _buildDecisionPricingBreakdown(classification);
+    final disallowedVehicles = _vehicles
+        .map((vehicle) => vehicle.name)
+        .where((vehicle) => !DeliveryPricing.vehicleCanCarryDelivery(
+              vehicle,
+              suitability,
+            ))
+        .toList(growable: false);
+    final confidenceScore = _irisConfidencePoints();
+    return CanonicalDeliveryDecision(
+      itemName: _irisMatchedItemName ?? _description.text.trim(),
+      canonicalItemType: _inferPackageType(),
+      quantity: _irisQuantity < 1 ? 1 : _irisQuantity,
+      userDeclaredWeightKg: _senderEnteredWeightKg,
+      irisEstimatedWeightKg: _irisEstimatedWeightKg,
+      confirmedWeightKg: _hasConfirmedWeight ? _confirmedWeightKg : null,
+      minimumBillableWeightKg: DeliveryPricing.minimumBillableWeightKg,
+      finalPricingWeightKg: classification.finalWeightKg,
+      parcelClass: classification.finalWeightBand,
+      recommendedVehicle: suitability.recommendedVehicle,
+      allowedVehicles: suitability.allowedVehicles,
+      disallowedVehicles: disallowedVehicles,
+      vehicleReason: suitability.explanation,
+      fragile: _irisFragile || suitability.fragile,
+      highValue: _irisValueSensitive,
+      vanguardRequired: _irisVanguardRecommended || _vanguardAddonSelected,
+      labourRequired: quote.assistedFee > 0 ||
+          quote.heavyDutyFee > 0 ||
+          quote.twoPersonFee > 0 ||
+          quote.heavyHandlingSurcharge > 0,
+      twoPersonRequired:
+          quote.twoPersonRequiredByWeight || quote.twoPersonFee > 0,
+      confidenceScore: confidenceScore,
+      confidenceBand: _irisConfidenceBandFromPoints(confidenceScore),
+      source: _weightSource ?? classification.selectedWeightSource,
+      pricingBreakdown: quote,
+      explanation: _irisReasoningSummary(),
+      riderVerificationRequired: _weightVerificationRequired ||
+          classification.requiresManualReview ||
+          quote.heavyHandlingAdminReviewRequired,
+    );
+  }
+
+  DeliveryPricingBreakdown _buildDecisionPricingBreakdown(
+    DeliveryClassification classification,
+  ) {
     final distanceMiles = _confirmedRouteDistanceMiles ?? 0;
     final baseQuote = DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: distanceMiles,
-        weightKg: chargeableWeightKg,
+        weightKg: classification.finalWeightKg,
         vehicleType: _effectiveVehicle.name,
         quantity: _irisQuantity,
         singleItemWeightKg: _irisSingleItemWeightKg,
@@ -21351,6 +21423,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       ),
     );
     return _specialHandling.applyTo(baseQuote);
+  }
+
+  DeliveryPricingBreakdown get _quoteBreakdown {
+    return _canonicalDeliveryDecision.pricingBreakdown;
   }
 
   void _logCheckoutPricing() {
@@ -21391,6 +21467,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     setState(() {
+      _confirmedDeliveryDecision = null;
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedPickup = address;
@@ -21412,6 +21489,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     setState(() {
+      _confirmedDeliveryDecision = null;
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedDropoff = address;
@@ -21425,6 +21503,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_validatedPickup == null) return;
     if (value.trim() == _validatedPickup!.displayAddress) return;
     setState(() {
+      _confirmedDeliveryDecision = null;
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedPickup = null;
@@ -21435,6 +21514,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_validatedDropoff == null) return;
     if (value.trim() == _validatedDropoff!.displayAddress) return;
     setState(() {
+      _confirmedDeliveryDecision = null;
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedDropoff = null;
@@ -22715,6 +22795,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       senderWeightKg: senderWeight > 0 ? senderWeight : null,
     );
     setState(() {
+      _confirmedDeliveryDecision = null;
       _senderEnteredWeightKg = senderWeight > 0 ? senderWeight : null;
       _irisEstimatedWeightKg =
           decision.source == 'repository_match' && decision.weightKg != null
@@ -23145,6 +23226,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       )) {
         _selectedVehicle = recommendedVehicle;
       }
+      _confirmedDeliveryDecision = _buildCanonicalDeliveryDecision();
       _weightMessage =
           'Confirmed parcel weight: ${_formatWeight(weightKg)} kg.';
     });
@@ -23159,6 +23241,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if ((typedWeight - _confirmedWeightKg!).abs() < 0.01) return;
     if (!mounted) return;
     setState(() {
+      _confirmedDeliveryDecision = null;
       _confirmedWeightKg = null;
       _confirmedWeightBand = null;
       _weightSource = null;
@@ -24011,8 +24094,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required Map<String, dynamic> parcelPhotoData,
   }) {
     final user = _senderUser ?? FirebaseAuth.instance.currentUser;
-    final classification = _deliveryClassification;
-    final confidenceScore = _irisConfidencePoints();
+    final canonicalDecision = _canonicalDeliveryDecision;
     final flags = _irisDeliveryFlags();
     final vehicleDecision = _irisVehicleDecision();
     final requiresVanguard = flags.contains('vanguard_required');
@@ -24037,11 +24119,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               'heightCm': _irisTypicalDimensions!.height,
             },
       'irisWeightKg': _irisEstimatedWeightKg,
-      'finalBillableWeightKg': classification.finalWeightKg,
-      'confidenceScore': confidenceScore,
-      'confidenceBand': _irisConfidenceBandFromPoints(confidenceScore),
-      'reasoningSummary': _irisReasoningSummary(),
+      'finalBillableWeightKg': canonicalDecision.finalPricingWeightKg,
+      'confidenceScore': canonicalDecision.confidenceScore,
+      'confidenceBand': canonicalDecision.confidenceBand,
+      'reasoningSummary': canonicalDecision.explanation,
       'reasoningFactors': _irisReasoningFactors(),
+      'canonicalDeliveryDecision': canonicalDecision.toJson(),
       'matchedRepositoryItems': [
         if ((_irisMatchedItemName ?? '').trim().isNotEmpty)
           {
@@ -24051,11 +24134,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'truthBand': _irisTruthBand(),
           },
       ],
-      'suggestedVehicle': vehicleDecision['recommendedVehicle'],
-      'recommendedVehicle': vehicleDecision['recommendedVehicle'],
+      'suggestedVehicle': canonicalDecision.recommendedVehicle.toLowerCase(),
+      'recommendedVehicle': canonicalDecision.recommendedVehicle.toLowerCase(),
       'minimumVehicle': vehicleDecision['minimumVehicle'],
-      'vehicleReason': vehicleDecision['vehicleReason'],
-      'vehicleConfidence': vehicleDecision['vehicleConfidence'],
+      'vehicleReason': canonicalDecision.vehicleReason,
+      'vehicleConfidence': canonicalDecision.confidenceScore,
       'vehicleDisqualifiers': vehicleDecision['vehicleDisqualifiers'],
       'vehicleFlags': vehicleDecision['vehicleFlags'],
       'vehicleDecisionSource': vehicleDecision['vehicleDecisionSource'],
@@ -24838,7 +24921,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     String id,
     Map<String, dynamic> parcelPhotoData,
   ) {
-    final quote = _quoteBreakdown;
+    final canonicalDecision = _canonicalDeliveryDecision;
+    final quote = canonicalDecision.pricingBreakdown;
     final classification = _deliveryClassification;
     final pickupAddress = _validatedPickup!;
     final dropoffAddress = _validatedDropoff!;
@@ -24962,6 +25046,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         ...classification.toJson(),
         'vehicleType': safeVehicleName,
       },
+      'canonicalDeliveryDecision': canonicalDecision.toJson(),
       'vehicleSuitability': {
         'recommendedVehicle': suitability.recommendedVehicle,
         'allowedVehicles': suitability.allowedVehicles,
@@ -25135,6 +25220,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'weight': _weight.text.trim(),
       'weightKg': classification.finalWeightKg,
       'deliveryClassification': classification.toJson(),
+      'canonicalDeliveryDecision': canonicalDecision.toJson(),
       'finalWeightKg': classification.finalWeightKg,
       'finalWeightBand': classification.finalWeightBand,
       'selectedWeightSource': classification.selectedWeightSource,

@@ -685,5 +685,257 @@ void main() {
       expect(DeliveryPricing.calculateVehicleSurcharge('Car'), 2);
       expect(DeliveryPricing.calculateVehicleSurcharge('Van'), 10);
     });
+
+    test('canonical delivery decision carries one confirmed weight and quote',
+        () {
+      final suitability = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 0.5,
+        description: 'iPhone',
+        itemCategory: 'Electronics',
+        highValue: true,
+      );
+      final quote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 3,
+          weightKg: 0.5,
+          vehicleType: 'Car',
+        ),
+      );
+      final decision = CanonicalDeliveryDecision(
+        itemName: 'iPhone',
+        canonicalItemType: 'Electronics',
+        quantity: 1,
+        userDeclaredWeightKg: 0.2,
+        irisEstimatedWeightKg: 0.3,
+        confirmedWeightKg: 0.5,
+        minimumBillableWeightKg: DeliveryPricing.minimumBillableWeightKg,
+        finalPricingWeightKg: 0.5,
+        parcelClass: DeliveryPricing.weightBandFor(0.5).category,
+        recommendedVehicle: suitability.recommendedVehicle,
+        allowedVehicles: suitability.allowedVehicles,
+        disallowedVehicles: const ['Bike'],
+        vehicleReason: suitability.explanation,
+        fragile: false,
+        highValue: true,
+        vanguardRequired: false,
+        labourRequired: false,
+        twoPersonRequired: false,
+        confidenceScore: 92,
+        confidenceBand: 'high',
+        source: 'iris_confirmed',
+        pricingBreakdown: quote,
+        explanation:
+            'IRIS estimated this transport-ready parcel and selected Car.',
+        riderVerificationRequired: false,
+      );
+
+      expect(decision.finalPricingWeightKg, 0.5);
+      expect(decision.pricingBreakdown.weightCategory, decision.parcelClass);
+      expect(decision.recommendedVehicle, 'Car');
+      expect(decision.allowedVehicles, contains('Car'));
+      expect(decision.disallowedVehicles, contains('Bike'));
+      expect(decision.toJson()['finalPricingWeightKg'], 0.5);
+    });
+
+    test('canonical vehicle result is consistent across common scenarios', () {
+      final iphone = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 0.5,
+        description: 'iPhone',
+        itemCategory: 'Electronics',
+        highValue: true,
+      );
+      final documents = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 0.5,
+        description: 'Passport documents',
+        itemCategory: 'Documents',
+      );
+      final sofa = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 20,
+        description: 'Sofa',
+        itemCategory: 'Furniture',
+      );
+
+      expect(iphone.recommendedVehicle, 'Car');
+      expect(iphone.explanation.toLowerCase(), isNot(contains('bike')));
+      expect(iphone.allows('Bike'), isFalse);
+      expect(documents.recommendedVehicle, 'Bike');
+      expect(documents.allows('Bike'), isTrue);
+      expect(sofa.recommendedVehicle, 'Van');
+      expect(sofa.allows('Bike'), isFalse);
+    });
+
+    test('changed item, weight, or quantity creates a distinct decision', () {
+      CanonicalDeliveryDecision decisionFor({
+        required String itemName,
+        required String itemType,
+        required int quantity,
+        required double confirmedWeightKg,
+      }) {
+        final suitability = DeliveryPricing.resolveVehicleSuitability(
+          weightKg: confirmedWeightKg,
+          description: itemName,
+          itemCategory: itemType,
+          highValue: itemType == 'Electronics',
+          quantity: quantity,
+        );
+        final quote = DeliveryPricing.calculate(
+          DeliveryPricingInput(
+            distanceMiles: 3,
+            weightKg: confirmedWeightKg,
+            vehicleType: suitability.recommendedVehicle,
+            quantity: quantity,
+          ),
+        );
+        return CanonicalDeliveryDecision(
+          itemName: itemName,
+          canonicalItemType: itemType,
+          quantity: quantity,
+          userDeclaredWeightKg: confirmedWeightKg,
+          irisEstimatedWeightKg: confirmedWeightKg,
+          confirmedWeightKg: confirmedWeightKg,
+          minimumBillableWeightKg: DeliveryPricing.minimumBillableWeightKg,
+          finalPricingWeightKg: confirmedWeightKg,
+          parcelClass:
+              DeliveryPricing.weightBandFor(confirmedWeightKg).category,
+          recommendedVehicle: suitability.recommendedVehicle,
+          allowedVehicles: suitability.allowedVehicles,
+          disallowedVehicles: const [],
+          vehicleReason: suitability.explanation,
+          fragile: false,
+          highValue: itemType == 'Electronics',
+          vanguardRequired: false,
+          labourRequired: false,
+          twoPersonRequired: false,
+          confidenceScore: 80,
+          confidenceBand: 'high',
+          source: 'test',
+          pricingBreakdown: quote,
+          explanation: suitability.explanation,
+          riderVerificationRequired: false,
+        );
+      }
+
+      final phone = decisionFor(
+        itemName: 'iPhone',
+        itemType: 'Electronics',
+        quantity: 1,
+        confirmedWeightKg: 0.5,
+      );
+      final laptop = decisionFor(
+        itemName: 'MacBook',
+        itemType: 'Electronics',
+        quantity: 1,
+        confirmedWeightKg: 2.5,
+      );
+      final threeLaptops = decisionFor(
+        itemName: 'MacBook',
+        itemType: 'Electronics',
+        quantity: 3,
+        confirmedWeightKg: 7.5,
+      );
+
+      expect(laptop.itemName, isNot(phone.itemName));
+      expect(laptop.finalPricingWeightKg, isNot(phone.finalPricingWeightKg));
+      expect(threeLaptops.quantity, isNot(laptop.quantity));
+      expect(threeLaptops.pricingBreakdown.total,
+          greaterThan(laptop.pricingBreakdown.total));
+    });
+
+    test('canonical decision preview scenarios resolve one vehicle answer', () {
+      const scenarios =
+          <({String item, String category, double weight, String vehicle})>[
+        (item: 'iPhone', category: 'Electronics', weight: 0.5, vehicle: 'Car'),
+        (item: 'MacBook', category: 'Electronics', weight: 2.5, vehicle: 'Car'),
+        (item: 'iPad', category: 'Electronics', weight: 1.0, vehicle: 'Car'),
+        (
+          item: '65 inch TV',
+          category: 'Electronics',
+          weight: 18,
+          vehicle: 'Van'
+        ),
+        (item: 'Passport', category: 'Documents', weight: 0.5, vehicle: 'Bike'),
+        (item: 'Contract', category: 'Documents', weight: 0.5, vehicle: 'Bike'),
+        (item: 'Envelope', category: 'Documents', weight: 0.5, vehicle: 'Bike'),
+        (
+          item: 'Dining table',
+          category: 'Furniture',
+          weight: 25,
+          vehicle: 'Van'
+        ),
+        (
+          item: 'Office chair',
+          category: 'Furniture',
+          weight: 12,
+          vehicle: 'Van'
+        ),
+        (item: 'Mattress', category: 'Furniture', weight: 18, vehicle: 'Van'),
+        (item: 'Sofa', category: 'Furniture', weight: 20, vehicle: 'Van'),
+        (
+          item: 'Washing machine',
+          category: 'Appliance',
+          weight: 35,
+          vehicle: 'Van'
+        ),
+        (item: 'Fridge', category: 'Appliance', weight: 35, vehicle: 'Van'),
+        (item: 'Bicycle', category: 'Large item', weight: 14, vehicle: 'Van'),
+        (item: 'Cake', category: 'Gift', weight: 1.5, vehicle: 'Car'),
+        (item: 'Flowers', category: 'Gift', weight: 1.0, vehicle: 'Car'),
+        (item: 'Artwork', category: 'Fragile', weight: 3.0, vehicle: 'Car'),
+      ];
+
+      for (final scenario in scenarios) {
+        final suitability = DeliveryPricing.resolveVehicleSuitability(
+          weightKg: scenario.weight,
+          description: scenario.item,
+          itemCategory: scenario.category,
+          fragile: scenario.category == 'Fragile',
+          highValue: scenario.category == 'Electronics',
+        );
+        final quote = DeliveryPricing.calculate(
+          DeliveryPricingInput(
+            distanceMiles: 3,
+            weightKg: scenario.weight,
+            vehicleType: suitability.recommendedVehicle,
+          ),
+        );
+        final decision = CanonicalDeliveryDecision(
+          itemName: scenario.item,
+          canonicalItemType: scenario.category,
+          quantity: 1,
+          userDeclaredWeightKg: scenario.weight,
+          irisEstimatedWeightKg: scenario.weight,
+          confirmedWeightKg: scenario.weight,
+          minimumBillableWeightKg: DeliveryPricing.minimumBillableWeightKg,
+          finalPricingWeightKg: scenario.weight,
+          parcelClass: DeliveryPricing.weightBandFor(scenario.weight).category,
+          recommendedVehicle: suitability.recommendedVehicle,
+          allowedVehicles: suitability.allowedVehicles,
+          disallowedVehicles: const [],
+          vehicleReason: suitability.explanation,
+          fragile: scenario.category == 'Fragile',
+          highValue: scenario.category == 'Electronics',
+          vanguardRequired: false,
+          labourRequired: false,
+          twoPersonRequired: scenario.vehicle == 'Van',
+          confidenceScore: 80,
+          confidenceBand: 'high',
+          source: 'preview_scenario',
+          pricingBreakdown: quote,
+          explanation: suitability.explanation,
+          riderVerificationRequired: false,
+        );
+
+        expect(
+          decision.recommendedVehicle,
+          scenario.vehicle,
+          reason: scenario.item,
+        );
+        final reason = decision.vehicleReason.toLowerCase();
+        for (final otherVehicle in const ['bike', 'car', 'van']) {
+          if (otherVehicle == scenario.vehicle.toLowerCase()) continue;
+          expect(reason, isNot(contains('$otherVehicle recommended')));
+        }
+      }
+    });
   });
 }
