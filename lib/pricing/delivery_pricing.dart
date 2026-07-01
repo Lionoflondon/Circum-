@@ -223,6 +223,7 @@ class HeavyHandlingAssessment {
 class DeliveryPricing {
   static const double riderDeliveryFareShare = 0.65;
   static const double platformDeliveryFareShare = 0.35;
+  static const double minimumBillableWeightKg = 0.5;
 
   static const Map<String, double> heavyKeywordMinimumWeightsKg = {
     'piano': 50,
@@ -384,11 +385,13 @@ class DeliveryPricing {
     double? irisEstimatedWeightKg,
     double? matchedCatalogueWeightKg,
   }) {
-    return [
+    final highest = [
       userEnteredWeightKg ?? 0,
       irisEstimatedWeightKg ?? 0,
       matchedCatalogueWeightKg ?? 0,
     ].reduce(max);
+    if (highest <= 0) return 0;
+    return max(highest, minimumBillableWeightKg);
   }
 
   static double chargeableWeightKg({
@@ -418,6 +421,7 @@ class DeliveryPricing {
     double? historicalVerifiedMinKg,
     double? historicalVerifiedMaxKg,
     double? driverVerifiedWeightKg,
+    VehicleSuitability? vehicleSuitability,
     String confidence = 'unknown',
   }) {
     final candidates = <String, double>{};
@@ -468,7 +472,8 @@ class DeliveryPricing {
       confidence: confidence,
       resolutionReason: _classificationReason(selectedSource, band.category),
       requiresManualReview: manualReview,
-      vehicleType: recommendedVehicleForWeight(finalWeight),
+      vehicleType: vehicleSuitability?.recommendedVehicle ??
+          recommendedVehicleForWeight(finalWeight),
       selectedWeightSource: selectedSource,
     );
   }
@@ -614,18 +619,18 @@ class DeliveryPricing {
       'designer fashion',
       'fragile gift',
     ].any(text.contains);
-    final highValueElectronic = highValue &&
-        (categoryText.contains('electronics') ||
-            [
-              'iphone',
-              'phone',
-              'smartphone',
-              'mobile',
-              'laptop',
-              'macbook',
-              'tablet',
-              'ipad',
-            ].any(text.contains));
+    final electronicsCareRequired = categoryText.contains('electronics') ||
+        [
+          'iphone',
+          'phone',
+          'smartphone',
+          'mobile',
+          'laptop',
+          'macbook',
+          'tablet',
+          'ipad',
+        ].any(text.contains);
+    final highValueElectronic = highValue && electronicsCareRequired;
     final resolvedQuantity = max(1, quantity ?? _quantityFromDescription(text));
     final largestItemWeightKg = singleItemWeightKg ??
         (resolvedQuantity > 1 ? weightKg / resolvedQuantity : weightKg);
@@ -667,6 +672,7 @@ class DeliveryPricing {
         carFirstItem ||
         fragile ||
         highValue ||
+        electronicsCareRequired ||
         vanguardRequired) {
       allowed = {'Car', 'Van'};
       recommended = 'Car';
@@ -731,6 +737,7 @@ class DeliveryPricing {
         bikeSafeDimensions &&
         !fragile &&
         !highValue &&
+        !electronicsCareRequired &&
         !vanguardRequired &&
         !bulkyByKeyword &&
         !oversizedDimensions &&

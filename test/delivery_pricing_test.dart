@@ -372,17 +372,28 @@ void main() {
       expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 1), isTrue);
     });
 
-    test('phone remains small and bike compatible when weight is light', () {
+    test('phone remains small but requires car handling', () {
+      final suitability = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 0.5,
+        description: 'iPhone 13',
+        itemCategory: 'Electronics',
+        repositoryVehicleSuitability: 'Bike',
+        fragile: true,
+        highValue: true,
+      );
       final classification = DeliveryPricing.resolveClassification(
         description: 'iPhone 13',
-        userEnteredWeightKg: 0.178,
-        irisEstimateKg: 0.174,
+        userEnteredWeightKg: 0.5,
+        irisEstimateKg: 0.321,
+        vehicleSuitability: suitability,
         confidence: 'high',
       );
 
-      expect(classification.finalWeightKg, closeTo(0.178, 0.001));
+      expect(classification.finalWeightKg, closeTo(0.5, 0.001));
       expect(classification.finalWeightBand, 'Small Parcel');
-      expect(classification.vehicleType, 'Bike');
+      expect(classification.vehicleType, 'Car');
+      expect(suitability.recommendedVehicle, 'Car');
+      expect(suitability.allows('Bike'), isFalse);
       expect(classification.requiresManualReview, isFalse);
     });
 
@@ -607,7 +618,7 @@ void main() {
       }
     });
 
-    test('small electronics and courier-safe parcels up to 10kg can use Bike',
+    test('small electronics use car while courier-safe parcels can use Bike',
         () {
       final phone = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 0.8,
@@ -621,7 +632,8 @@ void main() {
         description: 'Medium parcel',
       );
 
-      expect(phone.allows('Bike'), isTrue);
+      expect(phone.recommendedVehicle, 'Car');
+      expect(phone.allows('Bike'), isFalse);
       expect(medium.allows('Bike'), isTrue);
       expect(medium.recommendedVehicle, 'Bike');
     });

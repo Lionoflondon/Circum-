@@ -110,7 +110,7 @@ void main() {
           IrisWeightEstimator.knownProductEstimate('Apple iPhone 13 in a box');
 
       expect(estimate, isNotNull);
-      expect(estimate!.weightKg, closeTo(0.174, 0.001));
+      expect(estimate!.weightKg, inInclusiveRange(0.3, 0.6));
       expect(estimate.weightBand, 'Small Parcel');
       expect(estimate.weightSource, 'known_product_lookup');
       expect(estimate.confidence, 'high');
@@ -122,7 +122,7 @@ void main() {
           IrisWeightEstimator.knownProductEstimate('iPhone 15 for delivery');
 
       expect(estimate, isNotNull);
-      expect(estimate!.weightKg, closeTo(0.171, 0.001));
+      expect(estimate!.weightKg, inInclusiveRange(0.3, 0.6));
       expect(estimate.weightSource, 'known_product_lookup');
       expect(DeliveryPricing.weightSourceLabel(estimate.weightSource),
           'Repository Match');
@@ -143,7 +143,7 @@ void main() {
           senderWeightKg: 0.197,
           irisWeightKg: estimate!.weightKg,
         ),
-        closeTo(0.197, 0.001),
+        inInclusiveRange(0.3, 0.6),
       );
     });
 
@@ -152,7 +152,7 @@ void main() {
           IrisWeightEstimator.knownProductEstimate('AirPods Pro case');
 
       expect(estimate, isNotNull);
-      expect(estimate!.weightKg, closeTo(0.056, 0.001));
+      expect(estimate!.weightKg, closeTo(0.176, 0.001));
       expect(estimate.weightBand, 'Small Parcel');
     });
 
@@ -163,13 +163,13 @@ void main() {
 
       expect(pro16, isNotNull);
       expect(pro16!.matchedItemName, 'MacBook Pro 16');
-      expect(pro16.singleItemWeightKg, closeTo(2.15, 0.001));
+      expect(pro16.singleItemWeightKg, closeTo(2.55, 0.001));
       expect(air13, isNotNull);
       expect(air13!.matchedItemName, 'MacBook Air 13');
-      expect(air13.singleItemWeightKg, closeTo(1.24, 0.001));
+      expect(air13.singleItemWeightKg, closeTo(1.64, 0.001));
       expect(generic, isNotNull);
       expect(generic!.matchedItemName, 'MacBook (unspecified model)');
-      expect(generic.singleItemWeightKg, closeTo(1.51, 0.001));
+      expect(generic.singleItemWeightKg, closeTo(1.91, 0.001));
       expect(generic.confidenceScore, closeTo(0.68, 0.001));
     });
 
@@ -238,12 +238,12 @@ void main() {
       expect(iphone16, isNotNull);
       expect(iphone16!.matchedItemName, 'Apple iPhone 16');
       expect(iphone16.weightSource, 'known_product_lookup');
-      expect(iphone16.weightKg, closeTo(0.199, 0.001));
+      expect(iphone16.weightKg, closeTo(0.349, 0.001));
 
       expect(macbookPro16, isNotNull);
       expect(macbookPro16!.matchedItemName, 'MacBook Pro 16');
       expect(macbookPro16.weightSource, 'known_product_lookup');
-      expect(macbookPro16.weightKg, closeTo(2.15, 0.001));
+      expect(macbookPro16.weightKg, closeTo(2.55, 0.001));
     });
 
     test('final chargeable weight still uses higher customer or Iris weight',
@@ -257,7 +257,7 @@ void main() {
           senderWeightKg: 2,
           irisWeightKg: estimate!.weightKg,
         ),
-        4.5,
+        5.25,
       );
       expect(
         DeliveryPricing.chargeableWeightKg(
@@ -397,7 +397,7 @@ void main() {
         historicalMatches: const [0.2, 0.5, 9],
       );
 
-      expect(decision.pricingWeightKg, inInclusiveRange(0.2, 0.6));
+      expect(decision.pricingWeightKg, inInclusiveRange(0.3, 0.6));
       expect(
         DeliveryPricing.weightBandFor(decision.pricingWeightKg).category,
         'Small Parcel',
@@ -436,11 +436,11 @@ void main() {
 
       expect(macBooks, isNotNull);
       expect(macBooks!.quantity, 5);
-      expect(macBooks.singleItemWeightKg, closeTo(1.51, 0.001));
-      expect(macBooks.weightKg, closeTo(7.55, 0.001));
+      expect(macBooks.singleItemWeightKg, closeTo(1.91, 0.001));
+      expect(macBooks.weightKg, closeTo(9.55, 0.001));
       expect(
         macBooks.weightBand,
-        DeliveryPricing.weightBandFor(7.55).category,
+        DeliveryPricing.weightBandFor(9.55).category,
       );
     });
 
@@ -481,6 +481,24 @@ void main() {
       expect(phone?.vehicleSuitability, 'Car');
       expect(documents?.packageType, 'Documents');
       expect(documents?.vehicleSuitability, 'Bike');
+    });
+
+    test('transport-ready phone parcel handles boxed and unboxed language', () {
+      final normal = IrisWeightEstimator.knownProductEstimate('iPhone');
+      final boxed = IrisWeightEstimator.knownProductEstimate('boxed iPhone');
+      final unboxed =
+          IrisWeightEstimator.knownProductEstimate('unboxed iPhone');
+
+      expect(normal, isNotNull);
+      expect(boxed, isNotNull);
+      expect(unboxed, isNotNull);
+      expect(normal!.matchedItemName, boxed!.matchedItemName);
+      expect(normal.weightKg, inInclusiveRange(0.3, 0.6));
+      expect(boxed.weightKg, closeTo(normal.weightKg, 0.001));
+      expect(unboxed!.weightKg, lessThan(normal.weightKg));
+      expect(normal.vehicleSuitability, 'Car');
+      expect(boxed.vehicleSuitability, 'Car');
+      expect(unboxed.vehicleSuitability, 'Car');
     });
 
     test('vehicle recommendation keeps high-value electronics enclosed', () {

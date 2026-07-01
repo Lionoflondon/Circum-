@@ -85,7 +85,12 @@ class IrisWeightEstimator {
     for (final product in _knownProducts) {
       if (product.patterns.any(text.contains)) {
         final electronics = product.packageType == 'Electronics';
-        final totalWeightKg = product.weightKg * quantity;
+        final singleTransportReadyWeightKg = _transportReadySingleWeightKg(
+          product.weightKg,
+          description: text,
+          packageType: product.packageType,
+        );
+        final totalWeightKg = singleTransportReadyWeightKg * quantity;
         final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
         final vehicle = _resolveCanonicalVehicle(
           totalWeightKg: totalWeightKg,
@@ -98,13 +103,13 @@ class IrisWeightEstimator {
           vanguardRequired: electronics,
           stackable: product.stackable,
           quantity: quantity,
-          singleItemWeightKg: product.weightKg,
+          singleItemWeightKg: singleTransportReadyWeightKg,
           handlingNotes: product.handlingNotes,
         );
         return IrisWeightLookupResult(
           matchedItemName: product.name,
           quantity: quantity,
-          singleItemWeightKg: product.weightKg,
+          singleItemWeightKg: singleTransportReadyWeightKg,
           weightKg: totalWeightKg,
           weightBand: band,
           confidence: product.confidence,
@@ -409,6 +414,34 @@ class IrisWeightEstimator {
     return 0.25;
   }
 
+  static bool _explicitlyLooseOrUnboxed(String text) {
+    return [
+      'unboxed',
+      'loose',
+      'no packaging',
+      'without box',
+      'unpackaged',
+      'assembled',
+      'installed',
+    ].any(text.contains);
+  }
+
+  static double _transportReadySingleWeightKg(
+    double rawWeightKg, {
+    required String description,
+    required String packageType,
+  }) {
+    final text = description.trim().toLowerCase();
+    if (_explicitlyLooseOrUnboxed(text)) return rawWeightKg;
+    if (packageType.toLowerCase() == 'electronics') {
+      return double.parse(
+        (rawWeightKg + _electronicsPackagingAllowanceKg(text))
+            .toStringAsFixed(3),
+      );
+    }
+    return rawWeightKg;
+  }
+
   static IrisKnownItemWeightDecision resolveKnownItemWeight({
     required String description,
     required double senderWeightKg,
@@ -539,6 +572,20 @@ class IrisWeightEstimator {
       name: 'Apple iPhone 14',
       weightKg: 0.172,
       packageType: 'Electronics',
+      typicalDimensions: ItemDimensionsCm(length: 15, width: 8, height: 2),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Small fragile electronics package.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['iphone', 'apple iphone'],
+      name: 'Apple iPhone',
+      weightKg: 0.2,
+      packageType: 'Electronics',
+      confidence: 'medium',
+      confidenceScore: 0.72,
+      truthBand: 'Medium Confidence',
       typicalDimensions: ItemDimensionsCm(length: 15, width: 8, height: 2),
       vehicleSuitability: 'Bike',
       fragile: true,

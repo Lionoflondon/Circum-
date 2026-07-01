@@ -21079,18 +21079,52 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _confirmedWeightBand != null;
   }
 
-  DeliveryClassification get _deliveryClassification {
-    final pricingWeightKg = DeliveryPricing.checkoutPricingWeightKg(
+  double get _canonicalPricingWeightKg {
+    if (_hasConfirmedWeight && _confirmedWeightKg != null) {
+      return _confirmedWeightKg!;
+    }
+    return DeliveryPricing.checkoutPricingWeightKg(
       userEnteredWeightKg: _senderEnteredWeightKg ??
           DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
       irisEstimatedWeightKg: _irisEstimatedWeightKg,
       matchedCatalogueWeightKg: _matchedCatalogueWeightKg,
     );
+  }
+
+  VehicleSuitability get _canonicalVehicleSuitability {
+    return DeliveryPricing.resolveVehicleSuitability(
+      weightKg: _canonicalPricingWeightKg,
+      description: _description.text,
+      itemCategory: _irisMatchedItemName ?? _inferPackageType(),
+      dimensions: () {
+        final dims = _irisTypicalDimensions;
+        if (dims == null) return null;
+        return DeliveryItemDimensions(
+          lengthCm: dims.length,
+          widthCm: dims.width,
+          heightCm: dims.height,
+        );
+      }(),
+      repositoryVehicleSuitability: _irisVehicleSuitability,
+      fragile: _irisFragile,
+      highValue: _irisValueSensitive,
+      vanguardRequired: _irisVanguardRecommended,
+      stackable: _irisStackable,
+      quantity: _irisQuantity,
+      singleItemWeightKg: _irisSingleItemWeightKg,
+      handlingNotes: _irisHandlingNotes,
+    );
+  }
+
+  DeliveryClassification get _deliveryClassification {
+    final pricingWeightKg = _canonicalPricingWeightKg;
+    final vehicleSuitability = _canonicalVehicleSuitability;
     return DeliveryPricing.resolveClassification(
-      description: '',
+      description: _description.text,
       userEnteredWeightKg: pricingWeightKg,
       irisEstimateKg: null,
       historicalVerifiedMaxKg: null,
+      vehicleSuitability: vehicleSuitability,
       confidence: _irisWeightConfidence ?? 'unknown',
     );
   }
@@ -21297,29 +21331,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   VehicleSuitability get _vehicleSuitability {
-    final classification = _deliveryClassification;
-    return DeliveryPricing.resolveVehicleSuitability(
-      weightKg: classification.finalWeightKg,
-      description: _description.text,
-      itemCategory: _irisMatchedItemName ?? _inferPackageType(),
-      dimensions: () {
-        final dims = _irisTypicalDimensions;
-        if (dims == null) return null;
-        return DeliveryItemDimensions(
-          lengthCm: dims.length,
-          widthCm: dims.width,
-          heightCm: dims.height,
-        );
-      }(),
-      repositoryVehicleSuitability: _irisVehicleSuitability,
-      fragile: _irisFragile,
-      highValue: _irisValueSensitive,
-      vanguardRequired: _irisVanguardRecommended,
-      stackable: _irisStackable,
-      quantity: _irisQuantity,
-      singleItemWeightKg: _irisSingleItemWeightKg,
-      handlingNotes: _irisHandlingNotes,
-    );
+    return _canonicalVehicleSuitability;
   }
 
   DeliveryPricingBreakdown get _quoteBreakdown {
@@ -23112,11 +23124,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     bool verificationRequired = false,
   }) {
     final band = DeliveryPricing.weightBandFor(weightKg).category;
-    final recommendedVehicleName = _vehicleSuitability.recommendedVehicle;
-    final recommendedVehicle = _vehicles.firstWhere(
-      (vehicle) => vehicle.name == recommendedVehicleName,
-      orElse: () => _vehicles.last,
-    );
     setState(() {
       _confirmedWeightKg = weightKg;
       _confirmedWeightBand = band;
@@ -23127,6 +23134,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (!_matchingHasStarted) {
         _checkoutState = _CheckoutState.optionsReady;
       }
+      final recommendedVehicleName = _vehicleSuitability.recommendedVehicle;
+      final recommendedVehicle = _vehicles.firstWhere(
+        (vehicle) => vehicle.name == recommendedVehicleName,
+        orElse: () => _vehicles.last,
+      );
       if (!DeliveryPricing.vehicleCanCarryDelivery(
         _selectedVehicle.name,
         _vehicleSuitability,
