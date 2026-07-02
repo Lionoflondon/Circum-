@@ -9,33 +9,53 @@ class HealthPlusPricing {
   static const double defaultMedicationWeightKg = 0.5;
   static const double defaultDistanceMiles = 4.8;
 
-  static HealthPlusPriceBreakdown calculate({
+  static DeliveryPricingBreakdown deliveryQuote({
     double distanceMiles = defaultDistanceMiles,
     double medicationWeightKg = defaultMedicationWeightKg,
-    bool recurring = false,
-    String subscriptionPlan = 'basic',
   }) {
-    final delivery = DeliveryPricing.calculate(
+    return DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: distanceMiles,
         weightKg: medicationWeightKg,
         vehicleType: 'bike',
       ),
     );
+  }
+
+  static HealthPlusPriceBreakdown calculate({
+    double distanceMiles = defaultDistanceMiles,
+    double medicationWeightKg = defaultMedicationWeightKg,
+    bool recurring = false,
+    String subscriptionPlan = 'basic',
+    int remainingIncludedDeliveries = 0,
+    double promotionalDiscountGbp = 0,
+    DeliveryPricingBreakdown? deliveryQuote,
+  }) {
+    final delivery = deliveryQuote ??
+        HealthPlusPricing.deliveryQuote(
+          distanceMiles: distanceMiles,
+          medicationWeightKg: medicationWeightKg,
+        );
     final normalizedPlan = subscriptionPlan.toLowerCase().trim();
     final priorityFee =
         normalizedPlan == 'priority' ? priorityFeeGbp : 0.toDouble();
     final familyFee =
         normalizedPlan == 'family' ? familySupportFeeGbp : 0.toDouble();
     final recurringDiscount = recurring ? recurringDiscountGbp : 0.toDouble();
+    final includedDeliveryCredit =
+        remainingIncludedDeliveries > 0 ? delivery.total : 0.toDouble();
+    final policyDiscount = recurringDiscount +
+        includedDeliveryCredit +
+        (promotionalDiscountGbp < 0 ? 0 : promotionalDiscountGbp);
     final subtotal = delivery.total +
         serviceFeeGbp +
         priorityFee +
         familyFee -
-        recurringDiscount;
-    final total = subtotal < minimumStartingPriceGbp
+        policyDiscount;
+    final policyAdjustedSubtotal = subtotal < 0 ? 0.toDouble() : subtotal;
+    final total = policyAdjustedSubtotal < minimumStartingPriceGbp
         ? minimumStartingPriceGbp
-        : double.parse(subtotal.toStringAsFixed(2));
+        : double.parse(policyAdjustedSubtotal.toStringAsFixed(2));
 
     return HealthPlusPriceBreakdown(
       delivery: delivery,
@@ -43,10 +63,15 @@ class HealthPlusPricing {
       priorityFee: priorityFee,
       familySupportFee: familyFee,
       recurringDiscount: recurringDiscount,
-      minimumAdjustment: double.parse((total - subtotal).toStringAsFixed(2)),
+      includedDeliveryCredit: includedDeliveryCredit,
+      promotionalDiscount:
+          promotionalDiscountGbp < 0 ? 0 : promotionalDiscountGbp,
+      minimumAdjustment:
+          double.parse((total - policyAdjustedSubtotal).toStringAsFixed(2)),
       total: total,
       recurring: recurring,
       subscriptionPlan: normalizedPlan.isEmpty ? 'basic' : normalizedPlan,
+      vanguardIncluded: true,
     );
   }
 }
@@ -57,10 +82,13 @@ class HealthPlusPriceBreakdown {
   final double priorityFee;
   final double familySupportFee;
   final double recurringDiscount;
+  final double includedDeliveryCredit;
+  final double promotionalDiscount;
   final double minimumAdjustment;
   final double total;
   final bool recurring;
   final String subscriptionPlan;
+  final bool vanguardIncluded;
 
   const HealthPlusPriceBreakdown({
     required this.delivery,
@@ -68,10 +96,13 @@ class HealthPlusPriceBreakdown {
     required this.priorityFee,
     required this.familySupportFee,
     required this.recurringDiscount,
+    this.includedDeliveryCredit = 0,
+    this.promotionalDiscount = 0,
     required this.minimumAdjustment,
     required this.total,
     required this.recurring,
     required this.subscriptionPlan,
+    this.vanguardIncluded = true,
   });
 
   int get amountPence => (total * 100).round();
@@ -84,9 +115,13 @@ class HealthPlusPriceBreakdown {
         'priorityFee': priorityFee,
         'familySupportFee': familySupportFee,
         'recurringDiscount': recurringDiscount,
+        'includedDeliveryCredit': includedDeliveryCredit,
+        'promotionalDiscount': promotionalDiscount,
         'minimumAdjustment': minimumAdjustment,
         'total': total,
         'recurring': recurring,
         'subscriptionPlan': subscriptionPlan,
+        'vanguardIncluded': vanguardIncluded,
+        'vanguardInvoiceLabel': 'Included with Health+',
       };
 }

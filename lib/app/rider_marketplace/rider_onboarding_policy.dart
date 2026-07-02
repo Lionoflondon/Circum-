@@ -66,11 +66,12 @@ class RiderOnboardingPolicy {
     Map<String, dynamic>? profile,
     bool verifiedSuperAdmin = false,
   }) =>
-      isApproved(
-        email: email,
-        profile: profile,
-        verifiedSuperAdmin: verifiedSuperAdmin,
-      );
+      (verifiedSuperAdmin && isSuperAdmin(email)) ||
+      (isApproved(email: email, profile: profile) &&
+          '${profile?['stripeConnectAccountId'] ?? ''}'.trim().isNotEmpty &&
+          profile?['onboardingComplete'] == true &&
+          profile?['payoutsEnabled'] == true &&
+          profile?['payoutPaused'] != true);
 
   static Map<String, dynamic> adminReviewPatch({
     required bool approved,

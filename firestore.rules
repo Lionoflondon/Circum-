@@ -36,6 +36,49 @@ service cloud.firestore {
       return hasRole('super_admin') || hasRole('driver_manager');
     }
 
+    function payoutRawBankFieldsAbsent(data) {
+      return !data.keys().hasAny([
+        'bankName',
+        'sortCode',
+        'accountNumber',
+        'bankAccountNumber'
+      ]);
+    }
+
+    function riderPayoutProtectedFieldsAbsent(data) {
+      return !data.keys().hasAny([
+        'stripeConnectAccountId',
+        'stripeConnectStatus',
+        'stripeOnboardingCreatedAt',
+        'payoutsEnabled',
+        'chargesEnabled',
+        'onboardingComplete',
+        'payoutPaused',
+        'payoutFeePayer',
+        'lastStripeSyncAt',
+        'stripeRequirementsDue',
+        'stripeRequirementsPastDue',
+        'stripeDisabledReason'
+      ]);
+    }
+
+    function riderPayoutProtectedFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'stripeConnectAccountId',
+        'stripeConnectStatus',
+        'stripeOnboardingCreatedAt',
+        'payoutsEnabled',
+        'chargesEnabled',
+        'onboardingComplete',
+        'payoutPaused',
+        'payoutFeePayer',
+        'lastStripeSyncAt',
+        'stripeRequirementsDue',
+        'stripeRequirementsPastDue',
+        'stripeDisabledReason'
+      ]);
+    }
+
     function ownsSenderRecord(userId) {
       return signedIn() && request.auth.uid == userId;
     }
@@ -446,10 +489,12 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
       allow create: if isDriverManager() ||
         (signedIn() && request.auth.uid == driverId &&
+          riderPayoutProtectedFieldsAbsent(request.resource.data) &&
           (!('rank' in request.resource.data) || request.resource.data.rank == 'agent') &&
           (!('riderRank' in request.resource.data) || request.resource.data.riderRank == 'agent'));
       allow update: if isDriverManager() ||
         (signedIn() && request.auth.uid == driverId &&
+          riderPayoutProtectedFieldsUnchanged() &&
           !request.resource.data.diff(resource.data).changedKeys().hasAny([
             'rank',
             'riderRank',
@@ -463,7 +508,17 @@ service cloud.firestore {
     match /riders/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
       allow create, update: if isDriverManager() ||
-        (signedIn() && request.auth.uid == driverId);
+        (signedIn() && request.auth.uid == driverId &&
+          (
+            (
+              !exists(/databases/$(database)/documents/riders/$(driverId)) &&
+              riderPayoutProtectedFieldsAbsent(request.resource.data)
+            ) ||
+            (
+              exists(/databases/$(database)/documents/riders/$(driverId)) &&
+              riderPayoutProtectedFieldsUnchanged()
+            )
+          ));
       allow delete: if hasRole('super_admin');
     }
 
@@ -698,14 +753,17 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
       allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.riderId == request.auth.uid);
+        (signedIn() &&
+          request.resource.data.riderId == request.auth.uid &&
+          payoutRawBankFieldsAbsent(request.resource.data) &&
+          request.resource.data.payoutFeePayer == 'rider');
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /riderBankAccounts/{riderId} {
-      allow read, create, update: if isAdmin() ||
-        (signedIn() && riderId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 

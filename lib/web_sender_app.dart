@@ -7903,6 +7903,41 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       );
       return;
     }
+    if (nextStatus == 'approved') {
+      try {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('createRiderTransferOrPayout')
+            .call({
+          'requestId': requestId,
+          'riderId': riderId,
+          'amount': amount,
+        });
+        await _writeAudit(AdminAuditEntry(
+          adminUserId: _adminUser?.uid ?? '',
+          actionType: 'rider_stripe_payout_started',
+          recordType: 'payoutRequests',
+          recordId: requestId,
+          newValue: {
+            'riderId': riderId,
+            'amount': amount,
+            'status': 'processing',
+            'paymentProvider': 'stripe_connect_express',
+            'payoutFeePayer': 'rider',
+          },
+        ));
+        await _loadAdminData();
+      } on FirebaseFunctionsException catch (error) {
+        if (!mounted) return;
+        setState(
+          () =>
+              _message = error.message ?? 'Stripe payout could not be started.',
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _message = 'Stripe payout could not be started.');
+      }
+      return;
+    }
     final db = FirebaseFirestore.instance;
     await db.runTransaction((transaction) async {
       final requestRef = db.collection('payoutRequests').doc(requestId);
@@ -10219,6 +10254,14 @@ class _AdminFinanceSection extends StatelessWidget {
                 value: _adminMoneyText(lifetime),
               ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+          child: _AdminNotice(
+            colors: colors,
+            message:
+                'Stripe Connect Express payouts: Circum does not store rider bank details. Stripe Dashboard > Connect settings must set payout and fee payer to the connected account/rider where available.',
           ),
         ),
         rothTools,
@@ -14133,9 +14176,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _availability = TextEditingController();
   final _notes = TextEditingController();
   final _withdrawAmount = TextEditingController();
-  final _bankName = TextEditingController();
-  final _sortCode = TextEditingController();
-  final _accountNumber = TextEditingController();
   final _documentType = TextEditingController(text: 'Right to work');
   final _documentNotes = TextEditingController();
   bool _rightToWork = false;
@@ -14146,7 +14186,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   bool _submitting = false;
   bool _withdrawSubmitting = false;
   bool _documentSubmitting = false;
-  bool _saveBank = true;
   bool _roleChoiceConfirmed = false;
   User? _riderUser;
   _RiderEarningsSnapshot _earnings = _RiderEarningsSnapshot.empty();
@@ -14190,14 +14229,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   @override
   void initState() {
     super.initState();
-    for (final controller in [
-      _withdrawAmount,
-      _bankName,
-      _sortCode,
-      _accountNumber,
-    ]) {
-      controller.addListener(_refreshWithdrawalForm);
-    }
+    _withdrawAmount.addListener(_refreshWithdrawalForm);
     _restoreRiderSession();
   }
 
@@ -14246,18 +14278,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _plateNumber.dispose();
     _availability.dispose();
     _notes.dispose();
-    for (final controller in [
-      _withdrawAmount,
-      _bankName,
-      _sortCode,
-      _accountNumber,
-    ]) {
-      controller.removeListener(_refreshWithdrawalForm);
-    }
+    _withdrawAmount.removeListener(_refreshWithdrawalForm);
     _withdrawAmount.dispose();
-    _bankName.dispose();
-    _sortCode.dispose();
-    _accountNumber.dispose();
     _documentType.dispose();
     _documentNotes.dispose();
     _riderChatInput.dispose();
@@ -16571,6 +16593,94 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
   }
 
+  bool get _riderStripePayoutReady {
+    final profile = _riderProfile;
+    if (profile == null) return false;
+    return '${profile['stripeConnectAccountId'] ?? ''}'.trim().isNotEmpty &&
+        profile['onboardingComplete'] == true &&
+        profile['payoutsEnabled'] == true &&
+        profile['payoutPaused'] != true;
+  }
+
+  Future<void> _startStripePayoutSetup() async {
+    final user = _riderUser;
+    if (user == null) {
+      setState(() => _withdrawMessage = 'Sign in before setting up payouts.');
+      return;
+    }
+    if (!RiderOnboardingPolicy.isApproved(
+      email: user.email,
+      profile: _riderProfile,
+      verifiedSuperAdmin: _superAdminRiderBypass,
+    )) {
+      setState(
+        () => _withdrawMessage =
+            'Admin approval is required before payout setup.',
+      );
+      return;
+    }
+    setState(() => _withdrawMessage = 'Opening Stripe payout setup...');
+    try {
+      await _ensureCircumFirebaseReady();
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createStripeOnboardingLink')
+          .call({
+        'riderId': user.uid,
+        'returnUrl': '${Uri.base.origin}/?app=rider&section=earnings',
+        'refreshUrl':
+            '${Uri.base.origin}/?app=rider&section=earnings&payout=refresh',
+      });
+      final data = (result.data as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      final url = Uri.tryParse('${data['url'] ?? ''}');
+      if (url == null) {
+        throw StateError('Stripe onboarding URL missing.');
+      }
+      await launchUrl(url, webOnlyWindowName: '_self');
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _withdrawMessage =
+            error.message ?? 'Stripe payout setup could not be started.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _withdrawMessage =
+            'Stripe payout setup could not be started. Please try again.',
+      );
+    }
+  }
+
+  Future<void> _syncStripePayoutStatus() async {
+    final user = _riderUser;
+    if (user == null) return;
+    setState(() => _withdrawMessage = 'Checking Stripe payout status...');
+    try {
+      await _ensureCircumFirebaseReady();
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('syncStripeConnectStatus')
+          .call({'riderId': user.uid});
+      if (!mounted) return;
+      setState(
+        () => _withdrawMessage =
+            'Payout status refreshed. Stripe fees may apply to withdrawals.',
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _withdrawMessage =
+            error.message ?? 'We could not refresh your payout status.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _withdrawMessage =
+            'We could not refresh your payout status. Please try again.',
+      );
+    }
+  }
+
   Future<void> _requestWithdrawal() async {
     final user = _riderUser;
     if (_withdrawSubmitting || user == null) {
@@ -16583,16 +16693,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       verifiedSuperAdmin: _superAdminRiderBypass,
     )) {
       setState(() => _withdrawMessage =
-          'Your rider account must be approved before requesting a withdrawal.');
+          'Your rider account must be approved before requesting a payout.');
+      return;
+    }
+    if (!_riderStripePayoutReady) {
+      setState(
+        () => _withdrawMessage =
+            'Complete Stripe payout setup before requesting a payout.',
+      );
       return;
     }
     final amount = double.tryParse(_withdrawAmount.text.trim()) ?? 0;
-    if (amount <= 0 ||
-        _bankName.text.trim().isEmpty ||
-        _sortCode.text.trim().isEmpty ||
-        _accountNumber.text.trim().isEmpty) {
+    if (amount <= 0) {
       setState(
-        () => _withdrawMessage = 'Enter the amount and bank details first.',
+        () => _withdrawMessage = 'Enter a payout amount first.',
       );
       return;
     }
@@ -16633,10 +16747,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'riderId': user.uid,
         'riderEmail': user.email,
         'amount': amount,
-        'bankName': _bankName.text.trim(),
-        'sortCode': _sortCode.text.trim(),
-        'accountNumber': _accountNumber.text.trim(),
-        'saveAccountDetails': _saveBank,
+        'stripeAccountId': _riderProfile?['stripeConnectAccountId'],
+        'paymentProvider': 'stripe_connect_express',
+        'feePayer': 'rider',
+        'payoutFeePayer': 'rider',
         'status': 'requested',
         'notes': '',
         'auditTrail': [
@@ -16646,6 +16760,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'amount': amount,
             'status': 'requested',
             'source': 'circum-web',
+            'paymentProvider': 'stripe_connect_express',
+            'payoutFeePayer': 'rider',
             'createdAt': Timestamp.now(),
           },
         ],
@@ -16661,32 +16777,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true));
-      if (_saveBank) {
-        batch.set(
-          db.collection('riderBankAccounts').doc(user.uid),
-          {
-            'riderId': user.uid,
-            'bankName': _bankName.text.trim(),
-            'sortCodeLast2': _sortCode.text.trim().length >= 2
-                ? _sortCode.text.trim().substring(
-                      _sortCode.text.trim().length - 2,
-                    )
-                : _sortCode.text.trim(),
-            'accountLast4': _accountNumber.text.trim().length >= 4
-                ? _accountNumber.text.trim().substring(
-                      _accountNumber.text.trim().length - 4,
-                    )
-                : _accountNumber.text.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      }
       await batch.commit();
       if (!mounted) return;
       setState(
         () => _withdrawMessage =
-            'Withdrawal request sent. Circum will process it to your bank.',
+            'Payout request sent. Circum will release it through Stripe Connect.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -16979,12 +17074,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       completedJobs: _completedJobs,
       applicationId: _applicationId,
       withdrawAmount: _withdrawAmount,
-      bankName: _bankName,
-      sortCode: _sortCode,
-      accountNumber: _accountNumber,
       documentType: _documentType,
       documentNotes: _documentNotes,
-      saveBank: _saveBank,
       submittingWithdrawal: _withdrawSubmitting,
       submittingDocument: _documentSubmitting,
       withdrawMessage: _withdrawMessage,
@@ -16997,7 +17088,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       emailChangePassword: _emailChangePassword,
       securitySubmitting: _securitySubmitting,
       securityMessage: _securityMessage,
-      onSaveBank: (value) => setState(() => _saveBank = value ?? false),
+      onSetupPayouts: _startStripePayoutSetup,
+      onSyncPayouts: _syncStripePayoutStatus,
       onWithdraw: _requestWithdrawal,
       onUploadDocument: _uploadRiderDocument,
       onChangePassword: _changeRiderPassword,
@@ -17322,7 +17414,7 @@ class _RiderAccessPanel extends StatelessWidget {
           Text(
             signedIn
                 ? 'Signed in as ${user!.email ?? 'rider'}'
-                : 'Create an account or sign in to upload documents, see earnings, and request bank withdrawals.',
+                : 'Create an account or sign in to upload documents, see earnings, and set up Stripe payouts.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.4,
@@ -17745,12 +17837,8 @@ class _RiderWorkspace extends StatelessWidget {
   final List<Map<String, dynamic>> completedJobs;
   final String? applicationId;
   final TextEditingController withdrawAmount;
-  final TextEditingController bankName;
-  final TextEditingController sortCode;
-  final TextEditingController accountNumber;
   final TextEditingController documentType;
   final TextEditingController documentNotes;
-  final bool saveBank;
   final bool submittingWithdrawal;
   final bool submittingDocument;
   final String? withdrawMessage;
@@ -17763,7 +17851,8 @@ class _RiderWorkspace extends StatelessWidget {
   final TextEditingController emailChangePassword;
   final bool securitySubmitting;
   final String? securityMessage;
-  final ValueChanged<bool?> onSaveBank;
+  final VoidCallback onSetupPayouts;
+  final VoidCallback onSyncPayouts;
   final VoidCallback onWithdraw;
   final VoidCallback onUploadDocument;
   final VoidCallback onChangePassword;
@@ -17793,12 +17882,8 @@ class _RiderWorkspace extends StatelessWidget {
     required this.completedJobs,
     required this.applicationId,
     required this.withdrawAmount,
-    required this.bankName,
-    required this.sortCode,
-    required this.accountNumber,
     required this.documentType,
     required this.documentNotes,
-    required this.saveBank,
     required this.submittingWithdrawal,
     required this.submittingDocument,
     required this.withdrawMessage,
@@ -17811,7 +17896,8 @@ class _RiderWorkspace extends StatelessWidget {
     required this.emailChangePassword,
     required this.securitySubmitting,
     required this.securityMessage,
-    required this.onSaveBank,
+    required this.onSetupPayouts,
+    required this.onSyncPayouts,
     required this.onWithdraw,
     required this.onUploadDocument,
     required this.onChangePassword,
@@ -18156,50 +18242,27 @@ class _RiderWorkspace extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(colors: colors, title: 'Withdraw to bank'),
+                  _SectionTitle(colors: colors, title: 'Stripe payouts'),
                   const SizedBox(height: 10),
+                  _RiderPayoutStatusPanel(
+                    colors: colors,
+                    profile: riderProfile,
+                    onSetupPayouts: onSetupPayouts,
+                    onSyncPayouts: onSyncPayouts,
+                  ),
+                  const SizedBox(height: 12),
                   _InputBox(
                     colors: colors,
                     controller: withdrawAmount,
-                    hint: 'Amount to withdraw',
+                    hint: 'Amount to request',
                   ),
-                  const SizedBox(height: 10),
-                  _InputBox(
-                    colors: colors,
-                    controller: bankName,
-                    hint: 'Bank name',
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _InputBox(
-                          colors: colors,
-                          controller: sortCode,
-                          hint: 'Sort code',
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _InputBox(
-                          colors: colors,
-                          controller: accountNumber,
-                          hint: 'Account number',
-                        ),
-                      ),
-                    ],
-                  ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: saveBank,
-                    onChanged: onSaveBank,
-                    activeColor: colors.text,
-                    title: Text(
-                      'Save this bank for future withdrawals',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Stripe payout fees may be deducted from your withdrawal amount. Circum does not charge you to withdraw, but Stripe payout fees may apply.',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   if (withdrawMessage != null) ...[
@@ -18221,9 +18284,7 @@ class _RiderWorkspace extends StatelessWidget {
                               _canRequestWithdrawal(
                                 amountText: withdrawAmount.text,
                                 availableBalance: earnings.availableBalance,
-                                bankName: bankName.text,
-                                sortCode: sortCode.text,
-                                accountNumber: accountNumber.text,
+                                riderProfile: riderProfile,
                               )
                           ? onWithdraw
                           : null,
@@ -18237,7 +18298,7 @@ class _RiderWorkspace extends StatelessWidget {
                       label: Text(
                         submittingWithdrawal
                             ? 'Sending request...'
-                            : 'Request withdrawal',
+                            : 'Request Stripe payout',
                       ),
                       style: FilledButton.styleFrom(
                         backgroundColor: colors.text,
@@ -18367,16 +18428,133 @@ class _RiderWorkspace extends StatelessWidget {
   static bool _canRequestWithdrawal({
     required String amountText,
     required double availableBalance,
-    required String bankName,
-    required String sortCode,
-    required String accountNumber,
+    required Map<String, dynamic>? riderProfile,
   }) {
     final amount = double.tryParse(amountText.trim()) ?? 0;
     return amount > 0 &&
         amount <= availableBalance &&
-        bankName.trim().isNotEmpty &&
-        sortCode.trim().isNotEmpty &&
-        accountNumber.trim().isNotEmpty;
+        _stripePayoutReady(riderProfile);
+  }
+
+  static bool _stripePayoutReady(Map<String, dynamic>? profile) {
+    if (profile == null) return false;
+    return '${profile['stripeConnectAccountId'] ?? ''}'.trim().isNotEmpty &&
+        profile['onboardingComplete'] == true &&
+        profile['payoutsEnabled'] == true &&
+        profile['payoutPaused'] != true;
+  }
+}
+
+class _RiderPayoutStatusPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic>? profile;
+  final VoidCallback onSetupPayouts;
+  final VoidCallback onSyncPayouts;
+
+  const _RiderPayoutStatusPanel({
+    required this.colors,
+    required this.profile,
+    required this.onSetupPayouts,
+    required this.onSyncPayouts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accountId = '${profile?['stripeConnectAccountId'] ?? ''}'.trim();
+    final onboardingComplete = profile?['onboardingComplete'] == true;
+    final payoutsEnabled = profile?['payoutsEnabled'] == true;
+    final payoutPaused = profile?['payoutPaused'] == true;
+    final requirements = (profile?['stripeRequirementsDue'] as List?) ??
+        (profile?['stripeRequirementsPastDue'] as List?) ??
+        const [];
+    final ready = _RiderWorkspace._stripePayoutReady(profile);
+    final title = ready
+        ? 'Payouts enabled'
+        : payoutPaused
+            ? 'Payouts paused'
+            : accountId.isEmpty
+                ? 'Set up payouts with Stripe'
+                : onboardingComplete && !payoutsEnabled
+                    ? 'Payouts disabled'
+                    : 'Payout setup incomplete';
+    final subtitle = ready
+        ? 'Your Stripe Express account is ready for payout requests.'
+        : accountId.isEmpty
+            ? 'Stripe securely collects your bank and identity details. Circum does not store bank account numbers or sort codes.'
+            : requirements.isNotEmpty
+                ? 'Stripe needs more information before payouts can be enabled.'
+                : 'Continue Stripe onboarding, then refresh your payout status.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.panel.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                ready ? Icons.verified_rounded : Icons.account_balance_wallet,
+                color: colors.text,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Admin setup: Stripe Dashboard > Connect settings > set payout/fee payer to connected account/rider where available.',
+            style: TextStyle(
+              color: colors.mutedText.withValues(alpha: 0.88),
+              height: 1.35,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onSetupPayouts,
+                icon: const Icon(Icons.open_in_new),
+                label: Text(accountId.isEmpty
+                    ? 'Set up payouts'
+                    : 'Continue payout setup'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onSyncPayouts,
+                icon: const Icon(Icons.sync),
+                label: const Text('Refresh status'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -31,7 +31,7 @@ void main() {
       );
     });
 
-    test('approved rider can access jobs and withdrawals', () {
+    test('approved rider can access jobs after review', () {
       const profile = {'onboardingStatus': 'approved'};
       expect(
         RiderOnboardingPolicy.canAcceptJobs(
@@ -40,6 +40,23 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        RiderOnboardingPolicy.canWithdraw(
+          email: 'rider@example.com',
+          profile: profile,
+        ),
+        isFalse,
+      );
+    });
+
+    test('approved rider can withdraw after Stripe payouts are enabled', () {
+      const profile = {
+        'onboardingStatus': 'approved',
+        'stripeConnectAccountId': 'acct_123',
+        'onboardingComplete': true,
+        'payoutsEnabled': true,
+        'payoutPaused': false,
+      };
       expect(
         RiderOnboardingPolicy.canWithdraw(
           email: 'rider@example.com',

@@ -5,6 +5,7 @@ import 'package:circum/app/health_plus/models/prescription_pickup.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
 import 'package:circum/app/health_plus/models/health_plus_subscription.dart';
 import 'package:circum/app/health_plus/models/health_plus_custody_event.dart';
+import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -68,10 +69,77 @@ void main() {
     test('uses delivery pricing plus Health+ minimum starting price', () {
       final quote = HealthPlusPricing.calculate();
 
-      expect(quote.delivery.baseFare, 6);
+      expect(quote.delivery.baseFare, 5);
       expect(quote.serviceFee, HealthPlusPricing.serviceFeeGbp);
-      expect(quote.total, 11);
-      expect(quote.amountPence, 1100);
+      expect(quote.total, 13.4);
+      expect(quote.amountPence, 1340);
+      expect(quote.vanguardIncluded, isTrue);
+      expect(quote.toJson()['vanguardInvoiceLabel'], 'Included with Health+');
+    });
+
+    test('consumes shared delivery pricing without recalculating mileage', () {
+      final deliveryQuote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 2,
+          weightKg: 0.5,
+          vehicleType: 'car',
+        ),
+      );
+      final quote = HealthPlusPricing.calculate(
+        deliveryQuote: deliveryQuote,
+        remainingIncludedDeliveries: 0,
+      );
+
+      expect(quote.delivery.distanceFare, deliveryQuote.distanceFare);
+      expect(quote.delivery.vehicleSurcharge, deliveryQuote.vehicleSurcharge);
+      expect(quote.delivery.total, deliveryQuote.total);
+      expect(quote.total, deliveryQuote.total + quote.serviceFee);
+    });
+
+    test('policy discounts apply after delivery pricing', () {
+      final deliveryQuote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 8,
+          weightKg: 0.5,
+          vehicleType: 'bike',
+        ),
+      );
+      final quote = HealthPlusPricing.calculate(
+        deliveryQuote: deliveryQuote,
+        recurring: true,
+        promotionalDiscountGbp: 2,
+      );
+
+      expect(quote.delivery.total, deliveryQuote.total);
+      expect(quote.recurringDiscount, HealthPlusPricing.recurringDiscountGbp);
+      expect(quote.promotionalDiscount, 2);
+      expect(
+        quote.total,
+        deliveryQuote.total +
+            quote.serviceFee -
+            quote.recurringDiscount -
+            quote.promotionalDiscount,
+      );
+    });
+
+    test(
+        'included deliveries reduce payable amount without changing delivery quote',
+        () {
+      final deliveryQuote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 8,
+          weightKg: 0.5,
+          vehicleType: 'bike',
+        ),
+      );
+      final quote = HealthPlusPricing.calculate(
+        deliveryQuote: deliveryQuote,
+        remainingIncludedDeliveries: 1,
+      );
+
+      expect(quote.delivery.total, deliveryQuote.total);
+      expect(quote.includedDeliveryCredit, deliveryQuote.total);
+      expect(quote.total, HealthPlusPricing.minimumStartingPriceGbp);
     });
 
     test('cancelling or pausing uses explicit status fields', () {
