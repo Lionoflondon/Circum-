@@ -7,9 +7,15 @@ const appBaseUrl = process.env.APP_BASE_URL || (safeConfig.app && safeConfig.app
 const adminBaseUrl = process.env.ADMIN_BASE_URL || (safeConfig.admin && safeConfig.admin.base_url) || "https://admin.circumuk.com";
 
 const rawBankFields = ["bankName", "sortCode", "accountNumber", "bankAccountNumber"];
+const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
+const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
 
 function text(value) {
   return `${value || ""}`.trim();
+}
+
+function stripeFrom(stripeOrFactory) {
+  return typeof stripeOrFactory === "function" ? stripeOrFactory() : stripeOrFactory;
 }
 
 function hasRawBankFields(data) {
@@ -93,8 +99,9 @@ async function updateRiderConnectFields(riderId, patch) {
   await batch.commit();
 }
 
-function createStripeConnectAccountForRider(stripe) {
-  return functions.https.onCall(async (data, context) => {
+function createStripeConnectAccountForRider(stripeOrFactory) {
+  return stripeSecretRuntime.https.onCall(async (data, context) => {
+    const stripe = stripeFrom(stripeOrFactory);
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
@@ -139,8 +146,9 @@ function createStripeConnectAccountForRider(stripe) {
   });
 }
 
-function createStripeOnboardingLink(stripe) {
-  return functions.https.onCall(async (data, context) => {
+function createStripeOnboardingLink(stripeOrFactory) {
+  return stripeSecretRuntime.https.onCall(async (data, context) => {
+    const stripe = stripeFrom(stripeOrFactory);
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
@@ -183,8 +191,9 @@ function refreshStripeOnboardingLink(stripe) {
   return createStripeOnboardingLink(stripe);
 }
 
-function syncStripeConnectStatus(stripe) {
-  return functions.https.onCall(async (data, context) => {
+function syncStripeConnectStatus(stripeOrFactory) {
+  return stripeSecretRuntime.https.onCall(async (data, context) => {
+    const stripe = stripeFrom(stripeOrFactory);
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
@@ -208,8 +217,9 @@ function syncStripeConnectStatus(stripe) {
   });
 }
 
-function createRiderTransferOrPayout(stripe) {
-  return functions.https.onCall(async (data, context) => {
+function createRiderTransferOrPayout(stripeOrFactory) {
+  return stripeSecretRuntime.https.onCall(async (data, context) => {
+    const stripe = stripeFrom(stripeOrFactory);
     const riderId = text(data && data.riderId);
     const amount = Number((data && data.amount) || 0);
     const requestId = text(data && data.requestId);
@@ -305,19 +315,21 @@ function createRiderTransferOrPayout(stripe) {
   });
 }
 
-function handleStripeConnectWebhook(stripe) {
-  return functions.https.onRequest(async (req, res) => {
+function handleStripeConnectWebhook(stripeOrFactory) {
+  return stripeWebhookRuntime.https.onRequest(async (req, res) => {
+    const stripe = stripeFrom(stripeOrFactory);
     const signature = req.headers["stripe-signature"];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
       (safeConfig.stripe && safeConfig.stripe.connect_webhook_secret) ||
       (safeConfig.stripe && safeConfig.stripe.webhook_secret);
     let event;
     try {
-      if (webhookSecret) {
-        event = stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
-      } else {
-        event = req.body;
+      if (!webhookSecret) {
+        console.error("Stripe Connect webhook secret is not configured.");
+        res.status(500).send("Webhook secret missing");
+        return;
       }
+      event = stripe.webhooks.constructEvent(req.rawBody, signature, webhookSecret);
     } catch (error) {
       console.error("Stripe Connect webhook signature failed", error.message);
       res.status(400).send("Invalid signature");
