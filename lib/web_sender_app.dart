@@ -299,17 +299,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     colors: colors,
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
                   ),
-                _WebAppMode.iris => _PublicInfoPage(
+                _WebAppMode.iris => _PublicIrisPage(
                     key: const ValueKey('iris-public'),
                     colors: colors,
                     darkMode: _darkMode,
-                    title: 'IRIS',
-                    eyebrow: 'Circum Intelligence',
-                    body:
-                        'IRIS supports item analysis, vehicle recommendation, pricing weight checks, and delivery verification inside Circum workflows.',
-                    icon: Icons.auto_awesome_outlined,
-                    primaryLabel: 'Send a Parcel',
-                    onPrimary: () => _openSenderDashboard(),
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
@@ -880,7 +873,13 @@ class _LandingPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 58),
-                  _HeroMockup(colors: colors),
+                  _HeroMockup(
+                    colors: colors,
+                    onExploreIris: () => unawaited(
+                      launchUrl(Uri.base.resolve('/iris'),
+                          webOnlyWindowName: '_self'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -12877,104 +12876,303 @@ class _SpectrumSweepPainter extends CustomPainter {
 
 class _HeroMockup extends StatelessWidget {
   final _CircumColors colors;
+  final VoidCallback onExploreIris;
 
-  const _HeroMockup({required this.colors});
+  const _HeroMockup({required this.colors, required this.onExploreIris});
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth < 760 ? 1 : 4;
-        final services = [
-          (
-            Icons.local_shipping_outlined,
-            'Parcel delivery',
-            'Book trusted local deliveries.'
-          ),
-          (
-            Icons.health_and_safety_outlined,
-            'Health+',
-            'Arrange prescription logistics.'
-          ),
-          (
-            Icons.card_giftcard_outlined,
-            'Gifts',
-            'Send thoughtful requests through Circum.'
-          ),
-          (
-            Icons.business_center_outlined,
-            'Business',
-            'Manage company sending from a dedicated centre.'
-          ),
-        ];
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: columns,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: columns == 1 ? 3.4 : 1.65,
-          children: services
-              .map(
-                (item) => _CoreServiceCard(
-                  colors: colors,
-                  icon: item.$1,
-                  title: item.$2,
-                  body: item.$3,
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
+    return _IrisExplainerPanel(colors: colors, onExploreIris: onExploreIris);
   }
 }
 
-class _CoreServiceCard extends StatelessWidget {
+class _IrisExplainerPanel extends StatelessWidget {
   final _CircumColors colors;
-  final IconData icon;
-  final String title;
-  final String body;
+  final VoidCallback onExploreIris;
+  final String ctaLabel;
 
-  const _CoreServiceCard({
+  const _IrisExplainerPanel({
     required this.colors,
-    required this.icon,
-    required this.title,
-    required this.body,
+    required this.onExploreIris,
+    this.ctaLabel = 'Explore IRIS',
   });
 
   @override
   Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      padding: EdgeInsets.all(narrow ? 22 : 30),
       decoration: BoxDecoration(
-        color: colors.panel.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: colors.text, size: 24),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: TextStyle(
-              color: colors.text,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-            ),
+        color: const Color(0xff07090f).withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: const Color(0xff93b4ff).withValues(alpha: 0.24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff3b82f6).withValues(alpha: 0.16),
+            blurRadius: 34,
+            offset: const Offset(0, 18),
           ),
-          const SizedBox(height: 5),
-          Text(
-            body,
-            style: TextStyle(
-              color: colors.mutedText,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
-            ),
+          BoxShadow(
+            color: const Color(0xffa855f7).withValues(alpha: 0.08),
+            blurRadius: 56,
+            offset: const Offset(0, 24),
           ),
         ],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xff3b82f6).withValues(alpha: 0.10),
+            const Color(0xff07090f).withValues(alpha: 0.94),
+            const Color(0xffa855f7).withValues(alpha: 0.08),
+          ],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -56,
+            top: -76,
+            child: _IrisOrbGlow(size: narrow ? 190 : 260),
+          ),
+          narrow
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _IrisExplainerCopy(
+                      colors: colors,
+                      onExploreIris: onExploreIris,
+                      ctaLabel: ctaLabel,
+                    ),
+                    const SizedBox(height: 24),
+                    const _IrisOrbMark(),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: _IrisExplainerCopy(
+                        colors: colors,
+                        onExploreIris: onExploreIris,
+                        ctaLabel: ctaLabel,
+                      ),
+                    ),
+                    const SizedBox(width: 36),
+                    const SizedBox(width: 210, child: _IrisOrbMark()),
+                  ],
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IrisExplainerCopy extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onExploreIris;
+  final String ctaLabel;
+
+  const _IrisExplainerCopy({
+    required this.colors,
+    required this.onExploreIris,
+    required this.ctaLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'IRIS',
+          style: GoogleFonts.jetBrainsMono(
+            color: const Color(0xff93b4ff),
+            fontSize: 12,
+            letterSpacing: 2.2,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'The intelligence behind every Parcel Delivered.',
+          style: GoogleFonts.dmSerifDisplay(
+            color: const Color(0xfff5f7fb),
+            fontSize: narrow ? 32 : 44,
+            height: 1.02,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Text(
+            "IRIS looks at what you're sending and knows what it weighs — before a rider ever lifts it. Every estimate is checked against what actually gets delivered and fed back in, so the parcel you send keeps getting priced more accurately the more Circum delivers.",
+            style: GoogleFonts.inter(
+              color: const Color(0xffb8c2d8),
+              fontSize: narrow ? 15.5 : 17,
+              height: 1.62,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const SizedBox(height: 22),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: const [
+            _IrisCategoryPill('Parcels'),
+            _IrisCategoryPill('Prescriptions'),
+            _IrisCategoryPill('Documents'),
+            _IrisCategoryPill('Gifts'),
+            _IrisCategoryPill('Business'),
+          ],
+        ),
+        const SizedBox(height: 26),
+        OutlinedButton.icon(
+          onPressed: onExploreIris,
+          icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+          label: Text(ctaLabel),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xfff5f7fb),
+            side: BorderSide(
+              color: const Color(0xff93b4ff).withValues(alpha: 0.42),
+            ),
+            backgroundColor: const Color(0xff3b82f6).withValues(alpha: 0.10),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+            shape: const StadiumBorder(),
+            textStyle:
+                GoogleFonts.inter(fontSize: 14.5, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IrisCategoryPill extends StatelessWidget {
+  final String label;
+
+  const _IrisCategoryPill(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          color: const Color(0xffe8eefc),
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _IrisOrbMark extends StatelessWidget {
+  const _IrisOrbMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SizedBox(
+        width: 168,
+        height: 168,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const _IrisOrbGlow(size: 168),
+            Container(
+              width: 112,
+              height: 112,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xfff5f7fb),
+                    Color(0xff3b82f6),
+                    Color(0xff0d111c),
+                  ],
+                ),
+                border: Border.all(color: Colors.white24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xff3b82f6).withValues(alpha: 0.42),
+                    blurRadius: 32,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        Color(0xffffffff),
+                        Color(0x773b82f6),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border(
+                  top: BorderSide(
+                      color: const Color(0xff93b4ff).withValues(alpha: 0.8),
+                      width: 1.4),
+                  right: BorderSide(
+                      color: const Color(0xff93b4ff).withValues(alpha: 0.55),
+                      width: 1.4),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IrisOrbGlow extends StatelessWidget {
+  final double size;
+
+  const _IrisOrbGlow({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            const Color(0xff3b82f6).withValues(alpha: 0.24),
+            const Color(0xffa855f7).withValues(alpha: 0.10),
+            Colors.transparent,
+          ],
+        ),
       ),
     );
   }
@@ -48247,6 +48445,184 @@ class _PublicHealthPlusPage extends StatelessWidget {
             onHealthPlus: onStartHealth,
           ),
           _LandingFooter(colors: colors),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicIrisPage extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final VoidCallback onBack;
+  final VoidCallback onToggleTheme;
+
+  const _PublicIrisPage({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.onBack,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _LandingNav(
+            colors: colors,
+            darkMode: darkMode,
+            onStart: () => unawaited(
+              launchUrl(Uri.base.resolve('/sender'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onRider: () => unawaited(
+              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
+            ),
+            onHealthPlus: () => unawaited(
+              launchUrl(Uri.base.resolve('/health'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onGifts: () => unawaited(
+              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
+            ),
+            onBusiness: () => unawaited(
+              launchUrl(Uri.base.resolve('/business'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onToggleTheme: onToggleTheme,
+          ),
+          Container(
+            width: double.infinity,
+            color: const Color(0xff07090f),
+            padding: EdgeInsets.fromLTRB(22, narrow ? 58 : 82, 22, 82),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _IrisExplainerPanel(
+                      colors: colors,
+                      ctaLabel: 'Send a Parcel',
+                      onExploreIris: () => unawaited(
+                        launchUrl(Uri.base.resolve('/sender'),
+                            webOnlyWindowName: '_self'),
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns = constraints.maxWidth < 820 ? 1 : 2;
+                        return GridView.count(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: columns,
+                          childAspectRatio: columns == 1 ? 2.35 : 1.42,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                          children: const [
+                            _IrisInfoTile(
+                              title: 'What IRIS is',
+                              body:
+                                  'IRIS is Circum’s delivery intelligence layer. It helps understand what is being sent before the job is priced, matched, or collected.',
+                            ),
+                            _IrisInfoTile(
+                              title: 'What IRIS estimates',
+                              body:
+                                  'IRIS supports parcel type, transport-ready weight, vehicle suitability, risk signals, and the delivery experience needed for the item.',
+                            ),
+                            _IrisInfoTile(
+                              title: 'Where IRIS supports Circum',
+                              body:
+                                  'IRIS works across parcels, Health+, Gifts, Business, and Vanguard by helping each service use the right handling and verification context.',
+                            ),
+                            _IrisInfoTile(
+                              title: 'Why people still verify',
+                              body:
+                                  'IRIS supports decisions; it does not replace rider verification, admin adjudication, custody checks, or human judgement where trust matters.',
+                            ),
+                            _IrisInfoTile(
+                              title: 'How IRIS improves',
+                              body:
+                                  'Verified outcomes feed back into Circum, so estimates become more accurate as real deliveries confirm weight, handling, and vehicle choices.',
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        _PillButton(
+                          label: 'Send a Parcel',
+                          icon: Icons.arrow_forward_rounded,
+                          dark: true,
+                          onPressed: () => unawaited(
+                            launchUrl(Uri.base.resolve('/sender'),
+                                webOnlyWindowName: '_self'),
+                          ),
+                        ),
+                        _PillButton(
+                          label: 'Back to homepage',
+                          icon: Icons.home_outlined,
+                          dark: false,
+                          onPressed: onBack,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _LandingFooter(colors: colors),
+        ],
+      ),
+    );
+  }
+}
+
+class _IrisInfoTile extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _IrisInfoTile({required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              color: const Color(0xfff5f7fb),
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            body,
+            style: GoogleFonts.inter(
+              color: const Color(0xffaeb8ce),
+              fontSize: 14.5,
+              height: 1.48,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
