@@ -178,6 +178,22 @@ class _WebSenderAppState extends State<WebSenderApp> {
         path == '/cookies';
   }
 
+  _WebAppMode? get _publicMarketingModeForPath {
+    final path = _normalizedPath;
+    return switch (path) {
+      '' || '/' => _WebAppMode.landing,
+      '/iris' => _WebAppMode.iris,
+      '/health' || '/health-plus' => _WebAppMode.healthPlus,
+      '/gifts' => _WebAppMode.gifts,
+      '/business' => _WebAppMode.business,
+      '/vanguard' => _WebAppMode.vanguard,
+      '/terms' => _WebAppMode.terms,
+      '/privacy' => _WebAppMode.privacy,
+      '/cookies' => _WebAppMode.cookies,
+      _ => null,
+    };
+  }
+
   @override
   void initState() {
     super.initState();
@@ -259,11 +275,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
   Widget build(BuildContext context) {
     final colors = _CircumColors(_darkMode);
     // Mobile sender app dashboard must not be mounted on the public marketing web homepage.
-    final effectiveMode = _mode == _WebAppMode.sender &&
-            !_isSenderAppPath &&
-            _isPublicMarketingPath
-        ? _WebAppMode.landing
-        : _mode;
+    final effectiveMode = _publicMarketingModeForPath ??
+        (_mode == _WebAppMode.sender && !_isSenderAppPath
+            ? _WebAppMode.landing
+            : _mode);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -404,10 +419,18 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     colors: colors,
                     darkMode: _darkMode,
                     onStart: _openSenderDashboard,
-                    onRider: () => setState(() => _mode = _WebAppMode.rider),
-                    onHealthPlus: () =>
-                        setState(() => _mode = _WebAppMode.healthPlus),
-                    onGifts: () => setState(() => _mode = _WebAppMode.gifts),
+                    onRider: () => unawaited(launchUrl(
+                      Uri.base.resolve('/rider'),
+                      webOnlyWindowName: '_self',
+                    )),
+                    onHealthPlus: () => unawaited(launchUrl(
+                      Uri.base.resolve('/health-plus'),
+                      webOnlyWindowName: '_self',
+                    )),
+                    onGifts: () => unawaited(launchUrl(
+                      Uri.base.resolve('/gifts'),
+                      webOnlyWindowName: '_self',
+                    )),
                     onBusiness: () => unawaited(launchUrl(
                       Uri.base.resolve('/business'),
                       webOnlyWindowName: '_self',
