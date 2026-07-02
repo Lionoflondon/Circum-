@@ -66,6 +66,24 @@ void main() {
       );
     });
 
+    test('approved rider can withdraw with Express Connect status fields', () {
+      const profile = {
+        'onboardingStatus': 'approved',
+        'stripeAccountId': 'acct_express_123',
+        'stripeConnectType': 'express',
+        'stripeOnboardingStatus': 'complete',
+        'stripePayoutsEnabled': true,
+        'payoutPaused': false,
+      };
+      expect(
+        RiderOnboardingPolicy.canWithdraw(
+          email: 'rider@example.com',
+          profile: profile,
+        ),
+        isTrue,
+      );
+    });
+
     test('admin can approve rider', () {
       final patch = RiderOnboardingPolicy.adminReviewPatch(approved: true);
       expect(patch['onboardingStatus'], 'approved');

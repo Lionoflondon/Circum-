@@ -2035,6 +2035,26 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     };
   }
 
+  String _driverStripePayoutStatus(Map<String, dynamic> driver) {
+    final accountId =
+        '${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}'
+            .trim();
+    if (accountId.isEmpty) return 'Not started';
+    if (driver['stripePayoutsEnabled'] == true ||
+        driver['payoutsEnabled'] == true) {
+      return 'Payouts enabled';
+    }
+    if (driver['stripeOnboardingStatus'] == 'complete' ||
+        driver['onboardingComplete'] == true) {
+      return 'Complete';
+    }
+    if (driver['stripeDisabledReason'] != null ||
+        driver['payoutPaused'] == true) {
+      return 'Payouts disabled';
+    }
+    return 'Incomplete';
+  }
+
   Future<void> _setDriverWorkflowStatus(
     Map<String, dynamic> driver,
     String nextStatus,
@@ -3530,6 +3550,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   _driverId(_selectedDriverProfile!),
                 ),
                 statusLabel: _driverStatusLabel(_selectedDriverProfile!),
+                stripePayoutStatus:
+                    _driverStripePayoutStatus(_selectedDriverProfile!),
                 signupDate: _adminDateText(
                   _selectedDriverProfile!['createdAt'],
                 ),
@@ -5851,7 +5873,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminCell(
         '${_driverVehicleSummary(item)}\n${_driverPlateSummary(item)}',
       ),
-      _AdminStatusCell(colors: widget.colors, status: _driverStatusLabel(item)),
+      _AdminStatusCell(
+        colors: widget.colors,
+        status:
+            '${_driverStatusLabel(item)}\nStripe: ${_driverStripePayoutStatus(item)}',
+      ),
       _AdminCell('${item['averageRating'] ?? item['rating'] ?? 'New'}'),
       _AdminActions(
         colors: widget.colors,
@@ -10318,6 +10344,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
   final List<Map<String, dynamic>> walletTransactions;
   final List<Map<String, dynamic>> documents;
   final String statusLabel;
+  final String stripePayoutStatus;
   final String signupDate;
   final int completedJobs;
   final int cancelledJobs;
@@ -10343,6 +10370,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     required this.walletTransactions,
     required this.documents,
     required this.statusLabel,
+    required this.stripePayoutStatus,
     required this.signupDate,
     required this.completedJobs,
     required this.cancelledJobs,
@@ -10627,6 +10655,23 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                         _profileRow(
                           'Onboarding status',
                           '${driver['onboardingStatus'] ?? 'not provided'}',
+                        ),
+                        _profileRow('Stripe payout status', stripePayoutStatus),
+                        _profileRow(
+                          'Stripe account type',
+                          '${driver['stripeConnectType'] ?? (('${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}'.trim().isEmpty) ? 'Not started' : 'express')}',
+                        ),
+                        _profileRow(
+                          'Stripe account ID',
+                          _displayOrMissing(
+                            '${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}',
+                            'Not started',
+                          ),
+                        ),
+                        _profileRow(
+                          'Stripe last checked',
+                          _dateText(driver['stripeLastCheckedAt'] ??
+                              driver['lastStripeSyncAt']),
                         ),
                         if (blockers.isNotEmpty)
                           _profileRow(
@@ -14318,6 +14363,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _listenToAvailableJobs();
         _listenToRiderJobs(user.uid);
       }
+      if (_isRiderStripeReturnRoute || _isRiderStripeRefreshRoute) {
+        await _handleRiderStripeRedirect();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _authMessage = 'Sign in to manage rider earnings.');
@@ -16593,12 +16641,34 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
   }
 
+  bool get _isRiderStripeReturnRoute => Uri.base.path == '/rider/stripe/return';
+
+  bool get _isRiderStripeRefreshRoute =>
+      Uri.base.path == '/rider/stripe/refresh';
+
+  Future<void> _handleRiderStripeRedirect() async {
+    if (_isRiderStripeRefreshRoute) {
+      await _startStripePayoutSetup();
+      return;
+    }
+    if (!_isRiderStripeReturnRoute) return;
+    setState(() {
+      _riderTab = _RiderPortalTab.earnings;
+      _withdrawMessage = 'Checking your Stripe payout setup...';
+    });
+    await _syncStripePayoutStatus();
+  }
+
   bool get _riderStripePayoutReady {
     final profile = _riderProfile;
     if (profile == null) return false;
-    return '${profile['stripeConnectAccountId'] ?? ''}'.trim().isNotEmpty &&
-        profile['onboardingComplete'] == true &&
-        profile['payoutsEnabled'] == true &&
+    return '${profile['stripeAccountId'] ?? profile['stripeConnectAccountId'] ?? ''}'
+            .trim()
+            .isNotEmpty &&
+        (profile['stripeOnboardingStatus'] == 'complete' ||
+            profile['onboardingComplete'] == true) &&
+        (profile['stripePayoutsEnabled'] == true ||
+            profile['payoutsEnabled'] == true) &&
         profile['payoutPaused'] != true;
   }
 
@@ -16626,9 +16696,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .httpsCallable('createStripeOnboardingLink')
           .call({
         'riderId': user.uid,
-        'returnUrl': '${Uri.base.origin}/?app=rider&section=earnings',
-        'refreshUrl':
-            '${Uri.base.origin}/?app=rider&section=earnings&payout=refresh',
+        'returnUrl': '${Uri.base.origin}/rider/stripe/return',
+        'refreshUrl': '${Uri.base.origin}/rider/stripe/refresh',
       });
       final data = (result.data as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
@@ -16747,7 +16816,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'riderId': user.uid,
         'riderEmail': user.email,
         'amount': amount,
-        'stripeAccountId': _riderProfile?['stripeConnectAccountId'],
+        'stripeAccountId': _riderProfile?['stripeAccountId'] ??
+            _riderProfile?['stripeConnectAccountId'],
         'paymentProvider': 'stripe_connect_express',
         'feePayer': 'rider',
         'payoutFeePayer': 'rider',
@@ -18438,9 +18508,13 @@ class _RiderWorkspace extends StatelessWidget {
 
   static bool _stripePayoutReady(Map<String, dynamic>? profile) {
     if (profile == null) return false;
-    return '${profile['stripeConnectAccountId'] ?? ''}'.trim().isNotEmpty &&
-        profile['onboardingComplete'] == true &&
-        profile['payoutsEnabled'] == true &&
+    return '${profile['stripeAccountId'] ?? profile['stripeConnectAccountId'] ?? ''}'
+            .trim()
+            .isNotEmpty &&
+        (profile['stripeOnboardingStatus'] == 'complete' ||
+            profile['onboardingComplete'] == true) &&
+        (profile['stripePayoutsEnabled'] == true ||
+            profile['payoutsEnabled'] == true) &&
         profile['payoutPaused'] != true;
   }
 }
@@ -18460,9 +18534,14 @@ class _RiderPayoutStatusPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accountId = '${profile?['stripeConnectAccountId'] ?? ''}'.trim();
-    final onboardingComplete = profile?['onboardingComplete'] == true;
-    final payoutsEnabled = profile?['payoutsEnabled'] == true;
+    final accountId =
+        '${profile?['stripeAccountId'] ?? profile?['stripeConnectAccountId'] ?? ''}'
+            .trim();
+    final onboardingComplete =
+        profile?['stripeOnboardingStatus'] == 'complete' ||
+            profile?['onboardingComplete'] == true;
+    final payoutsEnabled = profile?['stripePayoutsEnabled'] == true ||
+        profile?['payoutsEnabled'] == true;
     final payoutPaused = profile?['payoutPaused'] == true;
     final requirements = (profile?['stripeRequirementsDue'] as List?) ??
         (profile?['stripeRequirementsPastDue'] as List?) ??

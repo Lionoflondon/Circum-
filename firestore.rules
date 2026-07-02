@@ -48,8 +48,15 @@ service cloud.firestore {
     function riderPayoutProtectedFieldsAbsent(data) {
       return !data.keys().hasAny([
         'stripeConnectAccountId',
+        'stripeAccountId',
+        'stripeConnectType',
         'stripeConnectStatus',
         'stripeOnboardingCreatedAt',
+        'stripeDetailsSubmitted',
+        'stripeChargesEnabled',
+        'stripePayoutsEnabled',
+        'stripeOnboardingStatus',
+        'stripeLastCheckedAt',
         'payoutsEnabled',
         'chargesEnabled',
         'onboardingComplete',
@@ -65,8 +72,15 @@ service cloud.firestore {
     function riderPayoutProtectedFieldsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'stripeConnectAccountId',
+        'stripeAccountId',
+        'stripeConnectType',
         'stripeConnectStatus',
         'stripeOnboardingCreatedAt',
+        'stripeDetailsSubmitted',
+        'stripeChargesEnabled',
+        'stripePayoutsEnabled',
+        'stripeOnboardingStatus',
+        'stripeLastCheckedAt',
         'payoutsEnabled',
         'chargesEnabled',
         'onboardingComplete',

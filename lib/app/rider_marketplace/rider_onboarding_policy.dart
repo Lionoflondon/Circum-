@@ -68,9 +68,13 @@ class RiderOnboardingPolicy {
   }) =>
       (verifiedSuperAdmin && isSuperAdmin(email)) ||
       (isApproved(email: email, profile: profile) &&
-          '${profile?['stripeConnectAccountId'] ?? ''}'.trim().isNotEmpty &&
-          profile?['onboardingComplete'] == true &&
-          profile?['payoutsEnabled'] == true &&
+          '${profile?['stripeAccountId'] ?? profile?['stripeConnectAccountId'] ?? ''}'
+              .trim()
+              .isNotEmpty &&
+          (profile?['stripeOnboardingStatus'] == 'complete' ||
+              profile?['onboardingComplete'] == true) &&
+          (profile?['stripePayoutsEnabled'] == true ||
+              profile?['payoutsEnabled'] == true) &&
           profile?['payoutPaused'] != true);
 
   static Map<String, dynamic> adminReviewPatch({
