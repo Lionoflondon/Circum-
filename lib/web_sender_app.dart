@@ -880,12 +880,11 @@ class _LandingPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 58),
-                  _HeroMockup(colors: colors, onStart: onStart),
+                  _HeroMockup(colors: colors),
                 ],
               ),
             ),
           ),
-          _FeatureBand(colors: colors),
           _VanguardLandingBand(colors: colors),
           _BusinessLandingBand(
             colors: colors,
@@ -12878,198 +12877,66 @@ class _SpectrumSweepPainter extends CustomPainter {
 
 class _HeroMockup extends StatelessWidget {
   final _CircumColors colors;
-  final VoidCallback onStart;
 
-  const _HeroMockup({required this.colors, required this.onStart});
+  const _HeroMockup({required this.colors});
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 820;
-        final services = _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Circum services',
-                style: TextStyle(
-                  color: colors.text,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                ),
-              ),
-              const SizedBox(height: 14),
-              ...[
-                (
-                  Icons.local_shipping_outlined,
-                  'Parcel delivery',
-                  'Book trusted local deliveries.'
-                ),
-                (
-                  Icons.health_and_safety_outlined,
-                  'Health+',
-                  'Arrange prescription logistics.'
-                ),
-                (
-                  Icons.card_giftcard_outlined,
-                  'Gifts',
-                  'Send thoughtful requests through Circum.'
-                ),
-                (
-                  Icons.business_center_outlined,
-                  'Business',
-                  'Manage company sending from a dedicated centre.'
-                ),
-              ].map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: colors.field,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(item.$1, color: colors.text, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.$2,
-                              style: TextStyle(
-                                color: colors.text,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            Text(
-                              item.$3,
-                              style: TextStyle(
-                                color: colors.mutedText,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+        final columns = constraints.maxWidth < 760 ? 1 : 4;
+        final services = [
+          (
+            Icons.local_shipping_outlined,
+            'Parcel delivery',
+            'Book trusted local deliveries.'
           ),
-        );
-        final panel = _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _LogoTile(colors: colors),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'One public website. Separate dashboards.',
-                          style: TextStyle(
-                            color: colors.text,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                          ),
-                        ),
-                        Text(
-                          'Public pages stay clean; app tools open only when requested.',
-                          style: TextStyle(
-                            color: colors.mutedText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _MarketingCapabilityRow(
-                colors: colors,
-                icon: Icons.public_outlined,
-                title: 'Public website',
-                body: 'Explore Circum, Health+, Gifts, Business and Vanguard.',
-              ),
-              const SizedBox(height: 12),
-              _MarketingCapabilityRow(
-                colors: colors,
-                icon: Icons.dashboard_customize_outlined,
-                title: 'Sender dashboard',
-                body: 'Open `/sender` or `/app` when you want app tools.',
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onStart,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Start a delivery'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors.text,
-                    foregroundColor: colors.inverseText,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+          (
+            Icons.health_and_safety_outlined,
+            'Health+',
+            'Arrange prescription logistics.'
+          ),
+          (
+            Icons.card_giftcard_outlined,
+            'Gifts',
+            'Send thoughtful requests through Circum.'
+          ),
+          (
+            Icons.business_center_outlined,
+            'Business',
+            'Manage company sending from a dedicated centre.'
+          ),
+        ];
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: columns,
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 14,
+          childAspectRatio: columns == 1 ? 3.4 : 1.65,
+          children: services
+              .map(
+                (item) => _CoreServiceCard(
+                  colors: colors,
+                  icon: item.$1,
+                  title: item.$2,
+                  body: item.$3,
                 ),
-              ),
-            ],
-          ),
-        );
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colors.panel,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: colors.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(colors.dark ? 0.32 : 0.08),
-                blurRadius: 36,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: wide
-              ? Row(
-                  children: [
-                    Expanded(flex: 6, child: services),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 4, child: panel),
-                  ],
-                )
-              : Column(children: [services, const SizedBox(height: 16), panel]),
+              )
+              .toList(),
         );
       },
     );
   }
 }
 
-class _MarketingCapabilityRow extends StatelessWidget {
+class _CoreServiceCard extends StatelessWidget {
   final _CircumColors colors;
   final IconData icon;
   final String title;
   final String body;
 
-  const _MarketingCapabilityRow({
+  const _CoreServiceCard({
     required this.colors,
     required this.icon,
     required this.title,
@@ -13081,96 +12948,33 @@ class _MarketingCapabilityRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(18),
+        color: colors.panel.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: colors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: colors.text, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  body,
-                  style: TextStyle(
-                    color: colors.mutedText,
-                    fontWeight: FontWeight.w600,
-                    height: 1.35,
-                  ),
-                ),
-              ],
+          Icon(icon, color: colors.text, size: 24),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            body,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FeatureBand extends StatelessWidget {
-  final _CircumColors colors;
-
-  const _FeatureBand({required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: colors.band,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 70),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final cols = constraints.maxWidth < 760 ? 1 : 3;
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: cols,
-                mainAxisSpacing: 18,
-                crossAxisSpacing: 18,
-                childAspectRatio: cols == 1 ? 2.1 : 1.05,
-                children: [
-                  _FeatureCard(
-                    colors: colors,
-                    icon: Icons.tune,
-                    tint: const Color(0xffdbeafe),
-                    title: 'Iris matching',
-                    body:
-                        'Tell Iris what you are sending and it helps choose the right rider, vehicle, route, and price.',
-                  ),
-                  _FeatureCard(
-                    colors: colors,
-                    icon: Icons.verified_user_outlined,
-                    tint: const Color(0xffdcfce7),
-                    title: 'Built-in reassurance',
-                    body:
-                        'Follow the journey with live location, rider details, status updates, and delivery proof.',
-                  ),
-                  _FeatureCard(
-                    colors: colors,
-                    icon: Icons.bolt,
-                    tint: const Color(0xffede9fe),
-                    title: 'Ready when you are',
-                    body:
-                        'Send the job to nearby riders and choose the option that fits the delivery.',
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
       ),
     );
   }
@@ -42666,61 +42470,6 @@ class _GlassPanel extends StatelessWidget {
           ),
           child: child,
         ),
-      ),
-    );
-  }
-}
-
-class _FeatureCard extends StatelessWidget {
-  final _CircumColors colors;
-  final IconData icon;
-  final Color tint;
-  final String title;
-  final String body;
-
-  const _FeatureCard({
-    required this.colors,
-    required this.icon,
-    required this.tint,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      colors: colors,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(icon, color: const Color(0xff2563eb)),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            title,
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            body,
-            style: TextStyle(
-              color: colors.mutedText,
-              height: 1.45,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
