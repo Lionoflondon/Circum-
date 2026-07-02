@@ -80,6 +80,7 @@ exports.refreshStripeOnboardingLink = riderConnect.refreshStripeOnboardingLink(s
 exports.syncStripeConnectStatus = riderConnect.syncStripeConnectStatus(stripeConnectClient);
 exports.createRiderTransferOrPayout = riderConnect.createRiderTransferOrPayout(stripeConnectClient);
 exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(stripeConnectClient);
+exports.scheduledRiderStripeStatusSync = riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);
 exports.redactLegacyPayoutBankFields = riderConnect.redactLegacyPayoutBankFields();
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.ensureReferralCode = referrals.ensureReferralCode;

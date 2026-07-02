@@ -2039,10 +2039,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final accountId =
         '${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}'
             .trim();
+    final stripeStatus = '${driver['stripeStatus'] ?? ''}'.trim();
+    if (stripeStatus == 'payouts_enabled') return 'Payouts Enabled';
+    if (stripeStatus == 'connected') return 'Connected';
+    if (stripeStatus == 'action_required') return 'Action Required';
+    if (stripeStatus == 'onboarding') return 'Onboarding';
+    if (stripeStatus == 'restricted') return 'Restricted';
+    if (stripeStatus == 'disabled') return 'Disabled';
     if (accountId.isEmpty) return 'Not started';
     if (driver['stripePayoutsEnabled'] == true ||
         driver['payoutsEnabled'] == true) {
-      return 'Payouts enabled';
+      return 'Payouts Enabled';
     }
     if (driver['stripeOnboardingStatus'] == 'complete' ||
         driver['onboardingComplete'] == true) {
@@ -2053,6 +2060,28 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       return 'Payouts disabled';
     }
     return 'Incomplete';
+  }
+
+  Future<void> _syncDriverStripeStatus(Map<String, dynamic> driver) async {
+    final riderId = _driverId(driver);
+    if (riderId.isEmpty) return;
+    setState(() => _message = 'Syncing rider Stripe status...');
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('syncStripeConnectStatus')
+          .call({'riderId': riderId});
+      await _loadAdminData();
+      if (!mounted) return;
+      setState(() => _message = 'Rider Stripe status synced.');
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _message = error.message ?? 'Could not sync rider Stripe status.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _message = 'Could not sync rider Stripe status.');
+    }
   }
 
   Future<void> _setDriverWorkflowStatus(
@@ -2799,6 +2828,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         label: 'Request Info',
         enabled: canApprove,
         onTap: () => _requestDriverMoreInformation(driver),
+      ),
+      _AdminAction(
+        label: 'Sync Stripe Status',
+        enabled: _can(AdminPermission.viewFinance),
+        onTap: () => _syncDriverStripeStatus(driver),
       ),
     ]);
     actions.add(
@@ -10679,7 +10713,8 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                         ),
                         _profileRow(
                           'Stripe last checked',
-                          _dateText(driver['stripeLastCheckedAt'] ??
+                          _dateText(driver['stripeLastSyncedAt'] ??
+                              driver['stripeLastCheckedAt'] ??
                               driver['lastStripeSyncAt']),
                         ),
                         if (blockers.isNotEmpty)
@@ -16674,29 +16709,58 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     return '${profile['stripeAccountId'] ?? profile['stripeConnectAccountId'] ?? ''}'
             .trim()
             .isNotEmpty &&
-        (profile['stripeOnboardingStatus'] == 'complete' ||
-            profile['stripeDetailsSubmitted'] == true ||
-            profile['onboardingComplete'] == true) &&
-        (profile['stripePayoutsEnabled'] == true ||
-            profile['payoutsEnabled'] == true) &&
+        (profile['stripeStatus'] == 'payouts_enabled' ||
+            (profile['stripePayoutsEnabled'] == true &&
+                (profile['stripeDetailsSubmitted'] == true ||
+                    profile['stripeOnboardingStatus'] == 'complete' ||
+                    profile['onboardingComplete'] == true))) &&
         profile['payoutPaused'] != true;
+  }
+
+  String? _riderPayoutBlockedReason({double? requestedAmount}) {
+    final user = _riderUser;
+    final profile = _riderProfile;
+    if (user == null) return 'Sign in before requesting a payout.';
+    if (profile?['isFrozen'] == true ||
+        profile?['payoutPaused'] == true ||
+        '${profile?['riderStatus'] ?? profile?['driverStatus'] ?? ''}' ==
+            'frozen') {
+      return 'Account frozen.';
+    }
+    final stripeStatus = '${profile?['stripeStatus'] ?? ''}';
+    final accountId =
+        '${profile?['stripeAccountId'] ?? profile?['stripeConnectAccountId'] ?? ''}'
+            .trim();
+    if (accountId.isEmpty || stripeStatus == 'not_started') {
+      return 'Set up Stripe payouts first.';
+    }
+    if (stripeStatus == 'action_required' ||
+        stripeStatus == 'restricted' ||
+        stripeStatus == 'disabled') {
+      return 'Stripe action required.';
+    }
+    if (!_riderStripePayoutReady) {
+      return 'Stripe action required.';
+    }
+    if (!RiderOnboardingPolicy.isApproved(
+      email: user.email,
+      profile: profile,
+      verifiedSuperAdmin: _superAdminRiderBypass,
+    )) {
+      return 'Admin approval required.';
+    }
+    if (_earnings.availableBalance <= 0) return 'No available balance.';
+    if (requestedAmount != null &&
+        requestedAmount > _earnings.availableBalance) {
+      return 'The withdrawal amount is higher than your available balance.';
+    }
+    return null;
   }
 
   Future<void> _startStripePayoutSetup() async {
     final user = _riderUser;
     if (user == null) {
       setState(() => _withdrawMessage = 'Sign in before setting up payouts.');
-      return;
-    }
-    if (!RiderOnboardingPolicy.isApproved(
-      email: user.email,
-      profile: _riderProfile,
-      verifiedSuperAdmin: _superAdminRiderBypass,
-    )) {
-      setState(
-        () => _withdrawMessage =
-            'Admin approval is required before payout setup.',
-      );
       return;
     }
     setState(() => _withdrawMessage = 'Opening Stripe payout setup...');
@@ -16770,22 +16834,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() => _withdrawMessage = 'Sign in before requesting a payout.');
       return;
     }
-    if (!RiderOnboardingPolicy.canWithdraw(
-      email: user.email,
-      profile: _riderProfile,
-      verifiedSuperAdmin: _superAdminRiderBypass,
-    )) {
-      setState(() => _withdrawMessage =
-          'Your rider account must be approved before requesting a payout.');
-      return;
-    }
-    if (!_riderStripePayoutReady) {
-      setState(
-        () => _withdrawMessage =
-            'Complete Stripe payout setup before requesting a payout.',
-      );
-      return;
-    }
     final amount = double.tryParse(_withdrawAmount.text.trim()) ?? 0;
     if (amount <= 0) {
       setState(
@@ -16793,11 +16841,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       );
       return;
     }
-    if (amount > _earnings.availableBalance) {
-      setState(
-        () => _withdrawMessage =
-            'The withdrawal amount is higher than your available balance.',
-      );
+    final blockedReason = _riderPayoutBlockedReason(requestedAmount: amount);
+    if (blockedReason != null) {
+      setState(() => _withdrawMessage = blockedReason);
       return;
     }
 
@@ -16818,8 +16864,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (pending.docs.isNotEmpty) {
         if (!mounted) return;
         setState(
-          () => _withdrawMessage =
-              'You already have a withdrawal being processed.',
+          () => _withdrawMessage = 'Payout already pending.',
         );
         return;
       }
@@ -18546,7 +18591,13 @@ class _RiderWorkspace extends StatelessWidget {
     final amount = double.tryParse(amountText.trim()) ?? 0;
     return amount > 0 &&
         amount <= availableBalance &&
-        _stripePayoutReady(riderProfile);
+        availableBalance > 0 &&
+        _stripePayoutReady(riderProfile) &&
+        RiderOnboardingPolicy.isApproved(email: null, profile: riderProfile) &&
+        riderProfile?['payoutPaused'] != true &&
+        riderProfile?['isFrozen'] != true &&
+        '${riderProfile?['riderStatus'] ?? riderProfile?['driverStatus'] ?? ''}' !=
+            'frozen';
   }
 
   static bool _stripePayoutReady(Map<String, dynamic>? profile) {
@@ -18554,10 +18605,11 @@ class _RiderWorkspace extends StatelessWidget {
     return '${profile['stripeAccountId'] ?? profile['stripeConnectAccountId'] ?? ''}'
             .trim()
             .isNotEmpty &&
-        (profile['stripeOnboardingStatus'] == 'complete' ||
-            profile['onboardingComplete'] == true) &&
-        (profile['stripePayoutsEnabled'] == true ||
-            profile['payoutsEnabled'] == true) &&
+        (profile['stripeStatus'] == 'payouts_enabled' ||
+            (profile['stripePayoutsEnabled'] == true &&
+                (profile['stripeDetailsSubmitted'] == true ||
+                    profile['stripeOnboardingStatus'] == 'complete' ||
+                    profile['onboardingComplete'] == true))) &&
         profile['payoutPaused'] != true;
   }
 }
@@ -18581,30 +18633,41 @@ class _RiderPayoutStatusPanel extends StatelessWidget {
         '${profile?['stripeAccountId'] ?? profile?['stripeConnectAccountId'] ?? ''}'
             .trim();
     final hasAccount = accountId.isNotEmpty;
-    final onboardingComplete =
+    final stripeStatus = '${profile?['stripeStatus'] ?? ''}';
+    final onboardingComplete = stripeStatus == 'payouts_enabled' ||
+        stripeStatus == 'connected' ||
         profile?['stripeOnboardingStatus'] == 'complete' ||
-            profile?['stripeDetailsSubmitted'] == true ||
-            profile?['onboardingComplete'] == true;
-    final payoutsEnabled = profile?['stripePayoutsEnabled'] == true ||
+        profile?['stripeDetailsSubmitted'] == true ||
+        profile?['onboardingComplete'] == true;
+    final payoutsEnabled = stripeStatus == 'payouts_enabled' ||
+        profile?['stripePayoutsEnabled'] == true ||
         profile?['payoutsEnabled'] == true;
     final payoutPaused = profile?['payoutPaused'] == true;
     final requirements = (profile?['stripeRequirementsDue'] as List?) ??
         (profile?['stripeRequirementsPastDue'] as List?) ??
         const [];
     final ready = _RiderWorkspace._stripePayoutReady(profile);
+    final needsAction = stripeStatus == 'action_required' ||
+        stripeStatus == 'restricted' ||
+        stripeStatus == 'disabled';
+    final onboarding = stripeStatus == 'onboarding';
     final title = ready || (hasAccount && onboardingComplete && payoutsEnabled)
         ? 'Stripe Connected'
         : payoutPaused
             ? 'Payouts paused'
             : !hasAccount
                 ? 'Set up payouts with Stripe'
-                : 'Action Required';
+                : needsAction
+                    ? 'Action Required'
+                    : onboarding
+                        ? 'Continue Stripe Verification'
+                        : 'Action Required';
     final subtitle = ready ||
             (hasAccount && onboardingComplete && payoutsEnabled)
         ? 'Payouts Enabled. Bank account linked. You can request payouts after Circum approval and available earnings checks.'
         : !hasAccount
             ? 'Stripe securely collects your bank and identity details. Circum does not store bank account numbers or sort codes.'
-            : requirements.isNotEmpty
+            : needsAction || requirements.isNotEmpty
                 ? 'Stripe needs more information before payouts can be enabled.'
                 : 'Continue Stripe onboarding, then refresh your payout status.';
     return Container(

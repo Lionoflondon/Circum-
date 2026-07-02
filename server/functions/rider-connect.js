@@ -146,6 +146,21 @@ async function loadRider(riderId) {
   return {profileRef, profile};
 }
 
+function stripeStatusFromAccount(account) {
+  if (!account || !account.id) return "not_started";
+  const requirements = account.requirements || {};
+  const currentlyDue = requirements.currently_due || [];
+  const pastDue = requirements.past_due || [];
+  if (text(requirements.disabled_reason)) return "disabled";
+  if (currentlyDue.length > 0 || pastDue.length > 0) return "action_required";
+  if (account.details_submitted !== true) return "onboarding";
+  if (account.payouts_enabled === true) return "payouts_enabled";
+  if (account.charges_enabled === false && account.details_submitted === true) {
+    return "restricted";
+  }
+  return "connected";
+}
+
 function connectPatch(account, extra = {}) {
   const requirements = account.requirements || {};
   const currentlyDue = requirements.currently_due || [];
@@ -154,15 +169,18 @@ function connectPatch(account, extra = {}) {
   const chargesEnabled = account.charges_enabled === true;
   const detailsSubmitted = account.details_submitted === true;
   const onboardingComplete = detailsSubmitted && payoutsEnabled;
+  const stripeStatus = stripeStatusFromAccount(account);
   return {
     stripeConnectAccountId: account.id,
     stripeAccountId: account.id,
     stripeConnectType: "express",
-    stripeConnectStatus: onboardingComplete ? "payouts_enabled" : "verification_required",
+    stripeStatus,
+    stripeConnectStatus: stripeStatus,
+    stripeOnboardingStarted: true,
     stripeDetailsSubmitted: detailsSubmitted,
     stripeChargesEnabled: chargesEnabled,
     stripePayoutsEnabled: payoutsEnabled,
-    stripeOnboardingStatus: onboardingComplete ? "complete" : "incomplete",
+    stripeOnboardingStatus: stripeStatus === "payouts_enabled" ? "complete" : "incomplete",
     payoutsEnabled,
     chargesEnabled,
     onboardingComplete,
@@ -171,6 +189,7 @@ function connectPatch(account, extra = {}) {
     stripeRequirementsDue: currentlyDue,
     stripeRequirementsPastDue: pastDue,
     stripeDisabledReason: requirements.disabled_reason || null,
+    stripeLastSyncedAt: FieldValue.serverTimestamp(),
     stripeLastCheckedAt: FieldValue.serverTimestamp(),
     lastStripeSyncAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -192,9 +211,6 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
-    if (!approved(profile)) {
-      throw new functions.https.HttpsError("failed-precondition", "Admin approval is required before payout setup.");
-    }
     if (text(profile.stripeConnectAccountId || profile.stripeAccountId)) {
       return {
         stripeConnectAccountId: profile.stripeConnectAccountId || profile.stripeAccountId,
@@ -219,7 +235,8 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
       },
     });
     await updateRiderConnectFields(riderId, connectPatch(account, {
-      stripeConnectStatus: "account_created",
+      stripeStatus: "onboarding",
+      stripeConnectStatus: "onboarding",
       stripeOnboardingCreatedAt: FieldValue.serverTimestamp(),
     }));
     await getFirestore().collection("riderPayoutAudit").add({
@@ -247,9 +264,6 @@ function createStripeOnboardingLink(stripeOrFactory) {
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
-    if (!approved(profile)) {
-      throw new functions.https.HttpsError("failed-precondition", "Admin approval is required before payout setup.");
-    }
     let accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
     if (!accountId) {
       const created = await stripe.accounts.create({
@@ -262,7 +276,8 @@ function createStripeOnboardingLink(stripeOrFactory) {
       });
       accountId = created.id;
       await updateRiderConnectFields(riderId, connectPatch(created, {
-        stripeConnectStatus: "account_created",
+        stripeStatus: "onboarding",
+        stripeConnectStatus: "onboarding",
       }));
     }
     const returnUrl = riderStripeReturnUrl;
@@ -274,8 +289,11 @@ function createStripeOnboardingLink(stripeOrFactory) {
       type: "account_onboarding",
     });
     await updateRiderConnectFields(riderId, {
-      stripeConnectStatus: "onboarding_link_created",
+      stripeStatus: "onboarding",
+      stripeConnectStatus: "onboarding",
+      stripeOnboardingStarted: true,
       payoutFeePayer: "rider",
+      stripeLastSyncedAt: FieldValue.serverTimestamp(),
       lastStripeSyncAt: FieldValue.serverTimestamp(),
     });
     return {
@@ -301,7 +319,40 @@ function syncStripeConnectStatus(stripeOrFactory) {
     const {profile} = await loadRider(riderId);
     const accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
     if (!accountId) {
-      throw new functions.https.HttpsError("failed-precondition", "Stripe payout setup has not started.");
+      const patch = {
+        stripeStatus: "not_started",
+        stripeConnectStatus: "not_started",
+        stripeOnboardingStarted: false,
+        stripeDetailsSubmitted: false,
+        stripeChargesEnabled: false,
+        stripePayoutsEnabled: false,
+        payoutsEnabled: false,
+        chargesEnabled: false,
+        onboardingComplete: false,
+        payoutFeePayer: "rider",
+        stripeRequirementsDue: [],
+        stripeRequirementsPastDue: [],
+        stripeDisabledReason: null,
+        stripeLastSyncedAt: FieldValue.serverTimestamp(),
+        stripeLastCheckedAt: FieldValue.serverTimestamp(),
+        lastStripeSyncAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      await updateRiderConnectFields(riderId, patch);
+      return {
+        stripeStatus: "not_started",
+        stripeConnectType: "express",
+        stripeDetailsSubmitted: false,
+        stripeChargesEnabled: false,
+        stripePayoutsEnabled: false,
+        payoutsEnabled: false,
+        chargesEnabled: false,
+        onboardingComplete: false,
+        payoutPaused: profile.payoutPaused === true,
+        payoutFeePayer: "rider",
+        requirementsDue: [],
+        disabledReason: null,
+      };
     }
     const account = await stripe.accounts.retrieve(accountId);
     const patch = connectPatch(account);
@@ -310,6 +361,7 @@ function syncStripeConnectStatus(stripeOrFactory) {
       stripeConnectAccountId: account.id,
       stripeAccountId: account.id,
       stripeConnectType: "express",
+      stripeStatus: patch.stripeStatus,
       stripeDetailsSubmitted: patch.stripeDetailsSubmitted,
       stripeChargesEnabled: patch.stripeChargesEnabled,
       stripePayoutsEnabled: patch.stripePayoutsEnabled,
@@ -345,7 +397,10 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       throw new functions.https.HttpsError("failed-precondition", "Rider must be approved first.");
     }
     const stripeAccountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
-    if (!stripeAccountId || profile.onboardingComplete !== true || profile.payoutsEnabled !== true || profile.payoutPaused === true) {
+    if (!stripeAccountId ||
+      profile.stripeStatus !== "payouts_enabled" ||
+      profile.stripePayoutsEnabled !== true ||
+      profile.payoutPaused === true) {
       throw new functions.https.HttpsError("failed-precondition", "Rider Stripe payout setup is not ready.");
     }
     const walletRef = db.collection("riderEarnings").doc(riderId);
@@ -612,6 +667,45 @@ function handleStripeConnectWebhook(stripeOrFactory) {
   });
 }
 
+function scheduledRiderStripeStatusSync(stripeOrFactory) {
+  return stripeSecretRuntime.pubsub.schedule("every 6 hours").onRun(async () => {
+    const stripe = stripeFrom(stripeOrFactory);
+    const db = getFirestore();
+    const byId = new Map();
+    const addDocs = (snapshot) => {
+      snapshot.docs.forEach((doc) => byId.set(doc.id, doc));
+    };
+    addDocs(await db.collection("riderProfiles")
+        .where("stripeAccountId", ">", "")
+        .limit(200)
+        .get());
+    addDocs(await db.collection("riderProfiles")
+        .where("stripeConnectAccountId", ">", "")
+        .limit(200)
+        .get());
+    let synced = 0;
+    let failed = 0;
+    for (const doc of byId.values()) {
+      const profile = doc.data() || {};
+      const accountId = text(profile.stripeAccountId || profile.stripeConnectAccountId);
+      if (!accountId) continue;
+      try {
+        const account = await stripe.accounts.retrieve(accountId);
+        await updateRiderConnectFields(doc.id, connectPatch(account));
+        synced += 1;
+      } catch (error) {
+        failed += 1;
+        console.error("Scheduled rider Stripe sync failed", {
+          riderId: doc.id,
+          stripeAccountId: accountId,
+          message: error && error.message,
+        });
+      }
+    }
+    return {synced, failed};
+  });
+}
+
 function redactLegacyPayoutBankFields() {
   return functions.https.onCall(async (data, context) => {
     await assertActor(context, text((data && data.riderId) || (context.auth && context.auth.uid)), {adminOnly: true});
@@ -644,8 +738,10 @@ module.exports = {
   syncStripeConnectStatus,
   createRiderTransferOrPayout,
   handleStripeConnectWebhook,
+  scheduledRiderStripeStatusSync,
   redactLegacyPayoutBankFields,
   adminBaseUrl,
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
+  stripeStatusFromAccount,
 };

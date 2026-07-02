@@ -71,10 +71,11 @@ class RiderOnboardingPolicy {
           '${profile?['stripeAccountId'] ?? profile?['stripeConnectAccountId'] ?? ''}'
               .trim()
               .isNotEmpty &&
-          (profile?['stripeOnboardingStatus'] == 'complete' ||
-              profile?['onboardingComplete'] == true) &&
-          (profile?['stripePayoutsEnabled'] == true ||
-              profile?['payoutsEnabled'] == true) &&
+          (profile?['stripeStatus'] == 'payouts_enabled' ||
+              (profile?['stripePayoutsEnabled'] == true &&
+                  (profile?['stripeDetailsSubmitted'] == true ||
+                      profile?['stripeOnboardingStatus'] == 'complete' ||
+                      profile?['onboardingComplete'] == true))) &&
           profile?['payoutPaused'] != true);
 
   static Map<String, dynamic> adminReviewPatch({

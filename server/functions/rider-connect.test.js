@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
+  stripeStatusFromAccount,
 } = require("./rider-connect");
 
 test("deducts Stripe payout fees from rider share, not Circum commission", () => {
@@ -51,4 +52,40 @@ test("estimates Stripe fee from backend policy values", () => {
   });
 
   assert.equal(fee, 1.7);
+});
+
+test("maps enabled Express account to payouts_enabled", () => {
+  const status = stripeStatusFromAccount({
+    id: "acct_enabled",
+    details_submitted: true,
+    charges_enabled: true,
+    payouts_enabled: true,
+    requirements: {currently_due: [], past_due: []},
+  });
+
+  assert.equal(status, "payouts_enabled");
+});
+
+test("maps incomplete Express account to onboarding", () => {
+  const status = stripeStatusFromAccount({
+    id: "acct_onboarding",
+    details_submitted: false,
+    charges_enabled: false,
+    payouts_enabled: false,
+    requirements: {currently_due: [], past_due: []},
+  });
+
+  assert.equal(status, "onboarding");
+});
+
+test("maps requirements to action_required", () => {
+  const status = stripeStatusFromAccount({
+    id: "acct_action",
+    details_submitted: true,
+    charges_enabled: true,
+    payouts_enabled: false,
+    requirements: {currently_due: ["external_account"], past_due: []},
+  });
+
+  assert.equal(status, "action_required");
 });

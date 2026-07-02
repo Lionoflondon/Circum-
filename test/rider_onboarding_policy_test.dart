@@ -53,6 +53,7 @@ void main() {
       const profile = {
         'onboardingStatus': 'approved',
         'stripeConnectAccountId': 'acct_123',
+        'stripeStatus': 'payouts_enabled',
         'onboardingComplete': true,
         'payoutsEnabled': true,
         'payoutPaused': false,
@@ -71,7 +72,25 @@ void main() {
         'onboardingStatus': 'approved',
         'stripeAccountId': 'acct_express_123',
         'stripeConnectType': 'express',
-        'stripeOnboardingStatus': 'complete',
+        'stripeStatus': 'payouts_enabled',
+        'stripePayoutsEnabled': true,
+        'payoutPaused': false,
+      };
+      expect(
+        RiderOnboardingPolicy.canWithdraw(
+          email: 'rider@example.com',
+          profile: profile,
+        ),
+        isTrue,
+      );
+    });
+
+    test('approved rider can withdraw with synced Stripe details fields', () {
+      const profile = {
+        'onboardingStatus': 'approved',
+        'stripeAccountId': 'acct_express_456',
+        'stripeConnectType': 'express',
+        'stripeDetailsSubmitted': true,
         'stripePayoutsEnabled': true,
         'payoutPaused': false,
       };
