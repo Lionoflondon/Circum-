@@ -110,8 +110,11 @@ enum _WebAppMode {
   rider,
   gifts,
   admin,
+  iris,
+  healthPlus,
   terms,
   privacy,
+  cookies,
   vanguard,
   business,
 }
@@ -143,8 +146,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
   late _SenderStep _senderInitialStep = _initialSenderStep();
 
   bool get _senderArchitecturePreview {
-    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    return path == '/sender' || Uri.base.queryParameters['app'] == 'sender';
+    return Uri.base.queryParameters['preview'] == 'sender-ui';
   }
 
   bool get _riderArchitecturePreview {
@@ -163,27 +165,41 @@ class _WebSenderAppState extends State<WebSenderApp> {
       return _WebAppMode.admin;
     }
     final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    if (path == '/sender') return _WebAppMode.sender;
+    if (path == '/sender' || path == '/app') return _WebAppMode.sender;
     if (path == '/rider') return _WebAppMode.rider;
+    if (path == '/iris') return _WebAppMode.iris;
+    if (path == '/health' || path == '/health-plus') {
+      return _WebAppMode.healthPlus;
+    }
+    if (path == '/gifts') return _WebAppMode.gifts;
     if (path == '/terms') return _WebAppMode.terms;
     if (path == '/privacy') return _WebAppMode.privacy;
+    if (path == '/cookies') return _WebAppMode.cookies;
     if (path == '/vanguard') return _WebAppMode.vanguard;
     if (path == '/business') return _WebAppMode.business;
     return switch (Uri.base.queryParameters['app']) {
-      'sender' || 'health' || 'business' || 'profile' => _WebAppMode.sender,
+      'sender' => _WebAppMode.sender,
+      'health' => _WebAppMode.healthPlus,
+      'business' => _WebAppMode.business,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
       'gifts' => _WebAppMode.gifts,
+      'iris' => _WebAppMode.iris,
       _ => _WebAppMode.landing,
     };
   }
 
   _SenderStep _initialSenderStep() {
     final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    if (path == '/sender') return _SenderStep.dashboard;
+    if (path == '/sender' || path == '/app') {
+      return switch (Uri.base.queryParameters['section'] ??
+          Uri.base.queryParameters['service']) {
+        'health' || 'health-plus' => _SenderStep.healthPlus,
+        'business' => _SenderStep.business,
+        'account' || 'profile' => _SenderStep.account,
+        _ => _SenderStep.dashboard,
+      };
+    }
     return switch (Uri.base.queryParameters['app']) {
-      'health' => _SenderStep.healthPlus,
-      'business' => _SenderStep.business,
-      'profile' => _SenderStep.account,
       _ => _SenderStep.dashboard,
     };
   }
@@ -281,6 +297,28 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     colors: colors,
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
                   ),
+                _WebAppMode.iris => _PublicInfoPage(
+                    key: const ValueKey('iris-public'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    title: 'IRIS',
+                    eyebrow: 'Circum Intelligence',
+                    body:
+                        'IRIS supports item analysis, vehicle recommendation, pricing weight checks, and delivery verification inside Circum workflows.',
+                    icon: Icons.auto_awesome_outlined,
+                    primaryLabel: 'Send a Parcel',
+                    onPrimary: () => _openSenderDashboard(),
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
+                _WebAppMode.healthPlus => _PublicHealthPlusPage(
+                    key: const ValueKey('health-public'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    onStartHealth: () => _openSenderHealthPlus(),
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
                 _WebAppMode.terms => _LegalDocumentPage(
                     key: const ValueKey('terms'),
                     colors: colors,
@@ -294,6 +332,21 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     title: 'Privacy Policy',
                     documentPath: '/legal/CIRCUM_Privacy_Policy.pdf',
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
+                  ),
+                _WebAppMode.cookies => _PublicInfoPage(
+                    key: const ValueKey('cookies-public'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    title: 'Cookies',
+                    eyebrow: 'Privacy',
+                    body:
+                        'Circum uses essential cookies and local browser storage to keep the website and authenticated dashboards working securely.',
+                    icon: Icons.cookie_outlined,
+                    primaryLabel: 'Privacy Policy',
+                    onPrimary: () =>
+                        setState(() => _mode = _WebAppMode.privacy),
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
                 _WebAppMode.vanguard => _VanguardExplainerPage(
                     key: const ValueKey('vanguard'),
@@ -312,15 +365,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     key: const ValueKey('landing'),
                     colors: colors,
                     darkMode: _darkMode,
-                    onStart: () => setState(() {
-                      _senderInitialStep = _SenderStep.dashboard;
-                      _mode = _WebAppMode.sender;
-                    }),
+                    onStart: _openSenderDashboard,
                     onRider: () => setState(() => _mode = _WebAppMode.rider),
-                    onHealthPlus: () => setState(() {
-                      _senderInitialStep = _SenderStep.healthPlus;
-                      _mode = _WebAppMode.sender;
-                    }),
+                    onHealthPlus: () =>
+                        setState(() => _mode = _WebAppMode.healthPlus),
                     onGifts: () => setState(() => _mode = _WebAppMode.gifts),
                     onBusiness: () => unawaited(launchUrl(
                       Uri.base.resolve('/business'),
@@ -334,7 +382,11 @@ class _WebSenderAppState extends State<WebSenderApp> {
                   ),
               },
             ),
-            _PlatformNotificationCenter(colors: colors, mode: _mode),
+            if (_mode == _WebAppMode.sender ||
+                _mode == _WebAppMode.rider ||
+                _mode == _WebAppMode.business ||
+                _mode == _WebAppMode.admin)
+              _PlatformNotificationCenter(colors: colors, mode: _mode),
             _CompanyLiveChatButton(colors: colors),
           ],
         ),
@@ -350,6 +402,20 @@ class _WebSenderAppState extends State<WebSenderApp> {
         CircumRole.admin => _WebAppMode.admin,
         CircumRole.unknown => _WebAppMode.landing,
       };
+    });
+  }
+
+  void _openSenderDashboard() {
+    setState(() {
+      _senderInitialStep = _SenderStep.dashboard;
+      _mode = _WebAppMode.sender;
+    });
+  }
+
+  void _openSenderHealthPlus() {
+    setState(() {
+      _senderInitialStep = _SenderStep.healthPlus;
+      _mode = _WebAppMode.sender;
     });
   }
 }
@@ -48200,6 +48266,186 @@ class _HealthPlusLandingBand extends StatelessWidget {
   }
 }
 
+class _PublicHealthPlusPage extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final VoidCallback onStartHealth;
+  final VoidCallback onBack;
+  final VoidCallback onToggleTheme;
+
+  const _PublicHealthPlusPage({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.onStartHealth,
+    required this.onBack,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _LandingNav(
+            colors: colors,
+            darkMode: darkMode,
+            onStart: onStartHealth,
+            onRider: () => unawaited(
+              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
+            ),
+            onHealthPlus: () {},
+            onGifts: () => unawaited(
+              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
+            ),
+            onBusiness: () => unawaited(
+              launchUrl(Uri.base.resolve('/business'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onToggleTheme: onToggleTheme,
+          ),
+          _HealthPlusLandingBand(
+            colors: colors,
+            onHealthPlus: onStartHealth,
+          ),
+          _LandingFooter(colors: colors),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicInfoPage extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final String title;
+  final String eyebrow;
+  final String body;
+  final IconData icon;
+  final String primaryLabel;
+  final VoidCallback onPrimary;
+  final VoidCallback onBack;
+  final VoidCallback onToggleTheme;
+
+  const _PublicInfoPage({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.title,
+    required this.eyebrow,
+    required this.body,
+    required this.icon,
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.onBack,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _LandingNav(
+            colors: colors,
+            darkMode: darkMode,
+            onStart: onPrimary,
+            onRider: () => unawaited(
+              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
+            ),
+            onHealthPlus: () => unawaited(
+              launchUrl(Uri.base.resolve('/health'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onGifts: () => unawaited(
+              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
+            ),
+            onBusiness: () => unawaited(
+              launchUrl(Uri.base.resolve('/business'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onToggleTheme: onToggleTheme,
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(22, 74, 22, 84),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: colors.dark
+                    ? const [
+                        Color(0xff050816),
+                        Color(0xff08111f),
+                        Color(0xff0f1f3d),
+                      ]
+                    : const [
+                        Color(0xffffffff),
+                        Color(0xffeef6ff),
+                        Color(0xffffffff),
+                      ],
+              ),
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Column(
+                  children: [
+                    Icon(icon,
+                        size: narrow ? 46 : 58, color: const Color(0xff93c5fd)),
+                    const SizedBox(height: 18),
+                    const _BusinessEyebrow('Public website'),
+                    const SizedBox(height: 10),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.dmSerifDisplay(
+                        color: colors.text,
+                        fontSize: narrow ? 44 : 68,
+                        height: 1.02,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      eyebrow,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: colors.adminAccent,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      body,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: colors.mutedText,
+                        fontSize: narrow ? 17 : 20,
+                        height: 1.55,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    _PillButton(
+                      label: primaryLabel,
+                      icon: Icons.arrow_forward_rounded,
+                      dark: true,
+                      onPressed: onPrimary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _LandingFooter(colors: colors),
+        ],
+      ),
+    );
+  }
+}
+
 class _LandingFooter extends StatelessWidget {
   final _CircumColors colors;
 
@@ -48287,15 +48533,15 @@ class _GlobalLegalFooter extends StatelessWidget {
                 runSpacing: 2,
                 children: [
                   TextButton(
-                    onPressed: () => _open('/?app=sender'),
+                    onPressed: () => _open('/sender'),
                     child: const Text('Deliveries'),
                   ),
                   TextButton(
-                    onPressed: () => _open('/?app=health'),
+                    onPressed: () => _open('/health'),
                     child: const Text('Health+'),
                   ),
                   TextButton(
-                    onPressed: () => _open('/?app=gifts'),
+                    onPressed: () => _open('/gifts'),
                     child: const Text('Gifts by Circum'),
                   ),
                   TextButton(
@@ -48333,6 +48579,10 @@ class _GlobalLegalFooter extends StatelessWidget {
                   TextButton(
                     onPressed: () => _open('/privacy'),
                     child: const Text('Privacy Policy'),
+                  ),
+                  TextButton(
+                    onPressed: () => _open('/cookies'),
+                    child: const Text('Cookies'),
                   ),
                 ],
               ),
