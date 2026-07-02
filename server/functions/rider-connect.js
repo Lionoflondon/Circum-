@@ -20,6 +20,10 @@ function stripeFrom(stripeOrFactory) {
   return typeof stripeOrFactory === "function" ? stripeOrFactory() : stripeOrFactory;
 }
 
+function stripeClientMode(stripe) {
+  return stripe && stripe._circumStripeMode ? stripe._circumStripeMode : "unknown";
+}
+
 function numberValue(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -173,6 +177,7 @@ function connectPatch(account, extra = {}) {
   return {
     stripeConnectAccountId: account.id,
     stripeAccountId: account.id,
+    stripeMode: extra.stripeMode || "unknown",
     stripeConnectType: "express",
     stripeStatus,
     stripeConnectStatus: stripeStatus,
@@ -205,20 +210,76 @@ async function updateRiderConnectFields(riderId, patch) {
   await batch.commit();
 }
 
+function resetStripeFieldsPatch({staleAccountId = "", staleMode = "test"} = {}) {
+  return {
+    staleStripeAccountId: staleAccountId || FieldValue.delete(),
+    staleStripeMode: staleAccountId ? staleMode : FieldValue.delete(),
+    staleStripeResetAt: staleAccountId ? FieldValue.serverTimestamp() : FieldValue.delete(),
+    stripeConnectAccountId: FieldValue.delete(),
+    stripeAccountId: FieldValue.delete(),
+    stripeMode: FieldValue.delete(),
+    stripeStatus: "not_started",
+    stripeConnectStatus: "not_started",
+    stripeConnectType: FieldValue.delete(),
+    stripeOnboardingStarted: false,
+    stripeDetailsSubmitted: false,
+    stripeChargesEnabled: false,
+    stripePayoutsEnabled: false,
+    stripeRequirementsDue: [],
+    stripeRequirementsPastDue: [],
+    stripeDisabledReason: null,
+    stripeOnboardingStatus: "incomplete",
+    payoutsEnabled: false,
+    chargesEnabled: false,
+    onboardingComplete: false,
+    stripeLastSyncedAt: FieldValue.serverTimestamp(),
+    stripeLastCheckedAt: FieldValue.serverTimestamp(),
+    lastStripeSyncAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+async function resetRiderStripeFields(riderId, options = {}) {
+  await updateRiderConnectFields(riderId, resetStripeFieldsPatch(options));
+}
+
+async function retrieveUsableAccount(stripe, riderId, accountId) {
+  if (!accountId) return null;
+  try {
+    return await stripe.accounts.retrieve(accountId);
+  } catch (error) {
+    if (error && (error.code === "resource_missing" || error.statusCode === 404)) {
+      await resetRiderStripeFields(riderId, {
+        staleAccountId: accountId,
+        staleMode: stripeClientMode(stripe) === "live" ? "test_or_missing" : "missing",
+      });
+      return null;
+    }
+    throw error;
+  }
+}
+
 function createStripeConnectAccountForRider(stripeOrFactory) {
   return stripeSecretRuntime.https.onCall(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
+    const mode = stripeClientMode(stripe);
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
-    if (text(profile.stripeConnectAccountId || profile.stripeAccountId)) {
-      return {
-        stripeConnectAccountId: profile.stripeConnectAccountId || profile.stripeAccountId,
-        stripeAccountId: profile.stripeAccountId || profile.stripeConnectAccountId,
-        stripeConnectType: "express",
-        payoutFeePayer: "rider",
-        alreadyExists: true,
-      };
+    const existingAccountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
+    if (existingAccountId) {
+      const existingAccount = await retrieveUsableAccount(stripe, riderId, existingAccountId);
+      if (existingAccount) {
+        await updateRiderConnectFields(riderId, connectPatch(existingAccount, {stripeMode: mode}));
+        return {
+          stripeConnectAccountId: existingAccount.id,
+          stripeAccountId: existingAccount.id,
+          stripeConnectType: "express",
+          stripeMode: mode,
+          payoutFeePayer: "rider",
+          alreadyExists: true,
+        };
+      }
     }
     const account = await stripe.accounts.create({
       type: "express",
@@ -235,6 +296,7 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
       },
     });
     await updateRiderConnectFields(riderId, connectPatch(account, {
+      stripeMode: mode,
       stripeStatus: "onboarding",
       stripeConnectStatus: "onboarding",
       stripeOnboardingCreatedAt: FieldValue.serverTimestamp(),
@@ -253,6 +315,7 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
       stripeConnectAccountId: account.id,
       stripeAccountId: account.id,
       stripeConnectType: "express",
+      stripeMode: mode,
       payoutFeePayer: "rider",
     };
   });
@@ -261,10 +324,19 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
 function createStripeOnboardingLink(stripeOrFactory) {
   return stripeSecretRuntime.https.onCall(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
+    const mode = stripeClientMode(stripe);
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
     let accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
+    if (accountId) {
+      const existingAccount = await retrieveUsableAccount(stripe, riderId, accountId);
+      if (existingAccount) {
+        await updateRiderConnectFields(riderId, connectPatch(existingAccount, {stripeMode: mode}));
+      } else {
+        accountId = "";
+      }
+    }
     if (!accountId) {
       const created = await stripe.accounts.create({
         type: "express",
@@ -276,6 +348,7 @@ function createStripeOnboardingLink(stripeOrFactory) {
       });
       accountId = created.id;
       await updateRiderConnectFields(riderId, connectPatch(created, {
+        stripeMode: mode,
         stripeStatus: "onboarding",
         stripeConnectStatus: "onboarding",
       }));
@@ -291,6 +364,7 @@ function createStripeOnboardingLink(stripeOrFactory) {
     await updateRiderConnectFields(riderId, {
       stripeStatus: "onboarding",
       stripeConnectStatus: "onboarding",
+      stripeMode: mode,
       stripeOnboardingStarted: true,
       payoutFeePayer: "rider",
       stripeLastSyncedAt: FieldValue.serverTimestamp(),
@@ -301,6 +375,7 @@ function createStripeOnboardingLink(stripeOrFactory) {
       stripeConnectAccountId: accountId,
       stripeAccountId: accountId,
       stripeConnectType: "express",
+      stripeMode: mode,
       returnUrl,
       refreshUrl,
     };
@@ -314,6 +389,7 @@ function refreshStripeOnboardingLink(stripe) {
 function syncStripeConnectStatus(stripeOrFactory) {
   return stripeSecretRuntime.https.onCall(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
+    const mode = stripeClientMode(stripe);
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
@@ -333,6 +409,7 @@ function syncStripeConnectStatus(stripeOrFactory) {
         stripeRequirementsDue: [],
         stripeRequirementsPastDue: [],
         stripeDisabledReason: null,
+        stripeMode: FieldValue.delete(),
         stripeLastSyncedAt: FieldValue.serverTimestamp(),
         stripeLastCheckedAt: FieldValue.serverTimestamp(),
         lastStripeSyncAt: FieldValue.serverTimestamp(),
@@ -342,6 +419,7 @@ function syncStripeConnectStatus(stripeOrFactory) {
       return {
         stripeStatus: "not_started",
         stripeConnectType: "express",
+        stripeMode: null,
         stripeDetailsSubmitted: false,
         stripeChargesEnabled: false,
         stripePayoutsEnabled: false,
@@ -354,13 +432,32 @@ function syncStripeConnectStatus(stripeOrFactory) {
         disabledReason: null,
       };
     }
-    const account = await stripe.accounts.retrieve(accountId);
-    const patch = connectPatch(account);
+    const account = await retrieveUsableAccount(stripe, riderId, accountId);
+    if (!account) {
+      return {
+        stripeStatus: "not_started",
+        stripeConnectType: "express",
+        stripeMode: mode,
+        staleStripeAccountId: accountId,
+        stripeDetailsSubmitted: false,
+        stripeChargesEnabled: false,
+        stripePayoutsEnabled: false,
+        payoutsEnabled: false,
+        chargesEnabled: false,
+        onboardingComplete: false,
+        payoutPaused: profile.payoutPaused === true,
+        payoutFeePayer: "rider",
+        requirementsDue: [],
+        disabledReason: null,
+      };
+    }
+    const patch = connectPatch(account, {stripeMode: mode});
     await updateRiderConnectFields(riderId, patch);
     return {
       stripeConnectAccountId: account.id,
       stripeAccountId: account.id,
       stripeConnectType: "express",
+      stripeMode: mode,
       stripeStatus: patch.stripeStatus,
       stripeDetailsSubmitted: patch.stripeDetailsSubmitted,
       stripeChargesEnabled: patch.stripeChargesEnabled,
@@ -377,9 +474,41 @@ function syncStripeConnectStatus(stripeOrFactory) {
   });
 }
 
+function resetRiderTestStripeAccount() {
+  return functions.https.onCall(async (data, context) => {
+    const riderId = text(data && data.riderId);
+    await assertActor(context, riderId, {adminOnly: true});
+    if (!riderId) {
+      throw new functions.https.HttpsError("invalid-argument", "Rider is required.");
+    }
+    const {profile} = await loadRider(riderId);
+    const staleAccountId = text(profile.stripeAccountId || profile.stripeConnectAccountId);
+    const staleMode = text(profile.stripeMode || profile.staleStripeMode || "test_or_missing");
+    await resetRiderStripeFields(riderId, {
+      staleAccountId,
+      staleMode,
+    });
+    await getFirestore().collection("riderPayoutAudit").add({
+      riderId,
+      action: "stripe_test_account_reset",
+      staleStripeAccountId: staleAccountId || null,
+      staleStripeMode: staleMode || null,
+      actorId: context.auth.uid,
+      actorType: "admin",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      stripeStatus: "not_started",
+      staleStripeAccountId: staleAccountId || null,
+      staleStripeMode: staleMode || null,
+    };
+  });
+}
+
 function createRiderTransferOrPayout(stripeOrFactory) {
   return stripeSecretRuntime.https.onCall(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
+    const mode = stripeClientMode(stripe);
     const riderId = text(data && data.riderId);
     const amount = Number((data && data.amount) || 0);
     const requestId = text(data && data.requestId);
@@ -480,6 +609,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         estimatedStripeFees: breakdown.estimatedStripeFees,
         riderNetPayout: breakdown.riderNetPayout,
         stripeAccountId,
+        stripeMode: mode,
         payoutStatus: "processing",
         payoutCreatedAt: FieldValue.serverTimestamp(),
         payoutFeePolicy: breakdown.payoutFeePolicy,
@@ -559,6 +689,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       payoutRequestId: requestRef.id,
       action: "stripe_transfer_created",
       stripeTransferId: transfer.id,
+      stripeMode: mode,
       amount,
       feePayer: "rider",
       actorId: context.auth.uid,
@@ -601,7 +732,11 @@ function handleStripeConnectWebhook(stripeOrFactory) {
       const object = (event.data && event.data.object) || {};
       if (event.type === "account.updated") {
         const riderId = text(object.metadata && object.metadata.riderId);
-        if (riderId) await updateRiderConnectFields(riderId, connectPatch(object));
+        if (riderId) {
+          await updateRiderConnectFields(riderId, connectPatch(object, {
+            stripeMode: stripeClientMode(stripe),
+          }));
+        }
       }
       if (event.type === "payout.paid" || event.type === "payout.failed") {
         const accountId = text(object.destination || object.account || event.account);
@@ -690,8 +825,14 @@ function scheduledRiderStripeStatusSync(stripeOrFactory) {
       const accountId = text(profile.stripeAccountId || profile.stripeConnectAccountId);
       if (!accountId) continue;
       try {
-        const account = await stripe.accounts.retrieve(accountId);
-        await updateRiderConnectFields(doc.id, connectPatch(account));
+        const account = await retrieveUsableAccount(stripe, doc.id, accountId);
+        if (!account) {
+          failed += 1;
+          continue;
+        }
+        await updateRiderConnectFields(doc.id, connectPatch(account, {
+          stripeMode: stripeClientMode(stripe),
+        }));
         synced += 1;
       } catch (error) {
         failed += 1;
@@ -737,6 +878,7 @@ module.exports = {
   refreshStripeOnboardingLink,
   syncStripeConnectStatus,
   createRiderTransferOrPayout,
+  resetRiderTestStripeAccount,
   handleStripeConnectWebhook,
   scheduledRiderStripeStatusSync,
   redactLegacyPayoutBankFields,

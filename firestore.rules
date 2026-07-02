@@ -49,6 +49,10 @@ service cloud.firestore {
       return !data.keys().hasAny([
         'stripeConnectAccountId',
         'stripeAccountId',
+        'stripeMode',
+        'staleStripeAccountId',
+        'staleStripeMode',
+        'staleStripeResetAt',
         'stripeConnectType',
         'stripeStatus',
         'stripeConnectStatus',
@@ -76,6 +80,10 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'stripeConnectAccountId',
         'stripeAccountId',
+        'stripeMode',
+        'staleStripeAccountId',
+        'staleStripeMode',
+        'staleStripeResetAt',
         'stripeConnectType',
         'stripeStatus',
         'stripeConnectStatus',

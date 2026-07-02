@@ -2062,6 +2062,25 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     return 'Incomplete';
   }
 
+  String _driverStripeModeLabel(Map<String, dynamic> driver) {
+    final mode = '${driver['stripeMode'] ?? driver['staleStripeMode'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    if (mode == 'live') return 'live';
+    if (mode == 'test' || mode == 'test_or_missing') return 'test';
+    final accountId =
+        '${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}'
+            .trim();
+    return accountId.isEmpty ? 'not started' : 'not synced';
+  }
+
+  bool _driverHasTestStripeAccount(Map<String, dynamic> driver) {
+    final mode = '${driver['stripeMode'] ?? driver['staleStripeMode'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    return mode == 'test' || mode == 'test_or_missing';
+  }
+
   Future<void> _syncDriverStripeStatus(Map<String, dynamic> driver) async {
     final riderId = _driverId(driver);
     if (riderId.isEmpty) return;
@@ -2081,6 +2100,33 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _message = 'Could not sync rider Stripe status.');
+    }
+  }
+
+  Future<void> _resetDriverTestStripeAccount(
+      Map<String, dynamic> driver) async {
+    final riderId = _driverId(driver);
+    if (riderId.isEmpty) return;
+    setState(() => _message = 'Resetting rider Stripe account link...');
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('resetRiderTestStripeAccount')
+          .call({'riderId': riderId});
+      await _loadAdminData();
+      if (!mounted) return;
+      setState(
+        () => _message =
+            'Test Stripe account reset. The rider can start live onboarding again.',
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _message =
+            error.message ?? 'Could not reset this rider Stripe account.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _message = 'Could not reset this rider Stripe account.');
     }
   }
 
@@ -2833,6 +2879,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         label: 'Sync Stripe Status',
         enabled: _can(AdminPermission.viewFinance),
         onTap: () => _syncDriverStripeStatus(driver),
+      ),
+      _AdminAction(
+        label: 'Reset Test Stripe Account',
+        enabled: _can(AdminPermission.viewFinance) &&
+            (_driverHasTestStripeAccount(driver) ||
+                '${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}'
+                    .trim()
+                    .isNotEmpty),
+        onTap: () => _resetDriverTestStripeAccount(driver),
       ),
     ]);
     actions.add(
@@ -5910,7 +5965,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       _AdminStatusCell(
         colors: widget.colors,
         status:
-            '${_driverStatusLabel(item)}\nStripe: ${_driverStripePayoutStatus(item)}',
+            '${_driverStatusLabel(item)}\nStripe: ${_driverStripePayoutStatus(item)}\nMode: ${_driverStripeModeLabel(item)}',
       ),
       _AdminCell('${item['averageRating'] ?? item['rating'] ?? 'New'}'),
       _AdminActions(
@@ -10471,6 +10526,25 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
         : '$value';
   }
 
+  String _stripeModeLabel() {
+    final mode = '${driver['stripeMode'] ?? driver['staleStripeMode'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    if (mode == 'live') return 'live';
+    if (mode == 'test' || mode == 'test_or_missing') return 'test';
+    final accountId =
+        '${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}'
+            .trim();
+    return accountId.isEmpty ? 'not started' : 'not synced';
+  }
+
+  bool _hasTestStripeMode() {
+    final mode = '${driver['stripeMode'] ?? driver['staleStripeMode'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    return mode == 'test' || mode == 'test_or_missing';
+  }
+
   List<String> _approvalBlockers() {
     final vehicle = _vehicle();
     final blockers = <String>[];
@@ -10700,6 +10774,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                           '${driver['onboardingStatus'] ?? 'not provided'}',
                         ),
                         _profileRow('Stripe payout status', stripePayoutStatus),
+                        _profileRow('Stripe mode', _stripeModeLabel()),
                         _profileRow(
                           'Stripe account type',
                           '${driver['stripeConnectType'] ?? (('${driver['stripeAccountId'] ?? driver['stripeConnectAccountId'] ?? ''}'.trim().isEmpty) ? 'Not started' : 'express')}',
@@ -10717,6 +10792,11 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
                               driver['stripeLastCheckedAt'] ??
                               driver['lastStripeSyncAt']),
                         ),
+                        if (_hasTestStripeMode())
+                          _profileRow(
+                            'Stripe warning',
+                            'Test Stripe account linked in production — reset required.',
+                          ),
                         if (blockers.isNotEmpty)
                           _profileRow(
                             'Cannot approve rider',

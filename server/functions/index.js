@@ -5,11 +5,41 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {getAuth} = require("firebase-admin/auth");
 const functions = require("firebase-functions/v1");
 const stripeConfig = functions.config().stripe || {};
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || stripeConfig.secret_key || stripeConfig.livekey;
+function firebaseProjectId() {
+  try {
+    const parsed = JSON.parse(process.env.FIREBASE_CONFIG || "{}");
+    return parsed.projectId || process.env.GCLOUD_PROJECT || "";
+  } catch (_) {
+    return process.env.GCLOUD_PROJECT || "";
+  }
+}
+function stripeMode(secret) {
+  if (`${secret || ""}`.startsWith("sk_live_")) return "live";
+  if (`${secret || ""}`.startsWith("sk_test_")) return "test";
+  return "unknown";
+}
+function resolveStripeSecretKey() {
+  const projectId = firebaseProjectId();
+  const liveKey = stripeConfig.livekey;
+  const configured = process.env.STRIPE_SECRET_KEY || stripeConfig.secret_key || liveKey;
+  if (projectId === "circum-2797c" && stripeMode(configured) === "test") {
+    if (stripeMode(liveKey) === "live") {
+      console.warn("Stripe secret mode: test secret ignored in production; using configured live key.");
+      return liveKey;
+    }
+    throw new Error("Production Stripe secret is test mode. Refusing to start Stripe functions.");
+  }
+  console.info(`Stripe secret mode: ${stripeMode(configured)}`);
+  return configured;
+}
+const stripeSecretKey = resolveStripeSecretKey();
 const stripe = require("stripe")(stripeSecretKey);
+stripe._circumStripeMode = stripeMode(stripeSecretKey);
 const stripeConnectClient = () => {
-  const secret = process.env.STRIPE_SECRET_KEY || stripeSecretKey;
-  return require("stripe")(secret);
+  const secret = resolveStripeSecretKey();
+  const client = require("stripe")(secret);
+  client._circumStripeMode = stripeMode(secret);
+  return client;
 };
 const {v4: uuidv4} = require("uuid");
 
@@ -79,6 +109,7 @@ exports.createStripeOnboardingLink = riderConnect.createStripeOnboardingLink(str
 exports.refreshStripeOnboardingLink = riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
 exports.syncStripeConnectStatus = riderConnect.syncStripeConnectStatus(stripeConnectClient);
 exports.createRiderTransferOrPayout = riderConnect.createRiderTransferOrPayout(stripeConnectClient);
+exports.resetRiderTestStripeAccount = riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(stripeConnectClient);
 exports.scheduledRiderStripeStatusSync = riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);
 exports.redactLegacyPayoutBankFields = riderConnect.redactLegacyPayoutBankFields();
