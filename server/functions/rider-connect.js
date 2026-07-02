@@ -20,6 +20,83 @@ function stripeFrom(stripeOrFactory) {
   return typeof stripeOrFactory === "function" ? stripeOrFactory() : stripeOrFactory;
 }
 
+function numberValue(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function roundMoney(value) {
+  return Math.round(numberValue(value) * 100) / 100;
+}
+
+function payoutFeePolicy() {
+  const config = (safeConfig.rider_payout || safeConfig.riderPayout || {});
+  const percentBps = numberValue(
+      process.env.RIDER_PAYOUT_STRIPE_FEE_PERCENT_BPS ||
+      config.stripe_fee_percent_bps ||
+      config.stripeFeePercentBps,
+      150,
+  );
+  const fixedPence = numberValue(
+      process.env.RIDER_PAYOUT_STRIPE_FEE_FIXED_PENCE ||
+      config.stripe_fee_fixed_pence ||
+      config.stripeFeeFixedPence,
+      20,
+  );
+  const minimumPence = numberValue(
+      process.env.RIDER_PAYOUT_STRIPE_FEE_MINIMUM_PENCE ||
+      config.stripe_fee_minimum_pence ||
+      config.stripeFeeMinimumPence,
+      0,
+  );
+  return {
+    source: "backend_config",
+    percentBps,
+    fixedPence,
+    minimumPence,
+  };
+}
+
+function estimateStripeFee(amountGbp, policy = payoutFeePolicy()) {
+  const grossPence = Math.max(0, Math.round(numberValue(amountGbp) * 100));
+  if (grossPence <= 0) return 0;
+  const percentagePence = Math.ceil((grossPence * Math.max(0, policy.percentBps)) / 10000);
+  const feePence = Math.max(
+      Math.round(Math.max(0, policy.minimumPence)),
+      percentagePence + Math.round(Math.max(0, policy.fixedPence)),
+  );
+  return roundMoney(feePence / 100);
+}
+
+function resolveRiderPayoutBreakdown(input = {}) {
+  const riderGrossShare = roundMoney(input.riderGrossShare || input.amount || 0);
+  const totalCustomerPaid = roundMoney(input.totalCustomerPaid || input.customerPaid || input.total || 0);
+  const suppliedCommission = input.circumPlatformCommission ?? input.platformCommission;
+  const circumPlatformCommission = roundMoney(
+      suppliedCommission == null && totalCustomerPaid > 0 ?
+        Math.max(0, totalCustomerPaid - riderGrossShare) :
+        numberValue(suppliedCommission, 0),
+  );
+  const policy = payoutFeePolicy();
+  const estimatedStripeFees = roundMoney(
+      input.estimatedStripeFees == null ?
+        estimateStripeFee(riderGrossShare, policy) :
+        numberValue(input.estimatedStripeFees, 0),
+  );
+  const riderNetPayout = roundMoney(riderGrossShare - estimatedStripeFees);
+  return {
+    totalCustomerPaid,
+    circumPlatformCommission,
+    estimatedStripeFees,
+    riderGrossShare,
+    stripeFeeDeductedFromRider: estimatedStripeFees,
+    riderNetPayout,
+    payoutFeePayer: "rider",
+    payoutFeePolicy: policy,
+    adminReviewRequired: riderNetPayout <= 0,
+  };
+}
+
 function hasRawBankFields(data) {
   return rawBankFields.some((field) => {
     const value = text(data && data[field]);
@@ -254,6 +331,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
     const riderId = text(data && data.riderId);
     const amount = Number((data && data.amount) || 0);
     const requestId = text(data && data.requestId);
+    const deliveryId = text(data && (data.deliveryId || data.bookingId || data.orderId));
     await assertActor(context, riderId, {adminOnly: true});
     if (!riderId || amount <= 0) {
       throw new functions.https.HttpsError("invalid-argument", "Rider and amount are required.");
@@ -276,48 +354,123 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       const wallet = await transaction.get(walletRef);
       const existingRequest = await transaction.get(requestRef);
       const walletData = wallet.data() || {};
+      const requestData = existingRequest.exists ? existingRequest.data() || {} : {};
+      const payoutInput = {
+        ...requestData,
+        ...data,
+        amount,
+        riderGrossShare: requestData.riderGrossShare || data.riderGrossShare || amount,
+      };
+      const breakdown = resolveRiderPayoutBreakdown(payoutInput);
+      if (breakdown.riderNetPayout <= 0) {
+        transaction.set(requestRef, {
+          ...breakdown,
+          requestId: requestRef.id,
+          riderId,
+          riderEmail: profile.email || null,
+          deliveryId: deliveryId || requestData.deliveryId || requestData.bookingId || null,
+          amount: breakdown.riderGrossShare,
+          status: "admin_review_required",
+          payoutStatus: "blocked_admin_review",
+          payoutBlockReason: "estimated_stripe_fees_exceed_rider_share",
+          stripeAccountId,
+          feePayer: "rider",
+          payoutFeePayer: "rider",
+          paymentProvider: "stripe_connect_express",
+          updatedAt: FieldValue.serverTimestamp(),
+          processedBy: context.auth.uid,
+        }, {merge: true});
+        return {
+          blocked: true,
+          status: "admin_review_required",
+          reason: "estimated_stripe_fees_exceed_rider_share",
+          ...breakdown,
+        };
+      }
       const available = Number(walletData.availableBalance || 0);
-      if (available < amount) {
+      if (available < breakdown.riderGrossShare) {
         throw new functions.https.HttpsError("failed-precondition", "Withdrawal exceeds available balance.");
       }
-      const pendingDelta = existingRequest.exists ? 0 : amount;
+      const pendingDelta = existingRequest.exists ? 0 : breakdown.riderGrossShare;
+      const deliveryDocId = deliveryId || text(requestData.deliveryId || requestData.bookingId || requestData.orderId);
+      const deliveryRefs = deliveryDocId ? [
+        db.collection("deliveryRequests").doc(deliveryDocId),
+        db.collection("bookings").doc(deliveryDocId),
+        db.collection("deliveries").doc(deliveryDocId),
+        db.collection("deliveryRecords").doc(deliveryDocId),
+      ] : [];
+      const deliveryDocs = [];
+      for (const ref of deliveryRefs) {
+        deliveryDocs.push(await transaction.get(ref));
+      }
       const created = await stripe.transfers.create({
-        amount: Math.round(amount * 100),
+        amount: Math.round(breakdown.riderNetPayout * 100),
         currency: "gbp",
         destination: stripeAccountId,
         metadata: {
           riderId,
           payoutRequestId: requestRef.id,
+          deliveryId: deliveryDocId || "",
           payoutFeePayer: "rider",
+          riderGrossShare: String(breakdown.riderGrossShare),
+          stripeFeeDeductedFromRider: String(breakdown.stripeFeeDeductedFromRider),
+          riderNetPayout: String(breakdown.riderNetPayout),
         },
       });
+      const payoutPatch = {
+        totalCustomerPaid: breakdown.totalCustomerPaid,
+        circumPlatformCommission: breakdown.circumPlatformCommission,
+        riderGrossShare: breakdown.riderGrossShare,
+        stripeFeeDeductedFromRider: breakdown.stripeFeeDeductedFromRider,
+        estimatedStripeFees: breakdown.estimatedStripeFees,
+        riderNetPayout: breakdown.riderNetPayout,
+        stripeAccountId,
+        payoutStatus: "processing",
+        payoutCreatedAt: FieldValue.serverTimestamp(),
+        payoutFeePolicy: breakdown.payoutFeePolicy,
+        payoutFeePayer: "rider",
+        feePayer: "rider",
+        paymentProvider: "stripe_connect_express",
+        updatedAt: FieldValue.serverTimestamp(),
+      };
       transaction.set(requestRef, {
         requestId: requestRef.id,
         riderId,
         riderEmail: profile.email || null,
-        amount,
+        deliveryId: deliveryDocId || requestData.deliveryId || requestData.bookingId || null,
+        amount: breakdown.riderGrossShare,
         status: "processing",
-        stripeAccountId,
+        ...payoutPatch,
         stripeTransferId: created.id,
-        feePayer: "rider",
-        payoutFeePayer: "rider",
-        paymentProvider: "stripe_connect_express",
         createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
         processedAt: FieldValue.serverTimestamp(),
         processedBy: context.auth.uid,
       }, {merge: true});
+      deliveryDocs.forEach((doc) => {
+        if (!doc.exists) return;
+        transaction.set(doc.ref, {
+          ...payoutPatch,
+          payoutRequestId: requestRef.id,
+          stripeTransferId: created.id,
+        }, {merge: true});
+      });
       transaction.set(walletRef, {
-        availableBalance: FieldValue.increment(-amount),
+        availableBalance: FieldValue.increment(-breakdown.riderGrossShare),
         pendingWithdrawal: FieldValue.increment(pendingDelta),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
       transaction.set(db.collection("riderWalletTransactions").doc(`stripe_transfer_${requestRef.id}`), {
         id: `stripe_transfer_${requestRef.id}`,
         riderId,
+        deliveryId: deliveryDocId || null,
         withdrawalRequestId: requestRef.id,
         type: "withdrawal",
-        amount: -amount,
+        amount: -breakdown.riderGrossShare,
+        grossDeliveryEarning: breakdown.riderGrossShare,
+        stripePaymentFee: breakdown.stripeFeeDeductedFromRider,
+        netPayout: breakdown.riderNetPayout,
+        totalCustomerPaid: breakdown.totalCustomerPaid,
+        circumPlatformCommission: breakdown.circumPlatformCommission,
         status: "processing",
         stripeTransferId: created.id,
         feePayer: "rider",
@@ -327,6 +480,25 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       });
       return created;
     });
+    if (transfer.blocked) {
+      await db.collection("riderPayoutAudit").add({
+        riderId,
+        payoutRequestId: requestRef.id,
+        action: "stripe_transfer_blocked",
+        reason: transfer.reason,
+        amount,
+        riderGrossShare: transfer.riderGrossShare,
+        stripeFeeDeductedFromRider: transfer.stripeFeeDeductedFromRider,
+        riderNetPayout: transfer.riderNetPayout,
+        feePayer: "rider",
+        actorId: context.auth.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Stripe fees exceed the rider share. Admin review is required.",
+      );
+    }
     await db.collection("riderPayoutAudit").add({
       riderId,
       payoutRequestId: requestRef.id,
@@ -342,6 +514,8 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       stripeTransferId: transfer.id,
       status: "processing",
       feePayer: "rider",
+      stripeFeeDeductedFromRider: transfer.metadata && transfer.metadata.stripeFeeDeductedFromRider,
+      riderNetPayout: transfer.metadata && transfer.metadata.riderNetPayout,
       feeChecklist: "Stripe Dashboard -> Connect settings -> set payout/fee payer to connected account/rider where available.",
     };
   });
@@ -472,4 +646,6 @@ module.exports = {
   handleStripeConnectWebhook,
   redactLegacyPayoutBankFields,
   adminBaseUrl,
+  estimateStripeFee,
+  resolveRiderPayoutBreakdown,
 };

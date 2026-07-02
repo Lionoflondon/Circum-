@@ -7231,6 +7231,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Widget> _financeRow(Map<String, dynamic> item) {
     final recordType = '${item['recordType'] ?? 'payment'}';
     final transactionType = '${item['type'] ?? ''}';
+    double moneyValue(Object? value) {
+      if (value is num) return value.toDouble();
+      return double.tryParse('$value') ?? 0;
+    }
+
     final isPendingEarning = recordType == 'wallet_transaction' &&
         '${item['status']}' == 'pending' &&
         transactionType == 'earning' &&
@@ -7254,7 +7259,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             ? '${item['type'] ?? 'recorded'}'
             : '${item['status'] ?? 'pending'}',
       ),
-      _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
+      _AdminCell(isWithdrawal
+          ? 'Gross £${moneyValue(item['riderGrossShare'] ?? item['amount']).toStringAsFixed(2)}\n'
+              'Stripe/payment fee £${moneyValue(item['stripeFeeDeductedFromRider'] ?? item['estimatedStripeFees']).toStringAsFixed(2)}\n'
+              'Net payout £${moneyValue(item['riderNetPayout'] ?? item['amount']).toStringAsFixed(2)}'
+          : '£${_adminMoney(item).toStringAsFixed(2)}'),
       _AdminActions(
         colors: widget.colors,
         actions: [
@@ -16666,6 +16675,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             .trim()
             .isNotEmpty &&
         (profile['stripeOnboardingStatus'] == 'complete' ||
+            profile['stripeDetailsSubmitted'] == true ||
             profile['onboardingComplete'] == true) &&
         (profile['stripePayoutsEnabled'] == true ||
             profile['payoutsEnabled'] == true) &&
@@ -16730,10 +16740,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('syncStripeConnectStatus')
           .call({'riderId': user.uid});
+      final refreshed = await _loadRiderProfile(user.uid);
       if (!mounted) return;
       setState(
-        () => _withdrawMessage =
-            'Payout status refreshed. Stripe fees may apply to withdrawals.',
+        () {
+          _riderProfile = refreshed;
+          _withdrawMessage =
+              'Payout status refreshed. Stripe fees may apply to withdrawals.';
+        },
       );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -18327,6 +18341,21 @@ class _RiderWorkspace extends StatelessWidget {
                     hint: 'Amount to request',
                   ),
                   const SizedBox(height: 8),
+                  Builder(builder: (context) {
+                    final gross =
+                        double.tryParse(withdrawAmount.text.trim()) ?? 0;
+                    final fee = _estimatedStripePayoutFee(gross);
+                    final net = _estimatedNetPayout(gross);
+                    return _RiderChecklistRow(
+                      colors: colors,
+                      icon: Icons.receipt_long,
+                      label: 'Payout preview',
+                      value: gross > 0
+                          ? 'Gross delivery earning ${_money(gross)} • Stripe/payment fee ${_money(fee)} • Net payout ${_money(net)}'
+                          : 'Enter an amount to see gross earning, Stripe/payment fee, and net payout.',
+                    );
+                  }),
+                  const SizedBox(height: 8),
                   Text(
                     'Stripe payout fees may be deducted from your withdrawal amount. Circum does not charge you to withdraw, but Stripe payout fees may apply.',
                     style: TextStyle(
@@ -18495,6 +18524,20 @@ class _RiderWorkspace extends StatelessWidget {
 
   static String _money(double value) => '£${value.toStringAsFixed(2)}';
 
+  static double _estimatedStripePayoutFee(double gross) {
+    if (gross <= 0) return 0;
+    final grossPence = (gross * 100).round();
+    final percentagePence = (grossPence * 0.015).ceil();
+    final feePence = percentagePence + 20;
+    return feePence / 100;
+  }
+
+  static double _estimatedNetPayout(double gross) {
+    final fee = _estimatedStripePayoutFee(gross);
+    final net = gross - fee;
+    return net > 0 ? double.parse(net.toStringAsFixed(2)) : 0;
+  }
+
   static bool _canRequestWithdrawal({
     required String amountText,
     required double availableBalance,
@@ -18537,8 +18580,10 @@ class _RiderPayoutStatusPanel extends StatelessWidget {
     final accountId =
         '${profile?['stripeAccountId'] ?? profile?['stripeConnectAccountId'] ?? ''}'
             .trim();
+    final hasAccount = accountId.isNotEmpty;
     final onboardingComplete =
         profile?['stripeOnboardingStatus'] == 'complete' ||
+            profile?['stripeDetailsSubmitted'] == true ||
             profile?['onboardingComplete'] == true;
     final payoutsEnabled = profile?['stripePayoutsEnabled'] == true ||
         profile?['payoutsEnabled'] == true;
@@ -18547,18 +18592,17 @@ class _RiderPayoutStatusPanel extends StatelessWidget {
         (profile?['stripeRequirementsPastDue'] as List?) ??
         const [];
     final ready = _RiderWorkspace._stripePayoutReady(profile);
-    final title = ready
-        ? 'Payouts enabled'
+    final title = ready || (hasAccount && onboardingComplete && payoutsEnabled)
+        ? 'Stripe Connected'
         : payoutPaused
             ? 'Payouts paused'
-            : accountId.isEmpty
+            : !hasAccount
                 ? 'Set up payouts with Stripe'
-                : onboardingComplete && !payoutsEnabled
-                    ? 'Payouts disabled'
-                    : 'Payout setup incomplete';
-    final subtitle = ready
-        ? 'Your Stripe Express account is ready for payout requests.'
-        : accountId.isEmpty
+                : 'Action Required';
+    final subtitle = ready ||
+            (hasAccount && onboardingComplete && payoutsEnabled)
+        ? 'Payouts Enabled. Bank account linked. You can request payouts after Circum approval and available earnings checks.'
+        : !hasAccount
             ? 'Stripe securely collects your bank and identity details. Circum does not store bank account numbers or sort codes.'
             : requirements.isNotEmpty
                 ? 'Stripe needs more information before payouts can be enabled.'
@@ -18577,7 +18621,9 @@ class _RiderPayoutStatusPanel extends StatelessWidget {
           Row(
             children: [
               Icon(
-                ready ? Icons.verified_rounded : Icons.account_balance_wallet,
+                ready || (hasAccount && onboardingComplete && payoutsEnabled)
+                    ? Icons.verified_rounded
+                    : Icons.account_balance_wallet,
                 color: colors.text,
               ),
               const SizedBox(width: 10),
@@ -18594,6 +18640,24 @@ class _RiderPayoutStatusPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          if (ready ||
+              (hasAccount && onboardingComplete && payoutsEnabled)) ...[
+            _RiderChecklistRow(
+              colors: colors,
+              icon: Icons.check_circle,
+              label: 'Payouts Enabled',
+              value: 'Your Stripe Express payout account is connected.',
+            ),
+            const SizedBox(height: 8),
+            _RiderChecklistRow(
+              colors: colors,
+              icon: Icons.account_balance,
+              label: 'Bank account linked',
+              value:
+                  'Stripe stores and manages your bank details securely. Circum does not store them.',
+            ),
+            const SizedBox(height: 8),
+          ],
           Text(
             subtitle,
             style: TextStyle(
@@ -18620,9 +18684,11 @@ class _RiderPayoutStatusPanel extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onSetupPayouts,
                 icon: const Icon(Icons.open_in_new),
-                label: Text(accountId.isEmpty
-                    ? 'Set up payouts'
-                    : 'Continue payout setup'),
+                label: Text(!hasAccount
+                    ? 'Set up payouts with Stripe'
+                    : ready || (onboardingComplete && payoutsEnabled)
+                        ? 'Manage Stripe Account'
+                        : 'Continue Stripe Verification'),
               ),
               OutlinedButton.icon(
                 onPressed: onSyncPayouts,
