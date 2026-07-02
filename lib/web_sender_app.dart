@@ -117,6 +117,7 @@ enum _WebAppMode {
   cookies,
   vanguard,
   business,
+  businessDashboard,
 }
 
 bool _isPublicHostingHost() {
@@ -177,10 +178,11 @@ class _WebSenderAppState extends State<WebSenderApp> {
     if (path == '/cookies') return _WebAppMode.cookies;
     if (path == '/vanguard') return _WebAppMode.vanguard;
     if (path == '/business') return _WebAppMode.business;
+    if (path == '/business/dashboard') return _WebAppMode.businessDashboard;
     return switch (Uri.base.queryParameters['app']) {
-      'sender' => _WebAppMode.sender,
       'health' => _WebAppMode.healthPlus,
       'business' => _WebAppMode.business,
+      'business-dashboard' => _WebAppMode.businessDashboard,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
       'gifts' => _WebAppMode.gifts,
       'iris' => _WebAppMode.iris,
@@ -352,14 +354,22 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     key: const ValueKey('vanguard'),
                     onHome: () => setState(() => _mode = _WebAppMode.landing),
                   ),
-                _WebAppMode.business => _BusinessCommandPage(
+                _WebAppMode.business => _PublicBusinessPage(
+                    key: const ValueKey('business-public'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    onOpenDashboard: _openBusinessDashboard,
+                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
+                _WebAppMode.businessDashboard => _BusinessCommandPage(
                     key: const ValueKey('business-command'),
                     colors: colors,
                     onHome: () => setState(() => _mode = _WebAppMode.landing),
-                    onAccess: () => setState(() {
-                      _senderInitialStep = _SenderStep.business;
-                      _mode = _WebAppMode.sender;
-                    }),
+                    onAccess: () => unawaited(launchUrl(
+                      Uri.base.resolve('/app?section=business'),
+                      webOnlyWindowName: '_self',
+                    )),
                   ),
                 _WebAppMode.landing => _LandingPage(
                     key: const ValueKey('landing'),
@@ -384,7 +394,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
             ),
             if (_mode == _WebAppMode.sender ||
                 _mode == _WebAppMode.rider ||
-                _mode == _WebAppMode.business ||
+                _mode == _WebAppMode.businessDashboard ||
                 _mode == _WebAppMode.admin)
               _PlatformNotificationCenter(colors: colors, mode: _mode),
             _CompanyLiveChatButton(colors: colors),
@@ -406,17 +416,24 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   void _openSenderDashboard() {
-    setState(() {
-      _senderInitialStep = _SenderStep.dashboard;
-      _mode = _WebAppMode.sender;
-    });
+    unawaited(launchUrl(
+      Uri.base.resolve('/sender'),
+      webOnlyWindowName: '_self',
+    ));
   }
 
   void _openSenderHealthPlus() {
-    setState(() {
-      _senderInitialStep = _SenderStep.healthPlus;
-      _mode = _WebAppMode.sender;
-    });
+    unawaited(launchUrl(
+      Uri.base.resolve('/sender?section=health'),
+      webOnlyWindowName: '_self',
+    ));
+  }
+
+  void _openBusinessDashboard() {
+    unawaited(launchUrl(
+      Uri.base.resolve('/business/dashboard'),
+      webOnlyWindowName: '_self',
+    ));
   }
 }
 
@@ -12870,7 +12887,84 @@ class _HeroMockup extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 820;
-        final map = _MiniMap(colors: colors, active: true);
+        final services = _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Circum services',
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ...[
+                (
+                  Icons.local_shipping_outlined,
+                  'Parcel delivery',
+                  'Book trusted local deliveries.'
+                ),
+                (
+                  Icons.health_and_safety_outlined,
+                  'Health+',
+                  'Arrange prescription logistics.'
+                ),
+                (
+                  Icons.card_giftcard_outlined,
+                  'Gifts',
+                  'Send thoughtful requests through Circum.'
+                ),
+                (
+                  Icons.business_center_outlined,
+                  'Business',
+                  'Manage company sending from a dedicated centre.'
+                ),
+              ].map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: colors.field,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(item.$1, color: colors.text, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.$2,
+                              style: TextStyle(
+                                color: colors.text,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Text(
+                              item.$3,
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
         final panel = _GlassPanel(
           colors: colors,
           child: Column(
@@ -12885,7 +12979,7 @@ class _HeroMockup extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Your rider is on the way',
+                          'One public website. Separate dashboards.',
                           style: TextStyle(
                             color: colors.text,
                             fontWeight: FontWeight.w900,
@@ -12893,7 +12987,7 @@ class _HeroMockup extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Bike courier arriving in 8 min',
+                          'Public pages stay clean; app tools open only when requested.',
                           style: TextStyle(
                             color: colors.mutedText,
                             fontWeight: FontWeight.w600,
@@ -12905,30 +12999,18 @@ class _HeroMockup extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 18),
-              _RouteRow(
+              _MarketingCapabilityRow(
                 colors: colors,
-                from: 'Pickup address',
-                to: 'Drop-off address',
+                icon: Icons.public_outlined,
+                title: 'Public website',
+                body: 'Explore Circum, Health+, Gifts, Business and Vanguard.',
               ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MetricPill(
-                      colors: colors,
-                      label: 'ETA',
-                      value: '14 min',
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _MetricPill(
-                      colors: colors,
-                      label: 'Quote',
-                      value: '£9.80',
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              _MarketingCapabilityRow(
+                colors: colors,
+                icon: Icons.dashboard_customize_outlined,
+                title: 'Sender dashboard',
+                body: 'Open `/sender` or `/app` when you want app tools.',
               ),
               const SizedBox(height: 18),
               SizedBox(
@@ -12969,14 +13051,68 @@ class _HeroMockup extends StatelessWidget {
           child: wide
               ? Row(
                   children: [
-                    Expanded(flex: 6, child: map),
+                    Expanded(flex: 6, child: services),
                     const SizedBox(width: 16),
                     Expanded(flex: 4, child: panel),
                   ],
                 )
-              : Column(children: [map, const SizedBox(height: 16), panel]),
+              : Column(children: [services, const SizedBox(height: 16), panel]),
         );
       },
+    );
+  }
+}
+
+class _MarketingCapabilityRow extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _MarketingCapabilityRow({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: colors.text, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  body,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -43053,6 +43189,59 @@ class _BusinessLandingPreview extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicBusinessPage extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final VoidCallback onOpenDashboard;
+  final VoidCallback onBack;
+  final VoidCallback onToggleTheme;
+
+  const _PublicBusinessPage({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.onOpenDashboard,
+    required this.onBack,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _LandingNav(
+            colors: colors,
+            darkMode: darkMode,
+            onStart: () => unawaited(
+              launchUrl(Uri.base.resolve('/sender'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onRider: () => unawaited(
+              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
+            ),
+            onHealthPlus: () => unawaited(
+              launchUrl(Uri.base.resolve('/health'),
+                  webOnlyWindowName: '_self'),
+            ),
+            onGifts: () => unawaited(
+              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
+            ),
+            onBusiness: () {},
+            onToggleTheme: onToggleTheme,
+          ),
+          _BusinessLandingBand(
+            colors: colors,
+            onBusinessLogin: onOpenDashboard,
+            onCreateBusiness: onOpenDashboard,
+          ),
+          _LandingFooter(colors: colors),
         ],
       ),
     );
