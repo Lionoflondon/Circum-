@@ -8,7 +8,7 @@ const adminBaseUrl = process.env.ADMIN_BASE_URL || (safeConfig.admin && safeConf
 
 const rawBankFields = ["bankName", "sortCode", "accountNumber", "bankAccountNumber"];
 const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
-const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
+const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]});
 
 function text(value) {
   return `${value || ""}`.trim();
