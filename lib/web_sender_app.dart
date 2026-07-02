@@ -772,119 +772,7 @@ class _LandingPage extends StatelessWidget {
             onBusiness: onBusiness,
             onToggleTheme: onToggleTheme,
           ),
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: colors.dark
-                    ? const [
-                        Color(0xff050816),
-                        Color(0xff251047),
-                        Color(0xff1d4ed8),
-                        Color(0xff061826),
-                      ]
-                    : const [
-                        Color(0xffffffff),
-                        Color(0xfffff4de),
-                        Color(0xffffe5f3),
-                        Color(0xffebe8ff),
-                        Color(0xffdff8ff),
-                        Color(0xffffffff),
-                      ],
-                stops: colors.dark
-                    ? const [0, 0.36, 0.72, 1]
-                    : const [0, 0.16, 0.39, 0.62, 0.84, 1],
-              ),
-            ),
-            padding: const EdgeInsets.fromLTRB(22, 58, 22, 46),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1180),
-              child: Column(
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: CustomPaint(
-                            painter: _SpectrumSweepPainter(dark: colors.dark),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'Send anything across town.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: MediaQuery.sizeOf(context).width < 680
-                                ? 48
-                                : 76,
-                            height: 1.02,
-                            color: colors.dark
-                                ? Colors.white
-                                : const Color(0xff111827),
-                            fontWeight: FontWeight.w900,
-                            shadows: [
-                              Shadow(
-                                color: colors.dark
-                                    ? Colors.black.withOpacity(0.32)
-                                    : Colors.white.withOpacity(0.78),
-                                blurRadius: 24,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Book trusted riders for parcels, prescriptions, documents, and larger items. See the price, track the parcel, and stay in control.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontSize:
-                          MediaQuery.sizeOf(context).width < 680 ? 18 : 22,
-                      height: 1.45,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 34),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 14,
-                    runSpacing: 14,
-                    children: [
-                      _PillButton(
-                        label: 'Send a Parcel',
-                        icon: Icons.arrow_forward,
-                        dark: true,
-                        onPressed: onStart,
-                      ),
-                      _PillButton(
-                        label: 'Earn as a Rider',
-                        icon: Icons.two_wheeler,
-                        dark: false,
-                        onPressed: onRider,
-                      ),
-                      _PillButton(
-                        label: 'Get started with Health+',
-                        icon: Icons.health_and_safety,
-                        dark: false,
-                        onPressed: onHealthPlus,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 58),
-                  _HeroMockup(colors: colors),
-                ],
-              ),
-            ),
-          ),
+          _LandingHero(colors: colors, onStart: onStart),
           _VanguardLandingBand(colors: colors),
           _BusinessLandingBand(
             colors: colors,
@@ -12875,109 +12763,744 @@ class _SpectrumSweepPainter extends CustomPainter {
   }
 }
 
-class _HeroMockup extends StatelessWidget {
-  final _CircumColors colors;
+enum _IrisHeroState { rest, beckon, reasoning }
 
-  const _HeroMockup({required this.colors});
+class _LandingHero extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onStart;
+
+  const _LandingHero({required this.colors, required this.onStart});
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth < 760 ? 1 : 4;
-        final services = [
-          (
-            Icons.local_shipping_outlined,
-            'Parcel delivery',
-            'Book trusted local deliveries.'
-          ),
-          (
-            Icons.health_and_safety_outlined,
-            'Health+',
-            'Arrange prescription logistics.'
-          ),
-          (
-            Icons.card_giftcard_outlined,
-            'Gifts',
-            'Send thoughtful requests through Circum.'
-          ),
-          (
-            Icons.business_center_outlined,
-            'Business',
-            'Manage company sending from a dedicated centre.'
-          ),
-        ];
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: columns,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: columns == 1 ? 3.4 : 1.65,
-          children: services
-              .map(
-                (item) => _CoreServiceCard(
-                  colors: colors,
-                  icon: item.$1,
-                  title: item.$2,
-                  body: item.$3,
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
-  }
-}
-
-class _CoreServiceCard extends StatelessWidget {
-  final _CircumColors colors;
-  final IconData icon;
-  final String title;
-  final String body;
-
-  const _CoreServiceCard({
-    required this.colors,
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final headlineSize = width < 680 ? 44.0 : 82.0;
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.panel.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      width: double.infinity,
+      color: const Color(0xff07090f),
+      child: Stack(
         children: [
-          Icon(icon, color: colors.text, size: 24),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: TextStyle(
-              color: colors.text,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
+          const Positioned.fill(child: _HeroBlobField()),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: _HeroGrainPainter()),
             ),
           ),
-          const SizedBox(height: 5),
-          Text(
-            body,
-            style: TextStyle(
-              color: colors.mutedText,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(40, 96, 40, 64),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _HeroEyebrow(
+                      label: 'London · on-demand, on-trust delivery',
+                    ),
+                    const SizedBox(height: 26),
+                    RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.dmSerifDisplay(
+                          color: const Color(0xfff5f7fb),
+                          fontSize: headlineSize,
+                          height: 1.04,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: -0.8,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Send '),
+                          TextSpan(
+                            text: 'anything',
+                            style: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              foreground: Paint()
+                                ..shader = LinearGradient(
+                                  colors: const [
+                                    Color(0xfff5f7fb),
+                                    Color(0xff3b82f6),
+                                    Color(0xff1d4ed8),
+                                  ],
+                                ).createShader(Rect.fromLTWH(0, 0, 420, 90)),
+                            ),
+                          ),
+                          const TextSpan(text: ' across town.'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 26),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 600),
+                      child: Text(
+                        'Book trusted riders for parcels, prescriptions, documents, and larger items. See the price, track the parcel, and stay in control.',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xff9aa3b8),
+                          fontSize: width < 680 ? 16.5 : 17.5,
+                          height: 1.6,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    _HeroPrimaryButton(onPressed: onStart),
+                    const SizedBox(height: 76),
+                    const _IrisHeroCard(),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _HeroPrimaryButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _HeroPrimaryButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+      label: const Text('Send a Parcel'),
+      style: FilledButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xff0a0c16),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        textStyle: GoogleFonts.inter(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+        ),
+        shape: const StadiumBorder(),
+        elevation: 0,
+      ),
+    );
+  }
+}
+
+class _HeroEyebrow extends StatelessWidget {
+  final String label;
+
+  const _HeroEyebrow({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            color: Color(0xff3b82f6),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 9),
+        Text(
+          label.toUpperCase(),
+          style: GoogleFonts.jetBrainsMono(
+            color: const Color(0xff93b4ff),
+            fontSize: 12.5,
+            letterSpacing: 1.75,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IrisHeroCard extends StatefulWidget {
+  const _IrisHeroCard();
+
+  @override
+  State<_IrisHeroCard> createState() => _IrisHeroCardState();
+}
+
+class _IrisHeroCardState extends State<_IrisHeroCard> {
+  _IrisHeroState _state = _IrisHeroState.rest;
+
+  void _setState(_IrisHeroState value) => setState(() => _state = value);
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 760;
+        final visual = _IrisHeroVisual(state: _state, onChanged: _setState);
+        final content = const _IrisHeroContent();
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0x143b82f6),
+                Color(0x08f5f7fb),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: const Color(0x3393b4ff)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 34,
+                offset: Offset(0, 18),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment.topLeft,
+                        radius: 1.2,
+                        colors: [
+                          const Color(0xff3b82f6).withValues(alpha: 0.14),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              narrow
+                  ? Column(children: [visual, content])
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(width: 280, child: visual),
+                        Expanded(child: content),
+                      ],
+                    ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _IrisHeroVisual extends StatelessWidget {
+  final _IrisHeroState state;
+  final ValueChanged<_IrisHeroState> onChanged;
+
+  const _IrisHeroVisual({required this.state, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      constraints: BoxConstraints(minHeight: narrow ? 230 : 280),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.1),
+          radius: 0.85,
+          colors: [
+            const Color(0xff3b82f6).withValues(alpha: 0.12),
+            Colors.transparent,
+          ],
+        ),
+        border: Border(
+          right: narrow
+              ? BorderSide.none
+              : const BorderSide(color: Color(0x2493b4ff)),
+          bottom: narrow
+              ? const BorderSide(color: Color(0x2493b4ff))
+              : BorderSide.none,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _IrisOrb(state: state),
+          const SizedBox(height: 20),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _IrisStateButton(
+                label: 'REST',
+                active: state == _IrisHeroState.rest,
+                onPressed: () => onChanged(_IrisHeroState.rest),
+              ),
+              _IrisStateButton(
+                label: 'BECKON',
+                active: state == _IrisHeroState.beckon,
+                onPressed: () => onChanged(_IrisHeroState.beckon),
+              ),
+              _IrisStateButton(
+                label: 'REASONING',
+                active: state == _IrisHeroState.reasoning,
+                onPressed: () => onChanged(_IrisHeroState.reasoning),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IrisOrb extends StatefulWidget {
+  final _IrisHeroState state;
+
+  const _IrisOrb({required this.state});
+
+  @override
+  State<_IrisOrb> createState() => _IrisOrbState();
+}
+
+class _IrisOrbState extends State<_IrisOrb>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.state == _IrisHeroState.reasoning) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _IrisOrb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.state == _IrisHeroState.reasoning) {
+      _controller.repeat();
+    } else {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = switch (widget.state) {
+      _IrisHeroState.rest => 1.0,
+      _IrisHeroState.beckon => 1.08,
+      _IrisHeroState.reasoning => 1.04,
+    };
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return SizedBox(
+          width: 128,
+          height: 128,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              AnimatedScale(
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOut,
+                scale: scale,
+                child: Container(
+                  width: 128,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xff3b82f6).withValues(
+                          alpha: widget.state == _IrisHeroState.reasoning
+                              ? 0.42
+                              : 0.28,
+                        ),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Transform.rotate(
+                angle: widget.state == _IrisHeroState.reasoning
+                    ? _controller.value * math.pi * 2
+                    : 0,
+                child: Container(
+                  width: 112,
+                  height: 112,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border(
+                      top: BorderSide(
+                        color: const Color(0xff93b4ff).withValues(
+                          alpha: widget.state == _IrisHeroState.rest ? 0.35 : 1,
+                        ),
+                        width: 1.5,
+                      ),
+                      right: BorderSide(
+                        color: const Color(0xff93b4ff).withValues(
+                          alpha: widget.state == _IrisHeroState.rest ? 0.35 : 1,
+                        ),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              AnimatedScale(
+                duration: const Duration(milliseconds: 450),
+                curve: Curves.easeOut,
+                scale: widget.state == _IrisHeroState.reasoning ? 1.06 : 1,
+                child: Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xe6f5f7fb),
+                        Color(0x993b82f6),
+                        Color(0xe60d111c),
+                      ],
+                      stops: [0, 0.45, 1],
+                    ),
+                    border: Border.all(color: const Color(0x2ef5f7fb)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xff3b82f6).withValues(alpha: 0.35),
+                        blurRadius: 30,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 46,
+                      height: 46,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          center: Alignment(-0.3, -0.35),
+                          colors: [
+                            Color(0xf2f5f7fb),
+                            Color(0x663b82f6),
+                            Colors.transparent,
+                          ],
+                          stops: [0, 0.6, 1],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.state == _IrisHeroState.reasoning)
+                ...List.generate(3, (index) {
+                  final angle =
+                      (_controller.value * math.pi * 2) + index * 2.094;
+                  return Transform.translate(
+                    offset: Offset(math.cos(angle) * 46, math.sin(angle) * 46),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xff93b4ff),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xff93b4ff).withValues(alpha: 0.9),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _IrisStateButton extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onPressed;
+
+  const _IrisStateButton({
+    required this.label,
+    required this.active,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor:
+            active ? const Color(0xfff5f7fb) : const Color(0xff9aa3b8),
+        side: BorderSide(
+          color: active ? const Color(0xff93b4ff) : const Color(0x17f5f7fb),
+        ),
+        backgroundColor: active ? const Color(0x1f3b82f6) : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: const StadiumBorder(),
+        textStyle: GoogleFonts.jetBrainsMono(
+          fontSize: 10.5,
+          letterSpacing: 0.4,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _IrisHeroContent extends StatelessWidget {
+  const _IrisHeroContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 38, vertical: 34),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _HeroEyebrow(label: 'IRIS · Weight intelligence'),
+          const SizedBox(height: 16),
+          Text(
+            'The intelligence behind every parcel.',
+            style: GoogleFonts.dmSerifDisplay(
+              color: const Color(0xfff5f7fb),
+              fontSize: 30,
+              height: 1.08,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 14),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Text(
+              "IRIS looks at what you're sending and knows what it weighs — before a rider ever lifts it. Every estimate is checked against what actually gets delivered and fed back in, so the parcel you send keeps getting priced more accurately the more Circum carries.",
+              style: GoogleFonts.inter(
+                color: const Color(0xff9aa3b8),
+                fontSize: 15,
+                height: 1.65,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          const Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _IrisChip(label: 'Predicts weight from a photo or a description'),
+              _IrisChip(label: 'Learns from every confirmed parcel'),
+              _IrisChip(label: 'Cross-checked by riders in the field'),
+            ],
+          ),
+          const SizedBox(height: 26),
+          OutlinedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.radio_button_checked_rounded, size: 18),
+            label: const Text('See how IRIS reads your parcel'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xfff5f7fb),
+              side: const BorderSide(color: Color(0x4793b4ff)),
+              backgroundColor: const Color(0x0bf5f7fb),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+              shape: const StadiumBorder(),
+              textStyle: GoogleFonts.inter(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IrisChip extends StatelessWidget {
+  final String label;
+
+  const _IrisChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0x143b82f6),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0x3393b4ff)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: const BoxDecoration(
+              color: Color(0xff93b4ff),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: const Color(0xffdce6ff),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroBlobField extends StatefulWidget {
+  const _HeroBlobField();
+
+  @override
+  State<_HeroBlobField> createState() => _HeroBlobFieldState();
+}
+
+class _HeroBlobFieldState extends State<_HeroBlobField>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 26),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = Curves.easeInOut.transform(_controller.value);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _HeroBlob(
+              size: 520,
+              top: -160 + 30 * t,
+              left: -120 - 20 * t,
+              color: const Color(0xff3b82f6),
+            ),
+            _HeroBlob(
+              size: 460,
+              top: -80 - 20 * t,
+              right: -140 + 30 * t,
+              color: const Color(0xff93b4ff),
+            ),
+            _HeroBlob(
+              size: 420,
+              bottom: -200 + 25 * t,
+              left: MediaQuery.sizeOf(context).width * 0.3 - 20 * t,
+              color: const Color(0xff1d4ed8),
+            ),
+            _HeroBlob(
+              size: 320,
+              bottom: -120 - 15 * t,
+              right: MediaQuery.sizeOf(context).width * 0.1 + 20 * t,
+              color: const Color(0xff93b4ff),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HeroBlob extends StatelessWidget {
+  final double size;
+  final double? top;
+  final double? left;
+  final double? right;
+  final double? bottom;
+  final Color color;
+
+  const _HeroBlob({
+    required this.size,
+    this.top,
+    this.left,
+    this.right,
+    this.bottom,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: top,
+      left: left,
+      right: right,
+      bottom: bottom,
+      child: IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              center: const Alignment(-0.4, -0.4),
+              colors: [
+                color.withValues(alpha: 0.28),
+                Colors.transparent,
+              ],
+              stops: const [0, 0.65],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroGrainPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.018)
+      ..strokeWidth = 0.6;
+    for (var i = 0; i < 420; i++) {
+      final x = ((i * 37) % math.max(1, size.width.toInt())).toDouble();
+      final y = ((i * 67) % math.max(1, size.height.toInt())).toDouble();
+      canvas.drawPoints(ui.PointMode.points, [Offset(x, y)], paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _PhoneStage extends StatelessWidget {
