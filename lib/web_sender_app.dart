@@ -155,6 +155,29 @@ class _WebSenderAppState extends State<WebSenderApp> {
     return path == '/rider' || Uri.base.queryParameters['app'] == 'rider';
   }
 
+  String get _normalizedPath =>
+      Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+
+  bool get _isSenderAppPath {
+    final path = _normalizedPath;
+    return path == '/sender' || path == '/app';
+  }
+
+  bool get _isPublicMarketingPath {
+    final path = _normalizedPath;
+    return path.isEmpty ||
+        path == '/' ||
+        path == '/iris' ||
+        path == '/health' ||
+        path == '/health-plus' ||
+        path == '/gifts' ||
+        path == '/business' ||
+        path == '/vanguard' ||
+        path == '/terms' ||
+        path == '/privacy' ||
+        path == '/cookies';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -165,7 +188,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
     if (_adminHostingTarget && !_isPublicHostingHost()) {
       return _WebAppMode.admin;
     }
-    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    final path = _normalizedPath;
     if (path == '/sender' || path == '/app') return _WebAppMode.sender;
     if (path == '/rider') return _WebAppMode.rider;
     if (path == '/iris') return _WebAppMode.iris;
@@ -179,6 +202,12 @@ class _WebSenderAppState extends State<WebSenderApp> {
     if (path == '/vanguard') return _WebAppMode.vanguard;
     if (path == '/business') return _WebAppMode.business;
     if (path == '/business/dashboard') return _WebAppMode.businessDashboard;
+    // Mobile sender app dashboard must not be mounted on the public marketing web homepage.
+    if (_isPublicMarketingPath &&
+        const {'sender', 'app', 'dashboard'}
+            .contains(Uri.base.queryParameters['app'])) {
+      return _WebAppMode.landing;
+    }
     return switch (Uri.base.queryParameters['app']) {
       'health' => _WebAppMode.healthPlus,
       'business' => _WebAppMode.business,
@@ -229,6 +258,12 @@ class _WebSenderAppState extends State<WebSenderApp> {
   @override
   Widget build(BuildContext context) {
     final colors = _CircumColors(_darkMode);
+    // Mobile sender app dashboard must not be mounted on the public marketing web homepage.
+    final effectiveMode = _mode == _WebAppMode.sender &&
+            !_isSenderAppPath &&
+            _isPublicMarketingPath
+        ? _WebAppMode.landing
+        : _mode;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -247,7 +282,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
           children: [
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
-              child: switch (_mode) {
+              child: switch (effectiveMode) {
                 _WebAppMode.sender => _PhoneStage(
                     key: const ValueKey('sender-app'),
                     colors: colors,
@@ -385,11 +420,11 @@ class _WebSenderAppState extends State<WebSenderApp> {
                   ),
               },
             ),
-            if (_mode == _WebAppMode.sender ||
-                _mode == _WebAppMode.rider ||
-                _mode == _WebAppMode.businessDashboard ||
-                _mode == _WebAppMode.admin)
-              _PlatformNotificationCenter(colors: colors, mode: _mode),
+            if (effectiveMode == _WebAppMode.sender ||
+                effectiveMode == _WebAppMode.rider ||
+                effectiveMode == _WebAppMode.businessDashboard ||
+                effectiveMode == _WebAppMode.admin)
+              _PlatformNotificationCenter(colors: colors, mode: effectiveMode),
             _CompanyLiveChatButton(colors: colors),
           ],
         ),
@@ -13011,7 +13046,7 @@ class _IrisExplainerCopy extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
           child: Text(
-            "IRIS looks at what you're sending and knows what it weighs — before a rider ever lifts it. Every estimate is checked against what actually gets delivered and fed back in, so the parcel you send keeps getting priced more accurately the more Circum delivers.",
+            "IRIS looks at what you're sending and knows what it weighs before a rider ever lifts it. Every estimate is checked against what actually gets delivered and fed back in, so the parcel you send keeps getting priced more accurately the more Circum delivers.",
             style: GoogleFonts.inter(
               color: const Color(0xffb8c2d8),
               fontSize: narrow ? 15.5 : 17,
