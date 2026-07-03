@@ -1,3 +1,5 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
@@ -116,8 +118,163 @@ enum _WebAppMode {
   business,
 }
 
-bool _isPublicHostingHost() {
-  final host = Uri.base.host.toLowerCase();
+enum CircumAppSurface {
+  publicWebsite,
+  senderApp,
+  riderApp,
+  adminApp,
+}
+
+enum CircumPublicRoute {
+  landing,
+  gifts,
+  terms,
+  privacy,
+  vanguard,
+  business,
+}
+
+enum CircumSenderEntry {
+  dashboard,
+  healthPlus,
+  business,
+  account,
+}
+
+@visibleForTesting
+class CircumRouteDecision {
+  final CircumAppSurface surface;
+  final CircumPublicRoute publicRoute;
+  final CircumSenderEntry senderEntry;
+  final bool useSenderPreview;
+  final bool useRiderPreview;
+
+  const CircumRouteDecision({
+    required this.surface,
+    this.publicRoute = CircumPublicRoute.landing,
+    this.senderEntry = CircumSenderEntry.dashboard,
+    this.useSenderPreview = false,
+    this.useRiderPreview = false,
+  });
+
+  _SenderStep get _senderInitialStep => switch (senderEntry) {
+        CircumSenderEntry.dashboard => _SenderStep.dashboard,
+        CircumSenderEntry.healthPlus => _SenderStep.healthPlus,
+        CircumSenderEntry.business => _SenderStep.business,
+        CircumSenderEntry.account => _SenderStep.account,
+      };
+
+  _WebAppMode get _legacyMode => switch (surface) {
+        CircumAppSurface.senderApp => _WebAppMode.sender,
+        CircumAppSurface.riderApp => _WebAppMode.rider,
+        CircumAppSurface.adminApp => _WebAppMode.admin,
+        CircumAppSurface.publicWebsite => switch (publicRoute) {
+            CircumPublicRoute.gifts => _WebAppMode.gifts,
+            CircumPublicRoute.terms => _WebAppMode.terms,
+            CircumPublicRoute.privacy => _WebAppMode.privacy,
+            CircumPublicRoute.vanguard => _WebAppMode.vanguard,
+            CircumPublicRoute.business => _WebAppMode.business,
+            CircumPublicRoute.landing => _WebAppMode.landing,
+          },
+      };
+}
+
+@visibleForTesting
+CircumRouteDecision resolveCircumRoute(
+  Uri uri, {
+  bool adminHostingTarget = _adminHostingTarget,
+}) {
+  final path = uri.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+  final app = uri.queryParameters['app'];
+
+  if ((adminHostingTarget && !_isPublicHostingHostFor(uri)) ||
+      path == '/admin') {
+    return const CircumRouteDecision(surface: CircumAppSurface.adminApp);
+  }
+
+  // Temporary architecture-preview routes are deliberately isolated inside
+  // Sender/Rider roots. They must not be mounted on the public homepage.
+  if (path == '/sender') {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.senderApp,
+      senderEntry: CircumSenderEntry.dashboard,
+      useSenderPreview: true,
+    );
+  }
+  if (path == '/rider') {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.riderApp,
+      useRiderPreview: true,
+    );
+  }
+
+  if (path == '/gifts') {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.publicWebsite,
+      publicRoute: CircumPublicRoute.gifts,
+    );
+  }
+  if (path == '/terms') {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.publicWebsite,
+      publicRoute: CircumPublicRoute.terms,
+    );
+  }
+  if (path == '/privacy') {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.publicWebsite,
+      publicRoute: CircumPublicRoute.privacy,
+    );
+  }
+  if (path == '/vanguard') {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.publicWebsite,
+      publicRoute: CircumPublicRoute.vanguard,
+    );
+  }
+  if (path == '/business') {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.publicWebsite,
+      publicRoute: CircumPublicRoute.business,
+    );
+  }
+
+  return switch (app) {
+    'sender' => const CircumRouteDecision(
+        surface: CircumAppSurface.senderApp,
+        senderEntry: CircumSenderEntry.dashboard,
+        useSenderPreview: true,
+      ),
+    'health' => const CircumRouteDecision(
+        surface: CircumAppSurface.senderApp,
+        senderEntry: CircumSenderEntry.healthPlus,
+      ),
+    'business' => const CircumRouteDecision(
+        surface: CircumAppSurface.senderApp,
+        senderEntry: CircumSenderEntry.business,
+      ),
+    'profile' => const CircumRouteDecision(
+        surface: CircumAppSurface.senderApp,
+        senderEntry: CircumSenderEntry.account,
+      ),
+    'rider' ||
+    'driver' ||
+    'earn' ||
+    'circum-order' =>
+      const CircumRouteDecision(
+        surface: CircumAppSurface.riderApp,
+        useRiderPreview: true,
+      ),
+    'gifts' => const CircumRouteDecision(
+        surface: CircumAppSurface.publicWebsite,
+        publicRoute: CircumPublicRoute.gifts,
+      ),
+    _ => const CircumRouteDecision(surface: CircumAppSurface.publicWebsite),
+  };
+}
+
+bool _isPublicHostingHostFor(Uri uri) {
+  final host = uri.host.toLowerCase();
   return host == 'circumuk.com' ||
       host == 'www.circumuk.com' ||
       host == 'circum-2797c.web.app' ||
@@ -139,53 +296,13 @@ class WebSenderApp extends StatefulWidget {
 
 class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
-  late _WebAppMode _mode = _initialMode();
-  late _SenderStep _senderInitialStep = _initialSenderStep();
-
-  bool get _senderArchitecturePreview {
-    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    return path == '/sender' || Uri.base.queryParameters['app'] == 'sender';
-  }
-
-  bool get _riderArchitecturePreview {
-    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    return path == '/rider' || Uri.base.queryParameters['app'] == 'rider';
-  }
+  late CircumRouteDecision _route = resolveCircumRoute(Uri.base);
+  late _SenderStep _senderInitialStep = _route._senderInitialStep;
 
   @override
   void initState() {
     super.initState();
     _logWebsiteVisit();
-  }
-
-  _WebAppMode _initialMode() {
-    if (_adminHostingTarget && !_isPublicHostingHost()) {
-      return _WebAppMode.admin;
-    }
-    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    if (path == '/sender') return _WebAppMode.sender;
-    if (path == '/rider') return _WebAppMode.rider;
-    if (path == '/terms') return _WebAppMode.terms;
-    if (path == '/privacy') return _WebAppMode.privacy;
-    if (path == '/vanguard') return _WebAppMode.vanguard;
-    if (path == '/business') return _WebAppMode.business;
-    return switch (Uri.base.queryParameters['app']) {
-      'sender' || 'health' || 'business' || 'profile' => _WebAppMode.sender,
-      'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
-      'gifts' => _WebAppMode.gifts,
-      _ => _WebAppMode.landing,
-    };
-  }
-
-  _SenderStep _initialSenderStep() {
-    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    if (path == '/sender') return _SenderStep.dashboard;
-    return switch (Uri.base.queryParameters['app']) {
-      'health' => _SenderStep.healthPlus,
-      'business' => _SenderStep.business,
-      'profile' => _SenderStep.account,
-      _ => _SenderStep.dashboard,
-    };
   }
 
   Future<void> _logWebsiteVisit() async {
@@ -196,7 +313,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
         'url': Uri.base.toString(),
         'path': Uri.base.path,
         'query': Uri.base.queryParameters,
-        'appMode': _mode.name,
+        'appMode': _route._legacyMode.name,
         'userId': user?.uid,
         'email': user?.email,
         'signedIn': user != null,
@@ -229,112 +346,52 @@ class _WebSenderAppState extends State<WebSenderApp> {
           children: [
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
-              child: switch (_mode) {
-                _WebAppMode.sender => _PhoneStage(
-                    key: const ValueKey('sender-app'),
-                    colors: colors,
-                    child: _senderArchitecturePreview
-                        ? _SenderArchitecturePreviewApp(
-                            colors: colors,
-                            onOpenGifts: () =>
-                                setState(() => _mode = _WebAppMode.gifts),
-                          )
-                        : _CustomerPortal(
-                            darkMode: _darkMode,
-                            colors: colors,
-                            initialStep: _senderInitialStep,
-                            onBack: () =>
-                                setState(() => _mode = _WebAppMode.landing),
-                            onRoleSelected: _openRole,
-                            onOpenGifts: () =>
-                                setState(() => _mode = _WebAppMode.gifts),
-                            onToggleTheme: () =>
-                                setState(() => _darkMode = !_darkMode),
-                          ),
-                  ),
-                _WebAppMode.rider => _PhoneStage(
-                    key: const ValueKey('rider-app'),
-                    colors: colors,
-                    child: _riderArchitecturePreview
-                        ? _RiderArchitecturePreviewApp(colors: colors)
-                        : _RiderEnrollmentPortal(
-                            darkMode: _darkMode,
-                            colors: colors,
-                            onBack: () =>
-                                setState(() => _mode = _WebAppMode.landing),
-                            onRoleSelected: _openRole,
-                            onToggleTheme: () =>
-                                setState(() => _darkMode = !_darkMode),
-                          ),
-                  ),
-                _WebAppMode.admin => _AdminOperationsPanel(
-                    key: const ValueKey('admin-ops'),
+              child: switch (_route.surface) {
+                CircumAppSurface.publicWebsite => CircumPublicAppRoot(
+                    key: ValueKey('public-${_route.publicRoute.name}'),
                     colors: colors,
                     darkMode: _darkMode,
-                    onBack: _adminHostingTarget
-                        ? () {}
-                        : () => setState(() => _mode = _WebAppMode.landing),
+                    route: _route.publicRoute,
+                    onStart: _openSenderDashboard,
+                    onRider: _openRider,
+                    onHealthPlus: _openSenderHealthPlus,
+                    onGifts: _openGifts,
+                    onBusiness: _openBusinessPublic,
+                    onBusinessAccess: _openSenderBusiness,
+                    onHome: _openPublicHome,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
-                _WebAppMode.gifts => _GiftsRequestPage(
-                    key: const ValueKey('gifts-request'),
-                    colors: colors,
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                  ),
-                _WebAppMode.terms => _LegalDocumentPage(
-                    key: const ValueKey('terms'),
-                    colors: colors,
-                    title: 'Terms of Service',
-                    documentPath: '/legal/CIRCUM_Terms_of_Service.pdf',
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                  ),
-                _WebAppMode.privacy => _LegalDocumentPage(
-                    key: const ValueKey('privacy'),
-                    colors: colors,
-                    title: 'Privacy Policy',
-                    documentPath: '/legal/CIRCUM_Privacy_Policy.pdf',
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                  ),
-                _WebAppMode.vanguard => _VanguardExplainerPage(
-                    key: const ValueKey('vanguard'),
-                    onHome: () => setState(() => _mode = _WebAppMode.landing),
-                  ),
-                _WebAppMode.business => _BusinessCommandPage(
-                    key: const ValueKey('business-command'),
-                    colors: colors,
-                    onHome: () => setState(() => _mode = _WebAppMode.landing),
-                    onAccess: () => setState(() {
-                      _senderInitialStep = _SenderStep.business;
-                      _mode = _WebAppMode.sender;
-                    }),
-                  ),
-                _WebAppMode.landing => _LandingPage(
-                    key: const ValueKey('landing'),
+                CircumAppSurface.senderApp => CircumSenderAppRoot(
+                    key: const ValueKey('sender-root'),
                     colors: colors,
                     darkMode: _darkMode,
-                    onStart: () => setState(() {
-                      _senderInitialStep = _SenderStep.dashboard;
-                      _mode = _WebAppMode.sender;
-                    }),
-                    onRider: () => setState(() => _mode = _WebAppMode.rider),
-                    onHealthPlus: () => setState(() {
-                      _senderInitialStep = _SenderStep.healthPlus;
-                      _mode = _WebAppMode.sender;
-                    }),
-                    onGifts: () => setState(() => _mode = _WebAppMode.gifts),
-                    onBusiness: () => unawaited(launchUrl(
-                      Uri.base.resolve('/business'),
-                      webOnlyWindowName: '_self',
-                    )),
-                    onBusinessAccess: () => unawaited(launchUrl(
-                      Uri.base.resolve('/business'),
-                      webOnlyWindowName: '_self',
-                    )),
+                    initialStep: _senderInitialStep,
+                    usePreview: _route.useSenderPreview,
+                    onBack: _openPublicHome,
+                    onRoleSelected: _openRole,
+                    onOpenGifts: _openGifts,
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
+                CircumAppSurface.riderApp => CircumRiderAppRoot(
+                    key: const ValueKey('rider-root'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    usePreview: _route.useRiderPreview,
+                    onBack: _openPublicHome,
+                    onRoleSelected: _openRole,
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
+                CircumAppSurface.adminApp => CircumAdminAppRoot(
+                    key: const ValueKey('admin-root'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    onBack: _adminHostingTarget ? () {} : _openPublicHome,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
               },
             ),
-            _PlatformNotificationCenter(colors: colors, mode: _mode),
+            _PlatformNotificationCenter(
+                colors: colors, mode: _route._legacyMode),
             _CompanyLiveChatButton(colors: colors),
           ],
         ),
@@ -344,13 +401,260 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openRole(CircumRole role) {
     setState(() {
-      _mode = switch (role) {
-        CircumRole.sender => _WebAppMode.sender,
-        CircumRole.rider => _WebAppMode.rider,
-        CircumRole.admin => _WebAppMode.admin,
-        CircumRole.unknown => _WebAppMode.landing,
+      _route = switch (role) {
+        CircumRole.sender => const CircumRouteDecision(
+            surface: CircumAppSurface.senderApp,
+          ),
+        CircumRole.rider => const CircumRouteDecision(
+            surface: CircumAppSurface.riderApp,
+          ),
+        CircumRole.admin => const CircumRouteDecision(
+            surface: CircumAppSurface.adminApp,
+          ),
+        CircumRole.unknown => const CircumRouteDecision(
+            surface: CircumAppSurface.publicWebsite,
+          ),
       };
+      _senderInitialStep = _route._senderInitialStep;
     });
+  }
+
+  void _openPublicHome() {
+    setState(() {
+      _route =
+          const CircumRouteDecision(surface: CircumAppSurface.publicWebsite);
+      _senderInitialStep = _route._senderInitialStep;
+    });
+  }
+
+  void _openGifts() {
+    setState(() {
+      _route = const CircumRouteDecision(
+        surface: CircumAppSurface.publicWebsite,
+        publicRoute: CircumPublicRoute.gifts,
+      );
+    });
+  }
+
+  void _openBusinessPublic() {
+    unawaited(launchUrl(
+      Uri.base.resolve('/business'),
+      webOnlyWindowName: '_self',
+    ));
+  }
+
+  void _openSenderDashboard() {
+    setState(() {
+      _route = const CircumRouteDecision(surface: CircumAppSurface.senderApp);
+      _senderInitialStep = _SenderStep.dashboard;
+    });
+  }
+
+  void _openSenderHealthPlus() {
+    setState(() {
+      _route = const CircumRouteDecision(
+        surface: CircumAppSurface.senderApp,
+        senderEntry: CircumSenderEntry.healthPlus,
+      );
+      _senderInitialStep = _SenderStep.healthPlus;
+    });
+  }
+
+  void _openSenderBusiness() {
+    setState(() {
+      _route = const CircumRouteDecision(
+        surface: CircumAppSurface.senderApp,
+        senderEntry: CircumSenderEntry.business,
+      );
+      _senderInitialStep = _SenderStep.business;
+    });
+  }
+
+  void _openRider() {
+    setState(() {
+      _route = const CircumRouteDecision(surface: CircumAppSurface.riderApp);
+      _senderInitialStep = _route._senderInitialStep;
+    });
+  }
+}
+
+class CircumPublicAppRoot extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final CircumPublicRoute route;
+  final VoidCallback onStart;
+  final VoidCallback onRider;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBusiness;
+  final VoidCallback onBusinessAccess;
+  final VoidCallback onHome;
+  final VoidCallback onToggleTheme;
+
+  const CircumPublicAppRoot({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.route,
+    required this.onStart,
+    required this.onRider,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBusiness,
+    required this.onBusinessAccess,
+    required this.onHome,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (route) {
+      CircumPublicRoute.gifts => _GiftsRequestPage(
+          key: const ValueKey('public-gifts'),
+          colors: colors,
+          onBack: onHome,
+        ),
+      CircumPublicRoute.terms => _LegalDocumentPage(
+          key: const ValueKey('public-terms'),
+          colors: colors,
+          title: 'Terms of Service',
+          documentPath: '/legal/CIRCUM_Terms_of_Service.pdf',
+          onBack: onHome,
+        ),
+      CircumPublicRoute.privacy => _LegalDocumentPage(
+          key: const ValueKey('public-privacy'),
+          colors: colors,
+          title: 'Privacy Policy',
+          documentPath: '/legal/CIRCUM_Privacy_Policy.pdf',
+          onBack: onHome,
+        ),
+      CircumPublicRoute.vanguard => _VanguardExplainerPage(
+          key: const ValueKey('public-vanguard'),
+          onHome: onHome,
+        ),
+      CircumPublicRoute.business => _BusinessCommandPage(
+          key: const ValueKey('public-business'),
+          colors: colors,
+          onHome: onHome,
+          onAccess: onBusinessAccess,
+        ),
+      CircumPublicRoute.landing => _LandingPage(
+          key: const ValueKey('public-landing'),
+          colors: colors,
+          darkMode: darkMode,
+          onStart: onStart,
+          onRider: onRider,
+          onHealthPlus: onHealthPlus,
+          onGifts: onGifts,
+          onBusiness: onBusiness,
+          onBusinessAccess: onBusinessAccess,
+          onToggleTheme: onToggleTheme,
+        ),
+    };
+  }
+}
+
+class CircumSenderAppRoot extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final _SenderStep initialStep;
+  final bool usePreview;
+  final VoidCallback onBack;
+  final ValueChanged<CircumRole> onRoleSelected;
+  final VoidCallback onOpenGifts;
+  final VoidCallback onToggleTheme;
+
+  const CircumSenderAppRoot({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.initialStep,
+    required this.usePreview,
+    required this.onBack,
+    required this.onRoleSelected,
+    required this.onOpenGifts,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _PhoneStage(
+      colors: colors,
+      child: usePreview
+          ? _SenderArchitecturePreviewApp(
+              colors: colors,
+              onOpenGifts: onOpenGifts,
+            )
+          : _CustomerPortal(
+              darkMode: darkMode,
+              colors: colors,
+              initialStep: initialStep,
+              onBack: onBack,
+              onRoleSelected: onRoleSelected,
+              onOpenGifts: onOpenGifts,
+              onToggleTheme: onToggleTheme,
+            ),
+    );
+  }
+}
+
+class CircumRiderAppRoot extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final bool usePreview;
+  final VoidCallback onBack;
+  final ValueChanged<CircumRole> onRoleSelected;
+  final VoidCallback onToggleTheme;
+
+  const CircumRiderAppRoot({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.usePreview,
+    required this.onBack,
+    required this.onRoleSelected,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _PhoneStage(
+      colors: colors,
+      child: usePreview
+          ? _RiderArchitecturePreviewApp(colors: colors)
+          : _RiderEnrollmentPortal(
+              darkMode: darkMode,
+              colors: colors,
+              onBack: onBack,
+              onRoleSelected: onRoleSelected,
+              onToggleTheme: onToggleTheme,
+            ),
+    );
+  }
+}
+
+class CircumAdminAppRoot extends StatelessWidget {
+  final _CircumColors colors;
+  final bool darkMode;
+  final VoidCallback onBack;
+  final VoidCallback onToggleTheme;
+
+  const CircumAdminAppRoot({
+    super.key,
+    required this.colors,
+    required this.darkMode,
+    required this.onBack,
+    required this.onToggleTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminOperationsPanel(
+      colors: colors,
+      darkMode: darkMode,
+      onBack: onBack,
+      onToggleTheme: onToggleTheme,
+    );
   }
 }
 
