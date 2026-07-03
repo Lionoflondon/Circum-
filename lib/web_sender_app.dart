@@ -930,18 +930,6 @@ class _LandingPage extends StatelessWidget {
                         dark: true,
                         onPressed: onStart,
                       ),
-                      _PillButton(
-                        label: 'Earn as a Rider',
-                        icon: Icons.two_wheeler,
-                        dark: false,
-                        onPressed: onRider,
-                      ),
-                      _PillButton(
-                        label: 'Get started with Health+',
-                        icon: Icons.health_and_safety,
-                        dark: false,
-                        onPressed: onHealthPlus,
-                      ),
                     ],
                   ),
                   const SizedBox(height: 58),
@@ -12772,6 +12760,7 @@ class _LandingNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
+    final showLinks = width >= 820;
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -12787,27 +12776,20 @@ class _LandingNav extends StatelessWidget {
                 fit: BoxFit.contain,
               ),
               const Spacer(),
-              IconButton(
-                tooltip: darkMode ? 'Light mode' : 'Dark mode',
-                onPressed: onToggleTheme,
-                icon: Icon(
-                  darkMode ? Icons.light_mode : Icons.dark_mode,
-                  color: colors.text,
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (width >= 560)
+              if (showLinks) ...[
                 TextButton(
-                  onPressed: onRider,
+                  onPressed: () => unawaited(launchUrl(
+                    Uri.base.resolve('/iris'),
+                    webOnlyWindowName: '_self',
+                  )),
                   child: Text(
-                    'Rider',
+                    'IRIS',
                     style: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-              if (width >= 680)
                 TextButton(
                   onPressed: onHealthPlus,
                   child: Text(
@@ -12818,7 +12800,16 @@ class _LandingNav extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (width >= 720)
+                TextButton(
+                  onPressed: onGifts,
+                  child: Text(
+                    'Gifts',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
                 TextButton(
                   onPressed: onBusiness,
                   child: Text(
@@ -12828,64 +12819,32 @@ class _LandingNav extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                )
-              else if (width >= 520)
-                IconButton(
-                  tooltip: 'Business',
-                  onPressed: onBusiness,
-                  icon:
-                      Icon(Icons.business_center_outlined, color: colors.text),
-                )
-              else
-                IconButton(
-                  tooltip: 'Business',
-                  onPressed: onBusiness,
-                  icon:
-                      Icon(Icons.business_center_outlined, color: colors.text),
                 ),
-              if (onGifts != null && width >= 760)
-                TextButton.icon(
-                  onPressed: onGifts,
-                  icon: const Icon(Icons.card_giftcard, size: 18),
-                  label: Text(
-                    'Gifts',
+                TextButton(
+                  onPressed: onRider,
+                  child: Text(
+                    'Rider',
                     style: TextStyle(
                       color: colors.text,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                )
-              else if (onGifts != null)
-                IconButton(
-                  tooltip: 'Gifts',
-                  onPressed: onGifts,
-                  icon: Icon(Icons.card_giftcard, color: colors.text),
                 ),
+              ],
               const SizedBox(width: 8),
-              if (width < 520)
-                IconButton.filled(
-                  tooltip: 'Book delivery',
-                  onPressed: onStart,
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor: colors.text,
-                    foregroundColor: colors.inverseText,
+              FilledButton(
+                onPressed: onStart,
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.text,
+                  foregroundColor: colors.inverseText,
+                  shape: const StadiumBorder(),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: width < 520 ? 16 : 20,
+                    vertical: 14,
                   ),
-                )
-              else
-                FilledButton(
-                  onPressed: onStart,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors.text,
-                    foregroundColor: colors.inverseText,
-                    shape: const StadiumBorder(),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                  ),
-                  child: const Text('Send a Parcel'),
                 ),
+                child: const Text('Send a Parcel'),
+              ),
             ],
           ),
         ),
