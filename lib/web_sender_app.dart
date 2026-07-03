@@ -110,14 +110,10 @@ enum _WebAppMode {
   rider,
   gifts,
   admin,
-  iris,
-  healthPlus,
   terms,
   privacy,
-  cookies,
   vanguard,
   business,
-  businessDashboard,
 }
 
 bool _isPublicHostingHost() {
@@ -147,58 +143,13 @@ class _WebSenderAppState extends State<WebSenderApp> {
   late _SenderStep _senderInitialStep = _initialSenderStep();
 
   bool get _senderArchitecturePreview {
-    return Uri.base.queryParameters['preview'] == 'sender-ui';
+    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    return path == '/sender' || Uri.base.queryParameters['app'] == 'sender';
   }
 
   bool get _riderArchitecturePreview {
     final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
     return path == '/rider' || Uri.base.queryParameters['app'] == 'rider';
-  }
-
-  String get _normalizedPath =>
-      Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-
-  bool get _isSenderAppPath {
-    final path = _normalizedPath;
-    return path == '/sender' || path == '/app';
-  }
-
-  bool get _isPublicMarketingPath {
-    final path = _normalizedPath;
-    if (Uri.base.scheme == 'file' || path.endsWith('/web/index.html')) {
-      return true;
-    }
-    return path.isEmpty ||
-        path == '/' ||
-        path == '/iris' ||
-        path == '/health' ||
-        path == '/health-plus' ||
-        path == '/gifts' ||
-        path == '/business' ||
-        path == '/vanguard' ||
-        path == '/terms' ||
-        path == '/privacy' ||
-        path == '/cookies';
-  }
-
-  _WebAppMode? get _publicMarketingModeForPath {
-    if (Uri.base.scheme == 'file' ||
-        _normalizedPath.endsWith('/web/index.html')) {
-      return _WebAppMode.landing;
-    }
-    final path = _normalizedPath;
-    return switch (path) {
-      '' || '/' => _WebAppMode.landing,
-      '/iris' => _WebAppMode.iris,
-      '/health' || '/health-plus' => _WebAppMode.healthPlus,
-      '/gifts' => _WebAppMode.gifts,
-      '/business' => _WebAppMode.business,
-      '/vanguard' => _WebAppMode.vanguard,
-      '/terms' => _WebAppMode.terms,
-      '/privacy' => _WebAppMode.privacy,
-      '/cookies' => _WebAppMode.cookies,
-      _ => null,
-    };
   }
 
   @override
@@ -211,49 +162,28 @@ class _WebSenderAppState extends State<WebSenderApp> {
     if (_adminHostingTarget && !_isPublicHostingHost()) {
       return _WebAppMode.admin;
     }
-    final path = _normalizedPath;
-    if (path == '/sender' || path == '/app') return _WebAppMode.sender;
+    final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    if (path == '/sender') return _WebAppMode.sender;
     if (path == '/rider') return _WebAppMode.rider;
-    if (path == '/iris') return _WebAppMode.iris;
-    if (path == '/health' || path == '/health-plus') {
-      return _WebAppMode.healthPlus;
-    }
-    if (path == '/gifts') return _WebAppMode.gifts;
     if (path == '/terms') return _WebAppMode.terms;
     if (path == '/privacy') return _WebAppMode.privacy;
-    if (path == '/cookies') return _WebAppMode.cookies;
     if (path == '/vanguard') return _WebAppMode.vanguard;
     if (path == '/business') return _WebAppMode.business;
-    if (path == '/business/dashboard') return _WebAppMode.businessDashboard;
-    // Mobile sender app dashboard must not be mounted on the public marketing web homepage.
-    if (_isPublicMarketingPath &&
-        const {'sender', 'app', 'dashboard'}
-            .contains(Uri.base.queryParameters['app'])) {
-      return _WebAppMode.landing;
-    }
     return switch (Uri.base.queryParameters['app']) {
-      'health' => _WebAppMode.healthPlus,
-      'business' => _WebAppMode.business,
-      'business-dashboard' => _WebAppMode.businessDashboard,
+      'sender' || 'health' || 'business' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
       'gifts' => _WebAppMode.gifts,
-      'iris' => _WebAppMode.iris,
       _ => _WebAppMode.landing,
     };
   }
 
   _SenderStep _initialSenderStep() {
     final path = Uri.base.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
-    if (path == '/sender' || path == '/app') {
-      return switch (Uri.base.queryParameters['section'] ??
-          Uri.base.queryParameters['service']) {
-        'health' || 'health-plus' => _SenderStep.healthPlus,
-        'business' => _SenderStep.business,
-        'account' || 'profile' => _SenderStep.account,
-        _ => _SenderStep.dashboard,
-      };
-    }
+    if (path == '/sender') return _SenderStep.dashboard;
     return switch (Uri.base.queryParameters['app']) {
+      'health' => _SenderStep.healthPlus,
+      'business' => _SenderStep.business,
+      'profile' => _SenderStep.account,
       _ => _SenderStep.dashboard,
     };
   }
@@ -281,11 +211,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
   @override
   Widget build(BuildContext context) {
     final colors = _CircumColors(_darkMode);
-    // Mobile sender app dashboard must not be mounted on the public marketing web homepage.
-    final effectiveMode = _publicMarketingModeForPath ??
-        (_mode == _WebAppMode.sender && !_isSenderAppPath
-            ? _WebAppMode.landing
-            : _mode);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -304,7 +229,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
           children: [
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
-              child: switch (effectiveMode) {
+              child: switch (_mode) {
                 _WebAppMode.sender => _PhoneStage(
                     key: const ValueKey('sender-app'),
                     colors: colors,
@@ -356,21 +281,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     colors: colors,
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
                   ),
-                _WebAppMode.iris => _PublicIrisPage(
-                    key: const ValueKey('iris-public'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
-                _WebAppMode.healthPlus => _PublicHealthPlusPage(
-                    key: const ValueKey('health-public'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onStartHealth: () => _openSenderHealthPlus(),
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
                 _WebAppMode.terms => _LegalDocumentPage(
                     key: const ValueKey('terms'),
                     colors: colors,
@@ -385,59 +295,33 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     documentPath: '/legal/CIRCUM_Privacy_Policy.pdf',
                     onBack: () => setState(() => _mode = _WebAppMode.landing),
                   ),
-                _WebAppMode.cookies => _PublicInfoPage(
-                    key: const ValueKey('cookies-public'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    title: 'Cookies',
-                    eyebrow: 'Privacy',
-                    body:
-                        'Circum uses essential cookies and local browser storage to keep the website and authenticated dashboards working securely.',
-                    icon: Icons.cookie_outlined,
-                    primaryLabel: 'Privacy Policy',
-                    onPrimary: () =>
-                        setState(() => _mode = _WebAppMode.privacy),
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
                 _WebAppMode.vanguard => _VanguardExplainerPage(
                     key: const ValueKey('vanguard'),
                     onHome: () => setState(() => _mode = _WebAppMode.landing),
                   ),
-                _WebAppMode.business => _PublicBusinessPage(
-                    key: const ValueKey('business-public'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onOpenDashboard: _openBusinessDashboard,
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
-                _WebAppMode.businessDashboard => _BusinessCommandPage(
+                _WebAppMode.business => _BusinessCommandPage(
                     key: const ValueKey('business-command'),
                     colors: colors,
                     onHome: () => setState(() => _mode = _WebAppMode.landing),
-                    onAccess: () => unawaited(launchUrl(
-                      Uri.base.resolve('/app?section=business'),
-                      webOnlyWindowName: '_self',
-                    )),
+                    onAccess: () => setState(() {
+                      _senderInitialStep = _SenderStep.business;
+                      _mode = _WebAppMode.sender;
+                    }),
                   ),
                 _WebAppMode.landing => _LandingPage(
                     key: const ValueKey('landing'),
                     colors: colors,
                     darkMode: _darkMode,
-                    onStart: _openSenderDashboard,
-                    onRider: () => unawaited(launchUrl(
-                      Uri.base.resolve('/rider'),
-                      webOnlyWindowName: '_self',
-                    )),
-                    onHealthPlus: () => unawaited(launchUrl(
-                      Uri.base.resolve('/health-plus'),
-                      webOnlyWindowName: '_self',
-                    )),
-                    onGifts: () => unawaited(launchUrl(
-                      Uri.base.resolve('/gifts'),
-                      webOnlyWindowName: '_self',
-                    )),
+                    onStart: () => setState(() {
+                      _senderInitialStep = _SenderStep.dashboard;
+                      _mode = _WebAppMode.sender;
+                    }),
+                    onRider: () => setState(() => _mode = _WebAppMode.rider),
+                    onHealthPlus: () => setState(() {
+                      _senderInitialStep = _SenderStep.healthPlus;
+                      _mode = _WebAppMode.sender;
+                    }),
+                    onGifts: () => setState(() => _mode = _WebAppMode.gifts),
                     onBusiness: () => unawaited(launchUrl(
                       Uri.base.resolve('/business'),
                       webOnlyWindowName: '_self',
@@ -450,11 +334,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                   ),
               },
             ),
-            if (effectiveMode == _WebAppMode.sender ||
-                effectiveMode == _WebAppMode.rider ||
-                effectiveMode == _WebAppMode.businessDashboard ||
-                effectiveMode == _WebAppMode.admin)
-              _PlatformNotificationCenter(colors: colors, mode: effectiveMode),
+            _PlatformNotificationCenter(colors: colors, mode: _mode),
             _CompanyLiveChatButton(colors: colors),
           ],
         ),
@@ -463,13 +343,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   void _openRole(CircumRole role) {
-    if (role == CircumRole.sender && !_isSenderAppPath) {
-      unawaited(launchUrl(
-        Uri.base.resolve('/sender'),
-        webOnlyWindowName: '_self',
-      ));
-      return;
-    }
     setState(() {
       _mode = switch (role) {
         CircumRole.sender => _WebAppMode.sender,
@@ -478,27 +351,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
         CircumRole.unknown => _WebAppMode.landing,
       };
     });
-  }
-
-  void _openSenderDashboard() {
-    unawaited(launchUrl(
-      Uri.base.resolve('/sender'),
-      webOnlyWindowName: '_self',
-    ));
-  }
-
-  void _openSenderHealthPlus() {
-    unawaited(launchUrl(
-      Uri.base.resolve('/sender?section=health'),
-      webOnlyWindowName: '_self',
-    ));
-  }
-
-  void _openBusinessDashboard() {
-    unawaited(launchUrl(
-      Uri.base.resolve('/business/dashboard'),
-      webOnlyWindowName: '_self',
-    ));
   }
 }
 
@@ -932,30 +784,25 @@ class _LandingPage extends StatelessWidget {
                       ),
                       _PillButton(
                         label: 'Earn as a Rider',
-                        icon: Icons.pedal_bike_rounded,
+                        icon: Icons.two_wheeler,
                         dark: false,
                         onPressed: onRider,
                       ),
                       _PillButton(
                         label: 'Get started with Health+',
-                        icon: Icons.medical_services_outlined,
+                        icon: Icons.health_and_safety,
                         dark: false,
                         onPressed: onHealthPlus,
                       ),
                     ],
                   ),
                   const SizedBox(height: 58),
-                  _HeroMockup(
-                    colors: colors,
-                    onExploreIris: () => unawaited(
-                      launchUrl(Uri.base.resolve('/iris'),
-                          webOnlyWindowName: '_self'),
-                    ),
-                  ),
+                  _HeroMockup(colors: colors, onStart: onStart),
                 ],
               ),
             ),
           ),
+          _FeatureBand(colors: colors),
           _VanguardLandingBand(colors: colors),
           _BusinessLandingBand(
             colors: colors,
@@ -12772,7 +12619,6 @@ class _LandingNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final showLinks = width >= 820;
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -12788,50 +12634,16 @@ class _LandingNav extends StatelessWidget {
                 fit: BoxFit.contain,
               ),
               const Spacer(),
-              if (showLinks) ...[
-                TextButton(
-                  onPressed: () => unawaited(launchUrl(
-                    Uri.base.resolve('/iris'),
-                    webOnlyWindowName: '_self',
-                  )),
-                  child: Text(
-                    'IRIS',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+              IconButton(
+                tooltip: darkMode ? 'Light mode' : 'Dark mode',
+                onPressed: onToggleTheme,
+                icon: Icon(
+                  darkMode ? Icons.light_mode : Icons.dark_mode,
+                  color: colors.text,
                 ),
-                TextButton(
-                  onPressed: onHealthPlus,
-                  child: Text(
-                    'Health+',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: onGifts,
-                  child: Text(
-                    'Gifts',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: onBusiness,
-                  child: Text(
-                    'Business',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+              ),
+              const SizedBox(width: 8),
+              if (width >= 560)
                 TextButton(
                   onPressed: onRider,
                   child: Text(
@@ -12842,21 +12654,85 @@ class _LandingNav extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: onStart,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.text,
-                  foregroundColor: colors.inverseText,
-                  shape: const StadiumBorder(),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: width < 520 ? 16 : 20,
-                    vertical: 14,
+              if (width >= 680)
+                TextButton(
+                  onPressed: onHealthPlus,
+                  child: Text(
+                    'Health+',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                child: const Text('Send a Parcel'),
-              ),
+              if (width >= 720)
+                TextButton(
+                  onPressed: onBusiness,
+                  child: Text(
+                    'Business',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else if (width >= 520)
+                IconButton(
+                  tooltip: 'Business',
+                  onPressed: onBusiness,
+                  icon:
+                      Icon(Icons.business_center_outlined, color: colors.text),
+                )
+              else
+                IconButton(
+                  tooltip: 'Business',
+                  onPressed: onBusiness,
+                  icon:
+                      Icon(Icons.business_center_outlined, color: colors.text),
+                ),
+              if (onGifts != null && width >= 760)
+                TextButton.icon(
+                  onPressed: onGifts,
+                  icon: const Icon(Icons.card_giftcard, size: 18),
+                  label: Text(
+                    'Gifts',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else if (onGifts != null)
+                IconButton(
+                  tooltip: 'Gifts',
+                  onPressed: onGifts,
+                  icon: Icon(Icons.card_giftcard, color: colors.text),
+                ),
+              const SizedBox(width: 8),
+              if (width < 520)
+                IconButton.filled(
+                  tooltip: 'Book delivery',
+                  onPressed: onStart,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  style: IconButton.styleFrom(
+                    backgroundColor: colors.text,
+                    foregroundColor: colors.inverseText,
+                  ),
+                )
+              else
+                FilledButton(
+                  onPressed: onStart,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.text,
+                    foregroundColor: colors.inverseText,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                  ),
+                  child: const Text('Send a Parcel'),
+                ),
             ],
           ),
         ),
@@ -12919,302 +12795,179 @@ class _SpectrumSweepPainter extends CustomPainter {
 
 class _HeroMockup extends StatelessWidget {
   final _CircumColors colors;
-  final VoidCallback onExploreIris;
+  final VoidCallback onStart;
 
-  const _HeroMockup({required this.colors, required this.onExploreIris});
-
-  @override
-  Widget build(BuildContext context) {
-    return _IrisExplainerPanel(colors: colors, onExploreIris: onExploreIris);
-  }
-}
-
-class _IrisExplainerPanel extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onExploreIris;
-  final String ctaLabel;
-
-  const _IrisExplainerPanel({
-    required this.colors,
-    required this.onExploreIris,
-    this.ctaLabel = 'Explore IRIS',
-  });
+  const _HeroMockup({required this.colors, required this.onStart});
 
   @override
   Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Container(
-      width: double.infinity,
-      clipBehavior: Clip.antiAlias,
-      padding: EdgeInsets.all(narrow ? 22 : 30),
-      decoration: BoxDecoration(
-        color: const Color(0xff07090f).withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: const Color(0xff93b4ff).withValues(alpha: 0.24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff3b82f6).withValues(alpha: 0.16),
-            blurRadius: 34,
-            offset: const Offset(0, 18),
-          ),
-          BoxShadow(
-            color: const Color(0xffa855f7).withValues(alpha: 0.08),
-            blurRadius: 56,
-            offset: const Offset(0, 24),
-          ),
-        ],
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xff3b82f6).withValues(alpha: 0.10),
-            const Color(0xff07090f).withValues(alpha: 0.94),
-            const Color(0xffa855f7).withValues(alpha: 0.08),
-          ],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -56,
-            top: -76,
-            child: _IrisOrbGlow(size: narrow ? 190 : 260),
-          ),
-          narrow
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _IrisExplainerCopy(
-                      colors: colors,
-                      onExploreIris: onExploreIris,
-                      ctaLabel: ctaLabel,
-                    ),
-                    const SizedBox(height: 24),
-                    const _IrisOrbMark(),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(
-                      child: _IrisExplainerCopy(
-                        colors: colors,
-                        onExploreIris: onExploreIris,
-                        ctaLabel: ctaLabel,
-                      ),
-                    ),
-                    const SizedBox(width: 36),
-                    const SizedBox(width: 210, child: _IrisOrbMark()),
-                  ],
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-class _IrisExplainerCopy extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onExploreIris;
-  final String ctaLabel;
-
-  const _IrisExplainerCopy({
-    required this.colors,
-    required this.onExploreIris,
-    required this.ctaLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'IRIS',
-          style: GoogleFonts.jetBrainsMono(
-            color: const Color(0xff93b4ff),
-            fontSize: 12,
-            letterSpacing: 2.2,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'The intelligence behind every Parcel Delivered.',
-          style: GoogleFonts.dmSerifDisplay(
-            color: const Color(0xfff5f7fb),
-            fontSize: narrow ? 32 : 44,
-            height: 1.02,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        const SizedBox(height: 16),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: Text(
-            "IRIS looks at what you're sending and knows what it weighs before a rider ever lifts it. Every estimate is checked against what actually gets delivered and fed back in, so the parcel you send keeps getting priced more accurately the more Circum delivers.",
-            style: GoogleFonts.inter(
-              color: const Color(0xffb8c2d8),
-              fontSize: narrow ? 15.5 : 17,
-              height: 1.62,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        const SizedBox(height: 22),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: const [
-            _IrisCategoryPill('Parcels'),
-            _IrisCategoryPill('Prescriptions'),
-            _IrisCategoryPill('Documents'),
-            _IrisCategoryPill('Gifts'),
-            _IrisCategoryPill('Business'),
-          ],
-        ),
-        const SizedBox(height: 26),
-        OutlinedButton.icon(
-          onPressed: onExploreIris,
-          icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-          label: Text(ctaLabel),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xfff5f7fb),
-            side: BorderSide(
-              color: const Color(0xff93b4ff).withValues(alpha: 0.42),
-            ),
-            backgroundColor: const Color(0xff3b82f6).withValues(alpha: 0.10),
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-            shape: const StadiumBorder(),
-            textStyle:
-                GoogleFonts.inter(fontSize: 14.5, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _IrisCategoryPill extends StatelessWidget {
-  final String label;
-
-  const _IrisCategoryPill(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          color: const Color(0xffe8eefc),
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _IrisOrbMark extends StatelessWidget {
-  const _IrisOrbMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SizedBox(
-        width: 168,
-        height: 168,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            const _IrisOrbGlow(size: 168),
-            Container(
-              width: 112,
-              height: 112,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xfff5f7fb),
-                    Color(0xff3b82f6),
-                    Color(0xff0d111c),
-                  ],
-                ),
-                border: Border.all(color: Colors.white24),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xff3b82f6).withValues(alpha: 0.42),
-                    blurRadius: 32,
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        Color(0xffffffff),
-                        Color(0x773b82f6),
-                        Colors.transparent,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 820;
+        final map = _MiniMap(colors: colors, active: true);
+        final panel = _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _LogoTile(colors: colors),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your rider is on the way',
+                          style: TextStyle(
+                            color: colors.text,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
+                        Text(
+                          'Bike courier arriving in 8 min',
+                          style: TextStyle(
+                            color: colors.mutedText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _RouteRow(
+                colors: colors,
+                from: 'Pickup address',
+                to: 'Drop-off address',
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MetricPill(
+                      colors: colors,
+                      label: 'ETA',
+                      value: '14 min',
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MetricPill(
+                      colors: colors,
+                      label: 'Quote',
+                      value: '£9.80',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onStart,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('Start a delivery'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.text,
+                    foregroundColor: colors.inverseText,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ),
-            ),
-            Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border(
-                  top: BorderSide(
-                      color: const Color(0xff93b4ff).withValues(alpha: 0.8),
-                      width: 1.4),
-                  right: BorderSide(
-                      color: const Color(0xff93b4ff).withValues(alpha: 0.55),
-                      width: 1.4),
-                ),
+            ],
+          ),
+        );
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colors.panel,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: colors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(colors.dark ? 0.32 : 0.08),
+                blurRadius: 36,
+                offset: const Offset(0, 18),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+          child: wide
+              ? Row(
+                  children: [
+                    Expanded(flex: 6, child: map),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 4, child: panel),
+                  ],
+                )
+              : Column(children: [map, const SizedBox(height: 16), panel]),
+        );
+      },
     );
   }
 }
 
-class _IrisOrbGlow extends StatelessWidget {
-  final double size;
+class _FeatureBand extends StatelessWidget {
+  final _CircumColors colors;
 
-  const _IrisOrbGlow({required this.size});
+  const _FeatureBand({required this.colors});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            const Color(0xff3b82f6).withValues(alpha: 0.24),
-            const Color(0xffa855f7).withValues(alpha: 0.10),
-            Colors.transparent,
-          ],
+      width: double.infinity,
+      color: colors.band,
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 70),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final cols = constraints.maxWidth < 760 ? 1 : 3;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: cols,
+                mainAxisSpacing: 18,
+                crossAxisSpacing: 18,
+                childAspectRatio: cols == 1 ? 2.1 : 1.05,
+                children: [
+                  _FeatureCard(
+                    colors: colors,
+                    icon: Icons.tune,
+                    tint: const Color(0xffdbeafe),
+                    title: 'Iris matching',
+                    body:
+                        'Tell Iris what you are sending and it helps choose the right rider, vehicle, route, and price.',
+                  ),
+                  _FeatureCard(
+                    colors: colors,
+                    icon: Icons.verified_user_outlined,
+                    tint: const Color(0xffdcfce7),
+                    title: 'Built-in reassurance',
+                    body:
+                        'Follow the journey with live location, rider details, status updates, and delivery proof.',
+                  ),
+                  _FeatureCard(
+                    colors: colors,
+                    icon: Icons.bolt,
+                    tint: const Color(0xffede9fe),
+                    title: 'Ready when you are',
+                    body:
+                        'Send the job to nearby riders and choose the option that fits the delivery.',
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -29990,11 +29743,11 @@ class _SenderBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = const [
-      (step: _SenderStep.dashboard, label: 'Home'),
-      (step: _SenderStep.tracking, label: 'Tracking'),
-      (step: _SenderStep.history, label: 'History'),
-      (step: _SenderStep.roth, label: 'Roth'),
-      (step: _SenderStep.account, label: 'Account'),
+      (step: _SenderStep.dashboard, glyph: _senderGlyphHome, label: 'Home'),
+      (step: _SenderStep.tracking, glyph: _senderGlyphTruck, label: 'Tracking'),
+      (step: _SenderStep.history, glyph: _senderGlyphHistory, label: 'History'),
+      (step: _SenderStep.roth, glyph: _senderGlyphWallet, label: 'Roth'),
+      (step: _SenderStep.account, glyph: _senderGlyphAccount, label: 'Account'),
     ];
     return SafeArea(
       top: false,
@@ -30019,6 +29772,7 @@ class _SenderBottomNav extends StatelessWidget {
               Expanded(
                 child: _SenderBottomNavItem(
                   colors: colors,
+                  glyph: item.glyph,
                   label: item.label,
                   selected: selected == item.step,
                   onTap: () => onSelected(item.step),
@@ -30033,12 +29787,14 @@ class _SenderBottomNav extends StatelessWidget {
 
 class _SenderBottomNavItem extends StatelessWidget {
   final _CircumColors colors;
+  final String glyph;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   const _SenderBottomNavItem({
     required this.colors,
+    required this.glyph,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -30055,13 +29811,15 @@ class _SenderBottomNavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _SenderLineGlyph(glyph, color: color, size: 22),
+            const SizedBox(height: 4),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: color,
-                fontSize: 12,
+                fontSize: 9.5,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -42711,6 +42469,61 @@ class _GlassPanel extends StatelessWidget {
   }
 }
 
+class _FeatureCard extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final Color tint;
+  final String title;
+  final String body;
+
+  const _FeatureCard({
+    required this.colors,
+    required this.icon,
+    required this.tint,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: tint,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(icon, color: const Color(0xff2563eb)),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MetricPill extends StatelessWidget {
   final _CircumColors colors;
   final String label;
@@ -43174,59 +42987,6 @@ class _BusinessLandingPreview extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PublicBusinessPage extends StatelessWidget {
-  final _CircumColors colors;
-  final bool darkMode;
-  final VoidCallback onOpenDashboard;
-  final VoidCallback onBack;
-  final VoidCallback onToggleTheme;
-
-  const _PublicBusinessPage({
-    super.key,
-    required this.colors,
-    required this.darkMode,
-    required this.onOpenDashboard,
-    required this.onBack,
-    required this.onToggleTheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _LandingNav(
-            colors: colors,
-            darkMode: darkMode,
-            onStart: () => unawaited(
-              launchUrl(Uri.base.resolve('/sender'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onRider: () => unawaited(
-              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
-            ),
-            onHealthPlus: () => unawaited(
-              launchUrl(Uri.base.resolve('/health'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onGifts: () => unawaited(
-              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
-            ),
-            onBusiness: () {},
-            onToggleTheme: onToggleTheme,
-          ),
-          _BusinessLandingBand(
-            colors: colors,
-            onBusinessLogin: onOpenDashboard,
-            onCreateBusiness: onOpenDashboard,
-          ),
-          _LandingFooter(colors: colors),
         ],
       ),
     );
@@ -48440,364 +48200,6 @@ class _HealthPlusLandingBand extends StatelessWidget {
   }
 }
 
-class _PublicHealthPlusPage extends StatelessWidget {
-  final _CircumColors colors;
-  final bool darkMode;
-  final VoidCallback onStartHealth;
-  final VoidCallback onBack;
-  final VoidCallback onToggleTheme;
-
-  const _PublicHealthPlusPage({
-    super.key,
-    required this.colors,
-    required this.darkMode,
-    required this.onStartHealth,
-    required this.onBack,
-    required this.onToggleTheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _LandingNav(
-            colors: colors,
-            darkMode: darkMode,
-            onStart: onStartHealth,
-            onRider: () => unawaited(
-              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
-            ),
-            onHealthPlus: () {},
-            onGifts: () => unawaited(
-              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
-            ),
-            onBusiness: () => unawaited(
-              launchUrl(Uri.base.resolve('/business'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onToggleTheme: onToggleTheme,
-          ),
-          _HealthPlusLandingBand(
-            colors: colors,
-            onHealthPlus: onStartHealth,
-          ),
-          _LandingFooter(colors: colors),
-        ],
-      ),
-    );
-  }
-}
-
-class _PublicIrisPage extends StatelessWidget {
-  final _CircumColors colors;
-  final bool darkMode;
-  final VoidCallback onBack;
-  final VoidCallback onToggleTheme;
-
-  const _PublicIrisPage({
-    super.key,
-    required this.colors,
-    required this.darkMode,
-    required this.onBack,
-    required this.onToggleTheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _LandingNav(
-            colors: colors,
-            darkMode: darkMode,
-            onStart: () => unawaited(
-              launchUrl(Uri.base.resolve('/sender'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onRider: () => unawaited(
-              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
-            ),
-            onHealthPlus: () => unawaited(
-              launchUrl(Uri.base.resolve('/health'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onGifts: () => unawaited(
-              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
-            ),
-            onBusiness: () => unawaited(
-              launchUrl(Uri.base.resolve('/business'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onToggleTheme: onToggleTheme,
-          ),
-          Container(
-            width: double.infinity,
-            color: const Color(0xff07090f),
-            padding: EdgeInsets.fromLTRB(22, narrow ? 58 : 82, 22, 82),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _IrisExplainerPanel(
-                      colors: colors,
-                      ctaLabel: 'Send a Parcel',
-                      onExploreIris: () => unawaited(
-                        launchUrl(Uri.base.resolve('/sender'),
-                            webOnlyWindowName: '_self'),
-                      ),
-                    ),
-                    const SizedBox(height: 36),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns = constraints.maxWidth < 820 ? 1 : 2;
-                        return GridView.count(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisCount: columns,
-                          childAspectRatio: columns == 1 ? 2.35 : 1.42,
-                          mainAxisSpacing: 16,
-                          crossAxisSpacing: 16,
-                          children: const [
-                            _IrisInfoTile(
-                              title: 'What IRIS is',
-                              body:
-                                  'IRIS is Circum’s delivery intelligence layer. It helps understand what is being sent before the job is priced, matched, or collected.',
-                            ),
-                            _IrisInfoTile(
-                              title: 'What IRIS estimates',
-                              body:
-                                  'IRIS supports parcel type, transport-ready weight, vehicle suitability, risk signals, and the delivery experience needed for the item.',
-                            ),
-                            _IrisInfoTile(
-                              title: 'Where IRIS supports Circum',
-                              body:
-                                  'IRIS works across parcels, Health+, Gifts, Business, and Vanguard by helping each service use the right handling and verification context.',
-                            ),
-                            _IrisInfoTile(
-                              title: 'Why people still verify',
-                              body:
-                                  'IRIS supports decisions; it does not replace rider verification, admin adjudication, custody checks, or human judgement where trust matters.',
-                            ),
-                            _IrisInfoTile(
-                              title: 'How IRIS improves',
-                              body:
-                                  'Verified outcomes feed back into Circum, so estimates become more accurate as real deliveries confirm weight, handling, and vehicle choices.',
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 32),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _PillButton(
-                          label: 'Send a Parcel',
-                          icon: Icons.arrow_forward_rounded,
-                          dark: true,
-                          onPressed: () => unawaited(
-                            launchUrl(Uri.base.resolve('/sender'),
-                                webOnlyWindowName: '_self'),
-                          ),
-                        ),
-                        _PillButton(
-                          label: 'Back to homepage',
-                          icon: Icons.home_outlined,
-                          dark: false,
-                          onPressed: onBack,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          _LandingFooter(colors: colors),
-        ],
-      ),
-    );
-  }
-}
-
-class _IrisInfoTile extends StatelessWidget {
-  final String title;
-  final String body;
-
-  const _IrisInfoTile({required this.title, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              color: const Color(0xfff5f7fb),
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            body,
-            style: GoogleFonts.inter(
-              color: const Color(0xffaeb8ce),
-              fontSize: 14.5,
-              height: 1.48,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PublicInfoPage extends StatelessWidget {
-  final _CircumColors colors;
-  final bool darkMode;
-  final String title;
-  final String eyebrow;
-  final String body;
-  final IconData icon;
-  final String primaryLabel;
-  final VoidCallback onPrimary;
-  final VoidCallback onBack;
-  final VoidCallback onToggleTheme;
-
-  const _PublicInfoPage({
-    super.key,
-    required this.colors,
-    required this.darkMode,
-    required this.title,
-    required this.eyebrow,
-    required this.body,
-    required this.icon,
-    required this.primaryLabel,
-    required this.onPrimary,
-    required this.onBack,
-    required this.onToggleTheme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 760;
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _LandingNav(
-            colors: colors,
-            darkMode: darkMode,
-            onStart: onPrimary,
-            onRider: () => unawaited(
-              launchUrl(Uri.base.resolve('/rider'), webOnlyWindowName: '_self'),
-            ),
-            onHealthPlus: () => unawaited(
-              launchUrl(Uri.base.resolve('/health'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onGifts: () => unawaited(
-              launchUrl(Uri.base.resolve('/gifts'), webOnlyWindowName: '_self'),
-            ),
-            onBusiness: () => unawaited(
-              launchUrl(Uri.base.resolve('/business'),
-                  webOnlyWindowName: '_self'),
-            ),
-            onToggleTheme: onToggleTheme,
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(22, 74, 22, 84),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: colors.dark
-                    ? const [
-                        Color(0xff050816),
-                        Color(0xff08111f),
-                        Color(0xff0f1f3d),
-                      ]
-                    : const [
-                        Color(0xffffffff),
-                        Color(0xffeef6ff),
-                        Color(0xffffffff),
-                      ],
-              ),
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 960),
-                child: Column(
-                  children: [
-                    Icon(icon,
-                        size: narrow ? 46 : 58, color: const Color(0xff93c5fd)),
-                    const SizedBox(height: 18),
-                    const _BusinessEyebrow('Public website'),
-                    const SizedBox(height: 10),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.dmSerifDisplay(
-                        color: colors.text,
-                        fontSize: narrow ? 44 : 68,
-                        height: 1.02,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      eyebrow,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: colors.adminAccent,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      body,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: colors.mutedText,
-                        fontSize: narrow ? 17 : 20,
-                        height: 1.55,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    _PillButton(
-                      label: primaryLabel,
-                      icon: Icons.arrow_forward_rounded,
-                      dark: true,
-                      onPressed: onPrimary,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          _LandingFooter(colors: colors),
-        ],
-      ),
-    );
-  }
-}
-
 class _LandingFooter extends StatelessWidget {
   final _CircumColors colors;
 
@@ -48885,15 +48287,15 @@ class _GlobalLegalFooter extends StatelessWidget {
                 runSpacing: 2,
                 children: [
                   TextButton(
-                    onPressed: () => _open('/sender'),
+                    onPressed: () => _open('/?app=sender'),
                     child: const Text('Deliveries'),
                   ),
                   TextButton(
-                    onPressed: () => _open('/health'),
+                    onPressed: () => _open('/?app=health'),
                     child: const Text('Health+'),
                   ),
                   TextButton(
-                    onPressed: () => _open('/gifts'),
+                    onPressed: () => _open('/?app=gifts'),
                     child: const Text('Gifts by Circum'),
                   ),
                   TextButton(
@@ -48931,10 +48333,6 @@ class _GlobalLegalFooter extends StatelessWidget {
                   TextButton(
                     onPressed: () => _open('/privacy'),
                     child: const Text('Privacy Policy'),
-                  ),
-                  TextButton(
-                    onPressed: () => _open('/cookies'),
-                    child: const Text('Cookies'),
                   ),
                 ],
               ),
