@@ -930,6 +930,18 @@ class _LandingPage extends StatelessWidget {
                         dark: true,
                         onPressed: onStart,
                       ),
+                      _PillButton(
+                        label: 'Earn as a Rider',
+                        icon: Icons.pedal_bike_rounded,
+                        dark: false,
+                        onPressed: onRider,
+                      ),
+                      _PillButton(
+                        label: 'Get started with Health+',
+                        icon: Icons.medical_services_outlined,
+                        dark: false,
+                        onPressed: onHealthPlus,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 58),
@@ -29978,11 +29990,11 @@ class _SenderBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = const [
-      (step: _SenderStep.dashboard, glyph: _senderGlyphHome, label: 'Home'),
-      (step: _SenderStep.tracking, glyph: _senderGlyphTruck, label: 'Tracking'),
-      (step: _SenderStep.history, glyph: _senderGlyphHistory, label: 'History'),
-      (step: _SenderStep.roth, glyph: _senderGlyphWallet, label: 'Roth'),
-      (step: _SenderStep.account, glyph: _senderGlyphAccount, label: 'Account'),
+      (step: _SenderStep.dashboard, label: 'Home'),
+      (step: _SenderStep.tracking, label: 'Tracking'),
+      (step: _SenderStep.history, label: 'History'),
+      (step: _SenderStep.roth, label: 'Roth'),
+      (step: _SenderStep.account, label: 'Account'),
     ];
     return SafeArea(
       top: false,
@@ -30007,7 +30019,6 @@ class _SenderBottomNav extends StatelessWidget {
               Expanded(
                 child: _SenderBottomNavItem(
                   colors: colors,
-                  glyph: item.glyph,
                   label: item.label,
                   selected: selected == item.step,
                   onTap: () => onSelected(item.step),
@@ -30022,14 +30033,12 @@ class _SenderBottomNav extends StatelessWidget {
 
 class _SenderBottomNavItem extends StatelessWidget {
   final _CircumColors colors;
-  final String glyph;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   const _SenderBottomNavItem({
     required this.colors,
-    required this.glyph,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -30046,15 +30055,13 @@ class _SenderBottomNavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _SenderLineGlyph(glyph, color: color, size: 22),
-            const SizedBox(height: 4),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: color,
-                fontSize: 9.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
             ),
