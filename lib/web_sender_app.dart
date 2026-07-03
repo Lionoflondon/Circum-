@@ -165,6 +165,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   bool get _isPublicMarketingPath {
     final path = _normalizedPath;
+    if (Uri.base.scheme == 'file' || path.endsWith('/web/index.html')) {
+      return true;
+    }
     return path.isEmpty ||
         path == '/' ||
         path == '/iris' ||
@@ -179,6 +182,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   _WebAppMode? get _publicMarketingModeForPath {
+    if (Uri.base.scheme == 'file' ||
+        _normalizedPath.endsWith('/web/index.html')) {
+      return _WebAppMode.landing;
+    }
     final path = _normalizedPath;
     return switch (path) {
       '' || '/' => _WebAppMode.landing,
@@ -456,6 +463,13 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   void _openRole(CircumRole role) {
+    if (role == CircumRole.sender && !_isSenderAppPath) {
+      unawaited(launchUrl(
+        Uri.base.resolve('/sender'),
+        webOnlyWindowName: '_self',
+      ));
+      return;
+    }
     setState(() {
       _mode = switch (role) {
         CircumRole.sender => _WebAppMode.sender,
