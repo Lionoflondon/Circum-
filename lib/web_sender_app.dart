@@ -20948,7 +20948,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                             ),
                           )
                         : SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
                             child: _buildAnimatedStep(colors),
                           ),
               ),
@@ -20965,47 +20965,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             onClose: () => setState(() => _chatOpen = false),
             onSend: _sendMessage,
           ),
-        if (_showSenderBottomNav)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _SenderBottomNav(
-              colors: colors,
-              selected: _senderNavStep,
-              onSelected: _selectSenderNavStep,
-            ),
-          ),
       ],
     );
-  }
-
-  bool get _showSenderBottomNav {
-    if (_isHealthPlusRoute || _senderAuthLoading || _senderUser == null) {
-      return false;
-    }
-    return {
-      _SenderStep.dashboard,
-      _SenderStep.tracking,
-      _SenderStep.history,
-      _SenderStep.roth,
-      _SenderStep.account,
-      _SenderStep.profile,
-      _SenderStep.business,
-    }.contains(_step);
-  }
-
-  _SenderStep get _senderNavStep {
-    return switch (_step) {
-      _SenderStep.history => _SenderStep.history,
-      _SenderStep.roth => _SenderStep.roth,
-      _SenderStep.account ||
-      _SenderStep.profile ||
-      _SenderStep.business =>
-        _SenderStep.account,
-      _SenderStep.tracking => _SenderStep.tracking,
-      _ => _SenderStep.dashboard,
-    };
   }
 
   void _selectSenderNavStep(_SenderStep step) {
@@ -28482,7 +28443,7 @@ class _SenderArchitecturePreviewAppState
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 108),
+                padding: EdgeInsets.zero,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
                   child: _showNotifications
@@ -28515,19 +28476,6 @@ class _SenderArchitecturePreviewAppState
               ),
             ),
           ],
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: _SenderBottomNav(
-            colors: colors,
-            selected: _selected,
-            onSelected: (step) => setState(() {
-              _showNotifications = false;
-              _selected = step;
-            }),
-          ),
         ),
       ],
     );
@@ -29723,107 +29671,6 @@ class _SenderPreviewAccountTile extends StatelessWidget {
               Icon(Icons.chevron_right, color: colors.mutedText),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SenderBottomNav extends StatelessWidget {
-  final _CircumColors colors;
-  final _SenderStep selected;
-  final ValueChanged<_SenderStep> onSelected;
-
-  const _SenderBottomNav({
-    required this.colors,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final items = const [
-      (step: _SenderStep.dashboard, glyph: _senderGlyphHome, label: 'Home'),
-      (step: _SenderStep.tracking, glyph: _senderGlyphTruck, label: 'Tracking'),
-      (step: _SenderStep.history, glyph: _senderGlyphHistory, label: 'History'),
-      (step: _SenderStep.roth, glyph: _senderGlyphWallet, label: 'Roth'),
-      (step: _SenderStep.account, glyph: _senderGlyphAccount, label: 'Account'),
-    ];
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-        decoration: BoxDecoration(
-          color: const Color(0xff0d1117).withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.36),
-              blurRadius: 28,
-              offset: const Offset(0, 14),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            for (final item in items)
-              Expanded(
-                child: _SenderBottomNavItem(
-                  colors: colors,
-                  glyph: item.glyph,
-                  label: item.label,
-                  selected: selected == item.step,
-                  onTap: () => onSelected(item.step),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SenderBottomNavItem extends StatelessWidget {
-  final _CircumColors colors;
-  final String glyph;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _SenderBottomNavItem({
-    required this.colors,
-    required this.glyph,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? colors.adminAccent : colors.mutedText;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SenderLineGlyph(glyph, color: color, size: 22),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
         ),
       ),
     );
