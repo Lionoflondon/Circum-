@@ -763,11 +763,46 @@ void main() {
         userWeightKg: 0,
         trustedItemWeightKg: estimate.weightKg,
         historicalMatches: const [9],
+        trustedWeightIsTransportReady:
+            estimate.weightSource == 'repository_match',
       );
 
-      expect(decision.pricingWeightKg, inInclusiveRange(0.2, 0.8));
-      expect(decision.pricingWeightKg, lessThan(2));
+      expect(estimate.weightKg, closeTo(0.45, 0.001));
+      expect(decision.pricingWeightKg, closeTo(0.5, 0.001));
+      expect(decision.pricingWeightKg, isNot(closeTo(0.6, 0.001)));
       expect(decision.ignoredHistoricalOutliers, contains(9));
+    });
+
+    test('phone aliases use repository weight plus only minimum billable floor',
+        () {
+      const aliases = [
+        'iPhone',
+        'Apple iPhone',
+        'iPhone 13',
+        'iPhone 15 Pro',
+        'mobile phone',
+      ];
+
+      for (final alias in aliases) {
+        final estimate = IrisWeightEstimator.knownProductEstimate(alias)!;
+        final decision = IrisWeightEstimator.resolveTrustedKnownItemPricing(
+          description: alias,
+          quantity: estimate.quantity,
+          userWeightKg: 0,
+          trustedItemWeightKg: estimate.weightKg,
+          trustedWeightIsTransportReady:
+              estimate.weightSource == 'repository_match',
+        );
+
+        expect(estimate.matchedItemName, 'Apple iPhone', reason: alias);
+        expect(estimate.weightSource, 'repository_match', reason: alias);
+        expect(estimate.weightKg, closeTo(0.45, 0.001), reason: alias);
+        expect(decision.pricingWeightKg, closeTo(0.5, 0.001), reason: alias);
+        expect(decision.pricingWeightKg, isNot(closeTo(0.6, 0.001)),
+            reason: alias);
+        expect(decision.explanation, contains('minimum billable'),
+            reason: alias);
+      }
     });
 
     test('three iPhones remain a realistic small bundled phone parcel', () {

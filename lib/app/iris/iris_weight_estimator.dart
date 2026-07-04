@@ -497,6 +497,7 @@ class IrisWeightEstimator {
     required double userWeightKg,
     required double trustedItemWeightKg,
     List<double> historicalMatches = const [],
+    bool trustedWeightIsTransportReady = false,
   }) {
     final text = description.trim().toLowerCase();
     final knownElectronics = [
@@ -517,29 +518,41 @@ class IrisWeightEstimator {
       'camera',
     ].any(text.contains);
     if (!knownElectronics) {
+      final baseWeight = math.max(userWeightKg, trustedItemWeightKg);
+      final pricingWeight =
+          math.max(baseWeight, DeliveryPricing.minimumBillableWeightKg);
       return IrisTrustedPricingDecision(
-        pricingWeightKg: math.max(userWeightKg, trustedItemWeightKg),
+        pricingWeightKg: pricingWeight,
+        explanation: pricingWeight > baseWeight
+            ? 'A minimum billable parcel weight of ${DeliveryPricing.minimumBillableWeightKg.toStringAsFixed(1)}kg applies for pricing.'
+            : null,
       );
     }
 
     final safeQuantity = quantity < 1 ? 1 : quantity;
-    final packagingAllowanceKg = _electronicsPackagingAllowanceKg(text);
-    final trustedPackagedWeight =
-        trustedItemWeightKg + (packagingAllowanceKg * safeQuantity);
+    final trustedPackagedWeight = trustedWeightIsTransportReady
+        ? trustedItemWeightKg
+        : trustedItemWeightKg +
+            (_electronicsPackagingAllowanceKg(text) * safeQuantity);
     final userWeightOutlier = userWeightKg > trustedPackagedWeight * 5;
     final outliers = historicalMatches
         .where((weight) => weight > trustedPackagedWeight * 5)
         .toList(growable: false);
+    final basePricingWeight = userWeightOutlier
+        ? trustedPackagedWeight
+        : math.max(userWeightKg, trustedPackagedWeight);
+    final pricingWeight =
+        math.max(basePricingWeight, DeliveryPricing.minimumBillableWeightKg);
     return IrisTrustedPricingDecision(
-      pricingWeightKg: userWeightOutlier
-          ? trustedPackagedWeight
-          : math.max(userWeightKg, trustedPackagedWeight),
+      pricingWeightKg: pricingWeight,
       ignoredHistoricalOutliers: outliers,
-      explanation: outliers.isEmpty && !userWeightOutlier
-          ? null
-          : userWeightOutlier
-              ? 'IRIS ignored an unusually high entered weight because this item has a verified catalogue weight.'
-              : 'IRIS ignored unusually high historical matches because this item has a verified catalogue weight.',
+      explanation: userWeightOutlier
+          ? 'IRIS ignored an unusually high entered weight because this item has a verified catalogue weight.'
+          : outliers.isNotEmpty
+              ? 'IRIS ignored unusually high historical matches because this item has a verified catalogue weight.'
+              : pricingWeight > basePricingWeight
+                  ? 'A minimum billable parcel weight of ${DeliveryPricing.minimumBillableWeightKg.toStringAsFixed(1)}kg applies for pricing.'
+                  : null,
     );
   }
 

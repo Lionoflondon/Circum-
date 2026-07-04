@@ -24694,6 +24694,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         historicalMatches: estimate.historicalVerifiedWeightKg == null
             ? const []
             : [estimate.historicalVerifiedWeightKg!],
+        trustedWeightIsTransportReady:
+            estimate.weightSource == 'repository_match',
       );
       final pricingWeight = trustedDecision.pricingWeightKg;
       return _WeightPricingDecision(
