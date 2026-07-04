@@ -3,7 +3,7 @@
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "lint": "eslint .",
-    "test:iris": "node --test iris-core.test.js iris-security.test.js",
+    "test:iris": "node --test iris-core.test.js iris-production-core.test.js iris-security.test.js",
     "test:adjustments": "node --test delivery-adjustment-core.test.js",
     "test:movement": "node --test movement-ledger.test.js",
     "test:gift-story": "node --test gift-story-automation.test.js",

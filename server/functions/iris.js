@@ -7,6 +7,11 @@ const {
   customerSafeIris,
   privateIris,
 } = require("./iris-core");
+const {
+  buildLearningRecord,
+  buildProductionDecision,
+  learningRecordId,
+} = require("./iris-production-core");
 
 async function loadLearningExamples(description) {
   const text = `${description || ""}`.trim();
@@ -24,7 +29,26 @@ const analyseIris = functions.https.onCall(async (data, context) => {
         "User must be authenticated to call Iris.");
   }
   const completedExamples = await loadLearningExamples(data.description || data.packageDescription);
-  return customerSafeIris(classifyIris({...data, completedExamples}));
+  const iris = classifyIris({...data, completedExamples});
+  const response = customerSafeIris(iris);
+  const db = getFirestore();
+  const decisionRef = db.collection("irisProductionDecisions").doc();
+  const decision = buildProductionDecision({
+    decisionId: decisionRef.id,
+    deliveryId: data.deliveryId || data.bookingId || data.requestId,
+    userId: context.auth.uid,
+    input: data,
+    iris,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await decisionRef.create(decision);
+  return {
+    ...response,
+    productionDecisionId: decisionRef.id,
+    confidence: decision.customerConfidence,
+    reasons: decision.reasons,
+    lowConfidenceSuggestions: decision.lowConfidenceSuggestions,
+  };
 });
 
 const adjudicateIris = functions.https.onCall(async (data, context) => {
@@ -89,6 +113,32 @@ const adjudicateIris = functions.https.onCall(async (data, context) => {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+  }
+  const itemDescription = data.itemDescription || data.description || data.packageDescription || "";
+  const learning = buildLearningRecord({
+    decisionId: data.productionDecisionId || data.decisionId || null,
+    deliveryId: requestId,
+    itemDescription,
+    finalVerifiedWeight: data.finalVerifiedWeight || data.finalWeightKg || null,
+    riderVerified: data.riderVerified === true,
+    adminAdjusted: true,
+    finalOutcome: {decision, finalCategory: finalCategory || null, finalWeightBand: finalWeightBand || null, finalHandlingFlags: finalHandlingFlags || []},
+    learningApplied: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  if (learning) {
+    const recordId = learningRecordId({...learning, createdAt: null});
+    const learningRef = db.collection("irisProductionLearningRecords").doc(recordId);
+    try {
+      await learningRef.create({
+        ...learning,
+        learningRecordId: recordId,
+      });
+    } catch (error) {
+      if (error && error.code !== 6 && error.code !== "already-exists") {
+        throw error;
+      }
+    }
   }
   return {ok: true, requestId, adjudication};
 });

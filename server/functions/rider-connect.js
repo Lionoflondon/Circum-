@@ -16,6 +16,15 @@ function text(value) {
   return `${value || ""}`.trim();
 }
 
+function urlWithParams(url, params = {}) {
+  const parsed = new URL(url);
+  Object.entries(params).forEach(([key, value]) => {
+    const normalized = text(value);
+    if (normalized) parsed.searchParams.set(key, normalized);
+  });
+  return parsed.toString();
+}
+
 function stripeFrom(stripeOrFactory) {
   return typeof stripeOrFactory === "function" ? stripeOrFactory() : stripeOrFactory;
 }
@@ -75,7 +84,9 @@ function estimateStripeFee(amountGbp, policy = payoutFeePolicy()) {
 function resolveRiderPayoutBreakdown(input = {}) {
   const riderGrossShare = roundMoney(input.riderGrossShare || input.amount || 0);
   const totalCustomerPaid = roundMoney(input.totalCustomerPaid || input.customerPaid || input.total || 0);
-  const suppliedCommission = input.circumPlatformCommission ?? input.platformCommission;
+  const suppliedCommission = input.circumPlatformCommission != null ?
+    input.circumPlatformCommission :
+    input.platformCommission;
   const circumPlatformCommission = roundMoney(
       suppliedCommission == null && totalCustomerPaid > 0 ?
         Math.max(0, totalCustomerPaid - riderGrossShare) :
@@ -353,8 +364,8 @@ function createStripeOnboardingLink(stripeOrFactory) {
         stripeConnectStatus: "onboarding",
       }));
     }
-    const returnUrl = riderStripeReturnUrl;
-    const refreshUrl = riderStripeRefreshUrl;
+    const returnUrl = urlWithParams(riderStripeReturnUrl, {riderId});
+    const refreshUrl = urlWithParams(riderStripeRefreshUrl, {riderId});
     const link = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: refreshUrl,
