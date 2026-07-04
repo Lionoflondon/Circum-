@@ -707,5 +707,208 @@ void main() {
       expect(hamper!.weightKg, inInclusiveRange(3, 10));
       expect(hamper.weightBand, 'Medium Parcel');
     });
+
+    test('phase 2 confidence handling drives pricing behaviour', () {
+      expect(
+        IrisWeightEstimator.confidenceHandlingFor(0.96).action,
+        'price_immediately',
+      );
+      expect(
+        IrisWeightEstimator.confidenceHandlingFor(0.84).action,
+        'price_normally_with_rider_verification',
+      );
+      expect(
+        IrisWeightEstimator.confidenceHandlingFor(0.72).shouldAskClarification,
+        isTrue,
+      );
+      expect(
+        IrisWeightEstimator.confidenceHandlingFor(0.45)
+            .shouldRequestPhotoOrDimensions,
+        isTrue,
+      );
+    });
+
+    test('phase 2 verified learning only applies clean verified outcomes', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('iPhone')!;
+      final clean = IrisWeightEstimator.verifiedLearningDecision(
+        estimate: estimate,
+        finalVerifiedWeightKg: estimate.weightKg,
+        riderVerified: true,
+        disputeOccurred: false,
+        adminOverrode: false,
+      );
+      final disputed = IrisWeightEstimator.verifiedLearningDecision(
+        estimate: estimate,
+        finalVerifiedWeightKg: 9,
+        riderVerified: true,
+        disputeOccurred: true,
+        adminOverrode: false,
+      );
+
+      expect(clean.canApplyToRepository, isTrue);
+      expect(clean.shouldCreateReviewCandidate, isFalse);
+      expect(disputed.canApplyToRepository, isFalse);
+      expect(disputed.shouldCreateReviewCandidate, isTrue);
+      expect(disputed.reasons, contains('dispute_occurred'));
+      expect(
+        disputed.reasons,
+        contains('verified_weight_outside_expected_range'),
+      );
+    });
+
+    test('phase 2 permanent regression suite keeps item matches plausible', () {
+      const cases = [
+        _IrisRegressionCase(
+          description: 'iPhone',
+          category: 'Electronics',
+          minKg: 0.2,
+          maxKg: 0.8,
+          vehicles: ['Car'],
+          bannedTerms: ['suitcase', 'wardrobe', 'chair'],
+        ),
+        _IrisRegressionCase(
+          description: 'iPad',
+          category: 'Electronics',
+          minKg: 0.5,
+          maxKg: 1.5,
+          vehicles: ['Car'],
+          bannedTerms: ['suitcase', 'wardrobe'],
+        ),
+        _IrisRegressionCase(
+          description: '65 inch TV',
+          category: 'Electronics',
+          minKg: 20,
+          maxKg: 35,
+          vehicles: ['Van'],
+          bannedTerms: ['wardrobe', 'suitcase'],
+        ),
+        _IrisRegressionCase(
+          description: 'wardrobe',
+          category: 'Household',
+          minKg: 20,
+          maxKg: 100,
+          vehicles: ['Van'],
+          bannedTerms: ['television', 'iphone'],
+        ),
+        _IrisRegressionCase(
+          description: 'office chair boxed',
+          category: 'Household',
+          minKg: 10,
+          maxKg: 25,
+          vehicles: ['Van'],
+          bannedTerms: ['television', 'iphone'],
+        ),
+        _IrisRegressionCase(
+          description: 'food hamper',
+          category: 'Food',
+          minKg: 3,
+          maxKg: 10,
+          vehicles: ['Car'],
+          bannedTerms: ['suitcase', 'television'],
+        ),
+        _IrisRegressionCase(
+          description: '5kg rice',
+          category: 'Food',
+          minKg: 5,
+          maxKg: 6,
+          vehicles: ['Bike', 'Car'],
+          bannedTerms: ['suitcase', 'luggage'],
+        ),
+        _IrisRegressionCase(
+          description: 'bicycle',
+          category: 'Large item',
+          minKg: 10,
+          maxKg: 25,
+          vehicles: ['Van'],
+          bannedTerms: ['iphone', 'television'],
+        ),
+        _IrisRegressionCase(
+          description: 'mattress',
+          category: 'Household',
+          minKg: 20,
+          maxKg: 45,
+          vehicles: ['Van'],
+          bannedTerms: ['iphone', 'television'],
+        ),
+        _IrisRegressionCase(
+          description: 'dining table',
+          category: 'Household',
+          minKg: 20,
+          maxKg: 55,
+          vehicles: ['Van'],
+          bannedTerms: ['iphone', 'television'],
+        ),
+        _IrisRegressionCase(
+          description: 'MacBook',
+          category: 'Electronics',
+          minKg: 1,
+          maxKg: 3,
+          vehicles: ['Car'],
+          bannedTerms: ['suitcase', 'wardrobe'],
+        ),
+        _IrisRegressionCase(
+          description: 'suitcase',
+          category: 'Luggage',
+          minKg: 1,
+          maxKg: 32,
+          vehicles: ['Car'],
+          bannedTerms: ['iphone', 'wardrobe'],
+        ),
+        _IrisRegressionCase(
+          description: 'washing machine',
+          category: 'White goods',
+          minKg: 50,
+          maxKg: 90,
+          vehicles: ['Van'],
+          bannedTerms: ['iphone', 'suitcase'],
+        ),
+      ];
+
+      for (final item in cases) {
+        final estimate =
+            IrisWeightEstimator.knownProductEstimate(item.description);
+        expect(estimate, isNotNull, reason: item.description);
+        final result = estimate!;
+        expect(result.packageType.toLowerCase(),
+            contains(item.category.toLowerCase()),
+            reason: item.description);
+        expect(result.weightKg, inInclusiveRange(item.minKg, item.maxKg),
+            reason: item.description);
+        expect(item.vehicles, contains(result.vehicleSuitability),
+            reason: item.description);
+        expect(['high', 'medium', 'low'], contains(result.confidence),
+            reason: item.description);
+        expect(
+          result.truthBand == 'Exact Match',
+          result.confidence == 'high' &&
+              result.weightSource == 'known_product_lookup' &&
+              result.matchedItemName != 'Apple iPhone' &&
+              result.matchedItemName != 'Tablet / iPad',
+          reason: item.description,
+        );
+        for (final banned in item.bannedTerms) {
+          expect(result.matchedItemName.toLowerCase(), isNot(contains(banned)),
+              reason: item.description);
+        }
+      }
+    });
+  });
+}
+
+class _IrisRegressionCase {
+  final String description;
+  final String category;
+  final double minKg;
+  final double maxKg;
+  final List<String> vehicles;
+  final List<String> bannedTerms;
+
+  const _IrisRegressionCase({
+    required this.description,
+    required this.category,
+    required this.minKg,
+    required this.maxKg,
+    required this.vehicles,
+    required this.bannedTerms,
   });
 }

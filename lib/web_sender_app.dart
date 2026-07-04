@@ -21176,6 +21176,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _irisWeightConfidence;
   String? _irisWeightExplanation;
   String? _irisWeightSource;
+  String? _irisWeightTruthBand;
   String? _irisMatchedItemName;
   int _irisQuantity = 1;
   double? _irisSingleItemWeightKg;
@@ -23765,6 +23766,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _irisWeightConfidence = estimate.confidence;
       _irisWeightExplanation = estimate.explanation;
       _irisWeightSource = estimate.weightSource;
+      _irisWeightTruthBand = estimate.truthBand;
       _irisMatchedItemName = estimate.matchedItemName;
       _irisQuantity = estimate.quantity;
       _irisSingleItemWeightKg = estimate.singleItemWeightKg;
@@ -24651,7 +24653,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   String _irisTruthBand() {
-    if (_irisWeightSource == 'known_product_lookup') return 'Exact Match';
+    if (_irisWeightTruthBand != null && _irisWeightTruthBand!.isNotEmpty) {
+      return _irisWeightTruthBand!;
+    }
     if (_irisWeightSource == 'verified_parcel_history') {
       return 'High Confidence';
     }

@@ -45,6 +45,37 @@ class IrisWeightLookupResult {
     required this.stackable,
     required this.handlingNotes,
   });
+
+  IrisConfidenceHandling get confidenceHandling =>
+      IrisWeightEstimator.confidenceHandlingFor(confidenceScore);
+}
+
+class IrisConfidenceHandling {
+  final String label;
+  final String action;
+  final bool canPriceImmediately;
+  final bool shouldAskClarification;
+  final bool shouldRequestPhotoOrDimensions;
+
+  const IrisConfidenceHandling({
+    required this.label,
+    required this.action,
+    required this.canPriceImmediately,
+    required this.shouldAskClarification,
+    required this.shouldRequestPhotoOrDimensions,
+  });
+}
+
+class IrisVerifiedLearningDecision {
+  final bool canApplyToRepository;
+  final bool shouldCreateReviewCandidate;
+  final List<String> reasons;
+
+  const IrisVerifiedLearningDecision({
+    required this.canApplyToRepository,
+    required this.shouldCreateReviewCandidate,
+    required this.reasons,
+  });
 }
 
 class ItemDimensionsCm {
@@ -63,6 +94,78 @@ class ItemDimensionsCm {
 }
 
 class IrisWeightEstimator {
+  static IrisConfidenceHandling confidenceHandlingFor(double confidenceScore) {
+    final score =
+        confidenceScore <= 1 ? confidenceScore * 100 : confidenceScore;
+    if (score >= 95) {
+      return const IrisConfidenceHandling(
+        label: 'high',
+        action: 'price_immediately',
+        canPriceImmediately: true,
+        shouldAskClarification: false,
+        shouldRequestPhotoOrDimensions: false,
+      );
+    }
+    if (score >= 80) {
+      return const IrisConfidenceHandling(
+        label: 'high',
+        action: 'price_normally_with_rider_verification',
+        canPriceImmediately: true,
+        shouldAskClarification: false,
+        shouldRequestPhotoOrDimensions: false,
+      );
+    }
+    if (score >= 60) {
+      return const IrisConfidenceHandling(
+        label: 'medium',
+        action: 'ask_one_clarification_or_dimensions',
+        canPriceImmediately: false,
+        shouldAskClarification: true,
+        shouldRequestPhotoOrDimensions: false,
+      );
+    }
+    return const IrisConfidenceHandling(
+      label: 'low',
+      action: 'request_photo_or_dimensions_before_final_pricing',
+      canPriceImmediately: false,
+      shouldAskClarification: false,
+      shouldRequestPhotoOrDimensions: true,
+    );
+  }
+
+  static IrisVerifiedLearningDecision verifiedLearningDecision({
+    required IrisWeightLookupResult estimate,
+    required double finalVerifiedWeightKg,
+    required bool riderVerified,
+    required bool disputeOccurred,
+    required bool adminOverrode,
+    ItemDimensionsCm? finalVerifiedDimensions,
+  }) {
+    final reasons = <String>[];
+    if (!riderVerified) reasons.add('rider_not_verified');
+    if (disputeOccurred) reasons.add('dispute_occurred');
+    if (adminOverrode) reasons.add('admin_overrode');
+    if (finalVerifiedWeightKg <= 0) reasons.add('invalid_verified_weight');
+    final lower = estimate.singleItemWeightKg * estimate.quantity * 0.45;
+    final upper = estimate.singleItemWeightKg * estimate.quantity * 2.25;
+    if (finalVerifiedWeightKg < lower || finalVerifiedWeightKg > upper) {
+      reasons.add('verified_weight_outside_expected_range');
+    }
+    final expectedDimensions = estimate.typicalDimensions;
+    if (finalVerifiedDimensions != null && expectedDimensions != null) {
+      final plausible =
+          finalVerifiedDimensions.length <= expectedDimensions.length * 2.5 &&
+              finalVerifiedDimensions.width <= expectedDimensions.width * 2.5 &&
+              finalVerifiedDimensions.height <= expectedDimensions.height * 2.5;
+      if (!plausible) reasons.add('verified_dimensions_outside_expected_range');
+    }
+    return IrisVerifiedLearningDecision(
+      canApplyToRepository: reasons.isEmpty,
+      shouldCreateReviewCandidate: reasons.isNotEmpty,
+      reasons: reasons,
+    );
+  }
+
   static int extractQuantity(String description) {
     final text = description.trim().toLowerCase();
     if (text.isEmpty) return 1;
@@ -618,6 +721,20 @@ class IrisWeightEstimator {
       handlingNotes: 'Small fragile electronics package.',
     ),
     _KnownIrisProduct(
+      patterns: ['ipad', 'tablet'],
+      name: 'Tablet / iPad',
+      weightKg: 0.75,
+      packageType: 'Electronics',
+      confidence: 'medium',
+      confidenceScore: 0.72,
+      truthBand: 'Medium Confidence',
+      typicalDimensions: ItemDimensionsCm(length: 28, width: 22, height: 3),
+      vehicleSuitability: 'Bike',
+      fragile: true,
+      stackable: true,
+      handlingNotes: 'Small fragile electronics package.',
+    ),
+    _KnownIrisProduct(
       patterns: ['macbook pro 16', 'macbook pro 16"'],
       name: 'MacBook Pro 16',
       weightKg: 2.15,
@@ -794,6 +911,48 @@ class IrisWeightEstimator {
       fragile: false,
       stackable: false,
       handlingNotes: 'Bulky furniture requiring van loading space.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['mattress'],
+      name: 'Mattress',
+      weightKg: 28,
+      packageType: 'Household',
+      confidence: 'medium',
+      confidenceScore: 0.7,
+      truthBand: 'Category Match',
+      typicalDimensions: ItemDimensionsCm(length: 190, width: 135, height: 25),
+      vehicleSuitability: 'Van',
+      fragile: false,
+      stackable: false,
+      handlingNotes: 'Bulky item requiring van loading space.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['dining table'],
+      name: 'Dining table',
+      weightKg: 32,
+      packageType: 'Household',
+      confidence: 'medium',
+      confidenceScore: 0.7,
+      truthBand: 'Category Match',
+      typicalDimensions: ItemDimensionsCm(length: 160, width: 90, height: 75),
+      vehicleSuitability: 'Van',
+      fragile: false,
+      stackable: false,
+      handlingNotes: 'Bulky furniture requiring van loading space.',
+    ),
+    _KnownIrisProduct(
+      patterns: ['washing machine'],
+      name: 'Washing machine',
+      weightKg: 70,
+      packageType: 'White goods',
+      confidence: 'medium',
+      confidenceScore: 0.72,
+      truthBand: 'Category Match',
+      typicalDimensions: ItemDimensionsCm(length: 60, width: 60, height: 85),
+      vehicleSuitability: 'Van',
+      fragile: false,
+      stackable: false,
+      handlingNotes: 'Heavy appliance requiring van handling.',
     ),
     _KnownIrisProduct(
       patterns: ['documents', 'document bundle', 'paperwork'],

@@ -11,6 +11,22 @@ class IrisRepositoryDimensions {
       {required this.lengthCm, required this.widthCm, required this.heightCm});
 }
 
+class IrisRepositoryGovernance {
+  final int version;
+  final String reviewStatus;
+  final String reviewedBy;
+  final String reviewedAt;
+  final String notes;
+
+  const IrisRepositoryGovernance({
+    this.version = 1,
+    this.reviewStatus = 'canonical',
+    this.reviewedBy = 'system',
+    this.reviewedAt = '',
+    this.notes = '',
+  });
+}
+
 class IrisRepositoryItem {
   final String id;
   final String itemName;
@@ -35,6 +51,7 @@ class IrisRepositoryItem {
   final List<String> allowedVehicles;
   final bool requiresVan;
   final List<String> confidenceBoostTerms;
+  final IrisRepositoryGovernance governance;
   const IrisRepositoryItem(
       {required this.id,
       required this.itemName,
@@ -58,12 +75,17 @@ class IrisRepositoryItem {
       this.giftSignals = const {},
       this.allowedVehicles = const [],
       this.requiresVan = false,
-      this.confidenceBoostTerms = const []});
+      this.confidenceBoostTerms = const [],
+      this.governance = const IrisRepositoryGovernance()});
 
+  String get canonicalName => itemName;
   String get name => itemName;
   double get typicalWeightKg => estimatedWeightKg;
   double get minKg => minimumWeightKg;
   double get maxKg => maximumWeightKg;
+  IrisRepositoryDimensions get expectedDimensionsCm => typicalDimensionsCm;
+  String get valueClass => highValue ? 'high' : 'standard';
+  String get reviewStatus => governance.reviewStatus;
 }
 
 class IrisCategoryDetection {
@@ -79,6 +101,17 @@ class IrisCategoryDetection {
 }
 
 class IrisItemRepository {
+  static const Map<String, Set<String>> semanticCategoryGraph = {
+    'food': {'food', 'food & consumables'},
+    'electronics': {'electronics'},
+    'luggage': {'luggage', 'airport'},
+    'documents': {'documents'},
+    'household': {'household', 'furniture & home', 'furniture'},
+    'beauty': {'beauty', 'gifts'},
+    'fashion': {'fashion'},
+    'wigs & hair': {'wigs & hair', 'beauty'},
+  };
+
   static const int coreItemCount = 1000;
   static const int expectedItemCount =
       coreItemCount + irisBeautyFashionItemCount;
@@ -26125,6 +26158,9 @@ class IrisItemRepository {
       'wardrobe',
       'sofa',
       'couch',
+      'chair',
+      'dining table',
+      'table',
       'washing machine',
       'fridge',
       'freezer',
@@ -26200,25 +26236,10 @@ class IrisItemRepository {
   ) {
     final category = detection.category.toLowerCase();
     final itemCategory = item.category.toLowerCase();
-    if (category == 'food') {
-      return itemCategory == 'food' ||
-          itemCategory == 'food & consumables' ||
-          itemCategory == 'gifts';
-    }
-    if (category == 'electronics') {
-      return itemCategory == 'electronics';
-    }
-    if (category == 'luggage') {
-      return itemCategory == 'luggage' || itemCategory == 'airport';
-    }
-    if (category == 'documents') {
-      return itemCategory == 'documents';
-    }
-    if (category == 'household') {
-      return itemCategory == 'household' || itemCategory == 'furniture & home';
-    }
+    final allowed = semanticCategoryGraph[category];
+    if (allowed != null && !allowed.contains(itemCategory)) return false;
     if (text.contains('rice') && item.itemName.toLowerCase().contains('bag')) {
-      return false;
+      return itemCategory == 'food' || itemCategory == 'food & consumables';
     }
     return true;
   }
@@ -26241,9 +26262,9 @@ class IrisItemRepository {
   ) {
     final itemCategory = item.category.toLowerCase();
     final detectedCategory = detection.category.toLowerCase();
-    final airportLuggage =
-        detectedCategory == 'luggage' && itemCategory == 'airport';
-    if (itemCategory != detectedCategory && !airportLuggage) {
+    final allowed =
+        semanticCategoryGraph[detectedCategory] ?? <String>{detectedCategory};
+    if (!allowed.contains(itemCategory)) {
       return false;
     }
     return detection.subcategory == null ||
