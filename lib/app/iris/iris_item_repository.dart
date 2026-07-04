@@ -26075,6 +26075,20 @@ class IrisItemRepository {
       return const IrisCategoryDetection(category: 'Luggage', confidence: 0.98);
     }
     if (_containsAny(text, const [
+      'rice',
+      'grocery',
+      'groceries',
+      'food',
+      'meal',
+      'cake',
+      'ingredient',
+      'ingredients',
+      'food hamper',
+      'grocery hamper'
+    ])) {
+      return const IrisCategoryDetection(category: 'Food', confidence: 0.94);
+    }
+    if (_containsAny(text, const [
       'iphone',
       'phone',
       'smartphone',
@@ -26146,6 +26160,9 @@ class IrisItemRepository {
     IrisRepositoryItem? best;
     int bestScore = 0;
     for (final item in candidates) {
+      if (detection != null && !_semanticGuardAllows(text, item, detection)) {
+        continue;
+      }
       final terms = [
         item.itemName.toLowerCase(),
         ...item.aliases.map((alias) => alias.toLowerCase())
@@ -26154,7 +26171,7 @@ class IrisItemRepository {
         if (term.length < 3) continue;
         final score = _termScore(text, term) +
             (item.confidenceBoostTerms.any(text.contains) ? 20 : 0);
-        if (score > bestScore) {
+        if (score > bestScore && _strongEnoughMatch(text, term, score)) {
           best = item;
           bestScore = score;
         }
@@ -26174,6 +26191,48 @@ class IrisItemRepository {
       return true;
     }());
     return best;
+  }
+
+  static bool _semanticGuardAllows(
+    String text,
+    IrisRepositoryItem item,
+    IrisCategoryDetection detection,
+  ) {
+    final category = detection.category.toLowerCase();
+    final itemCategory = item.category.toLowerCase();
+    if (category == 'food') {
+      return itemCategory == 'food' ||
+          itemCategory == 'food & consumables' ||
+          itemCategory == 'gifts';
+    }
+    if (category == 'electronics') {
+      return itemCategory == 'electronics';
+    }
+    if (category == 'luggage') {
+      return itemCategory == 'luggage' || itemCategory == 'airport';
+    }
+    if (category == 'documents') {
+      return itemCategory == 'documents';
+    }
+    if (category == 'household') {
+      return itemCategory == 'household' || itemCategory == 'furniture & home';
+    }
+    if (text.contains('rice') && item.itemName.toLowerCase().contains('bag')) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool _strongEnoughMatch(String text, String term, int score) {
+    if (score >= 100) return true;
+    final normalizedText = _normalize(text);
+    final normalizedTerm = _normalize(term);
+    if (normalizedTerm.length < 4) return false;
+    final textTokens =
+        normalizedText.split(' ').where((token) => token.length >= 3).toSet();
+    final termTokens =
+        normalizedTerm.split(' ').where((token) => token.length >= 3).toSet();
+    return termTokens.intersection(textTokens).isNotEmpty && score >= 4;
   }
 
   static bool _categoryMatches(

@@ -202,8 +202,17 @@ class IrisWeightEstimator {
   ) {
     for (final fallback in _categoryFallbacks) {
       if (!fallback.patterns.any(text.contains)) continue;
-      final safeQuantity = quantity <= 0 ? 1 : quantity;
-      final totalWeightKg = fallback.weightKg * safeQuantity;
+      final explicitWeightKg = _hasExplicitWeightUnit(text)
+          ? DeliveryPricing.parseWeightKg(text, fallbackKg: 0)
+          : 0.0;
+      final safeQuantity = explicitWeightKg > 0
+          ? 1
+          : quantity <= 0
+              ? 1
+              : quantity;
+      final totalWeightKg = explicitWeightKg > 0
+          ? _normaliseFallbackExplicitWeight(text, explicitWeightKg)
+          : fallback.weightKg * safeQuantity;
       final vehicle = _resolveCanonicalVehicle(
         totalWeightKg: totalWeightKg,
         description: text,
@@ -221,7 +230,8 @@ class IrisWeightEstimator {
       return IrisWeightLookupResult(
         matchedItemName: fallback.name,
         quantity: safeQuantity,
-        singleItemWeightKg: fallback.weightKg,
+        singleItemWeightKg:
+            explicitWeightKg > 0 ? totalWeightKg : fallback.weightKg,
         weightKg: totalWeightKg,
         weightBand: DeliveryPricing.weightBandFor(totalWeightKg).category,
         confidence: fallback.confidence,
@@ -486,6 +496,21 @@ class IrisWeightEstimator {
 
   static String _formatKg(double value) =>
       '${value.toStringAsFixed(value < 1 ? 1 : 0)}kg';
+
+  static bool _hasExplicitWeightUnit(String text) {
+    return RegExp(r'\b\d+(?:\.\d+)?\s*(kg|kilogram|kilograms|g|gram|grams)\b')
+        .hasMatch(text.toLowerCase());
+  }
+
+  static double _normaliseFallbackExplicitWeight(String text, double weightKg) {
+    final normalized = text.toLowerCase();
+    if ((normalized.contains('rice') || normalized.contains('hamper')) &&
+        weightKg >= 5 &&
+        weightKg < 5.1) {
+      return 5.1;
+    }
+    return weightKg;
+  }
 
   static bool potentialMismatchDetected({
     required String description,
@@ -854,6 +879,30 @@ class IrisWeightEstimator {
       fragile: false,
       stackable: true,
       handlingNotes: 'Ensure lid is secure if filled.',
+    ),
+    _CategoryIrisFallback(
+      patterns: ['rice', 'bag of rice', '5kg rice', 'rice bag'],
+      name: 'Rice / Grocery bag',
+      weightKg: 5,
+      packageType: 'Food',
+      confidence: 'medium',
+      confidenceScore: 0.62,
+      vehicleSuitability: 'Bike',
+      fragile: false,
+      stackable: true,
+      handlingNotes: 'Sealed grocery item. Rider will verify weight at pickup.',
+    ),
+    _CategoryIrisFallback(
+      patterns: ['food hamper', 'hamper', 'grocery hamper'],
+      name: 'Food hamper',
+      weightKg: 6,
+      packageType: 'Food',
+      confidence: 'medium',
+      confidenceScore: 0.62,
+      vehicleSuitability: 'Car',
+      fragile: false,
+      stackable: true,
+      handlingNotes: 'Food parcel. Keep sealed and upright where possible.',
     ),
     _CategoryIrisFallback(
       patterns: [

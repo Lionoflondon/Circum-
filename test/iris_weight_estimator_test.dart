@@ -661,5 +661,51 @@ void main() {
       expect(match?.category, 'Wigs & Hair');
       expect(match?.subcategory, 'Wigs');
     });
+
+    test('launch blocker: iPhone never inherits polluted heavy history', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('iPhone');
+
+      expect(estimate, isNotNull);
+      expect(estimate!.weightKg, inInclusiveRange(0.2, 0.8));
+      expect(estimate.weightBand, 'Small Parcel');
+      expect(estimate.matchedItemName.toLowerCase(), contains('iphone'));
+      expect(estimate.matchedItemName, isNot(contains('Suitcase')));
+      expect(estimate.weightKg, lessThan(2));
+    });
+
+    test('launch blocker: 5kg rice does not match suitcase luggage', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('5kg rice');
+
+      expect(estimate, isNotNull);
+      expect(estimate!.matchedItemName, 'Rice / Grocery bag');
+      expect(estimate.packageType, 'Food');
+      expect(estimate.matchedItemName, isNot(contains('Suitcase')));
+      expect(estimate.weightKg, inInclusiveRange(5, 6));
+      expect(estimate.weightBand, 'Medium Parcel');
+    });
+
+    test('launch blocker sanity bands stay plausible by category', () {
+      final tv = IrisWeightEstimator.knownProductEstimate('65 inch TV');
+      final ipad = IrisWeightEstimator.knownProductEstimate('iPad');
+      final chair =
+          IrisWeightEstimator.knownProductEstimate('office chair boxed');
+      final hamper = IrisWeightEstimator.knownProductEstimate('food hamper');
+
+      expect(tv, isNotNull);
+      expect(tv!.weightKg, inInclusiveRange(20, 35));
+      expect(tv.vehicleSuitability, 'Van');
+
+      expect(ipad, isNotNull);
+      expect(ipad!.weightKg, inInclusiveRange(0.5, 1.5));
+      expect(ipad.weightBand, 'Small Parcel');
+
+      expect(chair, isNotNull);
+      expect(chair!.weightKg, inInclusiveRange(10, 25));
+      expect(chair.vehicleSuitability, 'Van');
+
+      expect(hamper, isNotNull);
+      expect(hamper!.weightKg, inInclusiveRange(3, 10));
+      expect(hamper.weightBand, 'Medium Parcel');
+    });
   });
 }

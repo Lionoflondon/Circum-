@@ -20,6 +20,7 @@ import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/rider_marketplace/rider_marketplace_rules.dart';
 import 'package:circum/app/rider_marketplace/rider_onboarding_policy.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
+import 'package:circum/app/rider_profiles/uk_phone_number.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/pricing/special_handling_engine.dart';
@@ -15010,10 +15011,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (_authSubmitting) return;
     final email = _email.text.trim();
     final password = _password.text.trim();
+    final normalizedPhone = UkPhoneNumber.normalizeToE164(_phone.text);
     if (email.isEmpty || password.length < 6) {
       setState(
         () => _authMessage =
             'Enter an email and a password with at least 6 characters.',
+      );
+      return;
+    }
+    if (_signupMode && normalizedPhone == null) {
+      setState(
+        () => _authMessage =
+            'Enter a valid UK mobile number, for example 07891362527.',
       );
       return;
     }
@@ -15039,7 +15048,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final user = credential.user!;
       if (_signupMode) {
         await user.updateDisplayName(_fullName.text.trim());
-        await _saveRiderProfile(user);
+        await _saveRiderProfile(user, phoneNumber: normalizedPhone!);
         await _attachIncomingReferralIfPresent();
         _riderProfile = await _loadRiderProfile(user.uid);
         _availableRoles = {CircumRole.rider};
@@ -15276,7 +15285,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     return RiderOnboardingPolicy.status(_riderProfile);
   }
 
-  Future<void> _saveRiderProfile(User user) async {
+  Future<void> _saveRiderProfile(
+    User user, {
+    required String phoneNumber,
+  }) async {
     final db = FirebaseFirestore.instance;
     await db.collection('riderProfiles').doc(user.uid).set({
       'uid': user.uid,
@@ -15284,7 +15296,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'fullName': _fullName.text.trim().isEmpty
           ? user.displayName
           : _fullName.text.trim(),
-      'phoneNumber': _phone.text.trim(),
+      'phoneNumber': phoneNumber,
+      'phone': phoneNumber,
       'email': user.email ?? _email.text.trim(),
       'postcode': _postcode.text.trim(),
       'vehicleType': _vehicle.text.trim(),
@@ -15315,7 +15328,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'name': _fullName.text.trim().isEmpty
           ? user.displayName
           : _fullName.text.trim(),
-      'phone': _phone.text.trim(),
+      'phone': phoneNumber,
+      'phoneNumber': phoneNumber,
       'role': 'delivery',
       'status': 'offline',
       'rating': _performance.averageRating.toStringAsFixed(2),
@@ -17621,6 +17635,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       });
       return;
     }
+    final normalizedPhone = UkPhoneNumber.normalizeToE164(_phone.text);
+    if (normalizedPhone == null) {
+      setState(() {
+        _message = 'Enter a valid UK mobile number, for example 07891362527.';
+      });
+      return;
+    }
     if (!_rightToWork || !_sealedPackageConsent) {
       setState(() {
         _message =
@@ -17644,7 +17665,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'id': id,
         'riderId': _riderUser?.uid,
         'fullName': _fullName.text.trim(),
-        'phoneNumber': _phone.text.trim(),
+        'phoneNumber': normalizedPhone,
+        'phone': normalizedPhone,
         'email': _email.text.trim(),
         'postcode': _postcode.text.trim(),
         'vehicleType': _vehicle.text.trim(),
@@ -17674,7 +17696,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           {
             'fullName': _fullName.text.trim(),
             'email': _riderUser!.email ?? _email.text.trim(),
-            'phoneNumber': _phone.text.trim(),
+            'phoneNumber': normalizedPhone,
+            'phone': normalizedPhone,
             'vehicleType': _vehicle.text.trim(),
             'vehicleMakeModel': _vehicleMakeModel.text.trim(),
             'vehicleColour': _vehicleColour.text.trim(),
