@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
+const presenceCore = require("./rider-presence-core");
 
 const getNearbyRequests = functions.https.onCall(async (data, context) => {
   try {
@@ -28,6 +29,11 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
       ...riderDoc.data(),
       ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
     };
+    const presenceDoc = await getFirestore().collection("riderPresence").doc(riderId).get();
+    const presence = presenceDoc.exists ? presenceDoc.data() : {};
+    if (!presenceCore.canReceiveDispatch({profile: riderData, presence})) {
+      throw new functions.https.HttpsError("failed-precondition", "Go online and remain available before requesting deliveries.");
+    }
     if (!riderData.position.geopoint.latitude || !riderData.position.geopoint.longitude) {
       throw new functions.https.HttpsError("failed-precondition", "Rider position not available");
     }

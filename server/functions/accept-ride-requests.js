@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
+const riderPresence = require("./rider-presence");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -101,6 +102,7 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
   if (!rider) {
     throw new functions.https.HttpsError("not-found", "Rider profile not found.");
   }
+  await riderPresence.requireDispatchablePresence(riderId, rider);
 
   const accepted = await db.runTransaction(async (transaction) => {
     const found = await findDeliveryRequest(db, transaction, requestId);
