@@ -29460,15 +29460,8 @@ class _SenderArchitecturePreviewAppState
     final colors = widget.colors;
     final showLiveTrackingPreview =
         Uri.base.queryParameters['tracking_preview'] == 'live';
-    if (showLiveTrackingPreview) {
-      return _SenderTrackingSurface(
-        colors: colors,
-        delivery: _senderLiveTrackingPreviewDelivery(),
-        receivedAt: DateTime.now().subtract(const Duration(seconds: 18)),
-        onMessageRider: () => _showStub('Message rider'),
-        onContactSupport: () => _showStub('Support'),
-      );
-    }
+    final activePreviewDelivery =
+        showLiveTrackingPreview ? _senderLiveTrackingPreviewDelivery() : null;
 
     return Stack(
       children: [
@@ -29495,7 +29488,10 @@ class _SenderArchitecturePreviewAppState
                           ? _SenderPreviewHome(
                               key: const ValueKey('sender-preview-home'),
                               colors: colors,
+                              activeDelivery: activePreviewDelivery,
                               onSendParcel: () => _showStub('Send a Parcel'),
+                              onMessageRider: () => _showStub('Message rider'),
+                              onContactSupport: () => _showStub('Support'),
                               onGifts: widget.onOpenGifts,
                               onHealthPlus: () => _showStub('Health+'),
                               onBusiness: () => _showStub('Business'),
@@ -29529,8 +29525,8 @@ Map<String, dynamic> _senderLiveTrackingPreviewDelivery() {
     'isHealthPlus': true,
     'isGift': false,
     'estimatedArrival': '8 min',
-    'collectionPin': '4271',
-    'deliveryPin': '8352',
+    'collectionPin': '427158',
+    'deliveryPin': '835246',
     'collectionPinVerified': true,
     'deliveryPinVerified': false,
     'irisVerified': true,
@@ -29656,6 +29652,9 @@ class _SenderPreviewTopBar extends StatelessWidget {
 class _SenderPreviewHome extends StatelessWidget {
   final _CircumColors colors;
   final VoidCallback onSendParcel;
+  final Map<String, dynamic>? activeDelivery;
+  final VoidCallback? onMessageRider;
+  final VoidCallback? onContactSupport;
   final VoidCallback onGifts;
   final VoidCallback onHealthPlus;
   final VoidCallback onBusiness;
@@ -29663,7 +29662,10 @@ class _SenderPreviewHome extends StatelessWidget {
   const _SenderPreviewHome({
     super.key,
     required this.colors,
+    this.activeDelivery,
     required this.onSendParcel,
+    this.onMessageRider,
+    this.onContactSupport,
     required this.onGifts,
     required this.onHealthPlus,
     required this.onBusiness,
@@ -29748,7 +29750,18 @@ class _SenderPreviewHome extends StatelessWidget {
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: _SenderPreviewEmptyState(colors: colors),
+          child: activeDelivery == null
+              ? _SenderPreviewEmptyState(colors: colors)
+              : _SenderTrackingSurface(
+                  colors: colors,
+                  delivery: activeDelivery!,
+                  receivedAt: DateTime.now().subtract(
+                    const Duration(seconds: 18),
+                  ),
+                  embedded: true,
+                  onMessageRider: onMessageRider,
+                  onContactSupport: onContactSupport,
+                ),
         ),
       ],
     );
@@ -39140,6 +39153,7 @@ class _SenderTrackingSurface extends StatelessWidget {
   final String? networkError;
   final VoidCallback? onMessageRider;
   final VoidCallback? onContactSupport;
+  final bool embedded;
 
   const _SenderTrackingSurface({
     required this.colors,
@@ -39150,6 +39164,7 @@ class _SenderTrackingSurface extends StatelessWidget {
     this.networkError,
     this.onMessageRider,
     this.onContactSupport,
+    this.embedded = false,
   });
 
   @override
@@ -39181,10 +39196,11 @@ class _SenderTrackingSurface extends StatelessWidget {
     );
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 720),
+      height: embedded ? 650 : null,
+      constraints: BoxConstraints(minHeight: embedded ? 650 : 720),
       decoration: const BoxDecoration(color: Color(0xFF07090F)),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(embedded ? 24 : 28),
         child: Stack(
           children: [
             _SenderTrackingMapLayer(delivery: delivery),
@@ -39227,16 +39243,16 @@ class _SenderTrackingSurface extends StatelessWidget {
                         badge: badge,
                       ),
                       if (_showIrisStrip(delivery)) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 7),
                         _IrisVerificationMiniStrip(colors: colors),
                       ],
                       if (SenderTrackingPolicy.showCollectionPin(delivery)) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 7),
                         _CollectionPinCard(colors: colors, delivery: delivery),
                       ],
                       if (SenderTrackingPolicy.showDeliveryPinNotice(
                           delivery)) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 7),
                         _DeliveryPinNoticeCard(
                             colors: colors, delivery: delivery),
                       ],
@@ -39253,16 +39269,16 @@ class _SenderTrackingSurface extends StatelessWidget {
                         ),
                       ],
                       if (!SenderTrackingPolicy.isFindingRider(status)) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 7),
                         _SenderRiderCard(
                           colors: colors,
                           delivery: delivery,
                           onMessageRider: onMessageRider,
                         ),
                       ],
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 7),
                       _SenderRouteCard(colors: colors, delivery: delivery),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 7),
                       _SenderTrackingSupportRow(
                         colors: colors,
                         messageEnabled: onMessageRider != null &&
@@ -39312,14 +39328,14 @@ class _SenderTrackingGlass extends StatelessWidget {
           width: double.infinity,
           padding: padding,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.07),
+            color: Colors.white.withValues(alpha: 0.065),
             borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
             boxShadow: [
               BoxShadow(
-                color: glow.withValues(alpha: 0.16),
-                blurRadius: 28,
-                offset: const Offset(0, 16),
+                color: glow.withValues(alpha: 0.10),
+                blurRadius: 20,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
@@ -39329,9 +39345,9 @@ class _SenderTrackingGlass extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFF38BDF8).withValues(alpha: 0.22),
-                const Color(0xFF3B82F6).withValues(alpha: 0.04),
-                const Color(0xFF2563EB).withValues(alpha: 0.18),
+                const Color(0xFF38BDF8).withValues(alpha: 0.14),
+                const Color(0xFF3B82F6).withValues(alpha: 0.025),
+                const Color(0xFF2563EB).withValues(alpha: 0.10),
               ],
             ),
             backgroundBlendMode: BlendMode.screen,
@@ -39472,7 +39488,7 @@ class _LiveActivityStrip extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: _SenderTrackingGlass(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         radius: 999,
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -39482,7 +39498,7 @@ class _LiveActivityStrip extends StatelessWidget {
               style: TextStyle(
                 color: colors.text,
                 fontWeight: FontWeight.w900,
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
             const SizedBox(width: 8),
@@ -39491,12 +39507,12 @@ class _LiveActivityStrip extends StatelessWidget {
               style: TextStyle(
                 color: colors.mutedText,
                 fontWeight: FontWeight.w700,
-                fontSize: 11,
+                fontSize: 10,
               ),
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: const Color(0xFF3B82F6).withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(999),
@@ -39509,7 +39525,7 @@ class _LiveActivityStrip extends StatelessWidget {
                 style: TextStyle(
                   color: Color(0xFF60A5FA),
                   fontWeight: FontWeight.w900,
-                  fontSize: 10,
+                  fontSize: 9,
                 ),
               ),
             ),
@@ -39797,35 +39813,75 @@ class _SenderTimeline extends StatelessWidget {
   }
 }
 
-class _IrisVerificationMiniStrip extends StatelessWidget {
+class _IrisVerificationMiniStrip extends StatefulWidget {
   final _CircumColors colors;
 
   const _IrisVerificationMiniStrip({required this.colors});
 
   @override
+  State<_IrisVerificationMiniStrip> createState() =>
+      _IrisVerificationMiniStripState();
+}
+
+class _IrisVerificationMiniStripState
+    extends State<_IrisVerificationMiniStrip> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     return _SenderTrackingGlass(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(Icons.auto_awesome, color: Color(0xFF60A5FA), size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'IRIS verified parcel',
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
+      glow: const Color(0xFF38BDF8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome,
+                    color: Color(0xFF60A5FA), size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'IRIS verified parcel ✓',
+                    style: TextStyle(
+                      color: widget.colors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: const Color(0xFF60A5FA),
+                  size: 18,
+                ),
+              ],
+            ),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 180),
+              crossFadeState: _expanded
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              firstChild: const SizedBox.shrink(),
+              secondChild: const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    _MiniCheck(label: 'Weight confirmed'),
+                    SizedBox(width: 7),
+                    _MiniCheck(label: 'Vehicle confirmed'),
+                    SizedBox(width: 7),
+                    _MiniCheck(label: 'Pricing confirmed'),
+                  ],
+                ),
               ),
             ),
-          ),
-          const _MiniCheck(label: 'Weight'),
-          const SizedBox(width: 5),
-          const _MiniCheck(label: 'Vehicle'),
-          const SizedBox(width: 5),
-          const _MiniCheck(label: 'Pricing'),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -39859,7 +39915,8 @@ class _CollectionPinCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rawPin = _collectionPinFrom(delivery);
     final verified = delivery['collectionPinVerified'] == true;
-    final pin = rawPin.isEmpty ? 'Generating PIN...' : rawPin;
+    final pin =
+        rawPin.isEmpty ? 'Generating PIN...' : _spacedSecureCode(rawPin);
     return _SenderTrackingGlass(
       glow: const Color(0xFF60A5FA),
       child: Column(
@@ -39877,10 +39934,10 @@ class _CollectionPinCard extends StatelessWidget {
               verified ? 'Verified' : pin,
               style: TextStyle(
                 color: const Color(0xFF60A5FA),
-                fontFamily: 'monospace',
+                fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                 fontSize: rawPin.isEmpty ? 18 : 30,
                 fontWeight: FontWeight.w900,
-                letterSpacing: rawPin.isEmpty ? 0 : 5,
+                letterSpacing: 0,
               ),
             ),
           ),
@@ -39916,7 +39973,8 @@ class _DeliveryPinNoticeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rawPin = _deliveryPinFrom(delivery);
     final verified = delivery['deliveryPinVerified'] == true;
-    final pin = rawPin.isEmpty ? 'Generating PIN...' : rawPin;
+    final pin =
+        rawPin.isEmpty ? 'Generating PIN...' : _spacedSecureCode(rawPin);
     return _SenderTrackingGlass(
       glow: const Color(0xFF6EE7B7),
       child: Column(
@@ -39934,10 +39992,10 @@ class _DeliveryPinNoticeCard extends StatelessWidget {
               verified ? 'Verified' : pin,
               style: TextStyle(
                 color: const Color(0xFF6EE7B7),
-                fontFamily: 'monospace',
+                fontFamily: GoogleFonts.jetBrainsMono().fontFamily,
                 fontSize: rawPin.isEmpty ? 18 : 30,
                 fontWeight: FontWeight.w900,
-                letterSpacing: rawPin.isEmpty ? 0 : 5,
+                letterSpacing: 0,
               ),
             ),
           ),
@@ -40366,18 +40424,45 @@ class _SenderTrackingSupportRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onContactSupport,
-            icon: const Icon(Icons.support_agent_outlined),
-            label: const Text('Contact support'),
+          child: _SenderTrackingGlass(
+            padding: EdgeInsets.zero,
+            radius: 999,
+            glow: const Color(0xFF60A5FA),
+            child: TextButton.icon(
+              onPressed: onContactSupport,
+              icon: const Icon(Icons.support_agent_outlined, size: 17),
+              label: const Text('Contact support'),
+              style: TextButton.styleFrom(
+                foregroundColor: colors.text,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: messageEnabled ? onMessageRider : null,
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Message rider'),
+          child: _SenderTrackingGlass(
+            padding: EdgeInsets.zero,
+            radius: 999,
+            glow: const Color(0xFF38BDF8),
+            child: TextButton.icon(
+              onPressed: messageEnabled ? onMessageRider : null,
+              icon: const Icon(Icons.chat_bubble_outline, size: 17),
+              label: const Text('Message rider'),
+              style: TextButton.styleFrom(
+                foregroundColor:
+                    messageEnabled ? colors.text : colors.mutedText,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -40533,6 +40618,20 @@ String _deliveryPinFrom(Map<String, dynamic> delivery) {
       (delivery['vanguardProtection'] as Map?)?.cast<String, dynamic>();
   return '${delivery['deliveryPin'] ?? protection?['deliveryPin'] ?? ''}'
       .trim();
+}
+
+String _spacedSecureCode(String value) {
+  final trimmed = value.trim();
+  if (trimmed.length <= 1 || trimmed.contains(' ')) return trimmed;
+  // TODO(Vanguard security): keep this legacy fallback until every stored
+  // Vanguard delivery has migrated to the 6-digit backend standard.
+  if (trimmed.length == 6) {
+    return '${trimmed.substring(0, 3)} ${trimmed.substring(3)}';
+  }
+  if (trimmed.length == 4) {
+    return '${trimmed.substring(0, 2)} ${trimmed.substring(2)}';
+  }
+  return trimmed.split('').join(' ');
 }
 
 class _LiveDeliveryTrackingPanel extends StatelessWidget {
@@ -41199,11 +41298,15 @@ class _VanguardPinRow extends StatelessWidget {
             ),
           ),
           Text(
-            pin.isEmpty ? 'Pending' : pin,
+            pin.isEmpty || verified
+                ? (pin.isEmpty ? 'Pending' : pin)
+                : _spacedSecureCode(pin),
             style: TextStyle(
               color: colors.text,
               fontWeight: FontWeight.w900,
-              fontFamily: pin.length == 6 ? 'monospace' : null,
+              fontFamily: pin.length == 6
+                  ? GoogleFonts.jetBrainsMono().fontFamily
+                  : null,
               fontSize: pin.length == 6 ? 18 : 14,
             ),
           ),
