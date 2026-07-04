@@ -16,6 +16,7 @@ import 'package:circum/app/delivery/booking_cancellation.dart';
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
+import 'package:circum/app/iris/iris_item_repository.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/rider_marketplace/rider_marketplace_rules.dart';
 import 'package:circum/app/rider_marketplace/rider_onboarding_policy.dart';
@@ -1334,6 +1335,7 @@ enum _AdminSection {
   senders,
   drivers,
   deliveries,
+  irisRepository,
   gifts,
   finance,
   businessAccounts,
@@ -4332,6 +4334,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ],
           rowBuilder: _deliveryRow,
           emptyText: 'No delivery records yet.',
+        ),
+      _AdminSection.irisRepository => _AdminIrisRepositorySection(
+          colors: colors,
+          query: query,
         ),
       _AdminSection.gifts => _AdminGiftsSection(
           colors: colors,
@@ -10799,6 +10805,295 @@ class _AdminDataSection extends StatelessWidget {
   }
 }
 
+class _AdminIrisRepositorySection extends StatefulWidget {
+  final _CircumColors colors;
+  final String query;
+
+  const _AdminIrisRepositorySection({
+    required this.colors,
+    required this.query,
+  });
+
+  @override
+  State<_AdminIrisRepositorySection> createState() =>
+      _AdminIrisRepositorySectionState();
+}
+
+class _AdminIrisRepositorySectionState
+    extends State<_AdminIrisRepositorySection> {
+  String _category = 'all';
+  String _vehicle = 'all';
+  bool? _fragile;
+  bool? _highValue;
+  String _message =
+      'Repository changes are governed. Candidates do not overwrite canonical items until approved.';
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final rows = IrisItemRepository.adminRows(
+      query: widget.query,
+      category: _category,
+      vehicle: _vehicle,
+      fragile: _fragile,
+      highValue: _highValue,
+    );
+    final candidates = [
+      IrisItemRepository.createCandidate('PS5 Slim', estimatedWeightKg: 5.2),
+      IrisItemRepository.createCandidate(
+        'unknown photography rig',
+        estimatedWeightKg: 8,
+      ),
+    ];
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'IRIS Repository',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Canonical parcel intelligence, aliases, synonyms, candidate review, and guarded learning.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _adminDropdown(
+                    value: _category,
+                    values: const [
+                      'all',
+                      'Electronics',
+                      'Documents',
+                      'Food',
+                      'Household',
+                      'Fashion',
+                      'Beauty',
+                      'Medical',
+                      'Tools',
+                      'Luggage',
+                    ],
+                    onChanged: (value) => setState(() => _category = value),
+                  ),
+                  _adminDropdown(
+                    value: _vehicle,
+                    values: const ['all', 'Bike', 'Car', 'Van'],
+                    onChanged: (value) => setState(() => _vehicle = value),
+                  ),
+                  FilterChip(
+                    selected: _fragile == true,
+                    label: const Text('Fragile'),
+                    onSelected: (selected) =>
+                        setState(() => _fragile = selected ? true : null),
+                  ),
+                  FilterChip(
+                    selected: _highValue == true,
+                    label: const Text('High value'),
+                    onSelected: (selected) =>
+                        setState(() => _highValue = selected ? true : null),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _AdminNotice(colors: colors, message: _message),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Alias Manager',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _aliasChip('iphone', 'Apple iPhone'),
+                  _aliasChip('mobile phone', 'Apple iPhone'),
+                  _aliasChip('bike', 'Bicycle'),
+                  _aliasChip('mountain bike', 'Bicycle'),
+                  _aliasChip('PS5 Slim', 'Sony PlayStation 5'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 560,
+          child: _AdminDataSection(
+            colors: colors,
+            title: 'Canonical items',
+            subtitle:
+                'Search and filter canonical repository records. Deactivate bad entries rather than deleting them.',
+            records: rows.cast<Map<String, dynamic>>(),
+            columns: const [
+              'Canonical item',
+              'Category',
+              'Weight range',
+              'Vehicle',
+              'Flags',
+              'Version',
+            ],
+            rowBuilder: _repositoryRow,
+            emptyText: 'No repository items match this filter.',
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 360,
+          child: _AdminDataSection(
+            colors: colors,
+            title: 'Learning candidates',
+            subtitle:
+                'Unknown or corrected items wait here until an admin approves, rejects, merges, or marks them suspicious.',
+            records: candidates.map((candidate) => candidate.toJson()).toList(),
+            columns: const [
+              'Entered item',
+              'Category',
+              'Confidence',
+              'Actions'
+            ],
+            rowBuilder: _candidateRow,
+            emptyText: 'No learning candidates waiting for review.',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _adminDropdown({
+    required String value,
+    required List<String> values,
+    required ValueChanged<String> onChanged,
+  }) {
+    return DropdownButton<String>(
+      value: value,
+      dropdownColor: widget.colors.panel,
+      style: TextStyle(
+        color: widget.colors.text,
+        fontWeight: FontWeight.w800,
+      ),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(item == 'all' ? 'All' : item),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        if (value != null) onChanged(value);
+      },
+    );
+  }
+
+  Widget _aliasChip(String alias, String canonical) {
+    final resolved = IrisItemRepository.resolveAlias(alias);
+    final ok = resolved?.item.canonicalName == canonical;
+    return Chip(
+      avatar: Icon(
+        ok ? Icons.check_circle : Icons.warning_amber_rounded,
+        size: 18,
+      ),
+      label: Text('$alias → ${resolved?.item.canonicalName ?? 'Candidate'}'),
+    );
+  }
+
+  List<Widget> _repositoryRow(Map<String, dynamic> item) {
+    final aliases = ((item['aliases'] as List?) ?? const [])
+        .take(4)
+        .map((alias) => '$alias')
+        .join(', ');
+    return [
+      _AdminCell.primary('${item['canonicalName']}\n$aliases'),
+      _AdminCell('${item['categoryPath']}'),
+      _AdminCell(
+        '${item['minWeightKg']}–${item['maxWeightKg']}kg\nTypical ${item['typicalWeightKg']}kg',
+      ),
+      _AdminCell(
+        '${item['recommendedVehicle']}\nBike eligible: ${item['bikeEligible'] == true ? 'Yes' : 'No'}',
+      ),
+      _AdminCell([
+        if (item['fragile'] == true) 'Fragile',
+        if (item['highValue'] == true) 'High value',
+        if (item['vanguardRecommended'] == true) 'Vanguard',
+      ].join(', ')),
+      _AdminCell('v${item['version']}\n${item['verificationStatus']}'),
+    ];
+  }
+
+  List<Widget> _candidateRow(Map<String, dynamic> item) {
+    final confidence = (item['confidence'] as num?)?.toDouble() ?? 0;
+    return [
+      _AdminCell.primary('${item['enteredText']}\n${item['normalizedText']}'),
+      _AdminCell('${item['estimatedCategory']}'),
+      _AdminStatusCell(
+        colors: widget.colors,
+        status: confidence >= 0.8
+            ? 'High'
+            : confidence >= 0.6
+                ? 'Medium'
+                : 'Low',
+      ),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Approve',
+            enabled: true,
+            onTap: () => setState(
+              () => _message =
+                  'Candidate approved as a review action. Audit event prepared; canonical data is not overwritten silently.',
+            ),
+          ),
+          _AdminAction(
+            label: 'Reject',
+            enabled: true,
+            onTap: () => setState(
+              () => _message =
+                  'Candidate rejected. Canonical repository item preserved.',
+            ),
+          ),
+          _AdminAction(
+            label: 'Suspicious',
+            enabled: true,
+            onTap: () => setState(
+              () => _message =
+                  'Candidate marked suspicious for future estimate protection.',
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+}
+
 class _AdminFinanceSection extends StatelessWidget {
   final _CircumColors colors;
   final List<Map<String, dynamic>> records;
@@ -12245,6 +12540,7 @@ String _adminSectionLabel(_AdminSection section) {
     _AdminSection.senders => 'Senders',
     _AdminSection.drivers => 'Drivers',
     _AdminSection.deliveries => 'Deliveries',
+    _AdminSection.irisRepository => 'IRIS Repository',
     _AdminSection.gifts => 'Gifts',
     _AdminSection.finance => 'Finance',
     _AdminSection.businessAccounts => 'Business',
@@ -12264,6 +12560,7 @@ IconData _adminSectionIcon(_AdminSection section) {
     _AdminSection.senders => Icons.people,
     _AdminSection.drivers => Icons.two_wheeler,
     _AdminSection.deliveries => Icons.local_shipping,
+    _AdminSection.irisRepository => Icons.hub,
     _AdminSection.gifts => Icons.card_giftcard,
     _AdminSection.finance => Icons.payments,
     _AdminSection.businessAccounts => Icons.business_center,
@@ -15514,7 +15811,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             }
             final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}';
             final requiredVehicle =
-                '${job['vehicleType'] ?? job['irisRecommendedVehicle'] ?? ''}';
+                '${job['minimumVehicle'] ?? job['recommendedVehicle'] ?? job['irisRecommendedVehicle'] ?? job['vehicleType'] ?? ''}';
             if (!_superAdminRiderBypass &&
                 riderVehicle.isNotEmpty &&
                 requiredVehicle.isNotEmpty &&
@@ -15583,6 +15880,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       serviceA,
     ).compareTo(DeliveryPricing.matchingPriorityRank(serviceB));
     if (priorityCompare != 0) return priorityCompare;
+    final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}'.trim();
+    if (riderVehicle.isNotEmpty) {
+      final vehiclePriority = _vehicleBroadcastPriorityForRider(
+        b,
+        riderVehicle,
+      ).compareTo(_vehicleBroadcastPriorityForRider(a, riderVehicle));
+      if (vehiclePriority != 0) return vehiclePriority;
+    }
 
     final pickupCompare =
         '${a['scheduledPickupDate'] ?? ''} ${a['scheduledPickupWindow'] ?? ''}'
@@ -15592,6 +15897,28 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (pickupCompare != 0) return pickupCompare;
 
     return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
+  }
+
+  int _vehicleBroadcastPriorityForRider(
+    Map<String, dynamic> job,
+    String riderVehicle,
+  ) {
+    final serviceLevel =
+        '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? ''}'
+            .toLowerCase();
+    final order = ((job['vehicleBroadcastOrder'] as List?) ??
+            DeliveryPricing.broadcastVehicleOrder(
+              minimumVehicle:
+                  '${job['minimumVehicle'] ?? job['recommendedVehicle'] ?? ''}',
+              express: serviceLevel == 'express',
+            ))
+        .map((vehicle) => '$vehicle'.toLowerCase())
+        .toList(growable: false);
+    final normalized = riderVehicle.toLowerCase();
+    final index = order.indexWhere((vehicle) =>
+        normalized.contains(vehicle) ||
+        (vehicle == 'bike' && normalized.contains('bicycle')));
+    return index < 0 ? 0 : order.length - index;
   }
 
   void _listenToRiderJobs(String riderId) {
@@ -15681,6 +16008,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final riderRank = '${rider['riderRank'] ?? rider['rank'] ?? 'agent'}';
       final vehicleType =
           '${riderVehicle['type'] ?? rider['vehicleType'] ?? rider['vehicle'] ?? ''}';
+      final requiredVehicle =
+          '${job['minimumVehicle'] ?? job['recommendedVehicle'] ?? job['irisRecommendedVehicle'] ?? job['vehicleType'] ?? ''}';
+      if (!_superAdminRiderBypass &&
+          requiredVehicle.trim().isNotEmpty &&
+          !DeliveryPricing.vehicleMeetsMinimum(vehicleType, requiredVehicle)) {
+        setState(
+          () => _jobMessage =
+              'This delivery needs a $requiredVehicle or larger verified vehicle.',
+        );
+        return;
+      }
       final vehicleMakeModel =
           '${riderVehicle['makeModel'] ?? rider['vehicleMakeModel'] ?? ''}';
       final vehicleColour =
@@ -25973,6 +26311,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final vehicleDecision = _irisVehicleDecision();
     final safeVehicleName = _effectiveVehicle.name;
     final irisRecommendedVehicle = '${vehicleDecision['recommendedVehicle']}';
+    final minimumVehicle = '${vehicleDecision['minimumVehicle']}';
+    final eligibleVehicles =
+        DeliveryPricing.eligibleVehiclesForMinimum(minimumVehicle);
+    final vehicleBroadcastOrder = DeliveryPricing.broadcastVehicleOrder(
+      minimumVehicle: minimumVehicle,
+      express: selectedServiceLevel == 'express',
+    );
     final vehicleWasUpgraded = DeliveryPricing.vehicleWasUpgraded(
       safeVehicleName,
       irisRecommendedVehicle,
@@ -26055,6 +26400,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'totalEstimatedWeightKg': _irisEstimatedWeightKg,
       'weightClass': _irisWeightBand,
       'irisRecommendedVehicle': irisRecommendedVehicle,
+      'minimumVehicle': minimumVehicle,
+      'eligibleVehicleTypes': eligibleVehicles,
+      'vehicleBroadcastOrder': vehicleBroadcastOrder,
+      'expressBikePriority': selectedServiceLevel == 'express' &&
+          eligibleVehicles.contains('Bike'),
       'irisVehicleDecision': vehicleDecision,
       'userSelectedVehicle': safeVehicleName,
       'vehicleWasUpgraded': vehicleWasUpgraded,
@@ -26174,6 +26524,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'totalEstimatedWeightKg': _irisEstimatedWeightKg,
       'weightClass': _irisWeightBand,
       'irisRecommendedVehicle': irisRecommendedVehicle,
+      'minimumVehicle': minimumVehicle,
+      'eligibleVehicleTypes': eligibleVehicles,
+      'vehicleBroadcastOrder': vehicleBroadcastOrder,
+      'expressBikePriority': selectedServiceLevel == 'express' &&
+          eligibleVehicles.contains('Bike'),
       'userSelectedVehicle': safeVehicleName,
       'vehicleWasUpgraded': vehicleWasUpgraded,
       'hasPhoto': hasPhoto,
@@ -26231,7 +26586,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'irisWeightExplanation': _irisWeightExplanation,
       'irisPhotoInsight': _irisImageInsight?.toJson(),
       'recommendedVehicle': vehicleDecision['recommendedVehicle'],
-      'minimumVehicle': vehicleDecision['minimumVehicle'],
       'vehicleReason': vehicleDecision['vehicleReason'],
       'vehicleConfidence': vehicleDecision['vehicleConfidence'],
       'vehicleDisqualifiers': vehicleDecision['vehicleDisqualifiers'],

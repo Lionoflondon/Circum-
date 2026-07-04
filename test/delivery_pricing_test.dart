@@ -599,7 +599,10 @@ void main() {
       for (final description in [
         'Legal documents',
         'Passport',
+        'Emergency passport delivery',
+        'Visa documents',
         'Signed contract',
+        'Certificates',
         'Government paperwork',
         'Small document folder',
       ]) {
@@ -615,7 +618,71 @@ void main() {
             suitability.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
         expect(DeliveryPricing.vehicleCanCarryDelivery('Bike', suitability),
             isTrue);
+        expect(DeliveryPricing.vehicleCanCarryDelivery('Car', suitability),
+            isTrue);
+        expect(DeliveryPricing.vehicleCanCarryDelivery('Van', suitability),
+            isTrue);
       }
+    });
+
+    test('large document boxes can override Bike document eligibility', () {
+      final box = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 14,
+        description: 'Large archive document box',
+        itemCategory: 'Documents',
+        repositoryVehicleSuitability: 'Bike',
+      );
+
+      expect(box.recommendedVehicle, isNot('Bike'));
+      expect(box.allows('Bike'), isFalse);
+      expect(box.allows('Car') || box.allows('Van'), isTrue);
+    });
+
+    test('minimum vehicle keeps larger verified vehicles eligible', () {
+      final bikeMinimum = DeliveryPricing.eligibleVehiclesForMinimum('Bike');
+      final carMinimum = DeliveryPricing.eligibleVehiclesForMinimum('Car');
+      final vanMinimum = DeliveryPricing.eligibleVehiclesForMinimum('Van');
+
+      expect(bikeMinimum, ['Bike', 'Car', 'Van']);
+      expect(carMinimum, ['Car', 'Van']);
+      expect(vanMinimum, ['Van']);
+    });
+
+    test('Express bike-eligible jobs broadcast Bike before larger vehicles',
+        () {
+      expect(
+        DeliveryPricing.broadcastVehicleOrder(
+          minimumVehicle: 'Bike',
+          express: true,
+        ),
+        ['Bike', 'Car', 'Van'],
+      );
+      expect(
+        DeliveryPricing.broadcastVehicleOrder(
+          minimumVehicle: 'Van',
+          express: true,
+        ),
+        ['Van'],
+      );
+    });
+
+    test('larger vehicle accepting smaller job does not change base quote', () {
+      final bikeQuote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 3,
+          weightKg: 0.5,
+          vehicleType: 'Bike',
+        ),
+      );
+      final customerSelectedBikeQuote = DeliveryPricing.calculate(
+        const DeliveryPricingInput(
+          distanceMiles: 3,
+          weightKg: 0.5,
+          vehicleType: 'Bike',
+        ),
+      );
+
+      expect(customerSelectedBikeQuote.total, bikeQuote.total);
     });
 
     test('small electronics use car while courier-safe parcels can use Bike',

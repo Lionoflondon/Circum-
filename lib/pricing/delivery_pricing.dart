@@ -667,14 +667,28 @@ class DeliveryPricing {
     final documentDelivery = categoryText.contains('document') ||
         [
           'document',
+          'documents',
           'letter',
           'contract',
           'legal paper',
+          'visa documents',
           'passport',
           'certificate',
           'envelope',
           'document folder',
           'government paperwork',
+          'small file',
+        ].any(text.contains);
+    final bulkyDocumentDelivery = documentDelivery &&
+        [
+          'archive box',
+          'document box',
+          'large bundle',
+          'crate',
+          'crates',
+          'multiple heavy folders',
+          'bankers box',
+          'file box',
         ].any(text.contains);
     final compactBikeItem = [
       'keys',
@@ -810,8 +824,8 @@ class DeliveryPricing {
     if (documentDelivery &&
         weightKg <= 10 &&
         bikeSafeDimensions &&
-        !highValue &&
-        !vanguardRequired) {
+        !bulkyDocumentDelivery &&
+        !electronicsCareRequired) {
       allowed = {'Bike', 'Car', 'Van'};
       recommended = 'Bike';
       score = max(score, 95);
@@ -855,6 +869,24 @@ class DeliveryPricing {
       fragile: fragile,
       stackable: stackable,
     );
+  }
+
+  static List<String> eligibleVehiclesForMinimum(String? minimumVehicle) {
+    return switch (_normalizePricingVehicle(minimumVehicle)) {
+      'van' => const ['Van'],
+      'car' => const ['Car', 'Van'],
+      _ => const ['Bike', 'Car', 'Van'],
+    };
+  }
+
+  static List<String> broadcastVehicleOrder({
+    required String? minimumVehicle,
+    required bool express,
+  }) {
+    final eligible = eligibleVehiclesForMinimum(minimumVehicle);
+    if (!express) return eligible;
+    if (eligible.contains('Bike')) return const ['Bike', 'Car', 'Van'];
+    return eligible;
   }
 
   static int _quantityFromDescription(String description) {

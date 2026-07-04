@@ -27,6 +27,24 @@ class IrisRepositoryGovernance {
   });
 }
 
+class IrisRepositoryVersionEntry {
+  final int version;
+  final String changedBy;
+  final String changedAt;
+  final String reason;
+  final Map<String, Object?> before;
+  final Map<String, Object?> after;
+
+  const IrisRepositoryVersionEntry({
+    required this.version,
+    required this.changedBy,
+    required this.changedAt,
+    required this.reason,
+    this.before = const {},
+    this.after = const {},
+  });
+}
+
 class IrisRepositoryItem {
   final String id;
   final String itemName;
@@ -52,6 +70,11 @@ class IrisRepositoryItem {
   final bool requiresVan;
   final List<String> confidenceBoostTerms;
   final IrisRepositoryGovernance governance;
+  final List<String> synonyms;
+  final List<String> commonMisspellings;
+  final List<String> searchableKeywords;
+  final List<IrisRepositoryVersionEntry> versionHistory;
+  final bool active;
   const IrisRepositoryItem(
       {required this.id,
       required this.itemName,
@@ -76,16 +99,65 @@ class IrisRepositoryItem {
       this.allowedVehicles = const [],
       this.requiresVan = false,
       this.confidenceBoostTerms = const [],
-      this.governance = const IrisRepositoryGovernance()});
+      this.governance = const IrisRepositoryGovernance(),
+      this.synonyms = const [],
+      this.commonMisspellings = const [],
+      this.searchableKeywords = const [],
+      this.versionHistory = const [],
+      this.active = true});
 
   String get canonicalName => itemName;
   String get name => itemName;
+  List<String> get allSearchTerms => [
+        itemName,
+        ...aliases,
+        ...synonyms,
+        ...commonMisspellings,
+        ...searchableKeywords,
+      ];
   double get typicalWeightKg => estimatedWeightKg;
   double get minKg => minimumWeightKg;
   double get maxKg => maximumWeightKg;
   IrisRepositoryDimensions get expectedDimensionsCm => typicalDimensionsCm;
   String get valueClass => highValue ? 'high' : 'standard';
   String get reviewStatus => governance.reviewStatus;
+  String get categoryPath =>
+      subcategory.isEmpty ? category : '$category / $subcategory';
+  bool get bikeEligible =>
+      vehicleSuitability.toLowerCase().contains('bike') ||
+      allowedVehicles.any((vehicle) => vehicle.toLowerCase() == 'bike');
+  String get verificationStatus => governance.reviewStatus;
+  double get confidence => confidenceBaseline;
+
+  Map<String, Object?> toAdminMap() => {
+        'id': id,
+        'canonicalName': canonicalName,
+        'categoryPath': categoryPath,
+        'aliases': aliases,
+        'synonyms': synonyms,
+        'commonMisspellings': commonMisspellings,
+        'searchableKeywords': searchableKeywords,
+        'minWeightKg': minimumWeightKg,
+        'typicalWeightKg': typicalWeightKg,
+        'maxWeightKg': maximumWeightKg,
+        'dimensions': {
+          'lengthCm': typicalDimensionsCm.lengthCm,
+          'widthCm': typicalDimensionsCm.widthCm,
+          'heightCm': typicalDimensionsCm.heightCm,
+        },
+        'parcelClass': sizeClass,
+        'recommendedVehicle': vehicleSuitability,
+        'bikeEligible': bikeEligible,
+        'fragile': fragile,
+        'highValue': highValue,
+        'vanguardRecommended': requiresVanguard,
+        'verificationStatus': verificationStatus,
+        'confidence': confidenceBaseline,
+        'active': active,
+        'version': governance.version,
+        'reviewedBy': governance.reviewedBy,
+        'reviewedAt': governance.reviewedAt,
+      };
 }
 
 class IrisCategoryDetection {
@@ -100,6 +172,79 @@ class IrisCategoryDetection {
   });
 }
 
+enum IrisAliasMatchType {
+  exactCanonical,
+  exactAlias,
+  exactSynonym,
+  misspelling,
+  keyword,
+  semantic,
+}
+
+class IrisAliasResolution {
+  final IrisRepositoryItem item;
+  final String matchedTerm;
+  final IrisAliasMatchType matchType;
+  final double confidence;
+
+  const IrisAliasResolution({
+    required this.item,
+    required this.matchedTerm,
+    required this.matchType,
+    required this.confidence,
+  });
+}
+
+class IrisRepositoryCandidate {
+  final String enteredText;
+  final String normalizedText;
+  final String estimatedCategory;
+  final double estimatedWeightKg;
+  final int bookingFrequency;
+  final List<String> similarCanonicalItemIds;
+  final List<String> suggestedAliases;
+  final double confidence;
+  final String reviewStatus;
+
+  const IrisRepositoryCandidate({
+    required this.enteredText,
+    required this.normalizedText,
+    required this.estimatedCategory,
+    required this.estimatedWeightKg,
+    this.bookingFrequency = 1,
+    this.similarCanonicalItemIds = const [],
+    this.suggestedAliases = const [],
+    required this.confidence,
+    this.reviewStatus = 'pending_review',
+  });
+
+  Map<String, Object?> toJson() => {
+        'enteredText': enteredText,
+        'normalizedText': normalizedText,
+        'estimatedCategory': estimatedCategory,
+        'estimatedWeightKg': estimatedWeightKg,
+        'bookingFrequency': bookingFrequency,
+        'similarCanonicalItemIds': similarCanonicalItemIds,
+        'suggestedAliases': suggestedAliases,
+        'confidence': confidence,
+        'reviewStatus': reviewStatus,
+      };
+}
+
+class IrisLearningCandidateReview {
+  final String action;
+  final String canonicalItemId;
+  final String reason;
+  final Map<String, Object?> auditEvent;
+
+  const IrisLearningCandidateReview({
+    required this.action,
+    required this.canonicalItemId,
+    required this.reason,
+    required this.auditEvent,
+  });
+}
+
 class IrisItemRepository {
   static const Map<String, Set<String>> semanticCategoryGraph = {
     'food': {'food', 'food & consumables'},
@@ -107,14 +252,20 @@ class IrisItemRepository {
     'luggage': {'luggage', 'airport'},
     'documents': {'documents'},
     'household': {'household', 'furniture & home', 'furniture'},
+    'sports equipment': {'sports equipment'},
+    'baby items': {'baby items'},
+    'medical': {'medical'},
+    'gifts': {'gifts', 'food', 'beauty'},
+    'tools': {'tools'},
     'beauty': {'beauty', 'gifts'},
     'fashion': {'fashion'},
     'wigs & hair': {'wigs & hair', 'beauty'},
   };
 
   static const int coreItemCount = 1000;
+  static const int curatedLaunchItemCount = 27;
   static const int expectedItemCount =
-      coreItemCount + irisBeautyFashionItemCount;
+      coreItemCount + irisBeautyFashionItemCount + curatedLaunchItemCount;
   static const IrisRepositoryItem _genericSuitcase = IrisRepositoryItem(
     id: 'canonical_suitcase',
     itemName: 'Suitcase',
@@ -137,6 +288,665 @@ class IrisItemRepository {
     vehicleSuitability: 'Car',
     stackable: false,
   );
+  static const List<IrisRepositoryItem> _curatedLaunchItems = [
+    IrisRepositoryItem(
+      id: 'canonical_apple_iphone',
+      itemName: 'Apple iPhone',
+      aliases: [
+        'iphone',
+        'i phone',
+        'apple phone',
+        'iphone13',
+        'iphone14',
+        'iphone15',
+        'iphone16',
+        'iphone pro',
+        'iphone pro max',
+      ],
+      synonyms: ['mobile', 'mobile phone', 'smartphone', 'cell phone'],
+      searchableKeywords: ['ios phone', 'high value electronics'],
+      category: 'Electronics',
+      subcategory: 'Phones',
+      estimatedWeightKg: 0.45,
+      minimumWeightKg: 0.2,
+      maximumWeightKg: 0.8,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: true,
+      highValue: true,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'High-value phone parcel. Enclosed handling recommended.',
+      confidenceBaseline: 0.93,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 18, widthCm: 11, heightCm: 5),
+      vehicleSuitability: 'Car',
+      stackable: true,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_ipad_tablet',
+      itemName: 'Tablet / iPad',
+      aliases: ['ipad', 'tablet', 'apple ipad', 'android tablet'],
+      synonyms: ['tablet computer'],
+      category: 'Electronics',
+      subcategory: 'Tablets',
+      estimatedWeightKg: 1.0,
+      minimumWeightKg: 0.5,
+      maximumWeightKg: 1.5,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: true,
+      highValue: true,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'High-value tablet parcel. Enclosed handling recommended.',
+      confidenceBaseline: 0.9,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 32, widthCm: 24, heightCm: 6),
+      vehicleSuitability: 'Car',
+      stackable: true,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_macbook',
+      itemName: 'Apple MacBook',
+      aliases: ['macbook', 'macbook air', 'macbook pro', 'apple laptop'],
+      synonyms: ['laptop', 'notebook computer'],
+      category: 'Electronics',
+      subcategory: 'Laptops',
+      estimatedWeightKg: 2.1,
+      minimumWeightKg: 1.2,
+      maximumWeightKg: 3.2,
+      weightClass: 'Small Parcel',
+      sizeClass: 'medium',
+      fragile: true,
+      highValue: true,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'High-value laptop parcel. Enclosed handling recommended.',
+      confidenceBaseline: 0.9,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 40, widthCm: 30, heightCm: 8),
+      vehicleSuitability: 'Car',
+      stackable: true,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_sony_playstation_5',
+      itemName: 'Sony PlayStation 5',
+      aliases: ['ps5', 'ps5 slim', 'playstation 5', 'playstation five'],
+      synonyms: ['gaming console', 'games console'],
+      category: 'Electronics',
+      subcategory: 'Gaming',
+      estimatedWeightKg: 5.2,
+      minimumWeightKg: 3.5,
+      maximumWeightKg: 8,
+      weightClass: 'Medium Parcel',
+      sizeClass: 'medium',
+      fragile: true,
+      highValue: true,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'Bulky electronics parcel. Keep protected and upright.',
+      confidenceBaseline: 0.91,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 48, widthCm: 35, heightCm: 18),
+      vehicleSuitability: 'Car',
+      stackable: false,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_bicycle',
+      itemName: 'Bicycle',
+      aliases: ['bike', 'bicycle', 'mountain bike', 'road bike', 'hybrid bike'],
+      synonyms: ['bmx', 'cycle', 'push bike'],
+      category: 'Sports equipment',
+      subcategory: 'Bicycles',
+      estimatedWeightKg: 15,
+      minimumWeightKg: 8,
+      maximumWeightKg: 25,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Large item by dimensions. Van required.',
+      confidenceBaseline: 0.9,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 170, widthCm: 60, heightCm: 100),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_passport_document',
+      itemName: 'Passport / document envelope',
+      aliases: [
+        'passport',
+        'visa documents',
+        'contract',
+        'certificate',
+        'legal papers',
+        'letter',
+        'small file',
+        'emergency passport',
+        'urgent passport',
+      ],
+      synonyms: ['documents', 'paperwork', 'document envelope'],
+      category: 'Documents',
+      subcategory: 'Identity documents',
+      estimatedWeightKg: 0.2,
+      minimumWeightKg: 0.03,
+      maximumWeightKg: 1.0,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes:
+          'Lightweight document suitable for bicycle transport unless physically bundled.',
+      confidenceBaseline: 0.95,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 35, widthCm: 25, heightCm: 4),
+      vehicleSuitability: 'Bike',
+      stackable: true,
+      allowedVehicles: ['Bike', 'Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_archive_document_box',
+      itemName: 'Archive document box',
+      aliases: ['archive box', 'document box', 'bankers box', 'file box'],
+      synonyms: ['large document box', 'archive documents'],
+      category: 'Documents',
+      subcategory: 'Document storage',
+      estimatedWeightKg: 12,
+      minimumWeightKg: 6,
+      maximumWeightKg: 22,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Heavy document box. Car or van required.',
+      confidenceBaseline: 0.82,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 30),
+      vehicleSuitability: 'Car or Van',
+      stackable: true,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_5kg_rice',
+      itemName: '5kg rice bag',
+      aliases: ['sealed rice bag', 'grocery rice bag'],
+      synonyms: ['grocery bag', 'food staples'],
+      category: 'Food',
+      subcategory: 'Grocery',
+      estimatedWeightKg: 5.5,
+      minimumWeightKg: 5,
+      maximumWeightKg: 6,
+      weightClass: 'Medium Parcel',
+      sizeClass: 'medium',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Sealed grocery item. Rider will verify weight at pickup.',
+      confidenceBaseline: 0.88,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 45, widthCm: 30, heightCm: 10),
+      vehicleSuitability: 'Bike',
+      stackable: true,
+      allowedVehicles: ['Bike', 'Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_food_hamper',
+      itemName: 'Food hamper',
+      aliases: ['food hamper', 'grocery hamper', 'gift hamper'],
+      synonyms: ['hamper basket'],
+      category: 'Food',
+      subcategory: 'Hamper',
+      estimatedWeightKg: 6,
+      minimumWeightKg: 3,
+      maximumWeightKg: 10,
+      weightClass: 'Medium Parcel',
+      sizeClass: 'medium',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Food hamper. Keep sealed and upright where possible.',
+      confidenceBaseline: 0.82,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
+      vehicleSuitability: 'Car',
+      stackable: false,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_65_tv',
+      itemName: '65 inch TV',
+      aliases: ['65 inch tv', '65 tv', 'large tv', 'large television'],
+      synonyms: ['television'],
+      category: 'Electronics',
+      subcategory: 'Television',
+      estimatedWeightKg: 27,
+      minimumWeightKg: 20,
+      maximumWeightKg: 35,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: true,
+      highValue: true,
+      requiresVanguard: true,
+      requiresIRISReview: true,
+      deliveryNotes: 'Large fragile screen. Van required.',
+      confidenceBaseline: 0.88,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 160, widthCm: 95, heightCm: 18),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_office_chair_boxed',
+      itemName: 'Boxed office chair',
+      aliases: ['office chair', 'boxed office chair', 'desk chair'],
+      synonyms: ['swivel chair'],
+      category: 'Household',
+      subcategory: 'Furniture',
+      estimatedWeightKg: 16,
+      minimumWeightKg: 10,
+      maximumWeightKg: 25,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Bulky chair. Van likely required.',
+      confidenceBaseline: 0.84,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 75, widthCm: 65, heightCm: 65),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_dining_table',
+      itemName: 'Dining table',
+      aliases: ['dining table', 'table', 'kitchen table'],
+      category: 'Household',
+      subcategory: 'Furniture',
+      estimatedWeightKg: 30,
+      minimumWeightKg: 18,
+      maximumWeightKg: 60,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Bulky furniture. Van required.',
+      confidenceBaseline: 0.86,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 160, widthCm: 90, heightCm: 20),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_mattress',
+      itemName: 'Mattress',
+      aliases: ['mattress', 'double mattress', 'single mattress'],
+      category: 'Household',
+      subcategory: 'Furniture',
+      estimatedWeightKg: 28,
+      minimumWeightKg: 15,
+      maximumWeightKg: 45,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Large mattress. Van required.',
+      confidenceBaseline: 0.87,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 190, widthCm: 140, heightCm: 25),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_wardrobe',
+      itemName: 'Wardrobe',
+      aliases: ['wardrobe', 'closet', 'flat pack wardrobe'],
+      category: 'Household',
+      subcategory: 'Furniture',
+      estimatedWeightKg: 45,
+      minimumWeightKg: 20,
+      maximumWeightKg: 85,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Large furniture. Van required.',
+      confidenceBaseline: 0.86,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 190, widthCm: 80, heightCm: 55),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_washing_machine',
+      itemName: 'Washing machine',
+      aliases: ['washing machine', 'washer', 'laundry machine'],
+      category: 'Household',
+      subcategory: 'Appliances',
+      estimatedWeightKg: 70,
+      minimumWeightKg: 50,
+      maximumWeightKg: 90,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Heavy appliance. Van required.',
+      confidenceBaseline: 0.88,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 60, widthCm: 60, heightCm: 85),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_suitcase_launch',
+      itemName: 'Suitcase',
+      aliases: ['suitcase', 'luggage', 'travel bag', 'cabin bag'],
+      category: 'Luggage',
+      subcategory: 'Travel',
+      estimatedWeightKg: 18,
+      minimumWeightKg: 1,
+      maximumWeightKg: 32,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Luggage item. Car recommended unless oversized.',
+      confidenceBaseline: 0.82,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 70, widthCm: 45, heightCm: 28),
+      vehicleSuitability: 'Car',
+      stackable: false,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_baby_pram',
+      itemName: 'Baby pram',
+      aliases: ['pram', 'pushchair', 'stroller', 'buggy'],
+      category: 'Baby items',
+      estimatedWeightKg: 12,
+      minimumWeightKg: 7,
+      maximumWeightKg: 20,
+      weightClass: 'Heavy',
+      sizeClass: 'large',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Bulky baby item. Van likely required.',
+      confidenceBaseline: 0.8,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 90, widthCm: 60, heightCm: 45),
+      vehicleSuitability: 'Van',
+      stackable: false,
+      requiresVan: true,
+      allowedVehicles: ['Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_medication_envelope',
+      itemName: 'Medication envelope',
+      aliases: ['medication envelope', 'prescription envelope', 'medicine'],
+      category: 'Medical',
+      subcategory: 'Health+',
+      estimatedWeightKg: 0.3,
+      minimumWeightKg: 0.05,
+      maximumWeightKg: 1.5,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'Health+ item. Vanguard included.',
+      confidenceBaseline: 0.84,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 30, widthCm: 22, heightCm: 8),
+      vehicleSuitability: 'Bike',
+      stackable: true,
+      allowedVehicles: ['Bike', 'Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_toolbox',
+      itemName: 'Toolbox',
+      aliases: ['toolbox', 'tool box', 'tools'],
+      category: 'Tools',
+      estimatedWeightKg: 12,
+      minimumWeightKg: 4,
+      maximumWeightKg: 25,
+      weightClass: 'Heavy',
+      sizeClass: 'medium',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: true,
+      deliveryNotes: 'Dense tool item. Car or van required.',
+      confidenceBaseline: 0.78,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 55, widthCm: 30, heightCm: 30),
+      vehicleSuitability: 'Car or Van',
+      stackable: false,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_makeup_bag',
+      itemName: 'Makeup bag',
+      aliases: ['makeup bag', 'makeup', 'cosmetics bag'],
+      category: 'Beauty',
+      estimatedWeightKg: 1.2,
+      minimumWeightKg: 0.3,
+      maximumWeightKg: 3,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: true,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Beauty item. Keep upright where possible.',
+      confidenceBaseline: 0.78,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 12),
+      vehicleSuitability: 'Car',
+      stackable: true,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_wig_box',
+      itemName: 'Wig box',
+      aliases: ['wig box', 'hair unit'],
+      category: 'Wigs & Hair',
+      subcategory: 'Wigs',
+      estimatedWeightKg: 0.9,
+      minimumWeightKg: 0.3,
+      maximumWeightKg: 2,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: false,
+      highValue: true,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'High-value beauty item. Enclosed handling recommended.',
+      confidenceBaseline: 0.82,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 35, widthCm: 25, heightCm: 15),
+      vehicleSuitability: 'Car',
+      stackable: true,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_shoebox',
+      itemName: 'Shoebox',
+      aliases: ['shoes', 'trainers', 'sneakers', 'shoebox'],
+      category: 'Fashion',
+      subcategory: 'Footwear',
+      estimatedWeightKg: 1.2,
+      minimumWeightKg: 0.6,
+      maximumWeightKg: 2.5,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Small fashion parcel.',
+      confidenceBaseline: 0.8,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 35, widthCm: 22, heightCm: 14),
+      vehicleSuitability: 'Bike',
+      stackable: true,
+      allowedVehicles: ['Bike', 'Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_flowers',
+      itemName: 'Flowers',
+      aliases: ['flowers', 'bouquet', 'flower bouquet'],
+      category: 'Gifts',
+      estimatedWeightKg: 1.2,
+      minimumWeightKg: 0.5,
+      maximumWeightKg: 3,
+      weightClass: 'Small Parcel',
+      sizeClass: 'medium',
+      fragile: true,
+      highValue: false,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'Gift item. Careful enclosed handling recommended.',
+      confidenceBaseline: 0.82,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 65, widthCm: 30, heightCm: 25),
+      vehicleSuitability: 'Car',
+      stackable: false,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_birthday_cake',
+      itemName: 'Birthday cake',
+      aliases: ['cake', 'birthday cake', 'celebration cake'],
+      category: 'Gifts',
+      estimatedWeightKg: 2.5,
+      minimumWeightKg: 1,
+      maximumWeightKg: 6,
+      weightClass: 'Small Parcel',
+      sizeClass: 'medium',
+      fragile: true,
+      highValue: false,
+      requiresVanguard: true,
+      requiresIRISReview: false,
+      deliveryNotes: 'Fragile gift item. Car recommended.',
+      confidenceBaseline: 0.82,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 35, widthCm: 35, heightCm: 25),
+      vehicleSuitability: 'Car',
+      stackable: false,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_keys',
+      itemName: 'Keys',
+      aliases: ['keys', 'key set', 'house keys', 'car keys'],
+      category: 'Documents',
+      subcategory: 'Small valuables',
+      estimatedWeightKg: 0.1,
+      minimumWeightKg: 0.03,
+      maximumWeightKg: 0.5,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Small item suitable for bicycle transport.',
+      confidenceBaseline: 0.9,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 15, widthCm: 10, heightCm: 4),
+      vehicleSuitability: 'Bike',
+      stackable: true,
+      allowedVehicles: ['Bike', 'Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_usb_drive',
+      itemName: 'USB drive',
+      aliases: ['usb', 'usb drive', 'memory stick', 'flash drive'],
+      category: 'Electronics',
+      subcategory: 'Small accessories',
+      estimatedWeightKg: 0.05,
+      minimumWeightKg: 0.02,
+      maximumWeightKg: 0.3,
+      weightClass: 'Small Parcel',
+      sizeClass: 'small',
+      fragile: false,
+      highValue: false,
+      requiresVanguard: false,
+      requiresIRISReview: false,
+      deliveryNotes: 'Small accessory suitable for bicycle transport.',
+      confidenceBaseline: 0.88,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 12, widthCm: 8, heightCm: 3),
+      vehicleSuitability: 'Bike',
+      stackable: true,
+      allowedVehicles: ['Bike', 'Car', 'Van'],
+    ),
+    IrisRepositoryItem(
+      id: 'canonical_small_medical_equipment',
+      itemName: 'Small medical equipment',
+      aliases: ['small medical equipment', 'medical device', 'medical kit'],
+      category: 'Medical',
+      subcategory: 'Equipment',
+      estimatedWeightKg: 3,
+      minimumWeightKg: 1,
+      maximumWeightKg: 8,
+      weightClass: 'Medium Parcel',
+      sizeClass: 'medium',
+      fragile: true,
+      highValue: true,
+      requiresVanguard: true,
+      requiresIRISReview: true,
+      deliveryNotes: 'Medical equipment. Enclosed handling recommended.',
+      confidenceBaseline: 0.76,
+      typicalDimensionsCm:
+          IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
+      vehicleSuitability: 'Car',
+      stackable: false,
+      allowedVehicles: ['Car', 'Van'],
+    ),
+  ];
   static const List<IrisRepositoryItem> _coreItems = [
     IrisRepositoryItem(
       id: "documents_single_passport_1",
@@ -26035,9 +26845,178 @@ class IrisItemRepository {
     ),
   ];
   static final List<IrisRepositoryItem> items = List.unmodifiable([
+    ..._curatedLaunchItems,
     ..._coreItems,
     ...irisBeautyFashionItems,
   ]);
+
+  static final Map<String, IrisAliasResolution> _aliasIndex =
+      _buildAliasIndex();
+
+  static Map<String, IrisAliasResolution> _buildAliasIndex() {
+    final index = <String, IrisAliasResolution>{};
+    void add(
+      IrisRepositoryItem item,
+      String term,
+      IrisAliasMatchType type,
+      double confidence,
+    ) {
+      final normalized = normalizeSearchText(term);
+      if (normalized.isEmpty) return;
+      index.putIfAbsent(
+        normalized,
+        () => IrisAliasResolution(
+          item: item,
+          matchedTerm: term,
+          matchType: type,
+          confidence: confidence,
+        ),
+      );
+    }
+
+    for (final item in items.where((item) => item.active)) {
+      add(item, item.itemName, IrisAliasMatchType.exactCanonical, 1);
+      for (final alias in item.aliases) {
+        add(item, alias, IrisAliasMatchType.exactAlias, 0.98);
+      }
+      for (final synonym in item.synonyms) {
+        add(item, synonym, IrisAliasMatchType.exactSynonym, 0.94);
+      }
+      for (final misspelling in item.commonMisspellings) {
+        add(item, misspelling, IrisAliasMatchType.misspelling, 0.88);
+      }
+      for (final keyword in item.searchableKeywords) {
+        add(item, keyword, IrisAliasMatchType.keyword, 0.78);
+      }
+    }
+    return Map.unmodifiable(index);
+  }
+
+  static String normalizeSearchText(String value) {
+    final normalized = value
+        .toLowerCase()
+        .replaceAll('&', ' and ')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+    final tokens = normalized.split(' ').where((token) => token.isNotEmpty);
+    return tokens
+        .map((token) => token.length > 3 && token.endsWith('s')
+            ? token.substring(0, token.length - 1)
+            : token)
+        .join(' ');
+  }
+
+  static IrisAliasResolution? resolveAlias(String description) {
+    final normalized = normalizeSearchText(description);
+    if (normalized.isEmpty) return null;
+    final exact = _aliasIndex[normalized];
+    if (exact != null) return exact;
+    final tokens = normalized.split(' ').where((token) => token.length >= 3);
+    IrisAliasResolution? best;
+    var bestLength = 0;
+    for (final entry in _aliasIndex.entries) {
+      final term = entry.key;
+      if (term.length < 3) continue;
+      final matches = normalized.contains(term) ||
+          tokens.any((token) => token == term || token.contains(term));
+      if (matches && term.length > bestLength) {
+        best = entry.value;
+        bestLength = term.length;
+      }
+    }
+    return best;
+  }
+
+  static IrisRepositoryCandidate createCandidate(
+    String enteredText, {
+    Iterable<String> photoLabels = const [],
+    double estimatedWeightKg = 0,
+  }) {
+    final detection = detectCategory(enteredText, photoLabels: photoLabels);
+    final normalized = normalizeSearchText(enteredText);
+    final similar = detection == null
+        ? const <String>[]
+        : items
+            .where((item) => item.active && _categoryMatches(item, detection))
+            .take(5)
+            .map((item) => item.id)
+            .toList(growable: false);
+    return IrisRepositoryCandidate(
+      enteredText: enteredText,
+      normalizedText: normalized,
+      estimatedCategory: detection?.category ?? 'Unknown',
+      estimatedWeightKg: estimatedWeightKg,
+      similarCanonicalItemIds: similar,
+      suggestedAliases: normalized.isEmpty ? const [] : [normalized],
+      confidence: detection?.confidence ?? 0.25,
+    );
+  }
+
+  static IrisLearningCandidateReview reviewLearningCandidate({
+    required IrisRepositoryCandidate candidate,
+    required String action,
+    required String canonicalItemId,
+    required String adminUserId,
+    required String reason,
+  }) {
+    final canonicalExists = items.any((item) => item.id == canonicalItemId);
+    final safeAction = canonicalExists ? action : 'reject';
+    return IrisLearningCandidateReview(
+      action: safeAction,
+      canonicalItemId: canonicalExists ? canonicalItemId : '',
+      reason: canonicalExists ? reason : 'Canonical item not found.',
+      auditEvent: {
+        'actionType': 'iris_repository_candidate_$safeAction',
+        'adminUserId': adminUserId,
+        'recordType': 'irisRepositoryCandidate',
+        'recordId': candidate.normalizedText,
+        'canonicalItemId': canonicalExists ? canonicalItemId : null,
+        'reason': reason,
+        'before': candidate.toJson(),
+        'after': {
+          'reviewStatus': safeAction,
+          'canonicalItemId': canonicalExists ? canonicalItemId : null,
+        },
+        'source': 'admin',
+      },
+    );
+  }
+
+  static List<Map<String, Object?>> adminRows({
+    String query = '',
+    String category = 'all',
+    String vehicle = 'all',
+    bool? fragile,
+    bool? highValue,
+  }) {
+    final normalizedQuery = normalizeSearchText(query);
+    return items
+        .where((item) {
+          if (!item.active) return false;
+          if (category != 'all' &&
+              !item.categoryPath
+                  .toLowerCase()
+                  .contains(category.toLowerCase())) {
+            return false;
+          }
+          if (vehicle != 'all' &&
+              !item.vehicleSuitability
+                  .toLowerCase()
+                  .contains(vehicle.toLowerCase())) {
+            return false;
+          }
+          if (fragile != null && item.fragile != fragile) return false;
+          if (highValue != null && item.highValue != highValue) return false;
+          if (normalizedQuery.isEmpty) return true;
+          return item.allSearchTerms
+              .map(normalizeSearchText)
+              .any((term) => term.contains(normalizedQuery));
+        })
+        .map((item) => item.toAdminMap())
+        .toList(growable: false);
+  }
+
   static IrisCategoryDetection? detectCategory(
     String description, {
     Iterable<String> photoLabels = const [],
@@ -26180,6 +27159,11 @@ class IrisItemRepository {
   }) {
     final text = description.trim().toLowerCase();
     if (text.isEmpty) return null;
+    final aliasResolution = resolveAlias(description);
+    if (aliasResolution != null &&
+        _aliasResolutionAllowed(text, aliasResolution.item)) {
+      return aliasResolution.item;
+    }
     final detection = detectCategory(description, photoLabels: photoLabels);
     final isLuggage =
         RegExp(r'\b(suitcase|luggage|travel bag)s?\b').hasMatch(text);
@@ -26195,14 +27179,11 @@ class IrisItemRepository {
         : items.where((item) => !_categoryMatches(item, detection)).length;
     IrisRepositoryItem? best;
     int bestScore = 0;
-    for (final item in candidates) {
+    for (final item in candidates.where((item) => item.active)) {
       if (detection != null && !_semanticGuardAllows(text, item, detection)) {
         continue;
       }
-      final terms = [
-        item.itemName.toLowerCase(),
-        ...item.aliases.map((alias) => alias.toLowerCase())
-      ];
+      final terms = item.allSearchTerms.map((term) => term.toLowerCase());
       for (final term in terms) {
         if (term.length < 3) continue;
         final score = _termScore(text, term) +
@@ -26229,6 +27210,19 @@ class IrisItemRepository {
     return best;
   }
 
+  static bool _aliasResolutionAllowed(String text, IrisRepositoryItem item) {
+    if (item.category.toLowerCase() == 'luggage' &&
+        RegExp(r'\b(heathrow|gatwick|airport|terminal|cabin|carry on|checked luggage)\b')
+            .hasMatch(text)) {
+      return false;
+    }
+    if (item.id == 'canonical_wig_box') return false;
+    final detection = detectCategory(text);
+    if (detection == null) return true;
+    return _categoryMatches(item, detection) &&
+        _semanticGuardAllows(text, item, detection);
+  }
+
   static bool _semanticGuardAllows(
     String text,
     IrisRepositoryItem item,
@@ -26236,6 +27230,10 @@ class IrisItemRepository {
   ) {
     final category = detection.category.toLowerCase();
     final itemCategory = item.category.toLowerCase();
+    final airportQualified = RegExp(
+      r'\b(heathrow|gatwick|airport|terminal|cabin|carry on|checked luggage)\b',
+    ).hasMatch(text);
+    if (airportQualified && itemCategory != 'airport') return false;
     final allowed = semanticCategoryGraph[category];
     if (allowed != null && !allowed.contains(itemCategory)) return false;
     if (text.contains('rice') && item.itemName.toLowerCase().contains('bag')) {

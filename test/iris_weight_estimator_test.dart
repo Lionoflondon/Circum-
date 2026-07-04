@@ -56,6 +56,64 @@ void main() {
           IrisItemRepository.match('spa gift hamper')?.itemName, 'Spa Hamper');
     });
 
+    test('canonical aliases resolve before semantic repository matching', () {
+      expect(IrisItemRepository.resolveAlias('iphone')?.item.canonicalName,
+          'Apple iPhone');
+      expect(
+          IrisItemRepository.resolveAlias('mobile phone')?.item.canonicalName,
+          'Apple iPhone');
+      expect(IrisItemRepository.resolveAlias('bike')?.item.canonicalName,
+          'Bicycle');
+      expect(
+          IrisItemRepository.resolveAlias('mountain bike')?.item.canonicalName,
+          'Bicycle');
+      expect(IrisItemRepository.resolveAlias('road bike')?.item.canonicalName,
+          'Bicycle');
+      expect(IrisItemRepository.resolveAlias('PS5 Slim')?.item.canonicalName,
+          'Sony PlayStation 5');
+    });
+
+    test('unknown item creates repository candidate without canonical writes',
+        () {
+      final candidate = IrisItemRepository.createCandidate(
+        'unknown photography rig',
+        estimatedWeightKg: 8,
+      );
+
+      expect(candidate.reviewStatus, 'pending_review');
+      expect(candidate.normalizedText, 'unknown photography rig');
+      expect(IrisItemRepository.match('unknown photography rig'), isNull);
+    });
+
+    test('learning candidates do not overwrite canonical records', () {
+      final candidate = IrisItemRepository.createCandidate('PS5 Slim');
+      final review = IrisItemRepository.reviewLearningCandidate(
+        candidate: candidate,
+        action: 'approve_alias',
+        canonicalItemId: 'canonical_sony_playstation_5',
+        adminUserId: 'admin-1',
+        reason: 'Repeated customer wording.',
+      );
+
+      expect(review.action, 'approve_alias');
+      expect(review.auditEvent['actionType'],
+          'iris_repository_candidate_approve_alias');
+      expect(IrisItemRepository.resolveAlias('PS5 Slim')?.item.canonicalName,
+          'Sony PlayStation 5');
+    });
+
+    test('alias deletion and duplicate canonical merge preserve canonical data',
+        () {
+      final bike = IrisItemRepository.resolveAlias('bike')!.item;
+      final mountainBike =
+          IrisItemRepository.resolveAlias('mountain bike')!.item;
+
+      expect(bike.id, mountainBike.id);
+      expect(IrisItemRepository.items.where((item) => item.id == bike.id),
+          hasLength(1));
+      expect(bike.active, isTrue);
+    });
+
     test('Vanguard and review flags distinguish normal and luxury items', () {
       final synthetic = IrisItemRepository.match('synthetic wig')!;
       final luxuryWig = IrisItemRepository.match('luxury wig over £500')!;
