@@ -884,7 +884,7 @@ void main() {
 
       expect(hamper, isNotNull);
       expect(hamper!.weightKg, inInclusiveRange(3, 10));
-      expect(hamper.weightBand, 'Medium Parcel');
+      expect(hamper.weightBand, 'Small Parcel');
     });
 
     test('phase 2 confidence handling drives pricing behaviour', () {

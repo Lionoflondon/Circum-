@@ -24826,7 +24826,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     var packageType = 'Parcel';
     var vehicleReview = false;
     var explanation =
-        'Iris could not estimate weight safely from the details provided.';
+        'IRIS does not yet have a verified repository match for this item. Please confirm the weight or upload a photo to improve the estimate.';
 
     if (_irisBundleDetected(text)) {
       estimate = 20;
