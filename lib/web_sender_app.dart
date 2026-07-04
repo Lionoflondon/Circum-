@@ -24973,9 +24973,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       matches.sort();
       final high = matches.last;
       final low = matches.first;
-      final trustedKnownItem = base.confidence == 'high' &&
-          (base.weightSource == 'known_product_lookup' ||
-              base.weightSource == 'repository_match');
+      final trustedKnownItem = base.weightSource == 'known_product_lookup' ||
+          base.weightSource == 'repository_match';
       if (trustedKnownItem) {
         final expectedSingleWeight =
             base.singleItemWeightKg != null && base.singleItemWeightKg! > 0

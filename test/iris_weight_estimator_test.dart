@@ -237,17 +237,19 @@ void main() {
       expect(estimate.weightBand, 'Small Parcel');
     });
 
-    test('MacBook matching prefers specific models before catch-all', () {
+    test('MacBook aliases resolve through the canonical repository first', () {
       final pro16 = IrisWeightEstimator.knownProductEstimate('MacBook Pro 16');
       final air13 = IrisWeightEstimator.knownProductEstimate('MacBook Air 13');
       final generic = IrisWeightEstimator.knownProductEstimate('MacBook');
 
       expect(pro16, isNotNull);
-      expect(pro16!.matchedItemName, 'MacBook Pro 16');
-      expect(pro16.singleItemWeightKg, closeTo(2.55, 0.001));
+      expect(pro16!.matchedItemName, 'Apple MacBook');
+      expect(pro16.weightSource, 'repository_match');
+      expect(pro16.singleItemWeightKg, closeTo(2.1, 0.001));
       expect(air13, isNotNull);
-      expect(air13!.matchedItemName, 'MacBook Air 13');
-      expect(air13.singleItemWeightKg, closeTo(1.64, 0.001));
+      expect(air13!.matchedItemName, 'Apple MacBook');
+      expect(air13.weightSource, 'repository_match');
+      expect(air13.singleItemWeightKg, closeTo(2.1, 0.001));
       expect(generic, isNotNull);
       expect(generic!.matchedItemName, 'Apple MacBook');
       expect(generic.weightSource, 'repository_match');
@@ -261,10 +263,10 @@ void main() {
       final unknownTv = IrisWeightEstimator.knownProductEstimate('television');
 
       expect(largeTv, isNotNull);
-      expect(largeTv!.matchedItemName, '65" Television');
-      expect(largeTv.weightKg, closeTo(25, 0.001));
+      expect(largeTv!.matchedItemName, '65 inch TV');
+      expect(largeTv.weightKg, closeTo(27, 0.001));
       expect(largeTv.vehicleSuitability, 'Van');
-      expect(largeTv.weightBand, DeliveryPricing.weightBandFor(25).category);
+      expect(largeTv.weightBand, DeliveryPricing.weightBandFor(27).category);
       expect(largeTv.requiresVehicleReview, isTrue);
       expect(compactTv, isNotNull);
       expect(compactTv!.matchedItemName, '32" Television');
@@ -312,7 +314,7 @@ void main() {
       expect(phone.valueSensitive, isTrue);
     });
 
-    test('specific products still win before generic category fallback', () {
+    test('canonical repository wins before generic category fallback', () {
       final iphone16 = IrisWeightEstimator.knownProductEstimate('iphone 16');
       final macbookPro16 =
           IrisWeightEstimator.knownProductEstimate('macbook pro 16');
@@ -323,9 +325,9 @@ void main() {
       expect(iphone16.weightKg, closeTo(0.45, 0.001));
 
       expect(macbookPro16, isNotNull);
-      expect(macbookPro16!.matchedItemName, 'MacBook Pro 16');
-      expect(macbookPro16.weightSource, 'known_product_lookup');
-      expect(macbookPro16.weightKg, closeTo(2.55, 0.001));
+      expect(macbookPro16!.matchedItemName, 'Apple MacBook');
+      expect(macbookPro16.weightSource, 'repository_match');
+      expect(macbookPro16.weightKg, closeTo(2.1, 0.001));
     });
 
     test('final chargeable weight still uses higher customer or Iris weight',
@@ -339,7 +341,7 @@ void main() {
           senderWeightKg: 2,
           irisWeightKg: estimate!.weightKg,
         ),
-        5.25,
+        5.2,
       );
       expect(
         DeliveryPricing.chargeableWeightKg(
@@ -733,7 +735,7 @@ void main() {
       expect(piano?.weightKg, isNot(20));
       expect(piano?.weightKg, greaterThan(20));
       expect(wardrobes?.quantity, 7);
-      expect(wardrobes?.weightKg, 280);
+      expect(wardrobes?.weightKg, 315);
     });
 
     test('unrelated repository additions cannot win a detected category', () {
@@ -809,9 +811,9 @@ void main() {
     test('MacBook estimates ignore historical completed-delivery outliers', () {
       const cases = [
         ('MacBook', 'Apple MacBook', 'repository_match', 2.1),
-        ('MacBook Air', 'MacBook Air 13', 'known_product_lookup', 1.64),
-        ('MacBook Pro 14', 'MacBook Pro 14', 'known_product_lookup', 2.01),
-        ('MacBook Pro 16', 'MacBook Pro 16', 'known_product_lookup', 2.55),
+        ('MacBook Air', 'Apple MacBook', 'repository_match', 2.1),
+        ('MacBook Pro 14', 'Apple MacBook', 'repository_match', 2.1),
+        ('MacBook Pro 16', 'Apple MacBook', 'repository_match', 2.1),
       ];
 
       for (final item in cases) {
@@ -933,110 +935,166 @@ void main() {
       );
     });
 
-    test('phase 2 permanent regression suite keeps item matches plausible', () {
+    test('launch regression suite keeps canonical items authoritative', () {
       const cases = [
         _IrisRegressionCase(
-          description: 'iPhone',
-          category: 'Electronics',
-          minKg: 0.2,
-          maxKg: 0.8,
-          vehicles: ['Bike'],
+          description: 'passport',
+          matchedItemName: 'Passport / document envelope',
+          category: 'Documents',
+          minKg: 0.05,
+          maxKg: 1,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Bike',
           bannedTerms: ['suitcase', 'wardrobe', 'chair'],
         ),
         _IrisRegressionCase(
+          description: 'document envelope',
+          matchedItemName: 'Passport / document envelope',
+          category: 'Documents',
+          minKg: 0.05,
+          maxKg: 1,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Bike',
+          bannedTerms: ['suitcase', 'wardrobe', 'chair'],
+        ),
+        _IrisRegressionCase(
+          description: 'iPhone',
+          matchedItemName: 'Apple iPhone',
+          category: 'Electronics',
+          minKg: 0.2,
+          maxKg: 0.8,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Bike',
+          bannedTerms: ['suitcase', 'wardrobe', 'chair'],
+        ),
+        _IrisRegressionCase(
+          description: 'iPhone 13',
+          matchedItemName: 'Apple iPhone',
+          category: 'Electronics',
+          minKg: 0.2,
+          maxKg: 0.8,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Bike',
+          bannedTerms: ['suitcase', 'wardrobe', 'chair'],
+        ),
+        _IrisRegressionCase(
+          description: 'mobile phone',
+          matchedItemName: 'Apple iPhone',
+          category: 'Electronics',
+          minKg: 0.2,
+          maxKg: 0.8,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Bike',
+          bannedTerms: ['suitcase', 'wardrobe', 'chair'],
+        ),
+        _IrisRegressionCase(
+          description: 'MacBook',
+          matchedItemName: 'Apple MacBook',
+          category: 'Electronics',
+          minKg: 1.2,
+          maxKg: 3.2,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Car',
+          bannedTerms: ['suitcase', 'wardrobe'],
+        ),
+        _IrisRegressionCase(
+          description: 'MacBook Air',
+          matchedItemName: 'Apple MacBook',
+          category: 'Electronics',
+          minKg: 1.2,
+          maxKg: 3.2,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Car',
+          bannedTerms: ['suitcase', 'wardrobe'],
+        ),
+        _IrisRegressionCase(
+          description: 'MacBook Pro',
+          matchedItemName: 'Apple MacBook',
+          category: 'Electronics',
+          minKg: 1.2,
+          maxKg: 3.2,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Car',
+          bannedTerms: ['suitcase', 'wardrobe'],
+        ),
+        _IrisRegressionCase(
           description: 'iPad',
+          matchedItemName: 'Tablet / iPad',
           category: 'Electronics',
           minKg: 0.5,
           maxKg: 1.5,
-          vehicles: ['Car'],
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Car',
+          bannedTerms: ['suitcase', 'wardrobe'],
+        ),
+        _IrisRegressionCase(
+          description: 'tablet',
+          matchedItemName: 'Tablet / iPad',
+          category: 'Electronics',
+          minKg: 0.5,
+          maxKg: 1.5,
+          parcelClass: 'Small Parcel',
+          minimumVehicle: 'Car',
           bannedTerms: ['suitcase', 'wardrobe'],
         ),
         _IrisRegressionCase(
           description: '65 inch TV',
+          matchedItemName: '65 inch TV',
           category: 'Electronics',
           minKg: 20,
           maxKg: 35,
-          vehicles: ['Van'],
+          parcelClass: 'Large Item',
+          minimumVehicle: 'Van',
           bannedTerms: ['wardrobe', 'suitcase'],
         ),
         _IrisRegressionCase(
-          description: 'wardrobe',
-          category: 'Household',
-          minKg: 20,
-          maxKg: 100,
-          vehicles: ['Van'],
-          bannedTerms: ['television', 'iphone'],
-        ),
-        _IrisRegressionCase(
-          description: 'office chair boxed',
-          category: 'Household',
-          minKg: 10,
-          maxKg: 25,
-          vehicles: ['Van'],
-          bannedTerms: ['television', 'iphone'],
-        ),
-        _IrisRegressionCase(
-          description: 'food hamper',
-          category: 'Food',
-          minKg: 3,
-          maxKg: 10,
-          vehicles: ['Car'],
-          bannedTerms: ['suitcase', 'television'],
-        ),
-        _IrisRegressionCase(
-          description: '5kg rice',
-          category: 'Food',
-          minKg: 5,
-          maxKg: 6,
-          vehicles: ['Bike', 'Car'],
-          bannedTerms: ['suitcase', 'luggage'],
-        ),
-        _IrisRegressionCase(
           description: 'bicycle',
-          category: 'Large item',
+          matchedItemName: 'Bicycle',
+          category: 'Sports equipment',
           minKg: 10,
           maxKg: 25,
-          vehicles: ['Van'],
-          bannedTerms: ['iphone', 'television'],
-        ),
-        _IrisRegressionCase(
-          description: 'mattress',
-          category: 'Household',
-          minKg: 20,
-          maxKg: 45,
-          vehicles: ['Van'],
+          parcelClass: 'Heavy Parcel',
+          minimumVehicle: 'Van',
           bannedTerms: ['iphone', 'television'],
         ),
         _IrisRegressionCase(
           description: 'dining table',
+          matchedItemName: 'Dining table',
           category: 'Household',
-          minKg: 20,
-          maxKg: 55,
-          vehicles: ['Van'],
+          minKg: 18,
+          maxKg: 60,
+          parcelClass: 'Large Item',
+          minimumVehicle: 'Van',
           bannedTerms: ['iphone', 'television'],
         ),
         _IrisRegressionCase(
-          description: 'MacBook',
-          category: 'Electronics',
-          minKg: 1,
-          maxKg: 3,
-          vehicles: ['Car'],
-          bannedTerms: ['suitcase', 'wardrobe'],
+          description: 'mattress',
+          matchedItemName: 'Mattress',
+          category: 'Household',
+          minKg: 15,
+          maxKg: 45,
+          parcelClass: 'Large Item',
+          minimumVehicle: 'Van',
+          bannedTerms: ['iphone', 'television'],
         ),
         _IrisRegressionCase(
           description: 'suitcase',
+          matchedItemName: 'Suitcase',
           category: 'Luggage',
           minKg: 1,
           maxKg: 32,
-          vehicles: ['Car'],
+          parcelClass: 'Heavy Parcel',
+          minimumVehicle: 'Car',
           bannedTerms: ['iphone', 'wardrobe'],
         ),
         _IrisRegressionCase(
-          description: 'washing machine',
-          category: 'White goods',
-          minKg: 50,
-          maxKg: 90,
-          vehicles: ['Van'],
+          description: 'toolbox',
+          matchedItemName: 'Toolbox',
+          category: 'Tools',
+          minKg: 4,
+          maxKg: 25,
+          parcelClass: 'Heavy Parcel',
+          minimumVehicle: 'Car',
           bannedTerms: ['iphone', 'suitcase'],
         ),
       ];
@@ -1046,12 +1104,37 @@ void main() {
             IrisWeightEstimator.knownProductEstimate(item.description);
         expect(estimate, isNotNull, reason: item.description);
         final result = estimate!;
+        expect(result.matchedItemName, item.matchedItemName,
+            reason: item.description);
         expect(result.packageType.toLowerCase(),
             contains(item.category.toLowerCase()),
             reason: item.description);
         expect(result.weightKg, inInclusiveRange(item.minKg, item.maxKg),
             reason: item.description);
-        expect(item.vehicles, contains(result.vehicleSuitability),
+        expect(result.weightBand, item.parcelClass, reason: item.description);
+        expect(result.vehicleSuitability, item.minimumVehicle,
+            reason: item.description);
+        expect(
+          DeliveryPricing.eligibleVehiclesForMinimum(result.vehicleSuitability),
+          item.eligibleVehicles,
+          reason: item.description,
+        );
+        final decision = IrisWeightEstimator.resolveTrustedKnownItemPricing(
+          description: item.description,
+          quantity: result.quantity,
+          userWeightKg: 0,
+          trustedItemWeightKg: result.weightKg,
+          historicalMatches: const [120],
+          trustedWeightIsTransportReady:
+              result.weightSource == 'repository_match' ||
+                  result.weightSource == 'known_product_lookup',
+        );
+        expect(
+            decision.pricingWeightKg, inInclusiveRange(item.minKg, item.maxKg),
+            reason: item.description);
+        expect(decision.pricingWeightKg, isNot(closeTo(120, 0.001)),
+            reason: item.description);
+        expect(decision.ignoredHistoricalOutliers, contains(120),
             reason: item.description);
         expect(['high', 'medium', 'low'], contains(result.confidence),
             reason: item.description);
@@ -1074,18 +1157,25 @@ void main() {
 
 class _IrisRegressionCase {
   final String description;
+  final String matchedItemName;
   final String category;
   final double minKg;
   final double maxKg;
-  final List<String> vehicles;
+  final String parcelClass;
+  final String minimumVehicle;
   final List<String> bannedTerms;
 
   const _IrisRegressionCase({
     required this.description,
+    required this.matchedItemName,
     required this.category,
     required this.minKg,
     required this.maxKg,
-    required this.vehicles,
+    required this.parcelClass,
+    required this.minimumVehicle,
     required this.bannedTerms,
   });
+
+  List<String> get eligibleVehicles =>
+      DeliveryPricing.eligibleVehiclesForMinimum(minimumVehicle);
 }

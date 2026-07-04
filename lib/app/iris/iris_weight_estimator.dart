@@ -169,6 +169,10 @@ class IrisWeightEstimator {
   static int extractQuantity(String description) {
     final text = description.trim().toLowerCase();
     if (text.isEmpty) return 1;
+    if (RegExp(r'\b\d{2,3}\s*(?:\"|in|inch|inches|-inch)\s*(?:tv|television)\b')
+        .hasMatch(text)) {
+      return 1;
+    }
     final leading = RegExp(r'^\s*(\d+)\s*(?:[x×]\s*)?').firstMatch(text);
     final suffix = RegExp(r'\b[x×]\s*(\d+)\b').firstMatch(text);
     final parsed = int.tryParse(leading?.group(1) ?? suffix?.group(1) ?? '1');
@@ -181,10 +185,6 @@ class IrisWeightEstimator {
   }) {
     final text = description.trim().toLowerCase();
     final quantity = extractQuantity(description);
-    if (text.contains('tv') || text.contains('television')) {
-      final tvEstimate = _estimateTvBySize(text, quantity);
-      if (tvEstimate != null) return tvEstimate;
-    }
     if (_isPhoneAlias(text) && !_explicitlyLooseOrUnboxed(text)) {
       final phoneItem = _canonicalRepositoryItem('canonical_apple_iphone');
       if (phoneItem != null) {
@@ -195,7 +195,7 @@ class IrisWeightEstimator {
         );
       }
     }
-    if (_isGenericMacBookAlias(text) && !_explicitlyLooseOrUnboxed(text)) {
+    if (_isMacBookAlias(text) && !_explicitlyLooseOrUnboxed(text)) {
       final macBookItem = _canonicalRepositoryItem('canonical_macbook');
       if (macBookItem != null) {
         return _repositoryEstimate(
@@ -204,6 +204,33 @@ class IrisWeightEstimator {
           quantity: quantity,
         );
       }
+    }
+    if (text.contains('tv') || text.contains('television')) {
+      final canonicalTv =
+          RegExp(r'\b65\s*(?:\"|in|inch|inches|-inch)?\s*(?:tv|television)\b')
+                  .hasMatch(text)
+              ? _canonicalRepositoryItem('canonical_65_tv')
+              : null;
+      if (canonicalTv != null) {
+        return _repositoryEstimate(
+          repositoryItem: canonicalTv,
+          description: description,
+          quantity: quantity,
+        );
+      }
+      final tvEstimate = _estimateTvBySize(text, quantity);
+      if (tvEstimate != null) return tvEstimate;
+    }
+    final repositoryItem = IrisItemRepository.match(
+      description,
+      photoLabels: photoLabels,
+    );
+    if (repositoryItem != null) {
+      return _repositoryEstimate(
+        repositoryItem: repositoryItem,
+        description: description,
+        quantity: quantity,
+      );
     }
     for (final product in _knownProducts) {
       if (product.patterns.any(text.contains)) {
@@ -254,17 +281,6 @@ class IrisWeightEstimator {
           handlingNotes: product.handlingNotes,
         );
       }
-    }
-    final repositoryItem = IrisItemRepository.match(
-      description,
-      photoLabels: photoLabels,
-    );
-    if (repositoryItem != null) {
-      return _repositoryEstimate(
-        repositoryItem: repositoryItem,
-        description: description,
-        quantity: quantity,
-      );
     }
     final categoryEstimate = _categoryFallbackEstimate(text, quantity);
     if (categoryEstimate != null) return categoryEstimate;
@@ -337,13 +353,11 @@ class IrisWeightEstimator {
     ).hasMatch(text);
   }
 
-  static bool _isGenericMacBookAlias(String text) {
+  static bool _isMacBookAlias(String text) {
     if (!RegExp(r'\b(macbook|apple laptop|laptop)\b').hasMatch(text)) {
       return false;
     }
-    return !RegExp(
-            r'\b(macbook\s+(?:air|pro)|pro\s*(?:13|14|16)|air\s*(?:13|15))\b')
-        .hasMatch(text);
+    return true;
   }
 
   static IrisRepositoryItem? _canonicalRepositoryItem(String id) {
@@ -465,7 +479,31 @@ class IrisWeightEstimator {
         inches = 32;
       }
     }
-    if (inches == null) return null;
+    if (inches == null) {
+      const weightKg = 12.0;
+      return IrisWeightLookupResult(
+        matchedItemName: 'Television (size unknown)',
+        quantity: 1,
+        singleItemWeightKg: weightKg,
+        weightKg: weightKg,
+        weightBand: DeliveryPricing.weightBandFor(weightKg).category,
+        confidence: 'low',
+        confidenceScore: 0.45,
+        explanation:
+            'IRIS needs the screen size to estimate this TV precisely.',
+        packageType: 'Electronics',
+        weightSource: 'size_based_estimate',
+        truthBand: 'Low Confidence',
+        requiresVehicleReview: true,
+        typicalDimensions: null,
+        vehicleSuitability: 'Car',
+        fragile: true,
+        valueSensitive: false,
+        vanguardRecommended: false,
+        stackable: false,
+        handlingNotes: 'Screen item - confirm screen size before pickup.',
+      );
+    }
 
     final double weightKg;
     final String vehicle;
@@ -519,6 +557,7 @@ class IrisWeightEstimator {
     bool trustedWeightIsTransportReady = false,
   }) {
     final text = description.trim().toLowerCase();
+    final safeQuantity = quantity < 1 ? 1 : quantity;
     final knownElectronics = [
       'iphone',
       'phone',
@@ -537,18 +576,23 @@ class IrisWeightEstimator {
       'camera',
     ].any(text.contains);
     if (!knownElectronics) {
+      final historicalOutliers = historicalMatches
+          .where((weight) => weight > trustedItemWeightKg * 1.5)
+          .toList(growable: false);
       final baseWeight = math.max(userWeightKg, trustedItemWeightKg);
       final pricingWeight =
           math.max(baseWeight, DeliveryPricing.minimumBillableWeightKg);
       return IrisTrustedPricingDecision(
         pricingWeightKg: pricingWeight,
-        explanation: pricingWeight > baseWeight
-            ? 'A minimum billable parcel weight of ${DeliveryPricing.minimumBillableWeightKg.toStringAsFixed(1)}kg applies for pricing.'
-            : null,
+        ignoredHistoricalOutliers: historicalOutliers,
+        explanation: historicalOutliers.isNotEmpty
+            ? 'IRIS ignored historical matches outside the verified repository range.'
+            : pricingWeight > baseWeight
+                ? 'A minimum billable parcel weight of ${DeliveryPricing.minimumBillableWeightKg.toStringAsFixed(1)}kg applies for pricing.'
+                : null,
       );
     }
 
-    final safeQuantity = quantity < 1 ? 1 : quantity;
     final trustedPackagedWeight = trustedWeightIsTransportReady
         ? trustedItemWeightKg
         : trustedItemWeightKg +
