@@ -316,13 +316,14 @@ class IrisItemRepository {
       highValue: true,
       requiresVanguard: true,
       requiresIRISReview: false,
-      deliveryNotes: 'High-value phone parcel. Enclosed handling recommended.',
+      deliveryNotes:
+          'High-value phone parcel. Vanguard handling remains recommended.',
       confidenceBaseline: 0.93,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 18, widthCm: 11, heightCm: 5),
-      vehicleSuitability: 'Car',
+      vehicleSuitability: 'Bike',
       stackable: true,
-      allowedVehicles: ['Car', 'Van'],
+      allowedVehicles: ['Bike', 'Car', 'Van'],
     ),
     IrisRepositoryItem(
       id: 'canonical_ipad_tablet',

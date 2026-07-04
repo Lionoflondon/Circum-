@@ -24863,8 +24863,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           (base.weightSource == 'known_product_lookup' ||
               base.weightSource == 'repository_match');
       if (trustedKnownItem) {
+        final expectedSingleWeight =
+            base.singleItemWeightKg != null && base.singleItemWeightKg! > 0
+                ? base.singleItemWeightKg!
+                : base.weightKg / math.max(1, base.quantity);
+        final plausibleHistoricalCeiling = math.max(
+            base.weightKg * 2.2, expectedSingleWeight * base.quantity * 2.2);
+        final plausibleMatches = matches
+            .where((weight) => weight <= plausibleHistoricalCeiling)
+            .toList(growable: false);
         final outliers = matches
-            .where((weight) => weight > base.weightKg * 5)
+            .where((weight) => weight > plausibleHistoricalCeiling)
             .toList(growable: false);
         if (outliers.isNotEmpty) {
           await FirebaseFirestore.instance
@@ -24880,13 +24889,24 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
+        if (plausibleMatches.isEmpty) {
+          return base.copyWith(
+            learningReason: outliers.isNotEmpty
+                ? 'IRIS ignored historical matches outside the verified repository range.'
+                : null,
+            explanation: outliers.isNotEmpty
+                ? '${base.explanation} IRIS ignored historical matches outside the verified repository range.'
+                : base.explanation,
+          );
+        }
+        final plausibleHigh = plausibleMatches.last;
         return base.copyWith(
-          historicalVerifiedWeightKg: high,
+          historicalVerifiedWeightKg: plausibleHigh,
           learningReason: outliers.isNotEmpty
-              ? 'IRIS ignored unusually high historical matches because this item has a verified catalogue weight.'
+              ? 'IRIS ignored historical matches outside the verified repository range.'
               : 'Historical matches support the verified catalogue estimate.',
           explanation: outliers.isNotEmpty
-              ? '${base.explanation} IRIS ignored unusually high historical matches because this item has a verified catalogue weight.'
+              ? '${base.explanation} IRIS ignored historical matches outside the verified repository range.'
               : base.explanation,
         );
       }

@@ -372,7 +372,7 @@ void main() {
       expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 1), isTrue);
     });
 
-    test('phone remains small but requires car handling', () {
+    test('phone remains small and bike-minimum at launch', () {
       final suitability = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 0.5,
         description: 'iPhone 13',
@@ -391,9 +391,10 @@ void main() {
 
       expect(classification.finalWeightKg, closeTo(0.5, 0.001));
       expect(classification.finalWeightBand, 'Small Parcel');
-      expect(classification.vehicleType, 'Car');
-      expect(suitability.recommendedVehicle, 'Car');
-      expect(suitability.allows('Bike'), isFalse);
+      expect(classification.vehicleType, 'Bike');
+      expect(suitability.recommendedVehicle, 'Bike');
+      expect(suitability.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
+      expect(suitability.allows('Bike'), isTrue);
       expect(classification.requiresManualReview, isFalse);
     });
 
@@ -685,8 +686,7 @@ void main() {
       expect(customerSelectedBikeQuote.total, bikeQuote.total);
     });
 
-    test('small electronics use car while courier-safe parcels can use Bike',
-        () {
+    test('phone parcels use Bike while other care items can require Car', () {
       final phone = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 0.8,
         description: 'Small phone package',
@@ -694,13 +694,21 @@ void main() {
         repositoryVehicleSuitability: 'Bike',
         fragile: false,
       );
+      final cake = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 1.2,
+        description: 'Birthday cake',
+        itemCategory: 'Gifts',
+        fragile: true,
+      );
       final medium = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 7,
         description: 'Medium parcel',
       );
 
-      expect(phone.recommendedVehicle, 'Car');
-      expect(phone.allows('Bike'), isFalse);
+      expect(phone.recommendedVehicle, 'Bike');
+      expect(phone.allows('Bike'), isTrue);
+      expect(cake.recommendedVehicle, 'Car');
+      expect(cake.allows('Bike'), isFalse);
       expect(medium.allows('Bike'), isTrue);
       expect(medium.recommendedVehicle, 'Bike');
     });
@@ -780,7 +788,7 @@ void main() {
         parcelClass: DeliveryPricing.weightBandFor(0.5).category,
         recommendedVehicle: suitability.recommendedVehicle,
         allowedVehicles: suitability.allowedVehicles,
-        disallowedVehicles: const ['Bike'],
+        disallowedVehicles: const [],
         vehicleReason: suitability.explanation,
         fragile: false,
         highValue: true,
@@ -792,15 +800,17 @@ void main() {
         source: 'iris_confirmed',
         pricingBreakdown: quote,
         explanation:
-            'IRIS estimated this transport-ready parcel and selected Car.',
+            'IRIS estimated this transport-ready parcel and selected Bike.',
         riderVerificationRequired: false,
       );
 
       expect(decision.finalPricingWeightKg, 0.5);
       expect(decision.pricingBreakdown.weightCategory, decision.parcelClass);
-      expect(decision.recommendedVehicle, 'Car');
+      expect(decision.recommendedVehicle, 'Bike');
+      expect(decision.allowedVehicles, contains('Bike'));
       expect(decision.allowedVehicles, contains('Car'));
-      expect(decision.disallowedVehicles, contains('Bike'));
+      expect(decision.allowedVehicles, contains('Van'));
+      expect(decision.disallowedVehicles, isEmpty);
       expect(decision.toJson()['finalPricingWeightKg'], 0.5);
     });
 
@@ -822,9 +832,10 @@ void main() {
         itemCategory: 'Furniture',
       );
 
-      expect(iphone.recommendedVehicle, 'Car');
-      expect(iphone.explanation.toLowerCase(), isNot(contains('bike')));
-      expect(iphone.allows('Bike'), isFalse);
+      expect(iphone.recommendedVehicle, 'Bike');
+      expect(iphone.allows('Bike'), isTrue);
+      expect(iphone.allows('Car'), isTrue);
+      expect(iphone.allows('Van'), isTrue);
       expect(documents.recommendedVehicle, 'Bike');
       expect(documents.allows('Bike'), isTrue);
       expect(sofa.recommendedVehicle, 'Van');
@@ -911,7 +922,7 @@ void main() {
     test('canonical decision preview scenarios resolve one vehicle answer', () {
       const scenarios =
           <({String item, String category, double weight, String vehicle})>[
-        (item: 'iPhone', category: 'Electronics', weight: 0.5, vehicle: 'Car'),
+        (item: 'iPhone', category: 'Electronics', weight: 0.5, vehicle: 'Bike'),
         (item: 'MacBook', category: 'Electronics', weight: 2.5, vehicle: 'Car'),
         (item: 'iPad', category: 'Electronics', weight: 1.0, vehicle: 'Car'),
         (

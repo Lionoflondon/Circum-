@@ -727,6 +727,9 @@ class DeliveryPricing {
           'ipad',
         ].any(text.contains);
     final highValueElectronic = highValue && electronicsCareRequired;
+    final phoneClassDelivery =
+        RegExp(r'\b(i\s?phones?|phones?|smartphones?|mobile phones?|mobile)\b')
+            .hasMatch(text);
     final resolvedQuantity = max(1, quantity ?? _quantityFromDescription(text));
     final largestItemWeightKg = singleItemWeightKg ??
         (resolvedQuantity > 1 ? weightKg / resolvedQuantity : weightKg);
@@ -817,6 +820,21 @@ class DeliveryPricing {
       allowed = {'Car', 'Van'};
       recommended = 'Car';
       score = max(score, 82);
+    }
+
+    // A single phone-class parcel is a Bike-minimum job at launch. Vanguard
+    // and high-value handling may still apply, but they do not force car
+    // pricing or car-only dispatch unless size, weight, quantity, or policy
+    // data makes the parcel physically unsuitable for a bike.
+    if (phoneClassDelivery &&
+        weightKg <= 5 &&
+        resolvedQuantity <= 5 &&
+        bikeSafeDimensions &&
+        !bulkyByKeyword &&
+        !oversizedDimensions) {
+      allowed = {'Bike', 'Car', 'Van'};
+      recommended = 'Bike';
+      score = max(score, 92);
     }
 
     // Documents are a core Bike use case when they remain within the normal
@@ -961,10 +979,6 @@ class DeliveryPricing {
       'van': 2,
     };
     return order[vehicleType?.trim().toLowerCase()];
-  }
-
-  static String _normalizeVehicle(String? vehicleType) {
-    return _normalizePricingVehicle(vehicleType);
   }
 
   static double calculateVehicleSurcharge(String? vehicleType) {

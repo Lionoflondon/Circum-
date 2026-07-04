@@ -187,7 +187,7 @@ void main() {
       expect(estimate.matchedItemName, 'Apple iPhone 15');
       expect(estimate.truthBand, 'Exact Match');
       expect(estimate.typicalDimensions?.label, '15 x 8 x 2 cm');
-      expect(estimate.vehicleSuitability, 'Car');
+      expect(estimate.vehicleSuitability, 'Bike');
       expect(estimate.fragile, isTrue);
     });
 
@@ -536,7 +536,7 @@ void main() {
       expect(makeup?.matchedItemName, 'Makeup Kit');
       expect(phone?.matchedItemName, 'Apple iPhone 13');
       expect(phone?.matchedItemName, isNot(contains('Suitcase')));
-      expect(phone?.vehicleSuitability, 'Car');
+      expect(phone?.vehicleSuitability, 'Bike');
       expect(documents?.packageType, 'Documents');
       expect(documents?.vehicleSuitability, 'Bike');
     });
@@ -554,19 +554,21 @@ void main() {
       expect(normal.weightKg, inInclusiveRange(0.3, 0.6));
       expect(boxed.weightKg, closeTo(normal.weightKg, 0.001));
       expect(unboxed!.weightKg, lessThan(normal.weightKg));
-      expect(normal.vehicleSuitability, 'Car');
-      expect(boxed.vehicleSuitability, 'Car');
-      expect(unboxed.vehicleSuitability, 'Car');
+      expect(normal.vehicleSuitability, 'Bike');
+      expect(boxed.vehicleSuitability, 'Bike');
+      expect(unboxed.vehicleSuitability, 'Bike');
     });
 
-    test('vehicle recommendation keeps high-value electronics enclosed', () {
+    test(
+        'vehicle recommendation keeps phones bike-minimum and laptops enclosed',
+        () {
       final iphone = IrisWeightEstimator.knownProductEstimate('iPhone 16');
       final laptop = IrisWeightEstimator.knownProductEstimate('MacBook Pro 16');
       final genericPhone = IrisWeightEstimator.knownProductEstimate('1 phone');
 
-      expect(iphone?.vehicleSuitability, 'Car');
+      expect(iphone?.vehicleSuitability, 'Bike');
       expect(laptop?.vehicleSuitability, 'Car');
-      expect(genericPhone?.vehicleSuitability, 'Car');
+      expect(genericPhone?.vehicleSuitability, 'Bike');
     });
 
     test('vehicle recommendation keeps documents bike eligible', () {
@@ -681,7 +683,7 @@ void main() {
         itemCategory: 'Mixed items',
       );
 
-      expect(documentsAndPhone.recommendedVehicle, 'Car');
+      expect(documentsAndPhone.recommendedVehicle, 'Bike');
       expect(chairAndDocuments.recommendedVehicle, 'Van');
     });
 
@@ -696,9 +698,8 @@ void main() {
         fragile: true,
       );
 
-      expect(suitability.recommendedVehicle, 'Car');
-      expect(suitability.explanation, contains('Car recommended'));
-      expect(suitability.explanation.toLowerCase(), isNot(contains('bike')));
+      expect(suitability.recommendedVehicle, 'Bike');
+      expect(suitability.explanation, contains('Bike recommended'));
     });
 
     test('bulky known items use realistic weights and quantity', () {
@@ -729,6 +730,32 @@ void main() {
       expect(estimate.matchedItemName.toLowerCase(), contains('iphone'));
       expect(estimate.matchedItemName, isNot(contains('Suitcase')));
       expect(estimate.weightKg, lessThan(2));
+    });
+
+    test('iPhone canonical pricing ignores 9kg historical outlier', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('iPhone')!;
+      final decision = IrisWeightEstimator.resolveTrustedKnownItemPricing(
+        description: 'iPhone',
+        quantity: estimate.quantity,
+        userWeightKg: 0,
+        trustedItemWeightKg: estimate.weightKg,
+        historicalMatches: const [9],
+      );
+
+      expect(decision.pricingWeightKg, inInclusiveRange(0.2, 0.8));
+      expect(decision.pricingWeightKg, lessThan(2));
+      expect(decision.ignoredHistoricalOutliers, contains(9));
+    });
+
+    test('three iPhones remain a realistic small bundled phone parcel', () {
+      final estimate = IrisWeightEstimator.knownProductEstimate('3 iPhones');
+
+      expect(estimate, isNotNull);
+      expect(estimate!.matchedItemName, 'Apple iPhone');
+      expect(estimate.quantity, 3);
+      expect(estimate.weightKg, inInclusiveRange(0.6, 2.4));
+      expect(estimate.weightBand, 'Small Parcel');
+      expect(estimate.vehicleSuitability, 'Bike');
     });
 
     test('launch blocker: 5kg rice does not match suitcase luggage', () {
@@ -821,7 +848,7 @@ void main() {
           category: 'Electronics',
           minKg: 0.2,
           maxKg: 0.8,
-          vehicles: ['Car'],
+          vehicles: ['Bike'],
           bannedTerms: ['suitcase', 'wardrobe', 'chair'],
         ),
         _IrisRegressionCase(
