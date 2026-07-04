@@ -163,32 +163,55 @@ void main() {
           contains('modestFashionInterest'));
     });
 
-    test('iPhone 13 description returns known product weight', () {
+    test('iPhone 13 description returns canonical repository weight', () {
       final estimate =
           IrisWeightEstimator.knownProductEstimate('Apple iPhone 13 in a box');
 
       expect(estimate, isNotNull);
       expect(estimate!.weightKg, inInclusiveRange(0.3, 0.6));
       expect(estimate.weightBand, 'Small Parcel');
-      expect(estimate.weightSource, 'known_product_lookup');
+      expect(estimate.weightSource, 'repository_match');
       expect(estimate.confidence, 'high');
     });
 
-    test('iPhone 15 uses catalogue weight instead of generic phone fallback',
+    test('iPhone 15 uses canonical repository weight before legacy phone data',
         () {
       final estimate =
           IrisWeightEstimator.knownProductEstimate('iPhone 15 for delivery');
 
       expect(estimate, isNotNull);
       expect(estimate!.weightKg, inInclusiveRange(0.3, 0.6));
-      expect(estimate.weightSource, 'known_product_lookup');
+      expect(estimate.weightSource, 'repository_match');
       expect(DeliveryPricing.weightSourceLabel(estimate.weightSource),
           'Repository Match');
-      expect(estimate.matchedItemName, 'Apple iPhone 15');
-      expect(estimate.truthBand, 'Exact Match');
-      expect(estimate.typicalDimensions?.label, '15 x 8 x 2 cm');
+      expect(estimate.matchedItemName, 'Apple iPhone');
+      expect(estimate.truthBand, 'Repository Match');
+      expect(estimate.typicalDimensions?.label, '18 x 11 x 5 cm');
       expect(estimate.vehicleSuitability, 'Bike');
       expect(estimate.fragile, isTrue);
+    });
+
+    test('Apple iPhone aliases resolve to one canonical repository object', () {
+      const aliases = [
+        'iPhone',
+        'Apple iPhone',
+        'mobile phone',
+        'iPhone 13',
+        'iPhone 15 Pro',
+      ];
+
+      for (final alias in aliases) {
+        final repositoryItem = IrisItemRepository.match(alias);
+        final estimate = IrisWeightEstimator.knownProductEstimate(alias);
+
+        expect(repositoryItem?.id, 'canonical_apple_iphone', reason: alias);
+        expect(estimate, isNotNull, reason: alias);
+        expect(estimate!.matchedItemName, 'Apple iPhone', reason: alias);
+        expect(estimate.weightSource, 'repository_match', reason: alias);
+        expect(estimate.weightKg, inInclusiveRange(0.2, 0.8), reason: alias);
+        expect(estimate.weightBand, 'Small Parcel', reason: alias);
+        expect(estimate.vehicleSuitability, 'Bike', reason: alias);
+      }
     });
 
     test('iPhone 15 with heavier declared weight charges declared weight', () {
@@ -294,9 +317,9 @@ void main() {
           IrisWeightEstimator.knownProductEstimate('macbook pro 16');
 
       expect(iphone16, isNotNull);
-      expect(iphone16!.matchedItemName, 'Apple iPhone 16');
-      expect(iphone16.weightSource, 'known_product_lookup');
-      expect(iphone16.weightKg, closeTo(0.349, 0.001));
+      expect(iphone16!.matchedItemName, 'Apple iPhone');
+      expect(iphone16.weightSource, 'repository_match');
+      expect(iphone16.weightKg, closeTo(0.45, 0.001));
 
       expect(macbookPro16, isNotNull);
       expect(macbookPro16!.matchedItemName, 'MacBook Pro 16');
@@ -534,7 +557,7 @@ void main() {
 
       expect(makeup?.packageType, 'Beauty');
       expect(makeup?.matchedItemName, 'Makeup Kit');
-      expect(phone?.matchedItemName, 'Apple iPhone 13');
+      expect(phone?.matchedItemName, 'Apple iPhone');
       expect(phone?.matchedItemName, isNot(contains('Suitcase')));
       expect(phone?.vehicleSuitability, 'Bike');
       expect(documents?.packageType, 'Documents');

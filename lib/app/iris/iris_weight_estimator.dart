@@ -185,6 +185,16 @@ class IrisWeightEstimator {
       final tvEstimate = _estimateTvBySize(text, quantity);
       if (tvEstimate != null) return tvEstimate;
     }
+    if (_isPhoneAlias(text) && !_explicitlyLooseOrUnboxed(text)) {
+      final phoneItem = _canonicalPhoneItem();
+      if (phoneItem != null) {
+        return _repositoryEstimate(
+          repositoryItem: phoneItem,
+          description: description,
+          quantity: quantity,
+        );
+      }
+    }
     for (final product in _knownProducts) {
       if (product.patterns.any(text.contains)) {
         final electronics = product.packageType == 'Electronics';
@@ -240,58 +250,10 @@ class IrisWeightEstimator {
       photoLabels: photoLabels,
     );
     if (repositoryItem != null) {
-      final totalWeightKg = repositoryItem.estimatedWeightKg * quantity;
-      final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
-      final dimensions = repositoryItem.typicalDimensionsCm;
-      final typicalDimensions = ItemDimensionsCm(
-        length: dimensions.lengthCm,
-        width: dimensions.widthCm,
-        height: dimensions.heightCm,
-      );
-      final vehicle = _resolveCanonicalVehicle(
-        totalWeightKg: totalWeightKg,
+      return _repositoryEstimate(
+        repositoryItem: repositoryItem,
         description: description,
-        packageType: repositoryItem.category,
-        dimensions: typicalDimensions,
-        repositoryVehicleSuitability: repositoryItem.vehicleSuitability,
-        fragile: repositoryItem.fragile,
-        highValue: repositoryItem.highValue,
-        vanguardRequired: repositoryItem.requiresVanguard,
-        stackable: repositoryItem.stackable,
         quantity: quantity,
-        singleItemWeightKg: repositoryItem.estimatedWeightKg,
-        handlingNotes: repositoryItem.deliveryNotes,
-      );
-      return IrisWeightLookupResult(
-        matchedItemName: repositoryItem.itemName,
-        quantity: quantity,
-        singleItemWeightKg: repositoryItem.estimatedWeightKg,
-        weightKg: totalWeightKg,
-        weightBand: band,
-        confidence: repositoryItem.confidenceBaseline >= 0.85
-            ? 'high'
-            : repositoryItem.confidenceBaseline >= 0.65
-                ? 'medium'
-                : 'low',
-        confidenceScore: repositoryItem.confidenceBaseline,
-        explanation: quantity == 1
-            ? 'Iris matched the description to ${repositoryItem.itemName} using the Circum item repository.'
-            : 'Iris matched $quantity × ${repositoryItem.itemName} using the Circum item repository.',
-        packageType: repositoryItem.category,
-        weightSource: 'repository_match',
-        truthBand: repositoryItem.confidenceBaseline >= 0.85
-            ? 'Repository Match'
-            : 'Medium Confidence',
-        requiresVehicleReview: repositoryItem.requiresIRISReview ||
-            totalWeightKg > 10 ||
-            vehicle.recommendedVehicle == 'Van',
-        typicalDimensions: typicalDimensions,
-        vehicleSuitability: vehicle.recommendedVehicle,
-        fragile: repositoryItem.fragile,
-        valueSensitive: repositoryItem.highValue,
-        vanguardRecommended: repositoryItem.requiresVanguard,
-        stackable: repositoryItem.stackable,
-        handlingNotes: repositoryItem.deliveryNotes,
       );
     }
     final categoryEstimate = _categoryFallbackEstimate(text, quantity);
@@ -357,6 +319,79 @@ class IrisWeightEstimator {
       );
     }
     return null;
+  }
+
+  static bool _isPhoneAlias(String text) {
+    return RegExp(
+      r'\b(i\s?phones?(?:\s?(?:1[3-6]|pro|max|pro max))?|apple iphones?|mobile phones?|smartphones?|cell phones?)\b',
+    ).hasMatch(text);
+  }
+
+  static IrisRepositoryItem? _canonicalPhoneItem() {
+    for (final item in IrisItemRepository.items) {
+      if (item.id == 'canonical_apple_iphone') return item;
+    }
+    return null;
+  }
+
+  static IrisWeightLookupResult _repositoryEstimate({
+    required IrisRepositoryItem repositoryItem,
+    required String description,
+    required int quantity,
+  }) {
+    final totalWeightKg = repositoryItem.estimatedWeightKg * quantity;
+    final band = DeliveryPricing.weightBandFor(totalWeightKg).category;
+    final dimensions = repositoryItem.typicalDimensionsCm;
+    final typicalDimensions = ItemDimensionsCm(
+      length: dimensions.lengthCm,
+      width: dimensions.widthCm,
+      height: dimensions.heightCm,
+    );
+    final vehicle = _resolveCanonicalVehicle(
+      totalWeightKg: totalWeightKg,
+      description: description,
+      packageType: repositoryItem.category,
+      dimensions: typicalDimensions,
+      repositoryVehicleSuitability: repositoryItem.vehicleSuitability,
+      fragile: repositoryItem.fragile,
+      highValue: repositoryItem.highValue,
+      vanguardRequired: repositoryItem.requiresVanguard,
+      stackable: repositoryItem.stackable,
+      quantity: quantity,
+      singleItemWeightKg: repositoryItem.estimatedWeightKg,
+      handlingNotes: repositoryItem.deliveryNotes,
+    );
+    return IrisWeightLookupResult(
+      matchedItemName: repositoryItem.itemName,
+      quantity: quantity,
+      singleItemWeightKg: repositoryItem.estimatedWeightKg,
+      weightKg: totalWeightKg,
+      weightBand: band,
+      confidence: repositoryItem.confidenceBaseline >= 0.85
+          ? 'high'
+          : repositoryItem.confidenceBaseline >= 0.65
+              ? 'medium'
+              : 'low',
+      confidenceScore: repositoryItem.confidenceBaseline,
+      explanation: quantity == 1
+          ? 'Iris matched the description to ${repositoryItem.itemName} using the Circum item repository.'
+          : 'Iris matched $quantity × ${repositoryItem.itemName} using the Circum item repository.',
+      packageType: repositoryItem.category,
+      weightSource: 'repository_match',
+      truthBand: repositoryItem.confidenceBaseline >= 0.85
+          ? 'Repository Match'
+          : 'Medium Confidence',
+      requiresVehicleReview: repositoryItem.requiresIRISReview ||
+          totalWeightKg > 10 ||
+          vehicle.recommendedVehicle == 'Van',
+      typicalDimensions: typicalDimensions,
+      vehicleSuitability: vehicle.recommendedVehicle,
+      fragile: repositoryItem.fragile,
+      valueSensitive: repositoryItem.highValue,
+      vanguardRecommended: repositoryItem.requiresVanguard,
+      stackable: repositoryItem.stackable,
+      handlingNotes: repositoryItem.deliveryNotes,
+    );
   }
 
   static VehicleSuitability _resolveCanonicalVehicle({
