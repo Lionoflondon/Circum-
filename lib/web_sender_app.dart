@@ -29458,6 +29458,18 @@ class _SenderArchitecturePreviewAppState
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
+    final showLiveTrackingPreview =
+        Uri.base.queryParameters['tracking_preview'] == 'live';
+    if (showLiveTrackingPreview) {
+      return _SenderTrackingSurface(
+        colors: colors,
+        delivery: _senderLiveTrackingPreviewDelivery(),
+        receivedAt: DateTime.now().subtract(const Duration(seconds: 18)),
+        onMessageRider: () => _showStub('Message rider'),
+        onContactSupport: () => _showStub('Support'),
+      );
+    }
+
     return Stack(
       children: [
         Column(
@@ -29506,6 +29518,41 @@ class _SenderArchitecturePreviewAppState
       ],
     );
   }
+}
+
+Map<String, dynamic> _senderLiveTrackingPreviewDelivery() {
+  return {
+    'id': 'sender-tracking-preview',
+    'status': 'pin_required',
+    'deliveryType': 'Health+',
+    'isVanguard': true,
+    'isHealthPlus': true,
+    'isGift': false,
+    'estimatedArrival': '8 min',
+    'collectionPin': '4271',
+    'deliveryPin': '8352',
+    'collectionPinVerified': true,
+    'deliveryPinVerified': false,
+    'irisVerified': true,
+    'irisItemName': 'Prescription box',
+    'irisWeightKg': 0.2,
+    'irisVehicle': 'Bike',
+    'riderLocation': {'lat': 51.523, 'lng': -0.156},
+    'riderProfile': {
+      'firstName': 'Ayo',
+      'rank': 'Sentinel',
+      'vehicleType': 'Bike',
+      'rating': 4.9,
+    },
+    'pickupAddress': {
+      'area': 'Marylebone',
+      'shortAddress': 'Harley Street',
+    },
+    'dropoffAddress': {
+      'area': 'Chelsea',
+      'shortAddress': 'King’s Road',
+    },
+  };
 }
 
 class _SenderPreviewTopBar extends StatelessWidget {
