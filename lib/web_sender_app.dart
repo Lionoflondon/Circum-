@@ -21538,6 +21538,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _weightVerificationRequired = false;
   bool _settingWeightFromConfirmation = false;
   CanonicalDeliveryDecision? _confirmedDeliveryDecision;
+  String _lastIrisDescriptionText = '';
 
   late _SenderStep _step = widget.initialStep;
   _VehicleOption _selectedVehicle = _vehicles.first;
@@ -21657,7 +21658,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _weight.addListener(_handleWeightChanged);
     _pickup.addListener(_invalidateCanonicalDeliveryDecision);
     _dropoff.addListener(_invalidateCanonicalDeliveryDecision);
-    _description.addListener(_invalidateCanonicalDeliveryDecision);
+    _description.addListener(_handleDescriptionChanged);
     _senderName.addListener(_handleContactDetailsChanged);
     _senderPhone.addListener(_handleContactDetailsChanged);
     _receiverName.addListener(_handleContactDetailsChanged);
@@ -21673,7 +21674,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _weight.removeListener(_handleWeightChanged);
     _pickup.removeListener(_invalidateCanonicalDeliveryDecision);
     _dropoff.removeListener(_invalidateCanonicalDeliveryDecision);
-    _description.removeListener(_invalidateCanonicalDeliveryDecision);
+    _description.removeListener(_handleDescriptionChanged);
     _senderName.removeListener(_handleContactDetailsChanged);
     _senderPhone.removeListener(_handleContactDetailsChanged);
     _receiverName.removeListener(_handleContactDetailsChanged);
@@ -21745,6 +21746,116 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _invalidateCanonicalDeliveryDecision() {
     _confirmedDeliveryDecision = null;
+  }
+
+  bool get _hasGeneratedIrisState =>
+      _confirmedDeliveryDecision != null ||
+      _irisEstimatedWeightKg != null ||
+      _irisWeightBand != null ||
+      _irisWeightConfidence != null ||
+      _irisWeightExplanation != null ||
+      _irisWeightSource != null ||
+      _irisWeightTruthBand != null ||
+      _irisMatchedItemName != null ||
+      _irisSingleItemWeightKg != null ||
+      _irisWeightConfidenceScore != null ||
+      _irisHistoricalVerifiedWeightKg != null ||
+      _irisLearningReason != null ||
+      _irisTypicalDimensions != null ||
+      _irisVehicleSuitability != null ||
+      _irisFragile ||
+      _irisValueSensitive ||
+      _irisVanguardRecommended ||
+      !_irisStackable ||
+      _irisHandlingNotes != null ||
+      _confirmedWeightKg != null ||
+      _confirmedWeightBand != null ||
+      _weightSource != null ||
+      _weightConfirmedAt != null ||
+      _weightMessage != null ||
+      _weightPricingReason != null ||
+      _weightVerificationRequired ||
+      _senderEnteredWeightKg != null ||
+      _irisImageInsight != null ||
+      _analyzing ||
+      _broadcasting;
+
+  void _handleDescriptionChanged() {
+    final current = _description.text.trim();
+    final previous = _lastIrisDescriptionText;
+    if (current.isEmpty) {
+      _lastIrisDescriptionText = '';
+      _resetGeneratedIrisState(clearWeightInput: true);
+      return;
+    }
+    if (previous.isNotEmpty && current != previous && _hasGeneratedIrisState) {
+      _lastIrisDescriptionText = current;
+      _resetGeneratedIrisState(clearWeightInput: _weightSource != null);
+      return;
+    }
+    _lastIrisDescriptionText = current;
+    _invalidateCanonicalDeliveryDecision();
+  }
+
+  void _resetGeneratedIrisState({required bool clearWeightInput}) {
+    if (!_hasGeneratedIrisState &&
+        (!clearWeightInput || _weight.text.isEmpty)) {
+      return;
+    }
+    void clear() {
+      _confirmedDeliveryDecision = null;
+      _irisEstimatedWeightKg = null;
+      _irisWeightBand = null;
+      _irisWeightConfidence = null;
+      _irisWeightExplanation = null;
+      _irisWeightSource = null;
+      _irisWeightTruthBand = null;
+      _irisMatchedItemName = null;
+      _irisQuantity = 1;
+      _irisSingleItemWeightKg = null;
+      _irisWeightConfidenceScore = null;
+      _irisHistoricalVerifiedWeightKg = null;
+      _irisLearningReason = null;
+      _irisTypicalDimensions = null;
+      _irisVehicleSuitability = null;
+      _irisFragile = false;
+      _irisValueSensitive = false;
+      _irisVanguardRecommended = false;
+      _irisStackable = true;
+      _irisHandlingNotes = null;
+      _senderEnteredWeightKg = null;
+      _confirmedWeightKg = null;
+      _confirmedWeightBand = null;
+      _weightSource = null;
+      _weightConfirmedAt = null;
+      _weightMessage = null;
+      _weightPricingReason = null;
+      _weightVerificationRequired = false;
+      _irisImageInsight = null;
+      _analyzing = false;
+      _broadcasting = false;
+      if (_checkoutState == _CheckoutState.validating ||
+          _checkoutState == _CheckoutState.optionsReady ||
+          _checkoutState == _CheckoutState.awaitingPayment) {
+        _checkoutState = _CheckoutState.draft;
+      }
+      _selectedVehicle = _vehicles.first;
+      if (_parcelPhoto != null) {
+        _parcelPhotoMessage =
+            'Photo kept. IRIS will re-check it after you enter an item.';
+      }
+      if (clearWeightInput && _weight.text.isNotEmpty) {
+        _settingWeightFromConfirmation = true;
+        _weight.clear();
+        _settingWeightFromConfirmation = false;
+      }
+    }
+
+    if (!mounted) {
+      clear();
+      return;
+    }
+    setState(clear);
   }
 
   @override
