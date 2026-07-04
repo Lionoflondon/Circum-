@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -23,14 +24,23 @@ class RiderHomeScreen extends StatefulWidget {
 }
 
 class _RiderHomeScreenState extends State<RiderHomeScreen> {
+  static const _heartbeatInterval = Duration(seconds: 60);
+
   bool _goingOnline = false;
   bool _goingOffline = false;
   bool _accepting = false;
   String? _message;
+  Timer? _heartbeatTimer;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   RiderPresenceController get _presenceController =>
       RiderPresenceController(functions: FirebaseFunctions.instance);
+
+  @override
+  void dispose() {
+    _heartbeatTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +63,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                         .snapshots(),
                 builder: (context, presenceSnapshot) {
                   final presence = presenceSnapshot.data?.data() ?? {};
+                  _syncHeartbeat(presence);
                   return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                     stream: _offersStream(
                       riderId: user?.uid,
@@ -149,6 +160,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         _goingOnline = false;
         _message = message ?? 'You are online and available.';
       });
+      _startHeartbeat();
     }
   }
 
@@ -159,6 +171,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     });
     final message = await _presenceController.goOffline();
     if (mounted) {
+      _stopHeartbeat();
       setState(() {
         _goingOffline = false;
         _message = message ?? 'You are offline.';
@@ -208,6 +221,27 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         .where('status', isEqualTo: 'requested')
         .limit(20)
         .snapshots();
+  }
+
+  void _syncHeartbeat(Map<String, dynamic> presence) {
+    final online = presence['isOnline'] == true;
+    if (online) {
+      _startHeartbeat();
+    } else {
+      _stopHeartbeat();
+    }
+  }
+
+  void _startHeartbeat() {
+    if (_heartbeatTimer?.isActive == true) return;
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
+      _presenceController.updateHeartbeat();
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   Map<String, dynamic> _profileFromPresence(Map<String, dynamic> presence) {

@@ -38,6 +38,12 @@ class RiderHomeStateMapper {
     );
     if (approval != 'approved') return RiderJobUiState.pendingApproval;
 
+    final busy = presence?['busy'] == true ||
+        _text(presence?['availabilityStatus']) == 'busy' ||
+        _text(presence?['currentDeliveryId']).isNotEmpty ||
+        _text(presence?['activeDeliveryId']).isNotEmpty;
+    if (busy) return RiderJobUiState.accepted;
+
     final online = presence?['isOnline'] == true ||
         riderProfile?['isOnline'] == true ||
         riderProfile?['online'] == true ||

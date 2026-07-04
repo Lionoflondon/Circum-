@@ -73,5 +73,20 @@ void main() {
       expect(copy, isNot(contains('cancel')));
       expect(copy, isNot(contains('decline')));
     });
+
+    test('busy presence blocks offers and surfaces active delivery state', () {
+      expect(
+        RiderHomeStateMapper.fromBackend(
+          riderProfile: {'onboardingStatus': 'approved'},
+          presence: {
+            'isOnline': true,
+            'availabilityStatus': 'busy',
+            'activeDeliveryId': 'delivery-1',
+          },
+          hasAvailableOffers: true,
+        ),
+        RiderJobUiState.accepted,
+      );
+    });
   });
 }
