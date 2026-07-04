@@ -13,6 +13,7 @@ import 'package:circum/app/admin/admin_operations.dart';
 import 'package:circum/app/authentication/access/role_access.dart';
 import 'package:circum/app/delivery_security/vanguard_protection.dart';
 import 'package:circum/app/delivery/booking_cancellation.dart';
+import 'package:circum/app/delivery/sender_tracking_policy.dart';
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
@@ -38890,110 +38891,70 @@ class _TrackingStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final analysedItemName = irisItemName?.trim();
     final request = activeRequestData ?? const <String, dynamic>{};
-    final itemContext = _TrackingItemContext.fromRequest(
+    final status = _senderTrackingStatusFromLegacy(
       request,
-      fallbackDescription: pickup.isEmpty ? null : null,
-      fallbackIrisItemName: analysedItemName,
-      fallbackWeightKg: irisWeightKg,
-      fallbackWeightBand: irisWeightBand,
-      fallbackVehicle: recommendedVehicle,
+      statusIndex: statusIndex,
+      assignedDriver: assignedDriver,
     );
-    final paymentLabel = _deliveryPaymentStatusLabel(request);
+    final trackingData = <String, dynamic>{
+      ...request,
+      'id': request['_docId'] ?? request['id'] ?? orderId,
+      'requestId': request['requestId'] ?? orderId,
+      'status': status,
+      'pickupAddress': {
+        'area': pickupAddress?.city ?? pickupAddress?.postcode ?? 'Pickup',
+        'shortAddress': pickupAddress?.compactDisplay ?? pickup,
+      },
+      'dropoffAddress': {
+        'area': dropoffAddress?.city ?? dropoffAddress?.postcode ?? 'Drop-off',
+        'shortAddress': dropoffAddress?.compactDisplay ?? dropoff,
+      },
+      'riderLocation': liveLocation,
+      'riderProfile': {
+        'firstName': _firstName(assignedDriver?.fullName),
+        'rank': assignedDriver?.rank ?? request['riderRank'],
+        'vehicleType': assignedDriver?.vehicle.type ?? vehicle.name,
+        'rating': assignedDriverMetric?.averageRating ?? request['riderRating'],
+      },
+      'estimatedArrival': request['estimatedArrival'] ?? vehicle.eta,
+      'irisVerified': analysedItemName?.isNotEmpty == true ||
+          irisRepositoryMatched ||
+          irisCorrected,
+      'irisItemName': analysedItemName,
+      'irisWeightKg': irisWeightKg,
+      'irisVehicle': recommendedVehicle,
+      'deliveryType': request['deliveryType'] ??
+          (request['isHealthPlus'] == true
+              ? 'Health+'
+              : request['isGift'] == true
+                  ? 'Gift'
+                  : 'Parcel'),
+      'isVanguard': request['isVanguard'] ??
+          request['requiresVanguard'] ??
+          vanguardData?['vanguardEnabled'],
+      'isHealthPlus': request['isHealthPlus'] ?? request['healthPlus'],
+      'isGift': request['isGift'] ?? request['giftDelivery'],
+      'collectionPin': request['collectionPin'] ??
+          (vanguardData?['vanguardProtection'] as Map?)?['collectionPin'],
+      'deliveryPin': request['deliveryPin'] ??
+          (vanguardData?['vanguardProtection'] as Map?)?['deliveryPin'],
+      'collectionPinVerified': request['collectionPinVerified'] ??
+          vanguardData?['collectionPinVerified'],
+      'deliveryPinVerified': request['deliveryPinVerified'] ??
+          vanguardData?['deliveryPinVerified'],
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Delivery Status',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    orderId,
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    _jobReceivedTextFromDate(receivedAt),
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _StatusPill(
-                    colors: colors,
-                    label: assignedDriver == null
-                        ? 'Finding a rider'
-                        : 'Rider assigned',
-                  ),
-                  if (assignedDriver == null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Circum is matching your delivery with an eligible rider.',
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'New order',
-              onPressed: onNewOrder,
-              icon: Icon(Icons.add_circle_outline, color: colors.text),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        _FirebaseStatusBanner(
+        _SenderTrackingSurface(
           colors: colors,
-          online: firebaseOnline,
-          error: firebaseError,
-          checkoutState: checkoutState,
-          paymentStatus: paymentLabel,
+          delivery: trackingData,
+          receivedAt: receivedAt,
+          loading: checkoutState.index < _CheckoutState.bookingCreated.index,
+          networkError: firebaseOnline ? null : firebaseError,
+          onMessageRider: assignedDriver == null ? null : onChatDriver,
+          onContactSupport: onChatSupport,
         ),
-        if (vanguardData?['vanguardEnabled'] == true) ...[
-          const SizedBox(height: 14),
-          _VanguardCustomerPanel(colors: colors, data: vanguardData!),
-        ],
-        const SizedBox(height: 14),
-        _LiveDeliveryTrackingPanel(
-          colors: colors,
-          pickup: pickupAddress,
-          dropoff: dropoffAddress,
-          liveLocation: liveLocation,
-          statusIndex: statusIndex,
-        ),
-        const SizedBox(height: 14),
-        _TrackingItemWeightCard(
-          colors: colors,
-          item: itemContext,
-          paymentStatus: paymentLabel,
-        ),
-        const SizedBox(height: 14),
-        if (broadcasting)
-          _BroadcastCard(colors: colors)
-        else
-          _DriverCard(
-            colors: colors,
-            vehicle: vehicle,
-            driver: assignedDriver,
-            metric: assignedDriverMetric,
-            onChatDriver: onChatDriver,
-          ),
         if (statusIndex >= 3) ...[
           const SizedBox(height: 14),
           _DriverRatingPrompt(
@@ -39065,6 +39026,1466 @@ class _TrackingStep extends StatelessWidget {
       ],
     );
   }
+}
+
+class _SenderTrackingScreen extends StatefulWidget {
+  final _CircumColors colors;
+  final String deliveryId;
+
+  const _SenderTrackingScreen({
+    super.key,
+    required this.colors,
+    required this.deliveryId,
+  });
+
+  @override
+  State<_SenderTrackingScreen> createState() => _SenderTrackingScreenState();
+}
+
+class _SenderTrackingScreenState extends State<_SenderTrackingScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(widget.deliveryId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _SenderTrackingSurface(
+            colors: widget.colors,
+            delivery: const {},
+            networkError: 'Tracking could not be loaded.',
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _SenderTrackingSurface(
+            colors: widget.colors,
+            delivery: const {},
+            loading: true,
+          );
+        }
+        if (!snapshot.hasData || snapshot.data?.exists != true) {
+          return _SenderTrackingSurface(
+            colors: widget.colors,
+            delivery: const {},
+            notFound: true,
+          );
+        }
+        return _SenderTrackingSurface(
+          colors: widget.colors,
+          delivery: {
+            'id': snapshot.data!.id,
+            ...snapshot.data!.data()!,
+          },
+        );
+      },
+    );
+  }
+}
+
+class _SenderTrackingSurface extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> delivery;
+  final DateTime? receivedAt;
+  final bool loading;
+  final bool notFound;
+  final String? networkError;
+  final VoidCallback? onMessageRider;
+  final VoidCallback? onContactSupport;
+
+  const _SenderTrackingSurface({
+    required this.colors,
+    required this.delivery,
+    this.receivedAt,
+    this.loading = false,
+    this.notFound = false,
+    this.networkError,
+    this.onMessageRider,
+    this.onContactSupport,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final status = SenderTrackingPolicy.normalizeStatus(delivery['status']);
+    final copy = SenderTrackingPolicy.copyFor(status);
+    final collected = SenderTrackingPolicy.hasCollected(delivery);
+    final timeline = SenderTrackingPolicy.timelineIndex(
+      status,
+      collected: collected,
+    );
+    final updatedAt = _senderTrackingDateTime(
+          delivery['updatedAt'] ??
+              delivery['lastUpdatedAt'] ??
+              delivery['createdAt'],
+        ) ??
+        receivedAt;
+    final badge = SenderTrackingPolicy.badgeFor(delivery);
+    final waitStartedAt = _senderTrackingDateTime(
+      delivery['waitStartedAt'] ??
+          (delivery['waiting'] is Map
+              ? (delivery['waiting'] as Map)['startedAt']
+              : null),
+    );
+    final waitingCharge = _moneyFromAny(
+      delivery['waitingCharge'] ??
+          delivery['waitingChargeAmount'] ??
+          delivery['waitingSurchargeTotalGbp'],
+    );
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 720),
+      decoration: const BoxDecoration(color: Color(0xFF07090F)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            _SenderTrackingMapLayer(delivery: delivery),
+            const Positioned.fill(child: _SenderTrackingMapFades()),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    _LiveActivityStrip(
+                      updatedAt: updatedAt,
+                      colors: colors,
+                    ),
+                    const Spacer(),
+                    if (loading)
+                      _TrackingLoadingPanel(colors: colors)
+                    else if (networkError != null)
+                      _TrackingMessagePanel(
+                        colors: colors,
+                        icon: Icons.wifi_off_rounded,
+                        title: 'Tracking unavailable',
+                        body: networkError!,
+                        onContactSupport: onContactSupport,
+                      )
+                    else if (notFound)
+                      _TrackingMessagePanel(
+                        colors: colors,
+                        icon: Icons.search_off_rounded,
+                        title: 'Delivery not found',
+                        body:
+                            'We could not find this delivery. Please check the tracking link or contact support.',
+                        onContactSupport: onContactSupport,
+                      )
+                    else ...[
+                      _SenderTrackingStatusCard(
+                        colors: colors,
+                        copy: copy,
+                        delivery: delivery,
+                        timelineIndex: timeline,
+                        badge: badge,
+                      ),
+                      if (_showIrisStrip(delivery)) ...[
+                        const SizedBox(height: 8),
+                        _IrisVerificationMiniStrip(colors: colors),
+                      ],
+                      if (SenderTrackingPolicy.showCollectionPin(delivery)) ...[
+                        const SizedBox(height: 8),
+                        _CollectionPinCard(colors: colors, delivery: delivery),
+                      ],
+                      if (SenderTrackingPolicy.showDeliveryPinNotice(
+                          delivery)) ...[
+                        const SizedBox(height: 8),
+                        _DeliveryPinNoticeCard(
+                            colors: colors, delivery: delivery),
+                      ],
+                      if (SenderTrackingPolicy.shouldShowWaitingCard(
+                        status,
+                        waitStartedAt != null,
+                      )) ...[
+                        const SizedBox(height: 8),
+                        _WaitingTimerCard(
+                          colors: colors,
+                          status: status,
+                          waitStartedAt: waitStartedAt,
+                          waitingCharge: waitingCharge,
+                        ),
+                      ],
+                      if (!SenderTrackingPolicy.isFindingRider(status)) ...[
+                        const SizedBox(height: 8),
+                        _SenderRiderCard(
+                          colors: colors,
+                          delivery: delivery,
+                          onMessageRider: onMessageRider,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      _SenderRouteCard(colors: colors, delivery: delivery),
+                      const SizedBox(height: 8),
+                      _SenderTrackingSupportRow(
+                        colors: colors,
+                        messageEnabled: onMessageRider != null &&
+                            !SenderTrackingPolicy.isFindingRider(status),
+                        onMessageRider: onMessageRider,
+                        onContactSupport: onContactSupport,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static bool _showIrisStrip(Map<String, dynamic> delivery) {
+    return delivery['irisVerified'] == true ||
+        delivery['irisWeightConfirmed'] == true ||
+        delivery['irisVehicleConfirmed'] == true ||
+        delivery['irisPricingConfirmed'] == true;
+  }
+}
+
+class _SenderTrackingGlass extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color glow;
+  final double radius;
+
+  const _SenderTrackingGlass({
+    required this.child,
+    this.padding = const EdgeInsets.all(14),
+    this.glow = const Color(0xFF3B82F6),
+    this.radius = 20,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          width: double.infinity,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            boxShadow: [
+              BoxShadow(
+                color: glow.withValues(alpha: 0.16),
+                blurRadius: 28,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF38BDF8).withValues(alpha: 0.22),
+                const Color(0xFF3B82F6).withValues(alpha: 0.04),
+                const Color(0xFF2563EB).withValues(alpha: 0.18),
+              ],
+            ),
+            backgroundBlendMode: BlendMode.screen,
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderTrackingMapLayer extends StatelessWidget {
+  final Map<String, dynamic> delivery;
+
+  const _SenderTrackingMapLayer({required this.delivery});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _SenderTrackingMapPainter(
+        hasRider: delivery['riderLocation'] != null,
+      ),
+      child: const SizedBox.expand(),
+    );
+  }
+}
+
+class _SenderTrackingMapPainter extends CustomPainter {
+  final bool hasRider;
+
+  const _SenderTrackingMapPainter({required this.hasRider});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF090C16), Color(0xFF060810)],
+      ).createShader(rect);
+    canvas.drawRect(rect, paint);
+
+    final grid = Paint()
+      ..color = Colors.white.withValues(alpha: 0.025)
+      ..strokeWidth = 1;
+    for (var x = 0.0; x < size.width; x += 56) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    for (var y = 0.0; y < size.height; y += 56) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    final start = Offset(size.width * 0.24, size.height * 0.30);
+    final end = Offset(size.width * 0.76, size.height * 0.20);
+    final rider = Offset(size.width * 0.46, size.height * 0.25);
+    final route = Paint()
+      ..color = const Color(0xFF3B82F6).withValues(alpha: 0.46)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final path = Path()
+      ..moveTo(start.dx, start.dy)
+      ..cubicTo(
+        size.width * 0.24,
+        size.height * 0.12,
+        size.width * 0.68,
+        size.height * 0.36,
+        end.dx,
+        end.dy,
+      );
+    canvas.drawPath(path, route);
+    _pin(canvas, start, const Color(0xFF3B82F6));
+    _pin(canvas, end, const Color(0xFF10B981));
+    if (hasRider) {
+      canvas.drawCircle(
+        rider,
+        16,
+        Paint()..color = const Color(0xFF3B82F6).withValues(alpha: 0.14),
+      );
+      _pin(canvas, rider, const Color(0xFF60A5FA), radius: 7);
+    }
+  }
+
+  void _pin(Canvas canvas, Offset point, Color color, {double radius = 6}) {
+    canvas.drawCircle(point, radius, Paint()..color = color);
+    canvas.drawCircle(
+      point,
+      radius + 5,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = color.withValues(alpha: 0.26),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SenderTrackingMapPainter oldDelegate) =>
+      oldDelegate.hasRider != hasRider;
+}
+
+class _SenderTrackingMapFades extends StatelessWidget {
+  const _SenderTrackingMapFades();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFF07090F).withValues(alpha: 0.72),
+            Colors.transparent,
+            const Color(0xFF07090F).withValues(alpha: 0.88),
+          ],
+          stops: const [0, 0.38, 1],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveActivityStrip extends StatelessWidget {
+  final _CircumColors colors;
+  final DateTime? updatedAt;
+
+  const _LiveActivityStrip({
+    required this.colors,
+    required this.updatedAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final updated = updatedAt == null
+        ? 'Updated just now'
+        : 'Updated ${_relativeTime(updatedAt!)} ago';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: _SenderTrackingGlass(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        radius: 999,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Tracking',
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              updated,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: const Color(0xFF60A5FA).withValues(alpha: 0.32),
+                ),
+              ),
+              child: const Text(
+                'LIVE',
+                style: TextStyle(
+                  color: Color(0xFF60A5FA),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderTrackingStatusCard extends StatelessWidget {
+  final _CircumColors colors;
+  final SenderTrackingCopy copy;
+  final Map<String, dynamic> delivery;
+  final int timelineIndex;
+  final SenderTrackingBadge badge;
+
+  const _SenderTrackingStatusCard({
+    required this.colors,
+    required this.copy,
+    required this.delivery,
+    required this.timelineIndex,
+    required this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final eta = '${delivery['estimatedArrival'] ?? ''}'.trim();
+    return _SenderTrackingGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF60A5FA).withValues(alpha: 0.28),
+                  ),
+                ),
+                child: Icon(_statusIcon(delivery['status']),
+                    color: const Color(0xFF60A5FA), size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${delivery['deliveryType'] ?? 'Parcel'} delivery',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      copy.label,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      copy.body,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        height: 1.35,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (badge != SenderTrackingBadge.none) ...[
+                      const SizedBox(height: 8),
+                      _TrackingBadge(badge: badge),
+                    ],
+                  ],
+                ),
+              ),
+              if (eta.isNotEmpty)
+                _TinyPill(label: eta, color: const Color(0xFF60A5FA)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SenderTimeline(index: timelineIndex, colors: colors),
+        ],
+      ),
+    );
+  }
+
+  static IconData _statusIcon(Object? status) {
+    return switch (SenderTrackingPolicy.normalizeStatus(status)) {
+      'delivered' || 'completed' => Icons.check_rounded,
+      'issue_reported' => Icons.info_outline_rounded,
+      'pin_required' => Icons.lock_outline_rounded,
+      'arrived_at_pickup' ||
+      'arrived_at_dropoff' ||
+      'waiting' =>
+        Icons.location_on_outlined,
+      _ => Icons.route_rounded,
+    };
+  }
+}
+
+class _TrackingBadge extends StatelessWidget {
+  final SenderTrackingBadge badge;
+
+  const _TrackingBadge({required this.badge});
+
+  @override
+  Widget build(BuildContext context) {
+    final data = switch (badge) {
+      SenderTrackingBadge.vanguard => (
+          Icons.shield_outlined,
+          'Vanguard protected',
+          const Color(0xFF2563EB)
+        ),
+      SenderTrackingBadge.healthPlus => (
+          Icons.health_and_safety_outlined,
+          'Health+ delivery',
+          const Color(0xFF6EE7B7)
+        ),
+      SenderTrackingBadge.gift => (
+          Icons.card_giftcard_outlined,
+          'Gift delivery',
+          const Color(0xFFC4B5FD)
+        ),
+      SenderTrackingBadge.none => (
+          Icons.local_shipping_outlined,
+          '',
+          const Color(0xFF60A5FA)
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: data.$3.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: data.$3.withValues(alpha: 0.34)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(data.$1, color: data.$3, size: 13),
+          const SizedBox(width: 5),
+          Text(
+            data.$2,
+            style: TextStyle(
+              color: data.$3,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TinyPill extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _TinyPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderTimeline extends StatelessWidget {
+  final int index;
+  final _CircumColors colors;
+
+  const _SenderTimeline({required this.index, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Booked', 'Pickup', 'Collected', 'Drop-off', 'Done'];
+    return Row(
+      children: List.generate(labels.length, (i) {
+        final done = i < index;
+        final active = i == index;
+        return Expanded(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 2,
+                      color: i == 0
+                          ? Colors.transparent
+                          : done || active
+                              ? const Color(0xFF3B82F6)
+                              : Colors.white.withValues(alpha: 0.10),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 240),
+                    width: active ? 12 : 10,
+                    height: active ? 12 : 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: done || active
+                          ? const Color(0xFF3B82F6)
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: active
+                            ? const Color(0xFF60A5FA)
+                            : done
+                                ? const Color(0xFF3B82F6)
+                                : Colors.white.withValues(alpha: 0.22),
+                        width: 1.5,
+                      ),
+                      boxShadow: active
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFF3B82F6)
+                                    .withValues(alpha: 0.34),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      height: 2,
+                      color: i == labels.length - 1
+                          ? Colors.transparent
+                          : i < index
+                              ? const Color(0xFF3B82F6)
+                              : Colors.white.withValues(alpha: 0.10),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Text(
+                labels[i],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: active
+                      ? const Color(0xFF60A5FA)
+                      : done
+                          ? const Color(0xFF3B82F6).withValues(alpha: 0.78)
+                          : colors.mutedText.withValues(alpha: 0.72),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _IrisVerificationMiniStrip extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _IrisVerificationMiniStrip({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderTrackingGlass(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.auto_awesome, color: Color(0xFF60A5FA), size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'IRIS verified parcel',
+              style: TextStyle(
+                color: colors.text,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const _MiniCheck(label: 'Weight'),
+          const SizedBox(width: 5),
+          const _MiniCheck(label: 'Vehicle'),
+          const SizedBox(width: 5),
+          const _MiniCheck(label: 'Pricing'),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniCheck extends StatelessWidget {
+  final String label;
+
+  const _MiniCheck({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '✓ $label',
+      style: const TextStyle(
+        color: Color(0xFF60A5FA),
+        fontSize: 9,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _CollectionPinCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> delivery;
+
+  const _CollectionPinCard({required this.colors, required this.delivery});
+
+  @override
+  Widget build(BuildContext context) {
+    final rawPin = _collectionPinFrom(delivery);
+    final verified = delivery['collectionPinVerified'] == true;
+    final pin = rawPin.isEmpty ? 'Generating PIN...' : rawPin;
+    return _SenderTrackingGlass(
+      glow: const Color(0xFF60A5FA),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _PinHeader(
+            icon: Icons.lock_outline_rounded,
+            title: 'COLLECTION PIN',
+            subtitle: 'Show to rider at pickup',
+            color: Color(0xFF60A5FA),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              verified ? 'Verified' : pin,
+              style: TextStyle(
+                color: const Color(0xFF60A5FA),
+                fontFamily: 'monospace',
+                fontSize: rawPin.isEmpty ? 18 : 30,
+                fontWeight: FontWeight.w900,
+                letterSpacing: rawPin.isEmpty ? 0 : 5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Your rider cannot collect the parcel without this PIN.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 9),
+          _PinStatusRow(
+            collectionVerified: verified,
+            deliveryVerified: delivery['deliveryPinVerified'] == true,
+            deliveryPendingText: 'Delivery PIN — at drop-off',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryPinNoticeCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> delivery;
+
+  const _DeliveryPinNoticeCard({required this.colors, required this.delivery});
+
+  @override
+  Widget build(BuildContext context) {
+    final rawPin = _deliveryPinFrom(delivery);
+    final verified = delivery['deliveryPinVerified'] == true;
+    final pin = rawPin.isEmpty ? 'Generating PIN...' : rawPin;
+    return _SenderTrackingGlass(
+      glow: const Color(0xFF6EE7B7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _PinHeader(
+            icon: Icons.lock_outline_rounded,
+            title: 'RECEIVER DELIVERY PIN',
+            subtitle: 'Share with the receiver before drop-off',
+            color: Color(0xFF6EE7B7),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              verified ? 'Verified' : pin,
+              style: TextStyle(
+                color: const Color(0xFF6EE7B7),
+                fontFamily: 'monospace',
+                fontSize: rawPin.isEmpty ? 18 : 30,
+                fontWeight: FontWeight.w900,
+                letterSpacing: rawPin.isEmpty ? 0 : 5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Share this PIN with the receiver before drop-off. The receiver gives it to the rider to complete handover.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.35,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 9),
+          _PinStatusRow(
+            collectionVerified: delivery['collectionPinVerified'] == true,
+            deliveryVerified: verified,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PinHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+
+  const _PinHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.46),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PinStatusRow extends StatelessWidget {
+  final bool collectionVerified;
+  final bool deliveryVerified;
+  final String deliveryPendingText;
+
+  const _PinStatusRow({
+    required this.collectionVerified,
+    required this.deliveryVerified,
+    this.deliveryPendingText = 'Delivery PIN — awaiting',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _PinStatusPill(
+            label: collectionVerified
+                ? 'Collection PIN ✓'
+                : 'Collection PIN — awaiting',
+            verified: collectionVerified,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _PinStatusPill(
+            label: deliveryVerified ? 'Delivery PIN ✓' : deliveryPendingText,
+            verified: deliveryVerified,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PinStatusPill extends StatelessWidget {
+  final String label;
+  final bool verified;
+
+  const _PinStatusPill({required this.label, required this.verified});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: (verified ? const Color(0xFF10B981) : Colors.white)
+            .withValues(alpha: verified ? 0.15 : 0.055),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: (verified ? const Color(0xFF6EE7B7) : Colors.white)
+              .withValues(alpha: verified ? 0.30 : 0.12),
+        ),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: verified
+              ? const Color(0xFF6EE7B7)
+              : Colors.white.withValues(alpha: 0.48),
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _WaitingTimerCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String status;
+  final DateTime? waitStartedAt;
+  final double? waitingCharge;
+
+  const _WaitingTimerCard({
+    required this.colors,
+    required this.status,
+    required this.waitStartedAt,
+    required this.waitingCharge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final elapsed = waitStartedAt == null
+        ? Duration.zero
+        : now.difference(waitStartedAt!).isNegative
+            ? Duration.zero
+            : now.difference(waitStartedAt!);
+    final freeLeft = const Duration(minutes: 3) - elapsed;
+    final isPickup = status == 'arrived_at_pickup' || status == 'waiting';
+    return _SenderTrackingGlass(
+      glow: const Color(0xFFFCA5A5),
+      child: Row(
+        children: [
+          Icon(Icons.timer_outlined, color: colors.text, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isPickup ? 'Pickup wait' : 'Drop-off wait',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  freeLeft.isNegative
+                      ? 'Waiting charges may apply after the free waiting period.'
+                      : '3 min free wait included · Free wait ends in ${freeLeft.inSeconds}s',
+                  style: TextStyle(
+                    color: freeLeft.isNegative
+                        ? const Color(0xFFFCA5A5)
+                        : colors.mutedText,
+                    height: 1.25,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (waitingCharge != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    'Waiting charge: £${waitingCharge!.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Color(0xFFFCA5A5),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Text(
+            _durationClock(elapsed),
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'monospace',
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderRiderCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> delivery;
+  final VoidCallback? onMessageRider;
+
+  const _SenderRiderCard({
+    required this.colors,
+    required this.delivery,
+    required this.onMessageRider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final profile =
+        (delivery['riderProfile'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final name = _firstName(
+        profile['firstName'] ?? profile['name'] ?? delivery['riderName']);
+    final rank = '${profile['rank'] ?? delivery['riderRank'] ?? ''}'.trim();
+    final vehicle =
+        '${profile['vehicleType'] ?? delivery['riderVehicle'] ?? ''}'.trim();
+    final rating = _moneyFromAny(profile['rating'] ?? delivery['riderRating']);
+    return _SenderTrackingGlass(
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: const Color(0xFF3B82F6),
+            child: Text(
+              name.isEmpty ? 'R' : name[0].toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name.isEmpty ? 'Your rider' : name,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  [
+                    if (rank.isNotEmpty) _riderRankLabel(rank),
+                    if (rating != null && rating > 0) rating.toStringAsFixed(1),
+                    if (vehicle.isNotEmpty) vehicle,
+                  ].join(' · '),
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onMessageRider,
+            child: Text(onMessageRider == null ? 'Message' : 'Message'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderRouteCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> delivery;
+
+  const _SenderRouteCard({required this.colors, required this.delivery});
+
+  @override
+  Widget build(BuildContext context) {
+    final pickup =
+        (delivery['pickupAddress'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final dropoff =
+        (delivery['dropoffAddress'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    return _SenderTrackingGlass(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              const _RouteDot(color: Color(0xFF3B82F6)),
+              Container(
+                width: 2,
+                height: 36,
+                color: Colors.white.withValues(alpha: 0.14),
+              ),
+              const _RouteDot(color: Color(0xFF10B981)),
+            ],
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _RouteText(
+                  area: '${pickup['area'] ?? 'Pickup'}',
+                  address: '${pickup['shortAddress'] ?? 'Pickup address'}',
+                  colors: colors,
+                ),
+                const SizedBox(height: 12),
+                _RouteText(
+                  area: '${dropoff['area'] ?? 'Drop-off'}',
+                  address: '${dropoff['shortAddress'] ?? 'Drop-off address'}',
+                  colors: colors,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteDot extends StatelessWidget {
+  final Color color;
+
+  const _RouteDot({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
+class _RouteText extends StatelessWidget {
+  final String area;
+  final String address;
+  final _CircumColors colors;
+
+  const _RouteText({
+    required this.area,
+    required this.address,
+    required this.colors,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          area,
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          address,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: colors.mutedText,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderTrackingSupportRow extends StatelessWidget {
+  final _CircumColors colors;
+  final bool messageEnabled;
+  final VoidCallback? onMessageRider;
+  final VoidCallback? onContactSupport;
+
+  const _SenderTrackingSupportRow({
+    required this.colors,
+    required this.messageEnabled,
+    required this.onMessageRider,
+    required this.onContactSupport,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onContactSupport,
+            icon: const Icon(Icons.support_agent_outlined),
+            label: const Text('Contact support'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: messageEnabled ? onMessageRider : null,
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: const Text('Message rider'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TrackingLoadingPanel extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _TrackingLoadingPanel({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderTrackingGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Loading tracking',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Preparing your live delivery view.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackingMessagePanel extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String body;
+  final VoidCallback? onContactSupport;
+
+  const _TrackingMessagePanel({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.onContactSupport,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderTrackingGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xFF60A5FA)),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onContactSupport,
+            icon: const Icon(Icons.support_agent_outlined),
+            label: const Text('Contact support'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _senderTrackingStatusFromLegacy(
+  Map<String, dynamic> request, {
+  required int statusIndex,
+  required DriverProfile? assignedDriver,
+}) {
+  final explicit = SenderTrackingPolicy.normalizeStatus(request['status']);
+  if (explicit.isNotEmpty && explicit != 'null') return explicit;
+  if (assignedDriver == null || statusIndex <= 0) return 'finding_rider';
+  return switch (statusIndex) {
+    1 => 'accepted',
+    2 => 'collected',
+    3 => 'delivered',
+    _ => 'accepted',
+  };
+}
+
+DateTime? _senderTrackingDateTime(Object? value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+  return DateTime.tryParse('${value ?? ''}');
+}
+
+String _relativeTime(DateTime value) {
+  final elapsed = DateTime.now().difference(value);
+  if (elapsed.inSeconds < 1) return 'now';
+  if (elapsed.inSeconds < 60) return '${elapsed.inSeconds} sec';
+  if (elapsed.inMinutes < 60) return '${elapsed.inMinutes} min';
+  return '${elapsed.inHours} hr';
+}
+
+String _durationClock(Duration duration) {
+  final total = duration.inSeconds < 0 ? 0 : duration.inSeconds;
+  final minutes = (total ~/ 60).toString().padLeft(2, '0');
+  final seconds = (total % 60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
+}
+
+double? _moneyFromAny(Object? value) {
+  if (value is num) return value.toDouble();
+  final parsed = double.tryParse('${value ?? ''}'.replaceAll('£', '').trim());
+  return parsed;
+}
+
+String _firstName(Object? value) {
+  final text = '${value ?? ''}'.trim();
+  if (text.isEmpty || text == 'null') return '';
+  return text.split(RegExp(r'\s+')).first;
+}
+
+String _collectionPinFrom(Map<String, dynamic> delivery) {
+  final protection =
+      (delivery['vanguardProtection'] as Map?)?.cast<String, dynamic>();
+  return '${delivery['collectionPin'] ?? protection?['collectionPin'] ?? ''}'
+      .trim();
+}
+
+String _deliveryPinFrom(Map<String, dynamic> delivery) {
+  final protection =
+      (delivery['vanguardProtection'] as Map?)?.cast<String, dynamic>();
+  return '${delivery['deliveryPin'] ?? protection?['deliveryPin'] ?? ''}'
+      .trim();
 }
 
 class _LiveDeliveryTrackingPanel extends StatelessWidget {
@@ -39672,7 +41093,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Give this receiver delivery PIN to the rider only when ${receiverName.isEmpty ? 'the receiver' : receiverName} physically receives the parcel.',
+            'Share the receiver delivery PIN with ${receiverName.isEmpty ? 'the receiver' : receiverName} before drop-off. They give it to the rider when they physically receive the parcel.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.35,
@@ -39682,7 +41103,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
           const SizedBox(height: 10),
           _VanguardPinRow(
             colors: colors,
-            label: 'Delivery PIN',
+            label: 'Receiver Delivery PIN',
             pin: deliveryVerified ? 'Verified' : deliveryPin,
             verified: deliveryVerified,
           ),
