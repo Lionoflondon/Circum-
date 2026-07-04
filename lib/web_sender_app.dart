@@ -24695,7 +24695,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             ? const []
             : [estimate.historicalVerifiedWeightKg!],
         trustedWeightIsTransportReady:
-            estimate.weightSource == 'repository_match',
+            estimate.weightSource == 'repository_match' ||
+                estimate.weightSource == 'known_product_lookup',
       );
       final pricingWeight = trustedDecision.pricingWeightKg;
       return _WeightPricingDecision(
@@ -24980,13 +24981,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             base.singleItemWeightKg != null && base.singleItemWeightKg! > 0
                 ? base.singleItemWeightKg!
                 : base.weightKg / math.max(1, base.quantity);
-        final plausibleHistoricalCeiling = math.max(
-            base.weightKg * 2.2, expectedSingleWeight * base.quantity * 2.2);
-        final plausibleMatches = matches
-            .where((weight) => weight <= plausibleHistoricalCeiling)
-            .toList(growable: false);
+        final expectedTotalWeight =
+            expectedSingleWeight * math.max(1, base.quantity);
+        final advisoryCeiling =
+            math.max(base.weightKg, expectedTotalWeight) * 1.5;
         final outliers = matches
-            .where((weight) => weight > plausibleHistoricalCeiling)
+            .where((weight) => weight > advisoryCeiling)
             .toList(growable: false);
         if (outliers.isNotEmpty) {
           await FirebaseFirestore.instance
@@ -24996,28 +24996,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'description': _description.text.trim(),
             'matchedItemName': base.matchedItemName,
             'trustedWeightKg': base.weightKg,
+            'expectedTotalWeightKg': expectedTotalWeight,
             'outlierWeightsKg': outliers,
-            'reason': 'historical_weight_above_5x_catalogue_weight',
+            'reason': 'historical_weight_conflicts_with_canonical_item',
             'status': 'pending_review',
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
-        if (plausibleMatches.isEmpty) {
-          return base.copyWith(
-            learningReason: outliers.isNotEmpty
-                ? 'IRIS ignored historical matches outside the verified repository range.'
-                : null,
-            explanation: outliers.isNotEmpty
-                ? '${base.explanation} IRIS ignored historical matches outside the verified repository range.'
-                : base.explanation,
-          );
-        }
-        final plausibleHigh = plausibleMatches.last;
         return base.copyWith(
-          historicalVerifiedWeightKg: plausibleHigh,
           learningReason: outliers.isNotEmpty
               ? 'IRIS ignored historical matches outside the verified repository range.'
-              : 'Historical matches support the verified catalogue estimate.',
+              : 'Historical matches are advisory only for verified repository items.',
           explanation: outliers.isNotEmpty
               ? '${base.explanation} IRIS ignored historical matches outside the verified repository range.'
               : base.explanation,

@@ -249,9 +249,10 @@ void main() {
       expect(air13!.matchedItemName, 'MacBook Air 13');
       expect(air13.singleItemWeightKg, closeTo(1.64, 0.001));
       expect(generic, isNotNull);
-      expect(generic!.matchedItemName, 'MacBook (unspecified model)');
-      expect(generic.singleItemWeightKg, closeTo(1.91, 0.001));
-      expect(generic.confidenceScore, closeTo(0.68, 0.001));
+      expect(generic!.matchedItemName, 'Apple MacBook');
+      expect(generic.weightSource, 'repository_match');
+      expect(generic.singleItemWeightKg, closeTo(2.1, 0.001));
+      expect(generic.confidenceScore, closeTo(0.9, 0.001));
     });
 
     test('TV estimates use screen size before static fallback', () {
@@ -517,11 +518,11 @@ void main() {
 
       expect(macBooks, isNotNull);
       expect(macBooks!.quantity, 5);
-      expect(macBooks.singleItemWeightKg, closeTo(1.91, 0.001));
-      expect(macBooks.weightKg, closeTo(9.55, 0.001));
+      expect(macBooks.singleItemWeightKg, closeTo(2.1, 0.001));
+      expect(macBooks.weightKg, closeTo(10.5, 0.001));
       expect(
         macBooks.weightBand,
-        DeliveryPricing.weightBandFor(9.55).category,
+        DeliveryPricing.weightBandFor(10.5).category,
       );
     });
 
@@ -802,6 +803,39 @@ void main() {
             reason: alias);
         expect(decision.explanation, contains('minimum billable'),
             reason: alias);
+      }
+    });
+
+    test('MacBook estimates ignore historical completed-delivery outliers', () {
+      const cases = [
+        ('MacBook', 'Apple MacBook', 'repository_match', 2.1),
+        ('MacBook Air', 'MacBook Air 13', 'known_product_lookup', 1.64),
+        ('MacBook Pro 14', 'MacBook Pro 14', 'known_product_lookup', 2.01),
+        ('MacBook Pro 16', 'MacBook Pro 16', 'known_product_lookup', 2.55),
+      ];
+
+      for (final item in cases) {
+        final estimate = IrisWeightEstimator.knownProductEstimate(item.$1)!;
+        final decision = IrisWeightEstimator.resolveTrustedKnownItemPricing(
+          description: item.$1,
+          quantity: estimate.quantity,
+          userWeightKg: 0,
+          trustedItemWeightKg: estimate.weightKg,
+          historicalMatches: const [16.4],
+          trustedWeightIsTransportReady:
+              estimate.weightSource == 'repository_match' ||
+                  estimate.weightSource == 'known_product_lookup',
+        );
+
+        expect(estimate.matchedItemName, item.$2, reason: item.$1);
+        expect(estimate.weightSource, item.$3, reason: item.$1);
+        expect(estimate.weightKg, closeTo(item.$4, 0.001), reason: item.$1);
+        expect(decision.pricingWeightKg, closeTo(item.$4, 0.001),
+            reason: item.$1);
+        expect(decision.pricingWeightKg, isNot(closeTo(16.4, 0.001)),
+            reason: item.$1);
+        expect(decision.ignoredHistoricalOutliers, contains(16.4),
+            reason: item.$1);
       }
     });
 

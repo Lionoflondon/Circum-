@@ -38,7 +38,8 @@ class IrisLearningBridge {
       trustedItemWeightKg: estimate.singleItemWeightKg * quantity,
       historicalMatches: historicalWeights,
       trustedWeightIsTransportReady:
-          estimate.weightSource == 'repository_match',
+          estimate.weightSource == 'repository_match' ||
+              estimate.weightSource == 'known_product_lookup',
     );
   }
 

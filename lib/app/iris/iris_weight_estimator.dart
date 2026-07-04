@@ -186,10 +186,20 @@ class IrisWeightEstimator {
       if (tvEstimate != null) return tvEstimate;
     }
     if (_isPhoneAlias(text) && !_explicitlyLooseOrUnboxed(text)) {
-      final phoneItem = _canonicalPhoneItem();
+      final phoneItem = _canonicalRepositoryItem('canonical_apple_iphone');
       if (phoneItem != null) {
         return _repositoryEstimate(
           repositoryItem: phoneItem,
+          description: description,
+          quantity: quantity,
+        );
+      }
+    }
+    if (_isGenericMacBookAlias(text) && !_explicitlyLooseOrUnboxed(text)) {
+      final macBookItem = _canonicalRepositoryItem('canonical_macbook');
+      if (macBookItem != null) {
+        return _repositoryEstimate(
+          repositoryItem: macBookItem,
           description: description,
           quantity: quantity,
         );
@@ -327,9 +337,18 @@ class IrisWeightEstimator {
     ).hasMatch(text);
   }
 
-  static IrisRepositoryItem? _canonicalPhoneItem() {
+  static bool _isGenericMacBookAlias(String text) {
+    if (!RegExp(r'\b(macbook|apple laptop|laptop)\b').hasMatch(text)) {
+      return false;
+    }
+    return !RegExp(
+            r'\b(macbook\s+(?:air|pro)|pro\s*(?:13|14|16)|air\s*(?:13|15))\b')
+        .hasMatch(text);
+  }
+
+  static IrisRepositoryItem? _canonicalRepositoryItem(String id) {
     for (final item in IrisItemRepository.items) {
-      if (item.id == 'canonical_apple_iphone') return item;
+      if (item.id == id) return item;
     }
     return null;
   }
