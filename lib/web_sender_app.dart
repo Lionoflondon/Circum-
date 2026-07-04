@@ -22186,8 +22186,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   String get _effectiveSenderPhone {
     final profilePhone = _senderProfile?.phoneNumber.trim() ?? '';
-    if (profilePhone.isNotEmpty) return profilePhone;
-    return _senderPhone.text.trim();
+    if (profilePhone.isNotEmpty) return _normalizedSenderPhone(profilePhone);
+    return _normalizedSenderPhone(_senderPhone.text);
+  }
+
+  String _normalizedSenderPhone(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    return UkPhoneNumber.normalizeToE164(trimmed) ?? trimmed;
   }
 
   bool get _senderDetailsRequired =>
@@ -22198,7 +22204,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       : _effectiveSenderName;
 
   String get _effectiveCollectionContactPhone => _differentCollectionContact
-      ? _collectionContactPhone.text.trim()
+      ? _normalizedSenderPhone(_collectionContactPhone.text)
       : _effectiveSenderPhone;
 
   bool get _hasRequiredContactDetails {
@@ -22881,7 +22887,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'fullName': _senderName.text.trim(),
         'fullname': _senderName.text.trim(),
         'email': user.email,
-        'phoneNumber': _senderPhone.text.trim(),
+        'phoneNumber': _normalizedSenderPhone(_senderPhone.text),
         'role': 'user',
         'roles': ['sender'],
         'userType': 'sender',
@@ -23247,12 +23253,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           SenderProfile.fromMap(user.uid, {
             'email': user.email,
             'fullName': _senderName.text.trim(),
-            'phoneNumber': _senderPhone.text.trim(),
+            'phoneNumber': _normalizedSenderPhone(_senderPhone.text),
           });
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
             profile.safeUpdatePatch(
               fullName: _senderName.text.trim(),
-              phoneNumber: _senderPhone.text.trim(),
+              phoneNumber: _normalizedSenderPhone(_senderPhone.text),
               savedAddresses: profile.savedAddresses,
               communicationPreferences: profile.communicationPreferences.isEmpty
                   ? const {'email': true, 'sms': true}
@@ -23709,7 +23715,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _analyseRequest() async {
     final pickupPhone = _effectiveCollectionContactPhone;
     final dropoffName = _receiverName.text.trim();
-    final dropoffPhone = _receiverPhone.text.trim();
+    final dropoffPhone = _normalizedSenderPhone(_receiverPhone.text);
     if (pickupPhone.isEmpty) {
       _showBookingReviewMessage('Please add a pick-up phone number');
       return;
@@ -23823,8 +23829,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        var isPhoneValid = false;
-        String? completeNumber;
+        var normalizedPhone =
+            UkPhoneNumber.normalizeToE164(controller.text.trim());
+        var isPhoneValid = normalizedPhone != null;
         return StatefulBuilder(
           builder: (context, setSheetState) => Padding(
             padding: EdgeInsets.only(
@@ -23854,6 +23861,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   IntlPhoneField(
                     initialCountryCode: 'GB',
                     initialValue: controller.text.trim(),
+                    disableLengthCheck: true,
                     style: TextStyle(
                       color: widget.colors.text,
                       fontWeight: FontWeight.w800,
@@ -23870,9 +23878,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                       ),
                     ),
                     onChanged: (value) {
+                      final normalized =
+                          UkPhoneNumber.normalizeToE164(value.completeNumber) ??
+                              UkPhoneNumber.normalizeToE164(value.number);
                       setSheetState(() {
-                        isPhoneValid = value.isValidNumber();
-                        completeNumber = value.completeNumber;
+                        normalizedPhone = normalized;
+                        isPhoneValid = normalized != null;
                       });
                     },
                   ),
@@ -23889,7 +23900,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                       Expanded(
                         child: FilledButton(
                           onPressed: () {
-                            if (!isPhoneValid || completeNumber == null) {
+                            final normalized = normalizedPhone ??
+                                UkPhoneNumber.normalizeToE164(controller.text);
+                            if (!isPhoneValid || normalized == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content:
@@ -23898,7 +23911,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                               );
                               return;
                             }
-                            Navigator.pop(sheetContext, completeNumber);
+                            Navigator.pop(sheetContext, normalized);
                           },
                           child: const Text('Done'),
                         ),
@@ -23913,7 +23926,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       },
     );
     if (next == null || !mounted) return;
-    setState(() => controller.text = next);
+    setState(() => controller.text = _normalizedSenderPhone(next));
   }
 
   Future<void> _pickParcelPhoto() async {
@@ -25938,7 +25951,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final senderName = _effectiveSenderName;
     final senderPhone = _effectiveSenderPhone;
     final receiverName = _receiverName.text.trim();
-    final receiverPhone = _receiverPhone.text.trim();
+    final receiverPhone = _normalizedSenderPhone(_receiverPhone.text);
     final collectionContactName = _effectiveCollectionContactName;
     final collectionContactPhone = _effectiveCollectionContactPhone;
     final collectionContactDifferent = _differentCollectionContact;
