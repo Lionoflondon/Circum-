@@ -1,4 +1,4 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
@@ -62,6 +62,7 @@ const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
 const giftStoryAutomation = require("./gift-story-automation");
+const deliveryPolicy = require("./delivery-policy");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -134,6 +135,12 @@ exports.finalizeGiftStoryVideoUpload = giftStoryAutomation.finalizeGiftStoryVide
 exports.getGiftStoryVideoDownload = giftStoryAutomation.getGiftStoryVideoDownload;
 exports.giftStoryLanding = giftStoryAutomation.giftStoryLanding;
 exports.cleanupExpiredGiftStories = giftStoryAutomation.cleanupExpiredGiftStories;
+exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation;
+exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
+exports.recordArrivalZoneCheck = deliveryPolicy.recordArrivalZoneCheck;
+exports.recordCustomerArrivalResponse = deliveryPolicy.recordCustomerArrivalResponse;
+exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
+exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
