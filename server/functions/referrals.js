@@ -6,8 +6,13 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const rothLedger = require("./roth-ledger");
 const {BALANCE_TYPES, TRANSACTION_TYPES} = require("./roth-ledger-core");
+const {
+  DEFAULT_REFERRAL_REWARD_ROTH,
+  REFERRAL_STATUSES,
+  referralRewardFinanceMetadata,
+} = require("./referral-core");
 
-const DEFAULT_REWARD = 5;
+const DEFAULT_REWARD = DEFAULT_REFERRAL_REWARD_ROTH;
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -106,23 +111,28 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
     if (existing.exists) return;
     transaction.set(referralRef, {
       referrerUserId,
+      inviterUserId: referrerUserId,
       referrerEmail,
       referredUserId,
       referredEmail,
       referralCode: code,
-      status: "pending",
+      status: REFERRAL_STATUSES.signedUp,
+      rewardStatus: REFERRAL_STATUSES.signedUp,
       rewardAmount: DEFAULT_REWARD,
+      rewardCurrency: "ROTH",
+      rewardSource: "Referral",
       createdAt: FieldValue.serverTimestamp(),
+      signedUpAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
     transaction.set(db.collection("users").doc(referredUserId), {
       referredBy: referrerUserId,
       referralCodeUsed: code,
-      referralProgramStatus: "pending",
+      referralProgramStatus: REFERRAL_STATUSES.signedUp,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   });
-  return {status: "pending"};
+  return {status: REFERRAL_STATUSES.signedUp};
 });
 
 exports.activateReferral = functions.https.onCall(async (data, context) => {
@@ -145,7 +155,7 @@ async function activateReferralForUser({referredUserId, activityType, activityId
   const db = getFirestore();
   const referralRef = db.collection("referrals").doc(referredUserId);
   const snap = await referralRef.get();
-  if (!snap.exists || snap.data().status === "rewarded" || snap.data().status === "rejected") {
+  if (!snap.exists || snap.data().status === REFERRAL_STATUSES.rothAwarded || snap.data().status === "rewarded" || snap.data().status === "rejected") {
     return {status: snap.exists ? snap.data().status : "none"};
   }
   const referral = snap.data();
@@ -154,11 +164,13 @@ async function activateReferralForUser({referredUserId, activityType, activityId
   try {
     await db.runTransaction(async (transaction) => {
       const latest = await transaction.get(referralRef);
-      if (!latest.exists || latest.data().status === "rewarded") return;
+      if (!latest.exists || latest.data().status === REFERRAL_STATUSES.rothAwarded || latest.data().status === "rewarded") return;
       transaction.set(referralRef, {
-        status: "activated",
+        status: REFERRAL_STATUSES.firstQualifyingDeliveryCompleted,
+        rewardStatus: REFERRAL_STATUSES.firstQualifyingDeliveryCompleted,
         qualifyingActivityType: activityType,
         qualifyingActivityId: activityId || null,
+        qualifyingDeliveryId: activityId || null,
         activatedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
@@ -173,7 +185,16 @@ async function activateReferralForUser({referredUserId, activityType, activityId
       reason: "Referral activated after first completed activity",
       relatedEntityId: referredUserId,
       transactionId: `referral_reward_${referredUserId}_referrer`,
-      metadata: {activityType, activityId, referredUserId},
+      metadata: referralRewardFinanceMetadata({
+        referralCode: referral.referralCode,
+        inviterUserId: referral.referrerUserId,
+        referredUserId,
+        rewardAmount: reward,
+        rewardStatus: REFERRAL_STATUSES.rothAwarded,
+        activityType,
+        activityId,
+        role: "inviter",
+      }),
     });
     await rothLedger.recordRothMovement({
       db,
@@ -185,18 +206,34 @@ async function activateReferralForUser({referredUserId, activityType, activityId
       reason: "Joined through referral and completed first activity",
       relatedEntityId: referredUserId,
       transactionId: `referral_reward_${referredUserId}_referred`,
-      metadata: {activityType, activityId, referrerUserId: referral.referrerUserId},
+      metadata: referralRewardFinanceMetadata({
+        referralCode: referral.referralCode,
+        inviterUserId: referral.referrerUserId,
+        referredUserId,
+        rewardAmount: reward,
+        rewardStatus: REFERRAL_STATUSES.rothAwarded,
+        activityType,
+        activityId,
+        role: "referred_user",
+      }),
     });
     await referralRef.set({
-      status: "rewarded",
+      status: REFERRAL_STATUSES.rothAwarded,
+      rewardStatus: REFERRAL_STATUSES.rothAwarded,
+      rewardAmount: reward,
+      rewardCurrency: "ROTH",
+      inviterUserId: referral.referrerUserId,
+      referredUserId,
       rewardedAt: FieldValue.serverTimestamp(),
+      rewardIssuedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
-    return {status: "rewarded", rewardAmount: reward};
+    return {status: REFERRAL_STATUSES.rothAwarded, rewardAmount: reward};
   } catch (error) {
     console.error("Referral activation failed", error);
     await referralRef.set({
-      status: "activated",
+      status: REFERRAL_STATUSES.firstQualifyingDeliveryCompleted,
+      rewardStatus: REFERRAL_STATUSES.review,
       needsReview: true,
       reviewReason: error.message,
       updatedAt: FieldValue.serverTimestamp(),
