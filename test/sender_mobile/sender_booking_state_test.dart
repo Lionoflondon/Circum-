@@ -1,4 +1,5 @@
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -62,6 +63,14 @@ void main() {
       expect(senderDeliverySpeeds, const ['Economy', 'Standard', 'Express']);
       expect(isSenderDeliverySpeed('Standard'), isTrue);
       expect(isSenderDeliverySpeed('Vanguard'), isFalse);
+    });
+
+    test('dashboard service hub excludes Vanguard', () {
+      expect(
+        senderMobileDashboardServiceNames,
+        const ['Health+', 'Business', 'Gifts'],
+      );
+      expect(senderMobileDashboardServiceNames, isNot(contains('Vanguard')));
     });
 
     test('Vanguard add-on does not replace selected delivery speed', () {
