@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -18,7 +19,28 @@ import 'rider_presence_controller.dart';
 import 'rider_route_map_layer.dart';
 
 class RiderHomeScreen extends StatefulWidget {
-  const RiderHomeScreen({super.key});
+  final int initialTab;
+  final bool enableLocalPreview;
+  final Map<String, dynamic> localPreviewProfile;
+  final Map<String, dynamic> localPreviewPresence;
+  final Map<String, dynamic> localPreviewEarnings;
+  final Map<String, dynamic> localPreviewRothWallet;
+  final List<Map<String, dynamic>> localPreviewTransactions;
+  final List<Map<String, dynamic>> localPreviewPayouts;
+  final List<Map<String, dynamic>> localPreviewReferrals;
+
+  const RiderHomeScreen({
+    super.key,
+    this.initialTab = 0,
+    this.enableLocalPreview = false,
+    this.localPreviewProfile = const {},
+    this.localPreviewPresence = const {},
+    this.localPreviewEarnings = const {},
+    this.localPreviewRothWallet = const {},
+    this.localPreviewTransactions = const [],
+    this.localPreviewPayouts = const [],
+    this.localPreviewReferrals = const [],
+  });
 
   @override
   State<RiderHomeScreen> createState() => _RiderHomeScreenState();
@@ -38,6 +60,12 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       RiderPresenceController(functions: FirebaseFunctions.instance);
 
   @override
+  void initState() {
+    super.initState();
+    _tab = widget.initialTab;
+  }
+
+  @override
   void dispose() {
     _heartbeatTimer?.cancel();
     super.dispose();
@@ -46,6 +74,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    if (user == null && _localPreviewAllowed) {
+      return _buildLocalPreview(context);
+    }
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
@@ -236,6 +267,180 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                   },
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool get _localPreviewAllowed {
+    final host = Uri.base.host;
+    return kDebugMode &&
+        widget.enableLocalPreview &&
+        (host == 'localhost' || host == '127.0.0.1' || host.isEmpty);
+  }
+
+  Widget _buildLocalPreview(BuildContext context) {
+    final profile = _profileFromBackend(
+      {
+        'id': 'local-preview-rider',
+        'fullName': 'Jason Rider',
+        'firstName': 'Jason',
+        'email': 'local-rider@circum.test',
+        'onboardingStatus': 'approved',
+        'approvalStatus': 'approved',
+        'verificationStatus': 'approved',
+        'riderRank': 'Knight',
+        'trustPoints': 245,
+        'stripeStatus': 'payouts_enabled',
+        'stripeAccountId': 'acct_local_preview',
+        'stripePayoutsEnabled': true,
+        'stripeDetailsSubmitted': true,
+        ...widget.localPreviewProfile,
+      },
+      {
+        'isOnline': false,
+        'availabilityStatus': 'offline',
+        ...widget.localPreviewPresence,
+      },
+    );
+    final presence = {
+      'isOnline': false,
+      'availabilityStatus': 'offline',
+      ...widget.localPreviewPresence,
+    };
+    final earnings = {
+      'availableBalance': 184.25,
+      'pendingBalance': 42.5,
+      'todayEarnings': 36.8,
+      'weeklyEarnings': 218.4,
+      'monthlyEarnings': 940.75,
+      'lifetimeEarnings': 7412.2,
+      'todayCompletedJobs': 3,
+      'todayTrustPoints': 11,
+      ...widget.localPreviewEarnings,
+    };
+    final finance = _FinanceSnapshot.from(
+      earnings: earnings,
+      profile: profile,
+      rothWallet: {
+        'balanceRoth': 28,
+        ...widget.localPreviewRothWallet,
+      },
+      riderTransactions: widget.localPreviewTransactions.isEmpty
+          ? const [
+              {
+                'type': 'Health+',
+                'description': 'Prescription delivery completed',
+                'amount': 26.2,
+                '_financeKind': 'cash',
+              },
+              {
+                'type': 'Standard Delivery',
+                'description': 'Parcel delivery completed',
+                'amount': 18.5,
+                '_financeKind': 'cash',
+              },
+            ]
+          : widget.localPreviewTransactions,
+      walletTransactions: const [
+        {
+          'type': 'referral_reward',
+          'description': 'Rider referral reward',
+          'amount': 5,
+          'balanceType': 'rothCredit',
+        },
+        {
+          'type': 'admin_reward',
+          'description': 'Admin reward',
+          'amount': 10,
+          'balanceType': 'rothCredit',
+        },
+      ],
+      payouts: widget.localPreviewPayouts.isEmpty
+          ? const [
+              {
+                'type': 'withdrawal',
+                'status': 'paid',
+                'description': 'Stripe Express payout',
+                'amount': 120,
+                '_financeKind': 'withdrawal',
+              },
+            ]
+          : widget.localPreviewPayouts,
+      referrals: widget.localPreviewReferrals.isEmpty
+          ? const [
+              {
+                'status': 'completed',
+                'rewardRoth': 5,
+                'firstDeliveryCompletedAt': true,
+              },
+              {
+                'status': 'pending',
+                'signedUpAt': true,
+              },
+            ]
+          : widget.localPreviewReferrals,
+    );
+    final state = RiderHomeStateMapper.fromBackend(
+      riderProfile: profile,
+      presence: presence,
+      hasAvailableOffers: false,
+    );
+    final online = presence['isOnline'] == true;
+    final available = online && presence['availabilityStatus'] == 'available';
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090F),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: RiderRouteMapLayer()),
+          const Positioned.fill(child: _MapShade()),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: _tab == 3
+                      ? _FinanceHubPreviewPane(
+                          finance: finance,
+                          profile: profile,
+                          onOpenTab: _openTab,
+                        )
+                      : _DashboardPane(
+                          user: null,
+                          firstNameOverride: '${profile['firstName']}',
+                          state: state,
+                          profile: profile,
+                          presence: presence,
+                          earnings: earnings,
+                          offers: const [],
+                          scheduled: const [],
+                          recent: const [],
+                          unreadNotifications: 1,
+                          message:
+                              'Local Rider preview. Production auth is not bypassed.',
+                          loading: false,
+                          updating: false,
+                          online: online,
+                          available: available,
+                          onToggleAvailability: () => setState(
+                            () => _message =
+                                'Preview only. Use the app to change live presence.',
+                          ),
+                          onOpenTab: _openTab,
+                        ),
+                ),
+                _RiderBottomNav(
+                  selected: _tab,
+                  online: online,
+                  updating: false,
+                  onSelect: _openTab,
+                  onCentralTap: () => setState(
+                    () => _message =
+                        'Preview only. Use the app to change live presence.',
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -475,6 +680,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
 class _DashboardPane extends StatelessWidget {
   final User? user;
+  final String? firstNameOverride;
   final RiderJobUiState state;
   final Map<String, dynamic> profile;
   final Map<String, dynamic> presence;
@@ -494,6 +700,7 @@ class _DashboardPane extends StatelessWidget {
   const _DashboardPane({
     super.key,
     required this.user,
+    this.firstNameOverride,
     required this.state,
     required this.profile,
     required this.presence,
@@ -553,6 +760,8 @@ class _DashboardPane extends StatelessWidget {
   }
 
   String get _firstName {
+    final preview = firstNameOverride?.trim();
+    if (preview != null && preview.isNotEmpty) return preview;
     final display = user?.displayName?.trim();
     if (display != null && display.isNotEmpty) {
       return display.split(RegExp(r'\s+')).first;
@@ -739,6 +948,55 @@ class _FinanceHubPane extends StatelessWidget {
     return snapshot.data!.docs
         .map((doc) => {'id': doc.id, ...doc.data()})
         .toList(growable: false);
+  }
+}
+
+class _FinanceHubPreviewPane extends StatelessWidget {
+  final _FinanceSnapshot finance;
+  final Map<String, dynamic> profile;
+  final ValueChanged<int> onOpenTab;
+
+  const _FinanceHubPreviewPane({
+    required this.finance,
+    required this.profile,
+    required this.onOpenTab,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+      children: [
+        const _SectionHeader(
+          title: 'Finance',
+          subtitle: 'Local Rider preview · production auth untouched.',
+        ),
+        const SizedBox(height: 14),
+        _FinanceOverview(finance: finance),
+        const SizedBox(height: 14),
+        _FinanceEarnings(finance: finance),
+        const SizedBox(height: 14),
+        _RothWalletSection(finance: finance),
+        const SizedBox(height: 14),
+        _ReferralRothSection(finance: finance),
+        const SizedBox(height: 14),
+        _WithdrawSection(
+          finance: finance,
+          profile: profile,
+          previewEmail: '${profile['email'] ?? ''}',
+        ),
+        const SizedBox(height: 14),
+        _TransactionHistory(finance: finance),
+        const SizedBox(height: 14),
+        _FinanceRankSection(profile: profile),
+        const SizedBox(height: 14),
+        _InsightsSection(finance: finance),
+        const SizedBox(height: 14),
+        _NextMilestoneSection(finance: finance),
+        const SizedBox(height: 14),
+        _QuickActions(onOpenTab: onOpenTab),
+      ],
+    );
   }
 }
 
@@ -999,13 +1257,18 @@ class _ReferralRothSection extends StatelessWidget {
 class _WithdrawSection extends StatelessWidget {
   final _FinanceSnapshot finance;
   final Map<String, dynamic> profile;
+  final String? previewEmail;
 
-  const _WithdrawSection({required this.finance, required this.profile});
+  const _WithdrawSection({
+    required this.finance,
+    required this.profile,
+    this.previewEmail,
+  });
 
   @override
   Widget build(BuildContext context) {
     final ready = RiderOnboardingPolicy.canWithdraw(
-      email: FirebaseAuth.instance.currentUser?.email,
+      email: previewEmail ?? FirebaseAuth.instance.currentUser?.email,
       profile: profile,
     );
     final accountId =
