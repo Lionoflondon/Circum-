@@ -37031,6 +37031,7 @@ class _DetailsStep extends StatelessWidget {
                 onSelected: onPickupSelected,
                 onEdited: onPickupEdited,
                 verifiedMessage: 'Verified pickup address selected',
+                enableFreeLookup: true,
               ),
               const SizedBox(height: 12),
               _SavedAddressQuickPick(
@@ -37049,6 +37050,7 @@ class _DetailsStep extends StatelessWidget {
                 onSelected: onDropoffSelected,
                 onEdited: onDropoffEdited,
                 verifiedMessage: 'Verified drop-off address selected',
+                enableFreeLookup: true,
               ),
               const SizedBox(height: 12),
               Row(
@@ -37824,6 +37826,7 @@ class _HealthPlusStep extends StatelessWidget {
                   label: 'Pharmacy pickup address',
                   pharmacyMode: true,
                   glassStyle: true,
+                  enableFreeLookup: true,
                 ),
                 const SizedBox(height: 10),
                 _AddressField(
@@ -37832,6 +37835,7 @@ class _HealthPlusStep extends StatelessWidget {
                   controller: deliveryAddress,
                   label: 'Delivery address',
                   glassStyle: true,
+                  enableFreeLookup: true,
                 ),
               ],
             ),
@@ -39254,40 +39258,6 @@ String? _extractUkPostcode(String address) {
     caseSensitive: false,
   ).firstMatch(address);
   return match?.group(1)?.toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
-}
-
-Map<String, String> _googleAddressComponents(List<dynamic> components) {
-  String? byType(String type) {
-    for (final component in components.whereType<Map<String, dynamic>>()) {
-      final types = (component['types'] as List<dynamic>? ?? const [])
-          .map((value) => '$value')
-          .toSet();
-      if (types.contains(type)) return '${component['long_name']}';
-    }
-    return null;
-  }
-
-  final streetNumber = byType('street_number');
-  final route = byType('route');
-  final city = byType('postal_town') ?? byType('locality');
-  final county = byType('administrative_area_level_2');
-  final postcode = byType('postal_code');
-  final country = byType('country');
-  return {
-    if (streetNumber != null) 'buildingNumber': streetNumber,
-    if (route != null) 'street': route,
-    if (city != null) 'city': city,
-    if (county != null) 'county': county,
-    if (postcode != null) 'postcode': postcode,
-    if (country != null) 'country': country,
-  };
-}
-
-String _cleanGoogleAddress(String address) {
-  return address
-      .replaceAll(', UK', ', United Kingdom')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
 }
 
 String _stableLocationId(String address, double lat, double lng) {
@@ -43007,6 +42977,7 @@ class _AddressField extends StatefulWidget {
   final ValueChanged<String>? onEdited;
   final String verifiedMessage;
   final bool glassStyle;
+  final bool enableFreeLookup;
 
   const _AddressField({
     required this.colors,
@@ -43019,6 +42990,7 @@ class _AddressField extends StatefulWidget {
     this.onEdited,
     this.verifiedMessage = 'Verified address selected',
     this.glassStyle = false,
+    this.enableFreeLookup = false,
   });
 
   @override
@@ -43033,7 +43005,8 @@ class _AddressFieldState extends State<_AddressField> {
   bool _resolvingSuggestion = false;
   String? _suggestionError;
   int _suggestionRequest = 0;
-  late final String _placesSessionToken =
+  Timer? _suggestionDebounce;
+  late final String _addressSearchSessionToken =
       '${DateTime.now().millisecondsSinceEpoch}-${identityHashCode(this)}';
 
   @override
@@ -43046,6 +43019,7 @@ class _AddressFieldState extends State<_AddressField> {
   @override
   void dispose() {
     widget.controller.removeListener(_updateSuggestions);
+    _suggestionDebounce?.cancel();
     _focusNode.removeListener(_handleFocusChanged);
     _focusNode.dispose();
     super.dispose();
@@ -43087,6 +43061,7 @@ class _AddressFieldState extends State<_AddressField> {
 
   void _updateSuggestions() {
     if (_selectingSuggestion) return;
+    _suggestionDebounce?.cancel();
     final value = widget.controller.text.trim();
     final requestId = ++_suggestionRequest;
     if (value.length < 3) {
@@ -43099,15 +43074,31 @@ class _AddressFieldState extends State<_AddressField> {
       }
       return;
     }
+    if (!widget.enableFreeLookup || value.length < 5) {
+      final next = [
+        ..._popularPlaceSuggestions(value),
+        ..._localAddressSuggestions(value),
+      ].take(8).toList(growable: false);
+      if (mounted) {
+        setState(() {
+          _suggestions = next;
+          _loadingSuggestions = false;
+          _suggestionError = null;
+        });
+      }
+      return;
+    }
     setState(() {
       _loadingSuggestions = true;
       _suggestionError = null;
     });
-    _buildAddressSuggestions(value).then((next) {
-      if (!mounted || requestId != _suggestionRequest) return;
-      setState(() {
-        _suggestions = next;
-        _loadingSuggestions = false;
+    _suggestionDebounce = Timer(const Duration(milliseconds: 450), () {
+      _buildAddressSuggestions(value).then((next) {
+        if (!mounted || requestId != _suggestionRequest) return;
+        setState(() {
+          _suggestions = next;
+          _loadingSuggestions = false;
+        });
       });
     });
   }
@@ -43119,10 +43110,12 @@ class _AddressFieldState extends State<_AddressField> {
     final clean = value.replaceAll(RegExp(r'\s+'), ' ');
     if (clean.toLowerCase().contains('united kingdom')) return const [];
     final popular = _popularPlaceSuggestions(clean);
-    final google = await _googlePlacesAutocomplete(clean);
+    final freeLookup = widget.enableFreeLookup && clean.length >= 5
+        ? await _freeUkAddressSearch(clean)
+        : const <_AddressSuggestion>[];
     final combined = <_AddressSuggestion>[
       ...popular,
-      ...google.where(
+      ...freeLookup.where(
         (suggestion) => !popular.any(
           (place) => _sameSuggestionText(
             place.displayAddress,
@@ -43220,43 +43213,45 @@ class _AddressFieldState extends State<_AddressField> {
     ];
   }
 
-  Future<List<_AddressSuggestion>> _googlePlacesAutocomplete(
+  Future<List<_AddressSuggestion>> _freeUkAddressSearch(
     String input,
   ) async {
-    if (_googlePlacesApiKey.trim().isEmpty) return const [];
     try {
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/place/autocomplete/json',
-        {
-          'input': input,
-          'language': 'en',
-          'components': 'country:uk',
-          'key': _googlePlacesApiKey,
-          'sessiontoken': _placesSessionToken,
-        },
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('searchFreeUkAddresses')
+          .call({
+        'query': input,
+        'sessionToken': _addressSearchSessionToken,
+      }).timeout(
+        const Duration(seconds: 5),
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (response.statusCode != 200) return const [];
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final body = Map<String, dynamic>.from(response.data as Map);
       if ('${body['status']}' != 'OK') return const [];
-      final predictions = body['predictions'] as List<dynamic>? ?? const [];
-      return predictions
+      final results = body['results'] as List<dynamic>? ?? const [];
+      return results
           .whereType<Map<String, dynamic>>()
-          .where(
-            (prediction) =>
-                prediction['place_id'] != null &&
-                prediction['description'] != null,
-          )
-          .map(
-            (prediction) => _AddressSuggestion(
-              displayAddress: '${prediction['description']}',
-              confidence: 0.99,
-              provider: 'google_places',
+          .map((result) {
+            final components = result['components'] is Map
+                ? Map<String, String>.from(
+                    (result['components'] as Map).map(
+                      (key, value) => MapEntry('$key', '$value'),
+                    ),
+                  )
+                : const <String, String>{};
+            return _AddressSuggestion(
+              displayAddress: '${result['displayAddress'] ?? ''}',
+              lat: (result['lat'] as num?)?.toDouble(),
+              lng: (result['lng'] as num?)?.toDouble(),
+              confidence: (result['confidence'] as num?)?.toDouble() ?? 0.84,
+              provider: 'openstreetmap_nominatim',
               sourceInput: input,
-              placeId: '${prediction['place_id']}',
-            ),
-          )
+              placeId: '${result['locationId'] ?? ''}'.trim().isEmpty
+                  ? null
+                  : '${result['locationId']}',
+              components: components,
+            );
+          })
+          .where((suggestion) => suggestion.displayAddress.trim().isNotEmpty)
           .take(6)
           .toList(growable: false);
     } catch (_) {
@@ -43264,112 +43259,14 @@ class _AddressFieldState extends State<_AddressField> {
     }
   }
 
-  Future<_AddressSuggestion?> _googlePlaceDetails(
-    _AddressSuggestion suggestion,
-  ) async {
-    final placeId = suggestion.placeId;
-    if (placeId == null || _googlePlacesApiKey.trim().isEmpty) {
-      return suggestion;
-    }
-    try {
-      final uri =
-          Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
-        'place_id': placeId,
-        'language': 'en',
-        'fields': 'formatted_address,address_components,geometry,place_id,name',
-        'key': _googlePlacesApiKey,
-        'sessiontoken': _placesSessionToken,
-      });
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (response.statusCode != 200) return null;
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      if ('${body['status']}' != 'OK') return null;
-      final result = body['result'] as Map<String, dynamic>;
-      final geometry = result['geometry'] as Map<String, dynamic>?;
-      final location = geometry?['location'] as Map<String, dynamic>?;
-      final lat = (location?['lat'] as num?)?.toDouble();
-      final lng = (location?['lng'] as num?)?.toDouble();
-      if (lat == null || lng == null) return null;
-      final components = _googleAddressComponents(
-        result['address_components'] as List<dynamic>? ?? const [],
-      );
-      return _AddressSuggestion(
-        displayAddress: _cleanGoogleAddress(
-          '${result['formatted_address'] ?? suggestion.displayAddress}',
-        ),
-        lat: lat,
-        lng: lng,
-        confidence: 0.99,
-        provider: 'google_places',
-        sourceInput: suggestion.sourceInput,
-        placeId: placeId,
-        components: components,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<_AddressSuggestion?> _googleFindPlaceFromText(
-    _AddressSuggestion suggestion,
-  ) async {
-    final query = suggestion.searchText ?? suggestion.displayAddress;
-    if (_googlePlacesApiKey.trim().isEmpty) return null;
-    try {
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/place/findplacefromtext/json',
-        {
-          'input': query,
-          'inputtype': 'textquery',
-          'language': 'en',
-          'fields': 'formatted_address,geometry,place_id,name',
-          'key': _googlePlacesApiKey,
-          'locationbias': 'country:uk',
-        },
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (response.statusCode != 200) return null;
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      if ('${body['status']}' != 'OK') return null;
-      final candidates = body['candidates'] as List<dynamic>? ?? const [];
-      final typedCandidates = candidates.whereType<Map<String, dynamic>>();
-      if (typedCandidates.isEmpty) return null;
-      final result = typedCandidates.first;
-      final geometry = result['geometry'] as Map<String, dynamic>?;
-      final location = geometry?['location'] as Map<String, dynamic>?;
-      final lat = (location?['lat'] as num?)?.toDouble();
-      final lng = (location?['lng'] as num?)?.toDouble();
-      if (lat == null || lng == null) return null;
-      return _AddressSuggestion(
-        displayAddress: _cleanGoogleAddress(
-          '${result['formatted_address'] ?? suggestion.displayAddress}',
-        ),
-        lat: lat,
-        lng: lng,
-        confidence: 0.98,
-        provider: 'google_places',
-        sourceInput: suggestion.sourceInput,
-        placeId: '${result['place_id'] ?? ''}'.isEmpty
-            ? null
-            : '${result['place_id']}',
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<_AddressSuggestion?> _resolvePopularPlace(
     _AddressSuggestion suggestion,
   ) async {
     final query = suggestion.searchText ?? suggestion.displayAddress;
-    final predictions = await _googlePlacesAutocomplete(query);
+    final predictions = await _freeUkAddressSearch(query);
     if (predictions.isNotEmpty) {
-      final resolved = await _googlePlaceDetails(predictions.first);
-      if (resolved != null) return resolved;
+      return predictions.first;
     }
-    final found = await _googleFindPlaceFromText(suggestion);
-    if (found != null) return found;
     if (suggestion.lat != null &&
         suggestion.lng != null &&
         _coordinatesAreUsable(suggestion.lat!, suggestion.lng!)) {
@@ -43396,15 +43293,13 @@ class _AddressFieldState extends State<_AddressField> {
     });
     final resolved = suggestion.isPopularPlace
         ? await _resolvePopularPlace(suggestion)
-        : suggestion.provider == 'google_places'
-            ? await _googlePlaceDetails(suggestion)
-            : suggestion;
+        : suggestion;
     if (!mounted) return;
     if (resolved == null || !resolved.toValidatedAddress().hasCoordinates) {
       setState(() {
         _resolvingSuggestion = false;
         _suggestionError =
-            'Could not verify this place with Google Places. Try a different suggestion or type more detail.';
+            'Could not verify this place. Try a different suggestion or enter the address manually.';
       });
       return;
     }
@@ -43551,7 +43446,7 @@ class _AddressFieldState extends State<_AddressField> {
                               if (suggestion.isPopularPlace)
                                 Text(
                                   _resolvingSuggestion
-                                      ? 'Verifying with Google Places...'
+                                      ? 'Verifying free address data...'
                                       : 'Popular place${suggestion.category == null ? '' : ' • ${suggestion.category}'}',
                                   style: TextStyle(
                                     color: colors.mutedText,
@@ -43606,7 +43501,7 @@ class _AddressFieldState extends State<_AddressField> {
           Text(
             _resolvingSuggestion
                 ? 'Verifying selected place...'
-                : 'Checking Google Places...',
+                : 'Checking free UK address data...',
             style: TextStyle(
               color: colors.mutedText,
               fontSize: 12,
@@ -53871,6 +53766,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                             _validatedGiftAddress = address),
                                         onEdited: (_) => setState(
                                             () => _validatedGiftAddress = null),
+                                        enableFreeLookup: true,
                                         verifiedMessage:
                                             'Verified delivery address selected'),
                                     Row(children: [
@@ -55109,6 +55005,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           onEdited: (_) => setState(() => _validatedGiftAddress = null),
           verifiedMessage: 'Verified delivery address selected',
           glassStyle: true,
+          enableFreeLookup: true,
         ),
         const SizedBox(height: 12),
         Wrap(

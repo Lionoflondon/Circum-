@@ -64,6 +64,7 @@ const movementLedger = require("./movement-ledger");
 const giftStoryAutomation = require("./gift-story-automation");
 const deliveryPolicy = require("./delivery-policy");
 const riderPresence = require("./rider-presence");
+const freeAddressSearch = require("./free-address-search");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -147,6 +148,7 @@ exports.goOffline = riderPresence.goOffline;
 exports.updateRiderPresence = riderPresence.updateRiderPresence;
 exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
 exports.markStaleRiderPresenceOffline = riderPresence.markStaleRiderPresenceOffline;
+exports.searchFreeUkAddresses = freeAddressSearch.searchFreeUkAddresses;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
