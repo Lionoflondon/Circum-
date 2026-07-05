@@ -58,6 +58,33 @@ void main() {
       expect(mapConfidenceLabel(.40), 'Low');
     });
 
+    test('Vanguard is not treated as a delivery speed', () {
+      expect(senderDeliverySpeeds, const ['Economy', 'Standard', 'Express']);
+      expect(isSenderDeliverySpeed('Standard'), isTrue);
+      expect(isSenderDeliverySpeed('Vanguard'), isFalse);
+    });
+
+    test('Vanguard add-on does not replace selected delivery speed', () {
+      final draft = const SenderBookingDraft(
+        step: SenderBookingStep.options,
+        selectedOption: 'Express',
+      ).copyWith(vanguard: true);
+
+      expect(draft.selectedOption, 'Express');
+      expect(draft.vanguard, isTrue);
+      expect(draft.addOnTotalGbp, senderVanguardAddOnPriceGbp);
+      expect(draft.totalWithAddOns(8), 9.99);
+    });
+
+    test('removing Vanguard removes only the add-on price', () {
+      final draft =
+          const SenderBookingDraft(vanguard: true).copyWith(vanguard: false);
+
+      expect(draft.selectedOption, 'Standard');
+      expect(draft.addOnTotalGbp, 0);
+      expect(draft.totalWithAddOns(8), 8);
+    });
+
     test('payment cannot fake success', () {
       const unpaid = SenderBookingDraft(
         step: SenderBookingStep.payment,

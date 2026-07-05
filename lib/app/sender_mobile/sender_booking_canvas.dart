@@ -341,16 +341,9 @@ class _BookingPanel extends StatelessWidget {
           onContinue: onContinue,
         );
       case SenderBookingStep.options:
-        return _ChoicePanel(
-          title: 'Choose speed and trust options supported by current pricing.',
-          choices: const ['Economy', 'Standard', 'Express', 'Vanguard'],
-          selected: draft.vanguard ? 'Vanguard' : draft.selectedOption,
-          onSelected: (value) => onDraft(draft.copyWith(
-            selectedOption: value == 'Vanguard' ? draft.selectedOption : value,
-            vanguard: value == 'Vanguard' ? !draft.vanguard : draft.vanguard,
-          )),
-          primaryLabel: 'Review delivery',
-          canContinue: true,
+        return _OptionsPanel(
+          draft: draft,
+          onDraft: onDraft,
           onContinue: onContinue,
         );
       case SenderBookingStep.review:
@@ -360,7 +353,7 @@ class _BookingPanel extends StatelessWidget {
           onContinue: onContinue,
         );
       case SenderBookingStep.payment:
-        return _PaymentPanel(engine: engine);
+        return _PaymentPanel(engine: engine, draft: draft);
       case SenderBookingStep.findingRider:
         return const _FindingPanel();
       case SenderBookingStep.liveTracking:
@@ -641,6 +634,67 @@ class _ChoicePanel extends StatelessWidget {
   }
 }
 
+class _OptionsPanel extends StatelessWidget {
+  final SenderBookingDraft draft;
+  final ValueChanged<SenderBookingDraft> onDraft;
+  final VoidCallback onContinue;
+
+  const _OptionsPanel({
+    required this.draft,
+    required this.onDraft,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose speed first. Vanguard is a separate trust add-on.',
+          style: TextStyle(color: _Tokens.muted, height: 1.35),
+        ),
+        const SizedBox(height: 14),
+        const _SectionLabel('Delivery speed'),
+        const SizedBox(height: 8),
+        _SegmentedControl(
+          values: senderDeliverySpeeds,
+          selected: draft.selectedOption,
+          onSelected: (value) => onDraft(draft.copyWith(selectedOption: value)),
+        ),
+        const SizedBox(height: 16),
+        const _SectionLabel('Optional trust add-ons'),
+        const SizedBox(height: 8),
+        _AddOnTile(
+          selected: draft.vanguard,
+          title: 'Vanguard Protection',
+          price: '£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+          subtitle:
+              'Enhanced custody, verification, and protection cues for sensitive deliveries.',
+          icon: Icons.shield_outlined,
+          onTap: () => onDraft(draft.copyWith(vanguard: !draft.vanguard)),
+        ),
+        if (draft.vanguard) ...[
+          const SizedBox(height: 8),
+          const Text(
+            '✓ Vanguard Protection Added',
+            style: TextStyle(
+              color: _Tokens.lightBlue,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        _PrimaryButton(
+          label: 'Review delivery',
+          enabled: true,
+          onTap: onContinue,
+        ),
+      ],
+    );
+  }
+}
+
 class _ReviewPanel extends StatelessWidget {
   final SenderBookingDraft draft;
   final SendPackageState engine;
@@ -654,26 +708,45 @@ class _ReviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final total = draft.totalWithAddOns(engine.price);
     return Column(
       children: [
-        _SummaryLine(
+        _ReviewRow(
+            icon: Icons.location_on_outlined,
             label: 'Pickup',
             value: engine.pickupLocation ?? draft.pickupAddress),
-        _SummaryLine(
+        _ReviewRow(
+            icon: Icons.flag_outlined,
             label: 'Drop-off',
             value: engine.destinationLocation ?? draft.dropoffAddress),
-        _SummaryLine(label: 'Recipient', value: draft.receiverName),
-        _SummaryLine(label: 'Parcel', value: draft.itemName),
-        _SummaryLine(
+        _ReviewRow(
+            icon: Icons.person_outline_rounded,
+            label: 'Recipient',
+            value: draft.receiverName),
+        _ReviewRow(
+            icon: Icons.inventory_2_outlined,
+            label: 'Parcel',
+            value: draft.itemName),
+        _ReviewRow(
+            icon: Icons.speed_rounded,
+            label: 'Speed',
+            value: draft.selectedOption),
+        _ReviewRow(
+            icon: Icons.pedal_bike_rounded,
             label: 'Vehicle',
             value: engine.irisResult?.vehicleSuitability ?? draft.irisVehicle),
-        _SummaryLine(
-            label: 'Price',
-            value: engine.price == null
-                ? 'Calculating'
-                : '£${engine.price!.toStringAsFixed(2)}'),
         if (draft.vanguard)
-          const _SummaryLine(label: 'Vanguard', value: 'Included'),
+          _ReviewRow(
+            icon: Icons.shield_outlined,
+            label: 'Vanguard Protection',
+            value: '£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+            accent: _Tokens.lightBlue,
+          ),
+        _ReviewRow(
+            icon: Icons.payments_outlined,
+            label: 'Total',
+            value:
+                total == null ? 'Calculating' : '£${total.toStringAsFixed(2)}'),
         const SizedBox(height: 12),
         _PrimaryButton(
             label: 'Continue to payment', enabled: true, onTap: onContinue),
@@ -684,18 +757,31 @@ class _ReviewPanel extends StatelessWidget {
 
 class _PaymentPanel extends StatelessWidget {
   final SendPackageState engine;
+  final SenderBookingDraft draft;
 
-  const _PaymentPanel({required this.engine});
+  const _PaymentPanel({required this.engine, required this.draft});
 
   @override
   Widget build(BuildContext context) {
+    final total = draft.totalWithAddOns(engine.price);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SummaryLine(
-            label: 'Total',
+            label: 'Delivery price',
             value: engine.price == null
                 ? 'Pending route'
                 : '£${engine.price!.toStringAsFixed(2)}'),
+        if (draft.vanguard)
+          _SummaryLine(
+            label: 'Vanguard Protection',
+            value: '£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+          ),
+        _SummaryLine(
+          label: 'Total',
+          value:
+              total == null ? 'Pending route' : '£${total.toStringAsFixed(2)}',
+        ),
         const _GapNotice(
           title: 'Payment required before live booking',
           body:
@@ -872,17 +958,223 @@ class _PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton(
-        onPressed: enabled ? onTap : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _Tokens.blue,
-          disabledBackgroundColor: Colors.white.withValues(alpha: .10),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      height: 56,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: _Tokens.blue.withValues(alpha: .30),
+                    blurRadius: 24,
+                    offset: const Offset(0, 14),
+                  ),
+                ]
+              : const [],
+          gradient: enabled
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_Tokens.lightBlue, _Tokens.blue, _Tokens.vanguard],
+                )
+              : null,
         ),
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+        child: ElevatedButton(
+          onPressed: enabled ? onTap : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: enabled
+                ? Colors.transparent
+                : Colors.white.withValues(alpha: .10),
+            disabledBackgroundColor: Colors.white.withValues(alpha: .10),
+            shadowColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          ),
+          child:
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+
+  const _SectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label.toUpperCase(),
+      style: const TextStyle(
+        color: _Tokens.lightBlue,
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.2,
+      ),
+    );
+  }
+}
+
+class _SegmentedControl extends StatelessWidget {
+  final List<String> values;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  const _SegmentedControl({
+    required this.values,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .055),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _Tokens.border),
+      ),
+      child: Row(
+        children: values.map((value) {
+          final active = selected == value;
+          return Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => onSelected(value),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: active
+                      ? _Tokens.blue.withValues(alpha: .24)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: active ? _Tokens.lightBlue : Colors.transparent,
+                  ),
+                  boxShadow: active
+                      ? [
+                          BoxShadow(
+                            color: _Tokens.blue.withValues(alpha: .24),
+                            blurRadius: 18,
+                          ),
+                        ]
+                      : const [],
+                ),
+                child: Text(
+                  value,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: active ? Colors.white : _Tokens.muted,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _AddOnTile extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final String price;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _AddOnTile({
+    required this.selected,
+    required this.title,
+    required this.price,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? _Tokens.vanguard.withValues(alpha: .20)
+              : Colors.white.withValues(alpha: .055),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected ? _Tokens.lightBlue : _Tokens.border,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: _Tokens.vanguard.withValues(alpha: .26),
+                    blurRadius: 24,
+                    offset: const Offset(0, 12),
+                  ),
+                ]
+              : const [],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: selected ? _Tokens.lightBlue : Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        price,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: _Tokens.muted,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: selected ? _Tokens.lightBlue : _Tokens.muted,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -908,6 +1200,51 @@ class _SummaryLine extends StatelessWidget {
               textAlign: TextAlign.right,
               style: const TextStyle(
                   color: Colors.white, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+
+  const _ReviewRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.accent = _Tokens.lightBlue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _Tokens.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: accent, size: 20),
+          const SizedBox(width: 10),
+          Text(label, style: const TextStyle(color: _Tokens.muted)),
+          const Spacer(),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
@@ -973,16 +1310,35 @@ class _Glass extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(30),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: Container(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * .68,
+            maxHeight: MediaQuery.of(context).size.height * .54,
           ),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: _Tokens.glass,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _Tokens.midnight.withValues(alpha: .84),
+                _Tokens.bg.withValues(alpha: .72),
+                _Tokens.blue.withValues(alpha: .10),
+              ],
+            ),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: _Tokens.border),
+            border: Border.all(color: Colors.white.withValues(alpha: .18)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .40),
+                blurRadius: 36,
+                offset: const Offset(0, 22),
+              ),
+              BoxShadow(
+                color: _Tokens.blue.withValues(alpha: .14),
+                blurRadius: 34,
+              ),
+            ],
           ),
           child: SingleChildScrollView(child: child),
         ),
@@ -1147,6 +1503,26 @@ class _MapPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..color = _Tokens.lightBlue.withValues(alpha: active ? .68 : .24),
     );
+    final metrics = route.computeMetrics().toList();
+    if (metrics.isNotEmpty) {
+      final metric = metrics.first;
+      final start = (metric.length * t) % metric.length;
+      final end = math.min(metric.length, start + metric.length * .24);
+      canvas.drawPath(
+        metric.extractPath(start, end),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5
+          ..strokeCap = StrokeCap.round
+          ..shader = LinearGradient(
+            colors: [
+              _Tokens.iris.withValues(alpha: 0),
+              _Tokens.iris.withValues(alpha: .72),
+              _Tokens.lightBlue.withValues(alpha: 0),
+            ],
+          ).createShader(rect),
+      );
+    }
     _pin(canvas, pickup, _Tokens.blue, t);
     _pin(canvas, dropoff, const Color(0xFF22C55E), (t + .45) % 1);
   }

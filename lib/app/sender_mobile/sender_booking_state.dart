@@ -16,6 +16,12 @@ enum SenderBookingStep {
 
 enum SenderPaymentStatus { notReady, ready, processing, paid, failed }
 
+const senderDeliverySpeeds = ['Economy', 'Standard', 'Express'];
+const senderVanguardAddOnPriceGbp = 1.99;
+
+bool isSenderDeliverySpeed(String value) =>
+    senderDeliverySpeeds.contains(value);
+
 @immutable
 class SenderBookingDraft {
   final SenderBookingStep step;
@@ -86,6 +92,11 @@ class SenderBookingDraft {
 
   bool get exposesPaymentSuccess =>
       paymentStatus == SenderPaymentStatus.paid && bookingConfirmed;
+
+  double get addOnTotalGbp => vanguard ? senderVanguardAddOnPriceGbp : 0;
+
+  double? totalWithAddOns(double? deliveryPrice) =>
+      deliveryPrice == null ? null : deliveryPrice + addOnTotalGbp;
 
   double get progress =>
       (SenderBookingStep.values.indexOf(step) + 1) /
@@ -158,7 +169,7 @@ String senderStepTitle(SenderBookingStep step) {
     case SenderBookingStep.dropoff:
       return 'Where is this going?';
     case SenderBookingStep.recipient:
-      return "Who's receiving this parcel?";
+      return "Who's receiving\nthis parcel?";
     case SenderBookingStep.deliveryTime:
       return 'When should it arrive?';
     case SenderBookingStep.parcel:
