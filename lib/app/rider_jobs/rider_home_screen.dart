@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../rider_marketplace/rider_onboarding_policy.dart';
 import 'rider_accept_controller.dart';
 import 'rider_home_state_mapper.dart';
 import 'rider_iris_orb.dart';
@@ -162,31 +163,51 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                                                                   profile,
                                                             ),
                                                           )
-                                                        : _DashboardPane(
-                                                            key: const ValueKey(
-                                                                'dashboard'),
-                                                            user: user,
-                                                            state: state,
-                                                            profile: profile,
-                                                            presence: presence,
-                                                            earnings: earnings,
-                                                            offers: offers,
-                                                            scheduled:
-                                                                scheduled,
-                                                            recent: recent,
-                                                            unreadNotifications:
-                                                                unread,
-                                                            message: _message,
-                                                            loading: loading,
-                                                            updating:
-                                                                _updatingAvailability,
-                                                            online: online,
-                                                            available:
-                                                                available,
-                                                            onToggleAvailability:
-                                                                _toggleAvailability,
-                                                            onOpenTab: _openTab,
-                                                          ),
+                                                        : _tab == 3
+                                                            ? _FinanceHubPane(
+                                                                key: const ValueKey(
+                                                                    'finance'),
+                                                                user: user,
+                                                                profile:
+                                                                    profile,
+                                                                earnings:
+                                                                    earnings,
+                                                                firestore:
+                                                                    _firestore,
+                                                                onOpenTab:
+                                                                    _openTab,
+                                                              )
+                                                            : _DashboardPane(
+                                                                key: const ValueKey(
+                                                                    'dashboard'),
+                                                                user: user,
+                                                                state: state,
+                                                                profile:
+                                                                    profile,
+                                                                presence:
+                                                                    presence,
+                                                                earnings:
+                                                                    earnings,
+                                                                offers: offers,
+                                                                scheduled:
+                                                                    scheduled,
+                                                                recent: recent,
+                                                                unreadNotifications:
+                                                                    unread,
+                                                                message:
+                                                                    _message,
+                                                                loading:
+                                                                    loading,
+                                                                updating:
+                                                                    _updatingAvailability,
+                                                                online: online,
+                                                                available:
+                                                                    available,
+                                                                onToggleAvailability:
+                                                                    _toggleAvailability,
+                                                                onOpenTab:
+                                                                    _openTab,
+                                                              ),
                                                   ),
                                                 ),
                                                 _RiderBottomNav(
@@ -271,16 +292,18 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       _toggleAvailability();
       return;
     }
-    if (index == 3 || index == 4) {
+    if (index == 4) {
       setState(() {
         _tab = index;
-        _message = index == 3
-            ? 'Earnings opens from the existing rider finance route when wired.'
-            : 'Profile opens from the existing rider profile route when wired.';
+        _message =
+            'Profile opens from the existing rider profile route when wired.';
       });
       return;
     }
-    setState(() => _tab = index);
+    setState(() {
+      _tab = index;
+      if (index == 0 || index == 1 || index == 3) _message = null;
+    });
   }
 
   Future<void> _toggleAvailability() async {
@@ -568,6 +591,692 @@ class _OffersPane extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _FinanceHubPane extends StatelessWidget {
+  final User? user;
+  final Map<String, dynamic> profile;
+  final Map<String, dynamic> earnings;
+  final FirebaseFirestore firestore;
+  final ValueChanged<int> onOpenTab;
+
+  const _FinanceHubPane({
+    super.key,
+    required this.user,
+    required this.profile,
+    required this.earnings,
+    required this.firestore,
+    required this.onOpenTab,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = user?.uid;
+    if (uid == null) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+        children: const [
+          _SectionHeader(
+            title: 'Finance',
+            subtitle: 'Sign in to view rider earnings and wallet activity.',
+          ),
+        ],
+      );
+    }
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: firestore
+          .collectionGroup('wallets')
+          .where('walletType', isEqualTo: 'rider')
+          .limit(20)
+          .snapshots(),
+      builder: (context, rothSnapshot) {
+        final rothWallet = _roleRothWallet(rothSnapshot, uid);
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: firestore
+              .collection('riderWalletTransactions')
+              .where('riderId', isEqualTo: uid)
+              .limit(20)
+              .snapshots(),
+          builder: (context, riderTxSnapshot) {
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: firestore
+                  .collection('walletTransactions')
+                  .where('userId', isEqualTo: uid)
+                  .limit(20)
+                  .snapshots(),
+              builder: (context, walletTxSnapshot) {
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: firestore
+                      .collection('payoutRequests')
+                      .where('riderId', isEqualTo: uid)
+                      .limit(20)
+                      .snapshots(),
+                  builder: (context, payoutSnapshot) {
+                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: firestore
+                          .collection('referrals')
+                          .where('referrerUserId', isEqualTo: uid)
+                          .limit(20)
+                          .snapshots(),
+                      builder: (context, referralSnapshot) {
+                        final riderTransactions = _docs(riderTxSnapshot);
+                        final walletTransactions = _docs(walletTxSnapshot);
+                        final payouts = _docs(payoutSnapshot);
+                        final referrals = _docs(referralSnapshot);
+                        final finance = _FinanceSnapshot.from(
+                          earnings: earnings,
+                          profile: profile,
+                          rothWallet: rothWallet,
+                          riderTransactions: riderTransactions,
+                          walletTransactions: walletTransactions,
+                          payouts: payouts,
+                          referrals: referrals,
+                        );
+                        return ListView(
+                          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+                          children: [
+                            const _SectionHeader(
+                              title: 'Finance',
+                              subtitle:
+                                  'Cash, Roth, withdrawals and rank progress.',
+                            ),
+                            const SizedBox(height: 14),
+                            _FinanceOverview(finance: finance),
+                            const SizedBox(height: 14),
+                            _FinanceEarnings(finance: finance),
+                            const SizedBox(height: 14),
+                            _RothWalletSection(finance: finance),
+                            const SizedBox(height: 14),
+                            _ReferralRothSection(finance: finance),
+                            const SizedBox(height: 14),
+                            _WithdrawSection(
+                              finance: finance,
+                              profile: profile,
+                            ),
+                            const SizedBox(height: 14),
+                            _TransactionHistory(finance: finance),
+                            const SizedBox(height: 14),
+                            _FinanceRankSection(profile: profile),
+                            const SizedBox(height: 14),
+                            _InsightsSection(finance: finance),
+                            const SizedBox(height: 14),
+                            _NextMilestoneSection(finance: finance),
+                            const SizedBox(height: 14),
+                            _QuickActions(onOpenTab: onOpenTab),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  static Map<String, dynamic>? _roleRothWallet(
+    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+    String uid,
+  ) {
+    if (!snapshot.hasData) return null;
+    for (final doc in snapshot.data!.docs) {
+      final data = doc.data();
+      final owner =
+          '${data['userId'] ?? doc.reference.parent.parent?.id ?? ''}';
+      if (owner == uid) return {'id': doc.id, ...data};
+    }
+    return null;
+  }
+
+  static List<Map<String, dynamic>> _docs(
+    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+  ) {
+    if (!snapshot.hasData) return const [];
+    return snapshot.data!.docs
+        .map((doc) => {'id': doc.id, ...doc.data()})
+        .toList(growable: false);
+  }
+}
+
+class _FinanceSnapshot {
+  final double availableCash;
+  final double pendingCash;
+  final double today;
+  final double week;
+  final double month;
+  final double lifetime;
+  final double processingWithdrawals;
+  final double completedWithdrawals;
+  final double rothBalance;
+  final int trustPoints;
+  final String rank;
+  final List<Map<String, dynamic>> riderTransactions;
+  final List<Map<String, dynamic>> walletTransactions;
+  final List<Map<String, dynamic>> payouts;
+  final List<Map<String, dynamic>> referrals;
+
+  const _FinanceSnapshot({
+    required this.availableCash,
+    required this.pendingCash,
+    required this.today,
+    required this.week,
+    required this.month,
+    required this.lifetime,
+    required this.processingWithdrawals,
+    required this.completedWithdrawals,
+    required this.rothBalance,
+    required this.trustPoints,
+    required this.rank,
+    required this.riderTransactions,
+    required this.walletTransactions,
+    required this.payouts,
+    required this.referrals,
+  });
+
+  factory _FinanceSnapshot.from({
+    required Map<String, dynamic> earnings,
+    required Map<String, dynamic> profile,
+    required Map<String, dynamic>? rothWallet,
+    required List<Map<String, dynamic>> riderTransactions,
+    required List<Map<String, dynamic>> walletTransactions,
+    required List<Map<String, dynamic>> payouts,
+    required List<Map<String, dynamic>> referrals,
+  }) {
+    final processing = payouts.where((item) {
+      final status = '${item['status'] ?? ''}'.toLowerCase();
+      return status == 'requested' ||
+          status == 'approved' ||
+          status == 'pending' ||
+          status == 'processing';
+    }).fold<double>(0, (total, item) => total + _num(item['amount']));
+    final completed = payouts.where((item) {
+      final status = '${item['status'] ?? ''}'.toLowerCase();
+      return status == 'completed' || status == 'paid';
+    }).fold<double>(0, (total, item) => total + _num(item['amount']));
+    return _FinanceSnapshot(
+      availableCash: _num(earnings['availableBalance'] ??
+          earnings['availableEarnings'] ??
+          earnings['accountBalance']),
+      pendingCash: _num(earnings['pendingBalance'] ??
+          earnings['pendingEarnings'] ??
+          earnings['pendingWithdrawal']),
+      today: _num(earnings['todayEarnings'] ?? earnings['availableToday']),
+      week: _num(earnings['weeklyEarnings'] ?? earnings['thisWeekEarnings']),
+      month: _num(earnings['monthlyEarnings'] ?? earnings['thisMonthEarnings']),
+      lifetime:
+          _num(earnings['lifetimeEarnings'] ?? earnings['totalAmountEarned']),
+      processingWithdrawals: processing,
+      completedWithdrawals:
+          completed > 0 ? completed : _num(earnings['withdrawnEarnings']),
+      rothBalance: _num(rothWallet?['balanceRoth'] ??
+          rothWallet?['balance'] ??
+          rothWallet?['rothCredit']),
+      trustPoints: _num(profile['trustPoints']).toInt(),
+      rank: '${profile['riderRank'] ?? profile['rank'] ?? ''}'.trim(),
+      riderTransactions: riderTransactions,
+      walletTransactions: walletTransactions,
+      payouts: payouts,
+      referrals: referrals,
+    );
+  }
+
+  List<Map<String, dynamic>> get combinedTransactions {
+    final rows = <Map<String, dynamic>>[
+      ...riderTransactions.map((item) => {...item, '_financeKind': 'cash'}),
+      ...walletTransactions.map((item) {
+        final balanceType = '${item['balanceType'] ?? ''}'.toLowerCase();
+        final type = '${item['type'] ?? ''}'.toLowerCase();
+        return {
+          ...item,
+          '_financeKind': balanceType.contains('roth') ||
+                  type.contains('roth') ||
+                  type.contains('referral') ||
+                  type.contains('gift_card')
+              ? 'roth'
+              : 'cash',
+        };
+      }),
+      ...payouts.map((item) => {...item, '_financeKind': 'withdrawal'}),
+    ];
+    rows.sort((a, b) => _millis(b).compareTo(_millis(a)));
+    return rows.take(8).toList(growable: false);
+  }
+
+  static int _millis(Map<String, dynamic> item) {
+    final value = item['createdAt'] ?? item['updatedAt'] ?? item['paidAt'];
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    return 0;
+  }
+
+  static double _num(Object? value) => value is num ? value.toDouble() : 0;
+}
+
+class _FinanceOverview extends StatelessWidget {
+  final _FinanceSnapshot finance;
+
+  const _FinanceOverview({required this.finance});
+
+  @override
+  Widget build(BuildContext context) {
+    return _MetricGlassGrid(
+      title: 'Overview',
+      items: [
+        (_money(finance.availableCash), 'Available Cash'),
+        ('${finance.rothBalance.toStringAsFixed(0)} Roth', 'Roth Balance'),
+        (_money(finance.today), 'Today'),
+        ('${finance.trustPoints}', 'Trust Points'),
+        (finance.rank.isEmpty ? 'Rank building' : finance.rank, 'Current Rank'),
+      ],
+    );
+  }
+}
+
+class _FinanceEarnings extends StatelessWidget {
+  final _FinanceSnapshot finance;
+
+  const _FinanceEarnings({required this.finance});
+
+  @override
+  Widget build(BuildContext context) {
+    return _MetricGlassGrid(
+      title: 'Earnings',
+      items: [
+        (_money(finance.today), 'Today'),
+        (_money(finance.week), 'This Week'),
+        (_money(finance.month), 'This Month'),
+        (_money(finance.lifetime), 'Lifetime'),
+        (_money(finance.pendingCash), 'Pending'),
+        (_money(finance.availableCash), 'Available to Withdraw'),
+        (_money(finance.processingWithdrawals), 'Processing'),
+        (_money(finance.completedWithdrawals), 'Completed Withdrawals'),
+      ],
+    );
+  }
+}
+
+class _RothWalletSection extends StatelessWidget {
+  final _FinanceSnapshot finance;
+
+  const _RothWalletSection({required this.finance});
+
+  @override
+  Widget build(BuildContext context) {
+    final rothRows = finance.walletTransactions
+        .where((item) =>
+            '${item['_financeKind'] ?? item['balanceType'] ?? item['type']}'
+                .toLowerCase()
+                .contains('roth'))
+        .take(4)
+        .toList(growable: false);
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Roth Wallet',
+            subtitle:
+                'Roth is internal Circum credit, separate from cash earnings.',
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${finance.rothBalance.toStringAsFixed(0)} Roth',
+            style: GoogleFonts.jetBrainsMono(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const _EmptyLine(
+            'Roth is an internal Circum credit that can be used across supported Circum services. Roth is separate from cash earnings and cannot be withdrawn as cash.',
+          ),
+          const SizedBox(height: 12),
+          if (rothRows.isEmpty)
+            const _EmptyLine('No recent Roth activity yet.')
+          else
+            ...rothRows.map(_FinanceTransactionRow.new),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReferralRothSection extends StatelessWidget {
+  final _FinanceSnapshot finance;
+
+  const _ReferralRothSection({required this.finance});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Rider Referral Roth',
+            subtitle:
+                'Rewards unlock after approval, activation and first qualifying delivery.',
+          ),
+          const SizedBox(height: 12),
+          if (finance.referrals.isEmpty)
+            const _EmptyLine('Referral progress will appear here.')
+          else
+            ...finance.referrals.take(4).map((item) {
+              final status = _referralStatus(item);
+              final amount = _FinanceSnapshot._num(
+                item['rewardRoth'] ?? item['amountRoth'] ?? item['amount'],
+              );
+              return _FinanceLine(
+                icon: Icons.group_add_rounded,
+                title: 'Rider Referral Reward',
+                subtitle: 'Status: $status',
+                value: amount > 0 ? '+${amount.toStringAsFixed(0)} Roth' : '',
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  static String _referralStatus(Map<String, dynamic> item) {
+    final raw = '${item['status'] ?? ''}'.toLowerCase();
+    if (raw == 'completed' || raw == 'rewarded') return 'Completed';
+    if (item['firstDeliveryCompletedAt'] != null) return 'Completed';
+    if (item['approvedAt'] != null || item['activatedAt'] != null) {
+      return 'Awaiting first completed delivery';
+    }
+    if (item['signedUpAt'] != null || raw == 'pending') {
+      return 'Awaiting approval';
+    }
+    return 'Signed up';
+  }
+}
+
+class _WithdrawSection extends StatelessWidget {
+  final _FinanceSnapshot finance;
+  final Map<String, dynamic> profile;
+
+  const _WithdrawSection({required this.finance, required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = RiderOnboardingPolicy.canWithdraw(
+      email: FirebaseAuth.instance.currentUser?.email,
+      profile: profile,
+    );
+    final accountId =
+        '${profile['stripeAccountId'] ?? profile['stripeConnectAccountId'] ?? ''}'
+            .trim();
+    final stripeStatus = '${profile['stripeStatus'] ?? ''}'.trim();
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Withdraw',
+            subtitle: 'Stripe Express payout status and withdrawal history.',
+          ),
+          const SizedBox(height: 12),
+          _FinanceLine(
+            icon: Icons.payments_rounded,
+            title: 'Available Withdrawal Balance',
+            subtitle: 'Cash earnings only. Roth cannot be withdrawn.',
+            value: _money(finance.availableCash),
+          ),
+          _FinanceLine(
+            icon: Icons.account_balance_rounded,
+            title: accountId.isEmpty ? 'Stripe not started' : 'Stripe Express',
+            subtitle: _stripeCopy(profile),
+            value:
+                stripeStatus.isEmpty ? 'Not started' : _titleCase(stripeStatus),
+          ),
+          _FinanceLine(
+            icon: Icons.schedule_rounded,
+            title: 'Estimated Arrival',
+            subtitle: 'Shown after an approved Stripe payout is processed.',
+            value: ready ? 'Stripe schedule' : 'Locked',
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: null,
+              child: Text(
+                ready ? 'Withdraw via existing payout flow' : 'Withdraw locked',
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (finance.payouts.isEmpty)
+            const _EmptyLine('No withdrawal history yet.')
+          else
+            ...finance.payouts.take(4).map(_FinanceTransactionRow.new),
+        ],
+      ),
+    );
+  }
+
+  static String _stripeCopy(Map<String, dynamic> profile) {
+    if (profile['payoutPaused'] == true) return 'Payouts paused.';
+    if (profile['stripeStatus'] == 'payouts_enabled' ||
+        profile['stripePayoutsEnabled'] == true) {
+      return 'Payouts Enabled. Bank account linked through Stripe.';
+    }
+    if ('${profile['stripeAccountId'] ?? ''}'.trim().isNotEmpty) {
+      return 'Stripe account exists. Action may be required before withdrawal.';
+    }
+    return 'Set up Stripe payouts before requesting cash withdrawal.';
+  }
+}
+
+class _TransactionHistory extends StatelessWidget {
+  final _FinanceSnapshot finance;
+
+  const _TransactionHistory({required this.finance});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = finance.combinedTransactions;
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Transactions',
+            subtitle: 'All · Cash · Roth · Deliveries · Withdrawals · Rewards',
+          ),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            const _EmptyLine('Transactions will appear here.')
+          else
+            ...rows.map(_FinanceTransactionRow.new),
+        ],
+      ),
+    );
+  }
+}
+
+class _FinanceRankSection extends StatelessWidget {
+  final Map<String, dynamic> profile;
+
+  const _FinanceRankSection({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Rank Progression',
+            subtitle: 'Agent → Sentinel → Warden → Knight → Veteran',
+          ),
+          const SizedBox(height: 12),
+          _RankCard(profile: profile),
+          const SizedBox(height: 12),
+          const _EmptyLine(
+            'Higher ranks unlock greater priority for eligible delivery opportunities as defined by Circum dispatch policy.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightsSection extends StatelessWidget {
+  final _FinanceSnapshot finance;
+
+  const _InsightsSection({required this.finance});
+
+  @override
+  Widget build(BuildContext context) {
+    final insight = finance.week > 0 && finance.lifetime > finance.week
+        ? 'This week is contributing to your lifetime earnings.'
+        : finance.trustPoints > 0
+            ? 'You are building trust with every completed delivery.'
+            : '';
+    if (insight.isEmpty) return const SizedBox.shrink();
+    return _GlassPanel(
+      child: _FinanceLine(
+        icon: Icons.insights_rounded,
+        title: 'Insights',
+        subtitle: insight,
+        value: '',
+      ),
+    );
+  }
+}
+
+class _NextMilestoneSection extends StatelessWidget {
+  final _FinanceSnapshot finance;
+
+  const _NextMilestoneSection({required this.finance});
+
+  @override
+  Widget build(BuildContext context) {
+    final rank = finance.rank.isEmpty ? 'Agent' : finance.rank;
+    final next = _RankCard._nextRank(rank);
+    final remaining =
+        (_RankCard._rankThreshold(next) - finance.trustPoints).clamp(0, 99999);
+    final copy = finance.availableCash <= 0
+        ? 'Complete 1 more delivery to build your withdrawal balance.'
+        : remaining > 0
+            ? 'Earn $remaining more Trust Points to reach $next.'
+            : finance.referrals.isEmpty
+                ? 'Invite one Rider to earn referral Roth after their first qualifying delivery.'
+                : 'Keep completing deliveries to strengthen your rider profile.';
+    return _GlassPanel(
+      child: _FinanceLine(
+        icon: Icons.flag_rounded,
+        title: 'Next Milestone',
+        subtitle: copy,
+        value: '',
+      ),
+    );
+  }
+}
+
+class _FinanceLine extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String value;
+
+  const _FinanceLine({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          _CircleIcon(icon: icon),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .58),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (value.isNotEmpty)
+            Text(
+              value,
+              style: GoogleFonts.jetBrainsMono(
+                color: const Color(0xFF60A5FA),
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FinanceTransactionRow extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const _FinanceTransactionRow(this.item);
+
+  @override
+  Widget build(BuildContext context) {
+    final kind = '${item['_financeKind'] ?? item['type'] ?? 'transaction'}';
+    final isRoth = kind.toLowerCase().contains('roth') ||
+        '${item['type'] ?? ''}'.toLowerCase().contains('referral') ||
+        '${item['balanceType'] ?? ''}'.toLowerCase().contains('roth');
+    final amount = _FinanceSnapshot._num(
+      item['amount'] ?? item['tipAmount'] ?? item['riderNetPayout'],
+    );
+    final sign = amount < 0 || kind == 'withdrawal' ? '-' : '+';
+    final value = isRoth
+        ? '$sign${amount.abs().toStringAsFixed(0)} Roth'
+        : '$sign£${amount.abs().toStringAsFixed(2)}';
+    return _FinanceLine(
+      icon: isRoth
+          ? Icons.stars_rounded
+          : kind == 'withdrawal'
+              ? Icons.account_balance_wallet_rounded
+              : Icons.receipt_long_rounded,
+      title: _titleCase('${item['type'] ?? item['status'] ?? 'Transaction'}'),
+      subtitle:
+          '${item['description'] ?? item['reason'] ?? item['status'] ?? 'Recorded'} · ${_date(item)}',
+      value: value,
+    );
+  }
+
+  static String _date(Map<String, dynamic> item) {
+    final value = item['createdAt'] ?? item['updatedAt'] ?? item['paidAt'];
+    if (value is Timestamp) {
+      final date = value.toDate();
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
+    }
+    return 'Pending date';
   }
 }
 
@@ -1224,15 +1933,20 @@ class _MetricGlassGrid extends StatelessWidget {
         children: [
           _SectionHeader(title: title, subtitle: 'Live rider summary.'),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 14,
             children: items
                 .map(
-                  (item) => Expanded(
+                  (item) => SizedBox(
+                    width: 132,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           item.$1,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.jetBrainsMono(
                             color: Colors.white,
                             fontSize: 16,
@@ -1511,6 +2225,17 @@ class _GlassPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+String _money(double value) => '£${value.toStringAsFixed(2)}';
+
+String _titleCase(String value) {
+  return value
+      .replaceAll('_', ' ')
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
 }
 
 class _MapShade extends StatelessWidget {
