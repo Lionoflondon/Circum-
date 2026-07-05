@@ -6,6 +6,14 @@ import 'package:flutter/material.dart';
 import 'sender_booking_canvas.dart';
 
 const senderMobileDashboardServiceNames = ['Health+', 'Business', 'Gifts'];
+const senderMobileHeroSubtitle =
+    'From collection to delivery, every step protected by IRIS.';
+const senderMobileDashboardServiceSubtitles = {
+  'Health+': 'Trusted medical deliveries',
+  'Business': 'Business deliveries',
+  'Gifts': 'Thoughtful gfts, delivered.',
+};
+const senderMobileRecentOrderTitles = ['Passport', 'Prescription collection'];
 
 class SenderMobileHome extends StatefulWidget {
   const SenderMobileHome({super.key});
@@ -82,11 +90,6 @@ class _SenderDashboard extends StatelessWidget {
             fontWeight: FontWeight.w900,
             height: 1.05,
           ),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Send with calm, verified delivery.',
-          style: TextStyle(color: _SenderTokens.muted),
         ),
         const SizedBox(height: 18),
         _HeroSendCard(onTap: onStartDelivery),
@@ -181,11 +184,26 @@ class _HeroSendCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 9),
-                    const Text(
-                      'Book, price, pay and track in one map-led flow.',
-                      style: TextStyle(
-                        color: Color(0xFFD8E7FF),
-                        height: 1.35,
+                    RichText(
+                      text: const TextSpan(
+                        style: TextStyle(
+                          color: Color(0xFFD8E7FF),
+                          height: 1.35,
+                          fontSize: 14,
+                        ),
+                        children: [
+                          TextSpan(
+                              text:
+                                  'From collection to delivery, every step protected by '),
+                          TextSpan(
+                            text: 'IRIS',
+                            style: TextStyle(
+                              color: _SenderTokens.blue,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          TextSpan(text: '.'),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -206,7 +224,7 @@ class _HeroSendCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Start a delivery',
+                            'Send now',
                             style: TextStyle(
                               color: _SenderTokens.bg,
                               fontWeight: FontWeight.w900,
@@ -251,7 +269,7 @@ class _YourCircumHub extends StatelessWidget {
             Expanded(
               child: _ServiceCard(
                 title: 'Health+',
-                subtitle: 'Care-led delivery',
+                subtitle: 'Trusted medical deliveries',
                 icon: Icons.health_and_safety_rounded,
                 accent: _SenderTokens.health,
               ),
@@ -260,20 +278,21 @@ class _YourCircumHub extends StatelessWidget {
             Expanded(
               child: _ServiceCard(
                 title: 'Business',
-                subtitle: 'Company sending',
+                subtitle: 'Business deliveries',
                 icon: Icons.business_center_rounded,
                 accent: _SenderTokens.business,
               ),
             ),
+            SizedBox(width: 10),
+            Expanded(
+              child: _ServiceCard(
+                title: 'Gifts',
+                subtitle: 'Thoughtful gfts, delivered.',
+                icon: Icons.card_giftcard_rounded,
+                accent: _SenderTokens.gifts,
+              ),
+            ),
           ],
-        ),
-        SizedBox(height: 10),
-        _ServiceCard(
-          title: 'Gifts',
-          subtitle: 'Premium moments, tracked beautifully',
-          icon: Icons.redeem_rounded,
-          accent: _SenderTokens.gifts,
-          wide: true,
         ),
       ],
     );
@@ -285,14 +304,12 @@ class _ServiceCard extends StatefulWidget {
   final String subtitle;
   final IconData icon;
   final Color accent;
-  final bool wide;
 
   const _ServiceCard({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.accent,
-    this.wide = false,
   });
 
   @override
@@ -313,48 +330,43 @@ class _ServiceCardState extends State<_ServiceCard> {
         scale: _pressed ? 1.02 : 1,
         child: _GlassCard(
           radius: 24,
-          padding: const EdgeInsets.all(15),
-          child: SizedBox(
-            height: widget.wide ? 92 : 124,
-            child: Row(
+          padding: const EdgeInsets.all(12),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _ServiceIcon(icon: widget.icon, accent: widget.accent),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            widget.subtitle,
-                            style: const TextStyle(
-                              color: _SenderTokens.muted,
-                              height: 1.25,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Align(
-                        alignment: Alignment.bottomRight,
-                        child: Icon(Icons.arrow_forward_rounded,
-                            color: widget.accent, size: 18),
-                      ),
-                    ],
+                widget.title == 'Gifts'
+                    ? const _PremiumGiftIcon()
+                    : _ServiceIcon(icon: widget.icon, accent: widget.accent),
+                const Spacer(),
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .1,
+                    height: 1.05,
                   ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _SenderTokens.muted,
+                    height: 1.22,
+                    fontSize: 11.8,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Icon(Icons.arrow_forward_rounded,
+                      color: widget.accent, size: 18),
                 ),
               ],
             ),
@@ -387,6 +399,120 @@ class _ServiceIcon extends StatelessWidget {
       child: Icon(icon, color: accent, size: 24),
     );
   }
+}
+
+class _PremiumGiftIcon extends StatelessWidget {
+  const _PremiumGiftIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _SenderTokens.giftGold.withValues(alpha: .22),
+            _SenderTokens.gifts.withValues(alpha: .18),
+            _SenderTokens.iceBlue.withValues(alpha: .14),
+          ],
+        ),
+        border: Border.all(color: _SenderTokens.pearl.withValues(alpha: .36)),
+        boxShadow: [
+          BoxShadow(
+            color: _SenderTokens.gifts.withValues(alpha: .20),
+            blurRadius: 20,
+          ),
+        ],
+      ),
+      child: CustomPaint(
+        painter: const _PremiumGiftPainter(),
+      ),
+    );
+  }
+}
+
+class _PremiumGiftPainter extends CustomPainter {
+  const _PremiumGiftPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final box = RRect.fromRectAndRadius(
+      Rect.fromLTWH(size.width * .22, size.height * .38, size.width * .56,
+          size.height * .38),
+      const Radius.circular(5),
+    );
+    final lid = RRect.fromRectAndRadius(
+      Rect.fromLTWH(size.width * .18, size.height * .30, size.width * .64,
+          size.height * .16),
+      const Radius.circular(5),
+    );
+    final bodyPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          _SenderTokens.giftGold,
+          _SenderTokens.pearl,
+          _SenderTokens.gifts,
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawRRect(box, bodyPaint);
+    canvas.drawRRect(lid, bodyPaint);
+
+    final ribbonPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [
+          _SenderTokens.gifts,
+          _SenderTokens.iceBlue,
+          _SenderTokens.softLilac,
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * .46, size.height * .29, size.width * .10,
+            size.height * .47),
+        const Radius.circular(3),
+      ),
+      ribbonPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * .18, size.height * .43, size.width * .64,
+            size.height * .08),
+        const Radius.circular(3),
+      ),
+      ribbonPaint,
+    );
+
+    final bowPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..color = _SenderTokens.pearl;
+    canvas.drawArc(
+      Rect.fromLTWH(size.width * .30, size.height * .18, size.width * .22,
+          size.height * .18),
+      math.pi * .1,
+      math.pi * 1.25,
+      false,
+      bowPaint,
+    );
+    canvas.drawArc(
+      Rect.fromLTWH(size.width * .48, size.height * .18, size.width * .22,
+          size.height * .18),
+      math.pi * -.35,
+      math.pi * 1.25,
+      false,
+      bowPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _PremiumGiftPainter oldDelegate) => false;
 }
 
 class _HeroRouteArt extends StatelessWidget {
@@ -475,7 +601,7 @@ class _RecentOrdersCard extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Live tracking and status',
+                      'Recent deliveries',
                       style: TextStyle(color: _SenderTokens.muted),
                     ),
                   ],
@@ -486,14 +612,14 @@ class _RecentOrdersCard extends StatelessWidget {
           ),
           SizedBox(height: 14),
           _OrderLine(
-            title: 'Passport delivery',
+            title: 'Passport',
             subtitle: 'Marylebone → Chelsea',
             status: 'In transit',
             icon: Icons.badge_rounded,
             accent: _SenderTokens.business,
           ),
           _OrderLine(
-            title: 'Prescription box',
+            title: 'Prescription collection',
             subtitle: 'Health+ verified',
             status: 'Delivered',
             icon: Icons.medical_services_rounded,
@@ -937,6 +1063,10 @@ class _SenderTokens {
   static const health = Color(0xFF22C55E);
   static const business = Color(0xFF94A3B8);
   static const gifts = Color(0xFFE8B4A0);
+  static const giftGold = Color(0xFFE7C98F);
+  static const pearl = Color(0xFFF7F1E4);
+  static const iceBlue = Color(0xFFA5D8FF);
+  static const softLilac = Color(0xFFCDB4F6);
   static const muted = Color(0xFF9CA3AF);
   static const border = Color(0x29FFFFFF);
   static const glass = Color(0x12FFFFFF);

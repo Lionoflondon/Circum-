@@ -73,6 +73,19 @@ void main() {
       expect(senderMobileDashboardServiceNames, isNot(contains('Vanguard')));
     });
 
+    test('dashboard copy uses approved service hub language', () {
+      expect(senderMobileHeroSubtitle,
+          'From collection to delivery, every step protected by IRIS.');
+      expect(senderMobileDashboardServiceSubtitles['Health+'],
+          'Trusted medical deliveries');
+      expect(senderMobileDashboardServiceSubtitles['Business'],
+          'Business deliveries');
+      expect(senderMobileDashboardServiceSubtitles['Gifts'],
+          'Thoughtful gfts, delivered.');
+      expect(senderMobileRecentOrderTitles,
+          const ['Passport', 'Prescription collection']);
+    });
+
     test('Vanguard add-on does not replace selected delivery speed', () {
       final draft = const SenderBookingDraft(
         step: SenderBookingStep.options,
