@@ -39107,6 +39107,7 @@ class _AddressSuggestion {
   });
 
   bool get isPopularPlace => provider == 'circum_popular_place';
+  bool get isExactTypedAddress => provider == 'circum_exact_address_input';
 
   _ValidatedAddress toValidatedAddress() {
     final resolvedLat = lat ?? 0;
@@ -39258,6 +39259,21 @@ String? _extractUkPostcode(String address) {
     caseSensitive: false,
   ).firstMatch(address);
   return match?.group(1)?.toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
+}
+
+bool _hasSpecificAddressDetail(String address) {
+  final lower = address.toLowerCase();
+  if (_extractUkPostcode(address) != null) return true;
+  if (RegExp(r'\b(flat|apartment|apt|unit|suite|room|floor|building)\b')
+      .hasMatch(lower)) {
+    return true;
+  }
+  if (RegExp(r'\b\d+[a-z]?\b').hasMatch(lower) &&
+      RegExp(r'\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|close|court|way|place|pl|mews|gardens|square|terrace)\b')
+          .hasMatch(lower)) {
+    return true;
+  }
+  return false;
 }
 
 String _stableLocationId(String address, double lat, double lng) {
@@ -43113,7 +43129,12 @@ class _AddressFieldState extends State<_AddressField> {
     final freeLookup = widget.enableFreeLookup && clean.length >= 5
         ? await _freeUkAddressSearch(clean)
         : const <_AddressSuggestion>[];
+    final exactTyped = _exactTypedAddressSuggestion(
+      clean,
+      [...freeLookup, ...popular],
+    );
     final combined = <_AddressSuggestion>[
+      if (exactTyped != null) exactTyped,
       ...popular,
       ...freeLookup.where(
         (suggestion) => !popular.any(
@@ -43126,6 +43147,42 @@ class _AddressFieldState extends State<_AddressField> {
     ];
     if (combined.isNotEmpty) return combined.take(8).toList(growable: false);
     return _localAddressSuggestions(clean);
+  }
+
+  _AddressSuggestion? _exactTypedAddressSuggestion(
+    String clean,
+    List<_AddressSuggestion> support,
+  ) {
+    if (!_hasSpecificAddressDetail(clean)) return null;
+    final supported = support
+        .where((suggestion) =>
+            suggestion.lat != null &&
+            suggestion.lng != null &&
+            _coordinatesAreUsable(suggestion.lat!, suggestion.lng!))
+        .toList(growable: false);
+    final postcode = _extractUkPostcode(clean);
+    final postcodeCoords = _postcodeCoordinatesForAddress(clean);
+    final lat = supported.isNotEmpty ? supported.first.lat : postcodeCoords?.$1;
+    final lng = supported.isNotEmpty ? supported.first.lng : postcodeCoords?.$2;
+    if (lat == null || lng == null || !_coordinatesAreUsable(lat, lng)) {
+      return null;
+    }
+    final inheritedComponents = supported.isNotEmpty
+        ? supported.first.components
+        : const <String, String>{};
+    return _AddressSuggestion(
+      displayAddress: clean,
+      lat: lat,
+      lng: lng,
+      confidence: supported.isNotEmpty ? 0.88 : 0.8,
+      provider: 'circum_exact_address_input',
+      sourceInput: clean,
+      placeId: _stableLocationId(clean, lat, lng),
+      components: {
+        ...inheritedComponents,
+        if (postcode != null) 'postcode': postcode,
+      },
+    );
   }
 
   List<_AddressSuggestion> _popularPlaceSuggestions(String clean) {
@@ -43423,9 +43480,11 @@ class _AddressFieldState extends State<_AddressField> {
                         Icon(
                           suggestion.isPopularPlace
                               ? Icons.star_rounded
-                              : widget.pharmacyMode
-                                  ? Icons.local_pharmacy
-                                  : Icons.place_outlined,
+                              : suggestion.isExactTypedAddress
+                                  ? Icons.edit_location_alt_outlined
+                                  : widget.pharmacyMode
+                                      ? Icons.local_pharmacy
+                                      : Icons.place_outlined,
                           color: colors.text,
                           size: 16,
                         ),
@@ -43443,11 +43502,14 @@ class _AddressFieldState extends State<_AddressField> {
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
-                              if (suggestion.isPopularPlace)
+                              if (suggestion.isPopularPlace ||
+                                  suggestion.isExactTypedAddress)
                                 Text(
-                                  _resolvingSuggestion
-                                      ? 'Verifying free address data...'
-                                      : 'Popular place${suggestion.category == null ? '' : ' • ${suggestion.category}'}',
+                                  suggestion.isExactTypedAddress
+                                      ? 'Use exact flat, house and street details'
+                                      : _resolvingSuggestion
+                                          ? 'Verifying free address data...'
+                                          : 'Popular place${suggestion.category == null ? '' : ' • ${suggestion.category}'}',
                                   style: TextStyle(
                                     color: colors.mutedText,
                                     fontSize: 11,
