@@ -10822,30 +10822,44 @@ class _AdminIrisRepositorySection extends StatefulWidget {
 
 class _AdminIrisRepositorySectionState
     extends State<_AdminIrisRepositorySection> {
+  String _section = 'Overview';
   String _category = 'all';
   String _vehicle = 'all';
   bool? _fragile;
   bool? _highValue;
+  final Set<String> _selectedItems = {};
+  late List<Map<String, dynamic>> _managedItems;
+  late List<Map<String, dynamic>> _learningCandidates;
+  final List<Map<String, dynamic>> _auditLog = [];
   String _message =
       'Repository changes are governed. Candidates do not overwrite canonical items until approved.';
 
   @override
-  Widget build(BuildContext context) {
-    final colors = widget.colors;
-    final rows = IrisItemRepository.adminRows(
-      query: widget.query,
-      category: _category,
-      vehicle: _vehicle,
-      fragile: _fragile,
-      highValue: _highValue,
-    );
-    final candidates = [
-      IrisItemRepository.createCandidate('PS5 Slim', estimatedWeightKg: 5.2),
+  void initState() {
+    super.initState();
+    _managedItems = IrisItemRepository.adminRows()
+        .take(80)
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    _learningCandidates = [
+      IrisItemRepository.createCandidate('PS5 Slim', estimatedWeightKg: 5.2)
+          .toJson(),
       IrisItemRepository.createCandidate(
         'unknown photography rig',
         estimatedWeightKg: 8,
-      ),
+      ).toJson(),
     ];
+    _recordAudit(
+      action: 'Loaded',
+      affectedItem: 'IRIS Repository',
+      reason: 'Repository management surface opened.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final rows = _filteredManagedRows();
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
@@ -10908,6 +10922,33 @@ class _AdminIrisRepositorySectionState
                     onSelected: (selected) =>
                         setState(() => _highValue = selected ? true : null),
                   ),
+                  _AdminActionButton(
+                    colors: colors,
+                    label: '+ New Canonical Item',
+                    onTap: () => _openCanonicalDrawer(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final section in const [
+                    'Overview',
+                    'Canonical Items',
+                    'Learning Candidates',
+                    'Alias Manager',
+                    'Categories',
+                    'Imports',
+                    'Audit Log',
+                    'Settings',
+                  ])
+                    ChoiceChip(
+                      selected: _section == section,
+                      label: Text(section),
+                      onSelected: (_) => setState(() => _section = section),
+                    ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -10916,74 +10957,7 @@ class _AdminIrisRepositorySectionState
           ),
         ),
         const SizedBox(height: 16),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Alias Manager',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _aliasChip('iphone', 'Apple iPhone'),
-                  _aliasChip('mobile phone', 'Apple iPhone'),
-                  _aliasChip('bike', 'Bicycle'),
-                  _aliasChip('mountain bike', 'Bicycle'),
-                  _aliasChip('PS5 Slim', 'Sony PlayStation 5'),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 560,
-          child: _AdminDataSection(
-            colors: colors,
-            title: 'Canonical items',
-            subtitle:
-                'Search and filter canonical repository records. Deactivate bad entries rather than deleting them.',
-            records: rows.cast<Map<String, dynamic>>(),
-            columns: const [
-              'Canonical item',
-              'Category',
-              'Weight range',
-              'Vehicle',
-              'Flags',
-              'Version',
-            ],
-            rowBuilder: _repositoryRow,
-            emptyText: 'No repository items match this filter.',
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 360,
-          child: _AdminDataSection(
-            colors: colors,
-            title: 'Learning candidates',
-            subtitle:
-                'Unknown or corrected items wait here until an admin approves, rejects, merges, or marks them suspicious.',
-            records: candidates.map((candidate) => candidate.toJson()).toList(),
-            columns: const [
-              'Entered item',
-              'Category',
-              'Confidence',
-              'Actions'
-            ],
-            rowBuilder: _candidateRow,
-            emptyText: 'No learning candidates waiting for review.',
-          ),
-        ),
+        _sectionBody(colors, rows),
       ],
     );
   }
@@ -11014,6 +10988,393 @@ class _AdminIrisRepositorySectionState
     );
   }
 
+  Widget _sectionBody(_CircumColors colors, List<Map<String, dynamic>> rows) {
+    return switch (_section) {
+      'Overview' => _overviewSection(colors, rows),
+      'Canonical Items' => _canonicalItemsSection(colors, rows),
+      'Learning Candidates' => _learningCandidatesSection(colors),
+      'Alias Manager' => _aliasManagerSection(colors),
+      'Categories' => _categoriesSection(colors, rows),
+      'Imports' => _importsSection(colors),
+      'Audit Log' => _auditSection(colors),
+      'Settings' => _settingsSection(colors),
+      _ => _overviewSection(colors, rows),
+    };
+  }
+
+  List<Map<String, dynamic>> _filteredManagedRows() {
+    final query = widget.query.trim().toLowerCase();
+    return _managedItems.where((item) {
+      final haystack = [
+        item['canonicalName'],
+        item['displayName'],
+        item['categoryPath'],
+        item['recommendedVehicle'],
+        ...((item['aliases'] as List?) ?? const []),
+      ].join(' ').toLowerCase();
+      if (query.isNotEmpty && !haystack.contains(query)) return false;
+      if (_category != 'all' &&
+          !'${item['categoryPath'] ?? ''}'.contains(_category)) {
+        return false;
+      }
+      if (_vehicle != 'all' && item['recommendedVehicle'] != _vehicle) {
+        return false;
+      }
+      if (_fragile != null && item['fragile'] != _fragile) return false;
+      if (_highValue != null && item['highValue'] != _highValue) return false;
+      return item['status'] != 'deactivated' || query.isNotEmpty;
+    }).toList();
+  }
+
+  Widget _overviewSection(
+      _CircumColors colors, List<Map<String, dynamic>> rows) {
+    final aliases = _managedItems.fold<int>(
+      0,
+      (count, item) =>
+          count + (((item['aliases'] as List?) ?? const []).length),
+    );
+    final pending = _learningCandidates
+        .where((candidate) => candidate['reviewStatus'] != 'rejected')
+        .length;
+    final categories = <String, int>{};
+    for (final item in _managedItems) {
+      final category =
+          '${item['categoryPath'] ?? 'Uncategorised'}'.split('/').first;
+      categories[category] = (categories[category] ?? 0) + 1;
+    }
+    return Column(
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _AdminMetricCard(
+                colors: colors,
+                label: 'Total Canonical Items',
+                value: '${_managedItems.length}'),
+            _AdminMetricCard(
+                colors: colors, label: 'Total Aliases', value: '$aliases'),
+            _AdminMetricCard(
+                colors: colors, label: 'Pending Candidates', value: '$pending'),
+            _AdminMetricCard(
+                colors: colors,
+                label: 'Approved Today',
+                value:
+                    '${_auditLog.where((entry) => entry['action'] == 'Approved').length}'),
+            _AdminMetricCard(
+                colors: colors,
+                label: 'Rejected Today',
+                value:
+                    '${_auditLog.where((entry) => entry['action'] == 'Rejected').length}'),
+            _AdminMetricCard(
+                colors: colors, label: 'Repository Health', value: 'Guarded'),
+            _AdminMetricCard(
+                colors: colors, label: 'Average Confidence', value: 'High'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _GlassPanel(
+          colors: colors,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle(colors, 'Repository intelligence'),
+              const SizedBox(height: 10),
+              Text(
+                'Most used categories: ${categories.entries.take(4).map((entry) => '${entry.key} (${entry.value})').join(', ')}',
+                style: TextStyle(
+                    color: colors.mutedText, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Most common unknown items: ${_learningCandidates.map((candidate) => candidate['enteredText']).take(4).join(', ')}',
+                style: TextStyle(
+                    color: colors.mutedText, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              _repositoryRules(colors),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _canonicalItemsSection(colors, rows.take(10).toList()),
+      ],
+    );
+  }
+
+  Widget _canonicalItemsSection(
+    _CircumColors colors,
+    List<Map<String, dynamic>> rows,
+  ) {
+    return Column(
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '${_selectedItems.length} selected',
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              _AdminActionButton(
+                colors: colors,
+                label: 'Bulk Edit',
+                onTap: () => _bulkAction('Bulk Edited'),
+              ),
+              _AdminActionButton(
+                colors: colors,
+                label: 'Bulk Merge',
+                onTap: () => _bulkAction('Bulk Merged'),
+              ),
+              _AdminActionButton(
+                colors: colors,
+                label: 'Bulk Category Change',
+                onTap: () => _bulkAction('Bulk Category Changed'),
+              ),
+              _AdminActionButton(
+                colors: colors,
+                label: 'Bulk Vehicle Change',
+                onTap: () => _bulkAction('Bulk Vehicle Changed'),
+              ),
+              _AdminActionButton(
+                colors: colors,
+                label: 'Bulk Activate',
+                onTap: () => _bulkAction('Bulk Activated'),
+              ),
+              _AdminActionButton(
+                colors: colors,
+                label: 'Bulk Deactivate',
+                onTap: () => _bulkAction('Bulk Deactivated'),
+              ),
+              _AdminActionButton(
+                colors: colors,
+                label: 'Bulk Export',
+                onTap: _bulkExport,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 620,
+          child: _AdminDataSection(
+            colors: colors,
+            title: 'Canonical items',
+            subtitle:
+                'Managed canonical records. View, edit, duplicate, deactivate and inspect version history. Records are never permanently deleted.',
+            records: rows,
+            columns: const [
+              '',
+              'Canonical item',
+              'Category',
+              'Weight range',
+              'Vehicle',
+              'Intelligence',
+              'Actions',
+            ],
+            rowBuilder: _repositoryRow,
+            emptyText: 'No repository items match this filter.',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _learningCandidatesSection(_CircumColors colors) {
+    return SizedBox(
+      height: 430,
+      child: _AdminDataSection(
+        colors: colors,
+        title: 'Learning candidates',
+        subtitle:
+            'Unknown or corrected items wait here until an admin approves, rejects, merges, creates a new item, saves as alias, or marks suspicious.',
+        records: _learningCandidates,
+        columns: const ['Entered item', 'Category', 'Confidence', 'Workflow'],
+        rowBuilder: _candidateRow,
+        emptyText: 'No learning candidates waiting for review.',
+      ),
+    );
+  }
+
+  Widget _aliasManagerSection(_CircumColors colors) {
+    final aliases = <Map<String, dynamic>>[];
+    for (final item in _managedItems.take(40)) {
+      for (final alias in ((item['aliases'] as List?) ?? const [])) {
+        aliases.add({
+          'alias': alias,
+          'canonicalName': item['canonicalName'],
+          'status': item['aliasStatus'] ?? 'active',
+          'usage': item['deliveriesClassified'] ?? 0,
+          'confidence':
+              item['confidence'] ?? item['confidenceBaseline'] ?? 0.88,
+        });
+      }
+    }
+    return SizedBox(
+      height: 500,
+      child: _AdminDataSection(
+        colors: colors,
+        title: 'Alias Manager',
+        subtitle:
+            'Aliases point to exactly one canonical item. Use move, merge, deactivate, or restore rather than deleting.',
+        records: aliases.take(80).toList(),
+        columns: const ['Alias', 'Canonical Item', 'Signals', 'Actions'],
+        rowBuilder: (alias) => [
+          _AdminCell.primary('${alias['alias']}'),
+          _AdminCell('${alias['canonicalName']}'),
+          _AdminCell(
+              'Usage ${alias['usage']}\nConfidence ${alias['confidence']}'),
+          _AdminActions(
+            colors: colors,
+            actions: [
+              _AdminAction(
+                  label: 'Edit',
+                  enabled: true,
+                  onTap: () => _openAliasAction('Edited', alias)),
+              _AdminAction(
+                  label: 'Move',
+                  enabled: true,
+                  onTap: () => _openAliasAction('Moved', alias)),
+              _AdminAction(
+                  label: 'Merge',
+                  enabled: true,
+                  onTap: () => _openAliasAction('Merged', alias)),
+              _AdminAction(
+                  label: 'Deactivate',
+                  enabled: true,
+                  onTap: () => _openAliasAction('Deactivated', alias)),
+            ],
+          ),
+        ],
+        emptyText: 'No aliases match this filter.',
+      ),
+    );
+  }
+
+  Widget _categoriesSection(
+      _CircumColors colors, List<Map<String, dynamic>> rows) {
+    final grouped = <String, int>{};
+    for (final item in rows) {
+      final category = '${item['categoryPath'] ?? 'Uncategorised'}';
+      grouped[category] = (grouped[category] ?? 0) + 1;
+    }
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(colors, 'Categories'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: grouped.entries.map((entry) {
+              return Chip(label: Text('${entry.key} · ${entry.value} items'));
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          _AdminNotice(
+            colors: colors,
+            message:
+                'Bulk Category Change is available from selected canonical records. Category moves are audited and versioned.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _importsSection(_CircumColors colors) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(colors, 'Import Engine'),
+          const SizedBox(height: 8),
+          Text(
+            'Supported import types: CSV, Excel, JSON. Imports preview changes first and never overwrite canonical records automatically.',
+            style:
+                TextStyle(color: colors.mutedText, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            children: [
+              _AdminActionButton(
+                  colors: colors,
+                  label: 'Import CSV',
+                  onTap: () => _recordImportPreview('CSV')),
+              _AdminActionButton(
+                  colors: colors,
+                  label: 'Import Excel',
+                  onTap: () => _recordImportPreview('Excel')),
+              _AdminActionButton(
+                  colors: colors,
+                  label: 'Import JSON',
+                  onTap: () => _recordImportPreview('JSON')),
+              _AdminActionButton(
+                  colors: colors, label: 'Bulk Export', onTap: _bulkExport),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _auditSection(_CircumColors colors) {
+    return SizedBox(
+      height: 520,
+      child: _AdminDataSection(
+        colors: colors,
+        title: 'Audit Log',
+        subtitle:
+            'Every repository action is retained for review: created, edited, merged, imported, approved, rejected, deactivated and rolled back.',
+        records: _auditLog.reversed.toList(),
+        columns: const [
+          'Administrator',
+          'Timestamp',
+          'Action',
+          'Affected Item',
+          'Reason'
+        ],
+        rowBuilder: (entry) => [
+          _AdminCell('${entry['administrator']}'),
+          _AdminCell('${entry['timestamp']}'),
+          _AdminStatusCell(colors: colors, status: '${entry['action']}'),
+          _AdminCell.primary('${entry['affectedItem']}'),
+          _AdminCell('${entry['reason']}'),
+        ],
+        emptyText: 'No audit events yet.',
+      ),
+    );
+  }
+
+  Widget _settingsSection(_CircumColors colors) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(colors, 'Repository Settings'),
+          const SizedBox(height: 12),
+          _repositoryRules(colors),
+          const SizedBox(height: 14),
+          _AdminNotice(
+            colors: colors,
+            message:
+                'Canonical repository remains the single source of truth. Historical deliveries and learning candidates can create review candidates only.',
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _aliasChip(String alias, String canonical) {
     final resolved = IrisItemRepository.resolveAlias(alias);
     final ok = resolved?.item.canonicalName == canonical;
@@ -11026,12 +11387,613 @@ class _AdminIrisRepositorySectionState
     );
   }
 
+  Widget _sectionTitle(_CircumColors colors, String title) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: colors.text,
+        fontSize: 18,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+
+  Widget _repositoryRules(_CircumColors colors) {
+    const rules = [
+      'Canonical Repository is the single source of truth.',
+      'Historical deliveries never overwrite canonical data automatically.',
+      'Learning candidates require administrator approval.',
+      'Every change is versioned and auditable.',
+      'Nothing is permanently deleted.',
+      'Every alias points to exactly one canonical item.',
+      'Rollback must always be possible.',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rules.map((rule) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 7),
+          child: Row(
+            children: [
+              Icon(Icons.verified_rounded, color: colors.adminAccent, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  rule,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  void _recordAudit({
+    required String action,
+    required String affectedItem,
+    required String reason,
+  }) {
+    _auditLog.add({
+      'administrator': 'Jason Adesanya',
+      'timestamp': DateTime.now().toIso8601String().substring(0, 19),
+      'action': action,
+      'affectedItem': affectedItem,
+      'reason': reason,
+    });
+  }
+
+  void _openCanonicalDrawer(
+      {Map<String, dynamic>? item, bool duplicate = false}) {
+    final editing = item != null && !duplicate;
+    final source = item ?? const <String, dynamic>{};
+    final name = TextEditingController(
+      text: duplicate
+          ? '${source['canonicalName'] ?? ''} copy'
+          : '${source['canonicalName'] ?? ''}',
+    );
+    final displayName = TextEditingController(
+        text: '${source['displayName'] ?? source['canonicalName'] ?? ''}');
+    final category = TextEditingController(
+        text: '${source['categoryPath'] ?? ''}'.split('/').first);
+    final subcategory = TextEditingController(
+        text: '${source['categoryPath'] ?? ''}'.split('/').skip(1).join('/'));
+    final typicalWeight = TextEditingController(
+        text:
+            '${source['typicalWeightKg'] ?? source['estimatedWeightKg'] ?? ''}');
+    final minWeight =
+        TextEditingController(text: '${source['minWeightKg'] ?? ''}');
+    final maxWeight =
+        TextEditingController(text: '${source['maxWeightKg'] ?? ''}');
+    final notes = TextEditingController();
+    final reason = TextEditingController();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: FractionallySizedBox(
+            widthFactor: MediaQuery.of(context).size.width > 900 ? .42 : .96,
+            heightFactor: .96,
+            child: _GlassPanel(
+              colors: widget.colors,
+              child: ListView(
+                children: [
+                  _sectionTitle(
+                    widget.colors,
+                    editing
+                        ? 'Edit Canonical Item'
+                        : duplicate
+                            ? 'Duplicate Canonical Item'
+                            : 'New Canonical Item',
+                  ),
+                  const SizedBox(height: 12),
+                  _drawerGroup('General', [
+                    _drawerField('Canonical Name', name),
+                    _drawerField('Display Name', displayName),
+                    _drawerField('Category', category),
+                    _drawerField('Subcategory', subcategory),
+                  ]),
+                  _drawerGroup('Classification', [
+                    _drawerToggles(const [
+                      'Standard',
+                      'Fragile',
+                      'High Value',
+                      'Medical',
+                      'Food',
+                      'Document',
+                      'Gift',
+                      'Hazardous',
+                    ]),
+                  ]),
+                  _drawerGroup('Weight', [
+                    _drawerField('Typical Weight', typicalWeight),
+                    _drawerField('Minimum Weight', minWeight),
+                    _drawerField('Maximum Weight', maxWeight),
+                  ]),
+                  _drawerGroup('Dimensions', [
+                    _drawerToggles(const ['Length', 'Width', 'Height']),
+                  ]),
+                  _drawerGroup('Vehicle Eligibility', [
+                    _drawerToggles(const [
+                      'Bike',
+                      'Car',
+                      'Van',
+                      'Large Van',
+                      'Heavy Duty'
+                    ]),
+                  ]),
+                  _drawerGroup('Handling', [
+                    _drawerToggles(const [
+                      'Keep Upright',
+                      'Keep Dry',
+                      'Refrigerated',
+                      'Two Person Lift',
+                      'Tail Lift Required',
+                    ]),
+                  ]),
+                  _drawerGroup('Commercial', [
+                    _drawerToggles(const [
+                      'Vanguard Required',
+                      'Labour Charge',
+                      'Insurance Category'
+                    ]),
+                  ]),
+                  _drawerGroup('Media', [
+                    _AdminNotice(
+                      colors: widget.colors,
+                      message:
+                          'Upload Reference Images placeholder. Storage wiring is intentionally not changed in this UI pass.',
+                    ),
+                  ]),
+                  _drawerGroup('Internal', [
+                    _drawerField('Notes', notes, maxLines: 3),
+                    _drawerField(
+                        'Status',
+                        TextEditingController(
+                            text: '${source['status'] ?? 'active'}')),
+                    _drawerField(
+                        'Version',
+                        TextEditingController(
+                            text: '${source['version'] ?? 1}')),
+                    _drawerField('Change reason', reason, maxLines: 2),
+                  ]),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    children: [
+                      _AdminActionButton(
+                        colors: widget.colors,
+                        label: 'Save Version',
+                        onTap: () {
+                          setState(() {
+                            final next = Map<String, dynamic>.from(source);
+                            next['canonicalName'] = name.text.trim();
+                            next['displayName'] = displayName.text.trim();
+                            next['categoryPath'] = [
+                              category.text.trim(),
+                              subcategory.text.trim(),
+                            ].where((value) => value.isNotEmpty).join('/');
+                            next['typicalWeightKg'] =
+                                double.tryParse(typicalWeight.text.trim()) ??
+                                    next['typicalWeightKg'] ??
+                                    0;
+                            next['minWeightKg'] =
+                                double.tryParse(minWeight.text.trim()) ??
+                                    next['minWeightKg'] ??
+                                    0;
+                            next['maxWeightKg'] =
+                                double.tryParse(maxWeight.text.trim()) ??
+                                    next['maxWeightKg'] ??
+                                    0;
+                            next['version'] =
+                                (int.tryParse('${source['version'] ?? 1}') ??
+                                        1) +
+                                    (editing ? 1 : 0);
+                            next['status'] = next['status'] ?? 'active';
+                            if (editing) {
+                              final index = _managedItems.indexWhere(
+                                  (row) => row['id'] == source['id']);
+                              if (index >= 0) _managedItems[index] = next;
+                            } else {
+                              next['id'] =
+                                  'admin_${DateTime.now().microsecondsSinceEpoch}';
+                              _managedItems.insert(0, next);
+                            }
+                            _recordAudit(
+                              action: editing
+                                  ? 'Edited'
+                                  : duplicate
+                                      ? 'Duplicated'
+                                      : 'Created',
+                              affectedItem: next['canonicalName'],
+                              reason: reason.text.trim().isEmpty
+                                  ? 'Repository manager update.'
+                                  : reason.text.trim(),
+                            );
+                            _message =
+                                'Canonical item saved as a versioned repository change.';
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _drawerGroup(String title, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: TextStyle(
+                  color: widget.colors.text, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _drawerField(
+    String label,
+    TextEditingController controller, {
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        style: TextStyle(color: widget.colors.text),
+        decoration: InputDecoration(labelText: label),
+      ),
+    );
+  }
+
+  Widget _drawerToggles(List<String> labels) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: labels
+          .map((label) => FilterChip(label: Text(label), onSelected: (_) {}))
+          .toList(),
+    );
+  }
+
+  void _openVersionHistory(Map<String, dynamic> item) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Version History · ${item['canonicalName']}'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _versionLine('Editor', 'Jason Adesanya'),
+              _versionLine(
+                  'Date', DateTime.now().toIso8601String().substring(0, 10)),
+              _versionLine('Field Changed', 'Canonical metadata'),
+              _versionLine('Previous Value', 'Previous version retained'),
+              _versionLine(
+                  'New Value', 'Current version ${item['version'] ?? 1}'),
+              _versionLine('Reason', 'Governed repository change'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _recordAudit(
+                  action: 'Rolled Back',
+                  affectedItem: '${item['canonicalName']}',
+                  reason: 'Rollback requested from version history.',
+                );
+                _message =
+                    'Rollback audit prepared. Canonical history remains intact.';
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Rollback'),
+          ),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _versionLine(String label, String value) {
+    return ListTile(
+      dense: true,
+      title: Text(label),
+      subtitle: Text(value),
+    );
+  }
+
+  void _openAliasAction(String action, Map<String, dynamic> alias) {
+    setState(() {
+      _recordAudit(
+        action: action,
+        affectedItem: '${alias['alias']} → ${alias['canonicalName']}',
+        reason:
+            'Alias manager action. Alias remains attached to exactly one canonical item.',
+      );
+      _message = 'Alias ${action.toLowerCase()} with audit record prepared.';
+    });
+  }
+
+  void _recordImportPreview(String type) {
+    setState(() {
+      _recordAudit(
+        action: 'Imported',
+        affectedItem: '$type preview',
+        reason:
+            'Import preview opened. Duplicates require administrator approval before canonical changes.',
+      );
+      _message =
+          '$type import preview prepared. No canonical records are overwritten automatically.';
+    });
+  }
+
+  void _bulkExport() {
+    setState(() {
+      _recordAudit(
+        action: 'Exported',
+        affectedItem: '${_selectedItems.length} selected records',
+        reason: 'Bulk export requested.',
+      );
+      _message = 'Bulk export prepared for selected repository records.';
+    });
+  }
+
+  void _bulkAction(String action) {
+    setState(() {
+      _recordAudit(
+        action: action,
+        affectedItem: '${_selectedItems.length} selected records',
+        reason: 'Bulk governed repository action.',
+      );
+      _message =
+          '$action prepared for ${_selectedItems.length} selected item(s).';
+    });
+  }
+
+  void _deactivateItem(Map<String, dynamic> item) {
+    setState(() {
+      item['status'] = 'deactivated';
+      _recordAudit(
+        action: 'Deactivated',
+        affectedItem: '${item['canonicalName']}',
+        reason: 'Soft deletion only. Record remains searchable in audit.',
+      );
+      _message = 'Canonical item deactivated. Nothing was permanently deleted.';
+    });
+  }
+
+  void _openCandidateWorkflow(Map<String, dynamic> item) {
+    String selected = 'Merge into Existing Canonical Item';
+    final reason = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('How should IRIS learn this?'),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final option in const [
+                      'Merge into Existing Canonical Item',
+                      'Create New Canonical Item',
+                      'Save as Alias',
+                    ])
+                      RadioListTile<String>(
+                        value: option,
+                        groupValue: selected,
+                        onChanged: (value) =>
+                            setDialogState(() => selected = value!),
+                        title: Text(option),
+                      ),
+                    TextField(
+                      controller: reason,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason / target canonical item',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      item['reviewStatus'] = 'approved';
+                      _recordAudit(
+                        action: 'Approved',
+                        affectedItem: '${item['enteredText']}',
+                        reason: '$selected. ${reason.text.trim()}'.trim(),
+                      );
+                      _message =
+                          'Candidate approved through guided workflow. Existing canonical weight, pricing and vehicle rules are preserved unless a new item is explicitly saved.';
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _markCandidateSuspicious(Map<String, dynamic> item) {
+    String reason = 'Fraud';
+    final notes = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Mark Suspicious'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButton<String>(
+                  value: reason,
+                  items: const [
+                    'Fraud',
+                    'Impossible Weight',
+                    'Spam',
+                    'Offensive',
+                    'Duplicate',
+                    'Unknown',
+                    'Malicious',
+                  ]
+                      .map(
+                        (value) =>
+                            DropdownMenuItem(value: value, child: Text(value)),
+                      )
+                      .toList(),
+                  onChanged: (value) => setDialogState(() => reason = value!),
+                ),
+                TextField(
+                  controller: notes,
+                  decoration:
+                      const InputDecoration(labelText: 'Optional Notes'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    item['reviewStatus'] = 'suspicious';
+                    _recordAudit(
+                      action: 'Suspicious',
+                      affectedItem: '${item['enteredText']}',
+                      reason: '$reason ${notes.text}'.trim(),
+                    );
+                    _message =
+                        'Candidate marked suspicious for anomaly detection.';
+                  });
+                  Navigator.pop(context);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _rejectCandidate(Map<String, dynamic> item) {
+    String reason = 'Duplicate';
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Reject Candidate'),
+            content: DropdownButton<String>(
+              value: reason,
+              items: const [
+                'Duplicate',
+                'Typo',
+                'Invalid Item',
+                'Nonsense',
+                'Temporary Error',
+              ]
+                  .map(
+                    (value) =>
+                        DropdownMenuItem(value: value, child: Text(value)),
+                  )
+                  .toList(),
+              onChanged: (value) => setDialogState(() => reason = value!),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    item['reviewStatus'] = 'rejected';
+                    _recordAudit(
+                      action: 'Rejected',
+                      affectedItem: '${item['enteredText']}',
+                      reason: reason,
+                    );
+                    _message =
+                        'Candidate rejected. It remains searchable in audit.';
+                  });
+                  Navigator.pop(context);
+                },
+                child: const Text('Reject'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   List<Widget> _repositoryRow(Map<String, dynamic> item) {
     final aliases = ((item['aliases'] as List?) ?? const [])
         .take(4)
         .map((alias) => '$alias')
         .join(', ');
+    final id = '${item['id'] ?? item['canonicalName']}';
     return [
+      Checkbox(
+        value: _selectedItems.contains(id),
+        onChanged: (selected) {
+          setState(() {
+            if (selected == true) {
+              _selectedItems.add(id);
+            } else {
+              _selectedItems.remove(id);
+            }
+          });
+        },
+      ),
       _AdminCell.primary('${item['canonicalName']}\n$aliases'),
       _AdminCell('${item['categoryPath']}'),
       _AdminCell(
@@ -11045,7 +12007,41 @@ class _AdminIrisRepositorySectionState
         if (item['highValue'] == true) 'High value',
         if (item['vanguardRecommended'] == true) 'Vanguard',
       ].join(', ')),
-      _AdminCell('v${item['version']}\n${item['verificationStatus']}'),
+      _AdminCell(
+        'Confidence ${item['confidence'] ?? item['confidenceBaseline'] ?? 'High'}\n'
+        'Aliases ${((item['aliases'] as List?) ?? const []).length}\n'
+        'v${item['version']} · ${item['status'] ?? item['verificationStatus'] ?? 'active'}',
+      ),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'View',
+            enabled: true,
+            onTap: () => _openVersionHistory(item),
+          ),
+          _AdminAction(
+            label: 'Edit',
+            enabled: true,
+            onTap: () => _openCanonicalDrawer(item: item),
+          ),
+          _AdminAction(
+            label: 'Duplicate',
+            enabled: true,
+            onTap: () => _openCanonicalDrawer(item: item, duplicate: true),
+          ),
+          _AdminAction(
+            label: 'Deactivate',
+            enabled: item['status'] != 'deactivated',
+            onTap: () => _deactivateItem(item),
+          ),
+          _AdminAction(
+            label: 'History',
+            enabled: true,
+            onTap: () => _openVersionHistory(item),
+          ),
+        ],
+      ),
     ];
   }
 
@@ -11068,30 +12064,50 @@ class _AdminIrisRepositorySectionState
           _AdminAction(
             label: 'Approve',
             enabled: true,
-            onTap: () => setState(
-              () => _message =
-                  'Candidate approved as a review action. Audit event prepared; canonical data is not overwritten silently.',
-            ),
+            onTap: () => _openCandidateWorkflow(item),
           ),
           _AdminAction(
             label: 'Reject',
             enabled: true,
-            onTap: () => setState(
-              () => _message =
-                  'Candidate rejected. Canonical repository item preserved.',
-            ),
+            onTap: () => _rejectCandidate(item),
           ),
           _AdminAction(
             label: 'Suspicious',
             enabled: true,
-            onTap: () => setState(
-              () => _message =
-                  'Candidate marked suspicious for future estimate protection.',
-            ),
+            onTap: () => _markCandidateSuspicious(item),
           ),
         ],
       ),
     ];
+  }
+}
+
+class _AdminActionButton extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final VoidCallback onTap;
+
+  const _AdminActionButton({
+    required this.colors,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: colors.text,
+        side: BorderSide(color: colors.adminAccent.withValues(alpha: .45)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      ),
+    );
   }
 }
 
