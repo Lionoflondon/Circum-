@@ -30461,6 +30461,8 @@ class _SenderArchitecturePreviewAppState
     extends State<_SenderArchitecturePreviewApp> {
   _SenderStep _selected = _SenderStep.dashboard;
   bool _showNotifications = false;
+  bool _showRc1Gallery = _isLocalSenderRc1GalleryRequested();
+  bool _forceLiveTrackingPreview = false;
 
   void _showStub(String label) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -30474,7 +30476,7 @@ class _SenderArchitecturePreviewAppState
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
-    final showLiveTrackingPreview =
+    final showLiveTrackingPreview = _forceLiveTrackingPreview ||
         Uri.base.queryParameters['tracking_preview'] == 'live';
     final activePreviewDelivery =
         showLiveTrackingPreview ? _senderLiveTrackingPreviewDelivery() : null;
@@ -30493,35 +30495,44 @@ class _SenderArchitecturePreviewAppState
                 padding: EdgeInsets.zero,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
-                  child: _showNotifications
-                      ? _SenderPreviewNotifications(
-                          key: const ValueKey('sender-preview-notifications'),
+                  child: _showRc1Gallery
+                      ? _SenderRc1PreviewGallery(
+                          key: const ValueKey('sender-rc1-preview-gallery'),
                           colors: colors,
-                          onBack: () =>
-                              setState(() => _showNotifications = false),
+                          onOpen: _openGalleryTarget,
                         )
-                      : _selected == _SenderStep.dashboard
-                          ? _SenderPreviewHome(
-                              key: const ValueKey('sender-preview-home'),
+                      : _showNotifications
+                          ? _SenderPreviewNotifications(
+                              key: const ValueKey(
+                                  'sender-preview-notifications'),
                               colors: colors,
-                              activeDelivery: activePreviewDelivery,
-                              onSendParcel: () => _showStub('Send a Parcel'),
-                              onMessageRider: () => _showStub('Message rider'),
-                              onContactSupport: () => _showStub('Support'),
-                              onGifts: widget.onOpenGifts,
-                              onHealthPlus: () => _showStub('Health+'),
-                              onBusiness: () => _showStub('Business'),
+                              onBack: () =>
+                                  setState(() => _showNotifications = false),
                             )
-                          : _SenderPreviewMilestonePanel(
-                              key: ValueKey(_selected.name),
-                              colors: colors,
-                              step: _selected,
-                              onHome: () => setState(
-                                  () => _selected = _SenderStep.dashboard),
-                              onGifts: widget.onOpenGifts,
-                              onHealthPlus: () => _showStub('Health+'),
-                              onBusiness: () => _showStub('Business'),
-                            ),
+                          : _selected == _SenderStep.dashboard
+                              ? _SenderPreviewHome(
+                                  key: const ValueKey('sender-preview-home'),
+                                  colors: colors,
+                                  activeDelivery: activePreviewDelivery,
+                                  onSendParcel: () =>
+                                      _showStub('Send a Parcel'),
+                                  onMessageRider: () =>
+                                      _showStub('Message rider'),
+                                  onContactSupport: () => _showStub('Support'),
+                                  onGifts: widget.onOpenGifts,
+                                  onHealthPlus: () => _showStub('Health+'),
+                                  onBusiness: () => _showStub('Business'),
+                                )
+                              : _SenderPreviewMilestonePanel(
+                                  key: ValueKey(_selected.name),
+                                  colors: colors,
+                                  step: _selected,
+                                  onHome: () => setState(
+                                      () => _selected = _SenderStep.dashboard),
+                                  onGifts: widget.onOpenGifts,
+                                  onHealthPlus: () => _showStub('Health+'),
+                                  onBusiness: () => _showStub('Business'),
+                                ),
                 ),
               ),
             ),
@@ -30530,6 +30541,48 @@ class _SenderArchitecturePreviewAppState
       ],
     );
   }
+
+  void _openGalleryTarget(_SenderRc1PreviewTarget target) {
+    setState(() {
+      _showRc1Gallery = false;
+      _showNotifications = false;
+      _forceLiveTrackingPreview = false;
+      switch (target) {
+        case _SenderRc1PreviewTarget.home:
+          _selected = _SenderStep.dashboard;
+        case _SenderRc1PreviewTarget.tracking:
+        case _SenderRc1PreviewTarget.receiverPin:
+          _selected = _SenderStep.dashboard;
+          _forceLiveTrackingPreview = true;
+        case _SenderRc1PreviewTarget.gifts:
+          widget.onOpenGifts();
+        case _SenderRc1PreviewTarget.health:
+          _showStub('Health+');
+        case _SenderRc1PreviewTarget.business:
+          _showStub('Business');
+        case _SenderRc1PreviewTarget.profile:
+          _selected = _SenderStep.account;
+        case _SenderRc1PreviewTarget.wallet:
+          _selected = _SenderStep.roth;
+        case _SenderRc1PreviewTarget.history:
+          _selected = _SenderStep.history;
+        case _SenderRc1PreviewTarget.notifications:
+          _showNotifications = true;
+        case _SenderRc1PreviewTarget.booking:
+        case _SenderRc1PreviewTarget.iris:
+        case _SenderRc1PreviewTarget.price:
+          _showStub(
+              'This existing sender step requires a signed-in sender session.');
+      }
+    });
+  }
+}
+
+bool _isLocalSenderRc1GalleryRequested() {
+  final host = Uri.base.host;
+  return kDebugMode &&
+      Uri.base.queryParameters['sender_rc1_gallery'] == '1' &&
+      (host == 'localhost' || host == '127.0.0.1' || host.isEmpty);
 }
 
 Map<String, dynamic> _senderLiveTrackingPreviewDelivery() {
@@ -30856,6 +30909,276 @@ class _SenderPreviewNotifications extends StatelessWidget {
             subtitle:
                 'You are all clear. We will notify you when something needs your attention.',
             time: 'Now',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _SenderRc1PreviewStatus {
+  existing,
+  missing,
+  needsAuth,
+}
+
+enum _SenderRc1PreviewTarget {
+  home,
+  booking,
+  iris,
+  price,
+  tracking,
+  receiverPin,
+  gifts,
+  health,
+  business,
+  profile,
+  wallet,
+  history,
+  notifications,
+}
+
+class _SenderRc1PreviewItem {
+  final String name;
+  final _SenderRc1PreviewStatus status;
+  final _SenderRc1PreviewTarget? target;
+  final String note;
+
+  const _SenderRc1PreviewItem({
+    required this.name,
+    required this.status,
+    required this.note,
+    this.target,
+  });
+}
+
+class _SenderRc1PreviewGallery extends StatelessWidget {
+  final _CircumColors colors;
+  final ValueChanged<_SenderRc1PreviewTarget> onOpen;
+
+  const _SenderRc1PreviewGallery({
+    super.key,
+    required this.colors,
+    required this.onOpen,
+  });
+
+  static const _items = [
+    _SenderRc1PreviewItem(
+      name: 'Sender Home',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.home,
+      note: 'Existing Sender preview home surface.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Send Parcel / Booking',
+      status: _SenderRc1PreviewStatus.needsAuth,
+      target: _SenderRc1PreviewTarget.booking,
+      note: 'Existing booking flow is inside the signed-in Sender portal.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'IRIS Estimate step',
+      status: _SenderRc1PreviewStatus.needsAuth,
+      target: _SenderRc1PreviewTarget.iris,
+      note: 'Existing IRIS step is part of the authenticated booking flow.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Delivery Options / Price step',
+      status: _SenderRc1PreviewStatus.needsAuth,
+      target: _SenderRc1PreviewTarget.price,
+      note: 'Existing price step depends on booking details and auth.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Active Tracking',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.tracking,
+      note: 'Existing local live tracking preview embedded in Sender home.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Receiver PIN / Handover',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.receiverPin,
+      note:
+          'Existing tracking preview includes the Receiver Delivery PIN card.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Gifts',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.gifts,
+      note: 'Existing public Gifts surface.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Health+',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.health,
+      note: 'Existing Sender preview service entry.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Business entry',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.business,
+      note: 'Existing Sender preview service entry.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Profile',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.profile,
+      note: 'Existing account/profile preview section.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Wallet / Roth',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.wallet,
+      note: 'Existing Roth Wallet preview section.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Delivery History',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.history,
+      note: 'Existing history preview section.',
+    ),
+    _SenderRc1PreviewItem(
+      name: 'Notifications',
+      status: _SenderRc1PreviewStatus.existing,
+      target: _SenderRc1PreviewTarget.notifications,
+      note: 'Existing Sender notification preview.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sender RC1 Preview Gallery',
+            style: GoogleFonts.dmSerifDisplay(
+              color: colors.text,
+              fontSize: 30,
+              height: 1.05,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Development-only index for reviewing existing Sender screens. Production routing is unchanged.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          for (final item in _items) ...[
+            _SenderRc1PreviewCard(
+              colors: colors,
+              item: item,
+              onOpen: item.target == null ? null : () => onOpen(item.target!),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderRc1PreviewCard extends StatelessWidget {
+  final _CircumColors colors;
+  final _SenderRc1PreviewItem item;
+  final VoidCallback? onOpen;
+
+  const _SenderRc1PreviewCard({
+    required this.colors,
+    required this.item,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final status = switch (item.status) {
+      _SenderRc1PreviewStatus.existing => ('Existing', const Color(0xff60A5FA)),
+      _SenderRc1PreviewStatus.missing => ('Missing', const Color(0xffFCA5A5)),
+      _SenderRc1PreviewStatus.needsAuth => (
+          'Needs auth',
+          const Color(0xffE0A93A)
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xff111827),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: status.$2.withValues(alpha: .14),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: status.$2.withValues(alpha: .25),
+                        ),
+                      ),
+                      child: Text(
+                        status.$1,
+                        style: TextStyle(
+                          color: status.$2,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  item.note,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.35,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton(
+            onPressed: onOpen,
+            style: TextButton.styleFrom(
+              foregroundColor: colors.adminAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            child: Text(
+              item.status == _SenderRc1PreviewStatus.needsAuth
+                  ? 'Info'
+                  : 'Open',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
           ),
         ],
       ),
