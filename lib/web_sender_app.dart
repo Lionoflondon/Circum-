@@ -394,6 +394,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     usePreview: _route.useSenderPreview,
                     onBack: _openPublicHome,
                     onRoleSelected: _openRole,
+                    onOpenBooking: _openSenderBooking,
                     onOpenGifts: _openGifts,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
@@ -481,6 +482,13 @@ class _WebSenderAppState extends State<WebSenderApp> {
     setState(() {
       _route = const CircumRouteDecision(surface: CircumAppSurface.senderApp);
       _senderInitialStep = _SenderStep.dashboard;
+    });
+  }
+
+  void _openSenderBooking() {
+    setState(() {
+      _route = const CircumRouteDecision(surface: CircumAppSurface.senderApp);
+      _senderInitialStep = _SenderStep.details;
     });
   }
 
@@ -595,6 +603,7 @@ class CircumSenderAppRoot extends StatelessWidget {
   final bool usePreview;
   final VoidCallback onBack;
   final ValueChanged<CircumRole> onRoleSelected;
+  final VoidCallback onOpenBooking;
   final VoidCallback onOpenGifts;
   final VoidCallback onToggleTheme;
 
@@ -606,6 +615,7 @@ class CircumSenderAppRoot extends StatelessWidget {
     required this.usePreview,
     required this.onBack,
     required this.onRoleSelected,
+    required this.onOpenBooking,
     required this.onOpenGifts,
     required this.onToggleTheme,
   });
@@ -617,6 +627,7 @@ class CircumSenderAppRoot extends StatelessWidget {
       child: usePreview
           ? _SenderArchitecturePreviewApp(
               colors: colors,
+              onOpenBooking: onOpenBooking,
               onOpenGifts: onOpenGifts,
             )
           : _CustomerPortal(
@@ -30445,10 +30456,12 @@ class _SenderLineGlyph extends StatelessWidget {
 
 class _SenderArchitecturePreviewApp extends StatefulWidget {
   final _CircumColors colors;
+  final VoidCallback onOpenBooking;
   final VoidCallback onOpenGifts;
 
   const _SenderArchitecturePreviewApp({
     required this.colors,
+    required this.onOpenBooking,
     required this.onOpenGifts,
   });
 
@@ -30514,8 +30527,7 @@ class _SenderArchitecturePreviewAppState
                                   key: const ValueKey('sender-preview-home'),
                                   colors: colors,
                                   activeDelivery: activePreviewDelivery,
-                                  onSendParcel: () =>
-                                      _showStub('Send a Parcel'),
+                                  onSendParcel: widget.onOpenBooking,
                                   onMessageRider: () =>
                                       _showStub('Message rider'),
                                   onContactSupport: () => _showStub('Support'),
@@ -30571,8 +30583,7 @@ class _SenderArchitecturePreviewAppState
         case _SenderRc1PreviewTarget.booking:
         case _SenderRc1PreviewTarget.iris:
         case _SenderRc1PreviewTarget.price:
-          _showStub(
-              'This existing sender step requires a signed-in sender session.');
+          widget.onOpenBooking();
       }
     });
   }
