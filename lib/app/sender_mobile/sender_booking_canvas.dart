@@ -1,0 +1,1178 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../send_package/bloc/send_package_bloc.dart';
+import 'sender_booking_state.dart';
+
+class SenderBookingCanvas extends StatefulWidget {
+  const SenderBookingCanvas({super.key});
+
+  @override
+  State<SenderBookingCanvas> createState() => _SenderBookingCanvasState();
+}
+
+class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
+  SenderBookingDraft _draft = const SenderBookingDraft();
+  final _pickup = TextEditingController();
+  final _dropoff = TextEditingController();
+  final _receiverName = TextEditingController();
+  final _receiverPhone = TextEditingController();
+  final _notes = TextEditingController();
+  final _item = TextEditingController();
+  final _description = TextEditingController();
+  final _weight = TextEditingController(text: '0.5');
+  var _searchingPickup = true;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<SendPackageBloc>().add(CheckForPushToken());
+    context.read<SendPackageBloc>().add(CheckForActiveRequest());
+  }
+
+  @override
+  void dispose() {
+    _pickup.dispose();
+    _dropoff.dispose();
+    _receiverName.dispose();
+    _receiverPhone.dispose();
+    _notes.dispose();
+    _item.dispose();
+    _description.dispose();
+    _weight.dispose();
+    super.dispose();
+  }
+
+  void _setDraft(SenderBookingDraft next) => setState(() => _draft = next);
+
+  void _advance() {
+    if (_draft.step == SenderBookingStep.payment) return;
+    _setDraft(_draft.next());
+  }
+
+  void _back() {
+    if (_draft.step == SenderBookingStep.pickup) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    _setDraft(_draft.back());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SendPackageBloc, SendPackageState>(
+      builder: (context, engine) {
+        final operationalStep = _stepForEngine(engine);
+        if (operationalStep != null && operationalStep != _draft.step) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _setDraft(_draft.copyWith(step: operationalStep));
+          });
+        }
+        return Scaffold(
+          backgroundColor: _Tokens.bg,
+          body: Stack(
+            children: [
+              const _SenderMobileMap(active: true),
+              SafeArea(
+                child: Column(
+                  children: [
+                    _TopBar(
+                      progress: _draft.progress,
+                      onBack: _back,
+                    ),
+                    const Spacer(),
+                    _BookingPanel(
+                      draft: _draft,
+                      engine: engine,
+                      pickup: _pickup,
+                      dropoff: _dropoff,
+                      receiverName: _receiverName,
+                      receiverPhone: _receiverPhone,
+                      notes: _notes,
+                      item: _item,
+                      description: _description,
+                      weight: _weight,
+                      searchingPickup: _searchingPickup,
+                      onSearchingPickupChanged: (value) =>
+                          setState(() => _searchingPickup = value),
+                      onDraft: _setDraft,
+                      onContinue: _advance,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  SenderBookingStep? _stepForEngine(SendPackageState engine) {
+    switch (engine.deliveryStatus) {
+      case DeliveryStatus.deliveryConfirmed:
+      case DeliveryStatus.reconnectingWithRider:
+        return SenderBookingStep.findingRider;
+      case DeliveryStatus.deliveryOnGoing:
+      case DeliveryStatus.deliveryCompleted:
+        return SenderBookingStep.liveTracking;
+      case DeliveryStatus.inital:
+      case DeliveryStatus.addressesSelected:
+        return null;
+    }
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  final double progress;
+  final VoidCallback onBack;
+
+  const _TopBar({required this.progress, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Row(
+        children: [
+          _RoundButton(icon: Icons.arrow_back_rounded, onTap: onBack),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 5,
+                value: progress,
+                backgroundColor: Colors.white.withValues(alpha: .08),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(_Tokens.lightBlue),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const _TrustPill(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BookingPanel extends StatelessWidget {
+  final SenderBookingDraft draft;
+  final SendPackageState engine;
+  final TextEditingController pickup;
+  final TextEditingController dropoff;
+  final TextEditingController receiverName;
+  final TextEditingController receiverPhone;
+  final TextEditingController notes;
+  final TextEditingController item;
+  final TextEditingController description;
+  final TextEditingController weight;
+  final bool searchingPickup;
+  final ValueChanged<bool> onSearchingPickupChanged;
+  final ValueChanged<SenderBookingDraft> onDraft;
+  final VoidCallback onContinue;
+
+  const _BookingPanel({
+    required this.draft,
+    required this.engine,
+    required this.pickup,
+    required this.dropoff,
+    required this.receiverName,
+    required this.receiverPhone,
+    required this.notes,
+    required this.item,
+    required this.description,
+    required this.weight,
+    required this.searchingPickup,
+    required this.onSearchingPickupChanged,
+    required this.onDraft,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = _content(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: _Glass(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          child: Column(
+            key: ValueKey(draft.step),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  height: 5,
+                  width: 48,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .18),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              Text(
+                senderStepTitle(draft.step),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  height: 1.08,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              content,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
+    switch (draft.step) {
+      case SenderBookingStep.pickup:
+        return _AddressPanel(
+          controller: pickup,
+          hint: 'Pickup address, flat or postcode',
+          suggestions: engine.suggestions,
+          onChanged: (value) {
+            onSearchingPickupChanged(true);
+            _search(context, value);
+            onDraft(draft.copyWith(pickupAddress: value));
+          },
+          onSuggestion: (suggestion) {
+            context.read<SendPackageBloc>().add(SetPickupAddress(
+                  val: suggestion.mainText,
+                  pickupLocationSubAddress: suggestion.subText,
+                  placeId: suggestion.placeId,
+                  lang: Localizations.localeOf(context).languageCode,
+                ));
+            pickup.text = suggestion.mainText;
+            onDraft(draft.copyWith(pickupAddress: suggestion.description));
+          },
+          primaryLabel: 'Set pickup',
+          canContinue: draft.canContinue,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.dropoff:
+        return _AddressPanel(
+          controller: dropoff,
+          hint: 'Drop-off address, flat or postcode',
+          suggestions: engine.suggestions,
+          onChanged: (value) {
+            onSearchingPickupChanged(false);
+            _search(context, value);
+            onDraft(draft.copyWith(dropoffAddress: value));
+          },
+          onSuggestion: (suggestion) {
+            context.read<SendPackageBloc>().add(SetDeliveryAddress(
+                  val: suggestion.mainText,
+                  destinationLocationSubAddress: suggestion.subText,
+                  placeId: suggestion.placeId,
+                  lang: Localizations.localeOf(context).languageCode,
+                ));
+            dropoff.text = suggestion.mainText;
+            onDraft(draft.copyWith(dropoffAddress: suggestion.description));
+          },
+          primaryLabel: 'Set drop-off',
+          canContinue: draft.canContinue,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.recipient:
+        return _RecipientPanel(
+          name: receiverName,
+          phone: receiverPhone,
+          notes: notes,
+          onChanged: () => onDraft(draft.copyWith(
+            receiverName: receiverName.text,
+            receiverPhone: receiverPhone.text,
+            deliveryNotes: notes.text,
+          )),
+          canContinue: draft.canContinue,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.deliveryTime:
+        return _ChoicePanel(
+          title:
+              'Deliver now is live. Schedule stays disabled until backend support is ready.',
+          choices: const ['Deliver now', 'Schedule'],
+          selected: draft.deliveryTime,
+          disabled: const {'Schedule'},
+          onSelected: (value) => onDraft(draft.copyWith(deliveryTime: value)),
+          primaryLabel: 'Continue',
+          canContinue: draft.canContinue,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.parcel:
+        return _ParcelPanel(
+          item: item,
+          description: description,
+          weight: weight,
+          fragile: draft.fragile,
+          highValue: draft.highValue,
+          onChanged: () {
+            final parsed = double.tryParse(weight.text) ?? .5;
+            context.read<SendPackageBloc>().add(SetParcelWeight(
+                  weightKg: parsed,
+                  itemDescription: item.text,
+                ));
+            onDraft(draft.copyWith(
+              itemName: item.text,
+              itemDescription: description.text,
+              weightLabel: '${parsed.toStringAsFixed(1)}kg',
+            ));
+          },
+          onFragile: (value) => onDraft(draft.copyWith(fragile: value)),
+          onHighValue: (value) => onDraft(draft.copyWith(highValue: value)),
+          canContinue: draft.canContinue,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.iris:
+        return _IrisPanel(
+          engine: engine,
+          draft: draft,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.options:
+        return _ChoicePanel(
+          title: 'Choose speed and trust options supported by current pricing.',
+          choices: const ['Economy', 'Standard', 'Express', 'Vanguard'],
+          selected: draft.vanguard ? 'Vanguard' : draft.selectedOption,
+          onSelected: (value) => onDraft(draft.copyWith(
+            selectedOption: value == 'Vanguard' ? draft.selectedOption : value,
+            vanguard: value == 'Vanguard' ? !draft.vanguard : draft.vanguard,
+          )),
+          primaryLabel: 'Review delivery',
+          canContinue: true,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.review:
+        return _ReviewPanel(
+          draft: draft,
+          engine: engine,
+          onContinue: onContinue,
+        );
+      case SenderBookingStep.payment:
+        return _PaymentPanel(engine: engine);
+      case SenderBookingStep.findingRider:
+        return const _FindingPanel();
+      case SenderBookingStep.liveTracking:
+        return _TrackingPanel(engine: engine);
+    }
+  }
+
+  void _search(BuildContext context, String value) {
+    if (value.trim().length < 3) {
+      context.read<SendPackageBloc>().add(ClearSuggestions());
+      return;
+    }
+    context.read<SendPackageBloc>().add(SearchAPlaceEvent(
+          query: value,
+          lang: Localizations.localeOf(context).languageCode,
+        ));
+  }
+}
+
+class _AddressPanel extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final List suggestions;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<dynamic> onSuggestion;
+  final String primaryLabel;
+  final bool canContinue;
+  final VoidCallback onContinue;
+
+  const _AddressPanel({
+    required this.controller,
+    required this.hint,
+    required this.suggestions,
+    required this.onChanged,
+    required this.onSuggestion,
+    required this.primaryLabel,
+    required this.canContinue,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _TextInput(controller: controller, hint: hint, onChanged: onChanged),
+        const SizedBox(height: 10),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 164),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: math.min(suggestions.length, 4),
+            itemBuilder: (context, index) {
+              final suggestion = suggestions[index];
+              return _SuggestionTile(
+                title: '${suggestion.mainText}',
+                subtitle: '${suggestion.subText}',
+                onTap: () => onSuggestion(suggestion),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        _PrimaryButton(
+          label: primaryLabel,
+          enabled: canContinue,
+          onTap: onContinue,
+        ),
+      ],
+    );
+  }
+}
+
+class _RecipientPanel extends StatelessWidget {
+  final TextEditingController name;
+  final TextEditingController phone;
+  final TextEditingController notes;
+  final VoidCallback onChanged;
+  final bool canContinue;
+  final VoidCallback onContinue;
+
+  const _RecipientPanel({
+    required this.name,
+    required this.phone,
+    required this.notes,
+    required this.onChanged,
+    required this.canContinue,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _TextInput(
+            controller: name,
+            hint: 'Receiver name',
+            onChanged: (_) => onChanged()),
+        const SizedBox(height: 10),
+        _TextInput(
+            controller: phone,
+            hint: 'Receiver phone',
+            keyboardType: TextInputType.phone,
+            onChanged: (_) => onChanged()),
+        const SizedBox(height: 10),
+        _TextInput(
+            controller: notes,
+            hint: 'Delivery notes',
+            onChanged: (_) => onChanged()),
+        const SizedBox(height: 12),
+        _PrimaryButton(
+            label: 'Continue', enabled: canContinue, onTap: onContinue),
+      ],
+    );
+  }
+}
+
+class _ParcelPanel extends StatelessWidget {
+  final TextEditingController item;
+  final TextEditingController description;
+  final TextEditingController weight;
+  final bool fragile;
+  final bool highValue;
+  final VoidCallback onChanged;
+  final ValueChanged<bool> onFragile;
+  final ValueChanged<bool> onHighValue;
+  final bool canContinue;
+  final VoidCallback onContinue;
+
+  const _ParcelPanel({
+    required this.item,
+    required this.description,
+    required this.weight,
+    required this.fragile,
+    required this.highValue,
+    required this.onChanged,
+    required this.onFragile,
+    required this.onHighValue,
+    required this.canContinue,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _TextInput(
+            controller: item, hint: 'Item name', onChanged: (_) => onChanged()),
+        const SizedBox(height: 10),
+        _TextInput(
+            controller: description,
+            hint: 'Optional description',
+            onChanged: (_) => onChanged()),
+        const SizedBox(height: 10),
+        _TextInput(
+            controller: weight,
+            hint: 'Weight kg',
+            keyboardType: TextInputType.number,
+            onChanged: (_) => onChanged()),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+                child: _ToggleChip(
+                    label: 'Fragile',
+                    selected: fragile,
+                    onTap: () => onFragile(!fragile))),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _ToggleChip(
+                    label: 'High value',
+                    selected: highValue,
+                    onTap: () => onHighValue(!highValue))),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _PrimaryButton(
+            label: 'Ask IRIS', enabled: canContinue, onTap: onContinue),
+      ],
+    );
+  }
+}
+
+class _IrisPanel extends StatelessWidget {
+  final SendPackageState engine;
+  final SenderBookingDraft draft;
+  final VoidCallback onContinue;
+
+  const _IrisPanel({
+    required this.engine,
+    required this.draft,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final iris = engine.irisResult;
+    final confidence =
+        iris == null ? 'Medium' : mapConfidenceLabel(iris.confidenceScore);
+    return Column(
+      children: [
+        const _IrisOrb(),
+        const SizedBox(height: 12),
+        _SummaryLine(
+            label: 'Classification',
+            value: iris?.matchedItemName ?? draft.itemName),
+        _SummaryLine(
+            label: 'Weight',
+            value: '${engine.parcelWeightKg.toStringAsFixed(1)}kg'),
+        _SummaryLine(
+            label: 'Vehicle',
+            value: iris?.vehicleSuitability ?? draft.irisVehicle),
+        _SummaryLine(label: 'Confidence', value: confidence),
+        ExpansionTile(
+          collapsedIconColor: _Tokens.lightBlue,
+          iconColor: _Tokens.lightBlue,
+          title: const Text('Why this estimate?',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          children: const [
+            _ReasonLine('Similar verified deliveries'),
+            _ReasonLine('Parcel details'),
+            _ReasonLine('Rider verification still happens at collection'),
+          ],
+        ),
+        _PrimaryButton(
+            label: 'Choose options', enabled: true, onTap: onContinue),
+      ],
+    );
+  }
+}
+
+class _ChoicePanel extends StatelessWidget {
+  final String title;
+  final List<String> choices;
+  final String selected;
+  final Set<String> disabled;
+  final ValueChanged<String> onSelected;
+  final String primaryLabel;
+  final bool canContinue;
+  final VoidCallback onContinue;
+
+  const _ChoicePanel({
+    required this.title,
+    required this.choices,
+    required this.selected,
+    this.disabled = const {},
+    required this.onSelected,
+    required this.primaryLabel,
+    required this.canContinue,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(color: _Tokens.muted, height: 1.35)),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: choices.map((choice) {
+            final off = disabled.contains(choice);
+            return _ToggleChip(
+              label: off ? '$choice · deferred' : choice,
+              selected: selected == choice,
+              disabled: off,
+              onTap: () => off ? null : onSelected(choice),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 14),
+        _PrimaryButton(
+            label: primaryLabel, enabled: canContinue, onTap: onContinue),
+      ],
+    );
+  }
+}
+
+class _ReviewPanel extends StatelessWidget {
+  final SenderBookingDraft draft;
+  final SendPackageState engine;
+  final VoidCallback onContinue;
+
+  const _ReviewPanel({
+    required this.draft,
+    required this.engine,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _SummaryLine(
+            label: 'Pickup',
+            value: engine.pickupLocation ?? draft.pickupAddress),
+        _SummaryLine(
+            label: 'Drop-off',
+            value: engine.destinationLocation ?? draft.dropoffAddress),
+        _SummaryLine(label: 'Recipient', value: draft.receiverName),
+        _SummaryLine(label: 'Parcel', value: draft.itemName),
+        _SummaryLine(
+            label: 'Vehicle',
+            value: engine.irisResult?.vehicleSuitability ?? draft.irisVehicle),
+        _SummaryLine(
+            label: 'Price',
+            value: engine.price == null
+                ? 'Calculating'
+                : '£${engine.price!.toStringAsFixed(2)}'),
+        if (draft.vanguard)
+          const _SummaryLine(label: 'Vanguard', value: 'Included'),
+        const SizedBox(height: 12),
+        _PrimaryButton(
+            label: 'Continue to payment', enabled: true, onTap: onContinue),
+      ],
+    );
+  }
+}
+
+class _PaymentPanel extends StatelessWidget {
+  final SendPackageState engine;
+
+  const _PaymentPanel({required this.engine});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _SummaryLine(
+            label: 'Total',
+            value: engine.price == null
+                ? 'Pending route'
+                : '£${engine.price!.toStringAsFixed(2)}'),
+        const _GapNotice(
+          title: 'Payment required before live booking',
+          body:
+              'This mobile shell will call the existing SendDeliveryRequest path only after real payment wiring is available. No fake paid jobs are created.',
+        ),
+        _PrimaryButton(
+            label: 'Payment integration required',
+            enabled: false,
+            onTap: () {}),
+      ],
+    );
+  }
+}
+
+class _FindingPanel extends StatelessWidget {
+  const _FindingPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        SizedBox(height: 8),
+        CircularProgressIndicator(color: _Tokens.lightBlue),
+        SizedBox(height: 18),
+        Text(
+          'Finding the best rider for you...',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Rider matching uses the existing delivery request state.',
+          style: TextStyle(color: _Tokens.muted),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+class _TrackingPanel extends StatelessWidget {
+  final SendPackageState engine;
+
+  const _TrackingPanel({required this.engine});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _SummaryLine(label: 'Status', value: 'Live tracking'),
+        _SummaryLine(label: 'Pickup', value: engine.pickupLocation ?? 'Pickup'),
+        _SummaryLine(
+            label: 'Drop-off', value: engine.destinationLocation ?? 'Drop-off'),
+        const _SummaryLine(
+            label: 'PIN security', value: 'Collection PIN only for sender'),
+        const SizedBox(height: 12),
+        _PrimaryButton(label: 'Message support', enabled: true, onTap: () {}),
+      ],
+    );
+  }
+}
+
+class _TextInput extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final TextInputType? keyboardType;
+  final ValueChanged<String> onChanged;
+
+  const _TextInput({
+    required this.controller,
+    required this.hint,
+    this.keyboardType,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      onChanged: onChanged,
+      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: _Tokens.muted),
+        filled: true,
+        fillColor: const Color(0xAA1A2030),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _SuggestionTile({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      minLeadingWidth: 0,
+      leading: const Icon(Icons.location_on_outlined, color: _Tokens.lightBlue),
+      title: Text(title,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w800)),
+      subtitle: Text(subtitle, style: const TextStyle(color: _Tokens.muted)),
+      onTap: onTap,
+    );
+  }
+}
+
+class _ToggleChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  const _ToggleChip({
+    required this.label,
+    required this.selected,
+    this.disabled = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: disabled ? null : onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected
+              ? _Tokens.blue.withValues(alpha: .22)
+              : Colors.white.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(999),
+          border:
+              Border.all(color: selected ? _Tokens.lightBlue : _Tokens.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: disabled ? _Tokens.muted : Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrimaryButton extends StatelessWidget {
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _PrimaryButton({
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: enabled ? onTap : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _Tokens.blue,
+          disabledBackgroundColor: Colors.white.withValues(alpha: .10),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      ),
+    );
+  }
+}
+
+class _SummaryLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _SummaryLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Text(label, style: const TextStyle(color: _Tokens.muted)),
+          const Spacer(),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReasonLine extends StatelessWidget {
+  final String text;
+
+  const _ReasonLine(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.check_rounded, color: _Tokens.lightBlue),
+      title: Text(text, style: const TextStyle(color: Colors.white)),
+    );
+  }
+}
+
+class _GapNotice extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _GapNotice({required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE0A93A).withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(18),
+        border:
+            Border.all(color: const Color(0xFFE0A93A).withValues(alpha: .35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  color: Color(0xFFE0A93A), fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(body,
+              style: const TextStyle(color: _Tokens.muted, height: 1.35)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Glass extends StatelessWidget {
+  final Widget child;
+
+  const _Glass({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * .68,
+          ),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: _Tokens.glass,
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: _Tokens.border),
+          ),
+          child: SingleChildScrollView(child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _RoundButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: _Tokens.glass,
+          shape: BoxShape.circle,
+          border: Border.all(color: _Tokens.border),
+        ),
+        child: Icon(icon, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _TrustPill extends StatelessWidget {
+  const _TrustPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _Tokens.glass,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _Tokens.border),
+      ),
+      child: const Text(
+        'IRIS',
+        style: TextStyle(
+          color: _Tokens.lightBlue,
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _IrisOrb extends StatelessWidget {
+  const _IrisOrb();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          colors: [_Tokens.iris, _Tokens.vanguard, _Tokens.bg],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _Tokens.iris.withValues(alpha: .24),
+            blurRadius: 28,
+          ),
+        ],
+      ),
+      child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
+    );
+  }
+}
+
+class _SenderMobileMap extends StatefulWidget {
+  final bool active;
+
+  const _SenderMobileMap({required this.active});
+
+  @override
+  State<_SenderMobileMap> createState() => _SenderMobileMapState();
+}
+
+class _SenderMobileMapState extends State<_SenderMobileMap>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 28))
+          ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => CustomPaint(
+        painter: _MapPainter(t: _controller.value, active: widget.active),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class _MapPainter extends CustomPainter {
+  final double t;
+  final bool active;
+
+  const _MapPainter({required this.t, required this.active});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_Tokens.bg, _Tokens.midnight],
+        ).createShader(rect),
+    );
+    final drift = math.sin(t * math.pi * 2) * 8;
+    final grid = Paint()
+      ..color = Colors.white.withValues(alpha: .025)
+      ..strokeWidth = 1;
+    for (var x = -70.0 + drift; x < size.width + 70; x += 50) {
+      canvas.drawLine(Offset(x, 0), Offset(x + 28, size.height), grid);
+    }
+    for (var y = -70.0 - drift; y < size.height + 70; y += 58) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y + 18), grid);
+    }
+    final pickup = Offset(size.width * .25, size.height * .30);
+    final dropoff = Offset(size.width * .73, size.height * .21);
+    final route = Path()
+      ..moveTo(pickup.dx, pickup.dy)
+      ..cubicTo(size.width * .23, size.height * .12, size.width * .70,
+          size.height * .40, dropoff.dx, dropoff.dy);
+    canvas.drawPath(
+      route,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..color = _Tokens.lightBlue.withValues(alpha: active ? .68 : .24),
+    );
+    _pin(canvas, pickup, _Tokens.blue, t);
+    _pin(canvas, dropoff, const Color(0xFF22C55E), (t + .45) % 1);
+  }
+
+  void _pin(Canvas canvas, Offset point, Color color, double phase) {
+    canvas.drawCircle(
+      point,
+      8 + phase * 20,
+      Paint()..color = color.withValues(alpha: .15 * (1 - phase)),
+    );
+    canvas.drawCircle(point, 6, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MapPainter oldDelegate) =>
+      oldDelegate.t != t || oldDelegate.active != active;
+}
+
+class _Tokens {
+  static const bg = Color(0xFF07090F);
+  static const midnight = Color(0xFF0B1020);
+  static const blue = Color(0xFF3B82F6);
+  static const lightBlue = Color(0xFF60A5FA);
+  static const vanguard = Color(0xFF2563EB);
+  static const iris = Color(0xFF38BDF8);
+  static const muted = Color(0xFF9CA3AF);
+  static const border = Color(0x29FFFFFF);
+  static const glass = Color(0x12FFFFFF);
+}

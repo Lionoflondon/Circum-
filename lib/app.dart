@@ -10,6 +10,7 @@ import 'app/bottom_nav/view/app_nav.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/onboarding/view/onboarding.dart';
 import 'app/rider_jobs/rider_home_screen.dart';
+import 'app/sender_mobile/sender_mobile_home.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'main.dart';
@@ -80,6 +81,7 @@ class _AppState extends State<App> {
             home: const _SessionGate(),
             routes: {
               '/rider/jobs': (_) => const RiderHomeScreen(),
+              '/sender/mobile': (_) => const SenderMobileHome(),
             },
           );
         },
