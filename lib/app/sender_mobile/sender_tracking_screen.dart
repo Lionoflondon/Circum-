@@ -353,12 +353,14 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       state,
       deliveryVerified: widget.deliveryVerified,
     );
+    final delivered = state == SenderTrackingState.delivered;
     return Stack(
       children: [
         SenderTrackingMapLayer(
           content: content,
           mapDrift: _mapDrift,
           pulse: _pulse,
+          delivered: delivered,
         ),
         if (content.pill.isNotEmpty)
           SafeArea(
@@ -370,6 +372,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
               ),
             ),
           ),
+        if (delivered) const _DeliveredConfirmationOverlay(),
         FloatingGlassPanel(
           child: _TrackingPanelContent(
             state: state,
@@ -386,12 +389,14 @@ class SenderTrackingMapLayer extends StatelessWidget {
   final SenderTrackingContent content;
   final Animation<double> mapDrift;
   final Animation<double> pulse;
+  final bool delivered;
 
   const SenderTrackingMapLayer({
     super.key,
     required this.content,
     required this.mapDrift,
     required this.pulse,
+    this.delivered = false,
   });
 
   @override
@@ -399,7 +404,8 @@ class SenderTrackingMapLayer extends StatelessWidget {
     return AnimatedBuilder(
       animation: Listenable.merge([mapDrift, pulse]),
       builder: (context, _) {
-        final drift = (mapDrift.value - .5) * 10;
+        final drift = delivered ? 0.0 : (mapDrift.value - .5) * 10;
+        final markerPulse = delivered ? 0.0 : pulse.value;
         return Stack(
           children: [
             Transform.translate(
@@ -417,25 +423,30 @@ class SenderTrackingMapLayer extends StatelessWidget {
             Positioned.fill(
               child: CustomPaint(
                 painter: _TrackingGridPainter(
-                  shimmer: mapDrift.value,
+                  shimmer: delivered ? .5 : mapDrift.value,
                   route: content.showRoute,
                 ),
               ),
             ),
-            if (content.showRoute) const _RouteLine(),
+            if (content.showRoute) _RouteLine(completed: delivered),
             if (content.showPickupPin)
               _MapPin(
                 alignment: const Alignment(-.62, -.38),
                 color: const Color(0xFF34D399),
-                pulse: pulse.value,
+                pulse: markerPulse,
                 strongPulse: content.showAnonymousRiders,
               ),
             if (content.showDropoffPin)
-              _MapPin(
-                alignment: const Alignment(.48, .34),
-                color: const Color(0xFF3B82F6),
-                pulse: pulse.value,
-              ),
+              delivered
+                  ? const _CompletionPulse(
+                      alignment: Alignment(.48, .34),
+                      color: Color(0xFF34D399),
+                    )
+                  : _MapPin(
+                      alignment: const Alignment(.48, .34),
+                      color: const Color(0xFF3B82F6),
+                      pulse: markerPulse,
+                    ),
             if (content.showAnonymousRiders) ...const [
               _AnonymousRiderDot(alignment: Alignment(-.18, -.22), delay: 0),
               _AnonymousRiderDot(alignment: Alignment(.18, -.12), delay: 420),
@@ -449,7 +460,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
                   content.riderPosition.dx * 2 - 1,
                   content.riderPosition.dy * 2 - 1,
                 ),
-                child: _RiderMarker(pulse: pulse.value),
+                child: _RiderMarker(pulse: markerPulse, settled: delivered),
               ),
             AnimatedOpacity(
               opacity: content.dimMap ? .52 : 0,
@@ -543,14 +554,22 @@ class _TrackingPanelContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          content.title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontFamily: 'DM Serif Display',
-            fontSize: 24,
-            height: 1.15,
-            fontWeight: FontWeight.w400,
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeOut,
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
+          child: Text(
+            content.title,
+            key: ValueKey(content.title),
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'DM Serif Display',
+              fontSize: 24,
+              height: 1.15,
+              fontWeight: FontWeight.w400,
+            ),
           ),
         ),
         const SizedBox(height: 6),
@@ -614,9 +633,179 @@ class _TrackingPanelContent extends StatelessWidget {
               ),
           ],
         ),
+        if (state == SenderTrackingState.delivered) ...[
+          const SizedBox(height: 8),
+          const _DeliveredChipSequence(),
+        ],
         const SizedBox(height: 16),
         _TrackingActions(state: state),
       ],
+    );
+  }
+}
+
+class _DeliveredConfirmationOverlay extends StatefulWidget {
+  const _DeliveredConfirmationOverlay();
+
+  @override
+  State<_DeliveredConfirmationOverlay> createState() =>
+      _DeliveredConfirmationOverlayState();
+}
+
+class _DeliveredConfirmationOverlayState
+    extends State<_DeliveredConfirmationOverlay> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted) setState(() => _visible = true);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 3100), () {
+      if (mounted) setState(() => _visible = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 58),
+          child: AnimatedOpacity(
+            opacity: _visible ? 1 : 0,
+            duration: Duration(milliseconds: _visible ? 300 : 400),
+            curve: Curves.easeOut,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF34D399).withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: const Color(0xFF34D399).withValues(alpha: .28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF34D399).withValues(alpha: .16),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: const Text(
+                '✓ Delivery completed',
+                style: TextStyle(
+                  color: Color(0xFF34D399),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveredChipSequence extends StatelessWidget {
+  const _DeliveredChipSequence();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _DelayedFadeChip(
+          delay: Duration(milliseconds: 350),
+          label: 'IRIS parcel confirmed',
+          color: Color(0xFF3B82F6),
+          glow: true,
+        ),
+        _DelayedFadeChip(
+          delay: Duration(milliseconds: 450),
+          label: 'Vanguard completed',
+          color: Color(0xFF34D399),
+        ),
+      ],
+    );
+  }
+}
+
+class _DelayedFadeChip extends StatefulWidget {
+  final Duration delay;
+  final String label;
+  final Color color;
+  final bool glow;
+
+  const _DelayedFadeChip({
+    required this.delay,
+    required this.label,
+    required this.color,
+    this.glow = false,
+  });
+
+  @override
+  State<_DelayedFadeChip> createState() => _DelayedFadeChipState();
+}
+
+class _DelayedFadeChipState extends State<_DelayedFadeChip> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(widget.delay, () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _visible ? 1 : 0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .035),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: widget.color.withValues(alpha: .18)),
+          boxShadow: widget.glow
+              ? [
+                  BoxShadow(
+                    color: widget.color.withValues(alpha: .12),
+                    blurRadius: 16,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '•',
+              style: TextStyle(
+                color: widget.color,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              widget.label,
+              style: const TextStyle(
+                color: _TrackingTokens.mid,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1058,37 +1247,129 @@ class _TrackingButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 13),
-      decoration: BoxDecoration(
-        color: primary
-            ? success
-                ? const Color(0xFF34D399)
-                : const Color(0xFF3B82F6)
-            : Colors.white.withValues(alpha: .06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: success
-              ? const Color(0xFF34D399).withValues(alpha: .36)
-              : Colors.white.withValues(alpha: .08),
-        ),
-        boxShadow: success
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF34D399).withValues(alpha: .20),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Stack(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: BoxDecoration(
+              color: primary && !success
+                  ? const Color(0xFF3B82F6)
+                  : Colors.white.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: success
+                    ? const Color(0xFF34D399).withValues(alpha: .36)
+                    : Colors.white.withValues(alpha: .08),
+              ),
+              boxShadow: success
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF34D399).withValues(alpha: .20),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          if (success)
+            Positioned.fill(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOut,
+                builder: (context, value, _) {
+                  return FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: value,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF34D399)
+                            .withValues(alpha: .92 + value * .08),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          Positioned.fill(
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: primary ? Colors.white : const Color(0xFFF2F4F8),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
                 ),
-              ]
-            : null,
+              ),
+            ),
+          ),
+        ],
       ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: TextStyle(
-          color: primary ? Colors.white : const Color(0xFFF2F4F8),
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
+    );
+  }
+}
+
+class _CompletionPulse extends StatefulWidget {
+  final Alignment alignment;
+  final Color color;
+
+  const _CompletionPulse({required this.alignment, required this.color});
+
+  @override
+  State<_CompletionPulse> createState() => _CompletionPulseState();
+}
+
+class _CompletionPulseState extends State<_CompletionPulse> {
+  bool _active = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() => _active = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: widget.alignment,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: _active ? 1 : 0),
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+        builder: (context, value, child) {
+          return Container(
+            width: 16 + value * 42,
+            height: 16 + value * 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: widget.color.withValues(alpha: (1 - value) * .30),
+              ),
+            ),
+            child: child,
+          );
+        },
+        child: Center(
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: widget.color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.color.withValues(alpha: .22),
+                  spreadRadius: 6,
+                  blurRadius: 18,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1403,26 +1684,31 @@ class _AnonymousRiderDotState extends State<_AnonymousRiderDot>
 
 class _RiderMarker extends StatelessWidget {
   final double pulse;
+  final bool settled;
 
-  const _RiderMarker({required this.pulse});
+  const _RiderMarker({required this.pulse, this.settled = false});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 18,
-      height: 18,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+      width: settled ? 16 : 18,
+      height: settled ? 16 : 18,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: settled ? const Color(0xFF34D399) : Colors.white,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.white.withValues(alpha: .12),
-            spreadRadius: 8 + pulse * 3,
-            blurRadius: 18,
+            color: (settled ? const Color(0xFF34D399) : Colors.white)
+                .withValues(alpha: settled ? .16 : .12),
+            spreadRadius: settled ? 6 : 8 + pulse * 3,
+            blurRadius: settled ? 16 : 18,
           ),
           BoxShadow(
-            color: const Color(0xFF3B82F6).withValues(alpha: .55),
-            blurRadius: 16,
+            color:
+                const Color(0xFF3B82F6).withValues(alpha: settled ? .18 : .55),
+            blurRadius: settled ? 10 : 16,
           ),
         ],
       ),
@@ -1431,12 +1717,23 @@ class _RiderMarker extends StatelessWidget {
 }
 
 class _RouteLine extends StatelessWidget {
-  const _RouteLine();
+  final bool completed;
+
+  const _RouteLine({this.completed = false});
 
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: CustomPaint(painter: _RouteLinePainter()),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: completed ? .74 : 1, end: 1),
+        duration: Duration(milliseconds: completed ? 400 : 0),
+        curve: Curves.easeOut,
+        builder: (context, value, _) {
+          return CustomPaint(
+            painter: _RouteLinePainter(progress: value, completed: completed),
+          );
+        },
+      ),
     );
   }
 }
@@ -1479,6 +1776,11 @@ class _TrackingGridPainter extends CustomPainter {
 }
 
 class _RouteLinePainter extends CustomPainter {
+  final double progress;
+  final bool completed;
+
+  const _RouteLinePainter({required this.progress, required this.completed});
+
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
@@ -1489,18 +1791,27 @@ class _RouteLinePainter extends CustomPainter {
         size.width * .74,
         size.height * .66,
       );
+    final metrics = path.computeMetrics().toList(growable: false);
+    final visiblePath = Path();
+    for (final metric in metrics) {
+      visiblePath.addPath(
+        metric.extractPath(0, metric.length * progress.clamp(0, 1)),
+        Offset.zero,
+      );
+    }
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..shader = const LinearGradient(
-        colors: [Color(0x223B82F6), Color(0xFF3B82F6), Color(0x223B82F6)],
+        colors: [Color(0x2234D399), Color(0xFF3B82F6), Color(0xFF34D399)],
       ).createShader(Offset.zero & size);
-    canvas.drawPath(path, paint);
+    canvas.drawPath(visiblePath, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RouteLinePainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.completed != completed;
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(

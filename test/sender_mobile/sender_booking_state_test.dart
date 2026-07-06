@@ -595,6 +595,23 @@ void main() {
       expect(source, contains('completeColor.withValues'));
     });
 
+    test('delivered tracking state has calm completion sequence', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('_DeliveredConfirmationOverlay'));
+      expect(source, contains('✓ Delivery completed'));
+      expect(source, contains('_DeliveredChipSequence'));
+      expect(source, contains('IRIS parcel confirmed'));
+      expect(source, contains('Vanguard completed'));
+      expect(source, contains('Tween(begin: completed ? .74 : 1, end: 1)'));
+      expect(source, contains('Duration(milliseconds: 400)'));
+      expect(source, contains('Duration(milliseconds: 500)'));
+      expect(source, contains('Curves.easeOut'));
+      expect(source, contains('settled: delivered'));
+    });
+
     test('PINs are removed for inactive terminal states', () {
       const inactiveStates = [
         SenderTrackingState.noActiveDelivery,
