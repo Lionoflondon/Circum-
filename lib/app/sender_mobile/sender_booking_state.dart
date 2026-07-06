@@ -22,6 +22,7 @@ enum SenderFallbackPaymentMethod { card, applePay }
 
 const senderDeliverySpeeds = ['Economy', 'Standard', 'Express'];
 const senderVanguardAddOnPriceGbp = 1.99;
+const senderVanguardProtocolLabel = 'Vanguard Delivery Protocol';
 const senderRothPoundValue = 1.0;
 
 bool isSenderDeliverySpeed(String value) =>
@@ -290,6 +291,11 @@ class SenderBookingDraft {
 
   double? totalWithAddOns(double? deliveryPrice) =>
       deliveryPrice == null ? null : deliveryPrice + addOnTotalGbp;
+
+  bool get vanguardProtocolEnabled => vanguard;
+
+  String get vanguardStatus =>
+      vanguardProtocolEnabled ? 'pickup_verification_pending' : 'not_required';
 
   double get progress =>
       (SenderBookingStep.values.indexOf(step) + 1) /

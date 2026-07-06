@@ -23,6 +23,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/calculate_bearing.dart';
 import '../../../helper/chats_help.dart';
+import '../../delivery_security/vanguard_protection.dart';
 import '../models/canonical_iris_result.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
@@ -537,6 +538,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final apnsToken = await firebaseMessaging.getAPNSToken();
       // print('apnsToken: $apnsToken');
       final fcmToken = await firebaseMessaging.getToken();
+      final vanguardFields = VanguardProtection.initialFields(
+        description:
+            state.itemDescription ?? state.canonicalIrisResult?.itemName ?? '',
+        packageType: state.canonicalIrisResult?.category ??
+            state.canonicalIrisResult?.weightBand,
+        manuallySelected: false,
+        irisRequired: state.canonicalIrisResult?.vanguardRequired ?? false,
+        irisRequiredReason: state.canonicalIrisResult?.vanguardRequiredReason,
+      );
 
       GeoFirePoint pickupLocation = GeoFirePoint(
         GeoPoint(
@@ -584,6 +594,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'code': fcmToken,
         'price': state.price,
         'weightKg': state.parcelWeightKg,
+        ...vanguardFields,
+        'dispatchProtocol': {
+          'vanguard': vanguardFields['vanguardProtocolEnabled'] == true,
+        },
         'pricingBreakdown': DeliveryPricing.calculate(
           DeliveryPricingInput(
             distanceMiles: DeliveryPricing.kilometresToMiles(

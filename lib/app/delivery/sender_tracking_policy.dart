@@ -1,3 +1,5 @@
+import 'package:circum/app/delivery_security/vanguard_protection.dart';
+
 enum SenderTrackingBadge {
   none,
   vanguard,
@@ -114,7 +116,7 @@ class SenderTrackingPolicy {
   static SenderTrackingBadge badgeFor(Map<String, dynamic> delivery) {
     if (delivery['isVanguard'] == true ||
         delivery['requiresVanguard'] == true ||
-        delivery['vanguardEnabled'] == true) {
+        VanguardProtection.isProtocolEnabled(delivery)) {
       return SenderTrackingBadge.vanguard;
     }
     if (delivery['isHealthPlus'] == true || delivery['healthPlus'] == true) {
@@ -124,6 +126,21 @@ class SenderTrackingPolicy {
       return SenderTrackingBadge.gift;
     }
     return SenderTrackingBadge.none;
+  }
+
+  static bool shouldShowVanguardTimeline(Map<String, dynamic> delivery) {
+    return VanguardProtection.isProtocolEnabled(delivery);
+  }
+
+  static List<String> vanguardTimeline(Map<String, dynamic> delivery) {
+    if (!shouldShowVanguardTimeline(delivery)) return const [];
+    return VanguardProtection.protocolTimeline;
+  }
+
+  static String vanguardStatusLabel(Map<String, dynamic> delivery) {
+    return VanguardProtection.statusLabel(
+      VanguardProtection.statusFromDelivery(delivery),
+    );
   }
 
   static bool isFindingRider(Object? status) {

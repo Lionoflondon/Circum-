@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const vehicleDispatch = require("./vehicle-dispatch");
+const vanguardProtocol = require("./vanguard-protocol-core");
 const CATEGORIES = Object.freeze([
   "Documents",
   "Electronics",
@@ -593,6 +594,14 @@ function dispatchPriority(request) {
   return priority === "express" || normalize(request.speed) === "express" ? 1 : 0;
 }
 
+function deliveryProtocolState(request = {}) {
+  return {
+    vanguardProtocolEnabled: vanguardProtocol.protocolEnabled(request),
+    vanguardStatus: request.vanguardStatus || vanguardProtocol.VANGUARD_STATUSES.notRequired,
+    vanguardRequiredReason: request.vanguardRequiredReason || "",
+  };
+}
+
 const RIDER_RANKS = new Set(["agent", "sentinel", "warden", "knight", "veteran"]);
 
 function normalizeRiderRank(value) {
@@ -631,6 +640,7 @@ module.exports = {
   isDispatchable,
   riderMatchesIris,
   dispatchPriority,
+  deliveryProtocolState,
   normalizeRiderRank,
   riderCanViewDispatch,
   riderDispatchPriority,

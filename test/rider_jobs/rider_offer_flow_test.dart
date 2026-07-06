@@ -37,6 +37,20 @@ void main() {
       );
     });
 
+    test('Vanguard protocol flag marks rider offer as Vanguard', () {
+      final offer = RiderJobOffer.fromMap({
+        'id': 'vanguard-protocol-job',
+        'estimatedEarnings': 18.5,
+        'pickupArea': 'Mayfair',
+        'dropoffArea': 'Chelsea',
+        'vanguardProtocolEnabled': true,
+        'vanguardStatus': 'secure_custody',
+      });
+
+      expect(offer.categories, contains(RiderJobCategory.vanguard));
+      expect(offer.warningChips, contains('Vanguard'));
+    });
+
     testWidgets('offer card has Accept only and no Roth/reject/decline copy',
         (tester) async {
       final offer = RiderJobOffer(

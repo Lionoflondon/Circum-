@@ -100,9 +100,91 @@ void main() {
         stage: 'collection',
       );
 
-      expect(fields, {'vanguardEnabled': false});
+      expect(fields['vanguardEnabled'], false);
+      expect(fields['vanguardProtocolEnabled'], false);
+      expect(fields['vanguardStatus'], 'not_required');
       expect(check.passed, isTrue);
       expect(check.attemptCount, 0);
+    });
+
+    test('toggle enables Vanguard delivery protocol state', () {
+      final fields = VanguardProtection.initialFields(
+        description: 'Small envelope',
+        manuallySelected: true,
+        random: Random(7),
+      );
+
+      expect(fields['vanguardEnabled'], isTrue);
+      expect(fields['vanguardProtocolEnabled'], isTrue);
+      expect(fields['vanguardStatus'], 'pickup_verification_pending');
+      expect(fields['vanguardVerificationState'], {
+        'pickup': 'pending',
+        'custody': 'pending',
+        'handover': 'pending',
+      });
+      expect(fields['vanguardAuditTrail'], isNotEmpty);
+      expect((fields['vanguardProtocol'] as Map)['timeline'],
+          VanguardProtection.protocolTimeline);
+    });
+
+    test('IRIS can require Vanguard and sender cannot remove protocol', () {
+      final decision = VanguardProtection.decideProtocol(
+        description: 'Passport',
+        irisRequired: true,
+        irisRequiredReason: 'IRIS policy requires Vanguard for passports.',
+      );
+      final fields = VanguardProtection.initialFields(
+        description: 'Passport',
+        irisRequired: true,
+        irisRequiredReason: 'IRIS policy requires Vanguard for passports.',
+        random: Random(8),
+      );
+
+      expect(decision.required, isTrue);
+      expect(decision.enabled, isTrue);
+      expect(fields['vanguardProtocolEnabled'], isTrue);
+      expect(fields['vanguardRequiredReason'],
+          'IRIS policy requires Vanguard for passports.');
+      expect((fields['vanguardProtocol'] as Map)['required'], isTrue);
+    });
+
+    test('pickup and drop-off are blocked until protocol milestones complete',
+        () {
+      final pending = {
+        'vanguardProtocolEnabled': true,
+        'vanguardStatus': 'pickup_verification_pending',
+      };
+      final custody = {
+        'vanguardProtocolEnabled': true,
+        'vanguardStatus': 'secure_custody',
+      };
+      final handoverPending = {
+        'vanguardProtocolEnabled': true,
+        'vanguardStatus': 'handover_pending',
+      };
+      final handoverVerified = {
+        'vanguardProtocolEnabled': true,
+        'vanguardStatus': 'handover_verified',
+      };
+
+      expect(VanguardProtection.canCompletePickup(pending), isFalse);
+      expect(VanguardProtection.canCompletePickup(custody), isTrue);
+      expect(VanguardProtection.canCompleteDropoff(handoverPending), isFalse);
+      expect(VanguardProtection.canCompleteDropoff(handoverVerified), isTrue);
+    });
+
+    test('receipt reflects protocol completion and fee', () {
+      final receipt = VanguardProtection.receiptSummary({
+        'vanguardProtocolEnabled': true,
+        'vanguardStatus': 'completed',
+        'collectionPinVerified': true,
+        'deliveryPinVerified': true,
+      });
+
+      expect(receipt['label'], 'Vanguard Protection');
+      expect(receipt['protocolCompleted'], isTrue);
+      expect(receipt['verificationCompleted'], isTrue);
+      expect(receipt['fee'], 1.99);
     });
 
     test('wrong collection PIN blocks completion and increments attempts', () {

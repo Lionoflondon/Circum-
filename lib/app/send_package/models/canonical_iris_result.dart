@@ -12,6 +12,8 @@ class CanonicalIrisResult {
   final String? explanation;
   final List<String> reasons;
   final bool partial;
+  final bool vanguardRequired;
+  final String? vanguardRequiredReason;
 
   const CanonicalIrisResult({
     required this.itemName,
@@ -27,6 +29,8 @@ class CanonicalIrisResult {
     this.explanation,
     this.reasons = const [],
     this.partial = false,
+    this.vanguardRequired = false,
+    this.vanguardRequiredReason,
   });
 
   String get itemAndQuantity =>
@@ -50,13 +54,20 @@ class CanonicalIrisResult {
     final repository = _map(data['repositoryMatch']);
     final internal = _map(data['internal']);
     final riderMatching = _map(internal['riderMatching']);
+    final vanguard = _map(data['vanguard']);
+    final requiresVanguard = _bool(
+      data['requiresVanguard'] ??
+          data['vanguardRequired'] ??
+          recommendation['requiresVanguard'] ??
+          recommendation['vanguardRecommended'] ??
+          vanguard['required'],
+    );
     final reasons = [
       ..._list(data['reasons']),
       if (recommendation['customerSafeExplanation'] != null)
         '${recommendation['customerSafeExplanation']}',
     ].where((item) => item.trim().isNotEmpty).toList();
-    final quantity =
-        _int(data['quantity'] ?? recommendation['quantity']) ??
+    final quantity = _int(data['quantity'] ?? recommendation['quantity']) ??
         (fallbackQuantity <= 0 ? 1 : fallbackQuantity);
     final totalWeight = _double(
       data['totalWeightKg'] ??
@@ -96,11 +107,14 @@ class CanonicalIrisResult {
       ),
       explanation: '${recommendation['customerSafeExplanation'] ?? ''}'.trim(),
       reasons: reasons,
-      partial:
-          totalWeight == null ||
+      partial: totalWeight == null ||
           '${data['recommendedVehicle'] ?? riderMatching['vehicleRequired'] ?? ''}'
               .trim()
               .isEmpty,
+      vanguardRequired: requiresVanguard,
+      vanguardRequiredReason:
+          '${vanguard['reason'] ?? recommendation['vanguardReason'] ?? ''}'
+              .trim(),
     );
   }
 
@@ -118,6 +132,14 @@ class CanonicalIrisResult {
   static int? _int(Object? value) {
     if (value is num) return value.toInt();
     return int.tryParse('$value');
+  }
+
+  static bool _bool(Object? value) {
+    if (value is bool) return value;
+    final normalized = '$value'.trim().toLowerCase();
+    return normalized == 'true' ||
+        normalized == 'required' ||
+        normalized == 'recommended';
   }
 
   static String _confidenceLabel(Object? value) {

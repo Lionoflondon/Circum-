@@ -309,7 +309,7 @@ void main() {
       expect(source, contains('_AfterJoinPill(accent: accent)'));
     });
 
-    test('Vanguard add-on does not replace selected delivery speed', () {
+    test('Vanguard protocol does not replace selected delivery speed', () {
       final draft = const SenderBookingDraft(
         step: SenderBookingStep.options,
         selectedOption: 'Express',
@@ -317,16 +317,20 @@ void main() {
 
       expect(draft.selectedOption, 'Express');
       expect(draft.vanguard, isTrue);
+      expect(draft.vanguardProtocolEnabled, isTrue);
+      expect(draft.vanguardStatus, 'pickup_verification_pending');
       expect(draft.addOnTotalGbp, senderVanguardAddOnPriceGbp);
       expect(draft.totalWithAddOns(8), 9.99);
     });
 
-    test('removing Vanguard removes only the add-on price', () {
+    test('removing Vanguard disables the protocol and fee', () {
       final draft = const SenderBookingDraft(
         vanguard: true,
       ).copyWith(vanguard: false);
 
       expect(draft.selectedOption, 'Standard');
+      expect(draft.vanguardProtocolEnabled, isFalse);
+      expect(draft.vanguardStatus, 'not_required');
       expect(draft.addOnTotalGbp, 0);
       expect(draft.totalWithAddOns(8), 8);
     });
@@ -342,6 +346,8 @@ void main() {
       expect(source, contains('Recipient phone'));
       expect(source, contains('Delivery instructions (optional)'));
       expect(source, contains('Confirm recipient'));
+      expect(senderVanguardProtocolLabel, 'Vanguard Delivery Protocol');
+      expect(source, contains('Vanguard Protection Active'));
       expect(
         source,
         contains('Used only if the rider needs to contact the recipient.'),

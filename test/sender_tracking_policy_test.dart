@@ -48,7 +48,7 @@ void main() {
     test('badge priority favours Vanguard then Health+ then Gift', () {
       expect(
         SenderTrackingPolicy.badgeFor({
-          'isVanguard': true,
+          'vanguardProtocolEnabled': true,
           'isHealthPlus': true,
           'isGift': true,
         }),
@@ -61,6 +61,28 @@ void main() {
       expect(
         SenderTrackingPolicy.badgeFor({'isGift': true}),
         SenderTrackingBadge.gift,
+      );
+    });
+
+    test('sender timeline reflects Vanguard protocol lifecycle', () {
+      final delivery = {
+        'vanguardProtocolEnabled': true,
+        'vanguardStatus': 'secure_custody',
+      };
+
+      expect(SenderTrackingPolicy.shouldShowVanguardTimeline(delivery), isTrue);
+      expect(
+        SenderTrackingPolicy.vanguardTimeline(delivery),
+        [
+          'Vanguard pickup verification',
+          'Secure custody',
+          'Secure transit',
+          'Secure handover',
+        ],
+      );
+      expect(
+        SenderTrackingPolicy.vanguardStatusLabel(delivery),
+        'Secure custody active',
       );
     });
 

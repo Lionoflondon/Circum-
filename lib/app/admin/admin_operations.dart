@@ -386,6 +386,30 @@ class AdminAuditEntry {
 }
 
 class AdminDeliveryTools {
+  static Map<String, dynamic> vanguardProtocolSummary(
+    Map<String, dynamic> delivery,
+  ) {
+    final protocol =
+        (delivery['vanguardProtocol'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final evidence =
+        (delivery['vanguardEvidence'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    return {
+      'protocolEnabled': delivery['vanguardProtocolEnabled'] == true ||
+          delivery['vanguardEnabled'] == true ||
+          protocol['enabled'] == true,
+      'reasonEnabled':
+          delivery['vanguardRequiredReason'] ?? protocol['reason'] ?? '',
+      'protocolState':
+          delivery['vanguardStatus'] ?? protocol['status'] ?? 'not_required',
+      'auditTrail': delivery['vanguardAuditTrail'] ?? const [],
+      'evidence': evidence,
+      'verificationTimeline': delivery['vanguardVerificationState'] ?? const {},
+      'issueHistory': delivery['vanguardIssueHistory'] ?? const [],
+    };
+  }
+
   static Map<String, dynamic> duplicateDelivery(
     Map<String, dynamic> source, {
     required String newId,

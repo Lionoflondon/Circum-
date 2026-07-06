@@ -1001,7 +1001,7 @@ class _OptionsPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Choose speed first. Vanguard is a separate trust add-on.',
+          'Choose speed first. Vanguard enables a secure delivery protocol.',
           style: TextStyle(color: _Tokens.muted, height: 1.35),
         ),
         const SizedBox(height: 14),
@@ -1013,21 +1013,21 @@ class _OptionsPanel extends StatelessWidget {
           onSelected: (value) => onDraft(draft.copyWith(selectedOption: value)),
         ),
         const SizedBox(height: 16),
-        const _SectionLabel('Optional trust add-ons'),
+        const _SectionLabel('Optional trust protocol'),
         const SizedBox(height: 8),
         _AddOnTile(
           selected: draft.vanguard,
-          title: 'Vanguard Protection',
+          title: senderVanguardProtocolLabel,
           price: '£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
           subtitle:
-              'Enhanced custody, verification, and protection cues for sensitive deliveries.',
+              'Mandatory pickup verification, secure custody, secure transit, and secure handover.',
           icon: Icons.shield_outlined,
           onTap: () => onDraft(draft.copyWith(vanguard: !draft.vanguard)),
         ),
         if (draft.vanguard) ...[
           const SizedBox(height: 8),
           const Text(
-            '✓ Vanguard Protection Added',
+            '✓ Vanguard Protection Active',
             style: TextStyle(
               color: _Tokens.lightBlue,
               fontWeight: FontWeight.w900,
@@ -1099,7 +1099,7 @@ class _ReviewPanel extends StatelessWidget {
         if (draft.vanguard)
           _ReviewRow(
             icon: Icons.shield_outlined,
-            label: 'Vanguard Protection',
+            label: senderVanguardProtocolLabel,
             value: '£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
             accent: _Tokens.lightBlue,
           ),
@@ -1174,7 +1174,7 @@ class _PaymentPanel extends StatelessWidget {
               ),
               if (draft.vanguard)
                 _SummaryLine(
-                  label: 'Vanguard Protection',
+                  label: senderVanguardProtocolLabel,
                   value: formatSenderCurrency(senderVanguardAddOnPriceGbp),
                 ),
               _SummaryLine(

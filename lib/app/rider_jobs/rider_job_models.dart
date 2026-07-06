@@ -1,3 +1,4 @@
+import 'package:circum/app/delivery_security/vanguard_protection.dart';
 import 'package:flutter/foundation.dart';
 
 enum RiderJobCategory {
@@ -93,7 +94,7 @@ class RiderJobOffer {
           data['expiresAt'] is DateTime ? data['expiresAt'] as DateTime : null,
       categories: RiderJobCategoryRules.categoriesFromJob(data),
       warningChips: [
-        if (data['isVanguard'] == true) 'Vanguard',
+        if (VanguardProtection.isProtocolEnabled(data)) 'Vanguard',
         if (data['isHealthPlus'] == true) 'Health+',
         if (data['isHeavyDuty'] == true) 'Heavy',
         if (data['isScheduled'] == true) 'Scheduled',
@@ -115,7 +116,9 @@ class RiderJobCategoryRules {
     if (job['isScheduled'] == true || job['scheduledAt'] != null) {
       categories.add(RiderJobCategory.scheduled);
     }
-    if (job['isVanguard'] == true || job['requiresVanguard'] == true) {
+    if (job['isVanguard'] == true ||
+        job['requiresVanguard'] == true ||
+        VanguardProtection.isProtocolEnabled(job)) {
       categories.add(RiderJobCategory.vanguard);
     }
     if (job['isBusiness'] == true || job['businessDelivery'] == true) {

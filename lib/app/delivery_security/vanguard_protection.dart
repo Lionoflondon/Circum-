@@ -2,6 +2,26 @@ import 'dart:math';
 
 const vanguardHighValueThresholdGbp = 250.0;
 const vanguardMaxPinAttemptsBeforeReview = 5;
+const vanguardProtocolVersion = 'vanguard_protocol_v1';
+
+enum VanguardProtocolStatus {
+  notRequired,
+  optional,
+  required,
+  pickupVerificationPending,
+  pickupVerified,
+  secureCustody,
+  handoverPending,
+  handoverVerified,
+  completed,
+  issueReported,
+}
+
+enum VanguardProtocolStage {
+  pickup,
+  custody,
+  handover,
+}
 
 class VanguardProtectedCategory {
   final String name;
@@ -279,7 +299,40 @@ class VanguardPinCheck {
   });
 }
 
+class VanguardProtocolDecision {
+  final bool enabled;
+  final bool required;
+  final String requiredReason;
+  final VanguardProtocolStatus status;
+
+  const VanguardProtocolDecision({
+    required this.enabled,
+    required this.required,
+    required this.requiredReason,
+    required this.status,
+  });
+}
+
 class VanguardProtection {
+  static const senderActiveLabel = '🛡 Vanguard Protection Active';
+  static const protocolTimeline = [
+    'Vanguard pickup verification',
+    'Secure custody',
+    'Secure transit',
+    'Secure handover',
+  ];
+  static const pickupChecklist = [
+    'Verify parcel',
+    'Verify packaging',
+    'Required evidence',
+    'Rider declaration',
+  ];
+  static const handoverChecklist = [
+    'Recipient verification if policy requires',
+    'Delivery evidence',
+    'Secure handover declaration',
+  ];
+
   static bool shouldEnable({
     required String description,
     String? packageType,
@@ -296,6 +349,148 @@ class VanguardProtection {
           packageType: packageType,
         ) !=
         null;
+  }
+
+  static VanguardProtocolDecision decideProtocol({
+    required String description,
+    String? packageType,
+    double? declaredValueGbp,
+    bool manuallySelected = false,
+    bool irisRequired = false,
+    String? irisRequiredReason,
+  }) {
+    final matchedCategory = matchedCategoryName(
+      description: description,
+      packageType: packageType,
+    );
+    final required = irisRequired ||
+        matchedCategory != null ||
+        (declaredValueGbp != null &&
+            declaredValueGbp > vanguardHighValueThresholdGbp);
+    final enabled = manuallySelected || required;
+    return VanguardProtocolDecision(
+      enabled: enabled,
+      required: required,
+      requiredReason: !required
+          ? ''
+          : irisRequiredReason?.trim().isNotEmpty == true
+              ? irisRequiredReason!.trim()
+              : matchedCategory != null
+                  ? 'IRIS policy requires Vanguard for $matchedCategory.'
+                  : 'Declared value requires Vanguard protocol.',
+      status: enabled
+          ? VanguardProtocolStatus.pickupVerificationPending
+          : VanguardProtocolStatus.notRequired,
+    );
+  }
+
+  static bool isProtocolEnabled(Map<String, dynamic> delivery) {
+    final protocol =
+        (delivery['vanguardProtocol'] as Map?)?.cast<String, dynamic>();
+    return delivery['vanguardProtocolEnabled'] == true ||
+        delivery['vanguardEnabled'] == true ||
+        protocol?['enabled'] == true ||
+        ((delivery['vanguardProtection'] as Map?)?['enabled'] == true);
+  }
+
+  static VanguardProtocolStatus statusFromDelivery(
+    Map<String, dynamic> delivery,
+  ) {
+    final raw = '${delivery['vanguardStatus'] ?? ''}'.trim();
+    if (raw.isNotEmpty) return statusFromWire(raw);
+    if (!isProtocolEnabled(delivery)) return VanguardProtocolStatus.notRequired;
+    if (delivery['deliveryPinVerified'] == true) {
+      return VanguardProtocolStatus.completed;
+    }
+    if (delivery['collectionPinVerified'] == true) {
+      return VanguardProtocolStatus.secureCustody;
+    }
+    return VanguardProtocolStatus.pickupVerificationPending;
+  }
+
+  static VanguardProtocolStatus statusFromWire(String value) {
+    final normalized =
+        value.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+    return switch (normalized) {
+      'optional' => VanguardProtocolStatus.optional,
+      'required' => VanguardProtocolStatus.required,
+      'pickup_verification_pending' =>
+        VanguardProtocolStatus.pickupVerificationPending,
+      'pickup_verified' => VanguardProtocolStatus.pickupVerified,
+      'secure_custody' => VanguardProtocolStatus.secureCustody,
+      'handover_pending' => VanguardProtocolStatus.handoverPending,
+      'handover_verified' => VanguardProtocolStatus.handoverVerified,
+      'completed' => VanguardProtocolStatus.completed,
+      'issue_reported' => VanguardProtocolStatus.issueReported,
+      _ => VanguardProtocolStatus.notRequired,
+    };
+  }
+
+  static String statusWire(VanguardProtocolStatus status) {
+    return switch (status) {
+      VanguardProtocolStatus.notRequired => 'not_required',
+      VanguardProtocolStatus.optional => 'optional',
+      VanguardProtocolStatus.required => 'required',
+      VanguardProtocolStatus.pickupVerificationPending =>
+        'pickup_verification_pending',
+      VanguardProtocolStatus.pickupVerified => 'pickup_verified',
+      VanguardProtocolStatus.secureCustody => 'secure_custody',
+      VanguardProtocolStatus.handoverPending => 'handover_pending',
+      VanguardProtocolStatus.handoverVerified => 'handover_verified',
+      VanguardProtocolStatus.completed => 'completed',
+      VanguardProtocolStatus.issueReported => 'issue_reported',
+    };
+  }
+
+  static String statusLabel(VanguardProtocolStatus status) {
+    return switch (status) {
+      VanguardProtocolStatus.notRequired => 'Not required',
+      VanguardProtocolStatus.optional => 'Optional',
+      VanguardProtocolStatus.required => 'Required',
+      VanguardProtocolStatus.pickupVerificationPending =>
+        'Vanguard pickup verification',
+      VanguardProtocolStatus.pickupVerified => 'Pickup verified',
+      VanguardProtocolStatus.secureCustody => 'Secure custody active',
+      VanguardProtocolStatus.handoverPending => 'Secure handover pending',
+      VanguardProtocolStatus.handoverVerified => 'Handover verified',
+      VanguardProtocolStatus.completed => 'Protocol completed',
+      VanguardProtocolStatus.issueReported => 'Issue reported',
+    };
+  }
+
+  static bool canCompletePickup(Map<String, dynamic> delivery) {
+    if (!isProtocolEnabled(delivery)) return true;
+    final status = statusFromDelivery(delivery);
+    return status == VanguardProtocolStatus.pickupVerified ||
+        status == VanguardProtocolStatus.secureCustody ||
+        status == VanguardProtocolStatus.handoverPending ||
+        status == VanguardProtocolStatus.handoverVerified ||
+        status == VanguardProtocolStatus.completed;
+  }
+
+  static bool canCompleteDropoff(Map<String, dynamic> delivery) {
+    if (!isProtocolEnabled(delivery)) return true;
+    final status = statusFromDelivery(delivery);
+    return status == VanguardProtocolStatus.handoverVerified ||
+        status == VanguardProtocolStatus.completed;
+  }
+
+  static Map<String, dynamic> receiptSummary(
+    Map<String, dynamic> delivery, {
+    double fee = 1.99,
+  }) {
+    if (!isProtocolEnabled(delivery)) return const {};
+    final status = statusFromDelivery(delivery);
+    return {
+      'label': 'Vanguard Protection',
+      'protocolCompleted': status == VanguardProtocolStatus.completed,
+      'verificationCompleted': delivery['collectionPinVerified'] == true &&
+          delivery['deliveryPinVerified'] == true,
+      'fee': fee,
+      'issue': status == VanguardProtocolStatus.issueReported
+          ? delivery['vanguardIssueReason'] ?? 'Issue reported'
+          : null,
+    };
   }
 
   static VanguardPins generatePins({Random? random}) {
@@ -316,34 +511,71 @@ class VanguardProtection {
     String? packageType,
     double? declaredValueGbp,
     bool manuallySelected = false,
+    bool irisRequired = false,
+    String? irisRequiredReason,
     Random? random,
   }) {
     final matchedCategory = matchedCategoryName(
       description: description,
       packageType: packageType,
     );
-    final enabled = shouldEnable(
+    final decision = decideProtocol(
       description: description,
       packageType: packageType,
       declaredValueGbp: declaredValueGbp,
       manuallySelected: manuallySelected,
+      irisRequired: irisRequired,
+      irisRequiredReason: irisRequiredReason,
     );
+    final enabled = decision.enabled;
     if (!enabled) {
       return const {
         'vanguardEnabled': false,
+        'vanguardProtocolEnabled': false,
+        'vanguardStatus': 'not_required',
       };
     }
     final pins = generatePins(random: random);
+    final trigger = _trigger(
+      declaredValueGbp: declaredValueGbp,
+      manuallySelected: manuallySelected,
+      matchedCategory: matchedCategory,
+      irisRequired: irisRequired,
+    );
     return {
       'vanguardEnabled': true,
+      'vanguardProtocolEnabled': true,
+      'vanguardRequiredReason': decision.requiredReason,
+      'vanguardStatus': statusWire(decision.status),
+      'vanguardVerificationState': {
+        'pickup': 'pending',
+        'custody': 'pending',
+        'handover': 'pending',
+      },
+      'vanguardAuditTrail': [
+        {
+          'event': 'vanguard_protocol_enabled',
+          'status': statusWire(decision.status),
+          'trigger': trigger,
+          'reason': decision.requiredReason,
+        },
+      ],
+      'vanguardEvidence': {
+        'pickup': [],
+        'handover': [],
+      },
+      'vanguardProtocol': {
+        'enabled': true,
+        'required': decision.required,
+        'version': vanguardProtocolVersion,
+        'status': statusWire(decision.status),
+        'reason': decision.requiredReason,
+        'timeline': protocolTimeline,
+      },
       'vanguardProtection': {
         'enabled': true,
         'highValueThresholdGbp': vanguardHighValueThresholdGbp,
-        'trigger': _trigger(
-          declaredValueGbp: declaredValueGbp,
-          manuallySelected: manuallySelected,
-          matchedCategory: matchedCategory,
-        ),
+        'trigger': trigger,
         'matchedCategory': matchedCategory,
         'registryVersion': 1,
         // TODO: Hash these values server-side when a backend PIN hashing helper
@@ -430,7 +662,9 @@ class VanguardProtection {
     required double? declaredValueGbp,
     required bool manuallySelected,
     required String? matchedCategory,
+    required bool irisRequired,
   }) {
+    if (irisRequired) return 'iris_policy_required';
     if (manuallySelected) return 'manual_user_selection';
     if (declaredValueGbp != null &&
         declaredValueGbp > vanguardHighValueThresholdGbp) {

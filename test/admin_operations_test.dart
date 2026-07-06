@@ -185,6 +185,36 @@ void main() {
       expect(patch.containsKey('amount'), isFalse);
     });
 
+    test('delivery model exposes Vanguard protocol summary for admin review',
+        () {
+      final summary = AdminDeliveryTools.vanguardProtocolSummary({
+        'vanguardProtocolEnabled': true,
+        'vanguardRequiredReason': 'IRIS policy requires Vanguard.',
+        'vanguardStatus': 'secure_custody',
+        'vanguardAuditTrail': [
+          {'event': 'vanguard_protocol_enabled'}
+        ],
+        'vanguardEvidence': {
+          'pickup': ['photo-1']
+        },
+        'vanguardVerificationState': {
+          'pickup': 'complete',
+          'custody': 'active',
+        },
+        'vanguardIssueHistory': [
+          {'issue': 'seal_checked'}
+        ],
+      });
+
+      expect(summary['protocolEnabled'], isTrue);
+      expect(summary['reasonEnabled'], 'IRIS policy requires Vanguard.');
+      expect(summary['protocolState'], 'secure_custody');
+      expect(summary['auditTrail'], isNotEmpty);
+      expect((summary['evidence'] as Map)['pickup'], ['photo-1']);
+      expect((summary['verificationTimeline'] as Map)['custody'], 'active');
+      expect(summary['issueHistory'], isNotEmpty);
+    });
+
     test('creates audit log entries', () {
       final audit = AdminAuditEntry(
         adminUserId: 'admin-1',
