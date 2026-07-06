@@ -68,7 +68,29 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             ),
           );
     }
+    if (_draft.step == SenderBookingStep.iris ||
+        _draft.step == SenderBookingStep.options ||
+        _draft.step == SenderBookingStep.review) {
+      _requestBackendQuote(_draft);
+    }
+    if (_draft.step == SenderBookingStep.review) {
+      context.read<SendPackageBloc>().add(const LoadSenderRothBalance());
+    }
     _setDraft(_draft.next());
+  }
+
+  void _requestBackendQuote(SenderBookingDraft draft) {
+    context.read<SendPackageBloc>().add(
+          RequestSenderBookingQuote(
+            selectedSpeed: draft.selectedOption,
+            vanguardProtocolEnabled: draft.vanguard,
+            itemName: draft.itemName,
+            description: draft.itemDescription,
+            weightKg: double.tryParse(_weight.text) ?? .5,
+            fragile: draft.fragile,
+            highValue: draft.highValue,
+          ),
+        );
   }
 
   void _back() {
@@ -372,6 +394,7 @@ class _BookingPanel extends StatelessWidget {
       case SenderBookingStep.options:
         return _OptionsPanel(
           draft: draft,
+          engine: engine,
           onDraft: onDraft,
           onContinue: onContinue,
         );
@@ -986,17 +1009,20 @@ class _IrisPanel extends StatelessWidget {
 
 class _OptionsPanel extends StatelessWidget {
   final SenderBookingDraft draft;
+  final SendPackageState engine;
   final ValueChanged<SenderBookingDraft> onDraft;
   final VoidCallback onContinue;
 
   const _OptionsPanel({
     required this.draft,
+    required this.engine,
     required this.onDraft,
     required this.onContinue,
   });
 
   @override
   Widget build(BuildContext context) {
+    final quoteTotal = engine.senderQuoteTotal;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1010,7 +1036,11 @@ class _OptionsPanel extends StatelessWidget {
         _SegmentedControl(
           values: senderDeliverySpeeds,
           selected: draft.selectedOption,
-          onSelected: (value) => onDraft(draft.copyWith(selectedOption: value)),
+          onSelected: (value) {
+            final next = draft.copyWith(selectedOption: value);
+            onDraft(next);
+            _requestQuote(context, next);
+          },
         ),
         const SizedBox(height: 16),
         const _SectionLabel('Optional trust protocol'),
@@ -1022,7 +1052,11 @@ class _OptionsPanel extends StatelessWidget {
           subtitle:
               'Mandatory pickup verification, secure custody, secure transit, and secure handover.',
           icon: Icons.shield_outlined,
-          onTap: () => onDraft(draft.copyWith(vanguard: !draft.vanguard)),
+          onTap: () {
+            final next = draft.copyWith(vanguard: !draft.vanguard);
+            onDraft(next);
+            _requestQuote(context, next);
+          },
         ),
         if (draft.vanguard) ...[
           const SizedBox(height: 8),
@@ -1034,14 +1068,50 @@ class _OptionsPanel extends StatelessWidget {
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        _PaymentCard(
+          child: Column(
+            children: [
+              if (engine.isSenderQuoteLoading)
+                const _SummaryLine(label: 'Backend quote', value: 'Loading')
+              else if (engine.senderQuoteError.isNotEmpty)
+                _SummaryLine(
+                  label: 'Backend quote',
+                  value: engine.senderQuoteError,
+                )
+              else
+                _SummaryLine(
+                  label: 'Estimated total',
+                  value: quoteTotal == null
+                      ? 'Requesting backend quote'
+                      : formatSenderCurrency(quoteTotal),
+                ),
+            ],
+          ),
+        ),
         const SizedBox(height: 14),
         _PrimaryButton(
           label: 'Review delivery',
-          enabled: true,
+          enabled: quoteTotal != null && !engine.isSenderQuoteLoading,
           onTap: onContinue,
         ),
       ],
     );
+  }
+
+  void _requestQuote(BuildContext context, SenderBookingDraft draft) {
+    context.read<SendPackageBloc>().add(
+          RequestSenderBookingQuote(
+            selectedSpeed: draft.selectedOption,
+            vanguardProtocolEnabled: draft.vanguard,
+            itemName: draft.itemName,
+            description: draft.itemDescription,
+            weightKg:
+                double.tryParse(draft.weightLabel.replaceAll('kg', '')) ?? .5,
+            fragile: draft.fragile,
+            highValue: draft.highValue,
+          ),
+        );
   }
 }
 
@@ -1058,7 +1128,7 @@ class _ReviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = draft.totalWithAddOns(engine.price);
+    final total = engine.senderQuoteTotal;
     return Column(
       children: [
         _ReviewRow(
@@ -1100,18 +1170,34 @@ class _ReviewPanel extends StatelessWidget {
           _ReviewRow(
             icon: Icons.shield_outlined,
             label: senderVanguardProtocolLabel,
-            value: '£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+            value: 'Included in backend quote',
             accent: _Tokens.lightBlue,
+          ),
+        if (engine.senderQuoteLineItems.isNotEmpty)
+          ...engine.senderQuoteLineItems.map(
+            (item) => _ReviewRow(
+              icon: Icons.receipt_long_outlined,
+              label: '${item['label'] ?? 'Price line'}',
+              value: formatSenderCurrency(
+                double.tryParse('${item['amount'] ?? 0}') ?? 0,
+              ),
+            ),
+          ),
+        if (engine.senderQuoteError.isNotEmpty)
+          _ReviewRow(
+            icon: Icons.info_outline_rounded,
+            label: 'Backend quote',
+            value: engine.senderQuoteError,
           ),
         _ReviewRow(
           icon: Icons.payments_outlined,
-          label: 'Total',
+          label: 'Estimated total due today',
           value: total == null ? 'Calculating' : '£${total.toStringAsFixed(2)}',
         ),
         const SizedBox(height: 12),
         _PrimaryButton(
           label: 'Continue to payment',
-          enabled: true,
+          enabled: total != null && !engine.isSenderQuoteLoading,
           onTap: onContinue,
         ),
       ],
@@ -1132,8 +1218,8 @@ class _PaymentPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = draft.totalWithAddOns(engine.price);
-    final backendRothCredits = draft.rothAvailableCredits;
+    final total = engine.senderQuoteTotal;
+    final backendRothCredits = engine.senderRothBalance;
     final rothAvailable = backendRothCredits != null;
     final availableRoth = backendRothCredits ?? 0.0;
     final split = total == null
@@ -1144,9 +1230,24 @@ class _PaymentPanel extends StatelessWidget {
             availableRothCredits: availableRoth,
             fallbackMethod: draft.selectedPaymentMethod,
           );
-    final submitting = draft.paymentStatus == SenderPaymentStatus.processing;
+    final submitting =
+        engine.isSenderPaymentLoading || engine.isSenderDeliveryCreating;
     final canSubmit =
         total != null && split != null && split.canSubmit && !submitting;
+    if (engine.senderPaymentStatus == 'succeeded' &&
+        engine.senderPaymentSessionId != null &&
+        engine.senderCreatedRequestId == null &&
+        !engine.isSenderDeliveryCreating &&
+        engine.senderDeliveryError.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        context.read<SendPackageBloc>().add(
+              CreatePaidSenderDelivery(
+                bookingPayload: _bookingPayload(engine),
+              ),
+            );
+      });
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1164,18 +1265,18 @@ class _PaymentPanel extends StatelessWidget {
               ),
               _SummaryLine(
                 label: 'Base delivery',
-                value: engine.price == null
-                    ? 'Pending route'
-                    : formatSenderCurrency(engine.price!),
+                value: _lineAmount(engine, 'base_delivery') ??
+                    (total == null ? 'Pending route' : 'Included'),
               ),
-              const _SummaryLine(
+              _SummaryLine(
                 label: 'Speed/class adjustment',
-                value: 'Included in estimate',
+                value: _lineAmount(engine, 'speed_adjustment') ??
+                    'Included in backend quote',
               ),
               if (draft.vanguard)
                 _SummaryLine(
                   label: senderVanguardProtocolLabel,
-                  value: formatSenderCurrency(senderVanguardAddOnPriceGbp),
+                  value: _lineAmount(engine, 'vanguard') ?? 'Included in quote',
                 ),
               _SummaryLine(
                 label: 'Estimated total due today',
@@ -1238,6 +1339,16 @@ class _PaymentPanel extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Roth balance could not be loaded from the backend, so Roth cannot be applied right now.',
+                    style: TextStyle(color: _Tokens.muted, height: 1.35),
+                  ),
+                ),
+              ],
+              if (engine.isSenderRothLoading) ...[
+                const SizedBox(height: 6),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Loading backend Roth balance...',
                     style: TextStyle(color: _Tokens.muted, height: 1.35),
                   ),
                 ),
@@ -1322,6 +1433,26 @@ class _PaymentPanel extends StatelessWidget {
                 'Please try again. No payment has been confirmed and no rider broadcast has been created.',
           ),
         ],
+        if (engine.senderPaymentError.isNotEmpty ||
+            engine.senderDeliveryError.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _GapNotice(
+            title: "Payment couldn't be completed",
+            body: engine.senderPaymentError.isNotEmpty
+                ? engine.senderPaymentError
+                : engine.senderDeliveryError,
+          ),
+        ],
+        if (engine.senderPaymentStatus != null &&
+            engine.senderPaymentStatus != 'succeeded' &&
+            engine.senderPaymentClientSecret != null) ...[
+          const SizedBox(height: 12),
+          const _GapNotice(
+            title: 'Payment session created',
+            body:
+                'Card confirmation is required before Circum can create and broadcast this delivery.',
+          ),
+        ],
         const SizedBox(height: 14),
         _PrimaryButton(
           label: submitting
@@ -1396,20 +1527,81 @@ class _PaymentPanel extends StatelessWidget {
         amountDue: total,
       ),
     );
-    Future<void>.delayed(const Duration(milliseconds: 450), () {
-      if (!context.mounted) return;
-      onDraft(
-        draft.copyWith(
-          paymentStatus: SenderPaymentStatus.failed,
-          rothAppliedAmount: split.rothAppliedAmount,
-          rothAppliedCredits: split.rothAppliedCredits,
-          remainingAmount: split.remainingAmount,
-          paymentSplitSummary: split.splitSummary,
-          amountDue: total,
-        ),
-      );
-    });
+    context.read<SendPackageBloc>().add(
+          StartSenderPaymentSession(
+            rothEnabled: split.rothEnabled,
+            fallbackMethod: split.fallbackMethod == null
+                ? 'roth'
+                : senderPaymentMethodLabel(split.fallbackMethod!),
+          ),
+        );
   }
+
+  String? _lineAmount(SendPackageState engine, String key) {
+    for (final item in engine.senderQuoteLineItems) {
+      if ('${item['key']}' == key) {
+        return formatSenderCurrency(
+          double.tryParse('${item['amount'] ?? 0}') ?? 0,
+        );
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _bookingPayload(SendPackageState engine) => {
+        'pickup': {
+          'address': engine.pickupLocation ?? draft.pickupAddress,
+          'subAddress': engine.pickupLocationSubAddress ?? '',
+          'locality': engine.pickupLocality ?? '',
+          'coordinates': {
+            'lat': engine.pickupCoordinate?.lat ?? 0,
+            'lng': engine.pickupCoordinate?.lng ?? 0,
+          },
+        },
+        'dropoff': {
+          'address': engine.destinationLocation ?? draft.dropoffAddress,
+          'subAddress': engine.destinationLocationSubAddress ?? '',
+          'locality': engine.destinationLocality ?? '',
+          'coordinates': {
+            'lat': engine.desinationCoordinate?.lat ?? 0,
+            'lng': engine.desinationCoordinate?.lng ?? 0,
+          },
+        },
+        'recipient': {
+          'name': draft.receiverName,
+          'phone': draft.receiverPhone,
+          'deliveryNotes': draft.deliveryNotes,
+        },
+        'deliveryTime': {
+          'type': draft.deliveryTimingType == SenderDeliveryTimingType.now
+              ? 'now'
+              : 'scheduled',
+          'scheduledDate': draft.scheduledDate,
+          'scheduledWindow': draft.scheduledWindow,
+          'customWindowStart': draft.customWindowStart,
+          'customWindowEnd': draft.customWindowEnd,
+          'summary': draft.deliveryTimeSummary,
+        },
+        'parcel': {
+          'itemName': draft.itemName,
+          'description': draft.itemDescription,
+          'weightLabel': draft.weightLabel,
+          'weightKg': engine.parcelWeightKg,
+          'fragile': draft.fragile,
+          'highValue': draft.highValue,
+        },
+        'iris': {
+          'itemName': engine.canonicalIrisResult?.itemName,
+          'quantity': engine.canonicalIrisResult?.quantity,
+          'totalWeightKg': engine.canonicalIrisResult?.totalWeightKg,
+          'recommendedVehicle': engine.canonicalIrisResult?.recommendedVehicle,
+          'confidence': engine.canonicalIrisResult?.confidenceLabel,
+          'category': engine.canonicalIrisResult?.category,
+          'vanguardRequired': engine.canonicalIrisResult?.vanguardRequired,
+          'vanguardRequiredReason':
+              engine.canonicalIrisResult?.vanguardRequiredReason,
+        },
+      };
 }
 
 class _FindingPanel extends StatelessWidget {

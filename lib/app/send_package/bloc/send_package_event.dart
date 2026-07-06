@@ -88,6 +88,46 @@ class RequestCanonicalIrisEstimate extends SendPackageEvent {
   });
 }
 
+class RequestSenderBookingQuote extends SendPackageEvent {
+  final String selectedSpeed;
+  final bool vanguardProtocolEnabled;
+  final String itemName;
+  final String description;
+  final double weightKg;
+  final bool fragile;
+  final bool highValue;
+
+  const RequestSenderBookingQuote({
+    required this.selectedSpeed,
+    required this.vanguardProtocolEnabled,
+    required this.itemName,
+    required this.description,
+    required this.weightKg,
+    required this.fragile,
+    required this.highValue,
+  });
+}
+
+class LoadSenderRothBalance extends SendPackageEvent {
+  const LoadSenderRothBalance();
+}
+
+class StartSenderPaymentSession extends SendPackageEvent {
+  final bool rothEnabled;
+  final String fallbackMethod;
+
+  const StartSenderPaymentSession({
+    required this.rothEnabled,
+    required this.fallbackMethod,
+  });
+}
+
+class CreatePaidSenderDelivery extends SendPackageEvent {
+  final Map<String, dynamic> bookingPayload;
+
+  const CreatePaidSenderDelivery({required this.bookingPayload});
+}
+
 class CheckForPushToken extends SendPackageEvent {}
 
 class DeliveryAccepted extends SendPackageEvent {

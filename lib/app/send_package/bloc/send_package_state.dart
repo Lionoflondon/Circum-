@@ -65,6 +65,23 @@ class SendPackageState {
   final String? itemDescription;
   final bool isIrisResolving;
   final String irisErrorMessage;
+  final bool isSenderQuoteLoading;
+  final String senderQuoteError;
+  final String? senderQuoteId;
+  final double? senderQuoteTotal;
+  final String? senderQuoteSpeed;
+  final List<Map<String, dynamic>> senderQuoteLineItems;
+  final bool isSenderRothLoading;
+  final String senderRothError;
+  final double? senderRothBalance;
+  final bool isSenderPaymentLoading;
+  final String senderPaymentError;
+  final String? senderPaymentSessionId;
+  final String? senderPaymentStatus;
+  final String? senderPaymentClientSecret;
+  final bool isSenderDeliveryCreating;
+  final String senderDeliveryError;
+  final String? senderCreatedRequestId;
   SendPackageState({
     this.suggestions = const [],
     this.isAddressSearching = false,
@@ -104,6 +121,23 @@ class SendPackageState {
     this.itemDescription,
     this.isIrisResolving = false,
     this.irisErrorMessage = '',
+    this.isSenderQuoteLoading = false,
+    this.senderQuoteError = '',
+    this.senderQuoteId,
+    this.senderQuoteTotal,
+    this.senderQuoteSpeed,
+    this.senderQuoteLineItems = const [],
+    this.isSenderRothLoading = false,
+    this.senderRothError = '',
+    this.senderRothBalance,
+    this.isSenderPaymentLoading = false,
+    this.senderPaymentError = '',
+    this.senderPaymentSessionId,
+    this.senderPaymentStatus,
+    this.senderPaymentClientSecret,
+    this.isSenderDeliveryCreating = false,
+    this.senderDeliveryError = '',
+    this.senderCreatedRequestId,
   });
 
   SendPackageState copyWith({
@@ -145,6 +179,23 @@ class SendPackageState {
     String? itemDescription,
     bool? isIrisResolving,
     String? irisErrorMessage,
+    bool? isSenderQuoteLoading,
+    String? senderQuoteError,
+    String? senderQuoteId,
+    double? senderQuoteTotal,
+    String? senderQuoteSpeed,
+    List<Map<String, dynamic>>? senderQuoteLineItems,
+    bool? isSenderRothLoading,
+    String? senderRothError,
+    double? senderRothBalance,
+    bool? isSenderPaymentLoading,
+    String? senderPaymentError,
+    String? senderPaymentSessionId,
+    String? senderPaymentStatus,
+    String? senderPaymentClientSecret,
+    bool? isSenderDeliveryCreating,
+    String? senderDeliveryError,
+    String? senderCreatedRequestId,
   }) {
     return SendPackageState(
       suggestions: suggestions ?? this.suggestions,
@@ -188,6 +239,28 @@ class SendPackageState {
       itemDescription: itemDescription ?? this.itemDescription,
       isIrisResolving: isIrisResolving ?? this.isIrisResolving,
       irisErrorMessage: irisErrorMessage ?? this.irisErrorMessage,
+      isSenderQuoteLoading: isSenderQuoteLoading ?? this.isSenderQuoteLoading,
+      senderQuoteError: senderQuoteError ?? this.senderQuoteError,
+      senderQuoteId: senderQuoteId ?? this.senderQuoteId,
+      senderQuoteTotal: senderQuoteTotal ?? this.senderQuoteTotal,
+      senderQuoteSpeed: senderQuoteSpeed ?? this.senderQuoteSpeed,
+      senderQuoteLineItems: senderQuoteLineItems ?? this.senderQuoteLineItems,
+      isSenderRothLoading: isSenderRothLoading ?? this.isSenderRothLoading,
+      senderRothError: senderRothError ?? this.senderRothError,
+      senderRothBalance: senderRothBalance ?? this.senderRothBalance,
+      isSenderPaymentLoading:
+          isSenderPaymentLoading ?? this.isSenderPaymentLoading,
+      senderPaymentError: senderPaymentError ?? this.senderPaymentError,
+      senderPaymentSessionId:
+          senderPaymentSessionId ?? this.senderPaymentSessionId,
+      senderPaymentStatus: senderPaymentStatus ?? this.senderPaymentStatus,
+      senderPaymentClientSecret:
+          senderPaymentClientSecret ?? this.senderPaymentClientSecret,
+      isSenderDeliveryCreating:
+          isSenderDeliveryCreating ?? this.isSenderDeliveryCreating,
+      senderDeliveryError: senderDeliveryError ?? this.senderDeliveryError,
+      senderCreatedRequestId:
+          senderCreatedRequestId ?? this.senderCreatedRequestId,
     );
   }
 }

@@ -51,6 +51,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<SetPrice>(_handleSetPrice);
     on<SetParcelWeight>(_handleSetParcelWeight);
     on<RequestCanonicalIrisEstimate>(_handleRequestCanonicalIrisEstimate);
+    on<RequestSenderBookingQuote>(_handleRequestSenderBookingQuote);
+    on<LoadSenderRothBalance>(_handleLoadSenderRothBalance);
+    on<StartSenderPaymentSession>(_handleStartSenderPaymentSession);
+    on<CreatePaidSenderDelivery>(_handleCreatePaidSenderDelivery);
     on<SendDeliveryRequest>(_handleSendDeliveryRequestEvent);
     on<DeliveryAccepted>(_handleDeliveryAcceptedEvent);
     on<DeliveryCompleted>(_handleDeliveryCompleted);
@@ -515,6 +519,265 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           isIrisResolving: false,
           irisErrorMessage:
               "IRIS couldn't complete the estimate. Please try again.",
+        ),
+      );
+    }
+  }
+
+  double _numFrom(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0;
+  }
+
+  List<Map<String, dynamic>> _lineItemsFrom(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> _callableMap(
+    String name,
+    Map<String, dynamic> payload,
+  ) async {
+    final result =
+        await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    return result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : <String, dynamic>{};
+  }
+
+  void _handleRequestSenderBookingQuote(
+    RequestSenderBookingQuote event,
+    Emitter<SendPackageState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        isSenderQuoteLoading: true,
+        senderQuoteError: '',
+      ),
+    );
+    try {
+      final data = await _callableMap('createSenderBookingQuote', {
+        'selectedSpeed': event.selectedSpeed,
+        'vanguardProtocolEnabled': event.vanguardProtocolEnabled,
+        'distanceMiles': state.distance == null
+            ? 0
+            : DeliveryPricing.kilometresToMiles(state.distance!),
+        'weightKg':
+            state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
+        'parcel': {
+          'itemName': event.itemName,
+          'description': event.description,
+          'weightKg': event.weightKg,
+          'fragile': event.fragile,
+          'highValue': event.highValue,
+        },
+        'iris': {
+          if (state.canonicalIrisResult != null) ...{
+            'itemName': state.canonicalIrisResult!.itemName,
+            'quantity': state.canonicalIrisResult!.quantity,
+            'totalWeightKg': state.canonicalIrisResult!.totalWeightKg,
+            'category': state.canonicalIrisResult!.category,
+            'recommendedVehicle': state.canonicalIrisResult!.recommendedVehicle,
+            'confidence': state.canonicalIrisResult!.confidenceLabel,
+            'vanguardRequired': state.canonicalIrisResult!.vanguardRequired,
+            'vanguardRequiredReason':
+                state.canonicalIrisResult!.vanguardRequiredReason,
+          },
+        },
+      });
+      emit(
+        state.copyWith(
+          isSenderQuoteLoading: false,
+          senderQuoteId: '${data['quoteId'] ?? ''}',
+          senderQuoteTotal: _numFrom(
+            data['total'] ?? data['finalAmount'] ?? data['amountDue'],
+          ),
+          senderQuoteSpeed: '${data['selectedSpeed'] ?? event.selectedSpeed}',
+          senderQuoteLineItems: _lineItemsFrom(data['lineItems']),
+          price: _numFrom(
+            data['total'] ?? data['finalAmount'] ?? data['amountDue'],
+          ),
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'createSenderBookingQuote failed: code=${error.code}, message=${error.message}, details=${error.details}',
+      );
+      emit(
+        state.copyWith(
+          isSenderQuoteLoading: false,
+          senderQuoteError:
+              error.message ?? 'Could not load delivery quote. Try again.',
+        ),
+      );
+    } catch (error) {
+      debugPrint('createSenderBookingQuote unexpected failure: $error');
+      emit(
+        state.copyWith(
+          isSenderQuoteLoading: false,
+          senderQuoteError: 'Could not load delivery quote. Try again.',
+        ),
+      );
+    }
+  }
+
+  void _handleLoadSenderRothBalance(
+    LoadSenderRothBalance event,
+    Emitter<SendPackageState> emit,
+  ) async {
+    emit(
+      state.copyWith(isSenderRothLoading: true, senderRothError: ''),
+    );
+    try {
+      final data = await _callableMap('getSenderRothBalance', const {});
+      emit(
+        state.copyWith(
+          isSenderRothLoading: false,
+          senderRothBalance: _numFrom(data['availableRoth'] ?? data['balance']),
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'getSenderRothBalance failed: code=${error.code}, message=${error.message}, details=${error.details}',
+      );
+      emit(
+        state.copyWith(
+          isSenderRothLoading: false,
+          senderRothError:
+              error.message ?? 'Roth balance is unavailable right now.',
+        ),
+      );
+    } catch (error) {
+      debugPrint('getSenderRothBalance unexpected failure: $error');
+      emit(
+        state.copyWith(
+          isSenderRothLoading: false,
+          senderRothError: 'Roth balance is unavailable right now.',
+        ),
+      );
+    }
+  }
+
+  void _handleStartSenderPaymentSession(
+    StartSenderPaymentSession event,
+    Emitter<SendPackageState> emit,
+  ) async {
+    if (state.senderQuoteId == null || state.senderQuoteId!.isEmpty) {
+      emit(
+        state.copyWith(
+          senderPaymentError: 'Load a backend quote before payment.',
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        isSenderPaymentLoading: true,
+        senderPaymentError: '',
+      ),
+    );
+    try {
+      final data = await _callableMap('createSenderPaymentSession', {
+        'quoteId': state.senderQuoteId,
+        'rothEnabled': event.rothEnabled,
+        'fallbackMethod': event.fallbackMethod,
+      });
+      emit(
+        state.copyWith(
+          isSenderPaymentLoading: false,
+          senderPaymentSessionId: '${data['paymentSessionId'] ?? ''}',
+          senderPaymentStatus:
+              '${data['paymentStatus'] ?? data['status'] ?? ''}',
+          senderPaymentClientSecret:
+              data['clientSecret'] == null ? null : '${data['clientSecret']}',
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'createSenderPaymentSession failed: code=${error.code}, message=${error.message}, details=${error.details}',
+      );
+      emit(
+        state.copyWith(
+          isSenderPaymentLoading: false,
+          senderPaymentError:
+              error.message ?? "Payment couldn't be started. Please try again.",
+        ),
+      );
+    } catch (error) {
+      debugPrint('createSenderPaymentSession unexpected failure: $error');
+      emit(
+        state.copyWith(
+          isSenderPaymentLoading: false,
+          senderPaymentError: "Payment couldn't be started. Please try again.",
+        ),
+      );
+    }
+  }
+
+  void _handleCreatePaidSenderDelivery(
+    CreatePaidSenderDelivery event,
+    Emitter<SendPackageState> emit,
+  ) async {
+    if (state.senderPaymentStatus != 'succeeded' ||
+        state.senderPaymentSessionId == null ||
+        state.senderQuoteId == null) {
+      emit(
+        state.copyWith(
+          senderDeliveryError:
+              'Payment must be confirmed before delivery creation.',
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        isSenderDeliveryCreating: true,
+        senderDeliveryError: '',
+      ),
+    );
+    try {
+      final payload = {
+        ...event.bookingPayload,
+        'quoteId': state.senderQuoteId,
+        'paymentSessionId': state.senderPaymentSessionId,
+      };
+      final data = await _callableMap('createSenderPaidDelivery', payload);
+      final requestId = '${data['requestId'] ?? ''}';
+      if (requestId.isNotEmpty) {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('sendPackage')
+            .call({'requestId': requestId});
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('activeRequest', requestId);
+      }
+      emit(
+        state.copyWith(
+          isSenderDeliveryCreating: false,
+          senderCreatedRequestId: requestId,
+          deliveryStatus: DeliveryStatus.deliveryConfirmed,
+        ),
+      );
+      add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'createSenderPaidDelivery failed: code=${error.code}, message=${error.message}, details=${error.details}',
+      );
+      emit(
+        state.copyWith(
+          isSenderDeliveryCreating: false,
+          senderDeliveryError:
+              error.message ?? 'Delivery could not be created after payment.',
+        ),
+      );
+    } catch (error) {
+      debugPrint('createSenderPaidDelivery unexpected failure: $error');
+      emit(
+        state.copyWith(
+          isSenderDeliveryCreating: false,
+          senderDeliveryError: 'Delivery could not be created after payment.',
         ),
       );
     }
