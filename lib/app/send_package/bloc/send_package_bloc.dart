@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
@@ -9,7 +8,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,6 +22,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/calculate_bearing.dart';
 import '../../../helper/chats_help.dart';
+import '../models/canonical_iris_result.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
 import '../models/message.m.dart';
@@ -49,6 +48,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<SetDistance>(_handleSetDistance);
     on<SetPrice>(_handleSetPrice);
     on<SetParcelWeight>(_handleSetParcelWeight);
+    on<RequestCanonicalIrisEstimate>(_handleRequestCanonicalIrisEstimate);
     on<SendDeliveryRequest>(_handleSendDeliveryRequestEvent);
     on<DeliveryAccepted>(_handleDeliveryAcceptedEvent);
     on<DeliveryCompleted>(_handleDeliveryCompleted);
@@ -68,7 +68,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleCheckForPushToken(
-      CheckForPushToken event, Emitter<SendPackageState> emit) async {
+    CheckForPushToken event,
+    Emitter<SendPackageState> emit,
+  ) async {
     final storage = FlutterSecureStorage();
     final fcmToken = await firebaseMessaging.getToken();
     if (fcmToken != null) {
@@ -83,10 +85,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         final documentSnapshot = await documentReference.get();
         if (documentSnapshot.exists) {
           print('FCMToken: $fcmToken');
-          await db.collection("users").doc(user?.uid).update({
-            'fcmToken': fcmToken,
-          }).then((value) => print("DocumentSnapshot successfully updated!"),
-              onError: (e) => print("Error updating document $e"));
+          await db
+              .collection("users")
+              .doc(user?.uid)
+              .update({'fcmToken': fcmToken}).then(
+            (value) => print("DocumentSnapshot successfully updated!"),
+            onError: (e) => print("Error updating document $e"),
+          );
         }
       } catch (e) {
         print('Push Token update error');
@@ -96,52 +101,101 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSearchAPlaceEvent(
-      SearchAPlaceEvent event, Emitter<SendPackageState> emit) async {
+    SearchAPlaceEvent event,
+    Emitter<SendPackageState> emit,
+  ) async {
     const uuid = Uuid();
+    if (event.query.trim().length < 3) {
+      emit(
+        state.copyWith(
+          suggestions: [],
+          isAddressSearching: false,
+          addressSearchError: '',
+        ),
+      );
+      return;
+    }
+    emit(state.copyWith(isAddressSearching: true, addressSearchError: ''));
     try {
-      List<Suggestion> suggestions = await PlaceApiProvider(uuid)
-          .fetchSuggestions(event.query, event.lang);
+      List<Suggestion> suggestions = await PlaceApiProvider(
+        uuid,
+      ).fetchSuggestions(event.query, event.lang);
 
-      emit(state.copyWith(suggestions: suggestions));
+      emit(
+        state.copyWith(
+          suggestions: suggestions,
+          isAddressSearching: false,
+          addressSearchError: suggestions.isEmpty
+              ? "Couldn't find matching addresses. Please continue typing or try again."
+              : '',
+        ),
+      );
     } catch (e) {
       print(e);
+      emit(
+        state.copyWith(
+          suggestions: [],
+          isAddressSearching: false,
+          addressSearchError:
+              "Couldn't find matching addresses. Please continue typing or try again.",
+        ),
+      );
     }
   }
 
   void _handleSetDrawerHeight(
-      SetDrawerHeight event, Emitter<SendPackageState> emit) {
-    emit(state.copyWith(
+    SetDrawerHeight event,
+    Emitter<SendPackageState> emit,
+  ) {
+    emit(
+      state.copyWith(
         minDrawerHeight: event.minDrawerHeight,
         maxDrawerHeight: event.maxDrawerHeight,
-        panelControlStatus: PanelControlStatus.isOpened));
+        panelControlStatus: PanelControlStatus.isOpened,
+      ),
+    );
   }
 
   void _handleClearSuggestionsEvent(
-      ClearSuggestions event, Emitter<SendPackageState> emit) {
+    ClearSuggestions event,
+    Emitter<SendPackageState> emit,
+  ) {
     emit(state.copyWith(suggestions: []));
   }
 
   void _handleSetPickupAddressEvent(
-      SetPickupAddress event, Emitter<SendPackageState> emit) async {
+    SetPickupAddress event,
+    Emitter<SendPackageState> emit,
+  ) async {
     const uuid = Uuid();
 
-    emit(state.copyWith(
+    emit(
+      state.copyWith(
         pickupLocation: event.val,
         pickupLocationSubAddress: event.pickupLocationSubAddress,
         destinationLocation: '',
-        destinationLocationSubAddress: ''));
+        destinationLocationSubAddress: '',
+      ),
+    );
 
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(uuid)
-          .fetchPlaceDetails(event.placeId, event.lang);
+      PlaceCoordinate coordinate = await PlaceApiProvider(
+        uuid,
+      ).fetchPlaceDetails(event.placeId, event.lang);
 
       print('Pickup coordinate: $coordinate');
 
-      var address =
-          await placemarkFromCoordinates(coordinate.lat, coordinate.lng);
+      var address = await placemarkFromCoordinates(
+        coordinate.lat,
+        coordinate.lng,
+      );
 
-      emit(state.copyWith(
-          pickupCoordinate: coordinate, pickupLocality: address[0].locality));
+      emit(
+        state.copyWith(
+          pickupCoordinate: coordinate,
+          pickupLocality: address[0].locality,
+        ),
+      );
     } catch (e) {
       print(e);
     }
@@ -149,29 +203,41 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
     const uuid = Uuid();
-    emit(state.copyWith(
+    emit(
+      state.copyWith(
         destinationLocation: event.val,
-        destinationLocationSubAddress: event.destinationLocationSubAddress));
+        destinationLocationSubAddress: event.destinationLocationSubAddress,
+      ),
+    );
 
     if (state.pickupLocationSubAddress?.split(',').last ==
         event.destinationLocationSubAddress.split(',').last) {
-      add(SetDrawerHeight(
-          minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.55.sh));
+      add(
+        SetDrawerHeight(
+          minDrawerHeight: state.minDrawerHeight,
+          maxDrawerHeight: 0.55.sh,
+        ),
+      );
     }
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(uuid)
-          .fetchPlaceDetails(event.placeId, event.lang);
+      PlaceCoordinate coordinate = await PlaceApiProvider(
+        uuid,
+      ).fetchPlaceDetails(event.placeId, event.lang);
 
       print('Destination coordinate: $coordinate');
       // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
       var address = await placemarkFromCoordinates(
-        coordinate.lat, coordinate.lng,
+        coordinate.lat,
+        coordinate.lng,
         // localeIdentifier: "en_US"
       );
 
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           desinationCoordinate: coordinate,
-          destinationLocality: address[0].locality));
+          destinationLocality: address[0].locality,
+        ),
+      );
 
       if (state.pickupCoordinate != null &&
           state.pickupLocationSubAddress?.split(',').last ==
@@ -183,9 +249,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         PolylineResult polylineResult = await points.getRouteBetweenCoordinates(
           request: PolylineRequest(
             origin: PointLatLng(
-                state.pickupCoordinate!.lat, state.pickupCoordinate!.lng),
-            destination: PointLatLng(state.desinationCoordinate!.lat,
-                state.desinationCoordinate!.lng),
+              state.pickupCoordinate!.lat,
+              state.pickupCoordinate!.lng,
+            ),
+            destination: PointLatLng(
+              state.desinationCoordinate!.lat,
+              state.desinationCoordinate!.lng,
+            ),
             mode: TravelMode.driving,
           ),
           googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
@@ -202,16 +272,21 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           });
 
           List<Polyline> polyLines = [];
-          polyLines.add(Polyline(
+          polyLines.add(
+            Polyline(
               polylineId: const PolylineId('PolylineId'),
               points: latLngList,
               width: 3,
-              color: AppColors.primary));
+              color: AppColors.primary,
+            ),
+          );
 
           final Marker sourceMarker = Marker(
             markerId: const MarkerId('source_marker'),
-            position: LatLng(state.pickupCoordinate!.lat,
-                state.pickupCoordinate!.lng), // Source address location
+            position: LatLng(
+              state.pickupCoordinate!.lat,
+              state.pickupCoordinate!.lng,
+            ), // Source address location
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueAzure,
             ),
@@ -220,9 +295,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           final Marker destinationMarker = Marker(
             markerId: const MarkerId('destination_marker'),
             position: LatLng(
-                state.desinationCoordinate!.lat,
-                state
-                    .desinationCoordinate!.lng), // Destination address location
+              state.desinationCoordinate!.lat,
+              state.desinationCoordinate!.lng,
+            ), // Destination address location
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueRed,
             ),
@@ -230,15 +305,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
           Map<MarkerId, Marker> markers = {
             const MarkerId('source_marker'): sourceMarker,
-            const MarkerId('destination_marker'): destinationMarker
+            const MarkerId('destination_marker'): destinationMarker,
           };
 
-          emit(state.copyWith(
-              polylines: polyLines, markers: markers, distance: tripDistance));
+          emit(
+            state.copyWith(
+              polylines: polyLines,
+              markers: markers,
+              distance: tripDistance,
+            ),
+          );
           add(SetPrice());
 
-          add(SetSourceAndDestinationStatus(
-              status: SourceAndDestinationStatus.selected));
+          add(
+            SetSourceAndDestinationStatus(
+              status: SourceAndDestinationStatus.selected,
+            ),
+          );
         }
         // add(CalculateDistance());
       }
@@ -248,12 +331,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetDeliveryStatusEvent(
-      SetDeliveryStatus event, Emitter<SendPackageState> emit) {
+    SetDeliveryStatus event,
+    Emitter<SendPackageState> emit,
+  ) {
     emit(state.copyWith(deliveryStatus: event.deliveryStatus));
   }
 
   void _handleCalculateDistance(
-      CalculateDistance event, Emitter<SendPackageState> emit) async {
+    CalculateDistance event,
+    Emitter<SendPackageState> emit,
+  ) async {
     print('${state.pickupCoordinate!.lat}');
     print('${state.pickupCoordinate!.lng}');
     print('${state.desinationCoordinate!.lat}');
@@ -296,7 +383,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetParcelWeight(
-      SetParcelWeight event, Emitter<SendPackageState> emit) async {
+    SetParcelWeight event,
+    Emitter<SendPackageState> emit,
+  ) async {
     final itemDescription =
         event.itemDescription ?? state.itemDescription ?? '';
     final quickEstimate = itemDescription.trim().isEmpty
@@ -306,12 +395,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       userEnteredWeightKg: event.weightKg,
       irisEstimatedWeightKg: quickEstimate?.weightKg,
     );
-    emit(state.copyWith(
-      parcelWeightKg: quickWeight,
-      irisResult: quickEstimate,
-      itemDescription: itemDescription.trim().isEmpty ? null : itemDescription,
-      isIrisResolving: quickEstimate != null,
-    ));
+    emit(
+      state.copyWith(
+        parcelWeightKg: quickWeight,
+        irisResult: quickEstimate,
+        itemDescription:
+            itemDescription.trim().isEmpty ? null : itemDescription,
+        isIrisResolving: quickEstimate != null,
+      ),
+    );
     add(SetPrice());
     if (quickEstimate == null) return;
     try {
@@ -324,26 +416,99 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         userEnteredWeightKg: event.weightKg,
         irisEstimatedWeightKg: trusted.pricingWeightKg,
       );
-      emit(state.copyWith(
-        parcelWeightKg: finalWeight,
-        irisResult: quickEstimate,
-        itemDescription: itemDescription,
-        isIrisResolving: false,
-      ));
+      emit(
+        state.copyWith(
+          parcelWeightKg: finalWeight,
+          irisResult: quickEstimate,
+          itemDescription: itemDescription,
+          isIrisResolving: false,
+        ),
+      );
       add(SetPrice());
     } catch (_) {
-      emit(state.copyWith(
-        parcelWeightKg: quickWeight,
-        irisResult: quickEstimate,
-        itemDescription: itemDescription,
-        isIrisResolving: false,
-      ));
+      emit(
+        state.copyWith(
+          parcelWeightKg: quickWeight,
+          irisResult: quickEstimate,
+          itemDescription: itemDescription,
+          isIrisResolving: false,
+        ),
+      );
       add(SetPrice());
     }
   }
 
+  void _handleRequestCanonicalIrisEstimate(
+    RequestCanonicalIrisEstimate event,
+    Emitter<SendPackageState> emit,
+  ) async {
+    final itemDescription = [
+      event.itemName,
+      event.description,
+    ].where((value) => value.trim().isNotEmpty).join(' · ');
+    emit(
+      state.copyWith(
+        itemDescription:
+            itemDescription.trim().isEmpty ? null : itemDescription,
+        isIrisResolving: true,
+        irisErrorMessage: '',
+        canonicalIrisResult: null,
+      ),
+    );
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('analyseIris')
+          .call(<String, dynamic>{
+        'description':
+            itemDescription.trim().isEmpty ? event.itemName : itemDescription,
+        'packageDescription':
+            itemDescription.trim().isEmpty ? event.itemName : itemDescription,
+        'declaredWeightText': event.declaredWeightText,
+        'weight': event.declaredWeightText,
+        'quantity': event.quantity,
+        'fragile': event.fragile,
+        'highValue': event.highValue,
+        'pickupAddress': state.pickupLocation,
+        'dropoffAddress': state.destinationLocation,
+        'pickupPostcode': state.pickupLocationSubAddress,
+        'dropoffPostcode': state.destinationLocationSubAddress,
+        if (state.distance != null)
+          'distanceMiles': DeliveryPricing.kilometresToMiles(
+            state.distance!,
+          ),
+      });
+      final data = result.data is Map
+          ? Map<String, dynamic>.from(result.data as Map)
+          : <String, dynamic>{};
+      final canonical = CanonicalIrisResult.fromCallable(
+        data,
+        fallbackItemName: event.itemName,
+        fallbackQuantity: event.quantity <= 0 ? 1 : event.quantity,
+      );
+      emit(
+        state.copyWith(
+          canonicalIrisResult: canonical,
+          isIrisResolving: false,
+          irisErrorMessage: '',
+          parcelWeightKg: canonical.totalWeightKg ?? state.parcelWeightKg,
+        ),
+      );
+      add(SetPrice());
+    } catch (_) {
+      emit(
+        state.copyWith(
+          isIrisResolving: false,
+          irisErrorMessage:
+              "IRIS couldn't complete the estimate. Please try again.",
+        ),
+      );
+    }
+  }
+
   void _handleSendDeliveryRequestEvent(
-      SendDeliveryRequest event, Emitter emit) async {
+    SendDeliveryRequest event,
+    Emitter emit,
+  ) async {
     const uuid = Uuid();
     final uuid2 = uuid.v4();
     final uuid3 = uuid.v4();
@@ -359,11 +524,19 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       // print('apnsToken: $apnsToken');
       final fcmToken = await firebaseMessaging.getToken();
 
-      GeoFirePoint pickupLocation = GeoFirePoint(GeoPoint(
-          event.pickupDetails.address.lat, event.pickupDetails.address.lng));
+      GeoFirePoint pickupLocation = GeoFirePoint(
+        GeoPoint(
+          event.pickupDetails.address.lat,
+          event.pickupDetails.address.lng,
+        ),
+      );
 
-      GeoFirePoint dropoffLocation = GeoFirePoint(GeoPoint(
-          event.dropoffDetails.address.lat, event.pickupDetails.address.lng));
+      GeoFirePoint dropoffLocation = GeoFirePoint(
+        GeoPoint(
+          event.dropoffDetails.address.lat,
+          event.pickupDetails.address.lng,
+        ),
+      );
 
       // Document does not exist
       // print('Document does not exist');
@@ -375,7 +548,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           'moreInformation': event.pickupDetails.moreInformation,
           'locality': event.pickupDetails.locality,
           'address': state.pickupLocation,
-          'subAddress': state.pickupLocationSubAddress
+          'subAddress': state.pickupLocationSubAddress,
         },
         'dropoffDetails': {
           'fullname': event.dropoffDetails.fullname,
@@ -384,7 +557,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           'moreInformation': event.dropoffDetails.moreInformation,
           'locality': event.dropoffDetails.locality,
           'address': state.destinationLocation,
-          'subAddress': state.destinationLocationSubAddress
+          'subAddress': state.destinationLocationSubAddress,
         },
         "role": 'user',
         'userId': user?.uid,
@@ -399,20 +572,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'weightKg': state.parcelWeightKg,
         'pricingBreakdown': DeliveryPricing.calculate(
           DeliveryPricingInput(
-            distanceMiles:
-                DeliveryPricing.kilometresToMiles(state.distance ?? 0),
+            distanceMiles: DeliveryPricing.kilometresToMiles(
+              state.distance ?? 0,
+            ),
             weightKg: state.parcelWeightKg,
           ),
         ).toJson(),
         'currency': 'GBP',
         'status': 'requested',
-        'createdAt': DateTime.now()
-      }).then((value) => print("DocumentSnapshot successfully created!"),
-          onError: (e) => print("Error updating document $e"));
+        'createdAt': DateTime.now(),
+      }).then(
+        (value) => print("DocumentSnapshot successfully created!"),
+        onError: (e) => print("Error updating document $e"),
+      );
 
       final response = await callable.call({
         // Any data you want to send to the function
-        'requestId': uuidStrong
+        'requestId': uuidStrong,
       });
 
       print('Function response: ${response.data}');
@@ -433,7 +609,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleDeliveryAcceptedEvent(
-      DeliveryAccepted event, Emitter emit) async {
+    DeliveryAccepted event,
+    Emitter emit,
+  ) async {
     final User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
 
@@ -450,34 +628,47 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'status': 'accepted',
         'riderId': deliveryData.riderId,
         'estimatedDeliveryTime': deliveryData.estimatedDeliveryTime,
-        'updatedAt': DateTime.now()
+        'updatedAt': DateTime.now(),
       });
 
       await prefs.setString(
-          'activeRequest', activeDeliveryData.data()!['requestId']);
+        'activeRequest',
+        activeDeliveryData.data()!['requestId'],
+      );
 
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           deliveryStatus: DeliveryStatus.deliveryOnGoing,
-          deliveryData: deliveryData));
+          deliveryData: deliveryData,
+        ),
+      );
       add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
     }
   }
 
   void _handleDeliveryCompleted(DeliveryCompleted event, Emitter emit) {
     print(event.data['historyId']);
-    add(SetDrawerHeight(
+    add(
+      SetDrawerHeight(
         minDrawerHeight: state.minDrawerHeight,
-        maxDrawerHeight: state.minDrawerHeight));
-    emit(state.copyWith(
+        maxDrawerHeight: state.minDrawerHeight,
+      ),
+    );
+    emit(
+      state.copyWith(
         polylines: [],
         polylineCoordinates: [],
         markers: {},
         deliveryStatus: DeliveryStatus.deliveryCompleted,
-        lastHistoryId: event.data['historyId']));
+        lastHistoryId: event.data['historyId'],
+      ),
+    );
   }
 
   void _handleSetSourceAndDestinationStatus(
-      SetSourceAndDestinationStatus event, Emitter<SendPackageState> emit) {
+    SetSourceAndDestinationStatus event,
+    Emitter<SendPackageState> emit,
+  ) {
     emit(state.copyWith(sourceAndDestinationStatus: event.status));
   }
 
@@ -486,7 +677,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetRiderLocationEvent(
-      SetRiderLocation event, Emitter emit) async {
+    SetRiderLocation event,
+    Emitter emit,
+  ) async {
     final User? user = auth.currentUser;
     try {
       // print('In Bloc');
@@ -495,23 +688,31 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       PlaceCoordinate riderLocation = PlaceCoordinate(lat: lat, lng: lng);
 
       final icon = await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-          "assets/svg/bike_top.svg");
+        "assets/svg/bike_top.svg",
+      );
       final Marker riderLocationMarker = Marker(
-          markerId: const MarkerId('rider_location_marker'),
-          position: LatLng(lat, lng), // Destination address location
-          rotation: state.riderLocation == null
-              ? 0.0
-              : calculateBearing(
-                  LatLng(state.riderLocation!.lat, state.riderLocation!.lng),
-                  LatLng(riderLocation.lat, riderLocation.lng)),
-          icon: icon);
+        markerId: const MarkerId('rider_location_marker'),
+        position: LatLng(lat, lng), // Destination address location
+        rotation: state.riderLocation == null
+            ? 0.0
+            : calculateBearing(
+                LatLng(state.riderLocation!.lat, state.riderLocation!.lng),
+                LatLng(riderLocation.lat, riderLocation.lng),
+              ),
+        icon: icon,
+      );
 
       Map<MarkerId, Marker> markers = {};
 
       markers[const MarkerId('rider_location_marker')] = riderLocationMarker;
 
-      emit(state.copyWith(
-          riderLocation: riderLocation, markers: markers, polylines: []));
+      emit(
+        state.copyWith(
+          riderLocation: riderLocation,
+          markers: markers,
+          polylines: [],
+        ),
+      );
       add(SetMapCameraStatus(status: MapCameraStatus.showRiderLocation));
 
       if (state.deliveryData == null) {
@@ -541,7 +742,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleCheckForActiveRequestEvent(
-      CheckForActiveRequest event, Emitter emit) async {
+    CheckForActiveRequest event,
+    Emitter emit,
+  ) async {
     final User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? activeRequest = prefs.getString('activeRequest');
@@ -566,17 +769,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             data['pickupDetails']['position']['geopoint'];
 
         PlaceCoordinate pickUpCoordinates = PlaceCoordinate(
-            lat: pickUpGeoPoint.latitude, lng: pickUpGeoPoint.longitude);
+          lat: pickUpGeoPoint.latitude,
+          lng: pickUpGeoPoint.longitude,
+        );
         PlaceCoordinate dropoffCoordinates = PlaceCoordinate(
-            lat: dropoffGeoPoint.latitude, lng: dropoffGeoPoint.longitude);
+          lat: dropoffGeoPoint.latitude,
+          lng: dropoffGeoPoint.longitude,
+        );
 
         final ContactInfo pickupDetails = ContactInfo.fromJson(
-            address: pickUpCoordinates,
-            moreInformation: data['pickupDetails']['moreInformation']);
+          address: pickUpCoordinates,
+          moreInformation: data['pickupDetails']['moreInformation'],
+        );
 
         final ContactInfo dropoffDetails = ContactInfo.fromJson(
-            address: dropoffCoordinates,
-            moreInformation: data['dropoffDetails']['moreInformation']);
+          address: dropoffCoordinates,
+          moreInformation: data['dropoffDetails']['moreInformation'],
+        );
 
         DeliveryStatus? status;
         // print(data['status']);
@@ -588,22 +797,27 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             data['status'] == 'outForDelivery' ||
             data['status'] == 'requested') {
           status = DeliveryStatus.reconnectingWithRider;
-          emit(state.copyWith(
+          emit(
+            state.copyWith(
               deliveryStatus: status,
               pickupDetails: pickupDetails,
               dropoffDetails: dropoffDetails,
               pickupLocation: pickupAddress,
               destinationLocation: dropoffAddress,
               price: price,
-              currency: currency));
+              currency: currency,
+            ),
+          );
         }
 
         if (data['status'] == 'completed') {
           status = DeliveryStatus.deliveryCompleted;
-          emit(state.copyWith(
-            lastHistoryId: data['historyId'],
-            deliveryStatus: status,
-          ));
+          emit(
+            state.copyWith(
+              lastHistoryId: data['historyId'],
+              deliveryStatus: status,
+            ),
+          );
         }
 
         // emit(state.copyWith());
@@ -614,7 +828,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetPanelControlStatusEvent(
-      SetPanelControlStatus event, Emitter emit) {
+    SetPanelControlStatus event,
+    Emitter emit,
+  ) {
     emit(state.copyWith(panelControlStatus: event.status));
   }
 
@@ -628,8 +844,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final newMessage = Message.fromJson(event.data);
     chatMessages.add(newMessage);
 
-    emit(state.copyWith(
-        chatMessages: chatMessages, chatStatus: ChatStatus.newMessage));
+    emit(
+      state.copyWith(
+        chatMessages: chatMessages,
+        chatStatus: ChatStatus.newMessage,
+      ),
+    );
   }
 
   void _handleMessageRiderEvent(MessageRider event, Emitter emit) async {
@@ -653,7 +873,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'requestId': activeRequest,
         'senderId': user.uid,
         'message': msg,
-        'timeStamp': '${DateTime.now()}'
+        'timeStamp': '${DateTime.now()}',
       };
 
       final callable = FirebaseFunctions.instance.httpsCallable('sendMessage');
@@ -673,7 +893,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleLoadChatMessagesEvent(
-      LoadChatMessages event, Emitter emit) async {
+    LoadChatMessages event,
+    Emitter emit,
+  ) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? activeRequest = prefs.getString('activeRequest');
 
@@ -683,18 +905,22 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       print('Loading chats');
 
       final messagesList = jsonData.map((e) => Message.fromJson(e)).toList();
-      emit(state.copyWith(
-          chatMessages: messagesList, chatStatus: ChatStatus.newMessage));
+      emit(
+        state.copyWith(
+          chatMessages: messagesList,
+          chatStatus: ChatStatus.newMessage,
+        ),
+      );
     }
   }
 
   void _handleRateRider(RateRider event, Emitter emit) async {
     try {
       if (state.lastHistoryId != null) {
-        await db
-            .collection('history')
-            .doc(state.lastHistoryId)
-            .update({'riderRating': event.rating, 'updatedAt': DateTime.now()});
+        await db.collection('history').doc(state.lastHistoryId).update({
+          'riderRating': event.rating,
+          'updatedAt': DateTime.now(),
+        });
       }
     } catch (e) {
       print(e);
@@ -702,7 +928,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleDeleteCompletedDelivery(
-      DeleteCompletedDelivery event, Emitter emit) async {
+    DeleteCompletedDelivery event,
+    Emitter emit,
+  ) async {
     try {
       User user = auth.currentUser!;
       final documentReference = db.collection('deliveryRequests').doc(user.uid);
@@ -723,26 +951,36 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     if (data?['status'] == 'requested') {
       await collection.delete();
     }
-    add(SetDrawerHeight(
+    add(
+      SetDrawerHeight(
         minDrawerHeight: state.minDrawerHeight,
-        maxDrawerHeight: state.minDrawerHeight));
-    emit(state.copyWith(
-      polylines: [],
-      polylineCoordinates: [],
-      markers: {},
-      deliveryStatus: DeliveryStatus.inital,
-    ));
+        maxDrawerHeight: state.minDrawerHeight,
+      ),
+    );
+    emit(
+      state.copyWith(
+        polylines: [],
+        polylineCoordinates: [],
+        markers: {},
+        deliveryStatus: DeliveryStatus.inital,
+      ),
+    );
   }
 
   void _handleBackButtonPressedEvent(BackButtonPressed event, Emitter emit) {
-    add(SetDrawerHeight(
+    add(
+      SetDrawerHeight(
         minDrawerHeight: state.minDrawerHeight,
-        maxDrawerHeight: state.minDrawerHeight));
-    emit(state.copyWith(
-      polylines: [],
-      polylineCoordinates: [],
-      markers: {},
-      deliveryStatus: DeliveryStatus.inital,
-    ));
+        maxDrawerHeight: state.minDrawerHeight,
+      ),
+    );
+    emit(
+      state.copyWith(
+        polylines: [],
+        polylineCoordinates: [],
+        markers: {},
+        deliveryStatus: DeliveryStatus.inital,
+      ),
+    );
   }
 }

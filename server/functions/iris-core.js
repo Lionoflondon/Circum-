@@ -350,14 +350,32 @@ function matchingRequirementsFor({handlingFlags, weightKg, express}) {
 
 function customerSafeIris(iris) {
   const recommendation = iris.recommendation || {};
+  const internal = iris.internal || {};
+  const riderMatching = internal.riderMatching || {};
   return {
     version: iris.version || "v1",
     recommendation: {
+      detectedItem: recommendation.detectedItem || null,
       category: recommendation.category || null,
       weightBand: recommendation.weightBand || null,
+      unitWeightKg: recommendation.unitWeightKg || null,
+      quantity: recommendation.quantity || 1,
+      estimatedWeightKg: recommendation.estimatedWeightKg || null,
+      totalWeightKg: recommendation.totalWeightKg || recommendation.estimatedWeightKg || null,
+      handlingFlags: recommendation.handlingFlags || [],
       confidencePercent: recommendation.confidencePercent || null,
       customerSafeExplanation: customerSafeExplanation(iris),
     },
+    quantity: recommendation.quantity || 1,
+    unitWeightKg: recommendation.unitWeightKg || null,
+    totalWeightKg: recommendation.totalWeightKg || recommendation.estimatedWeightKg || null,
+    repositoryMatch: {
+      matchedItemName: recommendation.detectedItem || null,
+      category: recommendation.category || null,
+      weightBand: recommendation.weightBand && recommendation.weightBand.label || null,
+    },
+    recommendedVehicle: riderMatching.vehicleRequired || null,
+    similarVerifiedDeliveries: internal.learningMatchedExamples || 0,
   };
 }
 
@@ -427,7 +445,9 @@ function classifyIris(input = {}) {
   const speed = `${input.speed || ""}`;
   const express = normalize(speed) === "express" || input.express === true || input.urgent === true;
   const compliance = complianceFor(text);
-  const estimatedWeightKg = estimateWeightKg(text, declaredWeightText);
+  const quantity = Math.max(1, Math.min(999, Number(input.quantity) || 1));
+  const unitWeightKg = estimateWeightKg(text, declaredWeightText);
+  const estimatedWeightKg = Number((unitWeightKg * quantity).toFixed(3));
   const baseCategory = classifyCategory(text);
   const baseWeightBand = weightBandFor(estimatedWeightKg);
   const handlingFlags = handlingFlagsFor(text, baseCategory, estimatedWeightKg);
@@ -443,7 +463,10 @@ function classifyIris(input = {}) {
     detectedItem: description.trim() || baseCategory,
     category: baseCategory,
     weightBand: baseWeightBand,
+    unitWeightKg,
+    quantity,
     estimatedWeightKg,
+    totalWeightKg: estimatedWeightKg,
     handlingFlags,
     estimatedPrice: price.total,
     confidencePercent: text ? 82 : 55,

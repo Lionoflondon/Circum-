@@ -175,7 +175,7 @@ String senderStepTitle(SenderBookingStep step) {
     case SenderBookingStep.parcel:
       return 'Tell us about your parcel.';
     case SenderBookingStep.iris:
-      return 'IRIS has checked the parcel.';
+      return 'IRIS has estimated your parcel.';
     case SenderBookingStep.options:
       return 'Choose your delivery options.';
     case SenderBookingStep.review:
@@ -193,4 +193,17 @@ String mapConfidenceLabel(double score) {
   if (score >= .8) return 'High';
   if (score >= .55) return 'Medium';
   return 'Low';
+}
+
+int senderQuantityFromItemName(String value) {
+  final text = value.trim();
+  if (text.isEmpty) return 1;
+  final leading = RegExp(r'^(\d{1,3})\s+').firstMatch(text);
+  if (leading != null) return int.tryParse(leading.group(1)!) ?? 1;
+  final trailing = RegExp(
+    r'(?:x|×)\s*(\d{1,3})$',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (trailing != null) return int.tryParse(trailing.group(1)!) ?? 1;
+  return 1;
 }

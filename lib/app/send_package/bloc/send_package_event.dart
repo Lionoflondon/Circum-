@@ -16,11 +16,12 @@ class SetPickupAddress extends SendPackageEvent {
   String pickupLocationSubAddress;
   String placeId;
   String lang;
-  SetPickupAddress(
-      {required this.val,
-      required this.pickupLocationSubAddress,
-      required this.placeId,
-      required this.lang});
+  SetPickupAddress({
+    required this.val,
+    required this.pickupLocationSubAddress,
+    required this.placeId,
+    required this.lang,
+  });
 }
 
 class SetDeliveryAddress extends SendPackageEvent {
@@ -28,11 +29,12 @@ class SetDeliveryAddress extends SendPackageEvent {
   String destinationLocationSubAddress;
   String placeId;
   String lang;
-  SetDeliveryAddress(
-      {required this.val,
-      required this.destinationLocationSubAddress,
-      required this.placeId,
-      required this.lang});
+  SetDeliveryAddress({
+    required this.val,
+    required this.destinationLocationSubAddress,
+    required this.placeId,
+    required this.lang,
+  });
 }
 
 class ClearSuggestions extends SendPackageEvent {}
@@ -49,8 +51,10 @@ class SetDeliveryStatus extends SendPackageEvent {
 class SendDeliveryRequest extends SendPackageEvent {
   final ContactInfo pickupDetails;
   final ContactInfo dropoffDetails;
-  const SendDeliveryRequest(
-      {required this.pickupDetails, required this.dropoffDetails});
+  const SendDeliveryRequest({
+    required this.pickupDetails,
+    required this.dropoffDetails,
+  });
 }
 
 class SetDistance extends SendPackageEvent {
@@ -64,6 +68,24 @@ class SetParcelWeight extends SendPackageEvent {
   final double weightKg;
   final String? itemDescription;
   const SetParcelWeight({required this.weightKg, this.itemDescription});
+}
+
+class RequestCanonicalIrisEstimate extends SendPackageEvent {
+  final String itemName;
+  final int quantity;
+  final String description;
+  final String declaredWeightText;
+  final bool fragile;
+  final bool highValue;
+
+  const RequestCanonicalIrisEstimate({
+    required this.itemName,
+    this.quantity = 1,
+    this.description = '',
+    this.declaredWeightText = '',
+    this.fragile = false,
+    this.highValue = false,
+  });
 }
 
 class CheckForPushToken extends SendPackageEvent {}
@@ -103,8 +125,10 @@ class SetPanelControlStatus extends SendPackageEvent {
 class SetDrawerHeight extends SendPackageEvent {
   final double minDrawerHeight;
   final double maxDrawerHeight;
-  SetDrawerHeight(
-      {required this.minDrawerHeight, required this.maxDrawerHeight});
+  SetDrawerHeight({
+    required this.minDrawerHeight,
+    required this.maxDrawerHeight,
+  });
 }
 
 class SetNewMessage extends SendPackageEvent {

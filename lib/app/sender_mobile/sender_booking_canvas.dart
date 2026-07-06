@@ -50,6 +50,18 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   void _advance() {
     if (_draft.step == SenderBookingStep.payment) return;
+    if (_draft.step == SenderBookingStep.parcel) {
+      context.read<SendPackageBloc>().add(
+        RequestCanonicalIrisEstimate(
+          itemName: _item.text,
+          quantity: senderQuantityFromItemName(_item.text),
+          description: _description.text,
+          declaredWeightText: _weight.text,
+          fragile: _draft.fragile,
+          highValue: _draft.highValue,
+        ),
+      );
+    }
     _setDraft(_draft.next());
   }
 
@@ -79,10 +91,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
               SafeArea(
                 child: Column(
                   children: [
-                    _TopBar(
-                      progress: _draft.progress,
-                      onBack: _back,
-                    ),
+                    _TopBar(progress: _draft.progress, onBack: _back),
                     const Spacer(),
                     _BookingPanel(
                       draft: _draft,
@@ -147,8 +156,9 @@ class _TopBar extends StatelessWidget {
                 minHeight: 5,
                 value: progress,
                 backgroundColor: Colors.white.withValues(alpha: .08),
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(_Tokens.lightBlue),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  _Tokens.lightBlue,
+                ),
               ),
             ),
           ),
@@ -241,23 +251,28 @@ class _BookingPanel extends StatelessWidget {
         return _AddressPanel(
           controller: pickup,
           hint: 'Pickup address, flat or postcode',
+          helperText: 'Enter a postcode, business or address.',
           suggestions: engine.suggestions,
+          isSearching: engine.isAddressSearching,
+          errorText: engine.addressSearchError,
           onChanged: (value) {
             onSearchingPickupChanged(true);
             _search(context, value);
             onDraft(draft.copyWith(pickupAddress: value));
           },
           onSuggestion: (suggestion) {
-            context.read<SendPackageBloc>().add(SetPickupAddress(
-                  val: suggestion.mainText,
-                  pickupLocationSubAddress: suggestion.subText,
-                  placeId: suggestion.placeId,
-                  lang: Localizations.localeOf(context).languageCode,
-                ));
-            pickup.text = suggestion.mainText;
+            context.read<SendPackageBloc>().add(
+              SetPickupAddress(
+                val: suggestion.description,
+                pickupLocationSubAddress: suggestion.subText,
+                placeId: suggestion.placeId,
+                lang: Localizations.localeOf(context).languageCode,
+              ),
+            );
+            pickup.text = suggestion.description;
             onDraft(draft.copyWith(pickupAddress: suggestion.description));
           },
-          primaryLabel: 'Set pickup',
+          primaryLabel: 'Confirm pickup',
           canContinue: draft.canContinue,
           onContinue: onContinue,
         );
@@ -265,23 +280,28 @@ class _BookingPanel extends StatelessWidget {
         return _AddressPanel(
           controller: dropoff,
           hint: 'Drop-off address, flat or postcode',
+          helperText: 'Enter a postcode, business or address.',
           suggestions: engine.suggestions,
+          isSearching: engine.isAddressSearching,
+          errorText: engine.addressSearchError,
           onChanged: (value) {
             onSearchingPickupChanged(false);
             _search(context, value);
             onDraft(draft.copyWith(dropoffAddress: value));
           },
           onSuggestion: (suggestion) {
-            context.read<SendPackageBloc>().add(SetDeliveryAddress(
-                  val: suggestion.mainText,
-                  destinationLocationSubAddress: suggestion.subText,
-                  placeId: suggestion.placeId,
-                  lang: Localizations.localeOf(context).languageCode,
-                ));
-            dropoff.text = suggestion.mainText;
+            context.read<SendPackageBloc>().add(
+              SetDeliveryAddress(
+                val: suggestion.description,
+                destinationLocationSubAddress: suggestion.subText,
+                placeId: suggestion.placeId,
+                lang: Localizations.localeOf(context).languageCode,
+              ),
+            );
+            dropoff.text = suggestion.description;
             onDraft(draft.copyWith(dropoffAddress: suggestion.description));
           },
-          primaryLabel: 'Set drop-off',
+          primaryLabel: 'Confirm drop-off',
           canContinue: draft.canContinue,
           onContinue: onContinue,
         );
@@ -290,11 +310,13 @@ class _BookingPanel extends StatelessWidget {
           name: receiverName,
           phone: receiverPhone,
           notes: notes,
-          onChanged: () => onDraft(draft.copyWith(
-            receiverName: receiverName.text,
-            receiverPhone: receiverPhone.text,
-            deliveryNotes: notes.text,
-          )),
+          onChanged: () => onDraft(
+            draft.copyWith(
+              receiverName: receiverName.text,
+              receiverPhone: receiverPhone.text,
+              deliveryNotes: notes.text,
+            ),
+          ),
           canContinue: draft.canContinue,
           onContinue: onContinue,
         );
@@ -319,15 +341,13 @@ class _BookingPanel extends StatelessWidget {
           highValue: draft.highValue,
           onChanged: () {
             final parsed = double.tryParse(weight.text) ?? .5;
-            context.read<SendPackageBloc>().add(SetParcelWeight(
-                  weightKg: parsed,
-                  itemDescription: item.text,
-                ));
-            onDraft(draft.copyWith(
-              itemName: item.text,
-              itemDescription: description.text,
-              weightLabel: '${parsed.toStringAsFixed(1)}kg',
-            ));
+            onDraft(
+              draft.copyWith(
+                itemName: item.text,
+                itemDescription: description.text,
+                weightLabel: '${parsed.toStringAsFixed(1)}kg',
+              ),
+            );
           },
           onFragile: (value) => onDraft(draft.copyWith(fragile: value)),
           onHighValue: (value) => onDraft(draft.copyWith(highValue: value)),
@@ -335,11 +355,7 @@ class _BookingPanel extends StatelessWidget {
           onContinue: onContinue,
         );
       case SenderBookingStep.iris:
-        return _IrisPanel(
-          engine: engine,
-          draft: draft,
-          onContinue: onContinue,
-        );
+        return _IrisPanel(engine: engine, draft: draft, onContinue: onContinue);
       case SenderBookingStep.options:
         return _OptionsPanel(
           draft: draft,
@@ -366,17 +382,22 @@ class _BookingPanel extends StatelessWidget {
       context.read<SendPackageBloc>().add(ClearSuggestions());
       return;
     }
-    context.read<SendPackageBloc>().add(SearchAPlaceEvent(
-          query: value,
-          lang: Localizations.localeOf(context).languageCode,
-        ));
+    context.read<SendPackageBloc>().add(
+      SearchAPlaceEvent(
+        query: value,
+        lang: Localizations.localeOf(context).languageCode,
+      ),
+    );
   }
 }
 
 class _AddressPanel extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
+  final String helperText;
   final List suggestions;
+  final bool isSearching;
+  final String errorText;
   final ValueChanged<String> onChanged;
   final ValueChanged<dynamic> onSuggestion;
   final String primaryLabel;
@@ -386,7 +407,10 @@ class _AddressPanel extends StatelessWidget {
   const _AddressPanel({
     required this.controller,
     required this.hint,
+    required this.helperText,
     required this.suggestions,
+    required this.isSearching,
+    required this.errorText,
     required this.onChanged,
     required this.onSuggestion,
     required this.primaryLabel,
@@ -398,8 +422,36 @@ class _AddressPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            helperText,
+            style: const TextStyle(color: _Tokens.muted, height: 1.35),
+          ),
+        ),
+        const SizedBox(height: 10),
         _TextInput(controller: controller, hint: hint, onChanged: onChanged),
         const SizedBox(height: 10),
+        if (isSearching)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              color: _Tokens.lightBlue,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+        if (errorText.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                errorText,
+                style: const TextStyle(color: _Tokens.muted, height: 1.35),
+              ),
+            ),
+          ),
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 164),
           child: ListView.builder(
@@ -448,23 +500,36 @@ class _RecipientPanel extends StatelessWidget {
     return Column(
       children: [
         _TextInput(
-            controller: name,
-            hint: 'Receiver name',
-            onChanged: (_) => onChanged()),
+          controller: name,
+          hint: 'Recipient name',
+          errorText: name.text.trim().isEmpty
+              ? 'Recipient name is required'
+              : null,
+          onChanged: (_) => onChanged(),
+        ),
         const SizedBox(height: 10),
         _TextInput(
-            controller: phone,
-            hint: 'Receiver phone',
-            keyboardType: TextInputType.phone,
-            onChanged: (_) => onChanged()),
+          controller: phone,
+          hint: 'Recipient phone',
+          keyboardType: TextInputType.phone,
+          helperText: 'Used only if the rider needs to contact the recipient.',
+          errorText: phone.text.trim().isEmpty
+              ? 'Recipient phone is required'
+              : null,
+          onChanged: (_) => onChanged(),
+        ),
         const SizedBox(height: 10),
         _TextInput(
-            controller: notes,
-            hint: 'Delivery notes',
-            onChanged: (_) => onChanged()),
+          controller: notes,
+          hint: 'Delivery instructions (optional)',
+          onChanged: (_) => onChanged(),
+        ),
         const SizedBox(height: 12),
         _PrimaryButton(
-            label: 'Continue', enabled: canContinue, onTap: onContinue),
+          label: 'Confirm recipient',
+          enabled: canContinue,
+          onTap: onContinue,
+        ),
       ],
     );
   }
@@ -500,37 +565,49 @@ class _ParcelPanel extends StatelessWidget {
     return Column(
       children: [
         _TextInput(
-            controller: item, hint: 'Item name', onChanged: (_) => onChanged()),
+          controller: item,
+          hint: 'Item name',
+          onChanged: (_) => onChanged(),
+        ),
         const SizedBox(height: 10),
         _TextInput(
-            controller: description,
-            hint: 'Optional description',
-            onChanged: (_) => onChanged()),
+          controller: description,
+          hint: 'Optional description',
+          onChanged: (_) => onChanged(),
+        ),
         const SizedBox(height: 10),
         _TextInput(
-            controller: weight,
-            hint: 'Weight kg',
-            keyboardType: TextInputType.number,
-            onChanged: (_) => onChanged()),
+          controller: weight,
+          hint: 'Weight kg',
+          keyboardType: TextInputType.number,
+          onChanged: (_) => onChanged(),
+        ),
         const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
-                child: _ToggleChip(
-                    label: 'Fragile',
-                    selected: fragile,
-                    onTap: () => onFragile(!fragile))),
+              child: _ToggleChip(
+                label: 'Fragile',
+                selected: fragile,
+                onTap: () => onFragile(!fragile),
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
-                child: _ToggleChip(
-                    label: 'High value',
-                    selected: highValue,
-                    onTap: () => onHighValue(!highValue))),
+              child: _ToggleChip(
+                label: 'High value',
+                selected: highValue,
+                onTap: () => onHighValue(!highValue),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
         _PrimaryButton(
-            label: 'Ask IRIS', enabled: canContinue, onTap: onContinue),
+          label: 'Ask IRIS',
+          enabled: canContinue,
+          onTap: onContinue,
+        ),
       ],
     );
   }
@@ -549,37 +626,103 @@ class _IrisPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iris = engine.irisResult;
-    final confidence =
-        iris == null ? 'Medium' : mapConfidenceLabel(iris.confidenceScore);
+    final iris = engine.canonicalIrisResult;
     return Column(
       children: [
         const _IrisOrb(),
         const SizedBox(height: 12),
-        _SummaryLine(
-            label: 'Classification',
-            value: iris?.matchedItemName ?? draft.itemName),
-        _SummaryLine(
-            label: 'Weight',
-            value: '${engine.parcelWeightKg.toStringAsFixed(1)}kg'),
-        _SummaryLine(
-            label: 'Vehicle',
-            value: iris?.vehicleSuitability ?? draft.irisVehicle),
-        _SummaryLine(label: 'Confidence', value: confidence),
+        if (engine.isIrisResolving) ...[
+          const LinearProgressIndicator(
+            minHeight: 2,
+            color: _Tokens.iris,
+            backgroundColor: Colors.transparent,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Loading IRIS estimate...',
+            style: TextStyle(color: _Tokens.muted, height: 1.35),
+          ),
+        ] else if (engine.irisErrorMessage.isNotEmpty) ...[
+          Text(
+            engine.irisErrorMessage,
+            style: const TextStyle(color: _Tokens.muted, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          _PrimaryButton(
+            label: 'Retry',
+            enabled: true,
+            onTap: () => context.read<SendPackageBloc>().add(
+              RequestCanonicalIrisEstimate(
+                itemName: draft.itemName,
+                quantity: senderQuantityFromItemName(draft.itemName),
+                description: draft.itemDescription,
+                declaredWeightText: draft.weightLabel,
+                fragile: draft.fragile,
+                highValue: draft.highValue,
+              ),
+            ),
+          ),
+        ] else ...[
+          if (iris?.partial == true)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Some estimate details are unavailable right now.',
+                style: TextStyle(color: _Tokens.muted, height: 1.35),
+              ),
+            ),
+          _SummaryLine(
+            label: 'Item & quantity',
+            value:
+                iris?.itemAndQuantity ??
+                '${draft.itemName.isEmpty ? 'Parcel' : draft.itemName} ×1',
+          ),
+          _SummaryLine(
+            label: 'Estimated total weight',
+            value: iris?.totalWeightLabel ?? 'Unavailable',
+          ),
+          _SummaryLine(
+            label: 'Recommended vehicle',
+            value: iris?.recommendedVehicle?.isNotEmpty == true
+                ? iris!.recommendedVehicle!
+                : 'Unavailable',
+          ),
+          _SummaryLine(
+            label: 'Confidence',
+            value: iris?.confidenceLabel ?? 'Medium',
+          ),
+        ],
         ExpansionTile(
           collapsedIconColor: _Tokens.lightBlue,
           iconColor: _Tokens.lightBlue,
-          title: const Text('Why this estimate?',
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-          children: const [
-            _ReasonLine('Similar verified deliveries'),
-            _ReasonLine('Parcel details'),
-            _ReasonLine('Rider verification still happens at collection'),
+          title: const Text(
+            'Why IRIS estimated this',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          children: [
+            if (iris?.repositoryMatch?.isNotEmpty == true)
+              _ReasonLine('Repository match: ${iris!.repositoryMatch}'),
+            if (iris?.unitWeightKg != null)
+              _ReasonLine('Unit weight: ${iris!.unitWeightLabel}'),
+            if (iris != null)
+              _ReasonLine('Quantity applied: ×${iris.quantity}'),
+            if (iris?.totalWeightKg != null)
+              _ReasonLine('Total estimated weight: ${iris!.totalWeightLabel}'),
+            if (iris?.similarVerifiedDeliveries != null)
+              _ReasonLine(
+                'Similar verified deliveries: ${iris!.similarVerifiedDeliveries}',
+              ),
+            if (iris?.explanation?.isNotEmpty == true)
+              _ReasonLine('Confidence reason: ${iris!.explanation}'),
+            ...?iris?.reasons.map((reason) => _ReasonLine(reason)),
+            const _ReasonLine('Rider verification still happens at collection'),
           ],
         ),
         _PrimaryButton(
-            label: 'Choose options', enabled: true, onTap: onContinue),
+          label: 'Choose options',
+          enabled: true,
+          onTap: onContinue,
+        ),
       ],
     );
   }
@@ -628,7 +771,10 @@ class _ChoicePanel extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         _PrimaryButton(
-            label: primaryLabel, enabled: canContinue, onTap: onContinue),
+          label: primaryLabel,
+          enabled: canContinue,
+          onTap: onContinue,
+        ),
       ],
     );
   }
@@ -712,29 +858,35 @@ class _ReviewPanel extends StatelessWidget {
     return Column(
       children: [
         _ReviewRow(
-            icon: Icons.location_on_outlined,
-            label: 'Pickup',
-            value: engine.pickupLocation ?? draft.pickupAddress),
+          icon: Icons.location_on_outlined,
+          label: 'Pickup',
+          value: engine.pickupLocation ?? draft.pickupAddress,
+        ),
         _ReviewRow(
-            icon: Icons.flag_outlined,
-            label: 'Drop-off',
-            value: engine.destinationLocation ?? draft.dropoffAddress),
+          icon: Icons.flag_outlined,
+          label: 'Drop-off',
+          value: engine.destinationLocation ?? draft.dropoffAddress,
+        ),
         _ReviewRow(
-            icon: Icons.person_outline_rounded,
-            label: 'Recipient',
-            value: draft.receiverName),
+          icon: Icons.person_outline_rounded,
+          label: 'Recipient',
+          value: draft.receiverName,
+        ),
         _ReviewRow(
-            icon: Icons.inventory_2_outlined,
-            label: 'Parcel',
-            value: draft.itemName),
+          icon: Icons.inventory_2_outlined,
+          label: 'Parcel',
+          value: draft.itemName,
+        ),
         _ReviewRow(
-            icon: Icons.speed_rounded,
-            label: 'Speed',
-            value: draft.selectedOption),
+          icon: Icons.speed_rounded,
+          label: 'Speed',
+          value: draft.selectedOption,
+        ),
         _ReviewRow(
-            icon: Icons.pedal_bike_rounded,
-            label: 'Vehicle',
-            value: engine.irisResult?.vehicleSuitability ?? draft.irisVehicle),
+          icon: Icons.pedal_bike_rounded,
+          label: 'Vehicle',
+          value: engine.irisResult?.vehicleSuitability ?? draft.irisVehicle,
+        ),
         if (draft.vanguard)
           _ReviewRow(
             icon: Icons.shield_outlined,
@@ -743,13 +895,16 @@ class _ReviewPanel extends StatelessWidget {
             accent: _Tokens.lightBlue,
           ),
         _ReviewRow(
-            icon: Icons.payments_outlined,
-            label: 'Total',
-            value:
-                total == null ? 'Calculating' : '£${total.toStringAsFixed(2)}'),
+          icon: Icons.payments_outlined,
+          label: 'Total',
+          value: total == null ? 'Calculating' : '£${total.toStringAsFixed(2)}',
+        ),
         const SizedBox(height: 12),
         _PrimaryButton(
-            label: 'Continue to payment', enabled: true, onTap: onContinue),
+          label: 'Continue to payment',
+          enabled: true,
+          onTap: onContinue,
+        ),
       ],
     );
   }
@@ -768,10 +923,11 @@ class _PaymentPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SummaryLine(
-            label: 'Delivery price',
-            value: engine.price == null
-                ? 'Pending route'
-                : '£${engine.price!.toStringAsFixed(2)}'),
+          label: 'Delivery price',
+          value: engine.price == null
+              ? 'Pending route'
+              : '£${engine.price!.toStringAsFixed(2)}',
+        ),
         if (draft.vanguard)
           _SummaryLine(
             label: 'Vanguard Protection',
@@ -779,8 +935,9 @@ class _PaymentPanel extends StatelessWidget {
           ),
         _SummaryLine(
           label: 'Total',
-          value:
-              total == null ? 'Pending route' : '£${total.toStringAsFixed(2)}',
+          value: total == null
+              ? 'Pending route'
+              : '£${total.toStringAsFixed(2)}',
         ),
         const _GapNotice(
           title: 'Payment required before live booking',
@@ -788,9 +945,10 @@ class _PaymentPanel extends StatelessWidget {
               'This mobile shell will call the existing SendDeliveryRequest path only after real payment wiring is available. No fake paid jobs are created.',
         ),
         _PrimaryButton(
-            label: 'Payment integration required',
-            enabled: false,
-            onTap: () {}),
+          label: 'Payment integration required',
+          enabled: false,
+          onTap: () {},
+        ),
       ],
     );
   }
@@ -833,9 +991,13 @@ class _TrackingPanel extends StatelessWidget {
         const _SummaryLine(label: 'Status', value: 'Live tracking'),
         _SummaryLine(label: 'Pickup', value: engine.pickupLocation ?? 'Pickup'),
         _SummaryLine(
-            label: 'Drop-off', value: engine.destinationLocation ?? 'Drop-off'),
+          label: 'Drop-off',
+          value: engine.destinationLocation ?? 'Drop-off',
+        ),
         const _SummaryLine(
-            label: 'PIN security', value: 'Collection PIN only for sender'),
+          label: 'PIN security',
+          value: 'Collection PIN only for sender',
+        ),
         const SizedBox(height: 12),
         _PrimaryButton(label: 'Message support', enabled: true, onTap: () {}),
       ],
@@ -847,12 +1009,16 @@ class _TextInput extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final TextInputType? keyboardType;
+  final String? helperText;
+  final String? errorText;
   final ValueChanged<String> onChanged;
 
   const _TextInput({
     required this.controller,
     required this.hint,
     this.keyboardType,
+    this.helperText,
+    this.errorText,
     required this.onChanged,
   });
 
@@ -866,6 +1032,10 @@ class _TextInput extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: _Tokens.muted),
+        helperText: helperText,
+        helperStyle: const TextStyle(color: _Tokens.muted, height: 1.25),
+        errorText: errorText,
+        errorStyle: const TextStyle(color: Color(0xFFFCA5A5), height: 1.25),
         filled: true,
         fillColor: const Color(0xAA1A2030),
         border: OutlineInputBorder(
@@ -894,9 +1064,13 @@ class _SuggestionTile extends StatelessWidget {
       dense: true,
       minLeadingWidth: 0,
       leading: const Icon(Icons.location_on_outlined, color: _Tokens.lightBlue),
-      title: Text(title,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w800)),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
       subtitle: Text(subtitle, style: const TextStyle(color: _Tokens.muted)),
       onTap: onTap,
     );
@@ -928,8 +1102,9 @@ class _ToggleChip extends StatelessWidget {
               ? _Tokens.blue.withValues(alpha: .22)
               : Colors.white.withValues(alpha: .06),
           borderRadius: BorderRadius.circular(999),
-          border:
-              Border.all(color: selected ? _Tokens.lightBlue : _Tokens.border),
+          border: Border.all(
+            color: selected ? _Tokens.lightBlue : _Tokens.border,
+          ),
         ),
         child: Text(
           label,
@@ -989,11 +1164,14 @@ class _PrimaryButton extends StatelessWidget {
             shadowColor: Colors.transparent,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 15),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
           ),
-          child:
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
         ),
       ),
     );
@@ -1158,10 +1336,7 @@ class _AddOnTile extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: _Tokens.muted,
-                      height: 1.3,
-                    ),
+                    style: const TextStyle(color: _Tokens.muted, height: 1.3),
                   ),
                 ],
               ),
@@ -1199,7 +1374,9 @@ class _SummaryLine extends StatelessWidget {
               value,
               textAlign: TextAlign.right,
               style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w900),
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
@@ -1282,18 +1459,25 @@ class _GapNotice extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFE0A93A).withValues(alpha: .10),
         borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: const Color(0xFFE0A93A).withValues(alpha: .35)),
+        border: Border.all(
+          color: const Color(0xFFE0A93A).withValues(alpha: .35),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  color: Color(0xFFE0A93A), fontWeight: FontWeight.w900)),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFFE0A93A),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(body,
-              style: const TextStyle(color: _Tokens.muted, height: 1.35)),
+          Text(
+            body,
+            style: const TextStyle(color: _Tokens.muted, height: 1.35),
+          ),
         ],
       ),
     );
@@ -1411,10 +1595,7 @@ class _IrisOrb extends StatelessWidget {
           colors: [_Tokens.iris, _Tokens.vanguard, _Tokens.bg],
         ),
         boxShadow: [
-          BoxShadow(
-            color: _Tokens.iris.withValues(alpha: .24),
-            blurRadius: 28,
-          ),
+          BoxShadow(color: _Tokens.iris.withValues(alpha: .24), blurRadius: 28),
         ],
       ),
       child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
@@ -1438,9 +1619,10 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   @override
   void initState() {
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 28))
-          ..repeat();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 28),
+    )..repeat();
   }
 
   @override
@@ -1493,8 +1675,14 @@ class _MapPainter extends CustomPainter {
     final dropoff = Offset(size.width * .73, size.height * .21);
     final route = Path()
       ..moveTo(pickup.dx, pickup.dy)
-      ..cubicTo(size.width * .23, size.height * .12, size.width * .70,
-          size.height * .40, dropoff.dx, dropoff.dy);
+      ..cubicTo(
+        size.width * .23,
+        size.height * .12,
+        size.width * .70,
+        size.height * .40,
+        dropoff.dx,
+        dropoff.dy,
+      );
     canvas.drawPath(
       route,
       Paint()

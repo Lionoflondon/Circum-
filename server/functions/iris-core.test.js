@@ -41,6 +41,23 @@ test("electronics examples include iPhone 13 and 65-inch TV", () => {
   assert.equal(tv.internal.riderMatching.requiresTwoPerson, true);
 });
 
+test("customer-safe IRIS response includes quantity and total weight", () => {
+  const iris = classifyIris({description: "Apple MacBook", quantity: 10});
+  const safe = customerSafeIris(iris);
+
+  assert.equal(safe.recommendation.detectedItem, "Apple MacBook");
+  assert.equal(safe.recommendation.quantity, 10);
+  assert.equal(safe.quantity, 10);
+  assert.ok(safe.recommendation.unitWeightKg > 0);
+  assert.equal(
+      safe.recommendation.totalWeightKg,
+      safe.recommendation.estimatedWeightKg,
+  );
+  assert.equal(safe.totalWeightKg, safe.recommendation.totalWeightKg);
+  assert.ok(safe.recommendedVehicle);
+  assert.equal(safe.internal, undefined);
+});
+
 test("furniture and heavy goods classify with van/two-person handling", () => {
   const sofa = classifyIris({description: "large sofa", distanceMiles: 3});
   assert.equal(sofa.recommendation.category, "Furniture & Home");
