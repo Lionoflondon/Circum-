@@ -291,8 +291,8 @@ String senderCollectionPinStatusFor(SenderTrackingState state) {
     SenderTrackingState.inTransit ||
     SenderTrackingState.riderArrivingAtDropoff ||
     SenderTrackingState.issue =>
-      '✓ Used',
-    _ => 'Waiting for pickup',
+      '✓ Pickup verified',
+    _ => 'Ready for pickup',
   };
 }
 
@@ -300,7 +300,7 @@ String senderReceiverPinStatusFor(
   SenderTrackingState state, {
   bool verified = false,
 }) {
-  return verified ? '✓ Verified' : 'Waiting for delivery';
+  return verified ? '✓ Delivery verified' : 'Ready for delivery';
 }
 
 class SenderMobileTrackingScreen extends StatefulWidget {
@@ -566,6 +566,7 @@ class _TrackingPanelContent extends StatelessWidget {
         ProgressStepper(
           progress: content.progress,
           issue: content.issueVanguard,
+          completed: state == SenderTrackingState.delivered,
         ),
         if (state == SenderTrackingState.findingRider) ...[
           const SizedBox(height: 8),
@@ -582,8 +583,9 @@ class _TrackingPanelContent extends StatelessWidget {
             label: 'Collection PIN',
             hint: 'Give this to your rider at pickup.',
             statusLabel: senderCollectionPinStatusFor(state),
-            statusComplete: senderCollectionPinStatusFor(state) == '✓ Used',
+            statusComplete: senderCollectionPinStatusFor(state).startsWith('✓'),
             accent: const Color(0xFF3B82F6),
+            icon: Icons.inventory_2_outlined,
           ),
         ],
         if (content.showReceiverPin) ...[
@@ -595,6 +597,7 @@ class _TrackingPanelContent extends StatelessWidget {
             statusLabel: senderReceiverPinStatusFor(state),
             statusComplete: senderReceiverPinStatusFor(state).startsWith('✓'),
             accent: const Color(0xFF34D399),
+            icon: Icons.verified_outlined,
           ),
         ],
         const SizedBox(height: 12),
@@ -732,6 +735,7 @@ class PINCard extends StatefulWidget {
   final String statusLabel;
   final bool statusComplete;
   final Color accent;
+  final IconData icon;
 
   const PINCard({
     super.key,
@@ -741,6 +745,7 @@ class PINCard extends StatefulWidget {
     required this.statusLabel,
     required this.statusComplete,
     required this.accent,
+    required this.icon,
   });
 
   @override
@@ -794,7 +799,19 @@ class _PINCardState extends State<PINCard> {
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: 34,
+              height: 34,
+              margin: const EdgeInsets.only(right: 11),
+              decoration: BoxDecoration(
+                color: widget.accent.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: widget.accent.withValues(alpha: .24)),
+              ),
+              child: Icon(widget.icon, color: widget.accent, size: 18),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -900,13 +917,19 @@ class _PinStatusLabel extends StatelessWidget {
 class ProgressStepper extends StatelessWidget {
   final int progress;
   final bool issue;
+  final bool completed;
 
   const ProgressStepper(
-      {super.key, required this.progress, this.issue = false});
+      {super.key,
+      required this.progress,
+      this.issue = false,
+      this.completed = false});
 
   @override
   Widget build(BuildContext context) {
     const labels = ['Assigned', 'Pickup', 'Transit', 'Delivered'];
+    final completeColor =
+        completed ? const Color(0xFF34D399) : const Color(0xFF3B82F6);
     return Column(
       children: [
         Row(
@@ -924,14 +947,13 @@ class ProgressStepper extends StatelessWidget {
                   color: issue && progress == step
                       ? const Color(0xFFF5A623)
                       : filled
-                          ? const Color(0xFF3B82F6)
+                          ? completeColor
                           : Colors.white.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(99),
                   boxShadow: active
                       ? [
                           BoxShadow(
-                            color:
-                                const Color(0xFF3B82F6).withValues(alpha: .34),
+                            color: completeColor.withValues(alpha: .38),
                             blurRadius: 12,
                           ),
                         ]
@@ -1015,6 +1037,7 @@ class _TrackingActions extends StatelessWidget {
           child: _TrackingButton(
             label: delivered ? 'Done' : 'Support',
             primary: delivered || state == SenderTrackingState.issue,
+            success: delivered,
           ),
         ),
       ],
@@ -1025,8 +1048,13 @@ class _TrackingActions extends StatelessWidget {
 class _TrackingButton extends StatelessWidget {
   final String label;
   final bool primary;
+  final bool success;
 
-  const _TrackingButton({required this.label, this.primary = false});
+  const _TrackingButton({
+    required this.label,
+    this.primary = false,
+    this.success = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1034,10 +1062,25 @@ class _TrackingButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 13),
       decoration: BoxDecoration(
         color: primary
-            ? const Color(0xFF3B82F6)
+            ? success
+                ? const Color(0xFF34D399)
+                : const Color(0xFF3B82F6)
             : Colors.white.withValues(alpha: .06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+        border: Border.all(
+          color: success
+              ? const Color(0xFF34D399).withValues(alpha: .36)
+              : Colors.white.withValues(alpha: .08),
+        ),
+        boxShadow: success
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF34D399).withValues(alpha: .20),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : null,
       ),
       alignment: Alignment.center,
       child: Text(

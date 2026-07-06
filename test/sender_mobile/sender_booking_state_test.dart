@@ -539,30 +539,30 @@ void main() {
     test('tracking PIN status labels follow active delivery state', () {
       expect(
         senderCollectionPinStatusFor(SenderTrackingState.riderAssigned),
-        'Waiting for pickup',
+        'Ready for pickup',
       );
       expect(
         senderCollectionPinStatusFor(SenderTrackingState.riderArrivedAtPickup),
-        'Waiting for pickup',
+        'Ready for pickup',
       );
       expect(
         senderCollectionPinStatusFor(SenderTrackingState.pickupComplete),
-        '✓ Used',
+        '✓ Pickup verified',
       );
       expect(
         senderCollectionPinStatusFor(SenderTrackingState.inTransit),
-        '✓ Used',
+        '✓ Pickup verified',
       );
       expect(
         senderReceiverPinStatusFor(SenderTrackingState.riderAssigned),
-        'Waiting for delivery',
+        'Ready for delivery',
       );
       expect(
         senderReceiverPinStatusFor(
           SenderTrackingState.riderArrivingAtDropoff,
           verified: true,
         ),
-        '✓ Verified',
+        '✓ Delivery verified',
       );
     });
 
@@ -579,6 +579,20 @@ void main() {
         verified.body,
         'Vanguard confirmed this delivery is complete.',
       );
+    });
+
+    test('delivered tracking state uses green success treatment', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(
+        source,
+        contains('completed: state == SenderTrackingState.delivered'),
+      );
+      expect(source, contains('success: delivered'));
+      expect(source, contains('const Color(0xFF34D399)'));
+      expect(source, contains('completeColor.withValues'));
     });
 
     test('PINs are removed for inactive terminal states', () {
@@ -609,6 +623,8 @@ void main() {
       expect(source, contains('Give this to the receiver at delivery.'));
       expect(source, contains('const Color(0xFF3B82F6)'));
       expect(source, contains('const Color(0xFF34D399)'));
+      expect(source, contains('Icons.inventory_2_outlined'));
+      expect(source, contains('Icons.verified_outlined'));
       expect(source, contains('AnimatedSwitcher'));
       expect(source, contains('Duration(milliseconds: 250)'));
       expect(source, contains("'••••••'"));
