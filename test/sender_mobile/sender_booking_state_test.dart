@@ -71,13 +71,38 @@ void main() {
       expect(draft.deliveryNotes, 'Leave at reception');
     });
 
-    test('schedule is not treated as live booking support', () {
-      const draft = SenderBookingDraft(
+    test('delivery time defaults to deliver now and continues', () {
+      const draft = SenderBookingDraft(step: SenderBookingStep.deliveryTime);
+
+      expect(draft.deliveryTimingType, SenderDeliveryTimingType.now);
+      expect(draft.deliveryTimeSummary, 'Deliver now');
+      expect(draft.canContinue, isTrue);
+      expect(draft.next().step, SenderBookingStep.parcel);
+    });
+
+    test('scheduled delivery requires valid future date and window', () {
+      const incomplete = SenderBookingDraft(
         step: SenderBookingStep.deliveryTime,
-        deliveryTime: 'Schedule',
+        deliveryTimingType: SenderDeliveryTimingType.scheduled,
       );
 
-      expect(draft.canContinue, isFalse);
+      expect(incomplete.canContinue, isFalse);
+      expect(
+        isSenderScheduledDateValid('2026-07-06', now: DateTime(2026, 7, 6)),
+        isTrue,
+      );
+      expect(
+        isSenderScheduledDateValid('2026-07-05', now: DateTime(2026, 7, 6)),
+        isFalse,
+      );
+      final scheduled = incomplete.copyWith(
+        scheduledDate: '2026-07-07',
+        scheduledWindow: 'Morning',
+      );
+      expect(scheduled.canContinue, isTrue);
+      expect(scheduled.deliveryTimeSummary, 'Scheduled: 2026-07-07, Morning');
+      expect(isSenderCustomWindowValid('14:00', '16:00'), isTrue);
+      expect(isSenderCustomWindowValid('16:00', '14:00'), isFalse);
     });
 
     test('IRIS confidence exposes labels only', () {
@@ -186,7 +211,8 @@ void main() {
       );
     });
 
-    test('sender mobile pre-auth implementation follows auth entry contract', () {
+    test('sender mobile pre-auth implementation follows auth entry contract',
+        () {
       final source = File(
         'lib/app/sender_mobile/sender_mobile_home.dart',
       ).readAsStringSync();
@@ -313,6 +339,62 @@ void main() {
       expect(unpaid.canContinue, isFalse);
       expect(unpaid.next().step, SenderBookingStep.payment);
       expect(paidButNotConfirmed.exposesPaymentSuccess, isFalse);
+    });
+
+    test('Roth payment split is user controlled at one to one value', () {
+      expect(senderRothPoundValue, 1.0);
+      final off = SenderPaymentSplit.calculate(
+        totalDue: 58.50,
+        rothEnabled: false,
+        availableRothCredits: 42,
+        fallbackMethod: SenderFallbackPaymentMethod.card,
+      );
+      expect(off.rothAppliedAmount, 0);
+      expect(off.remainingAmount, 58.50);
+      expect(off.ctaLabel, 'Pay £58.50 with Card');
+
+      final partial = SenderPaymentSplit.calculate(
+        totalDue: 58.50,
+        rothEnabled: true,
+        availableRothCredits: 42,
+        fallbackMethod: SenderFallbackPaymentMethod.card,
+      );
+      expect(partial.rothAppliedCredits, 42);
+      expect(partial.rothAppliedAmount, 42);
+      expect(partial.remainingAmount, 16.50);
+      expect(partial.ctaLabel, 'Pay £16.50 with Card + 42 Roth');
+
+      final full = SenderPaymentSplit.calculate(
+        totalDue: 20,
+        rothEnabled: true,
+        availableRothCredits: 42,
+      );
+      expect(full.fullyCoveredByRoth, isTrue);
+      expect(full.requiresFallback, isFalse);
+      expect(full.ctaLabel, 'Pay £20.00 with Roth');
+    });
+
+    test('delivery time and payment copy stay safe', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('Delivery time'));
+      expect(source, contains('Confirm delivery time'));
+      expect(source, contains('Preferred collection window'));
+      expect(source, contains('Payment'));
+      expect(source, contains('Estimated total due today'));
+      expect(source, contains('Apply Roth to this payment'));
+      expect(source,
+          contains('Roth balance could not be loaded from the backend'));
+      expect(source, contains("Payment couldn't be started"));
+      expect(source, isNot(contains('42 Roth available')));
+      expect(source, isNot(contains('senderMobilePreviewRothBalanceCredits')));
+      expect(source, isNot(contains('Step X')));
+      expect(source, isNot(contains('Step 1')));
+      expect(source, isNot(contains('1/12')));
+      expect(source, isNot(contains('Final total')));
+      expect(source, isNot(contains('guaranteed delivery')));
     });
   });
 }

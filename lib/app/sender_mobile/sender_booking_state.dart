@@ -16,11 +16,139 @@ enum SenderBookingStep {
 
 enum SenderPaymentStatus { notReady, ready, processing, paid, failed }
 
+enum SenderDeliveryTimingType { now, scheduled }
+
+enum SenderFallbackPaymentMethod { card, applePay }
+
 const senderDeliverySpeeds = ['Economy', 'Standard', 'Express'];
 const senderVanguardAddOnPriceGbp = 1.99;
+const senderRothPoundValue = 1.0;
 
 bool isSenderDeliverySpeed(String value) =>
     senderDeliverySpeeds.contains(value);
+
+String senderPaymentMethodLabel(SenderFallbackPaymentMethod method) {
+  switch (method) {
+    case SenderFallbackPaymentMethod.card:
+      return 'Card';
+    case SenderFallbackPaymentMethod.applePay:
+      return 'Apple Pay';
+  }
+}
+
+bool isSenderScheduledDateValid(String value, {DateTime? now}) {
+  final parsed = DateTime.tryParse(value.trim());
+  if (parsed == null) return false;
+  final today = now ?? DateTime.now();
+  final todayOnly = DateTime(today.year, today.month, today.day);
+  final parsedOnly = DateTime(parsed.year, parsed.month, parsed.day);
+  return !parsedOnly.isBefore(todayOnly);
+}
+
+bool isSenderCustomWindowValid(String start, String end) {
+  final pattern = RegExp(r'^\d{2}:\d{2}$');
+  if (!pattern.hasMatch(start.trim()) || !pattern.hasMatch(end.trim())) {
+    return false;
+  }
+  final startParts = start.split(':').map(int.tryParse).toList();
+  final endParts = end.split(':').map(int.tryParse).toList();
+  if (startParts.any((part) => part == null) ||
+      endParts.any((part) => part == null)) {
+    return false;
+  }
+  final startMinutes = startParts[0]! * 60 + startParts[1]!;
+  final endMinutes = endParts[0]! * 60 + endParts[1]!;
+  return startParts[0]! < 24 &&
+      startParts[1]! < 60 &&
+      endParts[0]! < 24 &&
+      endParts[1]! < 60 &&
+      endMinutes > startMinutes;
+}
+
+@immutable
+class SenderPaymentSplit {
+  final double totalDue;
+  final bool rothEnabled;
+  final double availableRothCredits;
+  final double rothAppliedCredits;
+  final double rothAppliedAmount;
+  final double remainingAmount;
+  final SenderFallbackPaymentMethod? fallbackMethod;
+
+  const SenderPaymentSplit({
+    required this.totalDue,
+    required this.rothEnabled,
+    required this.availableRothCredits,
+    required this.rothAppliedCredits,
+    required this.rothAppliedAmount,
+    required this.remainingAmount,
+    required this.fallbackMethod,
+  });
+
+  bool get fullyCoveredByRoth =>
+      rothEnabled && remainingAmount <= 0 && rothAppliedAmount > 0;
+
+  bool get requiresFallback => remainingAmount > 0;
+
+  bool get canSubmit => !requiresFallback || fallbackMethod != null;
+
+  String get splitSummary {
+    if (!rothEnabled || rothAppliedAmount <= 0) {
+      final method = fallbackMethod == null
+          ? 'Card / Apple Pay'
+          : senderPaymentMethodLabel(fallbackMethod!);
+      return '$method (${formatSenderCurrency(remainingAmount)})';
+    }
+    final rothPart =
+        '${formatSenderRothCredits(rothAppliedCredits)} Roth (${formatSenderCurrency(rothAppliedAmount)})';
+    if (remainingAmount <= 0) return rothPart;
+    final method = fallbackMethod == null
+        ? 'Card / Apple Pay'
+        : senderPaymentMethodLabel(fallbackMethod!);
+    return '$rothPart + $method (${formatSenderCurrency(remainingAmount)})';
+  }
+
+  String get ctaLabel {
+    if (!canSubmit) return 'Choose payment method';
+    if (fullyCoveredByRoth) {
+      return 'Pay ${formatSenderCurrency(totalDue)} with Roth';
+    }
+    final method = senderPaymentMethodLabel(fallbackMethod!);
+    if (rothEnabled && rothAppliedAmount > 0) {
+      return 'Pay ${formatSenderCurrency(remainingAmount)} with $method + ${formatSenderRothCredits(rothAppliedCredits)} Roth';
+    }
+    return 'Pay ${formatSenderCurrency(remainingAmount)} with $method';
+  }
+
+  static SenderPaymentSplit calculate({
+    required double totalDue,
+    required bool rothEnabled,
+    required double availableRothCredits,
+    SenderFallbackPaymentMethod? fallbackMethod,
+  }) {
+    final maxRothAmount = availableRothCredits * senderRothPoundValue;
+    final rothAppliedAmount =
+        rothEnabled ? maxRothAmount.clamp(0, totalDue).toDouble() : 0.0;
+    final rothAppliedCredits = rothAppliedAmount / senderRothPoundValue;
+    final remaining = (totalDue - rothAppliedAmount).clamp(0, totalDue);
+    return SenderPaymentSplit(
+      totalDue: totalDue,
+      rothEnabled: rothEnabled,
+      availableRothCredits: availableRothCredits,
+      rothAppliedCredits: rothAppliedCredits,
+      rothAppliedAmount: rothAppliedAmount,
+      remainingAmount: remaining.toDouble(),
+      fallbackMethod: remaining > 0 ? fallbackMethod : null,
+    );
+  }
+}
+
+String formatSenderCurrency(double value) => '£${value.toStringAsFixed(2)}';
+
+String formatSenderRothCredits(double value) {
+  if (value == value.roundToDouble()) return value.toStringAsFixed(0);
+  return value.toStringAsFixed(2);
+}
 
 @immutable
 class SenderBookingDraft {
@@ -30,7 +158,11 @@ class SenderBookingDraft {
   final String receiverName;
   final String receiverPhone;
   final String deliveryNotes;
-  final String deliveryTime;
+  final SenderDeliveryTimingType deliveryTimingType;
+  final String scheduledDate;
+  final String scheduledWindow;
+  final String customWindowStart;
+  final String customWindowEnd;
   final String itemName;
   final String itemDescription;
   final String weightLabel;
@@ -42,6 +174,14 @@ class SenderBookingDraft {
   final bool vanguard;
   final SenderPaymentStatus paymentStatus;
   final bool bookingConfirmed;
+  final SenderFallbackPaymentMethod? selectedPaymentMethod;
+  final bool rothEnabled;
+  final double? rothAvailableCredits;
+  final double rothAppliedAmount;
+  final double rothAppliedCredits;
+  final double remainingAmount;
+  final String paymentSplitSummary;
+  final double? amountDue;
 
   const SenderBookingDraft({
     this.step = SenderBookingStep.pickup,
@@ -50,7 +190,11 @@ class SenderBookingDraft {
     this.receiverName = '',
     this.receiverPhone = '',
     this.deliveryNotes = '',
-    this.deliveryTime = 'Deliver now',
+    this.deliveryTimingType = SenderDeliveryTimingType.now,
+    this.scheduledDate = '',
+    this.scheduledWindow = '',
+    this.customWindowStart = '',
+    this.customWindowEnd = '',
     this.itemName = '',
     this.itemDescription = '',
     this.weightLabel = '',
@@ -62,6 +206,14 @@ class SenderBookingDraft {
     this.vanguard = false,
     this.paymentStatus = SenderPaymentStatus.notReady,
     this.bookingConfirmed = false,
+    this.selectedPaymentMethod,
+    this.rothEnabled = false,
+    this.rothAvailableCredits,
+    this.rothAppliedAmount = 0,
+    this.rothAppliedCredits = 0,
+    this.remainingAmount = 0,
+    this.paymentSplitSummary = '',
+    this.amountDue,
   });
 
   bool get canContinue {
@@ -74,7 +226,7 @@ class SenderBookingDraft {
         return receiverName.trim().isNotEmpty &&
             receiverPhone.trim().isNotEmpty;
       case SenderBookingStep.deliveryTime:
-        return deliveryTime == 'Deliver now';
+        return isDeliveryTimeValid;
       case SenderBookingStep.parcel:
         return itemName.trim().isNotEmpty;
       case SenderBookingStep.iris:
@@ -82,7 +234,7 @@ class SenderBookingDraft {
       case SenderBookingStep.review:
         return true;
       case SenderBookingStep.payment:
-        return paymentStatus == SenderPaymentStatus.ready;
+        return paymentStatus == SenderPaymentStatus.paid;
       case SenderBookingStep.findingRider:
         return bookingConfirmed;
       case SenderBookingStep.liveTracking:
@@ -101,6 +253,29 @@ class SenderBookingDraft {
   double get progress =>
       (SenderBookingStep.values.indexOf(step) + 1) /
       SenderBookingStep.values.length;
+
+  bool get isDeliveryTimeValid {
+    if (deliveryTimingType == SenderDeliveryTimingType.now) return true;
+    if (!isSenderScheduledDateValid(scheduledDate)) return false;
+    if (scheduledWindow.trim().isEmpty) return false;
+    if (scheduledWindow == 'Custom') {
+      return isSenderCustomWindowValid(customWindowStart, customWindowEnd);
+    }
+    return true;
+  }
+
+  String get deliveryTimeSummary {
+    if (deliveryTimingType == SenderDeliveryTimingType.now) {
+      return 'Deliver now';
+    }
+    if (scheduledDate.trim().isEmpty || scheduledWindow.trim().isEmpty) {
+      return 'Scheduled';
+    }
+    final window = scheduledWindow == 'Custom'
+        ? '$customWindowStart-$customWindowEnd'
+        : scheduledWindow;
+    return 'Scheduled: $scheduledDate, $window';
+  }
 
   SenderBookingDraft next() {
     if (!canContinue) return this;
@@ -126,7 +301,11 @@ class SenderBookingDraft {
     String? receiverName,
     String? receiverPhone,
     String? deliveryNotes,
-    String? deliveryTime,
+    SenderDeliveryTimingType? deliveryTimingType,
+    String? scheduledDate,
+    String? scheduledWindow,
+    String? customWindowStart,
+    String? customWindowEnd,
     String? itemName,
     String? itemDescription,
     String? weightLabel,
@@ -138,6 +317,17 @@ class SenderBookingDraft {
     bool? vanguard,
     SenderPaymentStatus? paymentStatus,
     bool? bookingConfirmed,
+    SenderFallbackPaymentMethod? selectedPaymentMethod,
+    bool clearSelectedPaymentMethod = false,
+    bool? rothEnabled,
+    double? rothAvailableCredits,
+    bool clearRothAvailableCredits = false,
+    double? rothAppliedAmount,
+    double? rothAppliedCredits,
+    double? remainingAmount,
+    String? paymentSplitSummary,
+    double? amountDue,
+    bool clearAmountDue = false,
   }) {
     return SenderBookingDraft(
       step: step ?? this.step,
@@ -146,7 +336,11 @@ class SenderBookingDraft {
       receiverName: receiverName ?? this.receiverName,
       receiverPhone: receiverPhone ?? this.receiverPhone,
       deliveryNotes: deliveryNotes ?? this.deliveryNotes,
-      deliveryTime: deliveryTime ?? this.deliveryTime,
+      deliveryTimingType: deliveryTimingType ?? this.deliveryTimingType,
+      scheduledDate: scheduledDate ?? this.scheduledDate,
+      scheduledWindow: scheduledWindow ?? this.scheduledWindow,
+      customWindowStart: customWindowStart ?? this.customWindowStart,
+      customWindowEnd: customWindowEnd ?? this.customWindowEnd,
       itemName: itemName ?? this.itemName,
       itemDescription: itemDescription ?? this.itemDescription,
       weightLabel: weightLabel ?? this.weightLabel,
@@ -158,6 +352,18 @@ class SenderBookingDraft {
       vanguard: vanguard ?? this.vanguard,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       bookingConfirmed: bookingConfirmed ?? this.bookingConfirmed,
+      selectedPaymentMethod: clearSelectedPaymentMethod
+          ? null
+          : selectedPaymentMethod ?? this.selectedPaymentMethod,
+      rothEnabled: rothEnabled ?? this.rothEnabled,
+      rothAvailableCredits: clearRothAvailableCredits
+          ? null
+          : rothAvailableCredits ?? this.rothAvailableCredits,
+      rothAppliedAmount: rothAppliedAmount ?? this.rothAppliedAmount,
+      rothAppliedCredits: rothAppliedCredits ?? this.rothAppliedCredits,
+      remainingAmount: remainingAmount ?? this.remainingAmount,
+      paymentSplitSummary: paymentSplitSummary ?? this.paymentSplitSummary,
+      amountDue: clearAmountDue ? null : amountDue ?? this.amountDue,
     );
   }
 }
@@ -171,7 +377,7 @@ String senderStepTitle(SenderBookingStep step) {
     case SenderBookingStep.recipient:
       return "Who's receiving\nthis parcel?";
     case SenderBookingStep.deliveryTime:
-      return 'When should it arrive?';
+      return 'Delivery time';
     case SenderBookingStep.parcel:
       return 'Tell us about your parcel.';
     case SenderBookingStep.iris:
@@ -181,7 +387,7 @@ String senderStepTitle(SenderBookingStep step) {
     case SenderBookingStep.review:
       return 'Review your delivery.';
     case SenderBookingStep.payment:
-      return 'Pay securely.';
+      return 'Payment';
     case SenderBookingStep.findingRider:
       return 'Finding the best rider for you...';
     case SenderBookingStep.liveTracking:

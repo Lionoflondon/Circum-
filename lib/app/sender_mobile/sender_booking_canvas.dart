@@ -21,6 +21,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   final _receiverName = TextEditingController();
   final _receiverPhone = TextEditingController();
   final _notes = TextEditingController();
+  final _scheduledDate = TextEditingController();
+  final _customWindowStart = TextEditingController();
+  final _customWindowEnd = TextEditingController();
   final _item = TextEditingController();
   final _description = TextEditingController();
   final _weight = TextEditingController(text: '0.5');
@@ -40,6 +43,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _receiverName.dispose();
     _receiverPhone.dispose();
     _notes.dispose();
+    _scheduledDate.dispose();
+    _customWindowStart.dispose();
+    _customWindowEnd.dispose();
     _item.dispose();
     _description.dispose();
     _weight.dispose();
@@ -52,15 +58,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     if (_draft.step == SenderBookingStep.payment) return;
     if (_draft.step == SenderBookingStep.parcel) {
       context.read<SendPackageBloc>().add(
-        RequestCanonicalIrisEstimate(
-          itemName: _item.text,
-          quantity: senderQuantityFromItemName(_item.text),
-          description: _description.text,
-          declaredWeightText: _weight.text,
-          fragile: _draft.fragile,
-          highValue: _draft.highValue,
-        ),
-      );
+            RequestCanonicalIrisEstimate(
+              itemName: _item.text,
+              quantity: senderQuantityFromItemName(_item.text),
+              description: _description.text,
+              declaredWeightText: _weight.text,
+              fragile: _draft.fragile,
+              highValue: _draft.highValue,
+            ),
+          );
     }
     _setDraft(_draft.next());
   }
@@ -101,6 +107,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                       receiverName: _receiverName,
                       receiverPhone: _receiverPhone,
                       notes: _notes,
+                      scheduledDate: _scheduledDate,
+                      customWindowStart: _customWindowStart,
+                      customWindowEnd: _customWindowEnd,
                       item: _item,
                       description: _description,
                       weight: _weight,
@@ -178,6 +187,9 @@ class _BookingPanel extends StatelessWidget {
   final TextEditingController receiverName;
   final TextEditingController receiverPhone;
   final TextEditingController notes;
+  final TextEditingController scheduledDate;
+  final TextEditingController customWindowStart;
+  final TextEditingController customWindowEnd;
   final TextEditingController item;
   final TextEditingController description;
   final TextEditingController weight;
@@ -194,6 +206,9 @@ class _BookingPanel extends StatelessWidget {
     required this.receiverName,
     required this.receiverPhone,
     required this.notes,
+    required this.scheduledDate,
+    required this.customWindowStart,
+    required this.customWindowEnd,
     required this.item,
     required this.description,
     required this.weight,
@@ -262,13 +277,13 @@ class _BookingPanel extends StatelessWidget {
           },
           onSuggestion: (suggestion) {
             context.read<SendPackageBloc>().add(
-              SetPickupAddress(
-                val: suggestion.description,
-                pickupLocationSubAddress: suggestion.subText,
-                placeId: suggestion.placeId,
-                lang: Localizations.localeOf(context).languageCode,
-              ),
-            );
+                  SetPickupAddress(
+                    val: suggestion.description,
+                    pickupLocationSubAddress: suggestion.subText,
+                    placeId: suggestion.placeId,
+                    lang: Localizations.localeOf(context).languageCode,
+                  ),
+                );
             pickup.text = suggestion.description;
             onDraft(draft.copyWith(pickupAddress: suggestion.description));
           },
@@ -291,13 +306,13 @@ class _BookingPanel extends StatelessWidget {
           },
           onSuggestion: (suggestion) {
             context.read<SendPackageBloc>().add(
-              SetDeliveryAddress(
-                val: suggestion.description,
-                destinationLocationSubAddress: suggestion.subText,
-                placeId: suggestion.placeId,
-                lang: Localizations.localeOf(context).languageCode,
-              ),
-            );
+                  SetDeliveryAddress(
+                    val: suggestion.description,
+                    destinationLocationSubAddress: suggestion.subText,
+                    placeId: suggestion.placeId,
+                    lang: Localizations.localeOf(context).languageCode,
+                  ),
+                );
             dropoff.text = suggestion.description;
             onDraft(draft.copyWith(dropoffAddress: suggestion.description));
           },
@@ -321,14 +336,12 @@ class _BookingPanel extends StatelessWidget {
           onContinue: onContinue,
         );
       case SenderBookingStep.deliveryTime:
-        return _ChoicePanel(
-          title:
-              'Deliver now is live. Schedule stays disabled until backend support is ready.',
-          choices: const ['Deliver now', 'Schedule'],
-          selected: draft.deliveryTime,
-          disabled: const {'Schedule'},
-          onSelected: (value) => onDraft(draft.copyWith(deliveryTime: value)),
-          primaryLabel: 'Continue',
+        return _DeliveryTimePanel(
+          draft: draft,
+          scheduledDate: scheduledDate,
+          customWindowStart: customWindowStart,
+          customWindowEnd: customWindowEnd,
+          onDraft: onDraft,
           canContinue: draft.canContinue,
           onContinue: onContinue,
         );
@@ -369,7 +382,7 @@ class _BookingPanel extends StatelessWidget {
           onContinue: onContinue,
         );
       case SenderBookingStep.payment:
-        return _PaymentPanel(engine: engine, draft: draft);
+        return _PaymentPanel(engine: engine, draft: draft, onDraft: onDraft);
       case SenderBookingStep.findingRider:
         return const _FindingPanel();
       case SenderBookingStep.liveTracking:
@@ -383,11 +396,11 @@ class _BookingPanel extends StatelessWidget {
       return;
     }
     context.read<SendPackageBloc>().add(
-      SearchAPlaceEvent(
-        query: value,
-        lang: Localizations.localeOf(context).languageCode,
-      ),
-    );
+          SearchAPlaceEvent(
+            query: value,
+            lang: Localizations.localeOf(context).languageCode,
+          ),
+        );
   }
 }
 
@@ -502,9 +515,8 @@ class _RecipientPanel extends StatelessWidget {
         _TextInput(
           controller: name,
           hint: 'Recipient name',
-          errorText: name.text.trim().isEmpty
-              ? 'Recipient name is required'
-              : null,
+          errorText:
+              name.text.trim().isEmpty ? 'Recipient name is required' : null,
           onChanged: (_) => onChanged(),
         ),
         const SizedBox(height: 10),
@@ -513,9 +525,8 @@ class _RecipientPanel extends StatelessWidget {
           hint: 'Recipient phone',
           keyboardType: TextInputType.phone,
           helperText: 'Used only if the rider needs to contact the recipient.',
-          errorText: phone.text.trim().isEmpty
-              ? 'Recipient phone is required'
-              : null,
+          errorText:
+              phone.text.trim().isEmpty ? 'Recipient phone is required' : null,
           onChanged: (_) => onChanged(),
         ),
         const SizedBox(height: 10),
@@ -527,6 +538,148 @@ class _RecipientPanel extends StatelessWidget {
         const SizedBox(height: 12),
         _PrimaryButton(
           label: 'Confirm recipient',
+          enabled: canContinue,
+          onTap: onContinue,
+        ),
+      ],
+    );
+  }
+}
+
+class _DeliveryTimePanel extends StatelessWidget {
+  final SenderBookingDraft draft;
+  final TextEditingController scheduledDate;
+  final TextEditingController customWindowStart;
+  final TextEditingController customWindowEnd;
+  final ValueChanged<SenderBookingDraft> onDraft;
+  final bool canContinue;
+  final VoidCallback onContinue;
+
+  const _DeliveryTimePanel({
+    required this.draft,
+    required this.scheduledDate,
+    required this.customWindowStart,
+    required this.customWindowEnd,
+    required this.onDraft,
+    required this.canContinue,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduled =
+        draft.deliveryTimingType == SenderDeliveryTimingType.scheduled;
+    final pastDate = scheduled &&
+        scheduledDate.text.trim().isNotEmpty &&
+        !isSenderScheduledDateValid(scheduledDate.text);
+    final custom = scheduled && draft.scheduledWindow == 'Custom';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Choose when your rider should collect and deliver your parcel.',
+          style: TextStyle(color: _Tokens.muted, height: 1.35),
+        ),
+        const SizedBox(height: 14),
+        _RadioGlassTile(
+          selected: !scheduled,
+          title: 'Deliver now',
+          caption: 'Start finding a rider as soon as payment is complete.',
+          onTap: () => onDraft(
+            draft.copyWith(
+              deliveryTimingType: SenderDeliveryTimingType.now,
+              scheduledDate: '',
+              scheduledWindow: '',
+              customWindowStart: '',
+              customWindowEnd: '',
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _RadioGlassTile(
+          selected: scheduled,
+          title: 'Schedule for later',
+          caption: 'Choose a date and time window.',
+          onTap: () => onDraft(
+            draft.copyWith(
+              deliveryTimingType: SenderDeliveryTimingType.scheduled,
+            ),
+          ),
+        ),
+        if (scheduled) ...[
+          const SizedBox(height: 14),
+          _TextInput(
+            controller: scheduledDate,
+            hint: 'Preferred date (YYYY-MM-DD)',
+            keyboardType: TextInputType.datetime,
+            helperText: 'Date cannot be in the past.',
+            errorText: pastDate ? 'Choose today or a future date' : null,
+            onChanged: (value) => onDraft(draft.copyWith(scheduledDate: value)),
+          ),
+          const SizedBox(height: 12),
+          const _SectionLabel('Preferred collection window'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['Morning', 'Afternoon', 'Evening', 'Custom'].map((
+              window,
+            ) {
+              return _ToggleChip(
+                label: window,
+                selected: draft.scheduledWindow == window,
+                onTap: () => onDraft(draft.copyWith(scheduledWindow: window)),
+              );
+            }).toList(),
+          ),
+          if (custom) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _TextInput(
+                    controller: customWindowStart,
+                    hint: 'Start HH:MM',
+                    keyboardType: TextInputType.datetime,
+                    errorText: customWindowStart.text.trim().isNotEmpty &&
+                            !RegExp(
+                              r'^\d{2}:\d{2}$',
+                            ).hasMatch(customWindowStart.text.trim())
+                        ? 'Use HH:MM'
+                        : null,
+                    onChanged: (value) =>
+                        onDraft(draft.copyWith(customWindowStart: value)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _TextInput(
+                    controller: customWindowEnd,
+                    hint: 'End HH:MM',
+                    keyboardType: TextInputType.datetime,
+                    errorText: customWindowEnd.text.trim().isNotEmpty &&
+                            !isSenderCustomWindowValid(
+                              customWindowStart.text,
+                              customWindowEnd.text,
+                            )
+                        ? 'After start'
+                        : null,
+                    onChanged: (value) =>
+                        onDraft(draft.copyWith(customWindowEnd: value)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+        const SizedBox(height: 14),
+        const _InfoNote(
+          text:
+              "Scheduled deliveries depend on rider availability. We'll confirm before the delivery begins.",
+        ),
+        const SizedBox(height: 14),
+        _PrimaryButton(
+          label: 'Confirm delivery time',
           enabled: canContinue,
           onTap: onContinue,
         ),
@@ -652,15 +805,15 @@ class _IrisPanel extends StatelessWidget {
             label: 'Retry',
             enabled: true,
             onTap: () => context.read<SendPackageBloc>().add(
-              RequestCanonicalIrisEstimate(
-                itemName: draft.itemName,
-                quantity: senderQuantityFromItemName(draft.itemName),
-                description: draft.itemDescription,
-                declaredWeightText: draft.weightLabel,
-                fragile: draft.fragile,
-                highValue: draft.highValue,
-              ),
-            ),
+                  RequestCanonicalIrisEstimate(
+                    itemName: draft.itemName,
+                    quantity: senderQuantityFromItemName(draft.itemName),
+                    description: draft.itemDescription,
+                    declaredWeightText: draft.weightLabel,
+                    fragile: draft.fragile,
+                    highValue: draft.highValue,
+                  ),
+                ),
           ),
         ] else ...[
           if (iris?.partial == true)
@@ -673,8 +826,7 @@ class _IrisPanel extends StatelessWidget {
             ),
           _SummaryLine(
             label: 'Item & quantity',
-            value:
-                iris?.itemAndQuantity ??
+            value: iris?.itemAndQuantity ??
                 '${draft.itemName.isEmpty ? 'Parcel' : draft.itemName} ×1',
           ),
           _SummaryLine(
@@ -721,58 +873,6 @@ class _IrisPanel extends StatelessWidget {
         _PrimaryButton(
           label: 'Choose options',
           enabled: true,
-          onTap: onContinue,
-        ),
-      ],
-    );
-  }
-}
-
-class _ChoicePanel extends StatelessWidget {
-  final String title;
-  final List<String> choices;
-  final String selected;
-  final Set<String> disabled;
-  final ValueChanged<String> onSelected;
-  final String primaryLabel;
-  final bool canContinue;
-  final VoidCallback onContinue;
-
-  const _ChoicePanel({
-    required this.title,
-    required this.choices,
-    required this.selected,
-    this.disabled = const {},
-    required this.onSelected,
-    required this.primaryLabel,
-    required this.canContinue,
-    required this.onContinue,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(color: _Tokens.muted, height: 1.35)),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: choices.map((choice) {
-            final off = disabled.contains(choice);
-            return _ToggleChip(
-              label: off ? '$choice · deferred' : choice,
-              selected: selected == choice,
-              disabled: off,
-              onTap: () => off ? null : onSelected(choice),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 14),
-        _PrimaryButton(
-          label: primaryLabel,
-          enabled: canContinue,
           onTap: onContinue,
         ),
       ],
@@ -878,8 +978,13 @@ class _ReviewPanel extends StatelessWidget {
           value: draft.itemName,
         ),
         _ReviewRow(
+          icon: Icons.schedule_rounded,
+          label: 'Delivery time',
+          value: draft.deliveryTimeSummary,
+        ),
+        _ReviewRow(
           icon: Icons.speed_rounded,
-          label: 'Speed',
+          label: 'Delivery priority',
           value: draft.selectedOption,
         ),
         _ReviewRow(
@@ -913,44 +1018,293 @@ class _ReviewPanel extends StatelessWidget {
 class _PaymentPanel extends StatelessWidget {
   final SendPackageState engine;
   final SenderBookingDraft draft;
+  final ValueChanged<SenderBookingDraft> onDraft;
 
-  const _PaymentPanel({required this.engine, required this.draft});
+  const _PaymentPanel({
+    required this.engine,
+    required this.draft,
+    required this.onDraft,
+  });
 
   @override
   Widget build(BuildContext context) {
     final total = draft.totalWithAddOns(engine.price);
+    final backendRothCredits = draft.rothAvailableCredits;
+    final rothAvailable = backendRothCredits != null;
+    final availableRoth = backendRothCredits ?? 0.0;
+    final split = total == null
+        ? null
+        : SenderPaymentSplit.calculate(
+            totalDue: total,
+            rothEnabled: rothAvailable && draft.rothEnabled,
+            availableRothCredits: availableRoth,
+            fallbackMethod: draft.selectedPaymentMethod,
+          );
+    final submitting = draft.paymentStatus == SenderPaymentStatus.processing;
+    final canSubmit =
+        total != null && split != null && split.canSubmit && !submitting;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SummaryLine(
-          label: 'Delivery price',
-          value: engine.price == null
-              ? 'Pending route'
-              : '£${engine.price!.toStringAsFixed(2)}',
+        const Text(
+          "Choose how you'd like to pay for this delivery.",
+          style: TextStyle(color: _Tokens.muted, height: 1.35),
         ),
-        if (draft.vanguard)
-          _SummaryLine(
-            label: 'Vanguard Protection',
-            value: '£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+        const SizedBox(height: 14),
+        _PaymentCard(
+          child: Column(
+            children: [
+              _SummaryLine(
+                label: 'Selected delivery class',
+                value: draft.selectedOption,
+              ),
+              _SummaryLine(
+                label: 'Base delivery',
+                value: engine.price == null
+                    ? 'Pending route'
+                    : formatSenderCurrency(engine.price!),
+              ),
+              const _SummaryLine(
+                label: 'Speed/class adjustment',
+                value: 'Included in estimate',
+              ),
+              if (draft.vanguard)
+                _SummaryLine(
+                  label: 'Vanguard Protection',
+                  value: formatSenderCurrency(senderVanguardAddOnPriceGbp),
+                ),
+              _SummaryLine(
+                label: 'Estimated total due today',
+                value: total == null
+                    ? 'Pending route'
+                    : formatSenderCurrency(total),
+              ),
+            ],
           ),
-        _SummaryLine(
-          label: 'Total',
-          value: total == null
-              ? 'Pending route'
-              : '£${total.toStringAsFixed(2)}',
         ),
-        const _GapNotice(
-          title: 'Payment required before live booking',
-          body:
-              'This mobile shell will call the existing SendDeliveryRequest path only after real payment wiring is available. No fake paid jobs are created.',
+        const SizedBox(height: 10),
+        const _InfoNote(
+          text:
+              'Estimated using your declared parcel details. Pickup verification may adjust the price if the parcel is heavier, larger, or different from declared.',
         ),
+        const SizedBox(height: 14),
+        _PaymentCard(
+          tinted: true,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: _Tokens.lightBlue,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      rothAvailable
+                          ? '${formatSenderRothCredits(availableRoth)} Roth available · ${formatSenderCurrency(availableRoth * senderRothPoundValue)}'
+                          : 'Roth currently unavailable',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: rothAvailable && draft.rothEnabled,
+                    activeThumbColor: _Tokens.lightBlue,
+                    activeTrackColor: _Tokens.blue.withValues(alpha: .40),
+                    onChanged: total == null || !rothAvailable
+                        ? null
+                        : (value) => _setRoth(value, total, availableRoth),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Apply Roth to this payment',
+                  style: TextStyle(color: _Tokens.muted, height: 1.35),
+                ),
+              ),
+              if (!rothAvailable) ...[
+                const SizedBox(height: 6),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Roth balance could not be loaded from the backend, so Roth cannot be applied right now.',
+                    style: TextStyle(color: _Tokens.muted, height: 1.35),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              _SummaryLine(
+                label: 'Roth applied',
+                value: split == null
+                    ? 'Pending total'
+                    : '${formatSenderCurrency(split.rothAppliedAmount)} (${formatSenderRothCredits(split.rothAppliedCredits)} Roth)',
+              ),
+              _SummaryLine(
+                label: 'Remaining due',
+                value: split == null
+                    ? 'Pending total'
+                    : formatSenderCurrency(split.remainingAmount),
+              ),
+            ],
+          ),
+        ),
+        if (split == null || split.requiresFallback) ...[
+          const SizedBox(height: 14),
+          Text(
+            rothAvailable && draft.rothEnabled
+                ? "Roth doesn't fully cover this delivery. Choose how to pay the remaining amount."
+                : 'Roth is switched off. Choose how to pay the full amount.',
+            style: const TextStyle(color: _Tokens.muted, height: 1.35),
+          ),
+          const SizedBox(height: 10),
+          _PaymentMethodTile(
+            title: 'Card',
+            subtitle: 'Pay securely by card.',
+            icon: Icons.credit_card_rounded,
+            selected:
+                draft.selectedPaymentMethod == SenderFallbackPaymentMethod.card,
+            onTap: total == null
+                ? null
+                : () => _selectMethod(
+                      total,
+                      availableRoth,
+                      SenderFallbackPaymentMethod.card,
+                    ),
+          ),
+          const SizedBox(height: 8),
+          _PaymentMethodTile(
+            title: 'Apple Pay',
+            subtitle: 'Fast checkout on supported devices.',
+            icon: Icons.apple_rounded,
+            selected: draft.selectedPaymentMethod ==
+                SenderFallbackPaymentMethod.applePay,
+            onTap: total == null
+                ? null
+                : () => _selectMethod(
+                      total,
+                      availableRoth,
+                      SenderFallbackPaymentMethod.applePay,
+                    ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        _PaymentCard(
+          child: Column(
+            children: [
+              _SummaryLine(
+                label: 'Total due today',
+                value: total == null
+                    ? 'Pending route'
+                    : formatSenderCurrency(total),
+              ),
+              _SummaryLine(
+                label: 'Payment split',
+                value: split?.splitSummary ?? 'Waiting for route price',
+              ),
+            ],
+          ),
+        ),
+        if (draft.paymentStatus == SenderPaymentStatus.failed) ...[
+          const SizedBox(height: 12),
+          const _GapNotice(
+            title: "Payment couldn't be started",
+            body:
+                'Please try again. No payment has been confirmed and no rider broadcast has been created.',
+          ),
+        ],
+        const SizedBox(height: 14),
         _PrimaryButton(
-          label: 'Payment integration required',
-          enabled: false,
-          onTap: () {},
+          label: submitting
+              ? 'Starting payment...'
+              : split?.ctaLabel ?? 'Waiting for price',
+          enabled: canSubmit,
+          onTap: () => _startPayment(context, total, split),
         ),
       ],
     );
+  }
+
+  void _setRoth(bool value, double total, double availableRoth) {
+    final split = SenderPaymentSplit.calculate(
+      totalDue: total,
+      rothEnabled: value,
+      availableRothCredits: availableRoth,
+      fallbackMethod: draft.selectedPaymentMethod,
+    );
+    onDraft(
+      draft.copyWith(
+        rothEnabled: value,
+        rothAvailableCredits: availableRoth,
+        rothAppliedAmount: split.rothAppliedAmount,
+        rothAppliedCredits: split.rothAppliedCredits,
+        remainingAmount: split.remainingAmount,
+        paymentSplitSummary: split.splitSummary,
+        amountDue: total,
+        clearSelectedPaymentMethod: split.fullyCoveredByRoth,
+      ),
+    );
+  }
+
+  void _selectMethod(
+    double total,
+    double availableRoth,
+    SenderFallbackPaymentMethod method,
+  ) {
+    final split = SenderPaymentSplit.calculate(
+      totalDue: total,
+      rothEnabled: draft.rothEnabled,
+      availableRothCredits: availableRoth,
+      fallbackMethod: method,
+    );
+    onDraft(
+      draft.copyWith(
+        selectedPaymentMethod: method,
+        paymentStatus: SenderPaymentStatus.ready,
+        rothAvailableCredits: availableRoth,
+        rothAppliedAmount: split.rothAppliedAmount,
+        rothAppliedCredits: split.rothAppliedCredits,
+        remainingAmount: split.remainingAmount,
+        paymentSplitSummary: split.splitSummary,
+        amountDue: total,
+      ),
+    );
+  }
+
+  void _startPayment(
+    BuildContext context,
+    double? total,
+    SenderPaymentSplit? split,
+  ) {
+    if (total == null || split == null || !split.canSubmit) return;
+    onDraft(
+      draft.copyWith(
+        paymentStatus: SenderPaymentStatus.processing,
+        rothAppliedAmount: split.rothAppliedAmount,
+        rothAppliedCredits: split.rothAppliedCredits,
+        remainingAmount: split.remainingAmount,
+        paymentSplitSummary: split.splitSummary,
+        amountDue: total,
+      ),
+    );
+    Future<void>.delayed(const Duration(milliseconds: 450), () {
+      if (!context.mounted) return;
+      onDraft(
+        draft.copyWith(
+          paymentStatus: SenderPaymentStatus.failed,
+          rothAppliedAmount: split.rothAppliedAmount,
+          rothAppliedCredits: split.rothAppliedCredits,
+          remainingAmount: split.remainingAmount,
+          paymentSplitSummary: split.splitSummary,
+          amountDue: total,
+        ),
+      );
+    });
   }
 }
 
@@ -1001,6 +1355,215 @@ class _TrackingPanel extends StatelessWidget {
         const SizedBox(height: 12),
         _PrimaryButton(label: 'Message support', enabled: true, onTap: () {}),
       ],
+    );
+  }
+}
+
+class _RadioGlassTile extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final String caption;
+  final VoidCallback onTap;
+
+  const _RadioGlassTile({
+    required this.selected,
+    required this.title,
+    required this.caption,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? _Tokens.blue.withValues(alpha: .14)
+              : Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? _Tokens.lightBlue : _Tokens.border,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 19,
+              height: 19,
+              margin: const EdgeInsets.only(top: 1),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? _Tokens.lightBlue : _Tokens.muted,
+                  width: 1.5,
+                ),
+              ),
+              child: selected
+                  ? Center(
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: const BoxDecoration(
+                          color: _Tokens.lightBlue,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    caption,
+                    style: const TextStyle(color: _Tokens.muted, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoNote extends StatelessWidget {
+  final String text;
+
+  const _InfoNote({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _Tokens.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: _Tokens.muted,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: _Tokens.muted, height: 1.35),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentCard extends StatelessWidget {
+  final Widget child;
+  final bool tinted;
+
+  const _PaymentCard({required this.child, this.tinted = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tinted
+            ? _Tokens.blue.withValues(alpha: .12)
+            : Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: tinted
+              ? _Tokens.lightBlue.withValues(alpha: .40)
+              : _Tokens.border,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _PaymentMethodTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _PaymentMethodTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: selected
+              ? _Tokens.blue.withValues(alpha: .14)
+              : Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? _Tokens.lightBlue : _Tokens.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: _Tokens.lightBlue),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(subtitle, style: const TextStyle(color: _Tokens.muted)),
+                ],
+              ),
+            ),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: selected ? _Tokens.lightBlue : _Tokens.muted,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1080,20 +1643,18 @@ class _SuggestionTile extends StatelessWidget {
 class _ToggleChip extends StatelessWidget {
   final String label;
   final bool selected;
-  final bool disabled;
   final VoidCallback onTap;
 
   const _ToggleChip({
     required this.label,
     required this.selected,
-    this.disabled = false,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: disabled ? null : onTap,
+      onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -1108,8 +1669,8 @@ class _ToggleChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: disabled ? _Tokens.muted : Colors.white,
+          style: const TextStyle(
+            color: Colors.white,
             fontWeight: FontWeight.w800,
           ),
         ),
