@@ -208,6 +208,7 @@ void main() {
       expect(source, contains('Terms'));
       expect(source, contains('Privacy Policy'));
       expect(source, contains('After you join'));
+      expect(source, contains('OR CONTINUE WITH'));
       expect(source, contains('Trusted Riders'));
       expect(source, contains('if (_isSignIn)'));
       expect(
@@ -216,6 +217,25 @@ void main() {
           '// TODO(sender-mobile-auth): Wire to the existing auth/onboarding handler.',
         ),
       );
+    });
+
+    test('sender mobile pre-auth visual refinements are present', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_mobile_home.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('height: 26'));
+      expect(source, contains('mainAxisExtent: 88'));
+      expect(source, contains('Curated gifts delivered with care.'));
+      expect(source, contains('Trusted prescription and care deliveries.'));
+      expect(source, contains('Delivery tools for growing teams.'));
+      expect(
+        source,
+        contains(
+          'Trusted by people sending everything from forgotten passports to meaningful gifts.',
+        ),
+      );
+      expect(source, contains('_AfterJoinPill(accent: accent)'));
     });
 
     test('Vanguard add-on does not replace selected delivery speed', () {

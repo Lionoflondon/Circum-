@@ -178,7 +178,9 @@ class _SenderPreAuthLanding extends StatelessWidget {
             const _WhyCircumSection(),
             const SizedBox(height: 34),
             const _ServicesPreviewSection(),
-            const SizedBox(height: 26),
+            const SizedBox(height: 20),
+            const _PreAuthSocialProof(),
+            const SizedBox(height: 24),
             const _PreAuthFooterLinks(),
           ],
         ),
@@ -235,7 +237,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                 const _CircumMarkChip(),
               ],
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 36),
             _AuthSegmentedControl(
               mode: widget.mode,
               onChanged: (mode) {
@@ -437,7 +439,7 @@ class _CircumWordmarkRow extends StatelessWidget {
           const SizedBox(width: 10),
           Image.asset(
             'assets/images/circum_wordmark.png',
-            height: 22,
+            height: 26,
             fit: BoxFit.contain,
             filterQuality: FilterQuality.high,
           ),
@@ -576,6 +578,7 @@ class _TrustHighlightGrid extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 2.18,
+      mainAxisExtent: 88,
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
       children: [
@@ -599,7 +602,7 @@ class _PreAuthGlassCard extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
           decoration: BoxDecoration(
             color: _SenderTokens.glass,
             borderRadius: BorderRadius.circular(16),
@@ -608,7 +611,7 @@ class _PreAuthGlassCard extends StatelessWidget {
           child: Row(
             children: [
               _MiniIcon(icon: icon, color: _SenderTokens.lightBlue),
-              const SizedBox(width: 11),
+              const SizedBox(width: 10),
               Flexible(
                 child: Text(
                   label,
@@ -666,19 +669,19 @@ class _ServicesPreviewSection extends StatelessWidget {
         _ServicePreviewCard(
           icon: Icons.card_giftcard_rounded,
           title: 'Gifts',
-          body: 'Thoughtful deliveries made simple.',
+          body: 'Curated gifts delivered with care.',
           accent: _SenderTokens.gifts,
         ),
         _ServicePreviewCard(
           icon: Icons.health_and_safety_rounded,
           title: 'Health+',
-          body: 'Pharmacy, wellness and care.',
+          body: 'Trusted prescription and care deliveries.',
           accent: _SenderTokens.health,
         ),
         _ServicePreviewCard(
           icon: Icons.business_center_rounded,
           title: 'Business',
-          body: 'Solutions that keep work moving.',
+          body: 'Delivery tools for growing teams.',
           accent: _SenderTokens.blue,
         ),
       ],
@@ -727,7 +730,7 @@ class _BenefitRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 15),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: _SenderTokens.hairline)),
       ),
@@ -815,7 +818,7 @@ class _ServicePreviewCard extends StatelessWidget {
               ],
             ),
           ),
-          const _AfterJoinPill(),
+          _AfterJoinPill(accent: accent),
         ],
       ),
     );
@@ -847,24 +850,44 @@ class _MiniIcon extends StatelessWidget {
 }
 
 class _AfterJoinPill extends StatelessWidget {
-  const _AfterJoinPill();
+  final Color accent;
+
+  const _AfterJoinPill({required this.accent});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .06),
+        color: accent.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _SenderTokens.hairline),
+        border: Border.all(color: accent.withValues(alpha: .24)),
       ),
       child: Text(
         'After you join',
         style: GoogleFonts.jetBrainsMono(
-          color: _SenderTokens.muted,
+          color: Colors.white.withValues(alpha: .72),
           fontSize: 9.5,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+class _PreAuthSocialProof extends StatelessWidget {
+  const _PreAuthSocialProof();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Trusted by people sending everything from forgotten passports to meaningful gifts.',
+      textAlign: TextAlign.center,
+      style: GoogleFonts.inter(
+        color: _SenderTokens.muted,
+        fontSize: 12.5,
+        height: 1.45,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -1065,7 +1088,7 @@ class _LabelledDivider extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
-            'or continue with',
+            'OR CONTINUE WITH',
             style: GoogleFonts.jetBrainsMono(
               color: _SenderTokens.muted,
               fontSize: 10.5,
