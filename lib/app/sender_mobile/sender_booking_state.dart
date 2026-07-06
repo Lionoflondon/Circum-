@@ -45,6 +45,47 @@ bool isSenderScheduledDateValid(String value, {DateTime? now}) {
   return !parsedOnly.isBefore(todayOnly);
 }
 
+List<DateTime> senderScheduleDateOptions({DateTime? now, int days = 7}) {
+  final base = now ?? DateTime.now();
+  final today = DateTime(base.year, base.month, base.day);
+  return List<DateTime>.generate(
+      days, (index) => today.add(Duration(days: index)));
+}
+
+String senderScheduleDateValue(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+String senderScheduleDayLabel(DateTime date, {DateTime? now}) {
+  final base = now ?? DateTime.now();
+  final today = DateTime(base.year, base.month, base.day);
+  final dateOnly = DateTime(date.year, date.month, date.day);
+  if (dateOnly == today) return 'Today';
+  if (dateOnly == today.add(const Duration(days: 1))) return 'Tomorrow';
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return weekdays[date.weekday - 1];
+}
+
+String senderScheduleMonthDayLabel(DateTime date) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${date.day} ${months[date.month - 1]}';
+}
+
 bool isSenderCustomWindowValid(String start, String end) {
   final pattern = RegExp(r'^\d{2}:\d{2}$');
   if (!pattern.hasMatch(start.trim()) || !pattern.hasMatch(end.trim())) {

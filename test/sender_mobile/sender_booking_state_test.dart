@@ -105,6 +105,28 @@ void main() {
       expect(isSenderCustomWindowValid('16:00', '14:00'), isFalse);
     });
 
+    test('scheduled delivery exposes selectable calendar dates', () {
+      final options = senderScheduleDateOptions(
+        now: DateTime(2026, 7, 6),
+        days: 3,
+      );
+
+      expect(options.map(senderScheduleDateValue), [
+        '2026-07-06',
+        '2026-07-07',
+        '2026-07-08',
+      ]);
+      expect(
+        senderScheduleDayLabel(options.first, now: DateTime(2026, 7, 6)),
+        'Today',
+      );
+      expect(
+        senderScheduleDayLabel(options[1], now: DateTime(2026, 7, 6)),
+        'Tomorrow',
+      );
+      expect(senderScheduleMonthDayLabel(options[2]), '8 Jul');
+    });
+
     test('IRIS confidence exposes labels only', () {
       expect(mapConfidenceLabel(.91), 'High');
       expect(mapConfidenceLabel(.70), 'Medium');
@@ -381,6 +403,8 @@ void main() {
 
       expect(source, contains('Delivery time'));
       expect(source, contains('Confirm delivery time'));
+      expect(source, contains('Preferred date'));
+      expect(source, contains('_ScheduleDateSelector'));
       expect(source, contains('Preferred collection window'));
       expect(source, contains('Payment'));
       expect(source, contains('Estimated total due today'));

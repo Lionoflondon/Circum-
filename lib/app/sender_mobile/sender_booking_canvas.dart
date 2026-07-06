@@ -608,14 +608,22 @@ class _DeliveryTimePanel extends StatelessWidget {
         ),
         if (scheduled) ...[
           const SizedBox(height: 14),
-          _TextInput(
-            controller: scheduledDate,
-            hint: 'Preferred date (YYYY-MM-DD)',
-            keyboardType: TextInputType.datetime,
-            helperText: 'Date cannot be in the past.',
-            errorText: pastDate ? 'Choose today or a future date' : null,
-            onChanged: (value) => onDraft(draft.copyWith(scheduledDate: value)),
+          const _SectionLabel('Preferred date'),
+          const SizedBox(height: 8),
+          _ScheduleDateSelector(
+            selectedDate: draft.scheduledDate,
+            onSelected: (value) {
+              scheduledDate.text = value;
+              onDraft(draft.copyWith(scheduledDate: value));
+            },
           ),
+          if (pastDate) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Choose today or a future date',
+              style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+            ),
+          ],
           const SizedBox(height: 12),
           const _SectionLabel('Preferred collection window'),
           const SizedBox(height: 8),
@@ -684,6 +692,102 @@ class _DeliveryTimePanel extends StatelessWidget {
           onTap: onContinue,
         ),
       ],
+    );
+  }
+}
+
+class _ScheduleDateSelector extends StatelessWidget {
+  final String selectedDate;
+  final ValueChanged<String> onSelected;
+
+  const _ScheduleDateSelector({
+    required this.selectedDate,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dates = senderScheduleDateOptions();
+    return SizedBox(
+      height: 86,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: dates.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final date = dates[index];
+          final value = senderScheduleDateValue(date);
+          final selected = selectedDate == value;
+          return _ScheduleDateCard(
+            day: senderScheduleDayLabel(date),
+            date: senderScheduleMonthDayLabel(date),
+            selected: selected,
+            onTap: () => onSelected(value),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ScheduleDateCard extends StatelessWidget {
+  final String day;
+  final String date;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ScheduleDateCard({
+    required this.day,
+    required this.date,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 84,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected
+              ? _Tokens.blue.withValues(alpha: .18)
+              : Colors.white.withValues(alpha: .045),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? _Tokens.lightBlue : _Tokens.border,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              day,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? Colors.white : _Tokens.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              date,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? _Tokens.lightBlue : Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
