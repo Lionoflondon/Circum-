@@ -285,6 +285,24 @@ SenderTrackingContent senderTrackingContentFor(
   }
 }
 
+String senderCollectionPinStatusFor(SenderTrackingState state) {
+  return switch (state) {
+    SenderTrackingState.pickupComplete ||
+    SenderTrackingState.inTransit ||
+    SenderTrackingState.riderArrivingAtDropoff ||
+    SenderTrackingState.issue =>
+      '✓ Used',
+    _ => 'Waiting for pickup',
+  };
+}
+
+String senderReceiverPinStatusFor(
+  SenderTrackingState state, {
+  bool verified = false,
+}) {
+  return verified ? '✓ Verified' : 'Waiting for delivery';
+}
+
 class SenderMobileTrackingScreen extends StatefulWidget {
   final SendPackageState engine;
   final SenderTrackingState? stateOverride;
@@ -562,7 +580,10 @@ class _TrackingPanelContent extends StatelessWidget {
           PINCard(
             pin: engine.deliveryData?.code,
             label: 'Collection PIN',
-            hint: 'Show this to your rider at pickup',
+            hint: 'Give this to your rider at pickup.',
+            statusLabel: senderCollectionPinStatusFor(state),
+            statusComplete: senderCollectionPinStatusFor(state) == '✓ Used',
+            accent: const Color(0xFF3B82F6),
           ),
         ],
         if (content.showReceiverPin) ...[
@@ -570,7 +591,10 @@ class _TrackingPanelContent extends StatelessWidget {
           PINCard(
             pin: engine.deliveryData?.deliveryPin,
             label: 'Receiver PIN',
-            hint: 'Share this with the receiver if needed for handoff.',
+            hint: 'Give this to the receiver at delivery.',
+            statusLabel: senderReceiverPinStatusFor(state),
+            statusComplete: senderReceiverPinStatusFor(state).startsWith('✓'),
+            accent: const Color(0xFF34D399),
           ),
         ],
         const SizedBox(height: 12),
@@ -705,12 +729,18 @@ class PINCard extends StatefulWidget {
   final String? pin;
   final String label;
   final String hint;
+  final String statusLabel;
+  final bool statusComplete;
+  final Color accent;
 
   const PINCard({
     super.key,
     required this.pin,
     required this.label,
     required this.hint,
+    required this.statusLabel,
+    required this.statusComplete,
+    required this.accent,
   });
 
   @override
@@ -750,11 +780,18 @@ class _PINCardState extends State<PINCard> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFF3B82F6).withValues(alpha: .08),
+          color: widget.accent.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFF3B82F6).withValues(alpha: .34),
+            color: widget.accent.withValues(alpha: .34),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: widget.accent.withValues(alpha: .10),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -764,9 +801,10 @@ class _PINCardState extends State<PINCard> {
                 children: [
                   Text(
                     widget.label,
-                    style: const TextStyle(
-                      color: _TrackingTokens.muted,
+                    style: TextStyle(
+                      color: widget.accent,
                       fontSize: 11,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -775,6 +813,18 @@ class _PINCardState extends State<PINCard> {
                     style: const TextStyle(
                       color: _TrackingTokens.muted,
                       fontSize: 10.5,
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeOut,
+                    child: _PinStatusLabel(
+                      key: ValueKey(widget.statusLabel),
+                      label: widget.statusLabel,
+                      complete: widget.statusComplete,
+                      accent: widget.accent,
                     ),
                   ),
                 ],
@@ -808,6 +858,39 @@ class _PINCardState extends State<PINCard> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinStatusLabel extends StatelessWidget {
+  final String label;
+  final bool complete;
+  final Color accent;
+
+  const _PinStatusLabel({
+    super.key,
+    required this.label,
+    required this.complete,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: complete ? .14 : .08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: .22)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: complete ? accent : _TrackingTokens.mid,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

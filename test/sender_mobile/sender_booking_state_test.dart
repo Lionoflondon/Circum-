@@ -536,6 +536,36 @@ void main() {
       }
     });
 
+    test('tracking PIN status labels follow active delivery state', () {
+      expect(
+        senderCollectionPinStatusFor(SenderTrackingState.riderAssigned),
+        'Waiting for pickup',
+      );
+      expect(
+        senderCollectionPinStatusFor(SenderTrackingState.riderArrivedAtPickup),
+        'Waiting for pickup',
+      );
+      expect(
+        senderCollectionPinStatusFor(SenderTrackingState.pickupComplete),
+        '✓ Used',
+      );
+      expect(
+        senderCollectionPinStatusFor(SenderTrackingState.inTransit),
+        '✓ Used',
+      );
+      expect(
+        senderReceiverPinStatusFor(SenderTrackingState.riderAssigned),
+        'Waiting for delivery',
+      );
+      expect(
+        senderReceiverPinStatusFor(
+          SenderTrackingState.riderArrivingAtDropoff,
+          verified: true,
+        ),
+        '✓ Verified',
+      );
+    });
+
     test('delivered state supports optional backend verification beat', () {
       final normal = senderTrackingContentFor(SenderTrackingState.delivered);
       final verified = senderTrackingContentFor(
@@ -575,8 +605,12 @@ void main() {
 
       expect(source, contains("label: 'Collection PIN'"));
       expect(source, contains("label: 'Receiver PIN'"));
-      expect(source,
-          contains('Share this with the receiver if needed for handoff.'));
+      expect(source, contains('Give this to your rider at pickup.'));
+      expect(source, contains('Give this to the receiver at delivery.'));
+      expect(source, contains('const Color(0xFF3B82F6)'));
+      expect(source, contains('const Color(0xFF34D399)'));
+      expect(source, contains('AnimatedSwitcher'));
+      expect(source, contains('Duration(milliseconds: 250)'));
       expect(source, contains("'••••••'"));
       expect(source, contains('onTap: _reveal'));
       expect(source, contains('onLongPress: _reveal'));
