@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
@@ -499,6 +500,60 @@ void main() {
         senderTrackingContentFor(SenderTrackingState.issue).title,
         "There's an issue with this delivery",
       );
+    });
+
+    test('sender tracking maps real backend statuses to all production states',
+        () {
+      final cases = {
+        'requested': SenderTrackingState.findingRider,
+        'accepted': SenderTrackingState.riderAssigned,
+        'navigating_to_pickup': SenderTrackingState.riderEnRouteToPickup,
+        'arrived_at_pickup': SenderTrackingState.riderArrivedAtPickup,
+        'collected': SenderTrackingState.pickupComplete,
+        'navigating_to_dropoff': SenderTrackingState.inTransit,
+        'arrived_at_dropoff': SenderTrackingState.riderArrivingAtDropoff,
+        'delivered': SenderTrackingState.delivered,
+        'completed': SenderTrackingState.delivered,
+        'cancelled': SenderTrackingState.cancelled,
+        'issue_reported': SenderTrackingState.issue,
+        'error': SenderTrackingState.error,
+      };
+
+      for (final entry in cases.entries) {
+        expect(senderTrackingStateForBackendStatus(entry.key), entry.value);
+      }
+      expect(senderTrackingStateForBackendStatus(null), isNull);
+    });
+
+    test('sender tracking engine prefers Firestore backend status', () {
+      expect(
+        senderTrackingStateForEngine(
+          SendPackageState(
+            deliveryStatus: DeliveryStatus.deliveryOnGoing,
+            deliveryRequestStatus: 'arrived_at_dropoff',
+          ),
+        ),
+        SenderTrackingState.riderArrivingAtDropoff,
+      );
+      expect(
+        senderTrackingStateForEngine(
+          SendPackageState(
+            deliveryStatus: DeliveryStatus.deliveryConfirmed,
+            deliveryRequestStatus: 'cancelled',
+          ),
+        ),
+        SenderTrackingState.cancelled,
+      );
+    });
+
+    test('sender tracking state gallery exposes all 13 states', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_state_gallery.dart',
+      ).readAsStringSync();
+
+      for (final state in SenderTrackingState.values) {
+        expect(source, contains('SenderTrackingState.${state.name}'));
+      }
     });
 
     test('finding rider remains anonymous and calm', () {

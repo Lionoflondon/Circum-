@@ -40,6 +40,7 @@ class SendPackageState {
   PlaceCoordinate? riderLocation;
   double? distance;
   final DeliveryStatus deliveryStatus;
+  final String deliveryRequestStatus;
   PanelControlStatus panelControlStatus;
   ContactInfo? pickupDetails;
   ContactInfo? dropoffDetails;
@@ -95,6 +96,7 @@ class SendPackageState {
     this.desinationCoordinate,
     this.distance,
     this.deliveryStatus = DeliveryStatus.inital,
+    this.deliveryRequestStatus = '',
     this.panelControlStatus = PanelControlStatus.isClosed,
     this.pickupDetails,
     this.dropoffDetails,
@@ -153,6 +155,7 @@ class SendPackageState {
     PlaceCoordinate? riderLocation,
     double? distance,
     DeliveryStatus? deliveryStatus,
+    String? deliveryRequestStatus,
     PanelControlStatus? panelControlStatus,
     List? ongoingRequests,
     ContactInfo? pickupDetails,
@@ -212,6 +215,8 @@ class SendPackageState {
       riderLocation: riderLocation ?? this.riderLocation,
       distance: distance ?? this.distance,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
+      deliveryRequestStatus:
+          deliveryRequestStatus ?? this.deliveryRequestStatus,
       panelControlStatus: panelControlStatus ?? this.panelControlStatus,
       ongoingRequests: ongoingRequests ?? this.ongoingRequests,
       pickupDetails: pickupDetails ?? this.pickupDetails,

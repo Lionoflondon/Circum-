@@ -758,6 +758,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           isSenderDeliveryCreating: false,
           senderCreatedRequestId: requestId,
           deliveryStatus: DeliveryStatus.deliveryConfirmed,
+          deliveryRequestStatus: 'requested',
         ),
       );
       add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
@@ -892,7 +893,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       //     .then((value) => print(uuidStrong));
       // print(user);
 
-      emit(state.copyWith(deliveryStatus: DeliveryStatus.deliveryConfirmed));
+      emit(state.copyWith(
+        deliveryStatus: DeliveryStatus.deliveryConfirmed,
+        deliveryRequestStatus: 'requested',
+      ));
       add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
     } catch (e) {
       print(e);
@@ -930,6 +934,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(
         state.copyWith(
           deliveryStatus: DeliveryStatus.deliveryOnGoing,
+          deliveryRequestStatus: 'accepted',
           deliveryData: deliveryData,
         ),
       );
@@ -951,6 +956,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         polylineCoordinates: [],
         markers: {},
         deliveryStatus: DeliveryStatus.deliveryCompleted,
+        deliveryRequestStatus: 'completed',
         lastHistoryId: event.data['historyId'],
       ),
     );
@@ -1013,10 +1019,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         final docResponse = await documentReference.get();
 
         if (docResponse.exists) {
-          final data = docResponse.data();
-
-          // print(data);
-
           final deliveryData = DeliveryData.fromJson(event.data);
           emit(state.copyWith(deliveryData: deliveryData));
         }
@@ -1041,10 +1043,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final String? activeRequest = prefs.getString('activeRequest');
 
     if (activeRequest != null) {
-      final documentReference =
+      final userDocumentReference =
           db.collection('deliveryRequests').doc(user!.uid);
+      final requestDocumentReference =
+          db.collection('deliveryRequests').doc(activeRequest);
 
-      final docResponse = await documentReference.get();
+      var docResponse = await userDocumentReference.get();
+      if (!docResponse.exists) {
+        docResponse = await requestDocumentReference.get();
+      }
 
       if (docResponse.exists) {
         print('There is an active ride');
@@ -1084,13 +1091,34 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         //   await documentReference.delete();
         // }
 
-        if (data['status'] == 'accepted' ||
-            data['status'] == 'outForDelivery' ||
-            data['status'] == 'requested') {
+        final requestStatus = '${data['status'] ?? ''}';
+        final activeRequestStatuses = {
+          'requested',
+          'pending',
+          'unmatched',
+          'finding_rider',
+          'accepted',
+          'rider_assigned',
+          'navigating_to_pickup',
+          'arrived_at_pickup',
+          'waiting',
+          'pickup_verification',
+          'pickup_verified',
+          'collected',
+          'outForDelivery',
+          'out_for_delivery',
+          'navigating_to_dropoff',
+          'arrived_at_dropoff',
+          'pin_required',
+          'issue_reported',
+        };
+
+        if (activeRequestStatuses.contains(requestStatus)) {
           status = DeliveryStatus.reconnectingWithRider;
           emit(
             state.copyWith(
               deliveryStatus: status,
+              deliveryRequestStatus: requestStatus,
               pickupDetails: pickupDetails,
               dropoffDetails: dropoffDetails,
               pickupLocation: pickupAddress,
@@ -1101,12 +1129,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           );
         }
 
-        if (data['status'] == 'completed') {
+        if (requestStatus == 'completed' || requestStatus == 'delivered') {
           status = DeliveryStatus.deliveryCompleted;
           emit(
             state.copyWith(
               lastHistoryId: data['historyId'],
               deliveryStatus: status,
+              deliveryRequestStatus: requestStatus,
+            ),
+          );
+        }
+
+        if (requestStatus == 'cancelled' || requestStatus == 'canceled') {
+          emit(
+            state.copyWith(
+              deliveryStatus: DeliveryStatus.reconnectingWithRider,
+              deliveryRequestStatus: requestStatus,
+              pickupDetails: pickupDetails,
+              dropoffDetails: dropoffDetails,
+              pickupLocation: pickupAddress,
+              destinationLocation: dropoffAddress,
+              price: price,
+              currency: currency,
             ),
           );
         }

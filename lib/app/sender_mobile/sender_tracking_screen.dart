@@ -68,6 +68,10 @@ class SenderTrackingContent {
 }
 
 SenderTrackingState senderTrackingStateForEngine(SendPackageState engine) {
+  final backendState = senderTrackingStateForBackendStatus(
+    engine.deliveryRequestStatus,
+  );
+  if (backendState != null) return backendState;
   final data = engine.deliveryData;
   if (engine.senderDeliveryError.isNotEmpty) return SenderTrackingState.error;
   switch (engine.deliveryStatus) {
@@ -84,6 +88,62 @@ SenderTrackingState senderTrackingStateForEngine(SendPackageState engine) {
     case DeliveryStatus.addressesSelected:
       return SenderTrackingState.noActiveDelivery;
   }
+}
+
+String _normalizeTrackingStatus(Object? value) => '${value ?? ''}'
+    .trim()
+    .toLowerCase()
+    .replaceAll('-', '_')
+    .replaceAll(' ', '_');
+
+SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
+  return switch (_normalizeTrackingStatus(status)) {
+    '' => null,
+    'requested' ||
+    'pending' ||
+    'unmatched' ||
+    'finding_rider' ||
+    'awaiting_rider' ||
+    'broadcast' ||
+    'broadcasted' =>
+      SenderTrackingState.findingRider,
+    'accepted' || 'rider_assigned' => SenderTrackingState.riderAssigned,
+    'navigating_to_pickup' ||
+    'en_route_to_pickup' =>
+      SenderTrackingState.riderEnRouteToPickup,
+    'arrived_at_pickup' ||
+    'waiting' =>
+      SenderTrackingState.riderArrivedAtPickup,
+    'pickup_verification' ||
+    'pickup_verified' ||
+    'collected' =>
+      SenderTrackingState.pickupComplete,
+    'delivery_on_going' ||
+    'outfordelivery' ||
+    'out_for_delivery' ||
+    'navigating_to_dropoff' =>
+      SenderTrackingState.inTransit,
+    'arrived_at_dropoff' ||
+    'pin_required' ||
+    'handover_pending' =>
+      SenderTrackingState.riderArrivingAtDropoff,
+    'delivered' ||
+    'completed' ||
+    'delivery_completed' =>
+      SenderTrackingState.delivered,
+    'cancelled' ||
+    'canceled' ||
+    'cancelled_verified_discrepancy' ||
+    'sender_no_show_pickup' =>
+      SenderTrackingState.cancelled,
+    'issue' ||
+    'issue_reported' ||
+    'failed' ||
+    'failed_delivery' =>
+      SenderTrackingState.issue,
+    'error' => SenderTrackingState.error,
+    _ => SenderTrackingState.inTransit,
+  };
 }
 
 SenderTrackingContent senderTrackingContentFor(
