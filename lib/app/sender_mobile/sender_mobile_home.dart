@@ -306,7 +306,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
             ),
             const SizedBox(height: 10),
             const _SocialAuthButton(
-              icon: Icons.g_mobiledata_rounded,
+              icon: Icons.g_mobiledata,
               label: 'Continue with Google',
             ),
             const SizedBox(height: 28),
@@ -566,10 +566,10 @@ class _TrustHighlightGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      (Icons.blur_on_rounded, 'IRIS'),
+      (Icons.auto_awesome_rounded, 'IRIS'),
       (Icons.shield_outlined, 'Vanguard'),
-      (Icons.route_outlined, 'Live Tracking'),
-      (Icons.verified_user_outlined, 'Trusted Riders'),
+      (Icons.visibility_outlined, 'Live Tracking'),
+      (Icons.person_outline_rounded, 'Trusted Riders'),
     ];
     return GridView.count(
       crossAxisCount: 2,
@@ -636,17 +636,17 @@ class _WhyCircumSection extends StatelessWidget {
       eyebrow: 'BUILT IN',
       children: [
         _BenefitRow(
-          icon: Icons.receipt_long_outlined,
+          icon: Icons.credit_card_rounded,
           title: 'Transparent pricing',
           body: 'Clear costs before you continue.',
         ),
         _BenefitRow(
-          icon: Icons.radar_rounded,
+          icon: Icons.visibility_outlined,
           title: 'Real-time tracking',
           body: 'Follow every step of the journey.',
         ),
         _BenefitRow(
-          icon: Icons.handshake_outlined,
+          icon: Icons.shield_outlined,
           title: 'Built for trust',
           body: 'Verified riders and safer handovers.',
         ),
@@ -670,13 +670,13 @@ class _ServicesPreviewSection extends StatelessWidget {
           accent: _SenderTokens.gifts,
         ),
         _ServicePreviewCard(
-          icon: Icons.health_and_safety_outlined,
+          icon: Icons.health_and_safety_rounded,
           title: 'Health+',
           body: 'Pharmacy, wellness and care.',
           accent: _SenderTokens.health,
         ),
         _ServicePreviewCard(
-          icon: Icons.business_center_outlined,
+          icon: Icons.business_center_rounded,
           title: 'Business',
           body: 'Solutions that keep work moving.',
           accent: _SenderTokens.blue,
@@ -836,8 +836,12 @@ class _MiniIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: .16),
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: .38)),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: .16), blurRadius: 14),
+        ],
       ),
-      child: Icon(icon, color: color, size: 18),
+      child: Icon(icon, color: color, size: 18.5),
     );
   }
 }
