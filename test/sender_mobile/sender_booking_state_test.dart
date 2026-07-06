@@ -509,18 +509,31 @@ void main() {
       expect(content.showAnonymousRiders, isTrue);
       expect(content.showRiderCard, isFalse);
       expect(content.showCollectionPin, isFalse);
+      expect(content.showReceiverPin, isFalse);
     });
 
-    test('collection PIN appears only before pickup completion', () {
-      final pinStates = SenderTrackingState.values
-          .where((state) => senderTrackingContentFor(state).showCollectionPin)
-          .toList();
-
-      expect(pinStates, const [
+    test('both PINs appear together after rider assignment', () {
+      const activeStates = [
         SenderTrackingState.riderAssigned,
         SenderTrackingState.riderEnRouteToPickup,
         SenderTrackingState.riderArrivedAtPickup,
-      ]);
+        SenderTrackingState.pickupComplete,
+        SenderTrackingState.inTransit,
+        SenderTrackingState.riderArrivingAtDropoff,
+        SenderTrackingState.issue,
+      ];
+
+      final pinStates = SenderTrackingState.values.where((state) {
+        final content = senderTrackingContentFor(state);
+        return content.showCollectionPin && content.showReceiverPin;
+      }).toList();
+
+      expect(pinStates, activeStates);
+      for (final state in activeStates) {
+        final content = senderTrackingContentFor(state);
+        expect(content.showCollectionPin, isTrue, reason: '$state');
+        expect(content.showReceiverPin, isTrue, reason: '$state');
+      }
     });
 
     test('delivered state supports optional backend verification beat', () {
@@ -538,43 +551,21 @@ void main() {
       );
     });
 
-    test('receiver PIN appears only in delivery-stage states', () {
-      final receiverPinStates = SenderTrackingState.values
-          .where((state) => senderTrackingContentFor(state).showReceiverPin)
-          .toList();
+    test('PINs are removed for inactive terminal states', () {
+      const inactiveStates = [
+        SenderTrackingState.noActiveDelivery,
+        SenderTrackingState.loading,
+        SenderTrackingState.findingRider,
+        SenderTrackingState.delivered,
+        SenderTrackingState.cancelled,
+        SenderTrackingState.error,
+      ];
 
-      expect(receiverPinStates, const [
-        SenderTrackingState.riderArrivingAtDropoff,
-      ]);
-      expect(
-        senderTrackingContentFor(SenderTrackingState.findingRider)
-            .showReceiverPin,
-        isFalse,
-      );
-      expect(
-        senderTrackingContentFor(SenderTrackingState.riderAssigned)
-            .showReceiverPin,
-        isFalse,
-      );
-      expect(
-        senderTrackingContentFor(SenderTrackingState.riderEnRouteToPickup)
-            .showReceiverPin,
-        isFalse,
-      );
-      expect(
-        senderTrackingContentFor(SenderTrackingState.riderArrivedAtPickup)
-            .showReceiverPin,
-        isFalse,
-      );
-      expect(
-        senderTrackingContentFor(SenderTrackingState.pickupComplete)
-            .showReceiverPin,
-        isFalse,
-      );
-      expect(
-        senderTrackingContentFor(SenderTrackingState.inTransit).showReceiverPin,
-        isFalse,
-      );
+      for (final state in inactiveStates) {
+        final content = senderTrackingContentFor(state);
+        expect(content.showCollectionPin, isFalse, reason: '$state');
+        expect(content.showReceiverPin, isFalse, reason: '$state');
+      }
     });
 
     test('sender tracking PIN cards stay masked by default', () {
