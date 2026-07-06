@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -22,13 +24,18 @@ const senderMobileAuthSignInHeadline = 'Welcome back';
 const senderMobileAuthCreateHeadline = 'Join Circum';
 const senderMobileAuthFinePrint =
     "By continuing, you agree to Circum's Terms and Privacy Policy.";
+const senderMobilePreviewAuthEnabledContract =
+    'Sender Mobile preview uses real Firebase Auth before booking.';
+const _senderMobilePreviewPassword = 'CircumPreview!2026';
 
 enum _SenderEntryScreen { landing, auth, app }
 
 enum _SenderAuthMode { signIn, createAccount }
 
 class SenderMobileHome extends StatefulWidget {
-  const SenderMobileHome({super.key});
+  final bool previewAuthEnabled;
+
+  const SenderMobileHome({super.key, this.previewAuthEnabled = false});
 
   @override
   State<SenderMobileHome> createState() => _SenderMobileHomeState();
@@ -75,7 +82,10 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       case _SenderEntryScreen.auth:
         return _SenderAuthEntry(
           mode: _authMode,
+          previewAuthEnabled: widget.previewAuthEnabled,
           onBack: () => setState(() => _entry = _SenderEntryScreen.landing),
+          onAuthenticated: () =>
+              setState(() => _entry = _SenderEntryScreen.app),
           onModeChanged: (mode) => setState(() => _authMode = mode),
         );
       case _SenderEntryScreen.app:
@@ -191,12 +201,16 @@ class _SenderPreAuthLanding extends StatelessWidget {
 
 class _SenderAuthEntry extends StatefulWidget {
   final _SenderAuthMode mode;
+  final bool previewAuthEnabled;
   final VoidCallback onBack;
+  final VoidCallback onAuthenticated;
   final ValueChanged<_SenderAuthMode> onModeChanged;
 
   const _SenderAuthEntry({
     required this.mode,
+    required this.previewAuthEnabled,
     required this.onBack,
+    required this.onAuthenticated,
     required this.onModeChanged,
   });
 
@@ -208,6 +222,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   final _identity = TextEditingController();
   final _password = TextEditingController();
   var _showErrors = false;
+  var _busy = false;
+  String? _authMessage;
 
   bool get _isSignIn => widget.mode == _SenderAuthMode.signIn;
 
@@ -220,6 +236,14 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
 
   @override
   Widget build(BuildContext context) {
+    final identityText = _identity.text.trim();
+    final identityError = !_showErrors
+        ? null
+        : identityText.isEmpty
+            ? 'Email or phone is required'
+            : widget.previewAuthEnabled && !identityText.contains('@')
+                ? 'Use an email address for preview auth'
+                : null;
     return Stack(
       children: [
         const _AmbientOrbs(count: 1),
@@ -275,9 +299,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               label: 'EMAIL OR PHONE',
               hint: 'you@email.com',
               keyboardType: TextInputType.emailAddress,
-              errorText: _showErrors && _identity.text.trim().isEmpty
-                  ? 'Email or phone is required'
-                  : null,
+              errorText: identityError,
               onChanged: (_) => setState(() {}),
             ),
             if (_isSignIn) ...[
@@ -295,10 +317,26 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
             ],
             const SizedBox(height: 14),
             _SenderPrimaryAction(
-              label: _isSignIn ? 'Sign in' : 'Create account',
+              label: _busy
+                  ? 'Preparing preview...'
+                  : _isSignIn
+                      ? 'Sign in'
+                      : 'Create account',
               semanticLabel: _isSignIn ? 'Sign in' : 'Create account',
-              onTap: _submit,
+              onTap: _busy ? () {} : () => _submit(),
             ),
+            if (_authMessage != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _authMessage!,
+                style: GoogleFonts.inter(
+                  color: _SenderTokens.muted,
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 26),
             const _LabelledDivider(),
             const SizedBox(height: 22),
@@ -331,12 +369,100 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final validIdentity = _identity.text.trim().isNotEmpty;
     final validPassword = !_isSignIn || _password.text.isNotEmpty;
-    setState(() => _showErrors = true);
-    if (!validIdentity || !validPassword) return;
-    // TODO(sender-mobile-auth): Wire to the existing auth/onboarding handler.
+    final validPreviewEmail =
+        !widget.previewAuthEnabled || _identity.text.trim().contains('@');
+    setState(() {
+      _showErrors = true;
+      _authMessage = null;
+    });
+    if (!validIdentity || !validPassword || !validPreviewEmail) return;
+    if (!widget.previewAuthEnabled) {
+      setState(() {
+        _authMessage =
+            'Authentication handler is not enabled for this production surface.';
+      });
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await _authenticatePreviewSender(
+        email: _identity.text.trim().toLowerCase(),
+        password: _isSignIn ? _password.text : _senderMobilePreviewPassword,
+        createAccount: !_isSignIn,
+      );
+      widget.onAuthenticated();
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _authMessage = _previewAuthMessage(error));
+    } catch (error) {
+      debugPrint('Sender Mobile preview auth failed: $error');
+      if (!mounted) return;
+      setState(
+        () => _authMessage = 'Preview authentication failed. Please try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _authenticatePreviewSender({
+    required String email,
+    required String password,
+    required bool createAccount,
+  }) async {
+    final auth = FirebaseAuth.instance;
+    UserCredential credential;
+    if (createAccount) {
+      try {
+        credential = await auth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      } on FirebaseAuthException catch (error) {
+        if (error.code != 'email-already-in-use') rethrow;
+        credential = await auth.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      }
+    } else {
+      credential = await auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+    }
+    final user = credential.user;
+    if (user == null) {
+      throw FirebaseAuthException(code: 'preview-no-user');
+    }
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'email': user.email,
+      'role': 'user',
+      'roles': ['sender'],
+      'userType': 'sender',
+      'status': 'active',
+      'source': 'sender_mobile_preview',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await user.getIdToken(true);
+  }
+
+  String _previewAuthMessage(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'invalid-email':
+        return 'Enter a valid email address for preview auth.';
+      case 'invalid-credential':
+      case 'wrong-password':
+      case 'user-not-found':
+        return 'Preview sign-in failed. Check the email and password.';
+      case 'weak-password':
+        return 'Preview password is too weak.';
+      default:
+        return 'Preview authentication failed (${error.code}).';
+    }
   }
 }
 

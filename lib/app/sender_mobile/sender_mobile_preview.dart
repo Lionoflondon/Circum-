@@ -26,7 +26,7 @@ class SenderMobilePreviewApp extends StatelessWidget {
       create: (_) => SendPackageBloc(),
       child: const MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: SenderMobileHome(),
+        home: SenderMobileHome(previewAuthEnabled: true),
       ),
     );
   }

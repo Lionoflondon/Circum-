@@ -233,39 +233,62 @@ void main() {
       );
     });
 
-    test('sender mobile pre-auth implementation follows auth entry contract',
-        () {
-      final source = File(
-        'lib/app/sender_mobile/sender_mobile_home.dart',
-      ).readAsStringSync();
+    test(
+      'sender mobile pre-auth implementation follows auth entry contract',
+      () {
+        final source = File(
+          'lib/app/sender_mobile/sender_mobile_home.dart',
+        ).readAsStringSync();
 
-      expect(
-        source,
-        contains(
-          "Image.asset(\n            'assets/images/circum_wordmark.png'",
-        ),
-      );
-      expect(source, contains('Create account'));
-      expect(source, contains('Sign in'));
-      expect(source, contains('_SenderAuthMode.signIn'));
-      expect(source, contains('_SenderAuthMode.createAccount'));
-      expect(source, contains('EMAIL OR PHONE'));
-      expect(source, contains('PASSWORD'));
-      expect(source, contains('Continue with Apple'));
-      expect(source, contains('Continue with Google'));
-      expect(source, contains('Terms'));
-      expect(source, contains('Privacy Policy'));
-      expect(source, contains('After you join'));
-      expect(source, contains('OR CONTINUE WITH'));
-      expect(source, contains('Trusted Riders'));
-      expect(source, contains('if (_isSignIn)'));
-      expect(
-        source,
-        contains(
-          '// TODO(sender-mobile-auth): Wire to the existing auth/onboarding handler.',
-        ),
-      );
-    });
+        expect(
+          source,
+          contains(
+            "Image.asset(\n            'assets/images/circum_wordmark.png'",
+          ),
+        );
+        expect(source, contains('Create account'));
+        expect(source, contains('Sign in'));
+        expect(source, contains('_SenderAuthMode.signIn'));
+        expect(source, contains('_SenderAuthMode.createAccount'));
+        expect(source, contains('EMAIL OR PHONE'));
+        expect(source, contains('PASSWORD'));
+        expect(source, contains('Continue with Apple'));
+        expect(source, contains('Continue with Google'));
+        expect(source, contains('Terms'));
+        expect(source, contains('Privacy Policy'));
+        expect(source, contains('After you join'));
+        expect(source, contains('OR CONTINUE WITH'));
+        expect(source, contains('Trusted Riders'));
+        expect(source, contains('if (_isSignIn)'));
+        expect(source, contains('previewAuthEnabled'));
+        expect(source, contains('FirebaseAuth.instance'));
+        expect(source, contains('createUserWithEmailAndPassword'));
+        expect(source, contains('signInWithEmailAndPassword'));
+        expect(source, contains('user.getIdToken(true)'));
+        expect(
+          source,
+          contains(
+            'Authentication handler is not enabled for this production surface.',
+          ),
+        );
+      },
+    );
+
+    test(
+      'sender mobile preview enables real Firebase auth only for preview',
+      () {
+        final previewSource = File(
+          'lib/app/sender_mobile/sender_mobile_preview.dart',
+        ).readAsStringSync();
+        final homeSource = File(
+          'lib/app/sender_mobile/sender_mobile_home.dart',
+        ).readAsStringSync();
+
+        expect(previewSource, contains('previewAuthEnabled: true'));
+        expect(homeSource, contains('this.previewAuthEnabled = false'));
+        expect(homeSource, isNot(contains('signInAnonymously')));
+      },
+    );
 
     test('sender mobile pre-auth visual refinements are present', () {
       final source = File(
@@ -331,6 +354,31 @@ void main() {
       expect(source, contains('Recommended vehicle'));
       expect(source, contains('Why IRIS estimated this'));
       expect(source, isNot(contains('Classification')));
+    });
+
+    test('canonical IRIS callable and backend auth guard stay in place', () {
+      final blocSource = File(
+        'lib/app/send_package/bloc/send_package_bloc.dart',
+      ).readAsStringSync();
+      final canvasSource = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+      final backendSource = File('server/functions/iris.js').readAsStringSync();
+
+      expect(blocSource, contains("httpsCallable('analyseIris')"));
+      expect(blocSource, contains('analyseIris request payload'));
+      expect(blocSource, contains('analyseIris response payload'));
+      expect(blocSource, contains('FirebaseFunctionsException'));
+      expect(blocSource, contains('code=\${error.code}'));
+      expect(blocSource, contains('message=\${error.message}'));
+      expect(blocSource, contains('details=\${error.details}'));
+      expect(canvasSource, contains("label: 'Retry'"));
+      expect(canvasSource, contains('RequestCanonicalIrisEstimate'));
+      expect(backendSource, contains('if (!context.auth)'));
+      expect(
+        backendSource,
+        contains('User must be authenticated to call Iris.'),
+      );
     });
 
     test(
@@ -409,8 +457,10 @@ void main() {
       expect(source, contains('Payment'));
       expect(source, contains('Estimated total due today'));
       expect(source, contains('Apply Roth to this payment'));
-      expect(source,
-          contains('Roth balance could not be loaded from the backend'));
+      expect(
+        source,
+        contains('Roth balance could not be loaded from the backend'),
+      );
       expect(source, contains("Payment couldn't be started"));
       expect(source, isNot(contains('42 Roth available')));
       expect(source, isNot(contains('senderMobilePreviewRothBalanceCredits')));

@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -456,9 +457,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       ),
     );
     try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('analyseIris')
-          .call(<String, dynamic>{
+      final payload = <String, dynamic>{
         'description':
             itemDescription.trim().isEmpty ? event.itemName : itemDescription,
         'packageDescription':
@@ -473,10 +472,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'pickupPostcode': state.pickupLocationSubAddress,
         'dropoffPostcode': state.destinationLocationSubAddress,
         if (state.distance != null)
-          'distanceMiles': DeliveryPricing.kilometresToMiles(
-            state.distance!,
-          ),
-      });
+          'distanceMiles': DeliveryPricing.kilometresToMiles(state.distance!),
+      };
+      debugPrint('analyseIris request payload: $payload');
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('analyseIris')
+          .call(payload);
+      debugPrint('analyseIris response payload: ${result.data}');
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
@@ -494,7 +496,19 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
       add(SetPrice());
-    } catch (_) {
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'analyseIris failed: code=${error.code}, message=${error.message}, details=${error.details}',
+      );
+      emit(
+        state.copyWith(
+          isIrisResolving: false,
+          irisErrorMessage:
+              "IRIS couldn't complete the estimate. Please try again.",
+        ),
+      );
+    } catch (error) {
+      debugPrint('analyseIris unexpected failure: $error');
       emit(
         state.copyWith(
           isIrisResolving: false,
