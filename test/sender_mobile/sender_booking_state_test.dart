@@ -172,6 +172,52 @@ void main() {
       ]);
     });
 
+    test('sender mobile pre-auth landing and auth copy are locked', () {
+      expect(senderMobilePreAuthHeadline, 'Deliver anything with confidence.');
+      expect(
+        senderMobilePreAuthSubtitle,
+        'Fast, trusted delivery powered by IRIS and verified riders.',
+      );
+      expect(senderMobileAuthSignInHeadline, 'Welcome back');
+      expect(senderMobileAuthCreateHeadline, 'Join Circum');
+      expect(
+        senderMobileAuthFinePrint,
+        "By continuing, you agree to Circum's Terms and Privacy Policy.",
+      );
+    });
+
+    test('sender mobile pre-auth implementation follows auth entry contract', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_mobile_home.dart',
+      ).readAsStringSync();
+
+      expect(
+        source,
+        contains(
+          "Image.asset(\n            'assets/images/circum_wordmark.png'",
+        ),
+      );
+      expect(source, contains('Create account'));
+      expect(source, contains('Sign in'));
+      expect(source, contains('_SenderAuthMode.signIn'));
+      expect(source, contains('_SenderAuthMode.createAccount'));
+      expect(source, contains('EMAIL OR PHONE'));
+      expect(source, contains('PASSWORD'));
+      expect(source, contains('Continue with Apple'));
+      expect(source, contains('Continue with Google'));
+      expect(source, contains('Terms'));
+      expect(source, contains('Privacy Policy'));
+      expect(source, contains('After you join'));
+      expect(source, contains('Trusted Riders'));
+      expect(source, contains('if (_isSignIn)'));
+      expect(
+        source,
+        contains(
+          '// TODO(sender-mobile-auth): Wire to the existing auth/onboarding handler.',
+        ),
+      );
+    });
+
     test('Vanguard add-on does not replace selected delivery speed', () {
       final draft = const SenderBookingDraft(
         step: SenderBookingStep.options,

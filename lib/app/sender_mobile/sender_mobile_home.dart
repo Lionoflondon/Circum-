@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'sender_booking_canvas.dart';
 
@@ -14,6 +15,17 @@ const senderMobileDashboardServiceSubtitles = {
   'Gifts': 'Thoughtful gfts, delivered.',
 };
 const senderMobileRecentOrderTitles = ['Passport', 'Prescription collection'];
+const senderMobilePreAuthHeadline = 'Deliver anything with confidence.';
+const senderMobilePreAuthSubtitle =
+    'Fast, trusted delivery powered by IRIS and verified riders.';
+const senderMobileAuthSignInHeadline = 'Welcome back';
+const senderMobileAuthCreateHeadline = 'Join Circum';
+const senderMobileAuthFinePrint =
+    "By continuing, you agree to Circum's Terms and Privacy Policy.";
+
+enum _SenderEntryScreen { landing, auth, app }
+
+enum _SenderAuthMode { signIn, createAccount }
 
 class SenderMobileHome extends StatefulWidget {
   const SenderMobileHome({super.key});
@@ -24,6 +36,8 @@ class SenderMobileHome extends StatefulWidget {
 
 class _SenderMobileHomeState extends State<SenderMobileHome> {
   var _index = 0;
+  var _entry = _SenderEntryScreen.landing;
+  var _authMode = _SenderAuthMode.createAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -31,25 +45,1145 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       backgroundColor: _SenderTokens.bg,
       body: Stack(
         children: [
-          const _SenderMapBackdrop(active: false),
-          SafeArea(
-            child: IndexedStack(
+          if (_entry == _SenderEntryScreen.app)
+            const _SenderMapBackdrop(active: false),
+          SafeArea(child: _activeSurface()),
+        ],
+      ),
+      bottomNavigationBar: _entry == _SenderEntryScreen.app
+          ? _SenderBottomNav(
               index: _index,
+              onChanged: (next) => setState(() => _index = next),
+            )
+          : null,
+    );
+  }
+
+  Widget _activeSurface() {
+    switch (_entry) {
+      case _SenderEntryScreen.landing:
+        return _SenderPreAuthLanding(
+          onCreateAccount: () => setState(() {
+            _authMode = _SenderAuthMode.createAccount;
+            _entry = _SenderEntryScreen.auth;
+          }),
+          onSignIn: () => setState(() {
+            _authMode = _SenderAuthMode.signIn;
+            _entry = _SenderEntryScreen.auth;
+          }),
+        );
+      case _SenderEntryScreen.auth:
+        return _SenderAuthEntry(
+          mode: _authMode,
+          onBack: () => setState(() => _entry = _SenderEntryScreen.landing),
+          onModeChanged: (mode) => setState(() => _authMode = mode),
+        );
+      case _SenderEntryScreen.app:
+        return IndexedStack(
+          index: _index,
+          children: [
+            _SenderDashboard(onStartDelivery: () => setState(() => _index = 1)),
+            const SenderBookingCanvas(),
+            const _SenderActivitySurface(),
+            const _SenderProfileSurface(),
+          ],
+        );
+    }
+  }
+}
+
+class _SenderPreAuthLanding extends StatelessWidget {
+  final VoidCallback onCreateAccount;
+  final VoidCallback onSignIn;
+
+  const _SenderPreAuthLanding({
+    required this.onCreateAccount,
+    required this.onSignIn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        const _AmbientOrbs(count: 2),
+        ListView(
+          padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
+          children: [
+            const _CircumWordmarkRow(),
+            const SizedBox(height: 46),
+            RichText(
+              text: TextSpan(
+                style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontSize: 38,
+                  height: 1.12,
+                  fontWeight: FontWeight.w700,
+                ),
+                children: const [
+                  TextSpan(text: 'Deliver anything with '),
+                  TextSpan(
+                    text: 'confidence',
+                    style: TextStyle(color: _SenderTokens.blue),
+                  ),
+                  TextSpan(text: '.'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(
+                  color: _SenderTokens.softText,
+                  fontSize: 14.5,
+                  height: 1.55,
+                  fontWeight: FontWeight.w500,
+                ),
+                children: const [
+                  TextSpan(text: 'Fast, trusted delivery powered by '),
+                  TextSpan(
+                    text: 'IRIS',
+                    style: TextStyle(
+                      color: _SenderTokens.blue,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  TextSpan(text: ' and verified riders.'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            _SenderPrimaryAction(
+              label: 'Create account',
+              semanticLabel: 'Create account',
+              onTap: onCreateAccount,
+            ),
+            Semantics(
+              button: true,
+              label: 'Sign in',
+              child: TextButton(
+                onPressed: onSignIn,
+                child: Text(
+                  'Sign in',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const _TrustHighlightGrid(),
+            const SizedBox(height: 34),
+            const _WhyCircumSection(),
+            const SizedBox(height: 34),
+            const _ServicesPreviewSection(),
+            const SizedBox(height: 26),
+            const _PreAuthFooterLinks(),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderAuthEntry extends StatefulWidget {
+  final _SenderAuthMode mode;
+  final VoidCallback onBack;
+  final ValueChanged<_SenderAuthMode> onModeChanged;
+
+  const _SenderAuthEntry({
+    required this.mode,
+    required this.onBack,
+    required this.onModeChanged,
+  });
+
+  @override
+  State<_SenderAuthEntry> createState() => _SenderAuthEntryState();
+}
+
+class _SenderAuthEntryState extends State<_SenderAuthEntry> {
+  final _identity = TextEditingController();
+  final _password = TextEditingController();
+  var _showErrors = false;
+
+  bool get _isSignIn => widget.mode == _SenderAuthMode.signIn;
+
+  @override
+  void dispose() {
+    _identity.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        const _AmbientOrbs(count: 1),
+        ListView(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+          children: [
+            Row(
               children: [
-                _SenderDashboard(
-                    onStartDelivery: () => setState(() => _index = 1)),
-                const SenderBookingCanvas(),
-                const _SenderActivitySurface(),
-                const _SenderProfileSurface(),
+                _GlassIconChip(
+                  icon: Icons.chevron_left_rounded,
+                  label: 'Back',
+                  onTap: widget.onBack,
+                ),
+                const Spacer(),
+                const _CircumMarkChip(),
+              ],
+            ),
+            const SizedBox(height: 28),
+            _AuthSegmentedControl(
+              mode: widget.mode,
+              onChanged: (mode) {
+                setState(() => _showErrors = false);
+                widget.onModeChanged(mode);
+              },
+            ),
+            const SizedBox(height: 26),
+            Text(
+              _isSignIn
+                  ? senderMobileAuthSignInHeadline
+                  : senderMobileAuthCreateHeadline,
+              style: GoogleFonts.dmSerifDisplay(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.w700,
+                height: 1.05,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _isSignIn
+                  ? 'Sign in to track deliveries and manage your account.'
+                  : 'Create an account to start sending with confidence.',
+              style: GoogleFonts.inter(
+                color: _SenderTokens.muted,
+                fontSize: 13.5,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 26),
+            _AuthField(
+              controller: _identity,
+              label: 'EMAIL OR PHONE',
+              hint: 'you@email.com',
+              keyboardType: TextInputType.emailAddress,
+              errorText: _showErrors && _identity.text.trim().isEmpty
+                  ? 'Email or phone is required'
+                  : null,
+              onChanged: (_) => setState(() {}),
+            ),
+            if (_isSignIn) ...[
+              const SizedBox(height: 14),
+              _AuthField(
+                controller: _password,
+                label: 'PASSWORD',
+                hint: 'Password',
+                obscureText: true,
+                errorText: _showErrors && _password.text.isEmpty
+                    ? 'Password is required'
+                    : null,
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+            const SizedBox(height: 14),
+            _SenderPrimaryAction(
+              label: _isSignIn ? 'Sign in' : 'Create account',
+              semanticLabel: _isSignIn ? 'Sign in' : 'Create account',
+              onTap: _submit,
+            ),
+            const SizedBox(height: 26),
+            const _LabelledDivider(),
+            const SizedBox(height: 22),
+            const _SocialAuthButton(
+              icon: Icons.apple_rounded,
+              label: 'Continue with Apple',
+            ),
+            const SizedBox(height: 10),
+            const _SocialAuthButton(
+              icon: Icons.g_mobiledata_rounded,
+              label: 'Continue with Google',
+            ),
+            const SizedBox(height: 28),
+            _AuthSwitchLine(
+              isSignIn: _isSignIn,
+              onTap: () {
+                setState(() => _showErrors = false);
+                widget.onModeChanged(
+                  _isSignIn
+                      ? _SenderAuthMode.createAccount
+                      : _SenderAuthMode.signIn,
+                );
+              },
+            ),
+            const SizedBox(height: 22),
+            const _AuthFinePrint(),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    final validIdentity = _identity.text.trim().isNotEmpty;
+    final validPassword = !_isSignIn || _password.text.isNotEmpty;
+    setState(() => _showErrors = true);
+    if (!validIdentity || !validPassword) return;
+    // TODO(sender-mobile-auth): Wire to the existing auth/onboarding handler.
+  }
+}
+
+class _AmbientOrbs extends StatefulWidget {
+  final int count;
+
+  const _AmbientOrbs({required this.count});
+
+  @override
+  State<_AmbientOrbs> createState() => _AmbientOrbsState();
+}
+
+class _AmbientOrbsState extends State<_AmbientOrbs>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 18),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            final t = Curves.easeInOut.transform(_controller.value);
+            return Stack(
+              children: [
+                Positioned(
+                  top: -120 + (t * 22),
+                  left: -84 + (t * 18),
+                  child: const _Orb(size: 270, opacity: .38),
+                ),
+                if (widget.count > 1)
+                  Positioned(
+                    top: 118 - (t * 24),
+                    right: -92 + (t * 16),
+                    child: const _Orb(size: 228, opacity: .28),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _Orb extends StatelessWidget {
+  final double size;
+  final double opacity;
+
+  const _Orb({required this.size, required this.opacity});
+
+  @override
+  Widget build(BuildContext context) {
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: 54, sigmaY: 54),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              _SenderTokens.blue.withValues(alpha: opacity),
+              _SenderTokens.blue.withValues(alpha: 0),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CircumWordmarkRow extends StatelessWidget {
+  const _CircumWordmarkRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Circum',
+      image: true,
+      child: Row(
+        children: [
+          const _CircumMarkChip(filled: true),
+          const SizedBox(width: 10),
+          Image.asset(
+            'assets/images/circum_wordmark.png',
+            height: 22,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircumMarkChip extends StatelessWidget {
+  final bool filled;
+
+  const _CircumMarkChip({this.filled = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: filled ? 30 : 34,
+      height: filled ? 30 : 34,
+      decoration: BoxDecoration(
+        color: filled ? _SenderTokens.blue : _SenderTokens.glass,
+        borderRadius: BorderRadius.circular(filled ? 9 : 12),
+        border: Border.all(color: _SenderTokens.glassBorder),
+      ),
+      child: Icon(
+        Icons.auto_awesome_rounded,
+        color: Colors.white,
+        size: filled ? 15 : 17,
+      ),
+    );
+  }
+}
+
+class _GlassIconChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _GlassIconChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _SenderTokens.glass,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _SenderTokens.glassBorder),
+              ),
+              child: Icon(icon, color: Colors.white, size: 20),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderPrimaryAction extends StatelessWidget {
+  final String label;
+  final String semanticLabel;
+  final VoidCallback onTap;
+
+  const _SenderPrimaryAction({
+    required this.label,
+    required this.semanticLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _SenderTokens.blue,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_rounded, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrustHighlightGrid extends StatelessWidget {
+  const _TrustHighlightGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      (Icons.blur_on_rounded, 'IRIS'),
+      (Icons.shield_outlined, 'Vanguard'),
+      (Icons.route_outlined, 'Live Tracking'),
+      (Icons.verified_user_outlined, 'Trusted Riders'),
+    ];
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 2.18,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      children: [
+        for (final item in items)
+          _PreAuthGlassCard(icon: item.$1, label: item.$2),
+      ],
+    );
+  }
+}
+
+class _PreAuthGlassCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _PreAuthGlassCard({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _SenderTokens.glass,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _SenderTokens.glassBorder),
+          ),
+          child: Row(
+            children: [
+              _MiniIcon(icon: icon, color: _SenderTokens.lightBlue),
+              const SizedBox(width: 11),
+              Flexible(
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WhyCircumSection extends StatelessWidget {
+  const _WhyCircumSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _PreAuthSection(
+      eyebrow: 'BUILT IN',
+      children: [
+        _BenefitRow(
+          icon: Icons.receipt_long_outlined,
+          title: 'Transparent pricing',
+          body: 'Clear costs before you continue.',
+        ),
+        _BenefitRow(
+          icon: Icons.radar_rounded,
+          title: 'Real-time tracking',
+          body: 'Follow every step of the journey.',
+        ),
+        _BenefitRow(
+          icon: Icons.handshake_outlined,
+          title: 'Built for trust',
+          body: 'Verified riders and safer handovers.',
+        ),
+      ],
+    );
+  }
+}
+
+class _ServicesPreviewSection extends StatelessWidget {
+  const _ServicesPreviewSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _PreAuthSection(
+      eyebrow: 'COMING WITH YOUR ACCOUNT',
+      children: [
+        _ServicePreviewCard(
+          icon: Icons.card_giftcard_rounded,
+          title: 'Gifts',
+          body: 'Thoughtful deliveries made simple.',
+          accent: _SenderTokens.gifts,
+        ),
+        _ServicePreviewCard(
+          icon: Icons.health_and_safety_outlined,
+          title: 'Health+',
+          body: 'Pharmacy, wellness and care.',
+          accent: _SenderTokens.health,
+        ),
+        _ServicePreviewCard(
+          icon: Icons.business_center_outlined,
+          title: 'Business',
+          body: 'Solutions that keep work moving.',
+          accent: _SenderTokens.blue,
+        ),
+      ],
+    );
+  }
+}
+
+class _PreAuthSection extends StatelessWidget {
+  final String eyebrow;
+  final List<Widget> children;
+
+  const _PreAuthSection({required this.eyebrow, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow,
+          style: GoogleFonts.jetBrainsMono(
+            color: _SenderTokens.muted,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...children,
+      ],
+    );
+  }
+}
+
+class _BenefitRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _BenefitRow({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: _SenderTokens.hairline)),
+      ),
+      child: Row(
+        children: [
+          _MiniIcon(icon: icon, color: _SenderTokens.lightBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  body,
+                  style: GoogleFonts.inter(
+                    color: _SenderTokens.muted,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: _SenderBottomNav(
-        index: _index,
-        onChanged: (next) => setState(() => _index = next),
+    );
+  }
+}
+
+class _ServicePreviewCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+  final Color accent;
+
+  const _ServicePreviewCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: _SenderTokens.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _SenderTokens.hairline),
       ),
+      child: Row(
+        children: [
+          _MiniIcon(icon: icon, color: accent),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  body,
+                  style: GoogleFonts.inter(
+                    color: _SenderTokens.muted,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const _AfterJoinPill(),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _MiniIcon({required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .16),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, color: color, size: 18),
+    );
+  }
+}
+
+class _AfterJoinPill extends StatelessWidget {
+  const _AfterJoinPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _SenderTokens.hairline),
+      ),
+      child: Text(
+        'After you join',
+        style: GoogleFonts.jetBrainsMono(
+          color: _SenderTokens.muted,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _PreAuthFooterLinks extends StatelessWidget {
+  const _PreAuthFooterLinks();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Terms, Privacy, Help',
+      child: Text(
+        'Terms · Privacy · Help',
+        textAlign: TextAlign.center,
+        style: GoogleFonts.inter(
+          color: _SenderTokens.muted,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthSegmentedControl extends StatelessWidget {
+  final _SenderAuthMode mode;
+  final ValueChanged<_SenderAuthMode> onChanged;
+
+  const _AuthSegmentedControl({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _SenderTokens.glass,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _SenderTokens.glassBorder),
+      ),
+      child: Row(
+        children: [
+          _AuthTab(
+            label: 'Sign in',
+            active: mode == _SenderAuthMode.signIn,
+            onTap: () => onChanged(_SenderAuthMode.signIn),
+          ),
+          _AuthTab(
+            label: 'Create account',
+            active: mode == _SenderAuthMode.createAccount,
+            onTap: () => onChanged(_SenderAuthMode.createAccount),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthTab extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _AuthTab({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: active ? _SenderTokens.blue : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: active ? Colors.white : _SenderTokens.muted,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+  final String? errorText;
+  final ValueChanged<String> onChanged;
+
+  const _AuthField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    this.keyboardType,
+    this.obscureText = false,
+    this.errorText,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      textField: true,
+      label: label,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.jetBrainsMono(
+              color: _SenderTokens.muted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            obscureText: obscureText,
+            onChanged: onChanged,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: GoogleFonts.inter(
+                color: Colors.white.withValues(alpha: .34),
+              ),
+              errorText: errorText,
+              errorStyle: GoogleFonts.inter(
+                color: const Color(0xFFFCA5A5),
+                fontWeight: FontWeight.w600,
+              ),
+              filled: true,
+              fillColor: _SenderTokens.glass,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _SenderTokens.glassBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _SenderTokens.blue),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFFCA5A5)),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFFFCA5A5)),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 15,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LabelledDivider extends StatelessWidget {
+  const _LabelledDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: _SenderTokens.hairline)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'or continue with',
+            style: GoogleFonts.jetBrainsMono(
+              color: _SenderTokens.muted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const Expanded(child: Divider(color: _SenderTokens.hairline)),
+      ],
+    );
+  }
+}
+
+class _SocialAuthButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _SocialAuthButton({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          // TODO(sender-mobile-auth): Wire social provider handlers when enabled.
+        },
+        icon: Icon(icon, color: Colors.white, size: 21),
+        label: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          side: const BorderSide(color: _SenderTokens.glassBorder),
+          backgroundColor: _SenderTokens.glass,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthSwitchLine extends StatelessWidget {
+  final bool isSignIn;
+  final VoidCallback onTap;
+
+  const _AuthSwitchLine({required this.isSignIn, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: isSignIn ? 'Create account' : 'Sign in',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Text.rich(
+          TextSpan(
+            text: isSignIn ? 'New to Circum? ' : 'Already have an account? ',
+            style: GoogleFonts.inter(
+              color: _SenderTokens.muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+            children: [
+              TextSpan(
+                text: isSignIn ? 'Create account' : 'Sign in',
+                style: GoogleFonts.inter(
+                  color: _SenderTokens.blue,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthFinePrint extends StatelessWidget {
+  const _AuthFinePrint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        text: 'By continuing, you agree to Circum\'s ',
+        style: GoogleFonts.inter(
+          color: _SenderTokens.muted,
+          fontSize: 11,
+          height: 1.5,
+        ),
+        children: [
+          TextSpan(
+            text: 'Terms',
+            style: GoogleFonts.inter(
+              color: _SenderTokens.blue,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const TextSpan(text: ' and '),
+          TextSpan(
+            text: 'Privacy Policy',
+            style: GoogleFonts.inter(
+              color: _SenderTokens.blue,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const TextSpan(text: '.'),
+        ],
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }
@@ -137,8 +1271,10 @@ class _HeroSendCard extends StatelessWidget {
                 right: 0,
                 top: 0,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: .25),
                     borderRadius: BorderRadius.circular(999),
@@ -147,8 +1283,11 @@ class _HeroSendCard extends StatelessWidget {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.history_rounded,
-                          color: _SenderTokens.lightBlue, size: 16),
+                      Icon(
+                        Icons.history_rounded,
+                        color: _SenderTokens.lightBlue,
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
                       Text(
                         '2 orders',
@@ -162,11 +1301,7 @@ class _HeroSendCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const Positioned(
-                left: 0,
-                top: 0,
-                child: _IrisOrb(size: 58),
-              ),
+              const Positioned(left: 0, top: 0, child: _IrisOrb(size: 58)),
               Positioned(
                 left: 0,
                 right: 118,
@@ -193,8 +1328,9 @@ class _HeroSendCard extends StatelessWidget {
                         ),
                         children: [
                           TextSpan(
-                              text:
-                                  'From collection to delivery, every step protected by '),
+                            text:
+                                'From collection to delivery, every step protected by ',
+                          ),
                           TextSpan(
                             text: 'IRIS',
                             style: TextStyle(
@@ -209,7 +1345,9 @@ class _HeroSendCard extends StatelessWidget {
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 11),
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(999),
@@ -231,8 +1369,11 @@ class _HeroSendCard extends StatelessWidget {
                             ),
                           ),
                           SizedBox(width: 8),
-                          Icon(Icons.arrow_forward_rounded,
-                              color: _SenderTokens.blue, size: 18),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            color: _SenderTokens.blue,
+                            size: 18,
+                          ),
                         ],
                       ),
                     ),
@@ -365,8 +1506,11 @@ class _ServiceCardState extends State<_ServiceCard> {
                 const Spacer(),
                 Align(
                   alignment: Alignment.bottomRight,
-                  child: Icon(Icons.arrow_forward_rounded,
-                      color: widget.accent, size: 18),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    color: widget.accent,
+                    size: 18,
+                  ),
                 ),
               ],
             ),
@@ -428,9 +1572,7 @@ class _PremiumGiftIcon extends StatelessWidget {
           ),
         ],
       ),
-      child: CustomPaint(
-        painter: const _PremiumGiftPainter(),
-      ),
+      child: CustomPaint(painter: const _PremiumGiftPainter()),
     );
   }
 }
@@ -441,13 +1583,21 @@ class _PremiumGiftPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final box = RRect.fromRectAndRadius(
-      Rect.fromLTWH(size.width * .22, size.height * .38, size.width * .56,
-          size.height * .38),
+      Rect.fromLTWH(
+        size.width * .22,
+        size.height * .38,
+        size.width * .56,
+        size.height * .38,
+      ),
       const Radius.circular(5),
     );
     final lid = RRect.fromRectAndRadius(
-      Rect.fromLTWH(size.width * .18, size.height * .30, size.width * .64,
-          size.height * .16),
+      Rect.fromLTWH(
+        size.width * .18,
+        size.height * .30,
+        size.width * .64,
+        size.height * .16,
+      ),
       const Radius.circular(5),
     );
     final bodyPaint = Paint()
@@ -473,16 +1623,24 @@ class _PremiumGiftPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * .46, size.height * .29, size.width * .10,
-            size.height * .47),
+        Rect.fromLTWH(
+          size.width * .46,
+          size.height * .29,
+          size.width * .10,
+          size.height * .47,
+        ),
         const Radius.circular(3),
       ),
       ribbonPaint,
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * .18, size.height * .43, size.width * .64,
-            size.height * .08),
+        Rect.fromLTWH(
+          size.width * .18,
+          size.height * .43,
+          size.width * .64,
+          size.height * .08,
+        ),
         const Radius.circular(3),
       ),
       ribbonPaint,
@@ -494,16 +1652,24 @@ class _PremiumGiftPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..color = _SenderTokens.pearl;
     canvas.drawArc(
-      Rect.fromLTWH(size.width * .30, size.height * .18, size.width * .22,
-          size.height * .18),
+      Rect.fromLTWH(
+        size.width * .30,
+        size.height * .18,
+        size.width * .22,
+        size.height * .18,
+      ),
       math.pi * .1,
       math.pi * 1.25,
       false,
       bowPaint,
     );
     canvas.drawArc(
-      Rect.fromLTWH(size.width * .48, size.height * .18, size.width * .22,
-          size.height * .18),
+      Rect.fromLTWH(
+        size.width * .48,
+        size.height * .18,
+        size.width * .22,
+        size.height * .18,
+      ),
       math.pi * -.35,
       math.pi * 1.25,
       false,
@@ -541,14 +1707,23 @@ class _HeroRoutePainter extends CustomPainter {
     }
     for (var y = 8.0; y < size.height; y += 28) {
       canvas.drawLine(
-          Offset(size.width * .38, y), Offset(size.width, y + 6), grid);
+        Offset(size.width * .38, y),
+        Offset(size.width, y + 6),
+        grid,
+      );
     }
     final start = Offset(size.width * .58, size.height * .70);
     final end = Offset(size.width * .90, size.height * .38);
     final route = Path()
       ..moveTo(start.dx, start.dy)
-      ..cubicTo(size.width * .66, size.height * .36, size.width * .82,
-          size.height * .86, end.dx, end.dy);
+      ..cubicTo(
+        size.width * .66,
+        size.height * .36,
+        size.width * .82,
+        size.height * .86,
+        end.dx,
+        end.dy,
+      );
     canvas.drawPath(
       route,
       Paint()
@@ -664,12 +1839,18 @@ class _OrderLine extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w900)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(subtitle,
-                    style: const TextStyle(color: _SenderTokens.muted)),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: _SenderTokens.muted),
+                ),
               ],
             ),
           ),
@@ -679,7 +1860,8 @@ class _OrderLine extends StatelessWidget {
               color: _SenderTokens.health.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                  color: _SenderTokens.health.withValues(alpha: .32)),
+                color: _SenderTokens.health.withValues(alpha: .32),
+              ),
             ),
             child: Text(
               status,
@@ -746,29 +1928,33 @@ class _SenderBottomNav extends StatelessWidget {
         child: Row(
           children: [
             _NavItem(
-                index: 0,
-                selected: index,
-                icon: Icons.home_rounded,
-                label: 'Home',
-                onTap: onChanged),
+              index: 0,
+              selected: index,
+              icon: Icons.home_rounded,
+              label: 'Home',
+              onTap: onChanged,
+            ),
             _NavItem(
-                index: 1,
-                selected: index,
-                icon: Icons.near_me_rounded,
-                label: 'Send',
-                onTap: onChanged),
+              index: 1,
+              selected: index,
+              icon: Icons.near_me_rounded,
+              label: 'Send',
+              onTap: onChanged,
+            ),
             _NavItem(
-                index: 2,
-                selected: index,
-                icon: Icons.route_rounded,
-                label: 'Activity',
-                onTap: onChanged),
+              index: 2,
+              selected: index,
+              icon: Icons.route_rounded,
+              label: 'Activity',
+              onTap: onChanged,
+            ),
             _NavItem(
-                index: 3,
-                selected: index,
-                icon: Icons.person_rounded,
-                label: 'Profile',
-                onTap: onChanged),
+              index: 3,
+              selected: index,
+              icon: Icons.person_rounded,
+              label: 'Profile',
+              onTap: onChanged,
+            ),
           ],
         ),
       ),
@@ -802,9 +1988,10 @@ class _NavItem extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon,
-                  color:
-                      active ? _SenderTokens.lightBlue : _SenderTokens.muted),
+              Icon(
+                icon,
+                color: active ? _SenderTokens.lightBlue : _SenderTokens.muted,
+              ),
               const SizedBox(height: 3),
               Text(
                 label,
@@ -832,9 +2019,13 @@ class _SenderAvatar extends StatelessWidget {
     return CircleAvatar(
       radius: 24,
       backgroundColor: _SenderTokens.blue,
-      child: Text(initials,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w900)),
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }
@@ -908,9 +2099,10 @@ class _IrisOrbState extends State<_IrisOrb>
   @override
   void initState() {
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 6))
-          ..repeat(reverse: true);
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -933,19 +2125,23 @@ class _IrisOrbState extends State<_IrisOrb>
               colors: [
                 _SenderTokens.iris,
                 _SenderTokens.vanguard,
-                _SenderTokens.bg
+                _SenderTokens.bg,
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: _SenderTokens.iris
-                    .withValues(alpha: .22 + _controller.value * .12),
+                color: _SenderTokens.iris.withValues(
+                  alpha: .22 + _controller.value * .12,
+                ),
                 blurRadius: 24,
               ),
             ],
           ),
-          child: Icon(Icons.auto_awesome_rounded,
-              color: Colors.white, size: widget.size * .42),
+          child: Icon(
+            Icons.auto_awesome_rounded,
+            color: Colors.white,
+            size: widget.size * .42,
+          ),
         );
       },
     );
@@ -968,9 +2164,10 @@ class _SenderMapBackdropState extends State<_SenderMapBackdrop>
   @override
   void initState() {
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 26))
-          ..repeat();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 26),
+    )..repeat();
   }
 
   @override
@@ -1025,8 +2222,14 @@ class _SenderMapPainter extends CustomPainter {
     final dropoff = Offset(size.width * .78, size.height * .22);
     final route = Path()
       ..moveTo(pickup.dx, pickup.dy)
-      ..cubicTo(size.width * .28, size.height * .14, size.width * .62,
-          size.height * .44, dropoff.dx, dropoff.dy);
+      ..cubicTo(
+        size.width * .28,
+        size.height * .14,
+        size.width * .62,
+        size.height * .44,
+        dropoff.dx,
+        dropoff.dy,
+      );
     canvas.drawPath(
       route,
       Paint()
@@ -1068,6 +2271,10 @@ class _SenderTokens {
   static const iceBlue = Color(0xFFA5D8FF);
   static const softLilac = Color(0xFFCDB4F6);
   static const muted = Color(0xFF9CA3AF);
+  static const softText = Color(0xB8F5F7FB);
+  static const panel = Color(0xFF0D111C);
+  static const hairline = Color(0x14F5F7FB);
   static const border = Color(0x29FFFFFF);
-  static const glass = Color(0x12FFFFFF);
+  static const glass = Color(0x0DF5F7FB);
+  static const glassBorder = Color(0x1AF5F7FB);
 }
