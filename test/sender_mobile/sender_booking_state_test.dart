@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
@@ -491,7 +492,7 @@ void main() {
       );
       expect(
         senderTrackingContentFor(SenderTrackingState.riderArrivingAtDropoff)
-            .showReceiverPinNotice,
+            .showReceiverPin,
         isTrue,
       );
       expect(
@@ -537,17 +538,78 @@ void main() {
       );
     });
 
-    test('sender tracking never renders receiver delivery PIN data', () {
+    test('receiver PIN appears only in delivery-stage states', () {
+      final receiverPinStates = SenderTrackingState.values
+          .where((state) => senderTrackingContentFor(state).showReceiverPin)
+          .toList();
+
+      expect(receiverPinStates, const [
+        SenderTrackingState.riderArrivingAtDropoff,
+      ]);
+      expect(
+        senderTrackingContentFor(SenderTrackingState.findingRider)
+            .showReceiverPin,
+        isFalse,
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.riderAssigned)
+            .showReceiverPin,
+        isFalse,
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.riderEnRouteToPickup)
+            .showReceiverPin,
+        isFalse,
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.riderArrivedAtPickup)
+            .showReceiverPin,
+        isFalse,
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.pickupComplete)
+            .showReceiverPin,
+        isFalse,
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.inTransit).showReceiverPin,
+        isFalse,
+      );
+    });
+
+    test('sender tracking PIN cards stay masked by default', () {
       final source = File(
         'lib/app/sender_mobile/sender_tracking_screen.dart',
       ).readAsStringSync();
 
-      expect(source, contains('Delivery PIN sent to receiver.'));
-      expect(source, isNot(contains('deliveryPin')));
-      expect(source, isNot(contains('receiverDeliveryPin')));
-      expect(source, isNot(contains('Receiver Delivery PIN')));
+      expect(source, contains("label: 'Collection PIN'"));
+      expect(source, contains("label: 'Receiver PIN'"));
+      expect(source,
+          contains('Share this with the receiver if needed for handoff.'));
+      expect(source, contains("'••••••'"));
+      expect(source, contains('onTap: _reveal'));
+      expect(source, contains('onLongPress: _reveal'));
+      expect(source, contains('Timer(const Duration(seconds: 4)'));
       expect(source, isNot(contains('price')));
       expect(source, isNot(contains('eye')));
+    });
+
+    test('delivery data carries existing backend receiver PIN field', () {
+      final data = DeliveryData.fromJson({
+        'courierName': 'Maya Stone',
+        'phoneNumber': '+447000000000',
+        'typeOfVehicle': 'Bike',
+        'estimatedDeliveryTime': '7 min',
+        'plateNumber': '',
+        'code': '427158',
+        'deliveryPin': '835246',
+        'rating': '4.9',
+        'riderId': 'rider_1',
+        'photoURL': 'null',
+      });
+
+      expect(data.code, '427158');
+      expect(data.deliveryPin, '835246');
     });
   });
 }

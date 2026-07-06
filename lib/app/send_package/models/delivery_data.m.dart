@@ -9,6 +9,7 @@ class DeliveryData {
   final String rating;
   final String riderId;
   final String? photoURL;
+  final String? deliveryPin;
 
   DeliveryData(
       {required this.courierName,
@@ -20,9 +21,13 @@ class DeliveryData {
       required this.code,
       required this.rating,
       required this.riderId,
-      this.photoURL});
+      this.photoURL,
+      this.deliveryPin});
 
   factory DeliveryData.fromJson(data) {
+    final vanguardProtection = data['vanguardProtection'] is Map
+        ? data['vanguardProtection'] as Map
+        : null;
     return DeliveryData(
         courierName: data['courierName'],
         phoneNumber: data['phoneNumber'],
@@ -33,7 +38,10 @@ class DeliveryData {
         rating: data['rating'],
         plateNumber: data['plateNumber'],
         riderId: data['riderId'],
-        photoURL: data['photoURL'] != 'null' ? data['photoURL'] : null);
+        photoURL: data['photoURL'] != 'null' ? data['photoURL'] : null,
+        deliveryPin:
+            '${data['deliveryPin'] ?? vanguardProtection?['deliveryPin'] ?? ''}'
+                .trim());
   }
 
   Map<String, dynamic> toJson() {
@@ -46,7 +54,9 @@ class DeliveryData {
       'code': code,
       'rating': rating,
       'plateNumber': plateNumber,
-      'riderId': riderId
+      'riderId': riderId,
+      if (deliveryPin != null && deliveryPin!.isNotEmpty)
+        'deliveryPin': deliveryPin,
     };
   }
 }

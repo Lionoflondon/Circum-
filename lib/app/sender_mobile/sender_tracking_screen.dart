@@ -33,7 +33,7 @@ class SenderTrackingContent {
   final bool showRider;
   final bool showAnonymousRiders;
   final bool showCollectionPin;
-  final bool showReceiverPinNotice;
+  final bool showReceiverPin;
   final bool showRiderCard;
   final bool showIris;
   final bool showVanguard;
@@ -56,7 +56,7 @@ class SenderTrackingContent {
     this.showRider = false,
     this.showAnonymousRiders = false,
     this.showCollectionPin = false,
-    this.showReceiverPinNotice = false,
+    this.showReceiverPin = false,
     this.showRiderCard = false,
     this.showIris = true,
     this.showVanguard = false,
@@ -212,7 +212,7 @@ SenderTrackingContent senderTrackingContentFor(
         showDropoffPin: true,
         showRider: true,
         showRiderCard: true,
-        showReceiverPinNotice: true,
+        showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.68, .62),
         eta: '< 3 min',
@@ -549,11 +549,19 @@ class _TrackingPanelContent extends StatelessWidget {
         ],
         if (content.showCollectionPin) ...[
           const SizedBox(height: 12),
-          PINCard(collectionPin: engine.deliveryData?.code),
+          PINCard(
+            pin: engine.deliveryData?.code,
+            label: 'Collection PIN',
+            hint: 'Show this to your rider at pickup',
+          ),
         ],
-        if (content.showReceiverPinNotice) ...[
+        if (content.showReceiverPin) ...[
           const SizedBox(height: 12),
-          const _NoticeCard(text: 'Delivery PIN sent to receiver.'),
+          PINCard(
+            pin: engine.deliveryData?.deliveryPin,
+            label: 'Receiver PIN',
+            hint: 'Share this with the receiver if needed for handoff.',
+          ),
         ],
         const SizedBox(height: 12),
         Wrap(
@@ -684,9 +692,16 @@ class VanguardChip extends StatelessWidget {
 }
 
 class PINCard extends StatefulWidget {
-  final String? collectionPin;
+  final String? pin;
+  final String label;
+  final String hint;
 
-  const PINCard({super.key, required this.collectionPin});
+  const PINCard({
+    super.key,
+    required this.pin,
+    required this.label,
+    required this.hint,
+  });
 
   @override
   State<PINCard> createState() => _PINCardState();
@@ -703,7 +718,7 @@ class _PINCardState extends State<PINCard> {
   }
 
   void _reveal() {
-    if (widget.collectionPin == null || widget.collectionPin!.isEmpty) return;
+    if (widget.pin == null || widget.pin!.isEmpty) return;
     setState(() => _revealed = true);
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
@@ -713,7 +728,7 @@ class _PINCardState extends State<PINCard> {
 
   @override
   Widget build(BuildContext context) {
-    final pin = widget.collectionPin;
+    final pin = widget.pin;
     final digits = pin == null || pin.isEmpty
         ? '••••••'
         : _revealed
@@ -721,6 +736,7 @@ class _PINCardState extends State<PINCard> {
             : '••••••';
     return GestureDetector(
       onTap: _reveal,
+      onLongPress: _reveal,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -732,21 +748,21 @@ class _PINCardState extends State<PINCard> {
         ),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Collection PIN',
-                    style: TextStyle(
+                    widget.label,
+                    style: const TextStyle(
                       color: _TrackingTokens.muted,
                       fontSize: 11,
                     ),
                   ),
-                  SizedBox(height: 3),
+                  const SizedBox(height: 3),
                   Text(
-                    'Show this to your rider at pickup',
-                    style: TextStyle(
+                    widget.hint,
+                    style: const TextStyle(
                       color: _TrackingTokens.muted,
                       fontSize: 10.5,
                     ),
@@ -1148,35 +1164,6 @@ class _FindingPulse extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _NoticeCard extends StatelessWidget {
-  final String text;
-
-  const _NoticeCard({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(),
-      child: Row(
-        children: [
-          const Icon(Icons.lock_outline_rounded, color: _TrackingTokens.muted),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: _TrackingTokens.mid,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
