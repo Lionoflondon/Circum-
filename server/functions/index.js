@@ -153,7 +153,7 @@ exports.searchFreeUkAddresses = freeAddressSearch.searchFreeUkAddresses;
 exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
 exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
 exports.createSenderPaymentSession = senderBooking.createSenderPaymentSession(stripe);
-exports.createSenderPaidDelivery = senderBooking.createSenderPaidDelivery;
+exports.createSenderPaidDelivery = senderBooking.createSenderPaidDelivery(stripe);
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

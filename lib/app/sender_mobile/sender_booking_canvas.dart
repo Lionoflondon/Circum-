@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
 import 'sender_booking_state.dart';
@@ -1235,17 +1236,27 @@ class _PaymentPanel extends StatelessWidget {
     final canSubmit =
         total != null && split != null && split.canSubmit && !submitting;
     if (engine.senderPaymentStatus == 'succeeded' &&
+        engine.senderPaymentClientSecret == null &&
         engine.senderPaymentSessionId != null &&
         engine.senderCreatedRequestId == null &&
         !engine.isSenderDeliveryCreating &&
         engine.senderDeliveryError.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
-        context.read<SendPackageBloc>().add(
-              CreatePaidSenderDelivery(
-                bookingPayload: _bookingPayload(engine),
-              ),
-            );
+        _createPaidDelivery(context, engine);
+      });
+    }
+    if (engine.senderPaymentClientSecret != null &&
+        engine.senderPaymentSessionId != null &&
+        engine.senderPaymentStatus != 'succeeded' &&
+        draft.paymentStatus == SenderPaymentStatus.processing &&
+        !draft.cardConfirmationStarted &&
+        !engine.isSenderPaymentLoading &&
+        !engine.isSenderDeliveryCreating) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        onDraft(draft.copyWith(cardConfirmationStarted: true));
+        _confirmCardPayment(context, engine.senderPaymentClientSecret!, engine);
       });
     }
     return Column(
@@ -1392,6 +1403,30 @@ class _PaymentPanel extends StatelessWidget {
                       SenderFallbackPaymentMethod.card,
                     ),
           ),
+          if (draft.selectedPaymentMethod ==
+              SenderFallbackPaymentMethod.card) ...[
+            const SizedBox(height: 10),
+            CardField(
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: .055),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: _Tokens.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: _Tokens.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: _Tokens.lightBlue),
+                ),
+              ),
+              style: const TextStyle(color: Colors.white),
+              cursorColor: _Tokens.lightBlue,
+            ),
+          ],
           const SizedBox(height: 8),
           _PaymentMethodTile(
             title: 'Apple Pay',
@@ -1443,14 +1478,13 @@ class _PaymentPanel extends StatelessWidget {
                 : engine.senderDeliveryError,
           ),
         ],
-        if (engine.senderPaymentStatus != null &&
-            engine.senderPaymentStatus != 'succeeded' &&
-            engine.senderPaymentClientSecret != null) ...[
+        if (engine.senderPaymentClientSecret != null &&
+            draft.paymentStatus == SenderPaymentStatus.processing) ...[
           const SizedBox(height: 12),
           const _GapNotice(
-            title: 'Payment session created',
+            title: 'Confirming card payment',
             body:
-                'Card confirmation is required before Circum can create and broadcast this delivery.',
+                'Your delivery will only be created after Stripe confirms payment.',
           ),
         ],
         const SizedBox(height: 14),
@@ -1507,6 +1541,7 @@ class _PaymentPanel extends StatelessWidget {
         remainingAmount: split.remainingAmount,
         paymentSplitSummary: split.splitSummary,
         amountDue: total,
+        cardConfirmationStarted: false,
       ),
     );
   }
@@ -1533,6 +1568,44 @@ class _PaymentPanel extends StatelessWidget {
             fallbackMethod: split.fallbackMethod == null
                 ? 'roth'
                 : senderPaymentMethodLabel(split.fallbackMethod!),
+          ),
+        );
+  }
+
+  Future<void> _confirmCardPayment(
+    BuildContext context,
+    String clientSecret,
+    SendPackageState engine,
+  ) async {
+    try {
+      final intent = await Stripe.instance.confirmPayment(
+        paymentIntentClientSecret: clientSecret,
+        data: const PaymentMethodParams.card(
+          paymentMethodData: PaymentMethodData(),
+        ),
+      );
+      if (!context.mounted) return;
+      if (intent.status != PaymentIntentsStatus.Succeeded) {
+        onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
+        return;
+      }
+      onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.paid));
+      _createPaidDelivery(context, engine);
+    } on StripeException catch (error) {
+      debugPrint('Sender mobile Stripe confirmation failed: $error');
+      if (!context.mounted) return;
+      onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
+    } catch (error) {
+      debugPrint('Sender mobile Stripe confirmation failed: $error');
+      if (!context.mounted) return;
+      onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
+    }
+  }
+
+  void _createPaidDelivery(BuildContext context, SendPackageState engine) {
+    context.read<SendPackageBloc>().add(
+          CreatePaidSenderDelivery(
+            bookingPayload: _bookingPayload(engine),
           ),
         );
   }

@@ -226,7 +226,7 @@ function geoData(point = {}) {
   };
 }
 
-exports.createSenderPaidDelivery = functions.https.onCall(async (data, context) => {
+exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
   const paymentSessionId = text(data.paymentSessionId);
@@ -244,9 +244,21 @@ exports.createSenderPaidDelivery = functions.https.onCall(async (data, context) 
   if (!paymentSnap.exists || paymentSnap.data().userId !== sender.uid) {
     throw new functions.https.HttpsError("not-found", "Payment session not found.");
   }
-  const payment = paymentSnap.data();
+  let payment = paymentSnap.data();
+  if (`${payment.paymentStatus || payment.status}` !== "succeeded" && payment.stripePaymentIntentId) {
+    const intent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
+    if (intent.status === "succeeded") {
+      await paymentSnap.ref.update({
+        status: "succeeded",
+        paymentStatus: "succeeded",
+        confirmedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      payment = {...payment, status: "succeeded", paymentStatus: "succeeded"};
+    }
+  }
   if (`${payment.paymentStatus || payment.status}` !== "succeeded") {
-    throw new functions.https.HttpsError("failed-precondition", "Payment must be confirmed before delivery creation.");
+    throw new functions.https.HttpsError("failed-precondition", "Stripe payment must be confirmed before delivery creation.");
   }
   const quote = quoteSnap.data();
   const requestId = text(data.requestId) || `sender_${Date.now()}_${sender.uid}`;

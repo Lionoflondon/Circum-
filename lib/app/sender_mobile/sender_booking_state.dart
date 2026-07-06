@@ -224,6 +224,7 @@ class SenderBookingDraft {
   final double remainingAmount;
   final String paymentSplitSummary;
   final double? amountDue;
+  final bool cardConfirmationStarted;
 
   const SenderBookingDraft({
     this.step = SenderBookingStep.pickup,
@@ -256,6 +257,7 @@ class SenderBookingDraft {
     this.remainingAmount = 0,
     this.paymentSplitSummary = '',
     this.amountDue,
+    this.cardConfirmationStarted = false,
   });
 
   bool get canContinue {
@@ -375,6 +377,7 @@ class SenderBookingDraft {
     String? paymentSplitSummary,
     double? amountDue,
     bool clearAmountDue = false,
+    bool? cardConfirmationStarted,
   }) {
     return SenderBookingDraft(
       step: step ?? this.step,
@@ -411,6 +414,8 @@ class SenderBookingDraft {
       remainingAmount: remainingAmount ?? this.remainingAmount,
       paymentSplitSummary: paymentSplitSummary ?? this.paymentSplitSummary,
       amountDue: clearAmountDue ? null : amountDue ?? this.amountDue,
+      cardConfirmationStarted:
+          cardConfirmationStarted ?? this.cardConfirmationStarted,
     );
   }
 }
