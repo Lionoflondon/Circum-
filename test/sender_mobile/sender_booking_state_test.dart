@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
+import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -475,6 +476,78 @@ void main() {
       expect(source, isNot(contains('1/12')));
       expect(source, isNot(contains('Final total')));
       expect(source, isNot(contains('guaranteed delivery')));
+    });
+
+    test('sender tracking exposes every required state copy', () {
+      for (final state in SenderTrackingState.values) {
+        final content = senderTrackingContentFor(state);
+        expect(content.title, isNotEmpty);
+        expect(content.body, isNotEmpty);
+      }
+
+      expect(
+        senderTrackingContentFor(SenderTrackingState.riderAssigned).title,
+        'Your rider is on the way',
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.riderArrivingAtDropoff)
+            .showReceiverPinNotice,
+        isTrue,
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.issue).title,
+        "There's an issue with this delivery",
+      );
+    });
+
+    test('finding rider remains anonymous and calm', () {
+      final content =
+          senderTrackingContentFor(SenderTrackingState.findingRider);
+
+      expect(content.showPickupPin, isTrue);
+      expect(content.showAnonymousRiders, isTrue);
+      expect(content.showRiderCard, isFalse);
+      expect(content.showCollectionPin, isFalse);
+    });
+
+    test('collection PIN appears only before pickup completion', () {
+      final pinStates = SenderTrackingState.values
+          .where((state) => senderTrackingContentFor(state).showCollectionPin)
+          .toList();
+
+      expect(pinStates, const [
+        SenderTrackingState.riderAssigned,
+        SenderTrackingState.riderEnRouteToPickup,
+        SenderTrackingState.riderArrivedAtPickup,
+      ]);
+    });
+
+    test('delivered state supports optional backend verification beat', () {
+      final normal = senderTrackingContentFor(SenderTrackingState.delivered);
+      final verified = senderTrackingContentFor(
+        SenderTrackingState.delivered,
+        deliveryVerified: true,
+      );
+
+      expect(normal.title, 'Delivered');
+      expect(verified.title, 'Delivery verified');
+      expect(
+        verified.body,
+        'Vanguard confirmed this delivery is complete.',
+      );
+    });
+
+    test('sender tracking never renders receiver delivery PIN data', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('Delivery PIN sent to receiver.'));
+      expect(source, isNot(contains('deliveryPin')));
+      expect(source, isNot(contains('receiverDeliveryPin')));
+      expect(source, isNot(contains('Receiver Delivery PIN')));
+      expect(source, isNot(contains('price')));
+      expect(source, isNot(contains('eye')));
     });
   });
 }

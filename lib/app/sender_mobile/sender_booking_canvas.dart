@@ -7,6 +7,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
 import 'sender_booking_state.dart';
+import 'sender_tracking_screen.dart';
 
 class SenderBookingCanvas extends StatefulWidget {
   const SenderBookingCanvas({super.key});
@@ -111,6 +112,16 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _setDraft(_draft.copyWith(step: operationalStep));
           });
+        }
+        if (_draft.step == SenderBookingStep.findingRider ||
+            _draft.step == SenderBookingStep.liveTracking) {
+          return Scaffold(
+            backgroundColor: _Tokens.bg,
+            body: SenderMobileTrackingScreen(
+              engine: engine,
+              stateOverride: senderTrackingStateForEngine(engine),
+            ),
+          );
         }
         return Scaffold(
           backgroundColor: _Tokens.bg,
@@ -408,9 +419,8 @@ class _BookingPanel extends StatelessWidget {
       case SenderBookingStep.payment:
         return _PaymentPanel(engine: engine, draft: draft, onDraft: onDraft);
       case SenderBookingStep.findingRider:
-        return const _FindingPanel();
       case SenderBookingStep.liveTracking:
-        return _TrackingPanel(engine: engine);
+        return const SizedBox.shrink();
     }
   }
 
@@ -1675,57 +1685,6 @@ class _PaymentPanel extends StatelessWidget {
               engine.canonicalIrisResult?.vanguardRequiredReason,
         },
       };
-}
-
-class _FindingPanel extends StatelessWidget {
-  const _FindingPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      children: [
-        SizedBox(height: 8),
-        CircularProgressIndicator(color: _Tokens.lightBlue),
-        SizedBox(height: 18),
-        Text(
-          'Finding the best rider for you...',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-        ),
-        SizedBox(height: 8),
-        Text(
-          'Rider matching uses the existing delivery request state.',
-          style: TextStyle(color: _Tokens.muted),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}
-
-class _TrackingPanel extends StatelessWidget {
-  final SendPackageState engine;
-
-  const _TrackingPanel({required this.engine});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const _SummaryLine(label: 'Status', value: 'Live tracking'),
-        _SummaryLine(label: 'Pickup', value: engine.pickupLocation ?? 'Pickup'),
-        _SummaryLine(
-          label: 'Drop-off',
-          value: engine.destinationLocation ?? 'Drop-off',
-        ),
-        const _SummaryLine(
-          label: 'PIN security',
-          value: 'Collection PIN only for sender',
-        ),
-        const SizedBox(height: 12),
-        _PrimaryButton(label: 'Message support', enabled: true, onTap: () {}),
-      ],
-    );
-  }
 }
 
 class _RadioGlassTile extends StatelessWidget {
