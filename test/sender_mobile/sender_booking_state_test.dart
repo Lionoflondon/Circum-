@@ -610,6 +610,16 @@ void main() {
       expect(source, contains('Duration(milliseconds: 500)'));
       expect(source, contains('Curves.easeOut'));
       expect(source, contains('settled: delivered'));
+      expect(
+        source,
+        contains('state != SenderTrackingState.delivered && content.showIris'),
+      );
+      expect(
+        source,
+        contains(
+          'state != SenderTrackingState.delivered && content.showVanguard',
+        ),
+      );
     });
 
     test('PINs are removed for inactive terminal states', () {

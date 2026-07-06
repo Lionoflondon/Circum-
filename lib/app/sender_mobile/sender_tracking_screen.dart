@@ -624,8 +624,9 @@ class _TrackingPanelContent extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            if (content.showIris) const IRISChip(),
-            if (content.showVanguard)
+            if (state != SenderTrackingState.delivered && content.showIris)
+              const IRISChip(),
+            if (state != SenderTrackingState.delivered && content.showVanguard)
               VanguardChip(
                 quiet: content.quietVanguard,
                 issue: content.issueVanguard,
