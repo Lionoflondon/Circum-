@@ -13,12 +13,14 @@ class GiftStoryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final unlocked = draft.giftStoryUnlocked;
     return GiftJourneyWidgets.scaffold(
       activeStep: 14,
       eyebrow: 'FINALE — GIFT STORY',
-      title: 'The story, delivered',
-      subtitle:
-          'Gift Story is a future build. This placeholder shows where the story preview will live.',
+      title: unlocked ? 'Your Gift Story is ready' : 'Gift Story locked',
+      subtitle: unlocked
+          ? 'Your gift has been delivered, so the story can now be viewed.'
+          : 'Your story will unlock after delivery is confirmed.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         Container(
@@ -34,13 +36,15 @@ class GiftStoryView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.movie_filter_outlined,
+                unlocked ? Icons.movie_filter_outlined : Icons.lock_outline,
                 color: const Color(0xFFC9B8FF).withValues(alpha: .8),
                 size: 42,
               ),
               const SizedBox(height: 18),
               Text(
-                'Story preview disabled',
+                unlocked
+                    ? 'Story preview ready'
+                    : 'Delivery confirmation needed',
                 style: GoogleFonts.inter(
                   color: Colors.white,
                   fontSize: 15,
@@ -49,7 +53,9 @@ class GiftStoryView extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'No real video generation, music upload, or story publishing is active in this pass.',
+                unlocked
+                    ? 'Gift reveal assets can appear here now that the linked Gift Delivery is delivered.'
+                    : 'Your story will unlock after delivery is confirmed.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: const Color(0xFFB8AAB8),
@@ -64,7 +70,7 @@ class GiftStoryView extends StatelessWidget {
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: true,
-        label: 'Done',
+        label: unlocked ? 'Done' : 'Back to status',
         onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
       ),
     );

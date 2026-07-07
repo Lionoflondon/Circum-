@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../gifts/gifts_social_policy.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
+import 'gift_story_view.dart';
 
 const senderGiftCampaignParticipantsCollectionName = 'giftCampaignParticipants';
 const senderGiftCampaignMatchesCollectionName = 'giftCampaignMatches';
@@ -101,6 +102,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     final data = _participantStatusData ?? const <String, dynamic>{};
     final raw = '${data['status'] ?? data['campaignStatus'] ?? ''}';
     if (raw == 'waiting_for_match') return 'paid_waiting_for_match';
+    if (raw == 'ready_for_delivery_planning') return 'ready_for_gift_delivery';
     if (raw.isNotEmpty) return raw;
     final matchStatus = '${data['matchStatus'] ?? ''}';
     if (matchStatus == 'match_found') return 'match_found';
@@ -154,14 +156,17 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           privacyNote:
               'Private identity and handover details remain hidden from the sender.',
         ),
-      'ready_for_delivery_planning' => const _CampaignStatusCopy(
-          title: 'Ready for delivery planning',
+      'ready_for_gift_delivery' ||
+      'ready_for_delivery_planning' =>
+        const _CampaignStatusCopy(
+          title: 'Ready for Gift Delivery',
           subtitle:
-              'Delivery planning can begin after policy-safe matching and Admin approval.',
+              'Your campaign journey is complete. Your gift is now moving into the standard Circum Gifts delivery workflow.',
           body:
-              'Final handover details are handled by the Gifts Team when the match is ready operationally.',
+              'Track fulfilment from the normal Gifts delivery experience. Campaign will stay here as the handoff record.',
           privacyNote:
-              'The campaign remains anonymous unless the reveal policy allows otherwise.',
+              'Campaign does not show delivery tracking or delivered status. Delivery completion comes only from the linked Gift Delivery workflow.',
+          showHandoff: true,
         ),
       _ => const _CampaignStatusCopy(
           title: 'Waiting for your match',
@@ -201,6 +206,32 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       return 'A safe anonymous match is ready. Shared details appear only when policy allows.';
     }
     return 'You both connect around ${shared.join(', ')}.';
+  }
+
+  bool get _linkedGiftDelivered {
+    final data = _participantStatusData ?? const <String, dynamic>{};
+    return '${data['linkedGiftDeliveryStatus'] ?? data['giftDeliveryStatus'] ?? ''}' ==
+        'delivered';
+  }
+
+  GiftJourneyDraft get _campaignStoryDraft {
+    final data = _participantStatusData ?? const <String, dynamic>{};
+    return GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+      campaignId: '${data['campaignId'] ?? _campaign?.id ?? ''}',
+      campaignName: '${data['campaignName'] ?? _campaign?.name ?? ''}',
+      campaignType: '${data['campaignType'] ?? _campaign?.type ?? ''}',
+      campaignTagline: '${data['campaignTagline'] ?? _campaign?.tagline ?? ''}',
+      campaignParticipantId: _participantId ?? '${data['id'] ?? ''}',
+      giftRequestId:
+          '${data['giftRequestId'] ?? data['linkedGiftRequestId'] ?? ''}',
+      giftDeliveryId:
+          '${data['giftDeliveryId'] ?? data['linkedGiftDeliveryId'] ?? ''}',
+      linkedGiftDeliveryStatus:
+          '${data['linkedGiftDeliveryStatus'] ?? data['giftDeliveryStatus'] ?? ''}',
+      giftStoryAdminOverride: data['giftStoryAdminOverride'] == true,
+      giftStoryAdminOverrideReason:
+          '${data['giftStoryAdminOverrideReason'] ?? ''}',
+    );
   }
 
   String _formatStatusDate(DateTime date) {
@@ -269,11 +300,28 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       onBack: _goBack,
       children: _children,
       footer: GiftJourneyWidgets.primaryButton(
-        enabled: _canContinue,
-        label: _primaryLabel,
-        onTap: _canContinue ? _goNext : null,
+        enabled: _footerAction != null,
+        label: _footerLabel,
+        onTap: _footerAction,
       ),
     );
+  }
+
+  String get _footerLabel {
+    if (_step == 8 && _linkedGiftDelivered) return 'View Gift Story';
+    return _primaryLabel;
+  }
+
+  VoidCallback? get _footerAction {
+    if (_step == 8 && _linkedGiftDelivered) {
+      return () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => GiftStoryView(draft: _campaignStoryDraft),
+              settings: const RouteSettings(name: GiftStoryView.routeName),
+            ),
+          );
+    }
+    return _canContinue ? _goNext : null;
   }
 
   String get _eyebrow => switch (_step) {
@@ -724,6 +772,23 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           body: _anonymousMatchSummary,
         ),
       ],
+      if (copy.showHandoff) ...[
+        const SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Ready for Gift Delivery',
+          body:
+              'Your campaign journey is complete. Your gift is now moving into the standard Circum Gifts delivery workflow.',
+        ),
+        const SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: _linkedGiftDelivered
+              ? 'Your Gift Story is ready'
+              : 'Gift Story locked',
+          body: _linkedGiftDelivered
+              ? 'View Gift Story'
+              : 'Your story will unlock after delivery is confirmed.',
+        ),
+      ],
       const SizedBox(height: 12),
       const _CampaignGlassCard(
         title: 'No recipient form',
@@ -1106,6 +1171,11 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'status': 'join_started',
       'campaignStatus': 'join_started',
       'source': senderGiftCampaignPaymentSource,
+      'campaignParticipantId': null,
+      'giftRequestId': null,
+      'giftDeliveryId': null,
+      'linkedGiftDeliveryStatus': 'not_started',
+      'handoffStatus': 'not_ready',
       'giftRequestCreated': false,
       'recipientKnown': false,
       'deliveryCollected': false,
@@ -1183,6 +1253,7 @@ class _CampaignStatusCopy {
   final String body;
   final String privacyNote;
   final bool showAnonymousMatchSummary;
+  final bool showHandoff;
 
   const _CampaignStatusCopy({
     required this.title,
@@ -1190,6 +1261,7 @@ class _CampaignStatusCopy {
     required this.body,
     required this.privacyNote,
     this.showAnonymousMatchSummary = false,
+    this.showHandoff = false,
   });
 }
 

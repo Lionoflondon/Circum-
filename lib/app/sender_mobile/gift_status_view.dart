@@ -26,6 +26,7 @@ class GiftStatusView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final storyUnlocked = draft.giftStoryUnlocked;
     return GiftJourneyWidgets.scaffold(
       activeStep: 13,
       eyebrow: 'STEP 13 — STATUS',
@@ -45,7 +46,7 @@ class GiftStatusView extends StatelessWidget {
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: true,
-        label: 'Preview Gift Story',
+        label: storyUnlocked ? 'View Gift Story' : 'Gift Story locked',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GiftStoryView(draft: draft),

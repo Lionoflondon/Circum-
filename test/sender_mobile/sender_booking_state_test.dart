@@ -787,7 +787,12 @@ void main() {
       expect(statusSource, contains('Curated by the Gifts Team'));
       expect(statusSource, contains('Supported by IRIS'));
       expect(storySource, contains('FINALE — GIFT STORY'));
-      expect(storySource, contains('Story preview disabled'));
+      expect(storySource, contains('Gift Story locked'));
+      expect(
+        storySource,
+        contains('Your story will unlock after delivery is confirmed.'),
+      );
+      expect(storySource, contains('Your Gift Story is ready'));
       expect(relationshipSource, isNot(contains('createGiftPayment')));
       expect(deliverySource, isNot(contains('createGiftPayment')));
       expect(messageSource, isNot(contains('createGiftPayment')));
@@ -1066,6 +1071,21 @@ void main() {
       expect(campaignSource, contains('Anonymous match found'));
       expect(campaignSource, contains('Waiting for your match'));
       expect(campaignSource, contains('Status updates automatically'));
+      expect(campaignSource, contains('ready_for_gift_delivery'));
+      expect(campaignSource, contains('Ready for Gift Delivery'));
+      expect(
+        campaignSource,
+        contains(
+          'Your campaign journey is complete. Your gift is now moving into the standard Circum Gifts delivery workflow.',
+        ),
+      );
+      expect(campaignSource, contains('linkedGiftDeliveryStatus'));
+      expect(campaignSource, contains('giftRequestId'));
+      expect(campaignSource, contains('giftDeliveryId'));
+      expect(campaignSource, contains('handoffStatus'));
+      expect(campaignSource, contains('View Gift Story'));
+      expect(campaignSource, isNot(contains("title: 'Delivered'")));
+      expect(campaignSource, isNot(contains('STEP 10 · Delivered')));
       expect(campaignSource, contains('campaignStatus'));
       expect(campaignSource, contains('statusUpdatedAt'));
       expect(campaignSource, contains('budgetPrivacyNote'));
@@ -1087,6 +1107,73 @@ void main() {
       expect(campaignSource, isNot(contains('GiftReviewView(')));
       expect(campaignSource, isNot(contains("label: 'BLOCKLIST'")));
       expect(campaignSource, isNot(contains('Optional blocked user IDs')));
+    });
+
+    test('Campaign handoff does not duplicate Gift Delivery or Story unlock',
+        () {
+      final campaignSource =
+          File('lib/app/sender_mobile/gift_campaign_view.dart')
+              .readAsStringSync();
+      final draftSource = File('lib/app/sender_mobile/gift_journey_draft.dart')
+          .readAsStringSync();
+      final storySource =
+          File('lib/app/sender_mobile/gift_story_view.dart').readAsStringSync();
+      final statusSource = File('lib/app/sender_mobile/gift_status_view.dart')
+          .readAsStringSync();
+
+      expect(campaignSource, contains('ready_for_gift_delivery'));
+      expect(campaignSource, contains('linkedGiftDeliveryStatus'));
+      expect(campaignSource, contains('Gift Story locked'));
+      expect(campaignSource, contains('Your Gift Story is ready'));
+      expect(campaignSource, contains('View Gift Story'));
+      expect(campaignSource, isNot(contains('GiftDeliveryView(')));
+      expect(campaignSource, isNot(contains("title: 'Delivered'")));
+      expect(campaignSource, isNot(contains('Delivery Complete')));
+
+      expect(draftSource, contains('campaignParticipantId'));
+      expect(draftSource, contains('giftRequestId'));
+      expect(draftSource, contains('giftDeliveryId'));
+      expect(draftSource, contains('giftStoryAdminOverrideReason'));
+      expect(draftSource, contains("linkedGiftDeliveryStatus == 'delivered'"));
+      expect(
+        draftSource,
+        contains(
+          'giftStoryAdminOverrideReason ??',
+        ),
+      );
+
+      expect(storySource, contains('Gift Story locked'));
+      expect(
+        storySource,
+        contains('Your story will unlock after delivery is confirmed.'),
+      );
+      expect(storySource, contains('Your Gift Story is ready'));
+      expect(storySource, contains('draft.giftStoryUnlocked'));
+
+      expect(statusSource, contains('View Gift Story'));
+      expect(statusSource, contains('Gift Story locked'));
+
+      final locked = GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        linkedGiftDeliveryStatus: 'ready_for_gift_delivery',
+      );
+      final delivered =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        linkedGiftDeliveryStatus: 'delivered',
+      );
+      final overrideWithoutReason =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        giftStoryAdminOverride: true,
+      );
+      final overrideWithReason =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        giftStoryAdminOverride: true,
+        giftStoryAdminOverrideReason: 'Admin unlock after proof review',
+      );
+
+      expect(locked.giftStoryUnlocked, isFalse);
+      expect(delivered.giftStoryUnlocked, isTrue);
+      expect(overrideWithoutReason.giftStoryUnlocked, isFalse);
+      expect(overrideWithReason.giftStoryUnlocked, isTrue);
     });
 
     test('Campaign matching is budget-independent and budget-private', () {

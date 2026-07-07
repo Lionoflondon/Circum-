@@ -312,6 +312,12 @@ class GiftJourneyDraft {
   final String? campaignTagline;
   final double? campaignCompatibilityScore;
   final String? campaignMatchSummary;
+  final String? campaignParticipantId;
+  final String? giftRequestId;
+  final String? giftDeliveryId;
+  final String? linkedGiftDeliveryStatus;
+  final bool giftStoryAdminOverride;
+  final String? giftStoryAdminOverrideReason;
   final double budget;
 
   const GiftJourneyDraft({
@@ -357,6 +363,12 @@ class GiftJourneyDraft {
     this.campaignTagline,
     this.campaignCompatibilityScore,
     this.campaignMatchSummary,
+    this.campaignParticipantId,
+    this.giftRequestId,
+    this.giftDeliveryId,
+    this.linkedGiftDeliveryStatus,
+    this.giftStoryAdminOverride = false,
+    this.giftStoryAdminOverrideReason,
     this.budget = 100,
   });
 
@@ -398,6 +410,12 @@ class GiftJourneyDraft {
         SenderGiftMode.anonymous => 'Anonymous gift',
         SenderGiftMode.campaign => 'Campaign',
       };
+
+  bool get giftStoryUnlocked {
+    if (linkedGiftDeliveryStatus == 'delivered') return true;
+    return giftStoryAdminOverride &&
+        (giftStoryAdminOverrideReason ?? '').trim().isNotEmpty;
+  }
 
   SenderGiftBriefPreview get giftBriefPreview {
     if (irisGiftBrief != null) {
@@ -582,6 +600,12 @@ class GiftJourneyDraft {
     String? campaignTagline,
     double? campaignCompatibilityScore,
     String? campaignMatchSummary,
+    String? campaignParticipantId,
+    String? giftRequestId,
+    String? giftDeliveryId,
+    String? linkedGiftDeliveryStatus,
+    bool? giftStoryAdminOverride,
+    String? giftStoryAdminOverrideReason,
     double? budget,
   }) {
     return GiftJourneyDraft(
@@ -630,6 +654,16 @@ class GiftJourneyDraft {
       campaignCompatibilityScore:
           campaignCompatibilityScore ?? this.campaignCompatibilityScore,
       campaignMatchSummary: campaignMatchSummary ?? this.campaignMatchSummary,
+      campaignParticipantId:
+          campaignParticipantId ?? this.campaignParticipantId,
+      giftRequestId: giftRequestId ?? this.giftRequestId,
+      giftDeliveryId: giftDeliveryId ?? this.giftDeliveryId,
+      linkedGiftDeliveryStatus:
+          linkedGiftDeliveryStatus ?? this.linkedGiftDeliveryStatus,
+      giftStoryAdminOverride:
+          giftStoryAdminOverride ?? this.giftStoryAdminOverride,
+      giftStoryAdminOverrideReason:
+          giftStoryAdminOverrideReason ?? this.giftStoryAdminOverrideReason,
       budget: budget ?? this.budget,
     );
   }
@@ -768,6 +802,12 @@ class GiftJourneyDraft {
           : null,
       'campaignCompatibilityScore': campaignCompatibilityScore,
       'campaignMatchSummary': campaignMatchSummary,
+      'campaignParticipantId': campaignParticipantId,
+      'giftRequestId': giftRequestId,
+      'giftDeliveryId': giftDeliveryId,
+      'linkedGiftDeliveryStatus': linkedGiftDeliveryStatus,
+      'giftStoryAdminOverride': giftStoryAdminOverride,
+      'giftStoryAdminOverrideReason': giftStoryAdminOverrideReason,
       'participantConsentRequired': mode == SenderGiftMode.campaign,
       'recordingConsentRequired': mode == SenderGiftMode.campaign,
       'mutualRevealAllowed': mode == SenderGiftMode.campaign,
