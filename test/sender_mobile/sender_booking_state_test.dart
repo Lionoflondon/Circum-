@@ -7,6 +7,7 @@ import 'package:circum/app/send_package/models/suggestions.m.dart';
 import 'package:circum/app/gifts/gift_system_policy.dart';
 import 'package:circum/app/gifts/gifts_social_policy.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/sender_mobile/gift_address_normalizer.dart';
 import 'package:circum/app/sender_mobile/gift_campaign_view.dart';
 import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
 import 'package:circum/app/sender_mobile/gift_iris_view.dart';
@@ -509,7 +510,7 @@ void main() {
       expect(deliverySource, isNot(contains('senderGiftPreferredDateOptions')));
       expect(deliverySource, isNot(contains('Tell us the date that matters')));
       expect(deliverySource, isNot(contains('Choose with Gifts Team')));
-      expect(deliverySource, contains('_selectedAddressSuggestion != null'));
+      expect(deliverySource, contains('GiftAddressNormalizer.hasRequiredFields'));
       expect(deliverySource, contains('GiftMessageView'));
       expect(messageSource, contains('Write something from the heart'));
       expect(messageSource, contains('Write the message in your own words'));
@@ -1489,6 +1490,47 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Write something from the heart'), findsNothing);
 
+      final routeOnlySuggestion = GiftAddressNormalizer.cleanSuggestion(
+        Suggestion(
+          placeId: 'addr-route-only',
+          description: 'Eldridge Road, London, SE9 2DF, United Kingdom',
+          mainText: 'null Eldridge Road',
+          subText: 'London, SE9 2DF, United Kingdom',
+          components: const {
+            'buildingNumber': null,
+            'street': 'Eldridge Road',
+            'city': 'London',
+            'postcode': 'SE9 2DF',
+            'country': 'United Kingdom',
+          },
+        ),
+      );
+      expect(routeOnlySuggestion.mainText, 'Eldridge Road');
+      expect(routeOnlySuggestion.description, isNot(contains('null')));
+      expect(routeOnlySuggestion.subText, isNot(contains('undefined')));
+      expect(
+        GiftAddressNormalizer.hasRequiredFields(routeOnlySuggestion),
+        isTrue,
+      );
+
+      final manualAddress =
+          'Flat 2, 16 Eldridge Road, London, SE9 2DF, United Kingdom';
+      final manualAddressFields = GiftAddressNormalizer.normalizedComponents(
+        null,
+        manualAddress: manualAddress,
+      );
+      expect(manualAddressFields['addressLine1'], 'Flat 2');
+      expect(manualAddressFields['city'], 'London');
+      expect(manualAddressFields['postcode'], 'SE9 2DF');
+      expect(manualAddressFields['country'], 'United Kingdom');
+      expect(
+        GiftAddressNormalizer.hasRequiredFields(
+          null,
+          manualAddress: manualAddress,
+        ),
+        isTrue,
+      );
+
       final verifiedDraft = GiftJourneyDraft.forMode(
         SenderGiftMode.someone,
       ).copyWith(
@@ -1505,6 +1547,29 @@ void main() {
           },
         ),
       );
+      final verifiedPayload = verifiedDraft.adminReviewPayload(
+        senderId: 'sender-address',
+        senderEmail: 'address@example.com',
+      );
+      expect(verifiedPayload['addressLine1'], '221B Baker Street');
+      expect(verifiedPayload['city'], 'London');
+      expect(verifiedPayload['postcode'], 'NW1 6XE');
+      expect(verifiedPayload['country'], 'GB');
+      expect(verifiedPayload['formattedAddress'], isNot(contains('null')));
+      expect(verifiedPayload['formattedAddress'], isNot(contains('undefined')));
+
+      final manualPayload = GiftJourneyDraft.forMode(SenderGiftMode.someone)
+          .copyWith(deliveryAddress: manualAddress)
+          .adminReviewPayload(
+            senderId: 'sender-manual-address',
+            senderEmail: 'manual-address@example.com',
+          );
+      expect(manualPayload['addressLine1'], 'Flat 2');
+      expect(manualPayload['city'], 'London');
+      expect(manualPayload['postcode'], 'SE9 2DF');
+      expect(manualPayload['country'], 'United Kingdom');
+      expect(manualPayload['formattedAddress'], isNot(contains('null')));
+      expect(manualPayload['formattedAddress'], isNot(contains('undefined')));
       await tester.pumpWidget(
         MaterialApp(
           key: UniqueKey(),

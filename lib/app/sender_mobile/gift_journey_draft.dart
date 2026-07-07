@@ -1,5 +1,6 @@
 import '../gifts/gift_system_policy.dart';
 import '../send_package/models/suggestions.m.dart';
+import 'gift_address_normalizer.dart';
 
 enum SenderGiftMode {
   someone,
@@ -736,6 +737,10 @@ class GiftJourneyDraft {
     final themes = normalizedGiftThemes;
     final selectedInterests = giftThemeLabels;
     final brief = irisGiftBrief ?? generateIrisBrief();
+    final normalizedAddress = GiftAddressNormalizer.normalizedComponents(
+      deliveryAddressData,
+      manualAddress: deliveryAddress,
+    );
     final giftType = mode == SenderGiftMode.campaign
         ? GiftSystemPolicy.campaignGiftType
         : GiftSystemPolicy.normalGiftType;
@@ -775,17 +780,32 @@ class GiftJourneyDraft {
       'deliveryAddressData': deliveryAddressData == null
           ? null
           : {
-              'placeId': deliveryAddressData!.placeId,
-              'description': deliveryAddressData!.description,
-              'mainText': deliveryAddressData!.mainText,
-              'subText': deliveryAddressData!.subText,
-              'lat': deliveryAddressData!.lat,
-              'lng': deliveryAddressData!.lng,
-              'components': deliveryAddressData!.components,
+              'placeId': normalizedAddress['placeId'],
+              'description': normalizedAddress['formattedAddress'] ??
+                  deliveryAddressData!.description,
+              'mainText': normalizedAddress['addressLine1'] ??
+                  deliveryAddressData!.mainText,
+              'subText': GiftAddressNormalizer.joinParts([
+                normalizedAddress['city'],
+                normalizedAddress['postcode'],
+                normalizedAddress['country'],
+              ]),
+              'lat': normalizedAddress['lat'],
+              'lng': normalizedAddress['lng'],
+              'components': normalizedAddress,
             },
-      'deliveryPostcode': deliveryAddressData?.components['postcode'],
-      'deliveryCity': deliveryAddressData?.components['city'],
-      'deliveryCountry': deliveryAddressData?.components['country'],
+      'addressLine1': normalizedAddress['addressLine1'],
+      'addressLine2': normalizedAddress['addressLine2'],
+      'city': normalizedAddress['city'],
+      'postcode': normalizedAddress['postcode'],
+      'country': normalizedAddress['country'],
+      'formattedAddress': normalizedAddress['formattedAddress'],
+      'placeId': normalizedAddress['placeId'],
+      'lat': normalizedAddress['lat'],
+      'lng': normalizedAddress['lng'],
+      'deliveryPostcode': normalizedAddress['postcode'],
+      'deliveryCity': normalizedAddress['city'],
+      'deliveryCountry': normalizedAddress['country'],
       'deliveryDate': deliveryDate,
       'deliveryTimeWindow': deliveryTimeWindow,
       'flexibleDelivery': flexibleDelivery,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../send_package/models/suggestions.m.dart';
 import '../send_package/repo/place_api.dart';
+import 'gift_address_normalizer.dart';
 import 'gift_journey_draft.dart';
 import 'gift_message_view.dart';
 import 'gift_relationship_view.dart';
@@ -46,7 +47,10 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   bool _flexibleDelivery = false;
 
   bool get _canContinue =>
-      _selectedAddressSuggestion != null &&
+      GiftAddressNormalizer.hasRequiredFields(
+        _selectedAddressSuggestion,
+        manualAddress: _deliveryAddressController.text,
+      ) &&
       _deliveryDate != null &&
       (_flexibleDelivery || _deliveryTimeWindow != null);
 
@@ -89,7 +93,10 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         final suggestions = await _addressSearch.fetchSuggestions(query, 'en');
         if (!mounted) return;
         setState(() {
-          _addressSuggestions = suggestions.take(5).toList(growable: false);
+          _addressSuggestions = suggestions
+              .map(GiftAddressNormalizer.cleanSuggestion)
+              .take(5)
+              .toList(growable: false);
           _isAddressSearching = false;
           _addressError = suggestions.isEmpty
               ? "Couldn't find matching addresses. Please continue typing or try again."
@@ -109,12 +116,13 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
 
   void _selectAddressSuggestion(Suggestion suggestion) {
     _addressDebounce?.cancel();
-    _deliveryAddressController.text = suggestion.description;
+    final cleanSuggestion = GiftAddressNormalizer.cleanSuggestion(suggestion);
+    _deliveryAddressController.text = cleanSuggestion.description;
     _deliveryAddressController.selection = TextSelection.collapsed(
-      offset: suggestion.description.length,
+      offset: cleanSuggestion.description.length,
     );
     setState(() {
-      _selectedAddressSuggestion = suggestion;
+      _selectedAddressSuggestion = cleanSuggestion;
       _addressSuggestions = const [];
       _isAddressSearching = false;
       _addressError = '';
@@ -304,7 +312,7 @@ class _GiftAddressLookupCard extends StatelessWidget {
           controller: controller,
           label: label,
           helper: selectedSuggestion == null
-              ? 'Select a verified delivery address to continue.'
+              ? 'Select a verified address, or enter a full address with city, postcode and country.'
               : 'Verified delivery address selected.',
           placeholder: placeholder,
           onChanged: onChanged,
