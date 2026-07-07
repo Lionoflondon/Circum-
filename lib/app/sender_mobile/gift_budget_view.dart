@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
-import 'gift_review_view.dart';
+import 'gift_safety_view.dart';
 
 class GiftBudgetView extends StatefulWidget {
   final GiftJourneyDraft draft;
@@ -102,13 +102,13 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: true,
-        label: 'Continue to Review',
+        label: 'Continue',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => GiftReviewView(
+            builder: (_) => GiftSafetyView(
               draft: widget.draft.copyWith(budget: _budget.roundToDouble()),
             ),
-            settings: const RouteSettings(name: GiftReviewView.routeName),
+            settings: const RouteSettings(name: GiftSafetyView.routeName),
           ),
         ),
       ),

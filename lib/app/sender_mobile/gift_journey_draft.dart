@@ -281,6 +281,7 @@ class GiftJourneyDraft {
   final Suggestion? deliveryAddressData;
   final String? deliveryDate;
   final String? deliveryTimeWindow;
+  final bool flexibleDelivery;
   final String? personalMessage;
   final List<String> interests;
   final String? customInterest;
@@ -293,6 +294,12 @@ class GiftJourneyDraft {
   final String? favouriteColours;
   final String? likedBrands;
   final List<String> preferredStyles;
+  final String? foodAllergies;
+  final String? medicalAllergies;
+  final String? dietaryRestrictions;
+  final String? culturalConsiderations;
+  final String? safetyThingsToAvoid;
+  final String? giftTeamNotes;
   final String? senderRevealMode;
   final String? selfGiftFrequency;
   final bool allowCircumSocialUse;
@@ -319,6 +326,7 @@ class GiftJourneyDraft {
     this.deliveryAddressData,
     this.deliveryDate,
     this.deliveryTimeWindow,
+    this.flexibleDelivery = false,
     this.personalMessage,
     this.interests = const [],
     this.customInterest,
@@ -331,6 +339,12 @@ class GiftJourneyDraft {
     this.favouriteColours,
     this.likedBrands,
     this.preferredStyles = const [],
+    this.foodAllergies,
+    this.medicalAllergies,
+    this.dietaryRestrictions,
+    this.culturalConsiderations,
+    this.safetyThingsToAvoid,
+    this.giftTeamNotes,
     this.senderRevealMode,
     this.selfGiftFrequency,
     this.allowCircumSocialUse = false,
@@ -451,6 +465,26 @@ class GiftJourneyDraft {
     ];
   }
 
+  String get safetySummary {
+    final parts = [
+      if ((foodAllergies ?? '').trim().isNotEmpty)
+        'Food allergies: ${foodAllergies!.trim()}',
+      if ((medicalAllergies ?? '').trim().isNotEmpty)
+        'Medical allergies: ${medicalAllergies!.trim()}',
+      if ((dietaryRestrictions ?? '').trim().isNotEmpty)
+        'Dietary restrictions: ${dietaryRestrictions!.trim()}',
+      if ((culturalConsiderations ?? '').trim().isNotEmpty)
+        'Religious or cultural considerations: ${culturalConsiderations!.trim()}',
+      if ((safetyThingsToAvoid ?? '').trim().isNotEmpty)
+        'Things to avoid: ${safetyThingsToAvoid!.trim()}',
+      if ((giftTeamNotes ?? '').trim().isNotEmpty)
+        'Anything else: ${giftTeamNotes!.trim()}',
+    ];
+    return parts.isEmpty
+        ? 'No allergies, restrictions, or safety notes supplied.'
+        : parts.join('\n');
+  }
+
   SenderGiftIrisBrief generateIrisBrief() {
     final themes = normalizedGiftThemes;
     final labels = themes.map((theme) => theme.label).toList();
@@ -460,6 +494,8 @@ class GiftJourneyDraft {
         .map((theme) => theme.label)
         .toList();
     final hasNotes = (notes ?? '').trim().isNotEmpty;
+    final hasSafetyNotes = safetySummary !=
+        'No allergies, restrictions, or safety notes supplied.';
     final hasMessage = (personalMessage ?? '').trim().isNotEmpty;
     final hasVoice = voiceNote?.hasVoiceNote == true;
     final score = (52 +
@@ -471,7 +507,8 @@ class GiftJourneyDraft {
             (themes.isNotEmpty ? 8 : 0) +
             ((likedBrands ?? '').trim().isNotEmpty ? 3 : 0) +
             ((favouriteColours ?? '').trim().isNotEmpty ? 3 : 0) +
-            (preferredStyles.isNotEmpty ? 4 : 0))
+            (preferredStyles.isNotEmpty ? 4 : 0) +
+            (hasSafetyNotes ? 4 : 0))
         .clamp(0, 96);
     final confidence = score >= 82
         ? 'High'
@@ -484,14 +521,17 @@ class GiftJourneyDraft {
       experienceDirection: signals.isEmpty
           ? 'Concierge-led curation using the personal context provided.'
           : 'Use supported IRIS gift signals: ${signals.join(' · ')}.',
-      thingsToAvoid: unsupported.isEmpty
-          ? 'Avoid product assumptions until the Gifts Team reviews the request.'
-          : 'Do not treat ${unsupported.join(', ')} as catalogue-backed interests.',
+      thingsToAvoid: [
+        if (unsupported.isEmpty)
+          'Avoid product assumptions until the Gifts Team reviews the request.'
+        else
+          'Do not treat ${unsupported.join(', ')} as catalogue-backed interests.',
+        if (hasSafetyNotes) safetySummary,
+      ].join('\n'),
       catalogueCoverage: signals,
       confidence: confidence,
       personalisationScore: score,
-      allergySafetyNotes:
-          'No allergy or medical restriction fields were supplied in this mobile flow.',
+      allergySafetyNotes: safetySummary,
       recommendedPartnerCategories: signals.isEmpty
           ? const ['Concierge curation']
           : signals.map((signal) => signal.replaceAll('Interest', '')).toList(),
@@ -510,6 +550,7 @@ class GiftJourneyDraft {
     Suggestion? deliveryAddressData,
     String? deliveryDate,
     String? deliveryTimeWindow,
+    bool? flexibleDelivery,
     String? personalMessage,
     List<String>? interests,
     String? customInterest,
@@ -523,6 +564,12 @@ class GiftJourneyDraft {
     String? favouriteColours,
     String? likedBrands,
     List<String>? preferredStyles,
+    String? foodAllergies,
+    String? medicalAllergies,
+    String? dietaryRestrictions,
+    String? culturalConsiderations,
+    String? safetyThingsToAvoid,
+    String? giftTeamNotes,
     String? senderRevealMode,
     String? selfGiftFrequency,
     bool? allowCircumSocialUse,
@@ -549,6 +596,7 @@ class GiftJourneyDraft {
       deliveryAddressData: deliveryAddressData ?? this.deliveryAddressData,
       deliveryDate: deliveryDate ?? this.deliveryDate,
       deliveryTimeWindow: deliveryTimeWindow ?? this.deliveryTimeWindow,
+      flexibleDelivery: flexibleDelivery ?? this.flexibleDelivery,
       personalMessage: personalMessage ?? this.personalMessage,
       interests: interests ?? this.interests,
       customInterest: customInterest ?? this.customInterest,
@@ -561,6 +609,13 @@ class GiftJourneyDraft {
       favouriteColours: favouriteColours ?? this.favouriteColours,
       likedBrands: likedBrands ?? this.likedBrands,
       preferredStyles: preferredStyles ?? this.preferredStyles,
+      foodAllergies: foodAllergies ?? this.foodAllergies,
+      medicalAllergies: medicalAllergies ?? this.medicalAllergies,
+      dietaryRestrictions: dietaryRestrictions ?? this.dietaryRestrictions,
+      culturalConsiderations:
+          culturalConsiderations ?? this.culturalConsiderations,
+      safetyThingsToAvoid: safetyThingsToAvoid ?? this.safetyThingsToAvoid,
+      giftTeamNotes: giftTeamNotes ?? this.giftTeamNotes,
       senderRevealMode: senderRevealMode ?? this.senderRevealMode,
       selfGiftFrequency: selfGiftFrequency ?? this.selfGiftFrequency,
       allowCircumSocialUse: allowCircumSocialUse ?? this.allowCircumSocialUse,
@@ -624,6 +679,7 @@ class GiftJourneyDraft {
       'deliveryCountry': deliveryAddressData?.components['country'],
       'deliveryDate': deliveryDate,
       'deliveryTimeWindow': deliveryTimeWindow,
+      'flexibleDelivery': flexibleDelivery,
       'selectedBudgetGbp': budget,
       'budget': budget,
       'grossBudget': budget,
@@ -640,6 +696,23 @@ class GiftJourneyDraft {
           .map((theme) => theme.label)
           .toList(),
       'notes': notes?.trim() ?? '',
+      'foodAllergies': foodAllergies?.trim() ?? '',
+      'medicalAllergies': medicalAllergies?.trim() ?? '',
+      'dietaryRestrictions': dietaryRestrictions?.trim() ?? '',
+      'religiousOrCulturalConsiderations': culturalConsiderations?.trim() ?? '',
+      'safetyThingsToAvoid': safetyThingsToAvoid?.trim() ?? '',
+      'giftTeamSafetyNotes': giftTeamNotes?.trim() ?? '',
+      'allergySafetyNotes': safetySummary,
+      'procurementSafetyNotes': {
+        'foodAllergies': foodAllergies?.trim() ?? '',
+        'medicalAllergies': medicalAllergies?.trim() ?? '',
+        'dietaryRestrictions': dietaryRestrictions?.trim() ?? '',
+        'religiousOrCulturalConsiderations':
+            culturalConsiderations?.trim() ?? '',
+        'thingsToAvoid': safetyThingsToAvoid?.trim() ?? '',
+        'anythingElse': giftTeamNotes?.trim() ?? '',
+        'summary': safetySummary,
+      },
       'voiceNote': voiceNote?.toMap(),
       'irisGiftBrief': brief.toMap(),
       'preferredStyles': preferredStyles,

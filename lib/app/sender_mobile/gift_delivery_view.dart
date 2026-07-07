@@ -58,7 +58,8 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     _selectedAddressSuggestion = widget.draft.deliveryAddressData;
     _deliveryDate = DateTime.tryParse(widget.draft.deliveryDate ?? '');
     _deliveryTimeWindow = widget.draft.deliveryTimeWindow;
-    _flexibleDelivery = widget.draft.deliveryDate == 'Flexible' ||
+    _flexibleDelivery = widget.draft.flexibleDelivery ||
+        widget.draft.deliveryDate == 'Flexible' ||
         widget.draft.deliveryTimeWindow == 'Flexible';
   }
 
@@ -275,6 +276,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
                         deliveryTimeWindow: _flexibleDelivery
                             ? 'Flexible'
                             : _deliveryTimeWindow,
+                        flexibleDelivery: _flexibleDelivery,
                       ),
                     ),
                     settings: const RouteSettings(

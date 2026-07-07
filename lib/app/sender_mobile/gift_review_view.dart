@@ -65,9 +65,8 @@ class _GiftReviewViewState extends State<GiftReviewView> {
           value: customThemes.isEmpty ? 'None' : customThemes.join(', '),
         ),
         _ReviewRow(
-          label: 'Allergies / medical',
-          value:
-              'No allergy or medical restriction fields were supplied in this mobile flow.',
+          label: 'Safety / allergies',
+          value: draft.safetySummary,
         ),
         _GiftBriefCard(
           draft: draft,
@@ -86,6 +85,10 @@ class _GiftReviewViewState extends State<GiftReviewView> {
         _ReviewRow(
           label: 'Budget',
           value: '£${draft.budget.toStringAsFixed(0)}',
+        ),
+        const _ReviewRow(
+          label: 'Roth payment summary',
+          value: 'Roth can be applied on the secure payment step.',
         ),
       ],
       footer: GiftJourneyWidgets.primaryButton(

@@ -14,6 +14,7 @@ import 'package:circum/app/sender_mobile/gift_payment_view.dart';
 import 'package:circum/app/sender_mobile/gift_pre_payment_view.dart';
 import 'package:circum/app/sender_mobile/gift_review_view.dart';
 import 'package:circum/app/sender_mobile/gift_relationship_view.dart';
+import 'package:circum/app/sender_mobile/gift_safety_view.dart';
 import 'package:circum/app/sender_mobile/gift_status_view.dart';
 import 'package:circum/app/sender_mobile/gift_story_view.dart';
 import 'package:circum/app/sender_mobile/gift_themes_view.dart';
@@ -347,6 +348,8 @@ void main() {
           .readAsStringSync();
       final budgetSource = File('lib/app/sender_mobile/gift_budget_view.dart')
           .readAsStringSync();
+      final safetySource = File('lib/app/sender_mobile/gift_safety_view.dart')
+          .readAsStringSync();
       final draftSource = File('lib/app/sender_mobile/gift_journey_draft.dart')
           .readAsStringSync();
       final reviewSource = File('lib/app/sender_mobile/gift_review_view.dart')
@@ -370,6 +373,7 @@ void main() {
       expect(styleSource, contains('activeStep: 8'));
       expect(privacySource, contains('activeStep: 9'));
       expect(budgetSource, contains('activeStep: 10'));
+      expect(safetySource, contains('activeStep: 11'));
       expect(reviewSource, contains('activeStep: 11'));
       expect(paymentSource, contains('activeStep: 12'));
       expect(statusSource, contains('activeStep: 13'));
@@ -386,6 +390,7 @@ void main() {
       expect(GiftVoiceNoteView.routeName, '/sender-mobile/gifts/voice-note');
       expect(GiftThemesView.routeName, '/sender-mobile/gifts/themes');
       expect(GiftIrisView.routeName, '/sender-mobile/gifts/iris');
+      expect(GiftSafetyView.routeName, '/sender-mobile/gifts/safety');
       expect(GiftReviewView.routeName, '/sender-mobile/gifts/review');
       expect(GiftPrePaymentView.routeName, '/sender-mobile/gifts/pre-payment');
       expect(GiftPaymentView.routeName, '/sender-mobile/gifts/payment');
@@ -621,6 +626,7 @@ void main() {
       );
       expect(budgetSource, contains('Slider('));
       expect(budgetSource, contains('senderGiftBudgetOptions'));
+      expect(budgetSource, contains('GiftSafetyView'));
       expect(budgetSource, isNot(contains('Premium Experience')));
       expect(budgetSource, isNot(contains('Luxury partner access')));
       expect(budgetSource, isNot(contains('Premium presentation')));
@@ -643,6 +649,23 @@ void main() {
       expect(draftSource, contains('fragranceInterest'));
       expect(draftSource, contains('jewelleryInterest'));
       expect(draftSource, contains('adminReviewPayload'));
+      expect(safetySource, contains('Anything we need to know?'));
+      expect(safetySource,
+          contains('Help the Gifts Team avoid unsuitable or unsafe gifts.'));
+      expect(safetySource, contains('FOOD ALLERGIES'));
+      expect(safetySource, contains('MEDICAL ALLERGIES'));
+      expect(safetySource, contains('DIETARY RESTRICTIONS'));
+      expect(safetySource, contains('RELIGIOUS OR CULTURAL CONSIDERATIONS'));
+      expect(safetySource, contains('THINGS TO AVOID'));
+      expect(
+          safetySource, contains('ANYTHING ELSE THE GIFTS TEAM SHOULD KNOW'));
+      expect(draftSource, contains('foodAllergies'));
+      expect(draftSource, contains('medicalAllergies'));
+      expect(draftSource, contains('dietaryRestrictions'));
+      expect(draftSource, contains('religiousOrCulturalConsiderations'));
+      expect(draftSource, contains('safetyThingsToAvoid'));
+      expect(draftSource, contains('giftTeamSafetyNotes'));
+      expect(draftSource, contains('procurementSafetyNotes'));
       expect(reviewSource, contains('STEP 11 — REVIEW'));
       expect(reviewSource,
           contains('Gift contents remain confidential before delivery.'));
@@ -704,7 +727,8 @@ void main() {
       expect(reviewSource, contains('Added ·'));
       expect(reviewSource, contains('Chosen themes'));
       expect(reviewSource, contains('Personal themes'));
-      expect(reviewSource, contains('Allergies / medical'));
+      expect(reviewSource, contains('Safety / allergies'));
+      expect(reviewSource, contains('Roth payment summary'));
       expect(reviewSource, contains('Campaign · Bringing London Closer'));
       expect(reviewSource, contains('Campaign path'));
       expect(
@@ -834,6 +858,12 @@ void main() {
           createdAt: DateTime.utc(2026),
         ),
         preferredStyles: const ['Minimal', 'Elegant'],
+        foodAllergies: 'Nut allergy',
+        medicalAllergies: 'Sensitive skin',
+        dietaryRestrictions: 'Vegan',
+        culturalConsiderations: 'No alcohol',
+        safetyThingsToAvoid: "Doesn't wear jewellery",
+        giftTeamNotes: 'Claustrophobic',
         irisGiftBrief: SenderGiftIrisBrief(
           emotionalDirection: 'Warm',
           experienceDirection: 'Concierge',
@@ -875,6 +905,20 @@ void main() {
         containsPair('downloadUrl', 'https://storage.example/voice.webm'),
       );
       expect(payload['preferredStyles'], ['Minimal', 'Elegant']);
+      expect(payload['foodAllergies'], 'Nut allergy');
+      expect(payload['medicalAllergies'], 'Sensitive skin');
+      expect(payload['dietaryRestrictions'], 'Vegan');
+      expect(payload['religiousOrCulturalConsiderations'], 'No alcohol');
+      expect(payload['safetyThingsToAvoid'], "Doesn't wear jewellery");
+      expect(payload['giftTeamSafetyNotes'], 'Claustrophobic');
+      expect(
+        payload['allergySafetyNotes'],
+        contains('Food allergies: Nut allergy'),
+      );
+      expect(
+        payload['procurementSafetyNotes'],
+        containsPair('thingsToAvoid', "Doesn't wear jewellery"),
+      );
       expect(payload['irisGiftBrief'], containsPair('confidence', 'High'));
     });
 
