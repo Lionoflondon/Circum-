@@ -208,11 +208,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     return 'You both connect around ${shared.join(', ')}.';
   }
 
-  bool get _linkedGiftDelivered {
-    final data = _participantStatusData ?? const <String, dynamic>{};
-    return '${data['linkedGiftDeliveryStatus'] ?? data['giftDeliveryStatus'] ?? ''}' ==
-        'delivered';
-  }
+  bool get _linkedGiftStoryUnlocked => _campaignStoryDraft.giftStoryUnlocked;
 
   GiftJourneyDraft get _campaignStoryDraft {
     final data = _participantStatusData ?? const <String, dynamic>{};
@@ -228,10 +224,37 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           '${data['giftDeliveryId'] ?? data['linkedGiftDeliveryId'] ?? ''}',
       linkedGiftDeliveryStatus:
           '${data['linkedGiftDeliveryStatus'] ?? data['giftDeliveryStatus'] ?? ''}',
+      riderCompletionAccepted: _truthy(data['riderCompletionAccepted']) ||
+          _truthy(data['riderCompletionAcceptedAt']),
+      deliveryVerificationCompleted:
+          _truthy(data['deliveryVerificationCompleted']) ||
+              _truthy(data['requiredDeliveryVerificationCompleted']) ||
+              _truthy(data['deliveryPinVerified']) ||
+              _truthy(data['photoProofAccepted']) ||
+              _truthy(data['signatureAccepted']),
+      deliveryAuditSuccessful: _truthy(data['deliveryAuditSuccessful']) ||
+          _truthy(data['backendDeliveryAuditSuccessful']),
+      activeDeliveryDispute: _truthy(data['activeDeliveryDispute']) ||
+          _truthy(data['hasActiveDeliveryDispute']) ||
+          _truthy(data['deliveryInvestigationActive']) ||
+          _truthy(data['activeDeliveryInvestigation']),
       giftStoryAdminOverride: data['giftStoryAdminOverride'] == true,
       giftStoryAdminOverrideReason:
           '${data['giftStoryAdminOverrideReason'] ?? ''}',
     );
+  }
+
+  static bool _truthy(Object? value) {
+    if (value == null) return false;
+    if (value is bool) return value;
+    if (value is Timestamp || value is DateTime) return true;
+    if (value is num) return value != 0;
+    final text = '$value'.trim().toLowerCase();
+    return text == 'true' ||
+        text == 'yes' ||
+        text == 'completed' ||
+        text == 'accepted' ||
+        text == 'successful';
   }
 
   String _formatStatusDate(DateTime date) {
@@ -308,12 +331,12 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   }
 
   String get _footerLabel {
-    if (_step == 8 && _linkedGiftDelivered) return 'View Gift Story';
+    if (_step == 8 && _linkedGiftStoryUnlocked) return 'View Gift Story';
     return _primaryLabel;
   }
 
   VoidCallback? get _footerAction {
-    if (_step == 8 && _linkedGiftDelivered) {
+    if (_step == 8 && _linkedGiftStoryUnlocked) {
       return () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => GiftStoryView(draft: _campaignStoryDraft),
@@ -781,10 +804,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         ),
         const SizedBox(height: 12),
         _CampaignGlassCard(
-          title: _linkedGiftDelivered
+          title: _linkedGiftStoryUnlocked
               ? 'Your Gift Story is ready'
               : 'Gift Story locked',
-          body: _linkedGiftDelivered
+          body: _linkedGiftStoryUnlocked
               ? 'View Gift Story'
               : 'Your story will unlock after delivery is confirmed.',
         ),

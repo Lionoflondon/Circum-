@@ -1133,14 +1133,22 @@ void main() {
       expect(draftSource, contains('campaignParticipantId'));
       expect(draftSource, contains('giftRequestId'));
       expect(draftSource, contains('giftDeliveryId'));
+      expect(draftSource, contains('riderCompletionAccepted'));
+      expect(draftSource, contains('deliveryVerificationCompleted'));
+      expect(draftSource, contains('deliveryAuditSuccessful'));
+      expect(draftSource, contains('activeDeliveryDispute'));
+      expect(draftSource, contains('giftStoryStatus'));
       expect(draftSource, contains('giftStoryAdminOverrideReason'));
       expect(draftSource, contains("linkedGiftDeliveryStatus == 'delivered'"));
       expect(
         draftSource,
         contains(
-          'giftStoryAdminOverrideReason ??',
+          'riderCompletionAccepted &&',
         ),
       );
+      expect(draftSource, contains('deliveryVerificationCompleted &&'));
+      expect(draftSource, contains('deliveryAuditSuccessful &&'));
+      expect(draftSource, contains('!activeDeliveryDispute'));
 
       expect(storySource, contains('Gift Story locked'));
       expect(
@@ -1160,20 +1168,28 @@ void main() {
           GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
         linkedGiftDeliveryStatus: 'delivered',
       );
-      final overrideWithoutReason =
+      final operationallyComplete =
           GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
-        giftStoryAdminOverride: true,
+        linkedGiftDeliveryStatus: 'delivered',
+        riderCompletionAccepted: true,
+        deliveryVerificationCompleted: true,
+        deliveryAuditSuccessful: true,
       );
-      final overrideWithReason =
+      final disputed =
           GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
-        giftStoryAdminOverride: true,
-        giftStoryAdminOverrideReason: 'Admin unlock after proof review',
+        linkedGiftDeliveryStatus: 'delivered',
+        riderCompletionAccepted: true,
+        deliveryVerificationCompleted: true,
+        deliveryAuditSuccessful: true,
+        activeDeliveryDispute: true,
       );
 
       expect(locked.giftStoryUnlocked, isFalse);
-      expect(delivered.giftStoryUnlocked, isTrue);
-      expect(overrideWithoutReason.giftStoryUnlocked, isFalse);
-      expect(overrideWithReason.giftStoryUnlocked, isTrue);
+      expect(locked.giftStoryStatus, 'locked');
+      expect(delivered.giftStoryUnlocked, isFalse);
+      expect(operationallyComplete.giftStoryUnlocked, isTrue);
+      expect(operationallyComplete.giftStoryStatus, 'unlocked');
+      expect(disputed.giftStoryUnlocked, isFalse);
     });
 
     test('Campaign matching is budget-independent and budget-private', () {

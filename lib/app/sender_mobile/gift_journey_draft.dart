@@ -316,6 +316,10 @@ class GiftJourneyDraft {
   final String? giftRequestId;
   final String? giftDeliveryId;
   final String? linkedGiftDeliveryStatus;
+  final bool riderCompletionAccepted;
+  final bool deliveryVerificationCompleted;
+  final bool deliveryAuditSuccessful;
+  final bool activeDeliveryDispute;
   final bool giftStoryAdminOverride;
   final String? giftStoryAdminOverrideReason;
   final double budget;
@@ -367,6 +371,10 @@ class GiftJourneyDraft {
     this.giftRequestId,
     this.giftDeliveryId,
     this.linkedGiftDeliveryStatus,
+    this.riderCompletionAccepted = false,
+    this.deliveryVerificationCompleted = false,
+    this.deliveryAuditSuccessful = false,
+    this.activeDeliveryDispute = false,
     this.giftStoryAdminOverride = false,
     this.giftStoryAdminOverrideReason,
     this.budget = 100,
@@ -412,10 +420,14 @@ class GiftJourneyDraft {
       };
 
   bool get giftStoryUnlocked {
-    if (linkedGiftDeliveryStatus == 'delivered') return true;
-    return giftStoryAdminOverride &&
-        (giftStoryAdminOverrideReason ?? '').trim().isNotEmpty;
+    return linkedGiftDeliveryStatus == 'delivered' &&
+        riderCompletionAccepted &&
+        deliveryVerificationCompleted &&
+        deliveryAuditSuccessful &&
+        !activeDeliveryDispute;
   }
+
+  String get giftStoryStatus => giftStoryUnlocked ? 'unlocked' : 'locked';
 
   SenderGiftBriefPreview get giftBriefPreview {
     if (irisGiftBrief != null) {
@@ -604,6 +616,10 @@ class GiftJourneyDraft {
     String? giftRequestId,
     String? giftDeliveryId,
     String? linkedGiftDeliveryStatus,
+    bool? riderCompletionAccepted,
+    bool? deliveryVerificationCompleted,
+    bool? deliveryAuditSuccessful,
+    bool? activeDeliveryDispute,
     bool? giftStoryAdminOverride,
     String? giftStoryAdminOverrideReason,
     double? budget,
@@ -660,6 +676,14 @@ class GiftJourneyDraft {
       giftDeliveryId: giftDeliveryId ?? this.giftDeliveryId,
       linkedGiftDeliveryStatus:
           linkedGiftDeliveryStatus ?? this.linkedGiftDeliveryStatus,
+      riderCompletionAccepted:
+          riderCompletionAccepted ?? this.riderCompletionAccepted,
+      deliveryVerificationCompleted:
+          deliveryVerificationCompleted ?? this.deliveryVerificationCompleted,
+      deliveryAuditSuccessful:
+          deliveryAuditSuccessful ?? this.deliveryAuditSuccessful,
+      activeDeliveryDispute:
+          activeDeliveryDispute ?? this.activeDeliveryDispute,
       giftStoryAdminOverride:
           giftStoryAdminOverride ?? this.giftStoryAdminOverride,
       giftStoryAdminOverrideReason:
@@ -806,6 +830,11 @@ class GiftJourneyDraft {
       'giftRequestId': giftRequestId,
       'giftDeliveryId': giftDeliveryId,
       'linkedGiftDeliveryStatus': linkedGiftDeliveryStatus,
+      'riderCompletionAccepted': riderCompletionAccepted,
+      'deliveryVerificationCompleted': deliveryVerificationCompleted,
+      'deliveryAuditSuccessful': deliveryAuditSuccessful,
+      'activeDeliveryDispute': activeDeliveryDispute,
+      'giftStoryStatus': giftStoryStatus,
       'giftStoryAdminOverride': giftStoryAdminOverride,
       'giftStoryAdminOverrideReason': giftStoryAdminOverrideReason,
       'participantConsentRequired': mode == SenderGiftMode.campaign,
