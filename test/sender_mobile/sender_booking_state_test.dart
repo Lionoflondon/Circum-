@@ -4,6 +4,7 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/send_package/models/suggestions.m.dart';
+import 'package:circum/app/gifts/gifts_social_policy.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
 import 'package:circum/app/sender_mobile/gift_iris_view.dart';
@@ -1040,7 +1041,7 @@ void main() {
       expect(campaignSource, contains('giftDraftId'));
       expect(campaignSource, contains('campaignParticipantId'));
       expect(campaignSource, contains('campaignFlow'));
-      expect(campaignSource, contains('waiting_for_match'));
+      expect(campaignSource, contains('paid_waiting_for_match'));
       expect(campaignSource, contains('checkout_pending'));
       expect(campaignSource, contains('Payment ready'));
       expect(campaignSource, contains('Processing payment...'));
@@ -1064,6 +1065,13 @@ void main() {
       expect(campaignSource, contains('GiftsSocialPolicy.canApproveBrandTags'));
       expect(campaignSource, contains('Anonymous match found'));
       expect(campaignSource, contains('Waiting for your match'));
+      expect(campaignSource, contains('Status updates automatically'));
+      expect(campaignSource, contains('campaignStatus'));
+      expect(campaignSource, contains('statusUpdatedAt'));
+      expect(campaignSource, contains('budgetPrivacyNote'));
+      expect(campaignSource, isNot(contains('Preview Next')));
+      expect(campaignSource, isNot(contains('campaign_preview_step')));
+      expect(campaignSource, isNot(contains('STEP 09 — MATCH FOUND')));
       expect(campaignSource, contains('No recipient fields here.'));
       expect(campaignSource, contains('Delivery address'));
       expect(
@@ -1079,6 +1087,59 @@ void main() {
       expect(campaignSource, isNot(contains('GiftReviewView(')));
       expect(campaignSource, isNot(contains("label: 'BLOCKLIST'")));
       expect(campaignSource, isNot(contains('Optional blocked user IDs')));
+    });
+
+    test('Campaign matching is budget-independent and budget-private', () {
+      expect(
+        GiftsSocialPolicy.campaignBudgetIndependenceRule,
+        contains('budget-independent'),
+      );
+      final baseParticipant = {
+        'userId': 'sender-a',
+        'matchConsent': true,
+        'matchStatus': 'active',
+        'interests': ['coffee', 'architecture'],
+        'hobbies': ['walking'],
+        'lifestyle': ['wellness'],
+        'customInspiration': 'London mornings',
+        'allergies': <String>[],
+        'blockedUserIds': <String>[],
+        'budget': 1500,
+        'paymentMethod': 'roth_card',
+        'rothApplied': 200,
+        'cardAmount': 1300,
+      };
+      final lowBudgetMatch = {
+        'userId': 'sender-b',
+        'matchConsent': true,
+        'matchStatus': 'active',
+        'interests': ['coffee', 'architecture'],
+        'hobbies': ['walking'],
+        'lifestyle': ['wellness'],
+        'allergies': <String>[],
+        'blockedUserIds': <String>[],
+        'budget': 50,
+      };
+      final highBudgetMatch = {
+        ...lowBudgetMatch,
+        'budget': 1500,
+      };
+
+      final lowBudgetScore =
+          GiftsSocialPolicy.scoreMatch(baseParticipant, lowBudgetMatch);
+      final highBudgetScore =
+          GiftsSocialPolicy.scoreMatch(baseParticipant, highBudgetMatch);
+
+      expect(lowBudgetScore.score, greaterThan(0));
+      expect(lowBudgetScore.score, highBudgetScore.score);
+      expect(lowBudgetScore.reason.toLowerCase(), isNot(contains('budget')));
+      expect(lowBudgetScore.reason.toLowerCase(), isNot(contains('spend')));
+
+      final safe = GiftsSocialPolicy.recipientSafeView(baseParticipant);
+      expect(safe, isNot(contains('budget')));
+      expect(safe, isNot(contains('paymentMethod')));
+      expect(safe, isNot(contains('rothApplied')));
+      expect(safe, isNot(contains('cardAmount')));
     });
 
     testWidgets('Gift flow validates recipient, delivery, and message steps', (

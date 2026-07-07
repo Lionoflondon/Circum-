@@ -22,25 +22,6 @@ bool _isLocalCampaignPaymentPreview() {
   return localHost && uri.queryParameters['campaign_payment_preview'] == '1';
 }
 
-int _initialCampaignPreviewStep() {
-  if (!_isLocalCampaignPaymentPreview()) return 0;
-  final requested = int.tryParse(
-    Uri.base.queryParameters['campaign_preview_step'] ?? '',
-  );
-  if (requested == null) return 8;
-  return requested.clamp(8, 13).toInt();
-}
-
-Map<String, dynamic> _previewApprovedCampaignMatch() {
-  return const {
-    'campaignName': 'Bringing London Closer',
-    'compatibilityScore': 91,
-    'sharedInterests': ['coffee', 'architecture', 'weekend walks'],
-    'revealMode': 'mutual_consent',
-    'safetyPassed': true,
-  };
-}
-
 class GiftCampaignView extends StatefulWidget {
   const GiftCampaignView({super.key});
 
@@ -51,12 +32,18 @@ class GiftCampaignView extends StatefulWidget {
 }
 
 class _GiftCampaignViewState extends State<GiftCampaignView> {
-  var _step = _initialCampaignPreviewStep();
+  var _step = _isLocalCampaignPaymentPreview() ? 8 : 0;
   _CampaignOption? _campaign;
   String? _participantId;
-  Map<String, dynamic>? _approvedMatch = _initialCampaignPreviewStep() >= 9
-      ? _previewApprovedCampaignMatch()
-      : null;
+  Map<String, dynamic>? _participantStatusData =
+      _isLocalCampaignPaymentPreview()
+          ? const {
+              'status': 'paid_waiting_for_match',
+              'campaignStatus': 'paid_waiting_for_match',
+            }
+          : null;
+  Map<String, dynamic>? _approvedMatch;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _participantSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _matchSub;
 
   final _displayNameController = TextEditingController();
@@ -110,6 +97,132 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     return 'card';
   }
 
+  String get _campaignParticipantStatus {
+    final data = _participantStatusData ?? const <String, dynamic>{};
+    final raw = '${data['status'] ?? data['campaignStatus'] ?? ''}';
+    if (raw == 'waiting_for_match') return 'paid_waiting_for_match';
+    if (raw.isNotEmpty) return raw;
+    final matchStatus = '${data['matchStatus'] ?? ''}';
+    if (matchStatus == 'match_found') return 'match_found';
+    if (matchStatus == 'approved') return 'admin_pairing_approved';
+    return 'paid_waiting_for_match';
+  }
+
+  _CampaignStatusCopy get _campaignStatusCopy {
+    return switch (_campaignParticipantStatus) {
+      'match_found' => const _CampaignStatusCopy(
+          title: 'Anonymous match found',
+          subtitle:
+              'A compatible anonymous match is ready. Private identity remains protected.',
+          body:
+              'Your match has been found from shared interests and safety checks. We only show what the policy allows.',
+          privacyNote:
+              'Names, photos, addresses and private details remain hidden unless GiftsSocialPolicy allows reveal.',
+          showAnonymousMatchSummary: true,
+        ),
+      'admin_pairing_pending' => const _CampaignStatusCopy(
+          title: 'Pairing under review',
+          subtitle:
+              'The Gifts Team is reviewing the safe anonymous pairing before anything moves forward.',
+          body:
+              'Admin is checking compatibility, consent and restrictions. You do not need to do anything yet.',
+          privacyNote: 'The match stays anonymous while review is pending.',
+        ),
+      'admin_pairing_approved' => const _CampaignStatusCopy(
+          title: 'Pairing approved',
+          subtitle: 'The Gifts Team approved the safe anonymous match.',
+          body:
+              'The pairing has passed policy review and can move into the internal Gifts workflow.',
+          privacyNote:
+              'Identity remains protected. Reveal timing is still governed by consent settings.',
+          showAnonymousMatchSummary: true,
+        ),
+      'gift_request_linked' => const _CampaignStatusCopy(
+          title: 'Gift journey linked',
+          subtitle: 'The operational Gifts request is now linked internally.',
+          body:
+              'Campaign context, safety notes and anonymous compatibility now travel with the internal request.',
+          privacyNote:
+              'No known-recipient form is shown in Campaign. Details stay controlled by Admin and policy.',
+        ),
+      'gifts_team_curating' => const _CampaignStatusCopy(
+          title: 'Gifts Team is curating',
+          subtitle:
+              'The concierge team is shaping the anonymous gift experience.',
+          body:
+              'The team is using compatibility, safety and consent notes to plan the next operational step.',
+          privacyNote:
+              'Private identity and handover details remain hidden from the sender.',
+        ),
+      'ready_for_delivery_planning' => const _CampaignStatusCopy(
+          title: 'Ready for delivery planning',
+          subtitle:
+              'Delivery planning can begin after policy-safe matching and Admin approval.',
+          body:
+              'Final handover details are handled by the Gifts Team when the match is ready operationally.',
+          privacyNote:
+              'The campaign remains anonymous unless the reveal policy allows otherwise.',
+        ),
+      _ => const _CampaignStatusCopy(
+          title: 'Waiting for your match',
+          subtitle:
+              'We’ll only reveal what the policy allows. You’ll be notified when a safe match is approved.',
+          body:
+              'Your campaign participation is paid and waiting for a compatible, policy-safe match.',
+          privacyNote:
+              'No recipient name, photo, address or private details are shown at this stage.',
+        ),
+    };
+  }
+
+  String? get _campaignStatusTimestampLabel {
+    final data = _participantStatusData ?? const <String, dynamic>{};
+    final value =
+        data['statusUpdatedAt'] ?? data['updatedAt'] ?? data['paidAt'];
+    final date = switch (value) {
+      Timestamp timestamp => timestamp.toDate(),
+      DateTime dateTime => dateTime,
+      String raw => DateTime.tryParse(raw),
+      _ => null,
+    };
+    if (date == null) return null;
+    return _formatStatusDate(date.toLocal());
+  }
+
+  String get _anonymousMatchSummary {
+    final safe = GiftsSocialPolicy.recipientSafeView(
+      _approvedMatch ?? const <String, dynamic>{},
+    );
+    final shared = ((safe['sharedInterests'] as List?) ?? const [])
+        .map((value) => '$value')
+        .where((value) => value.isNotEmpty)
+        .toList();
+    if (shared.isEmpty) {
+      return 'A safe anonymous match is ready. Shared details appear only when policy allows.';
+    }
+    return 'You both connect around ${shared.join(', ')}.';
+  }
+
+  String _formatStatusDate(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '${date.day} ${months[date.month - 1]} ${date.year} · $hour:$minute';
+  }
+
   bool get _canContinue {
     return switch (_step) {
       0 => true,
@@ -120,9 +233,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       5 => _budget >= 50,
       6 => true,
       7 => !_submitting && _paymentMethod.isNotEmpty,
-      8 => true,
-      9 => _approvedMatch != null,
-      10 || 11 || 12 || 13 => _canBypassCampaignPaymentForLocalPreview,
+      8 => false,
       _ => false,
     };
   }
@@ -135,6 +246,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
 
   @override
   void dispose() {
+    _participantSub?.cancel();
     _matchSub?.cancel();
     _displayNameController.dispose();
     _customInspirationController.dispose();
@@ -173,12 +285,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         5 => 'STEP 05 — BUDGET',
         6 => 'STEP 06 — REVIEW',
         7 => 'STEP 07 — PAYMENT',
-        8 => 'STEP 08 — WAITING FOR MATCH',
-        9 => 'STEP 09 — MATCH FOUND',
-        10 => 'STEP 10 — ADMIN PAIRING',
-        11 => 'STEP 11 — GIFT REQUEST LINKED',
-        12 => 'STEP 12 — TEAM CURATION',
-        13 => 'STEP 13 — READY FOR DELIVERY',
+        8 => 'CAMPAIGN STATUS',
         _ => 'CAMPAIGN',
       };
 
@@ -191,12 +298,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         5 => 'Campaign gift budget',
         6 => 'Review your campaign join',
         7 => 'Secure participation',
-        8 => 'Waiting for your match',
-        9 => 'Anonymous match found',
-        10 => 'Admin pairing approved',
-        11 => 'Gift journey linked',
-        12 => 'Gifts Team is curating',
-        13 => 'Ready for delivery planning',
+        8 => _campaignStatusCopy.title,
         _ => 'Campaign',
       };
 
@@ -213,28 +315,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         6 =>
           'No recipient, delivery address or delivery date is collected yet.',
         7 => 'Pay with Roth, card, or Roth plus card.',
-        8 =>
-          'We’ll only reveal what the policy allows. You’ll be notified when a safe match is approved.',
-        9 =>
-          'Only anonymous compatibility is shown. Names, photos and addresses stay hidden.',
-        10 =>
-          'The Gifts Team approves the safe pairing before any downstream request is created.',
-        11 =>
-          'A normal Gifts request is linked internally after matching, without asking for known-recipient fields during campaign join.',
-        12 =>
-          'The concierge team uses the anonymous compatibility and safety notes to shape the gift.',
-        13 =>
-          'Delivery details are handled only after policy-safe matching and Admin approval.',
+        8 => _campaignStatusCopy.subtitle,
         _ => '',
       };
 
   String get _primaryLabel => switch (_step) {
         0 => 'Join Campaign',
         7 => _submitting ? 'Processing...' : 'Continue to Secure Payment',
-        8 => 'Refresh Match',
-        9 => 'Continue',
-        10 || 11 || 12 => 'Preview Next',
-        13 => 'Done',
+        8 => 'Status updates automatically',
         _ => 'Continue',
       };
 
@@ -247,12 +335,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         5 => _budgetChildren,
         6 => _reviewChildren,
         7 => _paymentChildren,
-        8 => _waitingChildren,
-        9 => _matchChildren,
-        10 => _adminPairingChildren,
-        11 => _linkedRequestChildren,
-        12 => _teamCurationChildren,
-        13 => _readyForDeliveryChildren,
+        8 => _campaignStatusChildren,
         _ => const <Widget>[],
       };
 
@@ -580,151 +663,75 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         ),
       ];
 
-  List<Widget> get _waitingChildren => [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOut,
-          width: double.infinity,
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: const Color(0xFFC9B8FF).withValues(alpha: .32),
-            ),
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFFC9B8FF).withValues(alpha: .12),
-                const Color(0xFFFF8BD1).withValues(alpha: .08),
-              ],
-            ),
+  List<Widget> get _campaignStatusChildren {
+    final copy = _campaignStatusCopy;
+    final timestamp = _campaignStatusTimestampLabel;
+    return [
+      AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: const Color(0xFFC9B8FF).withValues(alpha: .32),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Waiting for your match',
-                style: GoogleFonts.dmSerifDisplay(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'We’ll only reveal what the policy allows. You’ll be notified when a safe match is approved.',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFFE7DFF5),
-                  fontSize: 13,
-                  height: 1.45,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFC9B8FF).withValues(alpha: .12),
+              const Color(0xFFFF8BD1).withValues(alpha: .08),
             ],
           ),
         ),
-      ];
-
-  List<Widget> get _matchChildren {
-    final match = _approvedMatch ?? const <String, dynamic>{};
-    final safe = GiftsSocialPolicy.recipientSafeView(match);
-    final shared = ((safe['sharedInterests'] as List?) ?? const [])
-        .map((value) => '$value')
-        .where((value) => value.isNotEmpty)
-        .toList();
-    final score = (safe['compatibilityScore'] as num?)?.toDouble();
-    return [
-      _CampaignGlassCard(
-        title: 'Compatibility score',
-        body: score == null ? 'Approved' : '${score.toStringAsFixed(0)} / 100',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              copy.title,
+              style: GoogleFonts.dmSerifDisplay(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              copy.body,
+              style: GoogleFonts.inter(
+                color: const Color(0xFFE7DFF5),
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
-      const SizedBox(height: 12),
+      SizedBox(height: 12),
       _CampaignGlassCard(
-        title: 'Shared interests',
-        body: shared.isEmpty
-            ? 'Anonymous compatibility approved'
-            : shared.join(', '),
+        title: 'Privacy and safety',
+        body: copy.privacyNote,
       ),
-      const SizedBox(height: 12),
-      _CampaignGlassCard(
-        title: 'Campaign',
-        body: _campaign?.name ?? '${safe['campaignName'] ?? 'Campaign'}',
-      ),
+      if (timestamp != null) ...[
+        const SizedBox(height: 12),
+        _CampaignGlassCard(title: 'Last updated', body: timestamp),
+      ],
+      if (copy.showAnonymousMatchSummary) ...[
+        const SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Anonymous compatibility',
+          body: _anonymousMatchSummary,
+        ),
+      ],
       const SizedBox(height: 12),
       const _CampaignGlassCard(
-        title: 'Safety passed',
-        body: 'Allergy and restriction conflicts were checked before approval.',
-      ),
-      const SizedBox(height: 12),
-      _CampaignGlassCard(title: 'Reveal policy', body: _senderRevealModeLabel),
-      const SizedBox(height: 12),
-      const _CampaignGlassCard(
-        title: 'Anonymous status',
-        body: 'Names, photos, addresses and private details remain hidden.',
+        title: 'No recipient form',
+        body:
+            'Campaign stays participant to match to gift. Delivery details are handled only after policy-safe matching and Admin approval.',
       ),
     ];
   }
-
-  List<Widget> get _adminPairingChildren => const [
-        _CampaignGlassCard(
-          title: 'Pairing approved',
-          body:
-              'Admin approves the anonymous match after GiftsSocialPolicy safety checks pass.',
-        ),
-        SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Identity protected',
-          body:
-              'Names, photos, addresses and private recipient details remain hidden unless policy allows reveal.',
-        ),
-        SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'No recipient form',
-          body:
-              'Campaign stays participant to match to gift. It does not enter the known-recipient delivery flow.',
-        ),
-      ];
-
-  List<Widget> get _linkedRequestChildren => const [
-        _CampaignGlassCard(
-          title: 'Internal gift request',
-          body:
-              'After Admin approval, Circum links or generates the operational gift request for procurement.',
-        ),
-        SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Campaign context carried',
-          body:
-              'Shared interests, safety notes, reveal mode and budget stay attached to the work.',
-        ),
-      ];
-
-  List<Widget> get _teamCurationChildren => const [
-        _CampaignGlassCard(
-          title: 'Gifts Team review',
-          body:
-              'The team curates around compatibility, consent, safety and the campaign budget.',
-        ),
-        SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'IRIS support',
-          body:
-              'IRIS helps organise the anonymous signals without exposing private identity.',
-        ),
-      ];
-
-  List<Widget> get _readyForDeliveryChildren => const [
-        _CampaignGlassCard(
-          title: 'Delivery planning',
-          body:
-              'Final handover details are handled only after safe matching and approval.',
-        ),
-        SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Still anonymous',
-          body:
-              'Reveal timing remains governed by GiftsSocialPolicy and consent settings.',
-        ),
-      ];
 
   Widget _chipSection(String title, String key, List<String> options) {
     if (key == 'senderRevealMode') {
@@ -830,16 +837,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       await _submitCampaignParticipant();
       return;
     }
-    if (_step == 8) {
-      await _refreshApprovedMatch();
-      if (_approvedMatch != null) setState(() => _step = 9);
-      return;
-    }
-    if (_canBypassCampaignPaymentForLocalPreview && _step >= 9 && _step < 13) {
-      setState(() => _step += 1);
-      return;
-    }
-    if (_step == 9) return;
+    if (_step == 8) return;
     setState(() => _step += 1);
   }
 
@@ -871,6 +869,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       setState(() {
         _participantId ??= 'local-preview-campaign-participant';
         _message = null;
+        _participantStatusData = const {
+          'status': 'paid_waiting_for_match',
+          'campaignStatus': 'paid_waiting_for_match',
+        };
         _step = 8;
       });
       return;
@@ -985,6 +987,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         return;
       }
       _listenForApprovedMatch();
+      _listenForParticipantStatus();
       if (!mounted) return;
       setState(() => _step = 8);
     } catch (error) {
@@ -1018,23 +1021,11 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'paymentDraftId': paymentDraftId,
       'stripeCheckoutSessionId': stripeSessionId,
       'campaignFlow': 'anonymous',
-      'campaignStatus': 'waiting_for_match',
+      'status': 'paid_waiting_for_match',
+      'campaignStatus': 'paid_waiting_for_match',
       'matchStatus': 'awaiting_admin_pairing',
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-  }
-
-  Future<void> _refreshApprovedMatch() async {
-    final participantId = _participantId;
-    if (participantId == null) return;
-    final snapshot = await FirebaseFirestore.instance
-        .collection(senderGiftCampaignMatchesCollectionName)
-        .where('participantIds', arrayContains: participantId)
-        .where('adminStatus', isEqualTo: 'approved')
-        .limit(1)
-        .get();
-    if (snapshot.docs.isEmpty) return;
-    setState(() => _approvedMatch = snapshot.docs.first.data());
   }
 
   void _listenForApprovedMatch() {
@@ -1051,8 +1042,21 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       if (!mounted || snapshot.docs.isEmpty) return;
       setState(() {
         _approvedMatch = snapshot.docs.first.data();
-        _step = 9;
       });
+    });
+  }
+
+  void _listenForParticipantStatus() {
+    final participantId = _participantId;
+    if (participantId == null) return;
+    _participantSub?.cancel();
+    _participantSub = FirebaseFirestore.instance
+        .collection(senderGiftCampaignParticipantsCollectionName)
+        .doc(participantId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted || !snapshot.exists) return;
+      setState(() => _participantStatusData = snapshot.data());
     });
   }
 
@@ -1093,10 +1097,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'allowBrandTagging': _allowBrandTagging,
       'budget': _budget,
       'grossGiftBudget': _budget,
+      'budgetPrivacyNote':
+          'Budgets are private. Matching is based on compatibility and safety, not spend. Each participant funds their own gift.',
       'paymentMethod': _verifiedPaymentMethod,
       'rothApplied': _rothApplied,
       'cardAmount': _cardAmount,
       'paymentStatus': 'payment_pending',
+      'status': 'join_started',
+      'campaignStatus': 'join_started',
       'source': senderGiftCampaignPaymentSource,
       'giftRequestCreated': false,
       'recipientKnown': false,
@@ -1166,6 +1174,22 @@ class _CampaignOption {
     required this.name,
     required this.type,
     required this.tagline,
+  });
+}
+
+class _CampaignStatusCopy {
+  final String title;
+  final String subtitle;
+  final String body;
+  final String privacyNote;
+  final bool showAnonymousMatchSummary;
+
+  const _CampaignStatusCopy({
+    required this.title,
+    required this.subtitle,
+    required this.body,
+    required this.privacyNote,
+    this.showAnonymousMatchSummary = false,
   });
 }
 

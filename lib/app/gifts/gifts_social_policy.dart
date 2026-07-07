@@ -1,4 +1,7 @@
 class GiftsSocialPolicy {
+  static const campaignBudgetIndependenceRule =
+      'Campaign matching is budget-independent. Budget must not be used to calculate compatibility score, rank matches, approve matches, or explain matches. Budget is private payment/procurement data only.';
+
   static bool canPostPublicly(Map<String, dynamic> gift) {
     return gift['recipientContentConsent'] == 'granted' &&
         gift['allowCircumSocialUse'] == true &&
@@ -24,7 +27,20 @@ class GiftsSocialPolicy {
       ..remove('internalNotes')
       ..remove('adminDecision')
       ..remove('manualGiftPlan')
-      ..remove('brandNotes');
+      ..remove('brandNotes')
+      ..remove('budget')
+      ..remove('budgetPrivacyNote')
+      ..remove('grossBudget')
+      ..remove('grossGiftBudget')
+      ..remove('giftCampaignTotal')
+      ..remove('selectedBudgetGbp')
+      ..remove('paymentMethod')
+      ..remove('rothApplied')
+      ..remove('cardAmount')
+      ..remove('remainingCardAmount')
+      ..remove('remainingStripeAmountGbp')
+      ..remove('stripeCheckoutSessionId')
+      ..remove('paymentDraftId');
     if (!canRevealSender(gift)) {
       safe
         ..remove('senderId')
@@ -74,6 +90,8 @@ class GiftsSocialPolicy {
       ...?participant['favouriteFoodsDrinks'] as List?,
       ...?participant['musicTaste'] as List?,
       ...?participant['booksFilms'] as List?,
+      ...?participant['lifestyle'] as List?,
+      participant['customInspiration'],
     ];
     return values
         .map((value) => '$value'.trim().toLowerCase())
