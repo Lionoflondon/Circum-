@@ -15,6 +15,13 @@ const senderGiftCampaignParticipantsCollectionName = 'giftCampaignParticipants';
 const senderGiftCampaignMatchesCollectionName = 'giftCampaignMatches';
 const senderGiftCampaignPaymentSource = 'sender_mobile_campaign';
 
+bool _isLocalCampaignPaymentPreview() {
+  final uri = Uri.base;
+  final host = uri.host.toLowerCase();
+  final localHost = host == 'localhost' || host == '127.0.0.1';
+  return localHost && uri.queryParameters['campaign_payment_preview'] == '1';
+}
+
 class GiftCampaignView extends StatefulWidget {
   const GiftCampaignView({super.key});
 
@@ -25,7 +32,7 @@ class GiftCampaignView extends StatefulWidget {
 }
 
 class _GiftCampaignViewState extends State<GiftCampaignView> {
-  var _step = 0;
+  var _step = _isLocalCampaignPaymentPreview() ? 8 : 0;
   _CampaignOption? _campaign;
   String? _participantId;
   Map<String, dynamic>? _approvedMatch;
@@ -750,6 +757,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   }
 
   Future<void> _submitCampaignParticipant() async {
+    if (_canBypassCampaignPaymentForLocalPreview) {
+      setState(() {
+        _participantId ??= 'local-preview-campaign-participant';
+        _message = null;
+        _step = 8;
+      });
+      return;
+    }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       setState(() {
@@ -872,6 +887,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  bool get _canBypassCampaignPaymentForLocalPreview {
+    return _isLocalCampaignPaymentPreview();
   }
 
   Future<void> _markParticipantPaid(
