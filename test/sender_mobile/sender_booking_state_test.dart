@@ -265,12 +265,15 @@ void main() {
       expect(giftSource, contains('Anonymous gift'));
       expect(giftSource, contains('Campaign'));
       expect(giftSource, contains('GiftCampaignView'));
-      expect(campaignSource, contains('Gift a stranger. Bring London closer.'));
+      expect(campaignSource, contains('Bring London Closer'));
+      expect(campaignSource, contains('giftCampaignParticipants'));
+      expect(campaignSource, contains('giftCampaignMatches'));
       expect(campaignSource, contains('GiftsSocialPolicy.scoreMatch'));
       expect(campaignSource, contains('GiftsSocialPolicy.canRevealSender'));
       expect(campaignSource, contains('GiftsSocialPolicy.canPostPublicly'));
       expect(campaignSource, contains('GiftsSocialPolicy.canApproveBrandTags'));
       expect(campaignSource, contains('GiftsSocialPolicy.recipientSafeView'));
+      expect(campaignSource, isNot(contains('GiftDeliveryView')));
       expect(giftSource, contains('SenderGiftsIconKind.gift'));
       expect(giftSource, contains('SenderGiftsIconKind.self'));
       expect(giftSource, contains('SenderGiftsIconKind.mask'));
@@ -981,8 +984,7 @@ void main() {
       await tester.tap(find.text('Campaign'));
       await tester.pumpAndSettle();
 
-      expect(
-          find.text('Gift a stranger. Bring London closer.'), findsOneWidget);
+      expect(find.text('Bring London Closer'), findsOneWidget);
       expect(find.text('Join Campaign'), findsOneWidget);
 
       await tester.tap(find.text('Join Campaign'));
@@ -990,6 +992,40 @@ void main() {
 
       expect(find.text('Choose campaign'), findsOneWidget);
       expect(find.text('Bringing London Closer'), findsOneWidget);
+      expect(find.text('Tell us about them'), findsNothing);
+      expect(find.text('Where and when?'), findsNothing);
+    });
+
+    test('Campaign Gifts is separate from known-recipient Gifts flow', () {
+      final campaignSource =
+          File('lib/app/sender_mobile/gift_campaign_view.dart')
+              .readAsStringSync();
+
+      expect(campaignSource, contains('giftCampaignParticipants'));
+      expect(campaignSource, contains('giftCampaignMatches'));
+      expect(campaignSource, contains('awaiting_admin_pairing'));
+      expect(campaignSource, contains('recipientKnown'));
+      expect(campaignSource, contains('deliveryCollected'));
+      expect(campaignSource, contains('GiftsSocialPolicy.scoreMatch'));
+      expect(campaignSource, contains('GiftsSocialPolicy.recipientSafeView'));
+      expect(campaignSource, contains('GiftsSocialPolicy.canRevealSender'));
+      expect(campaignSource, contains('GiftsSocialPolicy.canPostPublicly'));
+      expect(campaignSource, contains('GiftsSocialPolicy.canApproveBrandTags'));
+      expect(campaignSource, contains('Anonymous match found'));
+      expect(campaignSource, contains('Finding a compatible match'));
+      expect(campaignSource, contains('No recipient fields here.'));
+      expect(campaignSource, contains('Delivery address'));
+      expect(
+        campaignSource,
+        contains(
+          'Delivery address, recipient identity and handover details are handled after admin pairing approval.',
+        ),
+      );
+      expect(
+          campaignSource, isNot(contains("import 'gift_delivery_view.dart'")));
+      expect(campaignSource, isNot(contains('GiftDeliveryView(')));
+      expect(campaignSource, isNot(contains("import 'gift_review_view.dart'")));
+      expect(campaignSource, isNot(contains('GiftReviewView(')));
     });
 
     testWidgets('Gift flow validates recipient, delivery, and message steps', (

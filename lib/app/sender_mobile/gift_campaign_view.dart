@@ -1,12 +1,19 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../gifts/gifts_social_policy.dart';
-import 'gift_delivery_view.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
+
+const senderGiftCampaignParticipantsCollectionName = 'giftCampaignParticipants';
+const senderGiftCampaignMatchesCollectionName = 'giftCampaignMatches';
+const senderGiftCampaignPaymentSource = 'sender_mobile_campaign';
 
 class GiftCampaignView extends StatefulWidget {
   const GiftCampaignView({super.key});
@@ -20,6 +27,18 @@ class GiftCampaignView extends StatefulWidget {
 class _GiftCampaignViewState extends State<GiftCampaignView> {
   var _step = 0;
   _CampaignOption? _campaign;
+  String? _participantId;
+  Map<String, dynamic>? _approvedMatch;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _matchSub;
+
+  final _displayNameController = TextEditingController();
+  final _allergiesController = TextEditingController();
+  final _dietaryController = TextEditingController();
+  final _medicalController = TextEditingController();
+  final _culturalController = TextEditingController();
+  final _avoidController = TextEditingController();
+  final _blockedController = TextEditingController();
+
   final _selected = <String, Set<String>>{
     'interests': <String>{},
     'hobbies': <String>{},
@@ -29,19 +48,33 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     'lifestyle': <String>{},
     'preferredGiftCategories': <String>{},
   };
-  final _allergiesController = TextEditingController();
-  final _medicalController = TextEditingController();
-  final _blockedController = TextEditingController();
-  var _senderRevealMode = 'anonymous_forever';
+
+  var _senderRevealMode = 'mutual_consent';
   var _recipientContentConsent = false;
   var _allowCircumSocialUse = false;
   var _allowPublicPosting = false;
   var _allowBrandTagging = false;
-  _CampaignMatch? _match;
-  Timer? _matchTimer;
+  var _budget = 50.0;
+  var _paymentMethod = 'Card';
+  var _applyRoth = false;
+  var _rothLoading = true;
+  var _rothUnavailable = false;
+  var _rothBalance = 0.0;
+  var _submitting = false;
+  String? _message;
 
   bool get _hasAboutSignal =>
+      _displayNameController.text.trim().isNotEmpty &&
       _selected.values.any((values) => values.isNotEmpty);
+
+  double get _rothApplied =>
+      _applyRoth ? _rothBalance.clamp(0, _budget).toDouble() : 0;
+  double get _cardAmount => (_budget - _rothApplied).clamp(0, _budget);
+  String get _verifiedPaymentMethod {
+    if (_rothApplied >= _budget) return 'roth';
+    if (_rothApplied > 0) return 'roth_card';
+    return 'card';
+  }
 
   bool get _canContinue {
     return switch (_step) {
@@ -50,17 +83,30 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       2 => _hasAboutSignal,
       3 => true,
       4 => true,
-      5 => _match != null,
-      6 => _match != null,
+      5 => _budget >= 50,
+      6 => true,
+      7 => !_submitting && _paymentMethod.isNotEmpty,
+      8 => true,
+      9 => _approvedMatch != null,
       _ => false,
     };
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadRothBalance();
+  }
+
+  @override
   void dispose() {
-    _matchTimer?.cancel();
+    _matchSub?.cancel();
+    _displayNameController.dispose();
     _allergiesController.dispose();
+    _dietaryController.dispose();
     _medicalController.dispose();
+    _culturalController.dispose();
+    _avoidController.dispose();
     _blockedController.dispose();
     super.dispose();
   }
@@ -88,41 +134,53 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         2 => 'STEP 02 — ABOUT YOU',
         3 => 'STEP 03 — SAFETY',
         4 => 'STEP 04 — PRIVACY',
-        5 => 'STEP 05 — MATCHING',
-        6 => 'STEP 06 — MATCHED',
+        5 => 'STEP 05 — BUDGET',
+        6 => 'STEP 06 — REVIEW',
+        7 => 'STEP 07 — PAYMENT',
+        8 => 'STEP 08 — WAITING FOR MATCH',
+        9 => 'STEP 09 — MATCH FOUND',
         _ => 'CAMPAIGN',
       };
 
   String get _title => switch (_step) {
-        0 => 'Gift a stranger. Bring London closer.',
+        0 => 'Bring London Closer',
         1 => 'Choose campaign',
         2 => 'About you',
         3 => 'Safety',
         4 => 'Privacy',
-        5 => _match == null ? 'Finding your match...' : 'Match found',
-        6 => 'Your anonymous match is ready',
+        5 => 'Campaign gift budget',
+        6 => 'Review your campaign join',
+        7 => 'Secure participation',
+        8 => 'Finding a compatible match',
+        9 => 'Anonymous match found',
         _ => 'Campaign',
       };
 
   String get _subtitle => switch (_step) {
         0 =>
-          'People anonymously exchange thoughtful gifts with others who share similar interests. Circum never reveals identities until the policy allows.',
-        1 => 'Choose the anonymous gift exchange you want to join.',
+          'Join an anonymous gift exchange shaped around shared interests, safety and consent.',
+        1 => 'Choose the campaign you want to join.',
         2 =>
-          'Share only the interests GiftsSocialPolicy uses for anonymous matching.',
+          'Share the participant signals used for anonymous matching. No recipient fields here.',
         3 =>
-          'We use these details to avoid unsafe matches, including allergy conflicts.',
-        4 => 'Reveal and sharing choices are governed by GiftsSocialPolicy.',
-        5 =>
-          'We compare anonymous compatibility only. No names, photos, addresses or private profile details are shown.',
-        6 => 'Continue into the normal Gifts flow with this match attached.',
+          'These notes are used by GiftsSocialPolicy to hard-block unsafe matches.',
+        4 => 'Your identity stays private unless the reveal policy allows it.',
+        5 => 'Set the budget for your anonymous campaign gift.',
+        6 =>
+          'No recipient, delivery address or delivery date is collected yet.',
+        7 => 'Pay with Roth, card, or Roth plus card.',
+        8 =>
+          'Admin pairing and GiftsSocialPolicy matching happen before any private recipient details are used.',
+        9 =>
+          'Only anonymous compatibility is shown. Names, photos and addresses stay hidden.',
         _ => '',
       };
 
   String get _primaryLabel => switch (_step) {
         0 => 'Join Campaign',
-        5 => _match == null ? 'Finding match...' : 'View match',
-        6 => 'Continue to Gift',
+        7 => _submitting ? 'Securing...' : 'Continue to Secure Payment',
+        8 => 'Refresh Match',
+        9 => 'Continue',
         _ => 'Continue',
       };
 
@@ -132,16 +190,25 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         2 => _aboutChildren,
         3 => _safetyChildren,
         4 => _privacyChildren,
-        5 => _matchingChildren,
-        6 => _matchedChildren,
+        5 => _budgetChildren,
+        6 => _reviewChildren,
+        7 => _paymentChildren,
+        8 => _waitingChildren,
+        9 => _matchChildren,
         _ => const <Widget>[],
       };
 
   List<Widget> get _homeChildren => [
-        _CampaignGlassCard(
-          title: 'How it works',
+        const _CampaignGlassCard(
+          title: 'Anonymous exchange',
           body:
-              'You join a campaign, share safe matching signals, choose your reveal policy, then receive an anonymous compatibility match.',
+              'People anonymously exchange thoughtful gifts with others who share similar interests.',
+        ),
+        const SizedBox(height: 12),
+        const _CampaignGlassCard(
+          title: 'Policy protected',
+          body:
+              'Circum never reveals identities until GiftsSocialPolicy allows it.',
         ),
         const SizedBox(height: 8),
         Align(
@@ -165,12 +232,6 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Privacy first',
-          body:
-              'Circum uses GiftsSocialPolicy for reveal, public posting and brand tagging decisions.',
-        ),
       ];
 
   List<Widget> get _campaignChildren => [
@@ -185,6 +246,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       ];
 
   List<Widget> get _aboutChildren => [
+        GiftJourneyWidgets.inputCard(
+          controller: _displayNameController,
+          label: 'ANONYMOUS HANDLE',
+          placeholder: 'What should the Gifts Team call you?',
+          helper: 'This is not shown to your match.',
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 14),
         _chipSection('Interests', 'interests', const [
           'Travel',
           'Architecture',
@@ -213,7 +282,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           'History',
           'Biographies',
         ]),
-        _chipSection('Food', 'favouriteFoodsDrinks', const [
+        _chipSection('Food preferences', 'favouriteFoodsDrinks', const [
           'Tea',
           'Coffee',
           'Chocolate',
@@ -239,25 +308,47 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   List<Widget> get _safetyChildren => [
         GiftJourneyWidgets.inputCard(
           controller: _allergiesController,
-          label: 'FOOD ALLERGIES',
+          label: 'ALLERGIES',
           placeholder: 'Nuts, dairy, gluten...',
-          helper: 'Comma-separated. Used for automatic exclusion.',
+          helper: 'Used for automatic exclusion.',
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        GiftJourneyWidgets.inputCard(
+          controller: _dietaryController,
+          label: 'DIETARY RESTRICTIONS',
+          placeholder: 'Vegan, halal, no alcohol...',
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
         GiftJourneyWidgets.inputCard(
           controller: _medicalController,
           label: 'MEDICAL RESTRICTIONS',
-          placeholder: 'Anything gifts should avoid',
-          helper: 'Only include what is relevant to gifts.',
+          placeholder: 'Anything relevant to gifts',
+          onChanged: (_) => setState(() {}),
+          maxLines: 3,
+        ),
+        const SizedBox(height: 12),
+        GiftJourneyWidgets.inputCard(
+          controller: _culturalController,
+          label: 'CULTURAL OR RELIGIOUS CONSIDERATIONS',
+          placeholder: 'Anything the Gifts Team should respect',
+          onChanged: (_) => setState(() {}),
+          maxLines: 3,
+        ),
+        const SizedBox(height: 12),
+        GiftJourneyWidgets.inputCard(
+          controller: _avoidController,
+          label: 'THINGS TO AVOID',
+          placeholder: 'Perfume, flowers, jewellery...',
           onChanged: (_) => setState(() {}),
           maxLines: 3,
         ),
         const SizedBox(height: 12),
         GiftJourneyWidgets.inputCard(
           controller: _blockedController,
-          label: 'BLOCKED USERS',
-          placeholder: 'Optional user IDs',
+          label: 'BLOCKLIST',
+          placeholder: 'Optional blocked user IDs',
           helper: 'Used only if applicable.',
           onChanged: (_) => setState(() {}),
         ),
@@ -303,7 +394,121 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     ];
   }
 
-  List<Widget> get _matchingChildren => [
+  List<Widget> get _budgetChildren => [
+        _CampaignGlassCard(
+          title: 'Experience Budget',
+          body: '£${_budget.toStringAsFixed(0)}',
+        ),
+        Slider(
+          value: _budget,
+          min: 50,
+          max: 1500,
+          divisions: 29,
+          activeColor: const Color(0xFFC9B8FF),
+          inactiveColor: Colors.white.withValues(alpha: .12),
+          label: '£${_budget.toStringAsFixed(0)}',
+          onChanged: (value) => setState(() => _budget = value.roundToDouble()),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final value in const [50, 100, 250, 500, 1000, 1500])
+              GiftJourneyWidgets.choiceChip(
+                label: '£$value',
+                selected: _budget == value,
+                onTap: () => setState(() => _budget = value.toDouble()),
+              ),
+          ],
+        ),
+      ];
+
+  List<Widget> get _reviewChildren => [
+        _CampaignGlassCard(
+          title: 'Campaign',
+          body: _campaign?.name ?? 'Choose campaign',
+        ),
+        const SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Participant interests',
+          body: _reviewList([
+            ..._selected['interests']!,
+            ..._selected['hobbies']!,
+            ..._selected['musicTaste']!,
+            ..._selected['booksFilms']!,
+          ]),
+        ),
+        const SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Safety notes',
+          body: _reviewList([
+            _allergiesController.text,
+            _dietaryController.text,
+            _medicalController.text,
+            _culturalController.text,
+            _avoidController.text,
+          ]),
+        ),
+        const SizedBox(height: 12),
+        _CampaignGlassCard(title: 'Privacy mode', body: _senderRevealModeLabel),
+        const SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Budget',
+          body: '£${_budget.toStringAsFixed(0)}',
+        ),
+        const SizedBox(height: 12),
+        const _CampaignGlassCard(
+          title: 'No recipient yet',
+          body:
+              'Delivery address, recipient identity and handover details are handled after admin pairing approval.',
+        ),
+      ];
+
+  List<Widget> get _paymentChildren => [
+        _CampaignGlassCard(
+          title: 'Gift Total',
+          body: '£${_budget.toStringAsFixed(0)}',
+        ),
+        const SizedBox(height: 10),
+        _CampaignGlassCard(
+          title: 'Available Roth',
+          body: _rothLoading
+              ? 'Checking Roth balance...'
+              : _rothUnavailable
+                  ? 'Roth unavailable'
+                  : '£${_rothBalance.toStringAsFixed(0)}',
+        ),
+        const SizedBox(height: 14),
+        _chipSection('Payment method', 'paymentMethod', const [
+          'Card',
+          'Roth',
+          'Roth + Card',
+        ]),
+        if (_paymentMethod != 'Card' && _rothBalance > 0) ...[
+          const SizedBox(height: 12),
+          _CampaignToggle(
+            label: 'Apply Roth balance',
+            value: _applyRoth,
+            onChanged: (value) => setState(() => _applyRoth = value),
+          ),
+          const SizedBox(height: 10),
+          _CampaignGlassCard(
+            title: 'Roth applied',
+            body: '£${_rothApplied.toStringAsFixed(0)}',
+          ),
+        ],
+        const SizedBox(height: 10),
+        _CampaignGlassCard(
+          title: 'Remaining card amount',
+          body: '£${_cardAmount.toStringAsFixed(0)}',
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: 12),
+          _CampaignGlassCard(title: 'Payment', body: _message!),
+        ],
+      ];
+
+  List<Widget> get _waitingChildren => [
         AnimatedContainer(
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOut,
@@ -312,7 +517,8 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-                color: const Color(0xFFC9B8FF).withValues(alpha: .32)),
+              color: const Color(0xFFC9B8FF).withValues(alpha: .32),
+            ),
             gradient: LinearGradient(
               colors: [
                 const Color(0xFFC9B8FF).withValues(alpha: .12),
@@ -324,9 +530,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _match == null
-                    ? 'Finding your match...'
-                    : 'Anonymous compatibility summary',
+                'Finding a compatible match',
                 style: GoogleFonts.dmSerifDisplay(
                   color: Colors.white,
                   fontSize: 24,
@@ -335,8 +539,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
               ),
               const SizedBox(height: 10),
               Text(
-                _match?.reason ??
-                    'Looking for safe overlap across interests, food, books, music and lifestyle.',
+                'We only show anonymous compatibility after GiftsSocialPolicy and Admin pairing approve the match.',
                 style: GoogleFonts.inter(
                   color: const Color(0xFFE7DFF5),
                   fontSize: 13,
@@ -349,59 +552,70 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         ),
       ];
 
-  List<Widget> get _matchedChildren => [
-        _CampaignGlassCard(
-          title: 'Compatibility score',
-          body: '${_match?.score.toStringAsFixed(0) ?? '0'} / 100',
-        ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Shared interests',
-          body: _match?.sharedInterests.join(', ') ?? 'Broad compatibility',
-        ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Campaign',
-          body: _campaign?.name ?? 'Bringing London Closer',
-        ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Reveal policy',
-          body: _senderRevealModeLabel,
-        ),
-        const SizedBox(height: 12),
-        const _CampaignGlassCard(
-          title: 'Anonymous status',
-          body:
-              'Names, photos, addresses and private profile details remain hidden.',
-        ),
-      ];
+  List<Widget> get _matchChildren {
+    final match = _approvedMatch ?? const <String, dynamic>{};
+    final safe = GiftsSocialPolicy.recipientSafeView(match);
+    final shared = ((safe['sharedInterests'] as List?) ?? const [])
+        .map((value) => '$value')
+        .where((value) => value.isNotEmpty)
+        .toList();
+    final score = (safe['compatibilityScore'] as num?)?.toDouble();
+    return [
+      _CampaignGlassCard(
+        title: 'Compatibility score',
+        body: score == null ? 'Approved' : '${score.toStringAsFixed(0)} / 100',
+      ),
+      const SizedBox(height: 12),
+      _CampaignGlassCard(
+        title: 'Shared interests',
+        body: shared.isEmpty
+            ? 'Anonymous compatibility approved'
+            : shared.join(', '),
+      ),
+      const SizedBox(height: 12),
+      _CampaignGlassCard(
+        title: 'Campaign',
+        body: _campaign?.name ?? '${safe['campaignName'] ?? 'Campaign'}',
+      ),
+      const SizedBox(height: 12),
+      const _CampaignGlassCard(
+        title: 'Safety passed',
+        body: 'Allergy and restriction conflicts were checked before approval.',
+      ),
+      const SizedBox(height: 12),
+      _CampaignGlassCard(title: 'Reveal policy', body: _senderRevealModeLabel),
+      const SizedBox(height: 12),
+      const _CampaignGlassCard(
+        title: 'Anonymous status',
+        body: 'Names, photos, addresses and private details remain hidden.',
+      ),
+    ];
+  }
 
   Widget _chipSection(String title, String key, List<String> options) {
     if (key == 'senderRevealMode') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle(title),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final option in options)
-                GiftJourneyWidgets.choiceChip(
-                  label: option,
-                  selected: _senderRevealModeLabel == option,
-                  onTap: () => setState(() {
-                    _senderRevealMode = switch (option) {
-                      'Reveal immediately' => 'reveal_immediately',
-                      'Reveal after delivery' => 'reveal_after_delivery',
-                      _ => 'anonymous_forever',
-                    };
-                  }),
-                ),
-            ],
-          ),
-        ],
+      return _singleChoiceSection(
+        title,
+        options,
+        selected: _senderRevealModeLabel,
+        onSelected: (option) => setState(() {
+          _senderRevealMode = switch (option) {
+            'Reveal immediately' => 'reveal_immediately',
+            'Reveal after delivery' => 'reveal_after_delivery',
+            _ => 'mutual_consent',
+          };
+        }),
+      );
+    }
+    if (key == 'paymentMethod') {
+      return _singleChoiceSection(
+        title,
+        options,
+        selected: _paymentMethod,
+        onSelected: (option) => setState(() {
+          _paymentMethod = option;
+          _applyRoth = option != 'Card' && _rothBalance > 0;
+        }),
       );
     }
     final selected = _selected[key]!;
@@ -424,6 +638,32 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           ],
         ),
         const SizedBox(height: 18),
+      ],
+    );
+  }
+
+  Widget _singleChoiceSection(
+    String title,
+    List<String> options, {
+    required String selected,
+    required ValueChanged<String> onSelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(title),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in options)
+              GiftJourneyWidgets.choiceChip(
+                label: option,
+                selected: selected == option,
+                onTap: () => onSelected(option),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -451,100 +691,210 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     setState(() => _step -= 1);
   }
 
-  void _goNext() {
-    if (_step == 0) {
-      setState(() => _step = 1);
+  Future<void> _goNext() async {
+    if (_step == 7) {
+      await _submitCampaignParticipant();
       return;
     }
-    if (_step == 4) {
-      setState(() {
-        _step = 5;
-        _match = null;
-      });
-      _startMatching();
+    if (_step == 8) {
+      await _refreshApprovedMatch();
+      if (_approvedMatch != null) setState(() => _step = 9);
       return;
     }
-    if (_step == 5) {
-      setState(() => _step = 6);
-      return;
-    }
-    if (_step == 6) {
-      _continueToGift();
-      return;
-    }
+    if (_step == 9) return;
     setState(() => _step += 1);
   }
 
-  void _startMatching() {
-    _matchTimer?.cancel();
-    _matchTimer = Timer(const Duration(milliseconds: 700), () {
+  Future<void> _loadRothBalance() async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable(senderGiftRothBalanceCallableName)
+          .call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final balance = (data['availableRoth'] ?? data['balance'] ?? 0) as num;
       if (!mounted) return;
-      setState(() => _match = _bestMatch());
+      setState(() {
+        _rothBalance = balance.toDouble();
+        _rothLoading = false;
+        _rothUnavailable = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _rothBalance = 0;
+        _rothLoading = false;
+        _rothUnavailable = true;
+      });
+    }
+  }
+
+  Future<void> _submitCampaignParticipant() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _message = 'Sign in to join this campaign.';
+      });
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _message = null;
+    });
+    try {
+      final campaign = _campaign ?? _campaigns.first;
+      final participantRef = FirebaseFirestore.instance
+          .collection(senderGiftCampaignParticipantsCollectionName)
+          .doc(_participantId);
+      _participantId = participantRef.id;
+      final participant = _participantPayload(user.uid, user.email ?? '');
+      await participantRef.set({
+        ...participant,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      final result = GiftsSocialPolicy.scoreMatch(
+        participant,
+        _policyOnlyMatchEligibilityPreview(campaign),
+      );
+      if (result.score == 0) {
+        throw StateError(result.reason);
+      }
+      if (_verifiedPaymentMethod == 'roth' ||
+          _verifiedPaymentMethod == 'roth_card') {
+        final payment = await FirebaseFunctions.instance
+            .httpsCallable(senderGiftPaymentCallableName)
+            .call({
+          'campaignParticipantId': participantRef.id,
+          'source': senderGiftCampaignPaymentSource,
+          'applyRoth': true,
+          'grossGiftBudget': _budget,
+          'returnOrigin': Uri.base.origin,
+        });
+        final data = Map<String, dynamic>.from(payment.data as Map);
+        if (data['walletPaidInFull'] != true) {
+          final checkoutUrl = Uri.tryParse('${data['url'] ?? ''}');
+          if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
+            throw StateError('Secure checkout could not be opened.');
+          }
+          await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+          return;
+        }
+      } else {
+        final payment = await FirebaseFunctions.instance
+            .httpsCallable(senderGiftPaymentCallableName)
+            .call({
+          'campaignParticipantId': participantRef.id,
+          'source': senderGiftCampaignPaymentSource,
+          'applyRoth': false,
+          'grossGiftBudget': _budget,
+          'returnOrigin': Uri.base.origin,
+        });
+        final data = Map<String, dynamic>.from(payment.data as Map);
+        final checkoutUrl = Uri.tryParse('${data['url'] ?? ''}');
+        if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
+          throw StateError('Secure checkout could not be opened.');
+        }
+        await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+        return;
+      }
+      _listenForApprovedMatch();
+      if (!mounted) return;
+      setState(() => _step = 8);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error is FirebaseFunctionsException
+            ? (error.message ?? 'Could not secure campaign participation.')
+            : '$error'.replaceFirst('Bad state: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _refreshApprovedMatch() async {
+    final participantId = _participantId;
+    if (participantId == null) return;
+    final snapshot = await FirebaseFirestore.instance
+        .collection(senderGiftCampaignMatchesCollectionName)
+        .where('participantIds', arrayContains: participantId)
+        .where('adminStatus', isEqualTo: 'approved')
+        .limit(1)
+        .get();
+    if (snapshot.docs.isEmpty) return;
+    setState(() => _approvedMatch = snapshot.docs.first.data());
+  }
+
+  void _listenForApprovedMatch() {
+    final participantId = _participantId;
+    if (participantId == null) return;
+    _matchSub?.cancel();
+    _matchSub = FirebaseFirestore.instance
+        .collection(senderGiftCampaignMatchesCollectionName)
+        .where('participantIds', arrayContains: participantId)
+        .where('adminStatus', isEqualTo: 'approved')
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted || snapshot.docs.isEmpty) return;
+      setState(() {
+        _approvedMatch = snapshot.docs.first.data();
+        _step = 9;
+      });
     });
   }
 
-  _CampaignMatch _bestMatch() {
-    final participant = _participantPolicyMap;
-    _CampaignMatch? best;
-    for (final candidate in _candidatePool) {
-      final result = GiftsSocialPolicy.scoreMatch(participant, candidate);
-      if (result.score <= 0) continue;
-      final safe = GiftsSocialPolicy.recipientSafeView(candidate);
-      final overlap = _terms(participant).intersection(_terms(safe)).toList()
-        ..sort();
-      final match = _CampaignMatch(
-        score: result.score,
-        reason: result.reason,
-        sharedInterests:
-            overlap.isEmpty ? const ['Broad thoughtful exchange'] : overlap,
-      );
-      if (best == null || match.score > best.score) best = match;
-    }
-    return best ??
-        const _CampaignMatch(
-          score: 25,
-          reason: 'A broad campaign match with no obvious preference conflict.',
-          sharedInterests: ['Broad thoughtful exchange'],
-        );
-  }
-
-  void _continueToGift() {
+  Map<String, dynamic> _participantPayload(String userId, String email) {
     final campaign = _campaign ?? _campaigns.first;
-    final match = _match;
-    final draft = GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
-      recipientName: 'Anonymous campaign match',
-      relationship: 'Anonymous Recipient',
-      occasion: campaign.name,
-      notes:
-          'Campaign match: ${match?.reason ?? 'Anonymous compatibility match.'}',
-      interests: _selected['interests']!.toList(),
-      giftThemes: [
-        for (final label in _selected['preferredGiftCategories']!)
-          SenderGiftTheme.catalogue(label),
-      ],
-      senderRevealMode: _senderRevealMode,
-      allowCircumSocialUse: _allowCircumSocialUse,
-      allowPublicPosting: _allowPublicPosting,
-      allowBrandTagging: _allowBrandTagging,
-      recipientContentConsent:
+    return {
+      'userId': userId,
+      'email': email,
+      'displayName': _displayNameController.text.trim(),
+      'campaignId': campaign.id,
+      'campaignName': campaign.name,
+      'campaignType': campaign.type,
+      'campaignTagline': campaign.tagline,
+      'matchConsent': true,
+      'matchStatus': 'awaiting_admin_pairing',
+      'interests': _selected['interests']!.toList(),
+      'hobbies': _selected['hobbies']!.toList(),
+      'musicTaste': _selected['musicTaste']!.toList(),
+      'booksFilms': _selected['booksFilms']!.toList(),
+      'favouriteFoodsDrinks': _selected['favouriteFoodsDrinks']!.toList(),
+      'lifestyle': _selected['lifestyle']!.toList(),
+      'preferredGiftCategories': _selected['preferredGiftCategories']!.toList(),
+      'allergies': _commaList(_allergiesController.text),
+      'dietaryRestrictions': _dietaryController.text.trim(),
+      'medicalRestrictions': _medicalController.text.trim(),
+      'culturalOrReligiousConsiderations': _culturalController.text.trim(),
+      'thingsToAvoid': _avoidController.text.trim(),
+      'blockedUserIds': _commaList(_blockedController.text),
+      'senderRevealMode': _senderRevealMode,
+      'senderRevealConsent': 'pending',
+      'recipientRevealRequestStatus': 'pending',
+      'recipientContentConsent':
           _recipientContentConsent ? 'granted' : 'not_requested',
-      campaignId: campaign.id,
-      campaignName: campaign.name,
-      campaignType: campaign.type,
-      campaignTagline: campaign.tagline,
-      campaignCompatibilityScore: match?.score,
-      campaignMatchSummary: match?.reason,
-    );
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => GiftDeliveryView(draft: draft),
-        settings: const RouteSettings(name: GiftDeliveryView.routeName),
-      ),
-    );
+      'allowCircumSocialUse': _allowCircumSocialUse,
+      'allowPublicPosting': _allowPublicPosting,
+      'allowBrandTagging': _allowBrandTagging,
+      'budget': _budget,
+      'grossGiftBudget': _budget,
+      'paymentMethod': _verifiedPaymentMethod,
+      'rothApplied': _rothApplied,
+      'cardAmount': _cardAmount,
+      'paymentStatus': 'payment_pending',
+      'source': 'sender_mobile',
+      'giftRequestCreated': false,
+      'recipientKnown': false,
+      'deliveryCollected': false,
+    };
   }
 
-  Map<String, dynamic> get _participantPolicyMap => {
-        'userId': 'sender-mobile-campaign-participant',
+  Map<String, dynamic> _policyOnlyMatchEligibilityPreview(
+    _CampaignOption campaign,
+  ) =>
+      {
+        'userId': 'admin-approved-${campaign.id}',
         'matchConsent': true,
         'matchStatus': 'active',
         'interests': _selected['interests']!.toList(),
@@ -552,13 +902,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         'musicTaste': _selected['musicTaste']!.toList(),
         'booksFilms': _selected['booksFilms']!.toList(),
         'favouriteFoodsDrinks': _selected['favouriteFoodsDrinks']!.toList(),
-        'lifestyle': _selected['lifestyle']!.toList(),
         'preferredGiftCategories':
             _selected['preferredGiftCategories']!.toList(),
-        'allergies': _commaList(_allergiesController.text),
-        'medicalRestrictions': _medicalController.text.trim(),
-        'blockedUserIds': _commaList(_blockedController.text),
-        ..._policyGiftPreview,
+        'allergies': const <String>[],
+        'blockedUserIds': const <String>[],
       };
 
   Map<String, dynamic> get _policyGiftPreview => {
@@ -579,23 +926,19 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         _ => 'Anonymous until mutual consent',
       };
 
+  static String _reviewList(Iterable<String> values) {
+    final clean = values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    return clean.isEmpty ? 'Not added' : clean.join(', ');
+  }
+
   static List<String> _commaList(String value) => value
       .split(',')
       .map((item) => item.trim())
       .where((item) => item.isNotEmpty)
       .toList();
-
-  static Set<String> _terms(Map<String, dynamic> participant) {
-    final values = <dynamic>[
-      ...?participant['interests'] as List?,
-      ...?participant['hobbies'] as List?,
-      ...?participant['preferredGiftCategories'] as List?,
-      ...?participant['favouriteFoodsDrinks'] as List?,
-      ...?participant['musicTaste'] as List?,
-      ...?participant['booksFilms'] as List?,
-    ];
-    return values.map((value) => '$value'.toLowerCase()).toSet();
-  }
 }
 
 class _CampaignOption {
@@ -609,18 +952,6 @@ class _CampaignOption {
     required this.name,
     required this.type,
     required this.tagline,
-  });
-}
-
-class _CampaignMatch {
-  final double score;
-  final String reason;
-  final List<String> sharedInterests;
-
-  const _CampaignMatch({
-    required this.score,
-    required this.reason,
-    required this.sharedInterests,
   });
 }
 
@@ -667,35 +998,6 @@ const _campaigns = [
     type: 'anonymous_gifting',
     tagline: 'A thoughtful moment without pressure.',
   ),
-];
-
-const _candidatePool = [
-  {
-    'userId': 'campaign-candidate-travel-coffee',
-    'matchConsent': true,
-    'matchStatus': 'active',
-    'interests': ['Travel', 'Architecture', 'Coffee'],
-    'hobbies': ['Photography', 'Reading'],
-    'musicTaste': ['Jazz'],
-    'booksFilms': ['Design', 'History'],
-    'favouriteFoodsDrinks': ['Coffee', 'Tea'],
-    'preferredGiftCategories': ['Books', 'Experiences'],
-    'allergies': <String>[],
-    'blockedUserIds': <String>[],
-  },
-  {
-    'userId': 'campaign-candidate-wellness-art',
-    'matchConsent': true,
-    'matchStatus': 'active',
-    'interests': ['Art', 'Fashion'],
-    'hobbies': ['Cooking', 'Running'],
-    'musicTaste': ['Classical'],
-    'booksFilms': ['Poetry'],
-    'favouriteFoodsDrinks': ['Chocolate'],
-    'preferredGiftCategories': ['Beauty', 'Home Fragrance'],
-    'allergies': ['nuts'],
-    'blockedUserIds': <String>[],
-  },
 ];
 
 class _CampaignOptionCard extends StatelessWidget {
@@ -840,7 +1142,7 @@ class _HowItWorksSheet extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Join a campaign, share safe matching signals, receive an anonymous compatibility match, then continue into the normal Gifts journey.',
+              'Join a campaign, share safe matching signals, set privacy and budget, then wait for Admin-approved anonymous pairing. Delivery details are handled only after matching.',
               style: GoogleFonts.inter(
                 color: const Color(0xFFE7DFF5),
                 fontSize: 13.5,
