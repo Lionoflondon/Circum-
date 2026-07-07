@@ -24,7 +24,13 @@ function giftReturnUrls({giftDraftId, source, origin, config = {}}) {
   };
 }
 
+function giftPaymentMethodFromSplit(split = {}) {
+  if (Number(split.walletContributionGbp || 0) <= 0) return "card";
+  return Number(split.remainingGbp || 0) > 0 ? "roth_card" : "roth";
+}
+
 module.exports = {
+  giftPaymentMethodFromSplit,
   giftReturnUrls,
   selectedGiftBudgetGbp,
 };

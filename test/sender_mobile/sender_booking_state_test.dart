@@ -628,7 +628,11 @@ void main() {
       expect(prePaymentSource, contains('GiftPaymentView'));
       expect(paymentSource, contains('STEP 12 — PAYMENT'));
       expect(paymentSource, contains('senderGiftPaymentCallableName'));
+      expect(paymentSource, contains('senderGiftRothBalanceCallableName'));
       expect(paymentSource, contains('Gift Summary'));
+      expect(paymentSource, contains('Available Roth balance'));
+      expect(paymentSource, contains('Amount covered by Roth'));
+      expect(paymentSource, contains('Remaining card amount'));
       expect(paymentSource, contains('Choose payment method'));
       expect(paymentSource, contains('Card'));
       expect(paymentSource, contains('Apple Pay'));
@@ -652,7 +656,10 @@ void main() {
       );
       expect(draftSource, contains("'selectedBudgetGbp': budget"));
       expect(draftSource, contains("'source': 'sender_mobile'"));
+      expect(draftSource, contains("'paymentMethod': 'card'"));
       expect(draftSource, contains("'applyRoth': false"));
+      expect(draftSource, contains("'rothApplied': 0"));
+      expect(draftSource, contains("'cardAmount': budget"));
       expect(draftSource, contains("'walletContributionGbp': 0"));
       expect(draftSource, contains("'remainingStripeAmountGbp': budget"));
       expect(draftSource, contains("'voiceNote': voiceNote?.toMap()"));

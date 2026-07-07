@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  giftPaymentMethodFromSplit,
   giftReturnUrls,
   selectedGiftBudgetGbp,
 } = require("./gifts-payment-core");
@@ -33,6 +34,21 @@ test("gift checkout charges remaining GBP pence when Roth is explicitly applied"
   assert.equal(split.walletContributionGbp, 200);
   assert.equal(split.remainingGbp, 1300);
   assert.equal(split.stripeAmountMinor, 130000);
+});
+
+test("gift checkout persists canonical payment method labels", () => {
+  assert.equal(giftPaymentMethodFromSplit({
+    walletContributionGbp: 0,
+    remainingGbp: 1500,
+  }), "card");
+  assert.equal(giftPaymentMethodFromSplit({
+    walletContributionGbp: 200,
+    remainingGbp: 1300,
+  }), "roth_card");
+  assert.equal(giftPaymentMethodFromSplit({
+    walletContributionGbp: 1500,
+    remainingGbp: 0,
+  }), "roth");
 });
 
 test("sender mobile gifts checkout returns to sender mobile hash routes", () => {

@@ -5,6 +5,7 @@ const rothLedger = require("./roth-ledger");
 const {calculateWalletCheckout} = require("./wallet-core");
 const giftBriefEngine = require("./gift-brief-engine");
 const {
+  giftPaymentMethodFromSplit,
   giftReturnUrls,
   selectedGiftBudgetGbp,
 } = require("./gifts-payment-core");
@@ -105,9 +106,14 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       },
     });
   }
+  const verifiedPaymentMethod = giftPaymentMethodFromSplit(split);
   await ref.update({
     walletContributionGbp: split.walletContributionGbp,
     remainingStripeAmountGbp: split.remainingGbp,
+    rothApplied: split.walletContributionGbp,
+    cardAmount: split.remainingGbp,
+    grossGiftBudget: gross,
+    paymentMethod: verifiedPaymentMethod,
     paymentCurrency: split.customerPaymentCurrency,
     estimatedCustomerPaymentAmount: split.customerPaymentAmount,
     walletDeducted: split.walletContributionGbp > 0 && !split.stripeRequired,
@@ -139,6 +145,11 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
         stripePaymentIntentId: null,
         walletPaidInFull: true,
         paymentMethod: "roth",
+        rothApplied: split.walletContributionGbp,
+        cardAmount: 0,
+        grossGiftBudget: gross,
+        walletContributionGbp: split.walletContributionGbp,
+        remainingStripeAmountGbp: 0,
         giftStoryEnabled: true,
         giftStoryApproved: true,
         giftStoryShareEnabled: true,
@@ -207,6 +218,10 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
   await ref.update({
     paymentStatus: "payment_pending",
     stripeCheckoutSessionId: session.id,
+    paymentMethod: verifiedPaymentMethod,
+    rothApplied: split.walletContributionGbp,
+    cardAmount: split.remainingGbp,
+    grossGiftBudget: gross,
     updatedAt: FieldValue.serverTimestamp(),
   });
   return {
@@ -243,6 +258,8 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
     throw new functions.https.HttpsError("failed-precondition", "Payment has not completed.");
   }
   const walletContribution = Number(gift.walletContributionGbp || 0);
+  const cardAmount = Number(gift.remainingStripeAmountGbp || Math.max(0, gross - walletContribution));
+  const paymentMethod = walletContribution > 0 ? "roth_card" : "card";
   if (walletContribution > 0 && gift.walletDeducted !== true) {
     await rothLedger.applyWalletDebit({
       userId: context.auth.uid,
@@ -271,7 +288,12 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: session.payment_intent,
       walletDeducted: walletContribution > 0 || gift.walletDeducted === true,
-      paymentMethod: walletContribution > 0 && Number(gift.remainingStripeAmountGbp || 0) <= 0 ? "roth" : "stripe",
+      paymentMethod,
+      rothApplied: walletContribution,
+      cardAmount,
+      grossGiftBudget: gross,
+      walletContributionGbp: walletContribution,
+      remainingStripeAmountGbp: cardAmount,
       giftStoryEnabled: gift.giftStoryEnabled !== false,
       giftStoryApproved: gift.giftStoryApproved !== false,
       giftStoryShareEnabled: gift.giftStoryShareEnabled !== false,

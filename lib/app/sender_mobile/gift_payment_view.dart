@@ -22,11 +22,13 @@ class GiftPaymentView extends StatefulWidget {
 
 class _GiftPaymentViewState extends State<GiftPaymentView> {
   var _submitting = false;
+  var _rothLoading = true;
+  var _rothUnavailable = false;
   String? _message;
   String? _paymentMethod;
   bool _applyRoth = false;
 
-  double get _rothBalance => 0;
+  double _rothBalance = 0;
   bool get _rothCanFullyCover =>
       _rothBalance >= widget.draft.budget && widget.draft.budget > 0;
   bool get _showRothToggle =>
@@ -34,6 +36,13 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   double get _rothApplied =>
       _applyRoth ? _rothBalance.clamp(0, widget.draft.budget).toDouble() : 0;
   double get _remainingCardAmount => widget.draft.budget - _rothApplied;
+  String get _verifiedPaymentMethod {
+    if (_rothApplied >= widget.draft.budget && widget.draft.budget > 0) {
+      return 'roth';
+    }
+    if (_rothApplied > 0) return 'roth_card';
+    return 'card';
+  }
 
   @override
   void initState() {
@@ -45,6 +54,41 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       _message =
           'Payment cancelled. Your gift request is saved. You can try again.';
     }
+    _loadRothBalance();
+  }
+
+  Future<void> _loadRothBalance() async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable(senderGiftRothBalanceCallableName)
+          .call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final balance = (data['availableRoth'] ?? data['balance'] ?? 0) as num;
+      if (!mounted) return;
+      setState(() {
+        _rothBalance = balance.toDouble();
+        _rothLoading = false;
+        _rothUnavailable = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _rothBalance = 0;
+        _rothLoading = false;
+        _rothUnavailable = true;
+      });
+    }
+  }
+
+  void _selectPaymentMethod(String method) {
+    setState(() {
+      _paymentMethod = method;
+      if (method == 'Roth') {
+        _applyRoth = _rothCanFullyCover;
+      } else if (_rothBalance <= 0) {
+        _applyRoth = false;
+      }
+    });
   }
 
   @override
@@ -83,6 +127,14 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           label: 'Total',
           value: '£${widget.draft.budget.toStringAsFixed(0)}',
         ),
+        const SizedBox(height: 10),
+        _RothBalanceSummary(
+          loading: _rothLoading,
+          unavailable: _rothUnavailable,
+          balance: _rothBalance,
+          applied: _rothApplied,
+          remaining: _remainingCardAmount,
+        ),
         const SizedBox(height: 22),
         Text(
           'Choose payment method',
@@ -96,29 +148,26 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         _PaymentMethodTile(
           label: 'Card',
           selected: _paymentMethod == 'Card',
-          onTap: () => setState(() => _paymentMethod = 'Card'),
+          onTap: () => _selectPaymentMethod('Card'),
         ),
         const SizedBox(height: 10),
         _PaymentMethodTile(
           label: 'Apple Pay',
           selected: _paymentMethod == 'Apple Pay',
-          onTap: () => setState(() => _paymentMethod = 'Apple Pay'),
+          onTap: () => _selectPaymentMethod('Apple Pay'),
         ),
         const SizedBox(height: 10),
         _PaymentMethodTile(
           label: 'Google Pay',
           selected: _paymentMethod == 'Google Pay',
-          onTap: () => setState(() => _paymentMethod = 'Google Pay'),
+          onTap: () => _selectPaymentMethod('Google Pay'),
         ),
         if (_rothCanFullyCover) ...[
           const SizedBox(height: 10),
           _PaymentMethodTile(
             label: 'Roth',
             selected: _paymentMethod == 'Roth',
-            onTap: () => setState(() {
-              _paymentMethod = 'Roth';
-              _applyRoth = true;
-            }),
+            onTap: () => _selectPaymentMethod('Roth'),
           ),
         ],
         if (_showRothToggle) ...[
@@ -203,6 +252,14 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         senderEmail: user.email ?? '',
         senderName: user.displayName,
       ));
+      payload.addAll({
+        'applyRoth': _applyRoth && _rothBalance > 0,
+        'paymentMethod': _verifiedPaymentMethod,
+        'rothApplied': _rothApplied,
+        'cardAmount': _remainingCardAmount,
+        'grossGiftBudget': widget.draft.budget,
+        'paymentStatus': 'payment_pending',
+      });
       final parsedDeliveryDate = DateTime.tryParse(
         widget.draft.deliveryDate ?? '',
       );
@@ -371,6 +428,68 @@ class _RothToggleCard extends StatelessWidget {
   }
 }
 
+class _RothBalanceSummary extends StatelessWidget {
+  final bool loading;
+  final bool unavailable;
+  final double balance;
+  final double applied;
+  final double remaining;
+
+  const _RothBalanceSummary({
+    required this.loading,
+    required this.unavailable,
+    required this.balance,
+    required this.applied,
+    required this.remaining,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final balanceText = loading
+        ? 'Loading...'
+        : unavailable
+            ? 'Unavailable'
+            : '£${balance.toStringAsFixed(0)}';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: Column(
+        children: [
+          _PaymentSummaryRow(
+              label: 'Available Roth balance', value: balanceText),
+          const SizedBox(height: 8),
+          _PaymentSummaryRow(
+            label: 'Amount covered by Roth',
+            value: '£${applied.toStringAsFixed(0)}',
+          ),
+          const SizedBox(height: 8),
+          _PaymentSummaryRow(
+            label: 'Remaining card amount',
+            value: '£${remaining.toStringAsFixed(0)}',
+          ),
+          if (unavailable) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Roth is currently unavailable. You can continue securely by card.',
+              style: GoogleFonts.inter(
+                color: const Color(0xFFB8AAB8),
+                fontSize: 11.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _PaymentSummary extends StatelessWidget {
   final String label;
   final String value;
@@ -389,26 +508,63 @@ class _PaymentSummary extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              label.toUpperCase(),
-              style: GoogleFonts.jetBrainsMono(
-                color: const Color(0xFFB8AAB8),
-                fontSize: 10,
-                letterSpacing: .7,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          Expanded(child: _PaymentLabel(label)),
+          _PaymentValue(value),
         ],
+      ),
+    );
+  }
+}
+
+class _PaymentSummaryRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _PaymentSummaryRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _PaymentLabel(label)),
+        _PaymentValue(value),
+      ],
+    );
+  }
+}
+
+class _PaymentLabel extends StatelessWidget {
+  final String label;
+
+  const _PaymentLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label.toUpperCase(),
+      style: GoogleFonts.jetBrainsMono(
+        color: const Color(0xFFB8AAB8),
+        fontSize: 10,
+        letterSpacing: .7,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _PaymentValue extends StatelessWidget {
+  final String value;
+
+  const _PaymentValue(this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value,
+      style: GoogleFonts.inter(
+        color: Colors.white,
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
       ),
     );
   }

@@ -18,6 +18,7 @@ const senderGiftPendingIrisSuggestion = 'Pending IRIS gift recommendation';
 const senderGiftPaymentDraftCollectionName = 'giftPaymentDrafts';
 const senderGiftAdminReviewCollectionName = 'giftRequests';
 const senderGiftPaymentCallableName = 'createGiftPayment';
+const senderGiftRothBalanceCallableName = 'getSenderRothBalance';
 const senderGiftIrisUnsupportedCopy =
     'IRIS’s real catalog only tags gift signals for Beauty/Fashion. None of your selected themes fall in that range, so there’s nothing to suggest yet.';
 const senderGiftIrisPartialUnsupportedCopy =
@@ -626,7 +627,10 @@ class GiftJourneyDraft {
       'giftType': mode == SenderGiftMode.campaign ? 'campaign' : 'standard',
       'paymentStatus': 'payment_pending',
       'source': 'sender_mobile',
+      'paymentMethod': 'card',
       'applyRoth': false,
+      'rothApplied': 0,
+      'cardAmount': budget,
       'walletContributionGbp': 0,
       'remainingStripeAmountGbp': budget,
       'giftStatus': 'draft',
