@@ -125,7 +125,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deliveryDate ?? now.add(const Duration(days: 1)),
+      initialDate: _deliveryDate ?? now,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
       helpText: 'Preferred delivery date',

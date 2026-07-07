@@ -479,6 +479,10 @@ void main() {
       expect(deliverySource, contains('PREFERRED DELIVERY DATE'));
       expect(deliverySource, contains('Preferred delivery date'));
       expect(deliverySource, contains('showDatePicker'));
+      expect(
+        deliverySource,
+        isNot(contains("now.add(const Duration(days: 1))")),
+      );
       expect(deliverySource, contains('PREFERRED DELIVERY TIME'));
       expect(deliverySource, contains('Preferred delivery time'));
       expect(deliverySource, contains('showTimePicker'));
