@@ -454,11 +454,27 @@ void main() {
       expect(messageSource, contains('What do you want them to know?'));
       expect(messageSource, contains('GiftVoiceNoteView'));
       expect(voiceSource, contains('STEP 05 — VOICE NOTE'));
-      expect(voiceSource, contains('Skip for now'));
+      expect(voiceSource, contains('Permission.microphone.request'));
+      expect(voiceSource, contains('Record'));
+      expect(voiceSource, contains('Stop'));
+      expect(voiceSource, contains('Cancel'));
+      expect(voiceSource, contains('Play'));
+      expect(voiceSource, contains('Delete'));
+      expect(voiceSource, contains('Re-record'));
+      expect(voiceSource, contains('Use this voice note'));
+      expect(voiceSource, contains('Skip voice note'));
       expect(voiceSource, contains('GiftThemesView'));
       expect(themesSource, contains('STEP 06 — THEMES'));
+      expect(themesSource, contains("'Add'"));
+      expect(themesSource, contains('onSubmitted'));
+      expect(themesSource, contains("value.split(',')"));
       expect(themesSource, contains('IRIS signal preview'));
       expect(themesSource, contains('No IRIS coverage yet'));
+      expect(
+        themesSource,
+        contains(
+            'Custom interest saved. IRIS will use it as personal context.'),
+      );
       expect(themesSource, contains('GiftIrisView'));
       expect(irisSource, contains('STEP 07 — IRIS'));
       expect(irisSource, contains('IRIS is shaping the experience'));
@@ -467,8 +483,9 @@ void main() {
         contains('IRIS is reading the moment, not building a basket.'),
       );
       expect(irisSource, contains('Emotional direction'));
-      expect(irisSource, contains('Suitable gift signals'));
+      expect(irisSource, contains('Experience direction'));
       expect(irisSource, contains('Things to avoid'));
+      expect(irisSource, contains('generateIrisBrief'));
       expect(styleSource, contains('STEP 08 — STYLE & SIZES'));
       expect(styleSource, contains('CLOTHING / SHOE / RING SIZE'));
       expect(privacySource, contains('STEP 09 — REVEAL & PRIVACY'));
@@ -513,6 +530,14 @@ void main() {
       expect(draftSource, contains("'applyRoth': false"));
       expect(draftSource, contains("'walletContributionGbp': 0"));
       expect(draftSource, contains("'remainingStripeAmountGbp': budget"));
+      expect(draftSource, contains("'voiceNote': voiceNote?.toMap()"));
+      expect(draftSource, contains("'giftThemes':"));
+      expect(draftSource, contains("'giftThemeLabels':"));
+      expect(draftSource, contains("'irisGiftBrief': brief.toMap()"));
+      expect(reviewSource, contains('Voice note'));
+      expect(reviewSource, contains('Catalogue themes'));
+      expect(reviewSource, contains('Custom themes'));
+      expect(reviewSource, contains('Allergies / medical'));
       expect(reviewSource, contains('Campaign · Bringing London Closer'));
       expect(reviewSource, contains('IRIS GIFT BRIEF'));
       expect(reviewSource, contains('Emotional Direction'));
@@ -590,6 +615,45 @@ void main() {
         senderGiftIrisPartialUnsupportedCopy,
         'No IRIS coverage yet for some themes.',
       );
+      final draft = GiftJourneyDraft.forMode(SenderGiftMode.someone).copyWith(
+        giftThemes: [
+          SenderGiftTheme.catalogue('Fashion'),
+          SenderGiftTheme.custom('hhh'),
+        ],
+        voiceNote: SenderGiftVoiceNote(
+          hasVoiceNote: true,
+          durationSeconds: 12,
+          localPath: 'local://sender-mobile/gifts/voice-note/test.m4a',
+          createdAt: DateTime.utc(2026),
+        ),
+        irisGiftBrief: SenderGiftIrisBrief(
+          emotionalDirection: 'Warm',
+          experienceDirection: 'Concierge',
+          thingsToAvoid: 'No guesses',
+          catalogueCoverage: const ['fashionInterest'],
+          confidence: 'High',
+          personalisationScore: 90,
+          allergySafetyNotes: 'None supplied',
+          recommendedPartnerCategories: const ['fashion'],
+          createdAt: DateTime.utc(2026),
+        ),
+      );
+      final payload = draft.adminReviewPayload(
+        senderId: 'sender-1',
+        senderEmail: 'sender@example.com',
+      );
+      expect(payload['giftThemeLabels'], ['Fashion', 'hhh']);
+      expect(payload['customInterests'], ['hhh']);
+      expect(payload['giftThemes'], [
+        {'label': 'Fashion', 'source': 'catalogue', 'knownToIris': true},
+        {'label': 'hhh', 'source': 'custom', 'knownToIris': false},
+      ]);
+      expect(
+        payload['voiceNote'],
+        containsPair(
+            'localPath', 'local://sender-mobile/gifts/voice-note/test.m4a'),
+      );
+      expect(payload['irisGiftBrief'], containsPair('confidence', 'High'));
     });
 
     testWidgets('Gift someone opens relationship screen and back returns', (
@@ -714,9 +778,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Add your voice?'), findsOneWidget);
-      expect(find.text('Skip for now'), findsOneWidget);
+      expect(find.text('Skip voice note'), findsOneWidget);
 
-      await tester.tap(find.text('Skip for now'));
+      await tester.tap(find.text('Skip voice note'));
       await tester.pumpAndSettle();
 
       expect(find.text('What do they love?'), findsOneWidget);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -5,7 +7,7 @@ import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_style_view.dart';
 
-class GiftIrisView extends StatelessWidget {
+class GiftIrisView extends StatefulWidget {
   final GiftJourneyDraft draft;
 
   const GiftIrisView({super.key, required this.draft});
@@ -13,14 +15,36 @@ class GiftIrisView extends StatelessWidget {
   static const routeName = '/sender-mobile/gifts/iris';
 
   @override
+  State<GiftIrisView> createState() => _GiftIrisViewState();
+}
+
+class _GiftIrisViewState extends State<GiftIrisView> {
+  SenderGiftIrisBrief? _brief;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _brief = widget.draft.irisGiftBrief;
+    _loading = _brief == null;
+    if (_loading) {
+      Timer(const Duration(milliseconds: 900), () {
+        if (!mounted) return;
+        setState(() {
+          _brief = widget.draft.generateIrisBrief();
+          _loading = false;
+        });
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final allThemes = {
-      ...draft.interests,
-      if ((draft.customInterest ?? '').trim().isNotEmpty)
-        draft.customInterest!.trim(),
-    }.toList();
-    final signals = senderGiftIrisSignalsForThemes(allThemes);
-    final unsupported = senderGiftUnsupportedIrisThemes(allThemes);
+    final themes = widget.draft.normalizedGiftThemes;
+    final customThemes = themes
+        .where((theme) => theme.source == 'custom' || !theme.knownToIris)
+        .map((theme) => theme.label)
+        .toList();
 
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
@@ -31,50 +55,53 @@ class GiftIrisView extends StatelessWidget {
       children: [
         const _GiftIrisPulse(),
         const SizedBox(height: 18),
-        if (unsupported.isNotEmpty)
-          const _IrisNote('No IRIS coverage yet for some themes.'),
-        if (signals.isEmpty) const _IrisNote(senderGiftIrisUnsupportedCopy),
-        const SizedBox(height: 12),
-        _IrisInsightCard(
-          title: 'Emotional direction',
-          body: _emotionalDirection,
-        ),
-        const SizedBox(height: 12),
-        _IrisInsightCard(
-          title: 'Suitable gift signals',
-          body: signals.isEmpty
-              ? 'No supported IRIS gift signals yet.'
-              : signals.join(' · '),
-        ),
-        const SizedBox(height: 12),
-        _IrisInsightCard(
-          title: 'Things to avoid',
-          body: unsupported.isEmpty
-              ? 'Avoid product assumptions until Admin reviews the request.'
-              : 'Avoid unsupported catalogue guesses for ${unsupported.join(', ')}.',
-        ),
+        if (_loading)
+          const _IrisNote('Generating the IRIS Gift Brief...')
+        else ...[
+          if (customThemes.isNotEmpty)
+            const _IrisNote(
+              'Custom interest saved. IRIS will use it as personal context.',
+            ),
+          const SizedBox(height: 12),
+          _IrisInsightCard(
+            title: 'Emotional direction',
+            body: _brief!.emotionalDirection,
+          ),
+          const SizedBox(height: 12),
+          _IrisInsightCard(
+            title: 'Experience direction',
+            body: _brief!.experienceDirection,
+          ),
+          const SizedBox(height: 12),
+          _IrisInsightCard(
+            title: 'Things to avoid',
+            body: _brief!.thingsToAvoid,
+          ),
+          const SizedBox(height: 12),
+          _IrisInsightCard(
+            title: 'Catalogue coverage',
+            body: _brief!.catalogueCoverage.isEmpty
+                ? 'No catalogue-backed IRIS signal yet.'
+                : _brief!.catalogueCoverage.join(' · '),
+          ),
+        ],
       ],
       footer: GiftJourneyWidgets.primaryButton(
-        enabled: true,
+        enabled: !_loading && _brief != null,
         label: 'Continue',
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => GiftStyleView(draft: draft),
-            settings: const RouteSettings(name: GiftStyleView.routeName),
-          ),
-        ),
+        onTap: _loading || _brief == null
+            ? null
+            : () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => GiftStyleView(
+                      draft: widget.draft.copyWith(irisGiftBrief: _brief),
+                    ),
+                    settings:
+                        const RouteSettings(name: GiftStyleView.routeName),
+                  ),
+                ),
       ),
     );
-  }
-
-  String get _emotionalDirection {
-    final relationship = draft.relationship ?? 'their relationship';
-    final occasion = draft.occasion ?? 'the moment';
-    final notes = (draft.notes ?? '').trim();
-    if (notes.isEmpty) {
-      return 'Shape the experience around $relationship and $occasion.';
-    }
-    return 'Use the recipient context to keep $occasion personal and considered.';
   }
 }
 
@@ -111,10 +138,7 @@ class _GiftIrisPulseState extends State<_GiftIrisPulse>
         animation: _controller,
         builder: (context, child) {
           final pulse = .85 + (_controller.value * .15);
-          return Transform.scale(
-            scale: pulse,
-            child: child,
-          );
+          return Transform.scale(scale: pulse, child: child);
         },
         child: Container(
           width: 88,
@@ -220,7 +244,7 @@ class _IrisInsightCard extends StatelessWidget {
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 13,
-              height: 1.45,
+              height: 1.4,
               fontWeight: FontWeight.w700,
             ),
           ),

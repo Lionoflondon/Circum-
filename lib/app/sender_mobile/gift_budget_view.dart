@@ -32,7 +32,7 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
       eyebrow: 'STEP 10 — BUDGET',
       title: 'Set a gift budget',
       subtitle:
-          'Choose the experience budget. The backend enforces the approved Gifts limits.',
+          'Choose the experience budget. IRIS will curate the best possible gift within your chosen budget.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         Container(

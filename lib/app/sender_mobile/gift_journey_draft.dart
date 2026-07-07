@@ -80,6 +80,109 @@ class SenderGiftBriefPreview {
   });
 }
 
+class SenderGiftTheme {
+  final String label;
+  final String source;
+  final bool knownToIris;
+
+  const SenderGiftTheme({
+    required this.label,
+    required this.source,
+    required this.knownToIris,
+  });
+
+  factory SenderGiftTheme.catalogue(String label) {
+    return SenderGiftTheme(
+      label: label.trim(),
+      source: 'catalogue',
+      knownToIris: senderGiftIrisSignalMap.containsKey(label.trim()),
+    );
+  }
+
+  factory SenderGiftTheme.custom(String label) {
+    return SenderGiftTheme(
+      label: label.trim(),
+      source: 'custom',
+      knownToIris: false,
+    );
+  }
+
+  Map<String, Object?> toMap() => {
+        'label': label,
+        'source': source,
+        'knownToIris': knownToIris,
+      };
+}
+
+class SenderGiftVoiceNote {
+  final bool hasVoiceNote;
+  final int durationSeconds;
+  final String? localPath;
+  final String? storagePath;
+  final String? downloadUrl;
+  final DateTime createdAt;
+  final String? transcript;
+  final String? language;
+
+  const SenderGiftVoiceNote({
+    required this.hasVoiceNote,
+    required this.durationSeconds,
+    this.localPath,
+    this.storagePath,
+    this.downloadUrl,
+    required this.createdAt,
+    this.transcript,
+    this.language,
+  });
+
+  Map<String, Object?> toMap() => {
+        'hasVoiceNote': hasVoiceNote,
+        'durationSeconds': durationSeconds,
+        'localPath': localPath,
+        'storagePath': storagePath,
+        'downloadUrl': downloadUrl,
+        'createdAt': createdAt.toIso8601String(),
+        'transcript': transcript,
+        'language': language,
+      };
+}
+
+class SenderGiftIrisBrief {
+  final String emotionalDirection;
+  final String experienceDirection;
+  final String thingsToAvoid;
+  final List<String> catalogueCoverage;
+  final String confidence;
+  final int personalisationScore;
+  final String allergySafetyNotes;
+  final List<String> recommendedPartnerCategories;
+  final DateTime createdAt;
+
+  const SenderGiftIrisBrief({
+    required this.emotionalDirection,
+    required this.experienceDirection,
+    required this.thingsToAvoid,
+    required this.catalogueCoverage,
+    required this.confidence,
+    required this.personalisationScore,
+    required this.allergySafetyNotes,
+    required this.recommendedPartnerCategories,
+    required this.createdAt,
+  });
+
+  Map<String, Object?> toMap() => {
+        'emotionalDirection': emotionalDirection,
+        'experienceDirection': experienceDirection,
+        'thingsToAvoid': thingsToAvoid,
+        'catalogueCoverage': catalogueCoverage,
+        'confidence': confidence,
+        'personalisationScore': personalisationScore,
+        'allergySafetyNotes': allergySafetyNotes,
+        'recommendedPartnerCategories': recommendedPartnerCategories,
+        'createdAt': createdAt.toIso8601String(),
+      };
+}
+
 const senderGiftInterestOptions = [
   'Fashion',
   'Beauty',
@@ -177,6 +280,9 @@ class GiftJourneyDraft {
   final String? personalMessage;
   final List<String> interests;
   final String? customInterest;
+  final List<SenderGiftTheme> giftThemes;
+  final SenderGiftVoiceNote? voiceNote;
+  final SenderGiftIrisBrief? irisGiftBrief;
   final String? clothingSize;
   final String? shoeSize;
   final String? ringSize;
@@ -204,6 +310,9 @@ class GiftJourneyDraft {
     this.personalMessage,
     this.interests = const [],
     this.customInterest,
+    this.giftThemes = const [],
+    this.voiceNote,
+    this.irisGiftBrief,
     this.clothingSize,
     this.shoeSize,
     this.ringSize,
@@ -257,10 +366,17 @@ class GiftJourneyDraft {
       };
 
   SenderGiftBriefPreview get giftBriefPreview {
-    final selectedInterests = {
-      ...interests,
-      if ((customInterest ?? '').trim().isNotEmpty) customInterest!.trim(),
-    }.toList();
+    if (irisGiftBrief != null) {
+      return SenderGiftBriefPreview(
+        emotionalDirection: irisGiftBrief!.emotionalDirection,
+        experienceDirection: irisGiftBrief!.experienceDirection,
+        thingsToAvoid: irisGiftBrief!.thingsToAvoid,
+        confidence: irisGiftBrief!.confidence,
+        humanReviewRequired: irisGiftBrief!.confidence == 'Needs review' ||
+            irisGiftBrief!.catalogueCoverage.isEmpty,
+      );
+    }
+    final selectedInterests = giftThemeLabels;
     final signals = senderGiftIrisSignalsForThemes(selectedInterests);
     final unsupported = senderGiftUnsupportedIrisThemes(selectedInterests);
     final hasRelationship = (relationship ?? '').trim().isNotEmpty;
@@ -295,6 +411,73 @@ class GiftJourneyDraft {
     );
   }
 
+  List<String> get giftThemeLabels {
+    if (giftThemes.isNotEmpty) {
+      return giftThemes.map((theme) => theme.label).toList();
+    }
+    return {
+      ...interests,
+      if ((customInterest ?? '').trim().isNotEmpty) customInterest!.trim(),
+    }.toList();
+  }
+
+  List<SenderGiftTheme> get normalizedGiftThemes {
+    if (giftThemes.isNotEmpty) return giftThemes;
+    return [
+      for (final interest in interests)
+        if (interest.trim().isNotEmpty) SenderGiftTheme.catalogue(interest),
+      if ((customInterest ?? '').trim().isNotEmpty)
+        SenderGiftTheme.custom(customInterest!.trim()),
+    ];
+  }
+
+  SenderGiftIrisBrief generateIrisBrief() {
+    final themes = normalizedGiftThemes;
+    final labels = themes.map((theme) => theme.label).toList();
+    final signals = senderGiftIrisSignalsForThemes(labels);
+    final unsupported = themes
+        .where((theme) => !theme.knownToIris)
+        .map((theme) => theme.label)
+        .toList();
+    final hasNotes = (notes ?? '').trim().isNotEmpty;
+    final hasMessage = (personalMessage ?? '').trim().isNotEmpty;
+    final hasVoice = voiceNote?.hasVoiceNote == true;
+    final score = (52 +
+            ((relationship ?? '').trim().isNotEmpty ? 8 : 0) +
+            ((occasion ?? '').trim().isNotEmpty ? 8 : 0) +
+            (hasNotes ? 12 : 0) +
+            (hasMessage ? 8 : 0) +
+            (hasVoice ? 6 : 0) +
+            (themes.isNotEmpty ? 8 : 0) +
+            ((likedBrands ?? '').trim().isNotEmpty ? 3 : 0) +
+            ((favouriteColours ?? '').trim().isNotEmpty ? 3 : 0))
+        .clamp(0, 96);
+    final confidence = score >= 82
+        ? 'High'
+        : score >= 70
+            ? 'Medium'
+            : 'Needs review';
+    return SenderGiftIrisBrief(
+      emotionalDirection:
+          'Shape the experience around ${relationship ?? 'the relationship'} and ${occasion ?? 'the moment'}.',
+      experienceDirection: signals.isEmpty
+          ? 'Concierge-led curation using the personal context provided.'
+          : 'Use supported IRIS gift signals: ${signals.join(' · ')}.',
+      thingsToAvoid: unsupported.isEmpty
+          ? 'Avoid product assumptions until the Gifts Team reviews the request.'
+          : 'Do not treat ${unsupported.join(', ')} as catalogue-backed interests.',
+      catalogueCoverage: signals,
+      confidence: confidence,
+      personalisationScore: score,
+      allergySafetyNotes:
+          'No allergy or medical restriction fields were supplied in this mobile flow.',
+      recommendedPartnerCategories: signals.isEmpty
+          ? const ['Concierge curation']
+          : signals.map((signal) => signal.replaceAll('Interest', '')).toList(),
+      createdAt: DateTime.now(),
+    );
+  }
+
   GiftJourneyDraft copyWith({
     String? recipientName,
     String? relationship,
@@ -309,6 +492,10 @@ class GiftJourneyDraft {
     String? personalMessage,
     List<String>? interests,
     String? customInterest,
+    List<SenderGiftTheme>? giftThemes,
+    SenderGiftVoiceNote? voiceNote,
+    bool clearVoiceNote = false,
+    SenderGiftIrisBrief? irisGiftBrief,
     String? clothingSize,
     String? shoeSize,
     String? ringSize,
@@ -336,6 +523,9 @@ class GiftJourneyDraft {
       personalMessage: personalMessage ?? this.personalMessage,
       interests: interests ?? this.interests,
       customInterest: customInterest ?? this.customInterest,
+      giftThemes: giftThemes ?? this.giftThemes,
+      voiceNote: clearVoiceNote ? null : voiceNote ?? this.voiceNote,
+      irisGiftBrief: irisGiftBrief ?? this.irisGiftBrief,
       clothingSize: clothingSize ?? this.clothingSize,
       shoeSize: shoeSize ?? this.shoeSize,
       ringSize: ringSize ?? this.ringSize,
@@ -355,10 +545,9 @@ class GiftJourneyDraft {
     required String senderEmail,
     String? senderName,
   }) {
-    final selectedInterests = {
-      ...interests,
-      if ((customInterest ?? '').trim().isNotEmpty) customInterest!.trim(),
-    }.toList();
+    final themes = normalizedGiftThemes;
+    final selectedInterests = giftThemeLabels;
+    final brief = irisGiftBrief ?? generateIrisBrief();
     return {
       'senderId': senderId,
       'senderName': senderName ?? '',
@@ -405,7 +594,15 @@ class GiftJourneyDraft {
       'senderMessageText': personalMessage?.trim() ?? '',
       'interests': selectedInterests,
       'interestTags': selectedInterests,
+      'giftThemes': themes.map((theme) => theme.toMap()).toList(),
+      'giftThemeLabels': selectedInterests,
+      'customInterests': themes
+          .where((theme) => theme.source == 'custom')
+          .map((theme) => theme.label)
+          .toList(),
       'notes': notes?.trim() ?? '',
+      'voiceNote': voiceNote?.toMap(),
+      'irisGiftBrief': brief.toMap(),
       'sizesAndPreferences': {
         'clothingSize': clothingSize?.trim() ?? '',
         'shoeSize': shoeSize?.trim() ?? '',

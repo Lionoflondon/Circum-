@@ -21,6 +21,14 @@ class _GiftReviewViewState extends State<GiftReviewView> {
   Widget build(BuildContext context) {
     final draft = widget.draft;
     final brief = draft.giftBriefPreview;
+    final catalogueThemes = draft.normalizedGiftThemes
+        .where((theme) => theme.source == 'catalogue')
+        .map((theme) => theme.label)
+        .toList();
+    final customThemes = draft.normalizedGiftThemes
+        .where((theme) => theme.source == 'custom')
+        .map((theme) => theme.label)
+        .toList();
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
       eyebrow: 'STEP 11 — REVIEW',
@@ -41,6 +49,25 @@ class _GiftReviewViewState extends State<GiftReviewView> {
           value: (senderGiftRevealModeOptions[
                   draft.senderRevealMode ?? 'reveal_immediately'] ??
               'Reveal immediately'),
+        ),
+        _ReviewRow(
+          label: 'Voice note',
+          value: draft.voiceNote?.hasVoiceNote == true
+              ? 'Added · ${draft.voiceNote!.durationSeconds}s'
+              : 'Skipped',
+        ),
+        _ReviewRow(
+          label: 'Catalogue themes',
+          value: catalogueThemes.isEmpty ? 'None' : catalogueThemes.join(', '),
+        ),
+        _ReviewRow(
+          label: 'Custom themes',
+          value: customThemes.isEmpty ? 'None' : customThemes.join(', '),
+        ),
+        _ReviewRow(
+          label: 'Allergies / medical',
+          value:
+              'No allergy or medical restriction fields were supplied in this mobile flow.',
         ),
         _GiftBriefCard(
           brief: brief,
