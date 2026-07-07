@@ -5408,6 +5408,364 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     );
   }
 
+  Widget _adminGiftTeamWorkspace({
+    required TextEditingController assignedCurator,
+    required String workspaceStatus,
+    required ValueChanged<String> onWorkspaceStatusChanged,
+    required String priority,
+    required ValueChanged<String> onPriorityChanged,
+    required TextEditingController targetCompletion,
+    required TextEditingController curationNotes,
+    required TextEditingController supplierNames,
+    required TextEditingController supplierLinks,
+    required TextEditingController supplierContact,
+    required TextEditingController expectedFulfilment,
+    required String supplierStatus,
+    required ValueChanged<String> onSupplierStatusChanged,
+    required TextEditingController selectedExperience,
+    required TextEditingController reasonChosen,
+    required TextEditingController luxuryNotes,
+    required TextEditingController presentationNotes,
+    required TextEditingController packagingNotes,
+    required TextEditingController cardNotes,
+    required dynamic customerBudget,
+    required TextEditingController reservedBudget,
+    required TextEditingController spentBudget,
+    required TextEditingController irisAcceptedSignals,
+    required TextEditingController irisRejectedSignals,
+    required TextEditingController irisModifiedSignals,
+    required TextEditingController curatorFeedback,
+    required bool needsApproval,
+    required ValueChanged<bool> onNeedsApprovalChanged,
+    required TextEditingController approvedBy,
+    required TextEditingController approvedAt,
+    required TextEditingController approvalReason,
+    required bool readyForProcurement,
+    required ValueChanged<bool> onReadyForProcurementChanged,
+    required bool readyForRider,
+    required ValueChanged<bool> onReadyForRiderChanged,
+    required bool readyForScheduling,
+    required ValueChanged<bool> onReadyForSchedulingChanged,
+    required bool readyForDelivery,
+    required ValueChanged<bool> onReadyForDeliveryChanged,
+  }) {
+    final customer = customerBudget is num
+        ? customerBudget.toDouble()
+        : double.tryParse('$customerBudget') ?? 0;
+    final reserved = double.tryParse(reservedBudget.text.trim()) ?? 0;
+    final spent = double.tryParse(spentBudget.text.trim()) ?? 0;
+    final remaining = customer - math.max(reserved, spent);
+    final overBudget = remaining < 0;
+    return _adminGiftDetailPanel(
+      icon: Icons.diamond_outlined,
+      title: 'Gifts Team Workspace',
+      children: [
+        _adminGiftWorkspaceSection(
+          title: 'Assignment',
+          children: [
+            TextField(
+              controller: assignedCurator,
+              decoration: const InputDecoration(labelText: 'Assigned Curator'),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: workspaceStatus,
+                    decoration: const InputDecoration(labelText: 'Status'),
+                    items: const [
+                      'unassigned',
+                      'assigned',
+                      'curating',
+                      'supplier_pending',
+                      'approval_pending',
+                      'approved',
+                      'ready',
+                    ]
+                        .map((value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(_displayStatusLabel(value)),
+                            ))
+                        .toList(),
+                    onChanged: (value) =>
+                        onWorkspaceStatusChanged(value ?? workspaceStatus),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: priority,
+                    decoration: const InputDecoration(labelText: 'Priority'),
+                    items: const ['standard', 'high', 'urgent']
+                        .map((value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(_displayStatusLabel(value)),
+                            ))
+                        .toList(),
+                    onChanged: (value) => onPriorityChanged(value ?? priority),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: targetCompletion,
+              decoration: const InputDecoration(labelText: 'Target Completion'),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  assignedCurator.text =
+                      _adminUser?.displayName ?? _adminUser?.email ?? '';
+                  onWorkspaceStatusChanged('assigned');
+                },
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('Reassign to me'),
+              ),
+            ),
+          ],
+        ),
+        _adminGiftWorkspaceSection(
+          title: 'Curation Notes',
+          children: [
+            TextField(
+              controller: curationNotes,
+              maxLines: 5,
+              decoration:
+                  const InputDecoration(labelText: 'Rich internal notes'),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Timestamp and author are recorded when saved. Internal only.',
+              style: TextStyle(color: widget.colors.mutedText, fontSize: 12),
+            ),
+          ],
+        ),
+        _adminGiftWorkspaceSection(
+          title: 'Supplier Workspace',
+          children: [
+            TextField(
+              controller: supplierNames,
+              decoration:
+                  const InputDecoration(labelText: 'Chosen supplier(s)'),
+            ),
+            TextField(
+              controller: supplierLinks,
+              decoration: const InputDecoration(labelText: 'Supplier links'),
+            ),
+            TextField(
+              controller: supplierContact,
+              decoration: const InputDecoration(labelText: 'Supplier contact'),
+            ),
+            TextField(
+              controller: expectedFulfilment,
+              decoration:
+                  const InputDecoration(labelText: 'Expected fulfilment'),
+            ),
+            DropdownButtonFormField<String>(
+              initialValue: supplierStatus,
+              decoration: const InputDecoration(labelText: 'Supplier status'),
+              items: const ['not_started', 'contacted', 'confirmed', 'blocked']
+                  .map((value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(_displayStatusLabel(value)),
+                      ))
+                  .toList(),
+              onChanged: (value) =>
+                  onSupplierStatusChanged(value ?? supplierStatus),
+            ),
+          ],
+        ),
+        _adminGiftWorkspaceSection(
+          title: 'Experience Builder',
+          children: [
+            TextField(
+              controller: selectedExperience,
+              decoration:
+                  const InputDecoration(labelText: 'Selected experience'),
+            ),
+            TextField(
+              controller: reasonChosen,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Reason chosen'),
+            ),
+            TextField(
+              controller: luxuryNotes,
+              decoration: const InputDecoration(labelText: 'Luxury notes'),
+            ),
+            TextField(
+              controller: presentationNotes,
+              decoration:
+                  const InputDecoration(labelText: 'Presentation notes'),
+            ),
+            TextField(
+              controller: packagingNotes,
+              decoration: const InputDecoration(labelText: 'Packaging notes'),
+            ),
+            TextField(
+              controller: cardNotes,
+              decoration: const InputDecoration(labelText: 'Card notes'),
+            ),
+          ],
+        ),
+        _adminGiftWorkspaceSection(
+          title: 'Budget',
+          children: [
+            _adminGiftDetailLine('Customer Budget', _giftMoney(customer)),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: reservedBudget,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Reserved'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: spentBudget,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Spent'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Remaining: ${_giftMoney(remaining)}',
+              style: TextStyle(
+                color:
+                    overBudget ? const Color(0xfff59e0b) : widget.colors.text,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (overBudget)
+              const Text(
+                'Over budget. Approval should explain the reason.',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+          ],
+        ),
+        _adminGiftWorkspaceSection(
+          title: 'IRIS Collaboration',
+          children: [
+            TextField(
+              controller: irisAcceptedSignals,
+              decoration: const InputDecoration(labelText: 'Accepted signals'),
+            ),
+            TextField(
+              controller: irisRejectedSignals,
+              decoration: const InputDecoration(labelText: 'Rejected signals'),
+            ),
+            TextField(
+              controller: irisModifiedSignals,
+              decoration:
+                  const InputDecoration(labelText: 'Modified / added signals'),
+            ),
+            TextField(
+              controller: curatorFeedback,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Curator feedback'),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Every curator decision is saved as structured IRIS learning on this request.',
+            ),
+          ],
+        ),
+        _adminGiftWorkspaceSection(
+          title: 'Approval',
+          children: [
+            SwitchListTile(
+              value: needsApproval,
+              onChanged: onNeedsApprovalChanged,
+              title: const Text('Needs approval'),
+            ),
+            TextField(
+              controller: approvedBy,
+              decoration: const InputDecoration(labelText: 'Approved by'),
+            ),
+            TextField(
+              controller: approvedAt,
+              decoration: const InputDecoration(labelText: 'Approved at'),
+            ),
+            TextField(
+              controller: approvalReason,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Reason'),
+            ),
+          ],
+        ),
+        _adminGiftWorkspaceSection(
+          title: 'Ready for Procurement',
+          children: [
+            SwitchListTile(
+              value: readyForProcurement,
+              onChanged: onReadyForProcurementChanged,
+              title: const Text('Ready for Procurement'),
+            ),
+            SwitchListTile(
+              value: readyForRider,
+              onChanged: onReadyForRiderChanged,
+              title: const Text('Ready for Rider'),
+            ),
+            SwitchListTile(
+              value: readyForScheduling,
+              onChanged: onReadyForSchedulingChanged,
+              title: const Text('Ready for Scheduling'),
+            ),
+            SwitchListTile(
+              value: readyForDelivery,
+              onChanged: onReadyForDeliveryChanged,
+              title: const Text('Ready for Delivery'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _adminGiftWorkspaceSection({
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(16),
+          border:
+              Border.all(color: widget.colors.border.withValues(alpha: 0.7)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: widget.colors.text,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...children,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _adminGiftDetailPanel({
     required IconData icon,
     required String title,
@@ -5774,6 +6132,74 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         TextEditingController(text: '${item['procurementActualCost'] ?? ''}');
     final procurementNotes =
         TextEditingController(text: '${item['procurementNotes'] ?? ''}');
+    final workspace = item['giftsTeamWorkspace'] is Map
+        ? Map<String, dynamic>.from(item['giftsTeamWorkspace'] as Map)
+        : const <String, dynamic>{};
+    final assignment = workspace['assignment'] is Map
+        ? Map<String, dynamic>.from(workspace['assignment'] as Map)
+        : const <String, dynamic>{};
+    final supplier = workspace['supplierWorkspace'] is Map
+        ? Map<String, dynamic>.from(workspace['supplierWorkspace'] as Map)
+        : const <String, dynamic>{};
+    final experience = workspace['experienceBuilder'] is Map
+        ? Map<String, dynamic>.from(workspace['experienceBuilder'] as Map)
+        : const <String, dynamic>{};
+    final workspaceBudget = workspace['budget'] is Map
+        ? Map<String, dynamic>.from(workspace['budget'] as Map)
+        : const <String, dynamic>{};
+    final irisCollaboration = workspace['irisCollaboration'] is Map
+        ? Map<String, dynamic>.from(workspace['irisCollaboration'] as Map)
+        : const <String, dynamic>{};
+    final approval = workspace['approval'] is Map
+        ? Map<String, dynamic>.from(workspace['approval'] as Map)
+        : const <String, dynamic>{};
+    final readiness = workspace['readiness'] is Map
+        ? Map<String, dynamic>.from(workspace['readiness'] as Map)
+        : const <String, dynamic>{};
+    final assignedCurator =
+        TextEditingController(text: '${assignment['assignedCurator'] ?? ''}');
+    final targetCompletion =
+        TextEditingController(text: '${assignment['targetCompletion'] ?? ''}');
+    final curationNotes =
+        TextEditingController(text: '${workspace['curationNotes'] ?? ''}');
+    final supplierNames = TextEditingController(
+        text: _giftStringList(supplier['chosenSuppliers']).join(', '));
+    final supplierLinks = TextEditingController(
+        text: _giftStringList(supplier['supplierLinks']).join(', '));
+    final supplierContact =
+        TextEditingController(text: '${supplier['supplierContact'] ?? ''}');
+    final expectedFulfilment =
+        TextEditingController(text: '${supplier['expectedFulfilment'] ?? ''}');
+    final selectedExperience = TextEditingController(
+        text: '${experience['selectedExperience'] ?? ''}');
+    final reasonChosen =
+        TextEditingController(text: '${experience['reasonChosen'] ?? ''}');
+    final luxuryNotes =
+        TextEditingController(text: '${experience['luxuryNotes'] ?? ''}');
+    final presentationNotes =
+        TextEditingController(text: '${experience['presentationNotes'] ?? ''}');
+    final packagingNotes =
+        TextEditingController(text: '${experience['packagingNotes'] ?? ''}');
+    final cardNotes =
+        TextEditingController(text: '${experience['cardNotes'] ?? ''}');
+    final reservedBudget =
+        TextEditingController(text: '${workspaceBudget['reserved'] ?? ''}');
+    final spentBudget =
+        TextEditingController(text: '${workspaceBudget['spent'] ?? ''}');
+    final irisAcceptedSignals = TextEditingController(
+        text: _giftStringList(irisCollaboration['acceptedSignals']).join(', '));
+    final irisRejectedSignals = TextEditingController(
+        text: _giftStringList(irisCollaboration['rejectedSignals']).join(', '));
+    final irisModifiedSignals = TextEditingController(
+        text: _giftStringList(irisCollaboration['modifiedSignals']).join(', '));
+    final curatorFeedback = TextEditingController(
+        text: '${irisCollaboration['curatorFeedback'] ?? ''}');
+    final approvedBy =
+        TextEditingController(text: '${approval['approvedBy'] ?? ''}');
+    final approvedAt =
+        TextEditingController(text: '${approval['approvedAt'] ?? ''}');
+    final approvalReason =
+        TextEditingController(text: '${approval['reason'] ?? ''}');
     final isCampaignGift = '${item['giftType'] ?? 'standard'}' == 'campaign';
     final metrics = <String, int>{
       'views': (item['views'] as num?)?.toInt() ?? 0,
@@ -5786,6 +6212,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     String recipientConsent = '${item['recipientContentConsent'] ?? 'pending'}';
     String senderConsent = '${item['senderContentConsent'] ?? 'pending'}';
     String contentStatus = '${item['contentStatus'] ?? 'not_started'}';
+    String workspaceStatus = '${assignment['status'] ?? 'unassigned'}';
+    String workspacePriority = '${assignment['priority'] ?? 'standard'}';
+    String supplierStatus = '${supplier['supplierStatus'] ?? 'not_started'}';
+    bool needsApproval = approval['needsApproval'] != false;
+    bool readyForProcurement = readiness['readyForProcurement'] == true;
+    bool readyForRider = readiness['readyForRider'] == true;
+    bool readyForScheduling = readiness['readyForScheduling'] == true;
+    bool readyForDelivery = readiness['readyForDelivery'] == true;
     bool allowSocial = item['allowCircumSocialUse'] == true;
     bool allowBrandTagging = item['allowBrandTagging'] == true;
     bool allowRecording = item['allowReactionRecording'] == true;
@@ -5838,9 +6272,59 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _adminGiftIntelligenceStack(item),
+                  const SizedBox(height: 12),
+                  _adminGiftTeamWorkspace(
+                    assignedCurator: assignedCurator,
+                    workspaceStatus: workspaceStatus,
+                    onWorkspaceStatusChanged: (value) =>
+                        setDialogState(() => workspaceStatus = value),
+                    priority: workspacePriority,
+                    onPriorityChanged: (value) =>
+                        setDialogState(() => workspacePriority = value),
+                    targetCompletion: targetCompletion,
+                    curationNotes: curationNotes,
+                    supplierNames: supplierNames,
+                    supplierLinks: supplierLinks,
+                    supplierContact: supplierContact,
+                    expectedFulfilment: expectedFulfilment,
+                    supplierStatus: supplierStatus,
+                    onSupplierStatusChanged: (value) =>
+                        setDialogState(() => supplierStatus = value),
+                    selectedExperience: selectedExperience,
+                    reasonChosen: reasonChosen,
+                    luxuryNotes: luxuryNotes,
+                    presentationNotes: presentationNotes,
+                    packagingNotes: packagingNotes,
+                    cardNotes: cardNotes,
+                    customerBudget: item['grossBudget'] ?? item['budget'],
+                    reservedBudget: reservedBudget,
+                    spentBudget: spentBudget,
+                    irisAcceptedSignals: irisAcceptedSignals,
+                    irisRejectedSignals: irisRejectedSignals,
+                    irisModifiedSignals: irisModifiedSignals,
+                    curatorFeedback: curatorFeedback,
+                    needsApproval: needsApproval,
+                    onNeedsApprovalChanged: (value) =>
+                        setDialogState(() => needsApproval = value),
+                    approvedBy: approvedBy,
+                    approvedAt: approvedAt,
+                    approvalReason: approvalReason,
+                    readyForProcurement: readyForProcurement,
+                    onReadyForProcurementChanged: (value) =>
+                        setDialogState(() => readyForProcurement = value),
+                    readyForRider: readyForRider,
+                    onReadyForRiderChanged: (value) =>
+                        setDialogState(() => readyForRider = value),
+                    readyForScheduling: readyForScheduling,
+                    onReadyForSchedulingChanged: (value) =>
+                        setDialogState(() => readyForScheduling = value),
+                    readyForDelivery: readyForDelivery,
+                    onReadyForDeliveryChanged: (value) =>
+                        setDialogState(() => readyForDelivery = value),
+                  ),
                   const SizedBox(height: 18),
                   const Divider(),
-                  const Text('Raw request fields',
+                  const Text('Raw Request Data',
                       style:
                           TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
@@ -6561,8 +7045,106 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         });
                         return;
                       }
+                      final customerBudget =
+                          (item['grossBudget'] as num?)?.toDouble() ??
+                              (item['budget'] as num?)?.toDouble() ??
+                              0;
+                      final reserved =
+                          double.tryParse(reservedBudget.text.trim()) ?? 0;
+                      final spent =
+                          double.tryParse(spentBudget.text.trim()) ?? 0;
+                      final remaining =
+                          customerBudget - math.max(reserved, spent);
+                      final acceptedSignals = _csv(irisAcceptedSignals.text);
+                      final rejectedSignals = _csv(irisRejectedSignals.text);
+                      final modifiedSignals = _csv(irisModifiedSignals.text);
+                      final suppliers = _csv(supplierNames.text);
+                      final supplierUrlList = _csv(supplierLinks.text);
+                      final workspaceUpdate = {
+                        'assignment': {
+                          'assignedCurator': assignedCurator.text.trim(),
+                          'status': workspaceStatus,
+                          'priority': workspacePriority,
+                          'targetCompletion': targetCompletion.text.trim(),
+                          'reassignedBy': _adminUser?.uid ?? _adminUser?.email,
+                        },
+                        'curationNotes': curationNotes.text.trim(),
+                        'curationNotesUpdatedAt': FieldValue.serverTimestamp(),
+                        'curationNotesUpdatedBy':
+                            _adminUser?.uid ?? _adminUser?.email,
+                        'supplierWorkspace': {
+                          'chosenSuppliers': suppliers,
+                          'supplierLinks': supplierUrlList,
+                          'supplierContact': supplierContact.text.trim(),
+                          'expectedFulfilment': expectedFulfilment.text.trim(),
+                          'supplierStatus': supplierStatus,
+                        },
+                        'experienceBuilder': {
+                          'selectedExperience': selectedExperience.text.trim(),
+                          'reasonChosen': reasonChosen.text.trim(),
+                          'luxuryNotes': luxuryNotes.text.trim(),
+                          'presentationNotes': presentationNotes.text.trim(),
+                          'packagingNotes': packagingNotes.text.trim(),
+                          'cardNotes': cardNotes.text.trim(),
+                        },
+                        'budget': {
+                          'customerBudget': customerBudget,
+                          'reserved': reserved,
+                          'spent': spent,
+                          'remaining': remaining,
+                          'overBudget': remaining < 0,
+                        },
+                        'irisCollaboration': {
+                          'acceptedSignals': acceptedSignals,
+                          'rejectedSignals': rejectedSignals,
+                          'modifiedSignals': modifiedSignals,
+                          'curatorFeedback': curatorFeedback.text.trim(),
+                        },
+                        'approval': {
+                          'needsApproval': needsApproval,
+                          'approvedBy': approvedBy.text.trim(),
+                          'approvedAt': approvedAt.text.trim(),
+                          'reason': approvalReason.text.trim(),
+                        },
+                        'readiness': {
+                          'readyForProcurement': readyForProcurement,
+                          'readyForRider': readyForRider,
+                          'readyForScheduling': readyForScheduling,
+                          'readyForDelivery': readyForDelivery,
+                        },
+                      };
+                      final irisLearning = {
+                        'selectedExperience': selectedExperience.text.trim(),
+                        'experienceCategory': '${item['occasion'] ?? ''}',
+                        'supplierChosen': suppliers,
+                        'reasonChosen': reasonChosen.text.trim(),
+                        'manualChanges': modifiedSignals,
+                        'acceptedSignals': acceptedSignals,
+                        'rejectedSignals': rejectedSignals,
+                        'addedSignals': modifiedSignals,
+                        'curatorFeedback': curatorFeedback.text.trim(),
+                        'deliveryOutcome': '${item['status'] ?? status}',
+                        'recipientReaction': null,
+                        'giftStoryCompletion': null,
+                        'updatedAt': FieldValue.serverTimestamp(),
+                        'updatedBy': _adminUser?.uid ?? _adminUser?.email,
+                      };
                       Navigator.pop(context, {
                         'status': status,
+                        'giftsTeamWorkspace': workspaceUpdate,
+                        'giftIrisLearning': irisLearning,
+                        'giftWorkspaceAuditTrail': FieldValue.arrayUnion([
+                          {
+                            'event': 'workspace_updated',
+                            'assignedCurator': assignedCurator.text.trim(),
+                            'status': workspaceStatus,
+                            'priority': workspacePriority,
+                            'readyForProcurement': readyForProcurement,
+                            'readyForDelivery': readyForDelivery,
+                            'updatedBy': _adminUser?.uid ?? _adminUser?.email,
+                            'updatedAt': DateTime.now().toIso8601String(),
+                          }
+                        ]),
                         'manualGiftPlan': plan.text.trim(),
                         'adminDecision': decision.text.trim(),
                         'internalNotes': notes.text.trim(),
@@ -6648,9 +7230,32 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     procurementEstimatedCost.dispose();
     procurementActualCost.dispose();
     procurementNotes.dispose();
+    assignedCurator.dispose();
+    targetCompletion.dispose();
+    curationNotes.dispose();
+    supplierNames.dispose();
+    supplierLinks.dispose();
+    supplierContact.dispose();
+    expectedFulfilment.dispose();
+    selectedExperience.dispose();
+    reasonChosen.dispose();
+    luxuryNotes.dispose();
+    presentationNotes.dispose();
+    packagingNotes.dispose();
+    cardNotes.dispose();
+    reservedBudget.dispose();
+    spentBudget.dispose();
+    irisAcceptedSignals.dispose();
+    irisRejectedSignals.dispose();
+    irisModifiedSignals.dispose();
+    curatorFeedback.dispose();
+    approvedBy.dispose();
+    approvedAt.dispose();
+    approvalReason.dispose();
     if (result == null) return;
     final nowPosted = result['contentStatus'] == 'posted';
     final wasPosted = item['contentStatus'] == 'posted';
+    final workspaceUpdated = result.containsKey('giftsTeamWorkspace');
     await FirebaseFirestore.instance
         .collection('giftRequests')
         .doc('${item['id']}')
@@ -6668,16 +7273,20 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     });
     await _writeAudit(AdminAuditEntry(
       adminUserId: _adminUser?.uid ?? '',
-      actionType: nowPosted && !wasPosted
-          ? 'Gift content posted'
-          : 'Gift social record updated',
+      actionType: workspaceUpdated
+          ? 'Gift workspace updated'
+          : nowPosted && !wasPosted
+              ? 'Gift content posted'
+              : 'Gift social record updated',
       recordType: 'giftRequest',
       recordId: '${item['id']}',
       oldValue: item,
       newValue: result,
-      reason: nowPosted && !wasPosted
-          ? 'Gift content posted to an approved social channel.'
-          : 'Consent, caption, brand, or exposure details updated.',
+      reason: workspaceUpdated
+          ? 'Assignment, curation, supplier, budget, approval, readiness, or IRIS collaboration fields updated.'
+          : nowPosted && !wasPosted
+              ? 'Gift content posted to an approved social channel.'
+              : 'Consent, caption, brand, or exposure details updated.',
     ));
     if (nowPosted && '${result['brandName'] ?? ''}'.trim().isNotEmpty) {
       await _recordGiftBrandExposure('${item['id']}', result);
