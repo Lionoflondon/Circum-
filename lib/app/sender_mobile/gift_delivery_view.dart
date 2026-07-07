@@ -40,6 +40,8 @@ class GiftDeliveryView extends StatefulWidget {
 
 class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   final _deliveryAddressController = TextEditingController();
+  final _deliveryDateController = TextEditingController();
+  final _deliveryTimeWindowController = TextEditingController();
   final _addressSearch = PlaceApiProvider(
     'sender-mobile-gifts-delivery-address',
   );
@@ -51,15 +53,20 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   String? _deliveryDate;
   String? _deliveryTimeWindow;
 
+  bool get _usesFreeEntry => widget.draft.mode == SenderGiftMode.someone;
   bool get _canContinue =>
       _selectedAddressSuggestion != null &&
-      _deliveryDate != null &&
-      _deliveryTimeWindow != null;
+      (_usesFreeEntry
+          ? _deliveryDateController.text.trim().isNotEmpty &&
+              _deliveryTimeWindowController.text.trim().isNotEmpty
+          : _deliveryDate != null && _deliveryTimeWindow != null);
 
   @override
   void initState() {
     super.initState();
     _deliveryAddressController.text = widget.draft.deliveryAddress ?? '';
+    _deliveryDateController.text = widget.draft.deliveryDate ?? '';
+    _deliveryTimeWindowController.text = widget.draft.deliveryTimeWindow ?? '';
     _selectedAddressSuggestion = widget.draft.deliveryAddressData;
     _deliveryDate = widget.draft.deliveryDate;
     _deliveryTimeWindow = widget.draft.deliveryTimeWindow;
@@ -69,6 +76,8 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   void dispose() {
     _addressDebounce?.cancel();
     _deliveryAddressController.dispose();
+    _deliveryDateController.dispose();
+    _deliveryTimeWindowController.dispose();
     super.dispose();
   }
 
@@ -145,37 +154,56 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
           onChanged: _onAddressChanged,
           onSuggestionSelected: _selectAddressSuggestion,
         ),
-        const SizedBox(height: 12),
-        _GiftHardcodedChoiceCard(
-          label: 'PREFERRED DATE',
-          helper: 'Choose one option. The Gifts Team will plan around it.',
-          options: senderGiftPreferredDateOptions,
-          selected: _deliveryDate,
-          onSelected: (value) => setState(() => _deliveryDate = value),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'TIME WINDOW',
-          style: const TextStyle(
-            color: Color(0xFFC9B8FF),
-            fontSize: 10.5,
-            letterSpacing: .8,
-            fontWeight: FontWeight.w700,
+        if (_usesFreeEntry) ...[
+          const SizedBox(height: 12),
+          GiftJourneyWidgets.inputCard(
+            controller: _deliveryDateController,
+            label: 'PREFERRED DATE',
+            placeholder: 'Tell us the date that matters',
+            helper: 'Use natural language or a calendar date.',
+            onChanged: (_) => setState(() {}),
           ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final window in senderGiftDeliveryTimeWindows)
-              GiftJourneyWidgets.choiceChip(
-                label: window,
-                selected: _deliveryTimeWindow == window,
-                onTap: () => setState(() => _deliveryTimeWindow = window),
-              ),
-          ],
-        ),
+          const SizedBox(height: 12),
+          GiftJourneyWidgets.inputCard(
+            controller: _deliveryTimeWindowController,
+            label: 'PREFERRED TIME WINDOW',
+            placeholder: 'Morning, afternoon, evening, or a specific window',
+            helper: 'The Gifts Team will plan around this preference.',
+            onChanged: (_) => setState(() {}),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          _GiftHardcodedChoiceCard(
+            label: 'PREFERRED DATE',
+            helper: 'Choose one option. The Gifts Team will plan around it.',
+            options: senderGiftPreferredDateOptions,
+            selected: _deliveryDate,
+            onSelected: (value) => setState(() => _deliveryDate = value),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'TIME WINDOW',
+            style: const TextStyle(
+              color: Color(0xFFC9B8FF),
+              fontSize: 10.5,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final window in senderGiftDeliveryTimeWindows)
+                GiftJourneyWidgets.choiceChip(
+                  label: window,
+                  selected: _deliveryTimeWindow == window,
+                  onTap: () => setState(() => _deliveryTimeWindow = window),
+                ),
+            ],
+          ),
+        ],
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: _canContinue,
@@ -188,8 +216,12 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
                       draft: widget.draft.copyWith(
                         deliveryAddress: _deliveryAddressController.text.trim(),
                         deliveryAddressData: _selectedAddressSuggestion,
-                        deliveryDate: _deliveryDate,
-                        deliveryTimeWindow: _deliveryTimeWindow,
+                        deliveryDate: _usesFreeEntry
+                            ? _deliveryDateController.text.trim()
+                            : _deliveryDate,
+                        deliveryTimeWindow: _usesFreeEntry
+                            ? _deliveryTimeWindowController.text.trim()
+                            : _deliveryTimeWindow,
                       ),
                     ),
                     settings: const RouteSettings(

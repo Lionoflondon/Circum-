@@ -478,11 +478,15 @@ void main() {
       );
       expect(deliverySource, contains('PREFERRED DATE'));
       expect(deliverySource, contains('senderGiftPreferredDateOptions'));
+      expect(deliverySource, contains('_usesFreeEntry'));
+      expect(deliverySource, contains('Tell us the date that matters'));
+      expect(deliverySource, contains('PREFERRED TIME WINDOW'));
       expect(deliverySource, contains('Choose with Gifts Team'));
       expect(deliverySource, contains('_selectedAddressSuggestion != null'));
       expect(deliverySource, contains('GiftMessageView'));
       expect(messageSource, contains('Write something from the heart'));
       expect(messageSource, contains('senderGiftPersonalMessageOptions'));
+      expect(messageSource, contains('Write the message in your own words'));
       expect(
         messageSource,
         contains('You mean more to me than I say often enough.'),
@@ -566,8 +570,10 @@ void main() {
       expect(styleSource, contains('senderGiftBrandOptions'));
       expect(styleSource, contains('senderGiftColourOptions'));
       expect(styleSource, contains('senderGiftPreferredStyleOptions'));
-      expect(styleSource, isNot(contains('TextEditingController')));
-      expect(styleSource, isNot(contains('inputCard(')));
+      expect(styleSource, contains('_usesFreeEntry'));
+      expect(styleSource, contains('TextEditingController'));
+      expect(styleSource, contains('inputCard('));
+      expect(styleSource, contains('Tell us what you know'));
       expect(styleSource, contains('CLOTHING SIZE'));
       expect(styleSource, contains('SHOE SIZE'));
       expect(styleSource, contains('RING SIZE'));
@@ -987,33 +993,30 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Tomorrow'));
-      await tester.tap(find.text('Tomorrow'));
-      await tester.drag(find.byType(ListView), const Offset(0, -220));
+      expect(find.text('Tell us the date that matters'), findsOneWidget);
+      final deliveryFields = find.byType(TextField);
+      await tester.enterText(deliveryFields.at(1), 'Friday 18 July');
+      await tester.enterText(deliveryFields.at(2), 'Late afternoon');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Afternoon'));
-      await tester.pumpAndSettle();
-      expect(find.text('Tomorrow'), findsOneWidget);
-      expect(find.text('Afternoon'), findsOneWidget);
+      expect(find.text('Friday 18 July'), findsOneWidget);
+      expect(find.text('Late afternoon'), findsOneWidget);
 
       await tester.pumpWidget(
         MaterialApp(
           key: UniqueKey(),
           home: GiftMessageView(
             draft: verifiedDraft.copyWith(
-              deliveryDate: 'Tomorrow',
-              deliveryTimeWindow: 'Afternoon',
+              deliveryDate: 'Friday 18 July',
+              deliveryTimeWindow: 'Late afternoon',
             ),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        find.text(
-          'You mean more to me than I say often enough.',
-          skipOffstage: false,
-        ),
-        findsOneWidget,
+      expect(find.text('Write the message in your own words'), findsOneWidget);
+      await tester.enterText(
+        find.byType(TextField),
+        'I wanted this to feel like a little piece of calm.',
       );
 
       await tester.ensureVisible(find.text('Continue'));

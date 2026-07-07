@@ -28,18 +28,29 @@ class GiftMessageView extends StatefulWidget {
 }
 
 class _GiftMessageViewState extends State<GiftMessageView> {
+  final _messageController = TextEditingController();
   String? _selectedMessage;
 
-  bool get _canContinue => _selectedMessage != null;
+  bool get _usesFreeEntry => widget.draft.mode == SenderGiftMode.someone;
+  bool get _canContinue => _usesFreeEntry
+      ? _messageController.text.trim().isNotEmpty
+      : _selectedMessage != null;
 
   @override
   void initState() {
     super.initState();
     final existing = widget.draft.personalMessage?.trim();
+    _messageController.text = existing ?? '';
     if (existing != null &&
         senderGiftPersonalMessageOptions.contains(existing)) {
       _selectedMessage = existing;
     }
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -52,15 +63,25 @@ class _GiftMessageViewState extends State<GiftMessageView> {
           'Choose the message direction. You can refine the exact wording with the Gifts Team later.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
-        for (final message in senderGiftPersonalMessageOptions)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _GiftMessageOptionCard(
-              message: message,
-              selected: _selectedMessage == message,
-              onTap: () => setState(() => _selectedMessage = message),
+        if (_usesFreeEntry)
+          GiftJourneyWidgets.inputCard(
+            controller: _messageController,
+            label: 'PERSONAL MESSAGE',
+            placeholder: 'Write the message in your own words',
+            helper: 'The Gifts Team will preserve the feeling of your note.',
+            onChanged: (_) => setState(() {}),
+            maxLines: 5,
+          )
+        else
+          for (final message in senderGiftPersonalMessageOptions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _GiftMessageOptionCard(
+                message: message,
+                selected: _selectedMessage == message,
+                onTap: () => setState(() => _selectedMessage = message),
+              ),
             ),
-          ),
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: _canContinue,
@@ -71,7 +92,9 @@ class _GiftMessageViewState extends State<GiftMessageView> {
                   MaterialPageRoute<void>(
                     builder: (_) => GiftVoiceNoteView(
                       draft: widget.draft.copyWith(
-                        personalMessage: _selectedMessage,
+                        personalMessage: _usesFreeEntry
+                            ? _messageController.text.trim()
+                            : _selectedMessage,
                       ),
                     ),
                     settings: const RouteSettings(
