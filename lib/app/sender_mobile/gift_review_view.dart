@@ -21,7 +21,7 @@ class _GiftReviewViewState extends State<GiftReviewView> {
   Widget build(BuildContext context) {
     final draft = widget.draft;
     final brief = draft.giftBriefPreview;
-    final catalogueThemes = draft.normalizedGiftThemes
+    final chosenThemes = draft.normalizedGiftThemes
         .where((theme) => theme.source == 'catalogue')
         .map((theme) => theme.label)
         .toList();
@@ -57,11 +57,11 @@ class _GiftReviewViewState extends State<GiftReviewView> {
               : 'Skipped',
         ),
         _ReviewRow(
-          label: 'Catalogue themes',
-          value: catalogueThemes.isEmpty ? 'None' : catalogueThemes.join(', '),
+          label: 'Chosen themes',
+          value: chosenThemes.isEmpty ? 'None' : chosenThemes.join(', '),
         ),
         _ReviewRow(
-          label: 'Custom themes',
+          label: 'Personal themes',
           value: customThemes.isEmpty ? 'None' : customThemes.join(', '),
         ),
         _ReviewRow(
@@ -70,6 +70,7 @@ class _GiftReviewViewState extends State<GiftReviewView> {
               'No allergy or medical restriction fields were supplied in this mobile flow.',
         ),
         _GiftBriefCard(
+          draft: draft,
           brief: brief,
         ),
         if (draft.mode == SenderGiftMode.campaign) ...[
@@ -88,7 +89,7 @@ class _GiftReviewViewState extends State<GiftReviewView> {
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: true,
-        label: 'Proceed to Payment',
+        label: 'Continue to Secure Payment',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GiftPaymentView(draft: draft),
@@ -101,9 +102,10 @@ class _GiftReviewViewState extends State<GiftReviewView> {
 }
 
 class _GiftBriefCard extends StatelessWidget {
+  final GiftJourneyDraft draft;
   final SenderGiftBriefPreview brief;
 
-  const _GiftBriefCard({required this.brief});
+  const _GiftBriefCard({required this.draft, required this.brief});
 
   @override
   Widget build(BuildContext context) {
@@ -121,25 +123,44 @@ class _GiftBriefCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'IRIS GIFT BRIEF',
-            style: GoogleFonts.jetBrainsMono(
+            '✨ IRIS has understood the moment',
+            style: GoogleFonts.dmSerifDisplay(
               color: const Color(0xFFC9B8FF),
-              fontSize: 10.5,
-              letterSpacing: .8,
-              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              height: 1.05,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your gift remains completely confidential until delivery.\n\nThe Gifts Team now understands the intention behind your gift — not just the budget.',
+            style: GoogleFonts.inter(
+              color: const Color(0xFFE4DCF5),
+              fontSize: 12.5,
+              height: 1.48,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
           _BriefLine(
-            label: 'Emotional Direction',
+              label: 'Recipient', value: draft.recipientName ?? 'Not set'),
+          _BriefLine(
+              label: 'Relationship', value: draft.relationship ?? 'Not set'),
+          _BriefLine(label: 'Occasion', value: draft.occasion ?? 'Not set'),
+          _BriefLine(
+            label: 'Emotional direction',
             value: brief.emotionalDirection,
           ),
           _BriefLine(
-            label: 'Experience Direction',
+            label: 'Experience direction',
             value: brief.experienceDirection,
           ),
-          _BriefLine(label: 'Things To Avoid', value: brief.thingsToAvoid),
-          _BriefLine(label: 'Confidence', value: brief.confidence),
+          _BriefLine(label: 'Things to avoid', value: brief.thingsToAvoid),
+          _BriefLine(
+            label: 'Personalisation score',
+            value:
+                '${draft.irisGiftBrief?.personalisationScore ?? _fallbackScore(brief)}%',
+          ),
           _BriefLine(
             label: 'Human review required',
             value: brief.humanReviewRequired ? 'Yes' : 'No',
@@ -147,6 +168,14 @@ class _GiftBriefCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  int _fallbackScore(SenderGiftBriefPreview brief) {
+    return switch (brief.confidence) {
+      'High' => 88,
+      'Medium' => 74,
+      _ => 62,
+    };
   }
 }
 

@@ -7,6 +7,16 @@ import 'package:permission_handler/permission_handler.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_themes_view.dart';
+import 'gift_voice_recorder.dart';
+
+enum GiftVoiceNoteState {
+  idle,
+  permissionDenied,
+  recording,
+  recorded,
+  playing,
+  uploadFailed,
+}
 
 class GiftVoiceNoteView extends StatefulWidget {
   final GiftJourneyDraft draft;
@@ -20,27 +30,35 @@ class GiftVoiceNoteView extends StatefulWidget {
 }
 
 class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
-  static const _maxDurationSeconds = 160;
+  static const _maxDurationSeconds = 60;
 
   Timer? _timer;
   Timer? _playbackTimer;
-  bool _permissionDenied = false;
-  bool _recording = false;
-  bool _playing = false;
+  late final SenderGiftVoiceRecorder _recorder;
+  late final SenderGiftVoicePlayback _playback;
+  GiftVoiceNoteState _state = GiftVoiceNoteState.idle;
   int _seconds = 0;
   SenderGiftVoiceNote? _voiceNote;
+  String? _statusMessage;
 
   @override
   void initState() {
     super.initState();
+    _recorder = SenderGiftVoiceRecorder();
+    _playback = SenderGiftVoicePlayback();
     _voiceNote = widget.draft.voiceNote;
     _seconds = _voiceNote?.durationSeconds ?? 0;
+    if (_voiceNote?.hasVoiceNote == true) {
+      _state = GiftVoiceNoteState.recorded;
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _playbackTimer?.cancel();
+    _playback.dispose();
+    _recorder.dispose();
     super.dispose();
   }
 
@@ -55,15 +73,18 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         _VoiceNoteCard(
-          permissionDenied: _permissionDenied,
-          recording: _recording,
-          playing: _playing,
+          state: _state,
           seconds: _seconds,
           voiceNote: _voiceNote,
+          statusMessage: _statusMessage,
           onRecord: _startRecording,
-          onStop: _stopRecording,
+          onStop: () {
+            _stopRecording();
+          },
           onCancel: _cancelRecording,
-          onPlay: _play,
+          onPlay: () {
+            _play();
+          },
           onPause: _pause,
           onDelete: _delete,
           onRerecord: _rerecord,
@@ -101,77 +122,124 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
   }
 
   Future<void> _startRecording() async {
-    final status = await Permission.microphone.request();
-    if (!status.isGranted) {
-      setState(() => _permissionDenied = true);
+    if (!_recorder.isSupported) {
+      setState(() {
+        _state = GiftVoiceNoteState.uploadFailed;
+        _statusMessage =
+            'Voice recording is unavailable in this browser. You can skip this step.';
+      });
       return;
     }
-    setState(() {
-      _permissionDenied = false;
-      _recording = true;
-      _playing = false;
-      _voiceNote = null;
-      _seconds = 0;
-    });
-    _playbackTimer?.cancel();
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      if (_seconds + 1 >= _maxDurationSeconds) {
-        _stopRecording();
-        return;
-      }
-      setState(() => _seconds += 1);
-    });
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      setState(() {
+        _state = GiftVoiceNoteState.permissionDenied;
+        _statusMessage =
+            'Microphone access is blocked. Enable it in your browser settings, or skip this step.';
+      });
+      return;
+    }
+    try {
+      await _recorder.start();
+      setState(() {
+        _state = GiftVoiceNoteState.recording;
+        _statusMessage = null;
+        _voiceNote = null;
+        _seconds = 0;
+      });
+      _playbackTimer?.cancel();
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        if (_seconds + 1 >= _maxDurationSeconds) {
+          _stopRecording();
+          return;
+        }
+        setState(() => _seconds += 1);
+      });
+    } catch (_) {
+      setState(() {
+        _state = GiftVoiceNoteState.permissionDenied;
+        _statusMessage =
+            'Microphone access is blocked. Enable it in your browser settings, or skip this step.';
+      });
+    }
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _timer?.cancel();
     final duration = _seconds.clamp(1, _maxDurationSeconds);
-    setState(() {
-      _recording = false;
-      _seconds = duration;
-      _voiceNote = SenderGiftVoiceNote(
-        hasVoiceNote: true,
-        durationSeconds: duration,
-        localPath:
-            'local://sender-mobile/gifts/voice-note/${DateTime.now().millisecondsSinceEpoch}.m4a',
-        createdAt: DateTime.now(),
-        transcript: null,
-        language: null,
-      );
-    });
+    try {
+      final audio = await _recorder.stop();
+      setState(() {
+        _state = GiftVoiceNoteState.recorded;
+        _statusMessage = null;
+        _seconds = duration;
+        _voiceNote = SenderGiftVoiceNote(
+          hasVoiceNote: true,
+          durationSeconds: duration,
+          localUrl: audio.localUrl,
+          storagePath: null,
+          downloadUrl: null,
+          createdAt: DateTime.now(),
+          transcript: null,
+          language: null,
+        );
+      });
+    } catch (_) {
+      setState(() {
+        _state = GiftVoiceNoteState.uploadFailed;
+        _statusMessage =
+            'We could not save that recording. Please try again or skip this step.';
+      });
+    }
   }
 
   void _cancelRecording() {
     _timer?.cancel();
+    _recorder.cancel();
     setState(() {
-      _recording = false;
-      _playing = false;
+      _state = _voiceNote == null
+          ? GiftVoiceNoteState.idle
+          : GiftVoiceNoteState.recorded;
       _seconds = _voiceNote?.durationSeconds ?? 0;
     });
   }
 
-  void _play() {
-    if (_voiceNote == null) return;
+  Future<void> _play() async {
+    final localUrl = _voiceNote?.localUrl ?? _voiceNote?.localPath;
+    if (localUrl == null || localUrl.isEmpty) return;
     _playbackTimer?.cancel();
-    setState(() => _playing = true);
-    _playbackTimer = Timer(_voiceNoteDuration, () {
-      if (mounted) setState(() => _playing = false);
-    });
+    try {
+      await _playback.play(localUrl);
+      setState(() => _state = GiftVoiceNoteState.playing);
+      _playbackTimer = Timer(_voiceNoteDuration, () {
+        _playback.pause();
+        if (mounted) setState(() => _state = GiftVoiceNoteState.recorded);
+      });
+    } catch (_) {
+      setState(() {
+        _state = GiftVoiceNoteState.uploadFailed;
+        _statusMessage =
+            'We could not play that recording. Please try again or re-record.';
+      });
+    }
   }
 
   void _pause() {
     _playbackTimer?.cancel();
-    setState(() => _playing = false);
+    _playback.pause();
+    setState(() => _state = GiftVoiceNoteState.recorded);
   }
 
   void _delete() {
     _timer?.cancel();
     _playbackTimer?.cancel();
+    _playback.pause();
+    _recorder.cancel();
     setState(() {
-      _recording = false;
-      _playing = false;
+      _state = GiftVoiceNoteState.idle;
+      _statusMessage = null;
       _voiceNote = null;
       _seconds = 0;
     });
@@ -198,11 +266,10 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
 }
 
 class _VoiceNoteCard extends StatelessWidget {
-  final bool permissionDenied;
-  final bool recording;
-  final bool playing;
+  final GiftVoiceNoteState state;
   final int seconds;
   final SenderGiftVoiceNote? voiceNote;
+  final String? statusMessage;
   final VoidCallback onRecord;
   final VoidCallback onStop;
   final VoidCallback onCancel;
@@ -212,11 +279,10 @@ class _VoiceNoteCard extends StatelessWidget {
   final VoidCallback onRerecord;
 
   const _VoiceNoteCard({
-    required this.permissionDenied,
-    required this.recording,
-    required this.playing,
+    required this.state,
     required this.seconds,
     required this.voiceNote,
+    required this.statusMessage,
     required this.onRecord,
     required this.onStop,
     required this.onCancel,
@@ -229,6 +295,10 @@ class _VoiceNoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasNote = voiceNote != null;
+    final recording = state == GiftVoiceNoteState.recording;
+    final playing = state == GiftVoiceNoteState.playing;
+    final permissionDenied = state == GiftVoiceNoteState.permissionDenied;
+    final uploadFailed = state == GiftVoiceNoteState.uploadFailed;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -277,16 +347,17 @@ class _VoiceNoteCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            permissionDenied
-                ? 'Microphone permission was denied. Enable microphone access to record a note, or skip this step.'
-                : recording
-                    ? 'Maximum length is 160 seconds.'
-                    : hasNote
-                        ? 'Transcript and language are saved as null until processing is connected.'
-                        : 'Ask for microphone permission, then record a short note.',
+            statusMessage ??
+                (permissionDenied
+                    ? 'Microphone access is blocked. Enable it in your browser settings, or skip this step.'
+                    : recording
+                        ? 'Maximum length is 60 seconds.'
+                        : hasNote
+                            ? 'Transcript and language are saved as null until processing is connected.'
+                            : 'Ask for microphone permission, then record a short note.'),
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              color: permissionDenied
+              color: permissionDenied || uploadFailed
                   ? const Color(0xFFFFD6E8)
                   : const Color(0xFFB8AAB8),
               fontSize: 12.5,

@@ -454,7 +454,23 @@ void main() {
       expect(messageSource, contains('What do you want them to know?'));
       expect(messageSource, contains('GiftVoiceNoteView'));
       expect(voiceSource, contains('STEP 05 — VOICE NOTE'));
+      expect(voiceSource, contains('enum GiftVoiceNoteState'));
+      expect(voiceSource, contains('GiftVoiceNoteState.idle'));
+      expect(voiceSource, contains('GiftVoiceNoteState.permissionDenied'));
+      expect(voiceSource, contains('GiftVoiceNoteState.recording'));
+      expect(voiceSource, contains('GiftVoiceNoteState.recorded'));
+      expect(voiceSource, contains('GiftVoiceNoteState.playing'));
+      expect(voiceSource, contains('GiftVoiceNoteState.uploadFailed'));
       expect(voiceSource, contains('Permission.microphone.request'));
+      expect(voiceSource, contains('SenderGiftVoiceRecorder'));
+      expect(voiceSource, contains('SenderGiftVoicePlayback'));
+      expect(voiceSource, contains('_maxDurationSeconds = 60'));
+      expect(
+        voiceSource,
+        contains(
+          'Microphone access is blocked. Enable it in your browser settings, or skip this step.',
+        ),
+      );
       expect(voiceSource, contains('Record'));
       expect(voiceSource, contains('Stop'));
       expect(voiceSource, contains('Cancel'));
@@ -488,6 +504,24 @@ void main() {
       expect(irisSource, contains('generateIrisBrief'));
       expect(styleSource, contains('STEP 08 — STYLE & SIZES'));
       expect(styleSource, contains('CLOTHING / SHOE / RING SIZE'));
+      expect(styleSource, contains('PREFERRED STYLE'));
+      expect(
+        styleSource,
+        contains(
+          'Choose the styles that best describe what they enjoy wearing, collecting or surrounding themselves with.',
+        ),
+      );
+      expect(styleSource, contains('Minimal'));
+      expect(styleSource, contains('Classic'));
+      expect(styleSource, contains('Modern'));
+      expect(styleSource, contains('Bold'));
+      expect(styleSource, contains('Luxury'));
+      expect(styleSource, contains('Streetwear'));
+      expect(styleSource, contains('Vintage'));
+      expect(styleSource, contains('Elegant'));
+      expect(styleSource, contains('Sporty'));
+      expect(styleSource, contains('Cosy'));
+      expect(styleSource, contains('preferredStyles'));
       expect(privacySource, contains('STEP 09 — REVEAL & PRIVACY'));
       expect(privacySource, contains('Allow Circum story use'));
       expect(budgetSource, contains('STEP 10 — BUDGET'));
@@ -514,11 +548,18 @@ void main() {
       expect(reviewSource, contains('GiftPaymentView'));
       expect(paymentSource, contains('STEP 12 — PAYMENT'));
       expect(paymentSource, contains('senderGiftPaymentCallableName'));
-      expect(paymentSource, contains('Roth applied'));
-      expect(paymentSource, contains('Card amount'));
-      expect(paymentSource, contains('Final total'));
+      expect(paymentSource, contains('Gift Summary'));
+      expect(paymentSource, contains('Choose payment method'));
+      expect(paymentSource, contains('Card'));
+      expect(paymentSource, contains('Apple Pay'));
+      expect(paymentSource, contains('Google Pay'));
+      expect(paymentSource, contains('Apply Roth balance'));
+      expect(paymentSource, contains('_showRothToggle'));
+      expect(paymentSource, contains('Continue to Secure Payment'));
+      expect(paymentSource, contains('Secure payment powered by Stripe.'));
       expect(paymentSource, contains("'source': 'sender_mobile'"));
-      expect(paymentSource, contains("'applyRoth': false"));
+      expect(paymentSource,
+          contains("'applyRoth': _applyRoth && _rothBalance > 0"));
       expect(paymentSource, contains("'returnOrigin': Uri.base.origin"));
       expect(
         paymentSource,
@@ -531,20 +572,35 @@ void main() {
       expect(draftSource, contains("'walletContributionGbp': 0"));
       expect(draftSource, contains("'remainingStripeAmountGbp': budget"));
       expect(draftSource, contains("'voiceNote': voiceNote?.toMap()"));
+      expect(draftSource, contains("'localUrl': localUrl ?? localPath"));
+      expect(draftSource, contains('preferredStyles'));
       expect(draftSource, contains("'giftThemes':"));
       expect(draftSource, contains("'giftThemeLabels':"));
       expect(draftSource, contains("'irisGiftBrief': brief.toMap()"));
       expect(reviewSource, contains('Voice note'));
-      expect(reviewSource, contains('Catalogue themes'));
-      expect(reviewSource, contains('Custom themes'));
+      expect(reviewSource, contains('Added ·'));
+      expect(reviewSource, contains('Chosen themes'));
+      expect(reviewSource, contains('Personal themes'));
       expect(reviewSource, contains('Allergies / medical'));
       expect(reviewSource, contains('Campaign · Bringing London Closer'));
-      expect(reviewSource, contains('IRIS GIFT BRIEF'));
-      expect(reviewSource, contains('Emotional Direction'));
-      expect(reviewSource, contains('Experience Direction'));
-      expect(reviewSource, contains('Things To Avoid'));
+      expect(reviewSource, isNot(contains('IRIS GIFT BRIEF')));
+      expect(reviewSource, contains('✨ IRIS has understood the moment'));
+      expect(
+        reviewSource,
+        contains('Your gift remains completely confidential until delivery.'),
+      );
+      expect(
+        reviewSource,
+        contains(
+          'The Gifts Team now understands the intention behind your gift — not just the budget.',
+        ),
+      );
+      expect(reviewSource, contains('Emotional direction'));
+      expect(reviewSource, contains('Experience direction'));
+      expect(reviewSource, contains('Things to avoid'));
+      expect(reviewSource, contains('Personalisation score'));
       expect(reviewSource, contains('Human review required'));
-      expect(paymentSource, contains('Gift this experience'));
+      expect(paymentSource, isNot(contains('Gift this experience')));
       expect(statusSource, contains('IRIS analysing'));
       expect(statusSource, contains('Gift Brief complete'));
       expect(statusSource, contains('Gifts Team reviewing'));
@@ -623,9 +679,11 @@ void main() {
         voiceNote: SenderGiftVoiceNote(
           hasVoiceNote: true,
           durationSeconds: 12,
+          localUrl: 'blob:http://localhost/test',
           localPath: 'local://sender-mobile/gifts/voice-note/test.m4a',
           createdAt: DateTime.utc(2026),
         ),
+        preferredStyles: const ['Minimal', 'Elegant'],
         irisGiftBrief: SenderGiftIrisBrief(
           emotionalDirection: 'Warm',
           experienceDirection: 'Concierge',
@@ -650,9 +708,14 @@ void main() {
       ]);
       expect(
         payload['voiceNote'],
+        containsPair('localUrl', 'blob:http://localhost/test'),
+      );
+      expect(
+        payload['voiceNote'],
         containsPair(
             'localPath', 'local://sender-mobile/gifts/voice-note/test.m4a'),
       );
+      expect(payload['preferredStyles'], ['Minimal', 'Elegant']);
       expect(payload['irisGiftBrief'], containsPair('confidence', 'High'));
     });
 

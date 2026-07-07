@@ -23,6 +23,17 @@ class GiftPaymentView extends StatefulWidget {
 class _GiftPaymentViewState extends State<GiftPaymentView> {
   var _submitting = false;
   String? _message;
+  String? _paymentMethod;
+  bool _applyRoth = false;
+
+  double get _rothBalance => 0;
+  bool get _rothCanFullyCover =>
+      _rothBalance >= widget.draft.budget && widget.draft.budget > 0;
+  bool get _showRothToggle =>
+      _paymentMethod != null && _paymentMethod != 'Roth' && _rothBalance > 0;
+  double get _rothApplied =>
+      _applyRoth ? _rothBalance.clamp(0, widget.draft.budget).toDouble() : 0;
+  double get _remainingCardAmount => widget.draft.budget - _rothApplied;
 
   @override
   void initState() {
@@ -43,28 +54,83 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       eyebrow: 'STEP 12 — PAYMENT',
       title: 'Secure the request',
       subtitle:
-          'Payment uses the existing Gifts checkout path. Admin sees the same request fields as web.',
+          'Choose how you would like to secure this bespoke gift experience.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
+        Text(
+          'Gift Summary',
+          style: GoogleFonts.dmSerifDisplay(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 12),
         _PaymentSummary(
-          label: 'Gift budget',
+          label: 'Budget',
           value: '£${widget.draft.budget.toStringAsFixed(0)}',
         ),
         const SizedBox(height: 10),
-        const _PaymentSummary(
-          label: 'Roth applied',
-          value: '£0',
+        _PaymentSummary(
+          label: 'Delivery',
+          value:
+              '${widget.draft.deliveryDate ?? 'Date pending'} · ${widget.draft.deliveryTimeWindow ?? 'Window pending'}',
         ),
         const SizedBox(height: 10),
-        _PaymentSummary(
-          label: 'Card amount',
-          value: '£${widget.draft.budget.toStringAsFixed(0)}',
-        ),
+        const _PaymentSummary(label: 'Fees', value: '£0'),
         const SizedBox(height: 10),
         _PaymentSummary(
-          label: 'Final total',
+          label: 'Total',
           value: '£${widget.draft.budget.toStringAsFixed(0)}',
         ),
+        const SizedBox(height: 22),
+        Text(
+          'Choose payment method',
+          style: GoogleFonts.dmSerifDisplay(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _PaymentMethodTile(
+          label: 'Card',
+          selected: _paymentMethod == 'Card',
+          onTap: () => setState(() => _paymentMethod = 'Card'),
+        ),
+        const SizedBox(height: 10),
+        _PaymentMethodTile(
+          label: 'Apple Pay',
+          selected: _paymentMethod == 'Apple Pay',
+          onTap: () => setState(() => _paymentMethod = 'Apple Pay'),
+        ),
+        const SizedBox(height: 10),
+        _PaymentMethodTile(
+          label: 'Google Pay',
+          selected: _paymentMethod == 'Google Pay',
+          onTap: () => setState(() => _paymentMethod = 'Google Pay'),
+        ),
+        if (_rothCanFullyCover) ...[
+          const SizedBox(height: 10),
+          _PaymentMethodTile(
+            label: 'Roth',
+            selected: _paymentMethod == 'Roth',
+            onTap: () => setState(() {
+              _paymentMethod = 'Roth';
+              _applyRoth = true;
+            }),
+          ),
+        ],
+        if (_showRothToggle) ...[
+          const SizedBox(height: 16),
+          _RothToggleCard(
+            enabled: _applyRoth,
+            balance: _rothBalance,
+            applied: _rothApplied,
+            remaining: _remainingCardAmount,
+            onChanged: (value) => setState(() => _applyRoth = value),
+          ),
+        ],
         if (_message != null) ...[
           const SizedBox(height: 14),
           Text(
@@ -78,10 +144,40 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           ),
         ],
       ],
-      footer: GiftJourneyWidgets.primaryButton(
-        enabled: !_submitting,
-        label: _submitting ? 'Preparing checkout...' : 'Gift this experience',
-        onTap: _submitting ? null : _submitForAdminReview,
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'You’re almost there.\n\nOnce payment is confirmed, our Gifts Team begins designing a completely bespoke experience for your recipient.\n\nNo catalogue.\nNo mass-produced gifts.\nOnly something created specifically for this moment.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: const Color(0xFFE4DCF5),
+              fontSize: 12.5,
+              height: 1.42,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Secure payment powered by Stripe.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: const Color(0xFFB8AAB8),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GiftJourneyWidgets.primaryButton(
+            enabled: !_submitting && _paymentMethod != null,
+            label: _submitting
+                ? 'Preparing checkout...'
+                : 'Continue to Secure Payment',
+            onTap: _submitting || _paymentMethod == null
+                ? null
+                : _submitForAdminReview,
+          ),
+        ],
       ),
     );
   }
@@ -123,7 +219,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           .call({
         'giftDraftId': draftRef.id,
         'source': 'sender_mobile',
-        'applyRoth': false,
+        'applyRoth': _applyRoth && _rothBalance > 0,
         'returnOrigin': Uri.base.origin,
       });
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
@@ -152,6 +248,126 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+}
+
+class _PaymentMethodTile extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PaymentMethodTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFC9B8FF).withValues(alpha: .12)
+              : Colors.white.withValues(alpha: .052),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFC9B8FF).withValues(alpha: .34)
+                : Colors.white.withValues(alpha: .09),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color:
+                  selected ? const Color(0xFFC9B8FF) : const Color(0xFFB8AAB8),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RothToggleCard extends StatelessWidget {
+  final bool enabled;
+  final double balance;
+  final double applied;
+  final double remaining;
+  final ValueChanged<bool> onChanged;
+
+  const _RothToggleCard({
+    required this.enabled,
+    required this.balance,
+    required this.applied,
+    required this.remaining,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: Column(
+        children: [
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: enabled,
+            onChanged: onChanged,
+            title: Text(
+              'Apply Roth balance',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          if (enabled) ...[
+            const SizedBox(height: 8),
+            _PaymentSummary(
+              label: 'Roth balance',
+              value: '£${balance.toStringAsFixed(0)}',
+            ),
+            const SizedBox(height: 8),
+            _PaymentSummary(
+              label: 'Roth applied',
+              value: '£${applied.toStringAsFixed(0)}',
+            ),
+            const SizedBox(height: 8),
+            _PaymentSummary(
+              label: 'Remaining card amount',
+              value: '£${remaining.toStringAsFixed(0)}',
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

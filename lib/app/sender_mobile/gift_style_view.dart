@@ -28,6 +28,7 @@ class _GiftStyleViewState extends State<GiftStyleView> {
     _coloursController =
         TextEditingController(text: widget.draft.favouriteColours);
     _brandsController = TextEditingController(text: widget.draft.likedBrands);
+    _stylePills.addAll(widget.draft.preferredStyles);
   }
 
   @override
@@ -69,23 +70,15 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final style in const ['Cosy', 'Minimal', 'Bold', 'Classic'])
-              GiftJourneyWidgets.choiceChip(
-                label: style,
-                selected: _stylePills.contains(style),
-                onTap: () => setState(() {
-                  if (_stylePills.contains(style)) {
-                    _stylePills.remove(style);
-                  } else {
-                    _stylePills.add(style);
-                  }
-                }),
-              ),
-          ],
+        _PreferredStyleChips(
+          selectedStyles: _stylePills,
+          onToggle: (style) => setState(() {
+            if (_stylePills.contains(style)) {
+              _stylePills.remove(style);
+            } else {
+              _stylePills.add(style);
+            }
+          }),
         ),
       ],
       footer: GiftJourneyWidgets.primaryButton(
@@ -98,12 +91,74 @@ class _GiftStyleViewState extends State<GiftStyleView> {
                 clothingSize: _sizeController.text.trim(),
                 favouriteColours: _coloursController.text.trim(),
                 likedBrands: _brandsController.text.trim(),
+                preferredStyles: _stylePills.toList(),
               ),
             ),
             settings: const RouteSettings(name: GiftPrivacyView.routeName),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PreferredStyleChips extends StatelessWidget {
+  final Set<String> selectedStyles;
+  final ValueChanged<String> onToggle;
+
+  const _PreferredStyleChips({
+    required this.selectedStyles,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const styles = [
+      'Minimal',
+      'Classic',
+      'Modern',
+      'Bold',
+      'Luxury',
+      'Streetwear',
+      'Vintage',
+      'Elegant',
+      'Sporty',
+      'Cosy',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'PREFERRED STYLE',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: const Color(0xFFB8AAB8),
+                fontWeight: FontWeight.w800,
+                letterSpacing: .7,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Choose the styles that best describe what they enjoy wearing, collecting or surrounding themselves with.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: const Color(0xFFE4DCF5).withValues(alpha: .72),
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final style in styles)
+              GiftJourneyWidgets.choiceChip(
+                label: style,
+                selected: selectedStyles.contains(style),
+                onTap: () => onToggle(style),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

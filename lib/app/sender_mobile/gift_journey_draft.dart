@@ -117,6 +117,7 @@ class SenderGiftTheme {
 class SenderGiftVoiceNote {
   final bool hasVoiceNote;
   final int durationSeconds;
+  final String? localUrl;
   final String? localPath;
   final String? storagePath;
   final String? downloadUrl;
@@ -127,6 +128,7 @@ class SenderGiftVoiceNote {
   const SenderGiftVoiceNote({
     required this.hasVoiceNote,
     required this.durationSeconds,
+    this.localUrl,
     this.localPath,
     this.storagePath,
     this.downloadUrl,
@@ -138,7 +140,8 @@ class SenderGiftVoiceNote {
   Map<String, Object?> toMap() => {
         'hasVoiceNote': hasVoiceNote,
         'durationSeconds': durationSeconds,
-        'localPath': localPath,
+        'localUrl': localUrl ?? localPath,
+        'localPath': localPath ?? localUrl,
         'storagePath': storagePath,
         'downloadUrl': downloadUrl,
         'createdAt': createdAt.toIso8601String(),
@@ -288,6 +291,7 @@ class GiftJourneyDraft {
   final String? ringSize;
   final String? favouriteColours;
   final String? likedBrands;
+  final List<String> preferredStyles;
   final String? senderRevealMode;
   final String? selfGiftFrequency;
   final bool allowCircumSocialUse;
@@ -318,6 +322,7 @@ class GiftJourneyDraft {
     this.ringSize,
     this.favouriteColours,
     this.likedBrands,
+    this.preferredStyles = const [],
     this.senderRevealMode,
     this.selfGiftFrequency,
     this.allowCircumSocialUse = false,
@@ -450,7 +455,8 @@ class GiftJourneyDraft {
             (hasVoice ? 6 : 0) +
             (themes.isNotEmpty ? 8 : 0) +
             ((likedBrands ?? '').trim().isNotEmpty ? 3 : 0) +
-            ((favouriteColours ?? '').trim().isNotEmpty ? 3 : 0))
+            ((favouriteColours ?? '').trim().isNotEmpty ? 3 : 0) +
+            (preferredStyles.isNotEmpty ? 4 : 0))
         .clamp(0, 96);
     final confidence = score >= 82
         ? 'High'
@@ -501,6 +507,7 @@ class GiftJourneyDraft {
     String? ringSize,
     String? favouriteColours,
     String? likedBrands,
+    List<String>? preferredStyles,
     String? senderRevealMode,
     String? selfGiftFrequency,
     bool? allowCircumSocialUse,
@@ -531,6 +538,7 @@ class GiftJourneyDraft {
       ringSize: ringSize ?? this.ringSize,
       favouriteColours: favouriteColours ?? this.favouriteColours,
       likedBrands: likedBrands ?? this.likedBrands,
+      preferredStyles: preferredStyles ?? this.preferredStyles,
       senderRevealMode: senderRevealMode ?? this.senderRevealMode,
       selfGiftFrequency: selfGiftFrequency ?? this.selfGiftFrequency,
       allowCircumSocialUse: allowCircumSocialUse ?? this.allowCircumSocialUse,
@@ -603,6 +611,7 @@ class GiftJourneyDraft {
       'notes': notes?.trim() ?? '',
       'voiceNote': voiceNote?.toMap(),
       'irisGiftBrief': brief.toMap(),
+      'preferredStyles': preferredStyles,
       'sizesAndPreferences': {
         'clothingSize': clothingSize?.trim() ?? '',
         'shoeSize': shoeSize?.trim() ?? '',
@@ -612,6 +621,7 @@ class GiftJourneyDraft {
         'favouriteColours': favouriteColours?.trim() ?? '',
         'brandsLiked': likedBrands?.trim() ?? '',
         'brandsDisliked': '',
+        'preferredStyles': preferredStyles,
       },
       'giftType': mode == SenderGiftMode.campaign ? 'campaign' : 'standard',
       'paymentStatus': 'payment_pending',
