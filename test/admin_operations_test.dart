@@ -409,6 +409,13 @@ void main() {
       expect(approval['previousStatus'], 'submitted');
       expect(approval['newStatus'], 'approved');
       expect(approval['reason'], 'Approved for curation');
+      final resolvedApproval = AdminGiftsOperations.resolve({
+        ...approval,
+        'giftType': 'normal',
+        'paymentStatus': 'paid',
+      });
+      expect(resolvedApproval.flowStatus, 'approved');
+      expect(resolvedApproval.nextAllowedAdminAction, 'move_to_curation');
 
       final matchApproval = AdminGiftsOperations.approveCampaignMatchPatch(
         adminUserId: 'admin-2',
@@ -418,6 +425,13 @@ void main() {
       );
       expect(matchApproval['campaignStatus'], 'match_found');
       expect(matchApproval['matchStatus'], 'approved');
+      expect(
+        AdminGiftsOperations.resolve({
+          ...matchApproval,
+          'giftType': 'campaign',
+        }).nextAllowedAdminAction,
+        'approve_or_reject_campaign_match',
+      );
 
       final handoff = AdminGiftsOperations.linkCampaignDeliveryPatch(
         campaignParticipantId: 'participant-1',
@@ -430,6 +444,13 @@ void main() {
       expect(handoff['giftDeliveryId'], 'delivery-1');
       expect(handoff['campaignStatus'], 'ready_for_gift_delivery');
       expect(handoff['storyStatus'], 'locked');
+      expect(
+        AdminGiftsOperations.resolve({
+          ...handoff,
+          'giftType': 'campaign',
+        }).visibleUserStatus,
+        'Ready for Gift Delivery',
+      );
     });
 
     test('admin story lock unlock and notifications use shared Gifts audit',
@@ -484,6 +505,29 @@ void main() {
       expect(notification['privacySafe'], isTrue);
       expect(notification.containsKey('matchedParticipantBudget'), isFalse);
       expect(notification.containsKey('internalNotes'), isFalse);
+
+      expect(
+        AdminGiftsOperations.statusChangeNotificationPayload(
+          previousStatus: 'curating',
+          newStatus: 'curating',
+          userId: 'sender-1',
+          giftId: 'gift-1',
+          createdAt: DateTime(2026, 7, 7),
+        ),
+        isNull,
+      );
+      final statusNotification =
+          AdminGiftsOperations.statusChangeNotificationPayload(
+        previousStatus: 'curating',
+        newStatus: 'ready_for_gift_delivery',
+        userId: 'sender-1',
+        giftId: 'gift-1',
+        createdAt: DateTime(2026, 7, 7),
+      );
+      expect(statusNotification, isNotNull);
+      expect(
+          statusNotification!['giftEvent'], 'gift_ready_for_delivery_workflow');
+      expect(statusNotification['privacySafe'], isTrue);
     });
   });
 }

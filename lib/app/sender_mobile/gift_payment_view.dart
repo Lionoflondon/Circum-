@@ -272,16 +272,18 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      await FirebaseFirestore.instance.collection('notifications').doc().set(
-            GiftSystemPolicy.notificationPayload(
-              event: 'gift_request_submitted',
-              userId: user.uid,
-              giftId: draftRef.id,
-              title: 'Gift request submitted',
-              body: 'Your gift request has been saved for the Gifts Team.',
-              createdAt: FieldValue.serverTimestamp(),
-            ),
-          );
+      final notification = GiftSystemPolicy.statusChangeNotificationPayload(
+        previousStatus: 'draft',
+        newStatus: 'submitted',
+        userId: user.uid,
+        giftId: draftRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+      );
+      if (notification != null) {
+        await FirebaseFirestore.instance.collection('notifications').doc().set(
+              notification,
+            );
+      }
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
           .call({

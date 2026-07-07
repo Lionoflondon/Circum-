@@ -1141,16 +1141,18 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     }, SetOptions(merge: true));
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await FirebaseFirestore.instance.collection('notifications').doc().set(
-            GiftSystemPolicy.notificationPayload(
-              event: 'campaign_waiting_for_match',
-              userId: user.uid,
-              giftId: participantRef.id,
-              title: 'Campaign joined',
-              body: 'Your anonymous campaign gift is waiting for a safe match.',
-              createdAt: FieldValue.serverTimestamp(),
-            ),
-          );
+      final notification = GiftSystemPolicy.statusChangeNotificationPayload(
+        previousStatus: 'draft',
+        newStatus: 'waiting_for_match',
+        userId: user.uid,
+        giftId: participantRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+      );
+      if (notification != null) {
+        await FirebaseFirestore.instance.collection('notifications').doc().set(
+              notification,
+            );
+      }
     }
   }
 

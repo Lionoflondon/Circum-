@@ -520,6 +520,9 @@ class AdminGiftsOperations {
   static String statusBucket(Map<String, dynamic> record) =>
       GiftSystemPolicy.statusBucket(record);
 
+  static GiftLifecycleState resolve(Map<String, dynamic> record) =>
+      GiftSystemPolicy.resolve(record);
+
   static Map<String, Object?> approveRequestPatch({
     required String adminUserId,
     required String previousStatus,
@@ -662,6 +665,21 @@ class AdminGiftsOperations {
         giftId: giftId,
         title: title,
         body: body,
+        createdAt: createdAt,
+      );
+
+  static Map<String, Object?>? statusChangeNotificationPayload({
+    required String previousStatus,
+    required String newStatus,
+    required String userId,
+    required String giftId,
+    Object? createdAt,
+  }) =>
+      GiftSystemPolicy.statusChangeNotificationPayload(
+        previousStatus: previousStatus,
+        newStatus: newStatus,
+        userId: userId,
+        giftId: giftId,
         createdAt: createdAt,
       );
 }

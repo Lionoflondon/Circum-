@@ -1370,6 +1370,74 @@ void main() {
         }),
         GiftStoryView.routeName,
       );
+
+      final resolvedSomeone = GiftSystemPolicy.resolve({
+        'giftType': 'normal',
+        'flowStatus': 'draft',
+        'currentStep': 3,
+        'completedSteps': [1, 2],
+        'paymentStatus': 'payment_pending',
+      });
+      expect(resolvedSomeone.flowStatus, 'draft');
+      expect(resolvedSomeone.currentStep, 3);
+      expect(resolvedSomeone.nextAllowedUserAction, 'resume_draft');
+
+      final resolvedMe = GiftSystemPolicy.resolve({
+        'giftMode': 'gift_myself',
+        'paymentStatus': 'paid',
+      });
+      expect(resolvedMe.giftType, GiftSystemPolicy.normalGiftType);
+      expect(resolvedMe.flowStatus, 'paid');
+      expect(resolvedMe.visibleUserStatus, 'Payment confirmed');
+
+      final resolvedAnonymous = GiftSystemPolicy.resolve({
+        'giftMode': 'anonymous_gift',
+        'anonymousGiftType': 'direct',
+        'flowStatus': 'curating',
+      });
+      expect(resolvedAnonymous.giftType, GiftSystemPolicy.normalGiftType);
+      expect(resolvedAnonymous.nextAllowedAdminAction,
+          'mark_ready_for_gift_delivery');
+
+      final resolvedCampaign = GiftSystemPolicy.resolve({
+        'giftType': 'campaign',
+        'campaignStatus': 'match_found',
+      });
+      expect(resolvedCampaign.giftType, GiftSystemPolicy.campaignGiftType);
+      expect(resolvedCampaign.flowStatus, 'match_found');
+      expect(resolvedCampaign.nextAllowedUserAction, 'view_status');
+      expect(resolvedCampaign.nextAllowedAdminAction,
+          'approve_or_reject_campaign_match');
+
+      final convergedCampaign = GiftSystemPolicy.resolve({
+        'giftType': 'campaign',
+        'campaignStatus': 'ready_for_gift_delivery',
+        'giftRequestId': 'gift-1',
+        'giftDeliveryId': 'delivery-1',
+      });
+      expect(convergedCampaign.flowStatus, 'ready_for_gift_delivery');
+      expect(convergedCampaign.nextAllowedAdminAction, 'link_gift_delivery');
+
+      final deliveredButLocked = GiftSystemPolicy.resolve({
+        'giftType': 'normal',
+        'linkedDeliveryStatus': 'delivered',
+        'riderCompletionAccepted': true,
+        'deliveryVerificationCompleted': true,
+        'deliveryAuditSuccessful': false,
+      });
+      expect(deliveredButLocked.deliveryStatus, 'delivered');
+      expect(deliveredButLocked.storyStatus, 'locked');
+      expect(deliveredButLocked.nextAllowedUserAction, 'view_story_status');
+
+      final storyReady = GiftSystemPolicy.resolve({
+        'giftType': 'normal',
+        'linkedDeliveryStatus': 'delivered',
+        'riderCompletionAccepted': true,
+        'deliveryVerificationCompleted': true,
+        'deliveryAuditSuccessful': true,
+      });
+      expect(storyReady.storyStatus, 'unlocked');
+      expect(storyReady.nextAllowedUserAction, 'view_gift_story');
     });
 
     testWidgets('Gift flow validates recipient, delivery, and message steps', (
