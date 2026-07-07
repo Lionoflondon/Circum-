@@ -28,16 +28,24 @@ class DeliveryData {
     final vanguardProtection = data['vanguardProtection'] is Map
         ? data['vanguardProtection'] as Map
         : null;
+    final collectionPin =
+        '${data['collectionPin'] ?? vanguardProtection?['collectionPin'] ?? data['code'] ?? ''}'
+            .trim();
     return DeliveryData(
-        courierName: data['courierName'],
-        phoneNumber: data['phoneNumber'],
+        courierName:
+            '${data['courierName'] ?? data['riderName'] ?? data['driverName'] ?? 'Your rider'}',
+        phoneNumber: '${data['phoneNumber'] ?? data['riderPhone'] ?? ''}',
         locality: data['locality'],
-        typeOfVehicle: data['typeOfVehicle'],
-        estimatedDeliveryTime: data['estimatedDeliveryTime'],
-        code: data['code'],
-        rating: data['rating'],
-        plateNumber: data['plateNumber'],
-        riderId: data['riderId'],
+        typeOfVehicle:
+            '${data['typeOfVehicle'] ?? data['driverVehicle'] ?? 'Rider'}',
+        estimatedDeliveryTime:
+            '${data['estimatedDeliveryTime'] ?? data['eta'] ?? ''}',
+        code: collectionPin,
+        rating: '${data['rating'] ?? data['riderRating'] ?? ''}',
+        plateNumber:
+            '${data['plateNumber'] ?? data['driverPlateNumber'] ?? ''}',
+        riderId:
+            '${data['riderId'] ?? data['driverId'] ?? data['assignedRiderId'] ?? ''}',
         photoURL: data['photoURL'] != 'null' ? data['photoURL'] : null,
         deliveryPin:
             '${data['deliveryPin'] ?? vanguardProtection?['deliveryPin'] ?? ''}'

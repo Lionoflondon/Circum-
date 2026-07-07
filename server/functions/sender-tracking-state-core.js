@@ -57,10 +57,10 @@ const ALLOWED_TRANSITIONS = Object.freeze({
   requested: ["accepted", "cancelled", "issue_reported"],
   accepted: ["navigating_to_pickup", "arrived_at_pickup", "cancelled", "issue_reported"],
   navigating_to_pickup: ["arrived_at_pickup", "cancelled", "issue_reported"],
-  arrived_at_pickup: ["waiting", "pickup_verification", "cancelled", "issue_reported"],
-  waiting: ["pickup_verification", "cancelled", "issue_reported"],
+  arrived_at_pickup: ["waiting", "pickup_verification", "pickup_verified", "cancelled", "issue_reported"],
+  waiting: ["pickup_verification", "pickup_verified", "cancelled", "issue_reported"],
   pickup_verification: ["pickup_verified", "issue_reported"],
-  pickup_verified: ["collected", "issue_reported"],
+  pickup_verified: ["collected", "navigating_to_dropoff", "issue_reported"],
   collected: ["navigating_to_dropoff", "issue_reported"],
   navigating_to_dropoff: ["arrived_at_dropoff", "issue_reported"],
   arrived_at_dropoff: ["pin_required", "delivered", "issue_reported"],
@@ -69,6 +69,18 @@ const ALLOWED_TRANSITIONS = Object.freeze({
   cancelled: [],
   delivered: [],
   completed: [],
+});
+
+const RIDER_ACTION_TO_STATUS = Object.freeze({
+  start_heading_to_pickup: "navigating_to_pickup",
+  arrived_at_pickup: "arrived_at_pickup",
+  verify_collection_pin: "pickup_verified",
+  start_delivery: "navigating_to_dropoff",
+  near_dropoff: "arrived_at_dropoff",
+  arrived_at_dropoff: "arrived_at_dropoff",
+  verify_receiver_pin: "delivered",
+  report_issue: "issue_reported",
+  cancel: "cancelled",
 });
 
 function normalizeStatus(value) {
@@ -88,11 +100,17 @@ function canTransitionDeliveryStatus(from, to) {
   return (ALLOWED_TRANSITIONS[current] || []).includes(next);
 }
 
+function statusForRiderAction(action) {
+  return RIDER_ACTION_TO_STATUS[normalizeStatus(action)] || "";
+}
+
 module.exports = {
   ALLOWED_TRANSITIONS,
   BACKEND_STATUS_TO_SENDER_STATE,
+  RIDER_ACTION_TO_STATUS,
   SENDER_TRACKING_STATES,
   canTransitionDeliveryStatus,
   normalizeStatus,
   senderTrackingStateForBackendStatus,
+  statusForRiderAction,
 };

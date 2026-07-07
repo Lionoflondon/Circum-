@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
@@ -38,6 +40,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _activeDeliverySubscription;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -62,6 +66,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<SetMapCameraStatus>(_handleSetMapCameraStatusEvent);
     on<SetRiderLocation>(_handleSetRiderLocationEvent);
     on<CheckForActiveRequest>(_handleCheckForActiveRequestEvent);
+    on<WatchActiveDelivery>(_handleWatchActiveDeliveryEvent);
+    on<ActiveDeliverySnapshotChanged>(_handleActiveDeliverySnapshotChanged);
     on<SetPanelControlStatus>(_handleSetPanelControlStatusEvent);
     on<SetNewMessage>(_handleSetNewMessage);
     on<IncomingMessage>(_handleIncomingMessage);
@@ -71,6 +77,44 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<DeleteCompletedDelivery>(_handleDeleteCompletedDelivery);
     on<CancelRequest>(_handleCancelRequestEvent);
     on<BackButtonPressed>(_handleBackButtonPressedEvent);
+  }
+
+  @override
+  Future<void> close() {
+    _activeDeliverySubscription?.cancel();
+    return super.close();
+  }
+
+  void _listenToActiveDelivery(String requestId) {
+    final normalized = requestId.trim();
+    if (normalized.isEmpty) return;
+    _activeDeliverySubscription?.cancel();
+    _activeDeliverySubscription = db
+        .collection('deliveryRequests')
+        .where('requestId', isEqualTo: normalized)
+        .limit(1)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (snapshot.docs.isEmpty) {
+          add(const ActiveDeliverySnapshotChanged());
+          return;
+        }
+        final doc = snapshot.docs.first;
+        add(
+          ActiveDeliverySnapshotChanged(
+            data: {...doc.data(), 'id': doc.id},
+          ),
+        );
+      },
+      onError: (Object error) {
+        add(
+          ActiveDeliverySnapshotChanged(
+            errorMessage: 'Unable to load live delivery status.',
+          ),
+        );
+      },
+    );
   }
 
   void _handleCheckForPushToken(
@@ -752,6 +796,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             .call({'requestId': requestId});
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
+        add(WatchActiveDelivery(requestId: requestId));
       }
       emit(
         state.copyWith(
@@ -887,6 +932,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('activeRequest', uuidStrong);
+      add(WatchActiveDelivery(requestId: uuidStrong));
 
       // await firebaseMessaging
       //     .subscribeToTopic(uuidStrong)
@@ -1034,6 +1080,159 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
   }
 
+  void _handleWatchActiveDeliveryEvent(
+    WatchActiveDelivery event,
+    Emitter<SendPackageState> emit,
+  ) {
+    _listenToActiveDelivery(event.requestId);
+  }
+
+  void _handleActiveDeliverySnapshotChanged(
+    ActiveDeliverySnapshotChanged event,
+    Emitter<SendPackageState> emit,
+  ) {
+    if (event.errorMessage != null) {
+      emit(state.copyWith(senderDeliveryError: event.errorMessage));
+      return;
+    }
+    final data = event.data;
+    if (data == null) return;
+
+    final requestStatus = '${data['status'] ?? ''}'.trim();
+    final pickupDetails = _contactFromDelivery(
+      data['pickupDetails'],
+      fallback: state.pickupDetails,
+    );
+    final dropoffDetails = _contactFromDelivery(
+      data['dropoffDetails'],
+      fallback: state.dropoffDetails,
+    );
+    final riderLocation = _riderLocationFromDelivery(data);
+    final deliveryData = DeliveryData.fromJson(data);
+
+    emit(
+      state.copyWith(
+        deliveryStatus: _deliveryStatusForBackendStatus(requestStatus),
+        deliveryRequestStatus: requestStatus,
+        pickupDetails: pickupDetails,
+        dropoffDetails: dropoffDetails,
+        pickupLocation:
+            '${data['pickupDetails']?['address'] ?? state.pickupLocation ?? ''}'
+                    .trim()
+                    .isEmpty
+                ? state.pickupLocation
+                : '${data['pickupDetails']?['address']}',
+        destinationLocation:
+            '${data['dropoffDetails']?['address'] ?? state.destinationLocation ?? ''}'
+                    .trim()
+                    .isEmpty
+                ? state.destinationLocation
+                : '${data['dropoffDetails']?['address']}',
+        price: (data['price'] as num?)?.toDouble() ?? state.price,
+        currency: '${data['currency'] ?? state.currency}',
+        deliveryData: deliveryData,
+        riderLocation: riderLocation ?? state.riderLocation,
+        collectionPinVerified: data['collectionPinVerified'] == true,
+        deliveryPinVerified: data['deliveryPinVerified'] == true,
+        senderDeliveryError: '',
+      ),
+    );
+  }
+
+  DeliveryStatus _deliveryStatusForBackendStatus(String status) {
+    final normalized = status.trim().toLowerCase().replaceAll('-', '_');
+    if (normalized == 'delivered' ||
+        normalized == 'completed' ||
+        normalized == 'delivery_completed') {
+      return DeliveryStatus.deliveryCompleted;
+    }
+    if (_activeRequestStatuses.contains(normalized)) {
+      return DeliveryStatus.reconnectingWithRider;
+    }
+    if (normalized == 'requested' ||
+        normalized == 'pending' ||
+        normalized == 'unmatched' ||
+        normalized == 'finding_rider') {
+      return DeliveryStatus.deliveryConfirmed;
+    }
+    return DeliveryStatus.reconnectingWithRider;
+  }
+
+  static const Set<String> _activeRequestStatuses = {
+    'requested',
+    'pending',
+    'unmatched',
+    'finding_rider',
+    'accepted',
+    'rider_assigned',
+    'navigating_to_pickup',
+    'arrived_at_pickup',
+    'waiting',
+    'pickup_verification',
+    'pickup_verified',
+    'collected',
+    'outfordelivery',
+    'out_for_delivery',
+    'navigating_to_dropoff',
+    'arrived_at_dropoff',
+    'pin_required',
+    'issue_reported',
+    'cancelled',
+    'canceled',
+    'cancelled_verified_discrepancy',
+    'sender_no_show_pickup',
+  };
+
+  ContactInfo? _contactFromDelivery(
+    Object? value, {
+    ContactInfo? fallback,
+  }) {
+    if (value is! Map) return fallback;
+    final coordinate = _coordinateFromPosition(value['position']);
+    if (coordinate == null) return fallback;
+    return ContactInfo.fromJson(
+      address: coordinate,
+      fullname: '${value['fullname'] ?? ''}',
+      phoneNumber: '${value['phone'] ?? ''}',
+      moreInformation: '${value['moreInformation'] ?? ''}',
+      locality: '${value['locality'] ?? ''}',
+    );
+  }
+
+  PlaceCoordinate? _coordinateFromPosition(Object? value) {
+    if (value is! Map) return null;
+    final geo = value['geopoint'] ?? value['geoPoint'] ?? value['location'];
+    if (geo is GeoPoint) {
+      return PlaceCoordinate(lat: geo.latitude, lng: geo.longitude);
+    }
+    if (geo is Map) {
+      final lat = (geo['latitude'] ?? geo['lat']) as num?;
+      final lng = (geo['longitude'] ?? geo['lng']) as num?;
+      if (lat != null && lng != null) {
+        return PlaceCoordinate(lat: lat.toDouble(), lng: lng.toDouble());
+      }
+    }
+    final lat = (value['latitude'] ?? value['lat']) as num?;
+    final lng = (value['longitude'] ?? value['lng']) as num?;
+    if (lat != null && lng != null) {
+      return PlaceCoordinate(lat: lat.toDouble(), lng: lng.toDouble());
+    }
+    return null;
+  }
+
+  PlaceCoordinate? _riderLocationFromDelivery(Map<String, dynamic> data) {
+    for (final candidate in [
+      data['riderLocation'],
+      data['driverLocation'],
+      data['currentRiderLocation'],
+      data['lastRiderLocation'],
+    ]) {
+      final parsed = _coordinateFromPosition(candidate);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
   void _handleCheckForActiveRequestEvent(
     CheckForActiveRequest event,
     Emitter emit,
@@ -1043,6 +1242,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final String? activeRequest = prefs.getString('activeRequest');
 
     if (activeRequest != null) {
+      add(WatchActiveDelivery(requestId: activeRequest));
       final userDocumentReference =
           db.collection('deliveryRequests').doc(user!.uid);
       final requestDocumentReference =
@@ -1092,29 +1292,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         // }
 
         final requestStatus = '${data['status'] ?? ''}';
-        final activeRequestStatuses = {
-          'requested',
-          'pending',
-          'unmatched',
-          'finding_rider',
-          'accepted',
-          'rider_assigned',
-          'navigating_to_pickup',
-          'arrived_at_pickup',
-          'waiting',
-          'pickup_verification',
-          'pickup_verified',
-          'collected',
-          'outForDelivery',
-          'out_for_delivery',
-          'navigating_to_dropoff',
-          'arrived_at_dropoff',
-          'pin_required',
-          'issue_reported',
-        };
-
-        if (activeRequestStatuses.contains(requestStatus)) {
+        if (_activeRequestStatuses
+            .contains(requestStatus.toLowerCase().replaceAll('-', '_'))) {
           status = DeliveryStatus.reconnectingWithRider;
+          final deliveryData = DeliveryData.fromJson(data);
           emit(
             state.copyWith(
               deliveryStatus: status,
@@ -1125,6 +1306,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               destinationLocation: dropoffAddress,
               price: price,
               currency: currency,
+              deliveryData: deliveryData,
+              riderLocation: _riderLocationFromDelivery(data),
+              collectionPinVerified: data['collectionPinVerified'] == true,
+              deliveryPinVerified: data['deliveryPinVerified'] == true,
             ),
           );
         }
@@ -1136,6 +1321,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               lastHistoryId: data['historyId'],
               deliveryStatus: status,
               deliveryRequestStatus: requestStatus,
+              deliveryData: DeliveryData.fromJson(data),
+              collectionPinVerified: data['collectionPinVerified'] == true,
+              deliveryPinVerified: data['deliveryPinVerified'] == true,
             ),
           );
         }
@@ -1151,6 +1339,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               destinationLocation: dropoffAddress,
               price: price,
               currency: currency,
+              deliveryData: DeliveryData.fromJson(data),
+              riderLocation: _riderLocationFromDelivery(data),
+              collectionPinVerified: data['collectionPinVerified'] == true,
+              deliveryPinVerified: data['deliveryPinVerified'] == true,
             ),
           );
         }

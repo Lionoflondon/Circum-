@@ -111,14 +111,20 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const ids = deliveryIds({...after, id: change.after.id});
   const senderMessages = {
     accepted: ["Rider accepted", "A rider has accepted your delivery."],
+    navigating_to_pickup: ["Rider heading to pickup", "Your rider is on the way to the pickup."],
     arrived: ["Rider arrived", "Your rider has arrived at the pickup."],
     arrived_at_pickup: ["Rider arrived", "Your rider has arrived at the pickup."],
     rider_arrived_pickup: ["Rider arrived", "Your Circum rider has arrived at the pickup address."],
     sender_no_show_pickup: ["Pickup no-show", "Pickup was marked as no-show after the waiting period. A £5.00 waiting/no-show surcharge has been applied because the rider could not make contact."],
+    pickup_verified: ["Pickup verified", "Your rider has verified pickup."],
     collected: ["Parcel collected", "Your parcel has been collected."],
     picked_up: ["Parcel collected", "Your parcel has been collected."],
+    navigating_to_dropoff: ["Parcel in transit", "Your parcel is on the way to drop-off."],
+    arrived_at_dropoff: ["Rider arriving", "Your rider is arriving at the drop-off."],
+    pin_required: ["Receiver PIN needed", "The receiver PIN is needed to complete handover."],
     delivered: ["Parcel delivered", "Your parcel has been delivered."],
     completed: ["Parcel delivered", "Your delivery is complete."],
+    issue_reported: ["Delivery issue reported", "Your rider reported an issue. Circum support can review it."],
     refunded: ["Refund updated", "Your delivery refund has been updated."],
   };
   const senderMessage = senderMessages[status];

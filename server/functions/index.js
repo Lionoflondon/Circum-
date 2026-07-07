@@ -66,6 +66,7 @@ const deliveryPolicy = require("./delivery-policy");
 const riderPresence = require("./rider-presence");
 const freeAddressSearch = require("./free-address-search");
 const senderBooking = require("./sender-booking");
+const deliveryTracking = require("./delivery-tracking");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -154,6 +155,7 @@ exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
 exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
 exports.createSenderPaymentSession = senderBooking.createSenderPaymentSession(stripe);
 exports.createSenderPaidDelivery = senderBooking.createSenderPaidDelivery(stripe);
+exports.updateDeliveryTrackingStatus = deliveryTracking.updateDeliveryTrackingStatus;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

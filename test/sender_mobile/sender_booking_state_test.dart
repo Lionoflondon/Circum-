@@ -509,9 +509,11 @@ void main() {
         'accepted': SenderTrackingState.riderAssigned,
         'navigating_to_pickup': SenderTrackingState.riderEnRouteToPickup,
         'arrived_at_pickup': SenderTrackingState.riderArrivedAtPickup,
+        'pickup_verified': SenderTrackingState.pickupComplete,
         'collected': SenderTrackingState.pickupComplete,
         'navigating_to_dropoff': SenderTrackingState.inTransit,
         'arrived_at_dropoff': SenderTrackingState.riderArrivingAtDropoff,
+        'pin_required': SenderTrackingState.riderArrivingAtDropoff,
         'delivered': SenderTrackingState.delivered,
         'completed': SenderTrackingState.delivered,
         'cancelled': SenderTrackingState.cancelled,
@@ -602,6 +604,13 @@ void main() {
       );
       expect(
         senderCollectionPinStatusFor(SenderTrackingState.pickupComplete),
+        '✓ Pickup verified',
+      );
+      expect(
+        senderCollectionPinStatusFor(
+          SenderTrackingState.riderAssigned,
+          verified: true,
+        ),
         '✓ Pickup verified',
       );
       expect(
@@ -733,6 +742,24 @@ void main() {
 
       expect(data.code, '427158');
       expect(data.deliveryPin, '835246');
+    });
+
+    test('delivery data reads nested Vanguard PIN fields from backend', () {
+      final data = DeliveryData.fromJson({
+        'riderName': 'Maya Stone',
+        'driverVehicle': 'Bike',
+        'driverPlateNumber': '',
+        'rating': '4.9',
+        'riderId': 'rider_1',
+        'photoURL': 'null',
+        'vanguardProtection': {
+          'collectionPin': '111222',
+          'deliveryPin': '333444',
+        },
+      });
+
+      expect(data.code, '111222');
+      expect(data.deliveryPin, '333444');
     });
   });
 }

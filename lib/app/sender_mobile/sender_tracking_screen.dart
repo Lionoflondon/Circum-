@@ -345,7 +345,11 @@ SenderTrackingContent senderTrackingContentFor(
   }
 }
 
-String senderCollectionPinStatusFor(SenderTrackingState state) {
+String senderCollectionPinStatusFor(
+  SenderTrackingState state, {
+  bool verified = false,
+}) {
+  if (verified) return '✓ Pickup verified';
   return switch (state) {
     SenderTrackingState.pickupComplete ||
     SenderTrackingState.inTransit ||
@@ -413,11 +417,13 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       state,
       deliveryVerified: widget.deliveryVerified,
     );
+    final riderPosition = _riderPositionForEngine(widget.engine, content);
     final delivered = state == SenderTrackingState.delivered;
     return Stack(
       children: [
         SenderTrackingMapLayer(
           content: content,
+          riderPosition: riderPosition,
           mapDrift: _mapDrift,
           pulse: _pulse,
           delivered: delivered,
@@ -445,8 +451,33 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
   }
 }
 
+Offset _riderPositionForEngine(
+  SendPackageState engine,
+  SenderTrackingContent content,
+) {
+  final rider = engine.riderLocation;
+  final pickup = engine.pickupDetails?.address ?? engine.pickupCoordinate;
+  final dropoff = engine.dropoffDetails?.address ?? engine.desinationCoordinate;
+  if (rider == null || pickup == null || dropoff == null) {
+    return content.riderPosition;
+  }
+
+  final minLat = [pickup.lat, dropoff.lat].reduce((a, b) => a < b ? a : b);
+  final maxLat = [pickup.lat, dropoff.lat].reduce((a, b) => a > b ? a : b);
+  final minLng = [pickup.lng, dropoff.lng].reduce((a, b) => a < b ? a : b);
+  final maxLng = [pickup.lng, dropoff.lng].reduce((a, b) => a > b ? a : b);
+  final latSpan = (maxLat - minLat).abs();
+  final lngSpan = (maxLng - minLng).abs();
+  if (latSpan == 0 || lngSpan == 0) return content.riderPosition;
+
+  final x = ((rider.lng - minLng) / lngSpan).clamp(0.0, 1.0);
+  final y = (1 - ((rider.lat - minLat) / latSpan)).clamp(0.0, 1.0);
+  return Offset(.20 + (x * .54), .32 + (y * .34));
+}
+
 class SenderTrackingMapLayer extends StatelessWidget {
   final SenderTrackingContent content;
+  final Offset riderPosition;
   final Animation<double> mapDrift;
   final Animation<double> pulse;
   final bool delivered;
@@ -454,6 +485,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
   const SenderTrackingMapLayer({
     super.key,
     required this.content,
+    required this.riderPosition,
     required this.mapDrift,
     required this.pulse,
     this.delivered = false,
@@ -517,8 +549,8 @@ class SenderTrackingMapLayer extends StatelessWidget {
                 duration: const Duration(milliseconds: 380),
                 curve: Curves.easeOutCubic,
                 alignment: Alignment(
-                  content.riderPosition.dx * 2 - 1,
-                  content.riderPosition.dy * 2 - 1,
+                  riderPosition.dx * 2 - 1,
+                  riderPosition.dy * 2 - 1,
                 ),
                 child: _RiderMarker(pulse: markerPulse, settled: delivered),
               ),
@@ -661,8 +693,14 @@ class _TrackingPanelContent extends StatelessWidget {
             pin: engine.deliveryData?.code,
             label: 'Collection PIN',
             hint: 'Give this to your rider at pickup.',
-            statusLabel: senderCollectionPinStatusFor(state),
-            statusComplete: senderCollectionPinStatusFor(state).startsWith('✓'),
+            statusLabel: senderCollectionPinStatusFor(
+              state,
+              verified: engine.collectionPinVerified,
+            ),
+            statusComplete: senderCollectionPinStatusFor(
+              state,
+              verified: engine.collectionPinVerified,
+            ).startsWith('✓'),
             accent: const Color(0xFF3B82F6),
             icon: Icons.inventory_2_outlined,
           ),
@@ -673,8 +711,14 @@ class _TrackingPanelContent extends StatelessWidget {
             pin: engine.deliveryData?.deliveryPin,
             label: 'Receiver PIN',
             hint: 'Give this to the receiver at delivery.',
-            statusLabel: senderReceiverPinStatusFor(state),
-            statusComplete: senderReceiverPinStatusFor(state).startsWith('✓'),
+            statusLabel: senderReceiverPinStatusFor(
+              state,
+              verified: engine.deliveryPinVerified,
+            ),
+            statusComplete: senderReceiverPinStatusFor(
+              state,
+              verified: engine.deliveryPinVerified,
+            ).startsWith('✓'),
             accent: const Color(0xFF34D399),
             icon: Icons.verified_outlined,
           ),

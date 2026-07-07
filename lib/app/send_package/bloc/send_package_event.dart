@@ -157,6 +157,17 @@ class SetRiderLocation extends SendPackageEvent {
 
 class CheckForActiveRequest extends SendPackageEvent {}
 
+class WatchActiveDelivery extends SendPackageEvent {
+  final String requestId;
+  const WatchActiveDelivery({required this.requestId});
+}
+
+class ActiveDeliverySnapshotChanged extends SendPackageEvent {
+  final Map<String, dynamic>? data;
+  final String? errorMessage;
+  const ActiveDeliverySnapshotChanged({this.data, this.errorMessage});
+}
+
 class SetPanelControlStatus extends SendPackageEvent {
   final PanelControlStatus status;
   SetPanelControlStatus({required this.status});

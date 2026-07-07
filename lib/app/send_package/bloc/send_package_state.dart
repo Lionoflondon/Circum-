@@ -41,6 +41,8 @@ class SendPackageState {
   double? distance;
   final DeliveryStatus deliveryStatus;
   final String deliveryRequestStatus;
+  final bool collectionPinVerified;
+  final bool deliveryPinVerified;
   PanelControlStatus panelControlStatus;
   ContactInfo? pickupDetails;
   ContactInfo? dropoffDetails;
@@ -97,6 +99,8 @@ class SendPackageState {
     this.distance,
     this.deliveryStatus = DeliveryStatus.inital,
     this.deliveryRequestStatus = '',
+    this.collectionPinVerified = false,
+    this.deliveryPinVerified = false,
     this.panelControlStatus = PanelControlStatus.isClosed,
     this.pickupDetails,
     this.dropoffDetails,
@@ -156,6 +160,8 @@ class SendPackageState {
     double? distance,
     DeliveryStatus? deliveryStatus,
     String? deliveryRequestStatus,
+    bool? collectionPinVerified,
+    bool? deliveryPinVerified,
     PanelControlStatus? panelControlStatus,
     List? ongoingRequests,
     ContactInfo? pickupDetails,
@@ -217,6 +223,9 @@ class SendPackageState {
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
       deliveryRequestStatus:
           deliveryRequestStatus ?? this.deliveryRequestStatus,
+      collectionPinVerified:
+          collectionPinVerified ?? this.collectionPinVerified,
+      deliveryPinVerified: deliveryPinVerified ?? this.deliveryPinVerified,
       panelControlStatus: panelControlStatus ?? this.panelControlStatus,
       ongoingRequests: ongoingRequests ?? this.ongoingRequests,
       pickupDetails: pickupDetails ?? this.pickupDetails,
