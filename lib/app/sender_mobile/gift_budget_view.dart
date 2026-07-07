@@ -45,6 +45,16 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
           child: Column(
             children: [
               Text(
+                _budget >= 1500 ? 'Premium Experience' : 'Experience Budget',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFC9B8FF),
+                  fontSize: 13,
+                  height: 1.2,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
                 '£${_budget.toStringAsFixed(0)}',
                 style: GoogleFonts.dmSerifDisplay(
                   color: Colors.white,
@@ -62,6 +72,8 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
                 inactiveColor: Colors.white.withValues(alpha: .12),
                 onChanged: (value) => setState(() => _budget = value),
               ),
+              const SizedBox(height: 8),
+              const _PremiumBudgetNotes(),
             ],
           ),
         ),
@@ -91,6 +103,48 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PremiumBudgetNotes extends StatelessWidget {
+  const _PremiumBudgetNotes();
+
+  @override
+  Widget build(BuildContext context) {
+    const notes = [
+      'Luxury partner access',
+      'Premium presentation',
+      'Handwritten message eligible',
+      'Concierge curation',
+    ];
+    return Column(
+      children: [
+        for (final note in notes)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_rounded,
+                  color: Color(0xFFA8EDEA),
+                  size: 15,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    note,
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFFE4DCF5),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

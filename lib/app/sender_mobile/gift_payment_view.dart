@@ -148,7 +148,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'You’re almost there.\n\nOnce payment is confirmed, our Gifts Team begins designing a completely bespoke experience for your recipient.\n\nNo catalogue.\nNo mass-produced gifts.\nOnly something created specifically for this moment.',
+            'You’re almost there.\n\nYour payment reserves this request with the Gifts Team.\n\nWe prepare everything around your chosen delivery date.\n\nNo catalogue.\nNo mass-produced gifts.\nOnly something created specifically for this moment.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: const Color(0xFFE4DCF5),

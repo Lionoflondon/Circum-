@@ -78,6 +78,16 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
             fontWeight: FontWeight.w600,
           ),
         ),
+        const SizedBox(height: 12),
+        Text(
+          "We'll take every dietary and medical preference into account during curation.",
+          style: GoogleFonts.inter(
+            color: const Color(0xFFE4DCF5),
+            fontSize: 12,
+            height: 1.45,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: true,

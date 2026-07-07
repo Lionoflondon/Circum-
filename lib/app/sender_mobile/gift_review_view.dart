@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'gift_journey_draft.dart';
-import 'gift_payment_view.dart';
+import 'gift_pre_payment_view.dart';
 import 'gift_relationship_view.dart';
 
 class GiftReviewView extends StatefulWidget {
@@ -73,13 +73,14 @@ class _GiftReviewViewState extends State<GiftReviewView> {
           draft: draft,
           brief: brief,
         ),
+        _OurApproachCard(draft: draft, brief: brief),
         if (draft.mode == SenderGiftMode.campaign) ...[
           const _ReviewRow(
-            label: 'Admin path',
+            label: 'Campaign path',
             value: 'Campaign · Bringing London Closer',
           ),
           const _AdminPathNote(
-            'This mobile request writes the same campaign fields Admin already reads.',
+            'This request follows the approved campaign review path.',
           ),
         ],
         _ReviewRow(
@@ -92,8 +93,8 @@ class _GiftReviewViewState extends State<GiftReviewView> {
         label: 'Continue to Secure Payment',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => GiftPaymentView(draft: draft),
-            settings: const RouteSettings(name: GiftPaymentView.routeName),
+            builder: (_) => GiftPrePaymentView(draft: draft),
+            settings: const RouteSettings(name: GiftPrePaymentView.routeName),
           ),
         ),
       ),
@@ -163,7 +164,9 @@ class _GiftBriefCard extends StatelessWidget {
           ),
           _BriefLine(
             label: 'Human review required',
-            value: brief.humanReviewRequired ? 'Yes' : 'No',
+            value: brief.humanReviewRequired
+                ? 'A real person will guide this carefully.'
+                : "We're confident we've understood what matters.",
           ),
         ],
       ),
@@ -176,6 +179,67 @@ class _GiftBriefCard extends StatelessWidget {
       'Medium' => 74,
       _ => 62,
     };
+  }
+}
+
+class _OurApproachCard extends StatelessWidget {
+  final GiftJourneyDraft draft;
+  final SenderGiftBriefPreview brief;
+
+  const _OurApproachCard({required this.draft, required this.brief});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFA8EDEA).withValues(alpha: .18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '✨ Our approach',
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _BriefLine(
+            label: 'Who this is for',
+            value:
+                '${draft.recipientName ?? 'The recipient'} · ${draft.relationship ?? 'relationship-led'}',
+          ),
+          _BriefLine(
+            label: 'What matters most',
+            value: draft.notes?.trim().isNotEmpty == true
+                ? draft.notes!.trim()
+                : brief.emotionalDirection,
+          ),
+          _BriefLine(
+            label: "How we'll approach it",
+            value: brief.experienceDirection,
+          ),
+          _BriefLine(label: "What we'll avoid", value: brief.thingsToAvoid),
+          const _BriefLine(
+            label: 'Why this will feel personal',
+            value:
+                "We're confident we've understood what matters and will shape the experience around the intention, not just the spend.",
+          ),
+          const _BriefLine(
+            label: 'Confidentiality',
+            value: 'Your gift remains completely confidential until delivery.',
+          ),
+        ],
+      ),
+    );
   }
 }
 

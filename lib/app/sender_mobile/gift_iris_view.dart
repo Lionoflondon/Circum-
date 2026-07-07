@@ -49,40 +49,46 @@ class _GiftIrisViewState extends State<GiftIrisView> {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
       eyebrow: 'STEP 07 — IRIS',
-      title: 'IRIS is shaping the experience',
+      title: 'How IRIS understands this moment',
       subtitle: 'IRIS is reading the moment, not building a basket.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         const _GiftIrisPulse(),
         const SizedBox(height: 18),
         if (_loading)
-          const _IrisNote('Generating the IRIS Gift Brief...')
+          const _IrisNote('Understanding the intention behind this gift...')
         else ...[
           if (customThemes.isNotEmpty)
             const _IrisNote(
-              'Custom interest saved. IRIS will use it as personal context.',
+              "We've saved the personal interests as context for planning.",
             ),
           const SizedBox(height: 12),
           _IrisInsightCard(
-            title: 'Emotional direction',
+            title: "The feeling we're creating",
             body: _brief!.emotionalDirection,
           ),
           const SizedBox(height: 12),
           _IrisInsightCard(
-            title: 'Experience direction',
+            title: "How we'll bring it to life",
             body: _brief!.experienceDirection,
           ),
           const SizedBox(height: 12),
           _IrisInsightCard(
-            title: 'Things to avoid',
+            title: "We'll avoid",
             body: _brief!.thingsToAvoid,
           ),
           const SizedBox(height: 12),
           _IrisInsightCard(
-            title: 'Catalogue coverage',
+            title: 'Our confidence',
             body: _brief!.catalogueCoverage.isEmpty
-                ? 'No catalogue-backed IRIS signal yet.'
-                : _brief!.catalogueCoverage.join(' · '),
+                ? 'A real member of the Gifts Team will guide this carefully.'
+                : "We're confident we've understood what matters.",
+          ),
+          const SizedBox(height: 12),
+          const _IrisInsightCard(
+            title: 'Reviewed by the Gifts Team',
+            body:
+                'Every experience is reviewed by a real person before sourcing begins.',
           ),
         ],
       ],

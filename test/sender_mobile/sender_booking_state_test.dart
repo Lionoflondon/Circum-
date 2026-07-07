@@ -10,6 +10,7 @@ import 'package:circum/app/sender_mobile/gift_journey_draft.dart';
 import 'package:circum/app/sender_mobile/gift_message_view.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
 import 'package:circum/app/sender_mobile/gift_payment_view.dart';
+import 'package:circum/app/sender_mobile/gift_pre_payment_view.dart';
 import 'package:circum/app/sender_mobile/gift_review_view.dart';
 import 'package:circum/app/sender_mobile/gift_relationship_view.dart';
 import 'package:circum/app/sender_mobile/gift_status_view.dart';
@@ -339,6 +340,9 @@ void main() {
           .readAsStringSync();
       final reviewSource = File('lib/app/sender_mobile/gift_review_view.dart')
           .readAsStringSync();
+      final prePaymentSource =
+          File('lib/app/sender_mobile/gift_pre_payment_view.dart')
+              .readAsStringSync();
       final paymentSource = File('lib/app/sender_mobile/gift_payment_view.dart')
           .readAsStringSync();
       final statusSource = File('lib/app/sender_mobile/gift_status_view.dart')
@@ -358,6 +362,7 @@ void main() {
       expect(GiftThemesView.routeName, '/sender-mobile/gifts/themes');
       expect(GiftIrisView.routeName, '/sender-mobile/gifts/iris');
       expect(GiftReviewView.routeName, '/sender-mobile/gifts/review');
+      expect(GiftPrePaymentView.routeName, '/sender-mobile/gifts/pre-payment');
       expect(GiftPaymentView.routeName, '/sender-mobile/gifts/payment');
       expect(GiftStatusView.routeName, '/sender-mobile/gifts/status');
       expect(GiftStoryView.routeName, '/sender-mobile/gifts/story');
@@ -454,6 +459,13 @@ void main() {
       expect(messageSource, contains('What do you want them to know?'));
       expect(messageSource, contains('GiftVoiceNoteView'));
       expect(voiceSource, contains('STEP 05 — VOICE NOTE'));
+      expect(voiceSource, contains('Leave a personal message'));
+      expect(
+        voiceSource,
+        contains(
+          "A short voice note helps our Gifts Team understand the emotion behind your gift.",
+        ),
+      );
       expect(voiceSource, contains('enum GiftVoiceNoteState'));
       expect(voiceSource, contains('GiftVoiceNoteState.idle'));
       expect(voiceSource, contains('GiftVoiceNoteState.permissionDenied'));
@@ -461,7 +473,7 @@ void main() {
       expect(voiceSource, contains('GiftVoiceNoteState.recorded'));
       expect(voiceSource, contains('GiftVoiceNoteState.playing'));
       expect(voiceSource, contains('GiftVoiceNoteState.uploadFailed'));
-      expect(voiceSource, contains('Permission.microphone.request'));
+      expect(voiceSource, isNot(contains('Permission.microphone.request')));
       expect(voiceSource, contains('SenderGiftVoiceRecorder'));
       expect(voiceSource, contains('SenderGiftVoicePlayback'));
       expect(voiceSource, contains('_maxDurationSeconds = 60'));
@@ -477,33 +489,41 @@ void main() {
       expect(voiceSource, contains('Play'));
       expect(voiceSource, contains('Delete'));
       expect(voiceSource, contains('Re-record'));
-      expect(voiceSource, contains('Use this voice note'));
+      expect(voiceSource, contains('Use this recording'));
       expect(voiceSource, contains('Skip voice note'));
       expect(voiceSource, contains('GiftThemesView'));
-      expect(themesSource, contains('STEP 06 — THEMES'));
+      expect(themesSource, contains('STEP 06 — INTERESTS'));
+      expect(themesSource, contains('What makes them smile?'));
+      expect(themesSource, contains('Known Interests'));
+      expect(themesSource, contains('Personal Interests'));
       expect(themesSource, contains("'Add'"));
       expect(themesSource, contains('onSubmitted'));
       expect(themesSource, contains("value.split(',')"));
-      expect(themesSource, contains('IRIS signal preview'));
-      expect(themesSource, contains('No IRIS coverage yet'));
+      expect(themesSource, contains('Personal context'));
       expect(
         themesSource,
         contains(
-            'Custom interest saved. IRIS will use it as personal context.'),
+            "We've saved this as personal context. IRIS will use it while planning the experience."),
       );
       expect(themesSource, contains('GiftIrisView'));
       expect(irisSource, contains('STEP 07 — IRIS'));
-      expect(irisSource, contains('IRIS is shaping the experience'));
+      expect(irisSource, contains('How IRIS understands this moment'));
       expect(
         irisSource,
         contains('IRIS is reading the moment, not building a basket.'),
       );
-      expect(irisSource, contains('Emotional direction'));
-      expect(irisSource, contains('Experience direction'));
-      expect(irisSource, contains('Things to avoid'));
+      expect(irisSource, contains("The feeling we're creating"));
+      expect(irisSource, contains("How we'll bring it to life"));
+      expect(irisSource, contains("We'll avoid"));
+      expect(irisSource, contains('Our confidence'));
+      expect(irisSource, contains('Reviewed by the Gifts Team'));
       expect(irisSource, contains('generateIrisBrief'));
       expect(styleSource, contains('STEP 08 — STYLE & SIZES'));
-      expect(styleSource, contains('CLOTHING / SHOE / RING SIZE'));
+      expect(styleSource, contains('Their style'));
+      expect(styleSource, contains('CLOTHING SIZE'));
+      expect(styleSource, contains('SHOE SIZE'));
+      expect(styleSource, contains('RING SIZE'));
+      expect(styleSource, contains('COLOUR NOTES'));
       expect(styleSource, contains('PREFERRED STYLE'));
       expect(
         styleSource,
@@ -524,7 +544,18 @@ void main() {
       expect(styleSource, contains('preferredStyles'));
       expect(privacySource, contains('STEP 09 — REVEAL & PRIVACY'));
       expect(privacySource, contains('Allow Circum story use'));
+      expect(
+        privacySource,
+        contains(
+          "We'll take every dietary and medical preference into account during curation.",
+        ),
+      );
       expect(budgetSource, contains('STEP 10 — BUDGET'));
+      expect(budgetSource, contains('Premium Experience'));
+      expect(budgetSource, contains('Luxury partner access'));
+      expect(budgetSource, contains('Premium presentation'));
+      expect(budgetSource, contains('Handwritten message eligible'));
+      expect(budgetSource, contains('Concierge curation'));
       expect(draftSource, contains('SenderGiftMode.myself'));
       expect(draftSource, contains('SenderGiftMode.anonymous'));
       expect(draftSource, contains('SenderGiftMode.campaign'));
@@ -545,7 +576,18 @@ void main() {
       expect(reviewSource, contains('STEP 11 — REVIEW'));
       expect(reviewSource,
           contains('Gift contents remain confidential before delivery.'));
-      expect(reviewSource, contains('GiftPaymentView'));
+      expect(reviewSource, contains('GiftPrePaymentView'));
+      expect(prePaymentSource, contains("We've understood the moment"));
+      expect(prePaymentSource, contains('BEFORE PAYMENT'));
+      expect(
+          prePaymentSource, contains('IRIS believes this occasion deserves'));
+      expect(
+        prePaymentSource,
+        contains(
+          'Every experience is reviewed by a real member of our Gifts Team before sourcing begins.',
+        ),
+      );
+      expect(prePaymentSource, contains('GiftPaymentView'));
       expect(paymentSource, contains('STEP 12 — PAYMENT'));
       expect(paymentSource, contains('senderGiftPaymentCallableName'));
       expect(paymentSource, contains('Gift Summary'));
@@ -557,6 +599,10 @@ void main() {
       expect(paymentSource, contains('_showRothToggle'));
       expect(paymentSource, contains('Continue to Secure Payment'));
       expect(paymentSource, contains('Secure payment powered by Stripe.'));
+      expect(
+        paymentSource,
+        contains('We prepare everything around your chosen delivery date.'),
+      );
       expect(paymentSource, contains("'source': 'sender_mobile'"));
       expect(paymentSource,
           contains("'applyRoth': _applyRoth && _rothBalance > 0"));
@@ -583,6 +629,11 @@ void main() {
       expect(reviewSource, contains('Personal themes'));
       expect(reviewSource, contains('Allergies / medical'));
       expect(reviewSource, contains('Campaign · Bringing London Closer'));
+      expect(reviewSource, contains('Campaign path'));
+      expect(
+        reviewSource,
+        contains('This request follows the approved campaign review path.'),
+      );
       expect(reviewSource, isNot(contains('IRIS GIFT BRIEF')));
       expect(reviewSource, contains('✨ IRIS has understood the moment'));
       expect(
@@ -600,18 +651,25 @@ void main() {
       expect(reviewSource, contains('Things to avoid'));
       expect(reviewSource, contains('Personalisation score'));
       expect(reviewSource, contains('Human review required'));
+      expect(reviewSource, contains('✨ Our approach'));
+      expect(reviewSource, contains('Who this is for'));
+      expect(reviewSource, contains('What matters most'));
+      expect(reviewSource, contains("How we'll approach it"));
+      expect(reviewSource, contains("What we'll avoid"));
+      expect(reviewSource, contains('Why this will feel personal'));
       expect(paymentSource, isNot(contains('Gift this experience')));
-      expect(statusSource, contains('IRIS analysing'));
-      expect(statusSource, contains('Gift Brief complete'));
-      expect(statusSource, contains('Gifts Team reviewing'));
-      expect(statusSource, contains('Experience approved'));
-      expect(statusSource, contains('Being sourced'));
-      expect(statusSource, contains('Preparing'));
+      expect(statusSource, contains('Your gift is in safe hands.'));
+      expect(statusSource, contains('Request received'));
+      expect(statusSource, contains('Planning begins'));
+      expect(statusSource, contains('Experience prepared'));
+      expect(statusSource, contains('Quality review'));
       expect(statusSource, contains('Awaiting rider'));
       expect(statusSource, contains('Out for delivery'));
       expect(statusSource, contains('Delivered'));
       expect(statusSource, contains('Gift Story rendering'));
       expect(statusSource, contains('Gift Story ready'));
+      expect(statusSource, contains('Curated by the Gifts Team'));
+      expect(statusSource, contains('Supported by IRIS'));
       expect(storySource, contains('FINALE — GIFT STORY'));
       expect(storySource, contains('Story preview disabled'));
       expect(relationshipSource, isNot(contains('createGiftPayment')));
@@ -829,7 +887,7 @@ void main() {
       await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Add your voice?'), findsNothing);
+      expect(find.text('Leave a personal message'), findsNothing);
 
       await tester.enterText(
         find.byType(TextField),
@@ -840,14 +898,14 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Add your voice?'), findsOneWidget);
+      expect(find.text('Leave a personal message'), findsOneWidget);
       expect(find.text('Skip voice note'), findsOneWidget);
 
       await tester.tap(find.text('Skip voice note'));
       await tester.pumpAndSettle();
 
-      expect(find.text('What do they love?'), findsOneWidget);
-      expect(find.text('ADD A THEME'), findsOneWidget);
+      expect(find.text('What makes them smile?'), findsOneWidget);
+      expect(find.text('KNOWN INTEREST'), findsOneWidget);
     });
 
     test('sender mobile pre-auth landing and auth copy are locked', () {

@@ -42,14 +42,19 @@ class _GiftThemesViewState extends State<GiftThemesView> {
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
-      eyebrow: 'STEP 06 — THEMES',
-      title: 'What do they love?',
+      eyebrow: 'STEP 06 — INTERESTS',
+      title: 'What makes them smile?',
       subtitle:
-          'Choose from the web-backed interest list, or add something personal.',
+          'Tell us about the interests, hobbies and passions that make them unique.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
+        _SectionHeading(
+          title: 'Known Interests',
+          helper: 'Search the interests IRIS already understands.',
+        ),
+        const SizedBox(height: 10),
         GiftJourneyWidgets.dropdown(
-          label: 'ADD A THEME',
+          label: 'KNOWN INTEREST',
           value: _selectedInterest,
           placeholder: 'Choose from the list...',
           options: senderGiftInterestOptions
@@ -60,7 +65,12 @@ class _GiftThemesViewState extends State<GiftThemesView> {
             _addTheme(SenderGiftTheme.catalogue(value));
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 18),
+        _SectionHeading(
+          title: 'Personal Interests',
+          helper: 'Add anything personal, specific or wonderfully niche.',
+        ),
+        const SizedBox(height: 10),
         _CustomThemeInput(
           controller: _customController,
           onChanged: _handleCustomChanged,
@@ -161,13 +171,13 @@ class _IrisThemePanel extends StatelessWidget {
         .toList();
     final hasThemes = themes.isNotEmpty;
     final title = !hasThemes || signals.isEmpty
-        ? 'No IRIS coverage yet'
-        : 'IRIS signal preview';
+        ? 'Personal context'
+        : 'IRIS understands part of this';
     final body = !hasThemes
-        ? 'Add a theme to see whether IRIS has existing gift-signal coverage.'
+        ? 'Add an interest to help us understand the person behind the occasion.'
         : customThemes.isNotEmpty && signals.isEmpty
-            ? 'Custom interest saved. IRIS will use it as personal context.'
-            : 'Supported signals: ${signals.join(' · ')}';
+            ? "We've saved this as personal context. IRIS will use it while planning the experience."
+            : "We'll use these interests to shape the experience with more care.";
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -202,7 +212,7 @@ class _IrisThemePanel extends StatelessWidget {
           if (signals.isNotEmpty && customThemes.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              'Custom interest saved. IRIS will use it as personal context.',
+              "We've saved this as personal context. IRIS will use it while planning the experience.",
               style: GoogleFonts.inter(
                 color: const Color(0xFFC9B8FF),
                 fontSize: 12,
@@ -240,7 +250,7 @@ class _CustomThemeInput extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'CUSTOM THEME',
+            'PERSONAL INTEREST',
             style: GoogleFonts.jetBrainsMono(
               color: const Color(0xFFC9B8FF),
               fontSize: 10.5,
@@ -265,7 +275,7 @@ class _CustomThemeInput extends StatelessWidget {
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    hintText: 'Or type a custom theme...',
+                    hintText: 'Or type a personal interest...',
                     hintStyle: GoogleFonts.inter(
                       color: const Color(0xFFB8AAB8).withValues(alpha: .66),
                       fontSize: 14,
@@ -304,6 +314,40 @@ class _CustomThemeInput extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  final String title;
+  final String helper;
+
+  const _SectionHeading({required this.title, required this.helper});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.dmSerifDisplay(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          helper,
+          style: GoogleFonts.inter(
+            color: const Color(0xFFB8AAB8),
+            fontSize: 12.5,
+            height: 1.35,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
@@ -67,9 +66,9 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
       eyebrow: 'STEP 05 — VOICE NOTE',
-      title: 'Add your voice?',
+      title: 'Leave a personal message',
       subtitle:
-          'Record a short note for the Gifts Team. It stays attached to this gift draft.',
+          "A short voice note helps our Gifts Team understand the emotion behind your gift. It won't be shared with the recipient unless you later choose to include it in their Gift Story.",
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         _VoiceNoteCard(
@@ -95,7 +94,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
         children: [
           GiftJourneyWidgets.primaryButton(
             enabled: _voiceNote != null,
-            label: 'Use this voice note',
+            label: 'Use this recording',
             onTap: _voiceNote == null
                 ? null
                 : () => _continue(widget.draft.copyWith(voiceNote: _voiceNote)),
@@ -130,16 +129,9 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       });
       return;
     }
-    final status = await Permission.microphone.request();
-    if (!status.isGranted) {
-      setState(() {
-        _state = GiftVoiceNoteState.permissionDenied;
-        _statusMessage =
-            'Microphone access is blocked. Enable it in your browser settings, or skip this step.';
-      });
-      return;
-    }
     try {
+      // Browser MediaRecorder/getUserMedia is the permission request on web.
+      // It keeps localhost and app preview aligned with the native browser prompt.
       await _recorder.start();
       setState(() {
         _state = GiftVoiceNoteState.recording;
@@ -353,7 +345,7 @@ class _VoiceNoteCard extends StatelessWidget {
                     : recording
                         ? 'Maximum length is 60 seconds.'
                         : hasNote
-                            ? 'Transcript and language are saved as null until processing is connected.'
+                            ? 'Recording saved · ${voiceNote!.durationSeconds}s. You can play it back or re-record.'
                             : 'Ask for microphone permission, then record a short note.'),
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(

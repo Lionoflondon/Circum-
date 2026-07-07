@@ -13,12 +13,10 @@ class GiftStatusView extends StatelessWidget {
   static const routeName = '/sender-mobile/gifts/status';
 
   static const statusLabels = [
-    'IRIS analysing',
-    'Gift Brief complete',
-    'Gifts Team reviewing',
-    'Experience approved',
-    'Being sourced',
-    'Preparing',
+    'Request received',
+    'Planning begins',
+    'Experience prepared',
+    'Quality review',
     'Awaiting rider',
     'Out for delivery',
     'Delivered',
@@ -31,17 +29,19 @@ class GiftStatusView extends StatelessWidget {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
       eyebrow: 'STEP 13 — STATUS',
-      title: "Your gift's journey",
+      title: 'Your gift is in safe hands.',
       subtitle:
-          'IRIS and the Gifts Team move the experience through each approved stage.',
+          "We'll quietly take care of everything behind the scenes.\n\nYou'll only hear from us when there's something meaningful to share.",
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         for (var i = 0; i < statusLabels.length; i++)
           _StatusRow(
-            label: statusLabels[i],
+            label: _dateAwareLabel(statusLabels[i]),
             active: i <= 1,
             last: i == statusLabels.length - 1,
           ),
+        const SizedBox(height: 14),
+        const _GiftTeamFooter(),
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: true,
@@ -52,6 +52,31 @@ class GiftStatusView extends StatelessWidget {
             settings: const RouteSettings(name: GiftStoryView.routeName),
           ),
         ),
+      ),
+    );
+  }
+
+  String _dateAwareLabel(String label) {
+    if (label == 'Planning begins' && (draft.deliveryDate ?? '').isNotEmpty) {
+      return 'Planning begins around ${draft.deliveryDate}';
+    }
+    return label;
+  }
+}
+
+class _GiftTeamFooter extends StatelessWidget {
+  const _GiftTeamFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Curated by the Gifts Team\nSupported by IRIS\nEvery experience is reviewed by a real person before sourcing begins.',
+      textAlign: TextAlign.center,
+      style: GoogleFonts.inter(
+        color: const Color(0xFFB8AAB8),
+        fontSize: 12,
+        height: 1.45,
+        fontWeight: FontWeight.w700,
       ),
     );
   }

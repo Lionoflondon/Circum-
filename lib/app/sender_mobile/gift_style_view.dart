@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'gift_journey_draft.dart';
 import 'gift_privacy_view.dart';
@@ -16,25 +17,35 @@ class GiftStyleView extends StatefulWidget {
 }
 
 class _GiftStyleViewState extends State<GiftStyleView> {
-  late final TextEditingController _sizeController;
-  late final TextEditingController _coloursController;
+  late final TextEditingController _clothingSizeController;
+  late final TextEditingController _shoeSizeController;
+  late final TextEditingController _ringSizeController;
   late final TextEditingController _brandsController;
   final _stylePills = <String>{};
+  final _colourPills = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _sizeController = TextEditingController(text: widget.draft.clothingSize);
-    _coloursController =
-        TextEditingController(text: widget.draft.favouriteColours);
+    _clothingSizeController =
+        TextEditingController(text: widget.draft.clothingSize);
+    _shoeSizeController = TextEditingController(text: widget.draft.shoeSize);
+    _ringSizeController = TextEditingController(text: widget.draft.ringSize);
     _brandsController = TextEditingController(text: widget.draft.likedBrands);
     _stylePills.addAll(widget.draft.preferredStyles);
+    _colourPills.addAll(
+      (widget.draft.favouriteColours ?? '')
+          .split(',')
+          .map((colour) => colour.trim())
+          .where((colour) => colour.isNotEmpty),
+    );
   }
 
   @override
   void dispose() {
-    _sizeController.dispose();
-    _coloursController.dispose();
+    _clothingSizeController.dispose();
+    _shoeSizeController.dispose();
+    _ringSizeController.dispose();
     _brandsController.dispose();
     super.dispose();
   }
@@ -44,22 +55,29 @@ class _GiftStyleViewState extends State<GiftStyleView> {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
       eyebrow: 'STEP 08 — STYLE & SIZES',
-      title: 'Help us get it right',
+      title: 'Their style',
       subtitle:
-          'Share useful sizing and style signals for the Gifts Team and IRIS.',
+          'These choices help us understand what naturally feels like them.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         GiftJourneyWidgets.inputCard(
-          controller: _sizeController,
-          label: 'CLOTHING / SHOE / RING SIZE',
-          placeholder: 'e.g. UK 10, UK 6, M',
+          controller: _clothingSizeController,
+          label: 'CLOTHING SIZE',
+          placeholder: 'e.g. UK 10, M',
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
         GiftJourneyWidgets.inputCard(
-          controller: _coloursController,
-          label: 'FAVOURITE COLOURS',
-          placeholder: 'e.g. sage green, terracotta',
+          controller: _shoeSizeController,
+          label: 'SHOE SIZE',
+          placeholder: 'e.g. UK 6',
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        GiftJourneyWidgets.inputCard(
+          controller: _ringSizeController,
+          label: 'RING SIZE',
+          placeholder: 'e.g. L, 52, unknown',
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
@@ -70,6 +88,17 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
+        _ColourChips(
+          selectedColours: _colourPills,
+          onToggle: (colour) => setState(() {
+            if (_colourPills.contains(colour)) {
+              _colourPills.remove(colour);
+            } else {
+              _colourPills.add(colour);
+            }
+          }),
+        ),
+        const SizedBox(height: 16),
         _PreferredStyleChips(
           selectedStyles: _stylePills,
           onToggle: (style) => setState(() {
@@ -88,8 +117,10 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           MaterialPageRoute<void>(
             builder: (_) => GiftPrivacyView(
               draft: widget.draft.copyWith(
-                clothingSize: _sizeController.text.trim(),
-                favouriteColours: _coloursController.text.trim(),
+                clothingSize: _clothingSizeController.text.trim(),
+                shoeSize: _shoeSizeController.text.trim(),
+                ringSize: _ringSizeController.text.trim(),
+                favouriteColours: _colourPills.join(', '),
                 likedBrands: _brandsController.text.trim(),
                 preferredStyles: _stylePills.toList(),
               ),
@@ -98,6 +129,59 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ColourChips extends StatelessWidget {
+  final Set<String> selectedColours;
+  final ValueChanged<String> onToggle;
+
+  const _ColourChips({
+    required this.selectedColours,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const colours = [
+      'Black',
+      'White',
+      'Navy',
+      'Cream',
+      'Sage',
+      'Pink',
+      'Gold',
+      'Silver',
+      'Brown',
+      'Green',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'COLOUR NOTES',
+          style: GoogleFonts.jetBrainsMono(
+            color: const Color(0xFFB8AAB8),
+            fontSize: 10,
+            letterSpacing: .7,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final colour in colours)
+              GiftJourneyWidgets.choiceChip(
+                label: colour,
+                selected: selectedColours.contains(colour),
+                onTap: () => onToggle(colour),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
