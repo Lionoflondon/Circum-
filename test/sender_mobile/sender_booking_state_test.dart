@@ -5,9 +5,11 @@ import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
+import 'package:circum/app/sender_mobile/gift_relationship_view.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
 import 'package:circum/app/sender_mobile/sender_gifts_icon.dart';
 import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -297,6 +299,82 @@ void main() {
         ),
       );
       expect(iconSource, isNot(contains('0xFF3B82F6')));
+    });
+
+    test('sender mobile Gift someone relationship screen is wired', () {
+      final giftSource =
+          File('lib/app/sender_mobile/gift_mode_view.dart').readAsStringSync();
+      final relationshipSource = File(
+        'lib/app/sender_mobile/gift_relationship_view.dart',
+      ).readAsStringSync();
+
+      expect(giftSource, contains("import 'gift_relationship_view.dart';"));
+      expect(giftSource, contains('GiftRelationshipView'));
+      expect(
+        GiftRelationshipView.routeName,
+        '/sender-mobile/gifts/relationship',
+      );
+      expect(senderGiftRelationshipOptions, const [
+        'Partner',
+        'Parent',
+        'Sibling',
+        'Friend',
+        'Child',
+        'Colleague',
+        'Client',
+        'Other',
+      ]);
+      expect(relationshipSource, contains('Who are we gifting?'));
+      expect(
+        relationshipSource,
+        contains(
+          'Tell IRIS who this is for so we can shape the experience.',
+        ),
+      );
+      expect(relationshipSource, contains('Occasion screen coming next'));
+      expect(relationshipSource, isNot(contains('createGiftPayment')));
+      expect(relationshipSource, isNot(contains('FirebaseFirestore')));
+    });
+
+    testWidgets('Gift someone opens relationship screen and back returns', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: GiftModeView()));
+
+      expect(find.text('Gift someone'), findsOneWidget);
+      expect(find.text('Gift myself'), findsOneWidget);
+      expect(find.text('Anonymous gift'), findsOneWidget);
+      expect(find.text('Campaign'), findsOneWidget);
+
+      await tester.tap(find.text('Gift someone'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Who are we gifting?'), findsOneWidget);
+      expect(find.text('Partner'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Choose your gift mode.'), findsOneWidget);
+      expect(find.text('Gift someone'), findsOneWidget);
+    });
+
+    testWidgets('Gift relationship continue requires a selected option', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: GiftRelationshipView()));
+
+      expect(find.text('Continue'), findsOneWidget);
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Occasion screen coming next'), findsNothing);
+
+      await tester.tap(find.text('Friend'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Occasion screen coming next'), findsOneWidget);
     });
 
     test('sender mobile pre-auth landing and auth copy are locked', () {

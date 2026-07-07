@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'gift_relationship_view.dart';
 import 'sender_gifts_icon.dart';
 
 class GiftModeView extends StatelessWidget {
@@ -60,10 +61,18 @@ class GiftModeView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 26),
-                const _GiftModeCard(
+                _GiftModeCard(
                   iconKind: SenderGiftsIconKind.gift,
                   title: 'Gift someone',
                   subtitle: 'Create something thoughtful for another person.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const GiftRelationshipView(),
+                      settings: const RouteSettings(
+                        name: GiftRelationshipView.routeName,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 const _GiftModeCard(
@@ -96,11 +105,13 @@ class _GiftModeCard extends StatefulWidget {
   final SenderGiftsIconKind iconKind;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   const _GiftModeCard({
     required this.iconKind,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 
   @override
@@ -119,6 +130,7 @@ class _GiftModeCardState extends State<_GiftModeCard> {
         onTapDown: (_) => setState(() => _pressed = true),
         onTapCancel: () => setState(() => _pressed = false),
         onTapUp: (_) => setState(() => _pressed = false),
+        onTap: widget.onTap,
         child: AnimatedScale(
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOut,
