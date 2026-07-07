@@ -22,6 +22,25 @@ bool _isLocalCampaignPaymentPreview() {
   return localHost && uri.queryParameters['campaign_payment_preview'] == '1';
 }
 
+int _initialCampaignPreviewStep() {
+  if (!_isLocalCampaignPaymentPreview()) return 0;
+  final requested = int.tryParse(
+    Uri.base.queryParameters['campaign_preview_step'] ?? '',
+  );
+  if (requested == null) return 8;
+  return requested.clamp(8, 13).toInt();
+}
+
+Map<String, dynamic> _previewApprovedCampaignMatch() {
+  return const {
+    'campaignName': 'Bringing London Closer',
+    'compatibilityScore': 91,
+    'sharedInterests': ['coffee', 'architecture', 'weekend walks'],
+    'revealMode': 'mutual_consent',
+    'safetyPassed': true,
+  };
+}
+
 class GiftCampaignView extends StatefulWidget {
   const GiftCampaignView({super.key});
 
@@ -32,10 +51,12 @@ class GiftCampaignView extends StatefulWidget {
 }
 
 class _GiftCampaignViewState extends State<GiftCampaignView> {
-  var _step = _isLocalCampaignPaymentPreview() ? 8 : 0;
+  var _step = _initialCampaignPreviewStep();
   _CampaignOption? _campaign;
   String? _participantId;
-  Map<String, dynamic>? _approvedMatch;
+  Map<String, dynamic>? _approvedMatch = _initialCampaignPreviewStep() >= 9
+      ? _previewApprovedCampaignMatch()
+      : null;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _matchSub;
 
   final _displayNameController = TextEditingController();
@@ -101,6 +122,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       7 => !_submitting && _paymentMethod.isNotEmpty,
       8 => true,
       9 => _approvedMatch != null,
+      10 || 11 || 12 || 13 => _canBypassCampaignPaymentForLocalPreview,
       _ => false,
     };
   }
@@ -153,6 +175,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         7 => 'STEP 07 — PAYMENT',
         8 => 'STEP 08 — WAITING FOR MATCH',
         9 => 'STEP 09 — MATCH FOUND',
+        10 => 'STEP 10 — ADMIN PAIRING',
+        11 => 'STEP 11 — GIFT REQUEST LINKED',
+        12 => 'STEP 12 — TEAM CURATION',
+        13 => 'STEP 13 — READY FOR DELIVERY',
         _ => 'CAMPAIGN',
       };
 
@@ -167,6 +193,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         7 => 'Secure participation',
         8 => 'Waiting for your match',
         9 => 'Anonymous match found',
+        10 => 'Admin pairing approved',
+        11 => 'Gift journey linked',
+        12 => 'Gifts Team is curating',
+        13 => 'Ready for delivery planning',
         _ => 'Campaign',
       };
 
@@ -187,6 +217,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           'We’ll only reveal what the policy allows. You’ll be notified when a safe match is approved.',
         9 =>
           'Only anonymous compatibility is shown. Names, photos and addresses stay hidden.',
+        10 =>
+          'The Gifts Team approves the safe pairing before any downstream request is created.',
+        11 =>
+          'A normal Gifts request is linked internally after matching, without asking for known-recipient fields during campaign join.',
+        12 =>
+          'The concierge team uses the anonymous compatibility and safety notes to shape the gift.',
+        13 =>
+          'Delivery details are handled only after policy-safe matching and Admin approval.',
         _ => '',
       };
 
@@ -195,6 +233,8 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         7 => _submitting ? 'Processing...' : 'Continue to Secure Payment',
         8 => 'Refresh Match',
         9 => 'Continue',
+        10 || 11 || 12 => 'Preview Next',
+        13 => 'Done',
         _ => 'Continue',
       };
 
@@ -209,6 +249,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         7 => _paymentChildren,
         8 => _waitingChildren,
         9 => _matchChildren,
+        10 => _adminPairingChildren,
+        11 => _linkedRequestChildren,
+        12 => _teamCurationChildren,
+        13 => _readyForDeliveryChildren,
         _ => const <Widget>[],
       };
 
@@ -620,6 +664,68 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     ];
   }
 
+  List<Widget> get _adminPairingChildren => const [
+        _CampaignGlassCard(
+          title: 'Pairing approved',
+          body:
+              'Admin approves the anonymous match after GiftsSocialPolicy safety checks pass.',
+        ),
+        SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Identity protected',
+          body:
+              'Names, photos, addresses and private recipient details remain hidden unless policy allows reveal.',
+        ),
+        SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'No recipient form',
+          body:
+              'Campaign stays participant to match to gift. It does not enter the known-recipient delivery flow.',
+        ),
+      ];
+
+  List<Widget> get _linkedRequestChildren => const [
+        _CampaignGlassCard(
+          title: 'Internal gift request',
+          body:
+              'After Admin approval, Circum links or generates the operational gift request for procurement.',
+        ),
+        SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Campaign context carried',
+          body:
+              'Shared interests, safety notes, reveal mode and budget stay attached to the work.',
+        ),
+      ];
+
+  List<Widget> get _teamCurationChildren => const [
+        _CampaignGlassCard(
+          title: 'Gifts Team review',
+          body:
+              'The team curates around compatibility, consent, safety and the campaign budget.',
+        ),
+        SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'IRIS support',
+          body:
+              'IRIS helps organise the anonymous signals without exposing private identity.',
+        ),
+      ];
+
+  List<Widget> get _readyForDeliveryChildren => const [
+        _CampaignGlassCard(
+          title: 'Delivery planning',
+          body:
+              'Final handover details are handled only after safe matching and approval.',
+        ),
+        SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Still anonymous',
+          body:
+              'Reveal timing remains governed by GiftsSocialPolicy and consent settings.',
+        ),
+      ];
+
   Widget _chipSection(String title, String key, List<String> options) {
     if (key == 'senderRevealMode') {
       return _singleChoiceSection(
@@ -727,6 +833,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     if (_step == 8) {
       await _refreshApprovedMatch();
       if (_approvedMatch != null) setState(() => _step = 9);
+      return;
+    }
+    if (_canBypassCampaignPaymentForLocalPreview && _step >= 9 && _step < 13) {
+      setState(() => _step += 1);
       return;
     }
     if (_step == 9) return;
