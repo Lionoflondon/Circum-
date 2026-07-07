@@ -24,6 +24,7 @@ import 'package:circum/app/rider_marketplace/rider_onboarding_policy.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/rider_profiles/uk_phone_number.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
+import 'package:circum/app/sender_mobile/gift_mode_view.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/pricing/special_handling_engine.dart';
 import 'package:circum/env/env.dart';
@@ -156,6 +157,7 @@ class CircumRouteDecision {
   final CircumPublicRoute publicRoute;
   final CircumSenderEntry senderEntry;
   final CircumRiderStripeRoute? riderStripeRoute;
+  final bool openSenderGifts;
   final bool useSenderPreview;
   final bool useRiderPreview;
 
@@ -164,6 +166,7 @@ class CircumRouteDecision {
     this.publicRoute = CircumPublicRoute.landing,
     this.senderEntry = CircumSenderEntry.dashboard,
     this.riderStripeRoute,
+    this.openSenderGifts = false,
     this.useSenderPreview = false,
     this.useRiderPreview = false,
   });
@@ -198,6 +201,7 @@ CircumRouteDecision resolveCircumRoute(
 }) {
   final path = uri.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
   final app = uri.queryParameters['app'];
+  final senderMobileGifts = uri.queryParameters['sender_mobile_gifts'] == '1';
 
   if ((adminHostingTarget && !_isPublicHostingHostFor(uri)) ||
       path == '/admin') {
@@ -265,9 +269,10 @@ CircumRouteDecision resolveCircumRoute(
   }
 
   return switch (app) {
-    'sender' => const CircumRouteDecision(
+    'sender' => CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
         senderEntry: CircumSenderEntry.dashboard,
+        openSenderGifts: senderMobileGifts,
         useSenderPreview: true,
       ),
     'health' => const CircumRouteDecision(
@@ -392,10 +397,11 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     darkMode: _darkMode,
                     initialStep: _senderInitialStep,
                     usePreview: _route.useSenderPreview,
+                    openGifts: _route.openSenderGifts,
                     onBack: _openPublicHome,
                     onRoleSelected: _openRole,
                     onOpenBooking: _openSenderBooking,
-                    onOpenGifts: _openGifts,
+                    onOpenGifts: _openSenderMobileGifts,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
                 CircumAppSurface.riderApp => CircumRiderAppRoot(
@@ -469,6 +475,15 @@ class _WebSenderAppState extends State<WebSenderApp> {
         publicRoute: CircumPublicRoute.gifts,
       );
     });
+  }
+
+  void _openSenderMobileGifts() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const GiftModeView(),
+        settings: const RouteSettings(name: GiftModeView.routeName),
+      ),
+    );
   }
 
   void _openBusinessPublic() {
@@ -601,6 +616,7 @@ class CircumSenderAppRoot extends StatelessWidget {
   final bool darkMode;
   final _SenderStep initialStep;
   final bool usePreview;
+  final bool openGifts;
   final VoidCallback onBack;
   final ValueChanged<CircumRole> onRoleSelected;
   final VoidCallback onOpenBooking;
@@ -613,6 +629,7 @@ class CircumSenderAppRoot extends StatelessWidget {
     required this.darkMode,
     required this.initialStep,
     required this.usePreview,
+    required this.openGifts,
     required this.onBack,
     required this.onRoleSelected,
     required this.onOpenBooking,
@@ -624,21 +641,23 @@ class CircumSenderAppRoot extends StatelessWidget {
   Widget build(BuildContext context) {
     return _PhoneStage(
       colors: colors,
-      child: usePreview
-          ? _SenderArchitecturePreviewApp(
-              colors: colors,
-              onOpenBooking: onOpenBooking,
-              onOpenGifts: onOpenGifts,
-            )
-          : _CustomerPortal(
-              darkMode: darkMode,
-              colors: colors,
-              initialStep: initialStep,
-              onBack: onBack,
-              onRoleSelected: onRoleSelected,
-              onOpenGifts: onOpenGifts,
-              onToggleTheme: onToggleTheme,
-            ),
+      child: openGifts
+          ? const GiftModeView()
+          : usePreview
+              ? _SenderArchitecturePreviewApp(
+                  colors: colors,
+                  onOpenBooking: onOpenBooking,
+                  onOpenGifts: onOpenGifts,
+                )
+              : _CustomerPortal(
+                  darkMode: darkMode,
+                  colors: colors,
+                  initialStep: initialStep,
+                  onBack: onBack,
+                  onRoleSelected: onRoleSelected,
+                  onOpenGifts: onOpenGifts,
+                  onToggleTheme: onToggleTheme,
+                ),
     );
   }
 }
