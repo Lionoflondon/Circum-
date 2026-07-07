@@ -497,12 +497,14 @@ void main() {
       expect(deliverySource, contains('_selectedAddressSuggestion != null'));
       expect(deliverySource, contains('GiftMessageView'));
       expect(messageSource, contains('Write something from the heart'));
-      expect(messageSource, contains('senderGiftPersonalMessageOptions'));
       expect(messageSource, contains('Write the message in your own words'));
+      expect(messageSource, contains('Write the words you want'));
       expect(
-        messageSource,
-        contains('You mean more to me than I say often enough.'),
-      );
+          messageSource, isNot(contains('senderGiftPersonalMessageOptions')));
+      expect(messageSource, isNot(contains('GiftMessageOptionCard')));
+      expect(messageSource, isNot(contains('radio_button_checked_rounded')));
+      expect(messageSource,
+          isNot(contains('You mean more to me than I say often enough.')));
       expect(messageSource, contains('GiftVoiceNoteView'));
       expect(voiceSource, contains('STEP 05 — VOICE NOTE'));
       expect(voiceSource, contains('Leave a personal message'));
