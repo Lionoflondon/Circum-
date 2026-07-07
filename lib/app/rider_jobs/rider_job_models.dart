@@ -1,4 +1,5 @@
 import 'package:circum/app/delivery_security/vanguard_protection.dart';
+import 'package:circum/app/platform/address_engine.dart';
 import 'package:flutter/foundation.dart';
 
 enum RiderJobCategory {
@@ -76,10 +77,20 @@ class RiderJobOffer {
       estimatedEarnings:
           ((data['riderEarning'] ?? data['estimatedEarnings'] ?? 0) as num)
               .toDouble(),
-      pickupArea:
-          '${pickup['area'] ?? pickup['city'] ?? data['pickupArea'] ?? 'Pickup'}',
-      dropoffArea:
-          '${dropoff['area'] ?? dropoff['city'] ?? data['dropoffArea'] ?? 'Drop-off'}',
+      pickupArea: AddressEngine.firstPart([
+        pickup['area'],
+        pickup['city'],
+        AddressEngine.display(pickup),
+        data['pickupArea'],
+        'Pickup',
+      ]),
+      dropoffArea: AddressEngine.firstPart([
+        dropoff['area'],
+        dropoff['city'],
+        AddressEngine.display(dropoff),
+        data['dropoffArea'],
+        'Drop-off',
+      ]),
       distanceLabel: '${data['distanceLabel'] ?? data['distance'] ?? '--'}',
       etaLabel: '${data['etaLabel'] ?? data['estimatedDuration'] ?? '--'}',
       parcelSummary:

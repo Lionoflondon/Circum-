@@ -131,7 +131,7 @@ void main() {
         savedAddresses: const [
           SavedSenderAddress(
             label: 'Home',
-            address: 'Canary Wharf',
+            address: '10 Park Drive, London, E14 9GG, United Kingdom',
             addressType: 'pickup',
           ),
         ],
@@ -141,6 +141,14 @@ void main() {
       expect(patch['fullName'], 'Jane Smith');
       expect(patch['savedAddresses'], hasLength(1));
       expect(patch['savedAddresses'].first['addressType'], 'pickup');
+      expect(patch['savedAddresses'].first['addressData'],
+          isA<Map<String, dynamic>>());
+      expect(
+        patch['savedAddresses'].first['addressData']['addressLine1'],
+        '10 Park Drive',
+      );
+      expect(
+          patch['savedAddresses'].first['addressData']['postcode'], 'E14 9GG');
       expect(patch.containsKey('customerId'), isFalse);
       expect(patch.containsKey('cardNumber'), isFalse);
     });

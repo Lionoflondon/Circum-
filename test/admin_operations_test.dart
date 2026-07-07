@@ -177,11 +177,20 @@ void main() {
 
     test('safe delivery edit patch excludes payment amount changes', () {
       final patch = AdminDeliveryTools.safeDeliveryPatch(
-        pickupAddress: 'New pickup',
+        pickupAddress: '12 Eldridge Road, London, SE9 2DF, United Kingdom',
         parcelNotes: 'Leave at reception',
       );
 
-      expect(patch['pickupAddress'], 'New pickup');
+      expect(patch['pickupAddress'], isNot(contains('null')));
+      expect(patch['pickupAddressData'], isA<Map<String, dynamic>>());
+      expect(
+        (patch['pickupAddressData'] as Map<String, dynamic>)['addressLine1'],
+        '12 Eldridge Road',
+      );
+      expect(
+        (patch['pickupAddressData'] as Map<String, dynamic>)['postcode'],
+        'SE9 2DF',
+      );
       expect(patch['packageDescription'], 'Leave at reception');
       expect(patch.containsKey('price'), isFalse);
       expect(patch.containsKey('amount'), isFalse);

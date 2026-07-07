@@ -6,8 +6,8 @@ import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/send_package/models/suggestions.m.dart';
 import 'package:circum/app/gifts/gift_system_policy.dart';
 import 'package:circum/app/gifts/gifts_social_policy.dart';
+import 'package:circum/app/platform/address_engine.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
-import 'package:circum/app/sender_mobile/gift_address_normalizer.dart';
 import 'package:circum/app/sender_mobile/gift_campaign_view.dart';
 import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
 import 'package:circum/app/sender_mobile/gift_iris_view.dart';
@@ -510,7 +510,7 @@ void main() {
       expect(deliverySource, isNot(contains('senderGiftPreferredDateOptions')));
       expect(deliverySource, isNot(contains('Tell us the date that matters')));
       expect(deliverySource, isNot(contains('Choose with Gifts Team')));
-      expect(deliverySource, contains('GiftAddressNormalizer.hasRequiredFields'));
+      expect(deliverySource, contains('AddressEngine.hasRequiredFields'));
       expect(deliverySource, contains('GiftMessageView'));
       expect(messageSource, contains('Write something from the heart'));
       expect(messageSource, contains('Write the message in your own words'));
@@ -1490,7 +1490,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Write something from the heart'), findsNothing);
 
-      final routeOnlySuggestion = GiftAddressNormalizer.cleanSuggestion(
+      final routeOnlySuggestion = AddressEngine.cleanSuggestion(
         Suggestion(
           placeId: 'addr-route-only',
           description: 'Eldridge Road, London, SE9 2DF, United Kingdom',
@@ -1509,14 +1509,13 @@ void main() {
       expect(routeOnlySuggestion.description, isNot(contains('null')));
       expect(routeOnlySuggestion.subText, isNot(contains('undefined')));
       expect(
-        GiftAddressNormalizer.hasRequiredFields(routeOnlySuggestion),
+        AddressEngine.hasRequiredFields(suggestion: routeOnlySuggestion),
         isTrue,
       );
 
       final manualAddress =
           'Flat 2, 16 Eldridge Road, London, SE9 2DF, United Kingdom';
-      final manualAddressFields = GiftAddressNormalizer.normalizedComponents(
-        null,
+      final manualAddressFields = AddressEngine.normalize(
         manualAddress: manualAddress,
       );
       expect(manualAddressFields['addressLine1'], 'Flat 2');
@@ -1524,8 +1523,7 @@ void main() {
       expect(manualAddressFields['postcode'], 'SE9 2DF');
       expect(manualAddressFields['country'], 'United Kingdom');
       expect(
-        GiftAddressNormalizer.hasRequiredFields(
-          null,
+        AddressEngine.hasRequiredFields(
           manualAddress: manualAddress,
         ),
         isTrue,
@@ -1821,9 +1819,7 @@ void main() {
 
         expect(source, contains('searchFreeUkAddresses'));
         expect(source, isNot(contains('maps.googleapis.com/maps/api/place')));
-        expect(source, contains('lat'));
-        expect(source, contains('lng'));
-        expect(source, contains('components'));
+        expect(source, contains('AddressEngine.suggestionFromBackend'));
       },
     );
 

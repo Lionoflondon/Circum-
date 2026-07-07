@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../platform/address_engine.dart';
 import '../send_package/models/suggestions.m.dart';
 import '../send_package/repo/place_api.dart';
-import 'gift_address_normalizer.dart';
 import 'gift_journey_draft.dart';
 import 'gift_message_view.dart';
 import 'gift_relationship_view.dart';
@@ -47,8 +47,8 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   bool _flexibleDelivery = false;
 
   bool get _canContinue =>
-      GiftAddressNormalizer.hasRequiredFields(
-        _selectedAddressSuggestion,
+      AddressEngine.hasRequiredFields(
+        suggestion: _selectedAddressSuggestion,
         manualAddress: _deliveryAddressController.text,
       ) &&
       _deliveryDate != null &&
@@ -94,7 +94,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         if (!mounted) return;
         setState(() {
           _addressSuggestions = suggestions
-              .map(GiftAddressNormalizer.cleanSuggestion)
+              .map(AddressEngine.cleanSuggestion)
               .take(5)
               .toList(growable: false);
           _isAddressSearching = false;
@@ -116,7 +116,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
 
   void _selectAddressSuggestion(Suggestion suggestion) {
     _addressDebounce?.cancel();
-    final cleanSuggestion = GiftAddressNormalizer.cleanSuggestion(suggestion);
+    final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
     _deliveryAddressController.text = cleanSuggestion.description;
     _deliveryAddressController.selection = TextSelection.collapsed(
       offset: cleanSuggestion.description.length,

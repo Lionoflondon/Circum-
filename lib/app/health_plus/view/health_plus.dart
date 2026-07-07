@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../platform/address_engine.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
 import '../models/recurring_pickup_schedule.dart';
@@ -95,14 +96,28 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     try {
       final db = FirebaseFirestore.instance;
       final batch = db.batch();
+      final pharmacyAddress = AddressEngine.normalize(
+        manualAddress: _pharmacyAddress.text.trim(),
+      );
+      final deliveryAddress = AddressEngine.normalize(
+        manualAddress: _deliveryAddress.text.trim(),
+      );
 
       final profile = {
         'id': id,
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
         'email': _email.text.trim(),
-        'pharmacyAddress': _pharmacyAddress.text.trim(),
-        'deliveryAddress': _deliveryAddress.text.trim(),
+        'pharmacyAddress': AddressEngine.display(
+          pharmacyAddress,
+          fallback: _pharmacyAddress.text.trim(),
+        ),
+        'deliveryAddress': AddressEngine.display(
+          deliveryAddress,
+          fallback: _deliveryAddress.text.trim(),
+        ),
+        'pharmacyAddressData': pharmacyAddress,
+        'deliveryAddressData': deliveryAddress,
         'notes': _notes.text.trim(),
         'consentConfirmed': _consent,
         'source': 'circum-mobile',
@@ -116,8 +131,16 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         'scheduleId': scheduleId,
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
-        'pharmacyAddress': _pharmacyAddress.text.trim(),
-        'deliveryAddress': _deliveryAddress.text.trim(),
+        'pharmacyAddress': AddressEngine.display(
+          pharmacyAddress,
+          fallback: _pharmacyAddress.text.trim(),
+        ),
+        'deliveryAddress': AddressEngine.display(
+          deliveryAddress,
+          fallback: _deliveryAddress.text.trim(),
+        ),
+        'pharmacyAddressData': pharmacyAddress,
+        'deliveryAddressData': deliveryAddress,
         'notes': _notes.text.trim(),
         'preferredPickupTime': _preferredTime.text.trim(),
         'frequency': _frequency.value,

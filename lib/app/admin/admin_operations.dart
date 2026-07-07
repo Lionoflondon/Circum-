@@ -1,4 +1,5 @@
 import '../gifts/gift_system_policy.dart';
+import '../platform/address_engine.dart';
 
 enum AdminRole {
   superAdmin('super_admin'),
@@ -456,9 +457,21 @@ class AdminDeliveryTools {
     String? senderPhone,
     String? recipientPhone,
   }) {
+    final normalizedPickup = pickupAddress == null
+        ? null
+        : AddressEngine.normalize(manualAddress: pickupAddress);
+    final normalizedDropoff = dropoffAddress == null
+        ? null
+        : AddressEngine.normalize(manualAddress: dropoffAddress);
     return {
-      if (pickupAddress != null) 'pickupAddress': pickupAddress,
-      if (dropoffAddress != null) 'dropoffAddress': dropoffAddress,
+      if (pickupAddress != null)
+        'pickupAddress':
+            AddressEngine.display(normalizedPickup, fallback: pickupAddress),
+      if (pickupAddress != null) 'pickupAddressData': normalizedPickup,
+      if (dropoffAddress != null)
+        'dropoffAddress':
+            AddressEngine.display(normalizedDropoff, fallback: dropoffAddress),
+      if (dropoffAddress != null) 'dropoffAddressData': normalizedDropoff,
       if (parcelNotes != null) 'packageDescription': parcelNotes,
       if (pickupTime != null) 'pickupTime': pickupTime,
       if (senderPhone != null) 'senderPhone': senderPhone,

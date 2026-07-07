@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../platform/address_engine.dart';
+
 class SenderProfile {
   final String id;
   final String fullName;
@@ -228,18 +230,30 @@ class SavedSenderAddress {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'label': label,
-        'address': address,
-        'addressType': addressType,
-        if (notes.trim().isNotEmpty) 'notes': notes,
+  Map<String, dynamic> toJson() {
+    final normalized = AddressEngine.normalize(
+      manualAddress: address,
+      components: {
         if (postcode?.trim().isNotEmpty == true) 'postcode': postcode,
-        if (lat != null) 'lat': lat,
-        if (lng != null) 'lng': lng,
-        if (placeId?.trim().isNotEmpty == true) 'placeId': placeId,
-        if (provider?.trim().isNotEmpty == true) 'provider': provider,
-        if (locationId?.trim().isNotEmpty == true) 'locationId': locationId,
-      };
+      },
+      placeId: placeId ?? locationId,
+      latitude: lat,
+      longitude: lng,
+    );
+    return {
+      'label': label,
+      'address': AddressEngine.display(normalized, fallback: address),
+      'addressType': addressType,
+      'addressData': normalized,
+      if (notes.trim().isNotEmpty) 'notes': notes,
+      if (postcode?.trim().isNotEmpty == true) 'postcode': postcode,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+      if (placeId?.trim().isNotEmpty == true) 'placeId': placeId,
+      if (provider?.trim().isNotEmpty == true) 'provider': provider,
+      if (locationId?.trim().isNotEmpty == true) 'locationId': locationId,
+    };
+  }
 }
 
 class SavedRecipient {

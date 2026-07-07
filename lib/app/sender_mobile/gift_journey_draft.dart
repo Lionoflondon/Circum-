@@ -1,6 +1,6 @@
 import '../gifts/gift_system_policy.dart';
+import '../platform/address_engine.dart';
 import '../send_package/models/suggestions.m.dart';
-import 'gift_address_normalizer.dart';
 
 enum SenderGiftMode {
   someone,
@@ -737,8 +737,8 @@ class GiftJourneyDraft {
     final themes = normalizedGiftThemes;
     final selectedInterests = giftThemeLabels;
     final brief = irisGiftBrief ?? generateIrisBrief();
-    final normalizedAddress = GiftAddressNormalizer.normalizedComponents(
-      deliveryAddressData,
+    final normalizedAddress = AddressEngine.normalize(
+      suggestion: deliveryAddressData,
       manualAddress: deliveryAddress,
     );
     final giftType = mode == SenderGiftMode.campaign
@@ -785,13 +785,15 @@ class GiftJourneyDraft {
                   deliveryAddressData!.description,
               'mainText': normalizedAddress['addressLine1'] ??
                   deliveryAddressData!.mainText,
-              'subText': GiftAddressNormalizer.joinParts([
+              'subText': AddressEngine.joinParts([
                 normalizedAddress['city'],
                 normalizedAddress['postcode'],
                 normalizedAddress['country'],
               ]),
-              'lat': normalizedAddress['lat'],
-              'lng': normalizedAddress['lng'],
+              'latitude': normalizedAddress['latitude'],
+              'longitude': normalizedAddress['longitude'],
+              'lat': normalizedAddress['latitude'],
+              'lng': normalizedAddress['longitude'],
               'components': normalizedAddress,
             },
       'addressLine1': normalizedAddress['addressLine1'],
@@ -801,8 +803,10 @@ class GiftJourneyDraft {
       'country': normalizedAddress['country'],
       'formattedAddress': normalizedAddress['formattedAddress'],
       'placeId': normalizedAddress['placeId'],
-      'lat': normalizedAddress['lat'],
-      'lng': normalizedAddress['lng'],
+      'latitude': normalizedAddress['latitude'],
+      'longitude': normalizedAddress['longitude'],
+      'lat': normalizedAddress['latitude'],
+      'lng': normalizedAddress['longitude'],
       'deliveryPostcode': normalizedAddress['postcode'],
       'deliveryCity': normalizedAddress['city'],
       'deliveryCountry': normalizedAddress['country'],
