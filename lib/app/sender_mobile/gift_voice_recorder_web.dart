@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:html' as html;
+import 'dart:typed_data';
 
 class SenderGiftRecordedAudio {
   final String localUrl;
   final String? mimeType;
+  final Uint8List bytes;
 
   const SenderGiftRecordedAudio({
     required this.localUrl,
+    required this.bytes,
     this.mimeType,
   });
 }
@@ -35,11 +38,16 @@ class SenderGiftVoiceRecorder {
       final data = (event as html.BlobEvent).data;
       if (data != null && data.size > 0) _chunks.add(data);
     });
-    recorder.addEventListener('stop', (_) {
+    recorder.addEventListener('stop', (_) async {
       final blob = html.Blob(_chunks, 'audio/webm');
       final url = html.Url.createObjectUrlFromBlob(blob);
+      final bytes = await _readBlobBytes(blob);
       _stopCompleter?.complete(
-        SenderGiftRecordedAudio(localUrl: url, mimeType: blob.type),
+        SenderGiftRecordedAudio(
+          localUrl: url,
+          bytes: bytes,
+          mimeType: blob.type,
+        ),
       );
       _stopCompleter = null;
       _stopTracks();
@@ -77,6 +85,26 @@ class SenderGiftVoiceRecorder {
     }
     _stream = null;
     _recorder = null;
+  }
+
+  Future<Uint8List> _readBlobBytes(html.Blob blob) {
+    final reader = html.FileReader();
+    final completer = Completer<Uint8List>();
+    reader.onLoadEnd.listen((_) {
+      final result = reader.result;
+      if (result is ByteBuffer) {
+        completer.complete(result.asUint8List());
+      } else if (result is Uint8List) {
+        completer.complete(result);
+      } else {
+        completer.completeError(StateError('Could not read recorded audio.'));
+      }
+    });
+    reader.onError.listen((_) {
+      completer.completeError(StateError('Could not read recorded audio.'));
+    });
+    reader.readAsArrayBuffer(blob);
+    return completer.future;
   }
 }
 

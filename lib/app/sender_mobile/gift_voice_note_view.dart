@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -163,6 +165,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
     final duration = _seconds.clamp(1, _maxDurationSeconds);
     try {
       final audio = await _recorder.stop();
+      final uploaded = await _uploadRecording(audio);
       setState(() {
         _state = GiftVoiceNoteState.recorded;
         _statusMessage = null;
@@ -171,8 +174,8 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
           hasVoiceNote: true,
           durationSeconds: duration,
           localUrl: audio.localUrl,
-          storagePath: null,
-          downloadUrl: null,
+          storagePath: uploaded.storagePath,
+          downloadUrl: uploaded.downloadUrl,
           createdAt: DateTime.now(),
           transcript: null,
           language: null,
@@ -182,9 +185,35 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       setState(() {
         _state = GiftVoiceNoteState.uploadFailed;
         _statusMessage =
-            'We could not save that recording. Please try again or skip this step.';
+            'We could not upload that recording. Please try again or skip this step.';
       });
     }
+  }
+
+  Future<_UploadedVoiceNote> _uploadRecording(
+    SenderGiftRecordedAudio audio,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError('Sign in before saving a voice note.');
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final path = 'gift_requests/${user.uid}_$now/voice/original.webm';
+    final ref = FirebaseStorage.instance.ref(path);
+    await ref.putData(
+      audio.bytes,
+      SettableMetadata(
+        contentType: audio.mimeType ?? 'audio/webm',
+        customMetadata: {
+          'purpose': 'sender_mobile_gift_voice_note',
+          'uploadedBy': user.uid,
+        },
+      ),
+    );
+    return _UploadedVoiceNote(
+      storagePath: path,
+      downloadUrl: await ref.getDownloadURL(),
+    );
   }
 
   void _cancelRecording() {
@@ -255,6 +284,16 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       ),
     );
   }
+}
+
+class _UploadedVoiceNote {
+  final String storagePath;
+  final String downloadUrl;
+
+  const _UploadedVoiceNote({
+    required this.storagePath,
+    required this.downloadUrl,
+  });
 }
 
 class _VoiceNoteCard extends StatelessWidget {

@@ -476,6 +476,9 @@ void main() {
       expect(voiceSource, isNot(contains('Permission.microphone.request')));
       expect(voiceSource, contains('SenderGiftVoiceRecorder'));
       expect(voiceSource, contains('SenderGiftVoicePlayback'));
+      expect(voiceSource, contains('FirebaseStorage.instance.ref'));
+      expect(voiceSource, contains('gift_requests/'));
+      expect(voiceSource, contains('voice/original.webm'));
       expect(voiceSource, contains('_maxDurationSeconds = 60'));
       expect(
         voiceSource,
@@ -739,6 +742,8 @@ void main() {
           durationSeconds: 12,
           localUrl: 'blob:http://localhost/test',
           localPath: 'local://sender-mobile/gifts/voice-note/test.m4a',
+          storagePath: 'gift_requests/sender-1_123/voice/original.webm',
+          downloadUrl: 'https://storage.example/voice.webm',
           createdAt: DateTime.utc(2026),
         ),
         preferredStyles: const ['Minimal', 'Elegant'],
@@ -772,6 +777,15 @@ void main() {
         payload['voiceNote'],
         containsPair(
             'localPath', 'local://sender-mobile/gifts/voice-note/test.m4a'),
+      );
+      expect(
+        payload['voiceNote'],
+        containsPair(
+            'storagePath', 'gift_requests/sender-1_123/voice/original.webm'),
+      );
+      expect(
+        payload['voiceNote'],
+        containsPair('downloadUrl', 'https://storage.example/voice.webm'),
       );
       expect(payload['preferredStyles'], ['Minimal', 'Elegant']);
       expect(payload['irisGiftBrief'], containsPair('confidence', 'High'));

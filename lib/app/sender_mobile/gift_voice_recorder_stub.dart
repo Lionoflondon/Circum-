@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 class SenderGiftRecordedAudio {
   final String localUrl;
   final String? mimeType;
+  final Uint8List bytes;
 
   const SenderGiftRecordedAudio({
     required this.localUrl,
+    required this.bytes,
     this.mimeType,
   });
 }
