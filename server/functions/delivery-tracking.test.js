@@ -31,12 +31,57 @@ test("receiver PIN verification patch delivers without exposing PIN values", () 
 });
 
 test("rider location patch preserves live GPS contract", () => {
-  const patch = deliveryTracking.locationPatch({
+  const patch = deliveryTracking.liveLocationPatch({
     latitude: 51.5074,
     longitude: -0.1278,
+    heading: 122,
   });
-  assert.equal(patch.riderLocation.latitude, 51.5074);
-  assert.equal(patch.riderLocation.longitude, -0.1278);
-  assert.equal(patch.riderLocation.geopoint.latitude, 51.5074);
-  assert.equal(patch.riderLocation.geopoint.longitude, -0.1278);
+  assert.equal(patch.riderLiveLocation.latitude, 51.5074);
+  assert.equal(patch.riderLiveLocation.longitude, -0.1278);
+  assert.equal(patch.riderLiveLocation.heading, 122);
+  assert.equal(patch.riderLiveLocation.geopoint.latitude, 51.5074);
+  assert.equal(patch.riderLiveLocation.geopoint.longitude, -0.1278);
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, "locationHistory"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, "riderLocation"), false);
+});
+
+test("rider live location writes are throttled for low Firestore cost", () => {
+  const now = 60_000;
+  const previous = {
+    riderLiveLocation: {
+      latitude: 51.5074,
+      longitude: -0.1278,
+      heading: 90,
+      updatedAt: now - 9_000,
+    },
+  };
+  const nearby = deliveryTracking.liveLocationPatch({
+    latitude: 51.50745,
+    longitude: -0.12785,
+    heading: 92,
+  });
+  assert.equal(
+      deliveryTracking.shouldWriteLiveLocation(previous, nearby, now),
+      false,
+  );
+
+  const moved = deliveryTracking.liveLocationPatch({
+    latitude: 51.508,
+    longitude: -0.1278,
+    heading: 92,
+  });
+  assert.equal(
+      deliveryTracking.shouldWriteLiveLocation(previous, moved, now + 10_000),
+      true,
+  );
+
+  const stationary = deliveryTracking.liveLocationPatch({
+    latitude: 51.50741,
+    longitude: -0.12781,
+    heading: 92,
+  });
+  assert.equal(
+      deliveryTracking.shouldWriteLiveLocation(previous, stationary, now + 31_000),
+      true,
+  );
 });

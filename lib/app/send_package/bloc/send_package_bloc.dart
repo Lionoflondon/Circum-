@@ -42,6 +42,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _activeDeliverySubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _activeDeliveryLiveLocationSubscription;
+  String? _activeDeliveryLiveLocationId;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -68,6 +71,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<CheckForActiveRequest>(_handleCheckForActiveRequestEvent);
     on<WatchActiveDelivery>(_handleWatchActiveDeliveryEvent);
     on<ActiveDeliverySnapshotChanged>(_handleActiveDeliverySnapshotChanged);
+    on<ActiveDeliveryLiveLocationChanged>(
+      _handleActiveDeliveryLiveLocationChanged,
+    );
     on<SetPanelControlStatus>(_handleSetPanelControlStatusEvent);
     on<SetNewMessage>(_handleSetNewMessage);
     on<IncomingMessage>(_handleIncomingMessage);
@@ -82,6 +88,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   @override
   Future<void> close() {
     _activeDeliverySubscription?.cancel();
+    _activeDeliveryLiveLocationSubscription?.cancel();
     return super.close();
   }
 
@@ -101,6 +108,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           return;
         }
         final doc = snapshot.docs.first;
+        _listenToActiveDeliveryLiveLocation(doc.id);
         add(
           ActiveDeliverySnapshotChanged(
             data: {...doc.data(), 'id': doc.id},
@@ -115,6 +123,22 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
       },
     );
+  }
+
+  void _listenToActiveDeliveryLiveLocation(String deliveryId) {
+    final normalized = deliveryId.trim();
+    if (normalized.isEmpty || normalized == _activeDeliveryLiveLocationId) {
+      return;
+    }
+    _activeDeliveryLiveLocationId = normalized;
+    _activeDeliveryLiveLocationSubscription?.cancel();
+    _activeDeliveryLiveLocationSubscription = db
+        .collection('activeDeliveries')
+        .doc(normalized)
+        .snapshots()
+        .listen((snapshot) {
+      add(ActiveDeliveryLiveLocationChanged(data: snapshot.data()));
+    });
   }
 
   void _handleCheckForPushToken(
@@ -1139,6 +1163,26 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
   }
 
+  void _handleActiveDeliveryLiveLocationChanged(
+    ActiveDeliveryLiveLocationChanged event,
+    Emitter<SendPackageState> emit,
+  ) {
+    final liveLocation = event.data?['riderLiveLocation'];
+    final riderLocation = _coordinateFromPosition(liveLocation);
+    if (riderLocation == null) return;
+    emit(
+      state.copyWith(
+        riderLocation: riderLocation,
+        riderLiveLocationUpdatedAt: _dateTimeFromValue(
+          liveLocation is Map ? liveLocation['updatedAt'] : null,
+        ),
+        riderLiveLocationHeading: _doubleFromValue(
+          liveLocation is Map ? liveLocation['heading'] : null,
+        ),
+      ),
+    );
+  }
+
   DeliveryStatus _deliveryStatusForBackendStatus(String status) {
     final normalized = status.trim().toLowerCase().replaceAll('-', '_');
     if (normalized == 'delivered' ||
@@ -1222,15 +1266,25 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   PlaceCoordinate? _riderLocationFromDelivery(Map<String, dynamic> data) {
     for (final candidate in [
+      data['riderLiveLocation'],
       data['riderLocation'],
-      data['driverLocation'],
-      data['currentRiderLocation'],
-      data['lastRiderLocation'],
     ]) {
       final parsed = _coordinateFromPosition(candidate);
       if (parsed != null) return parsed;
     }
     return null;
+  }
+
+  DateTime? _dateTimeFromValue(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  double? _doubleFromValue(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('${value ?? ''}');
   }
 
   void _handleCheckForActiveRequestEvent(
@@ -1254,6 +1308,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       }
 
       if (docResponse.exists) {
+        _listenToActiveDeliveryLiveLocation(docResponse.id);
         print('There is an active ride');
         final data = docResponse.data();
         String? pickupAddress = data!['pickupDetails']['address'];

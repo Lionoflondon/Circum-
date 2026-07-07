@@ -367,6 +367,31 @@ String senderReceiverPinStatusFor(
   return verified ? '✓ Delivery verified' : 'Ready for delivery';
 }
 
+String senderVehicleMarkerKindFor(String? vehicle) {
+  final normalized = (vehicle ?? '').trim().toLowerCase();
+  if (normalized.contains('bike') ||
+      normalized.contains('bicycle') ||
+      normalized.contains('cycle') ||
+      normalized.contains('scooter') ||
+      normalized.contains('moped')) {
+    return 'bike';
+  }
+  if (normalized.contains('van')) return 'van';
+  if (normalized.contains('car')) return 'car';
+  return 'unknown';
+}
+
+String? senderLiveLocationStaleLabel(
+  DateTime? updatedAt, {
+  DateTime? now,
+}) {
+  if (updatedAt == null) return null;
+  final age = (now ?? DateTime.now()).difference(updatedAt);
+  if (age.inMinutes >= 2) return 'Last seen ${age.inMinutes} min ago';
+  if (age.inSeconds >= 45) return 'Location updating…';
+  return null;
+}
+
 class SenderMobileTrackingScreen extends StatefulWidget {
   final SendPackageState engine;
   final SenderTrackingState? stateOverride;
@@ -418,12 +443,19 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       deliveryVerified: widget.deliveryVerified,
     );
     final riderPosition = _riderPositionForEngine(widget.engine, content);
+    final staleLabel = content.showRider
+        ? senderLiveLocationStaleLabel(widget.engine.riderLiveLocationUpdatedAt)
+        : null;
     final delivered = state == SenderTrackingState.delivered;
     return Stack(
       children: [
         SenderTrackingMapLayer(
           content: content,
           riderPosition: riderPosition,
+          vehicleKind: senderVehicleMarkerKindFor(
+            widget.engine.deliveryData?.typeOfVehicle,
+          ),
+          headingDegrees: widget.engine.riderLiveLocationHeading,
           mapDrift: _mapDrift,
           pulse: _pulse,
           delivered: delivered,
@@ -438,6 +470,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
               ),
             ),
           ),
+        if (staleLabel != null) _StaleLocationPill(label: staleLabel),
+        if (content.showRider && !delivered) const _RecenterButton(),
         if (delivered) const _DeliveredConfirmationOverlay(),
         FloatingGlassPanel(
           child: _TrackingPanelContent(
@@ -478,6 +512,8 @@ Offset _riderPositionForEngine(
 class SenderTrackingMapLayer extends StatelessWidget {
   final SenderTrackingContent content;
   final Offset riderPosition;
+  final String vehicleKind;
+  final double? headingDegrees;
   final Animation<double> mapDrift;
   final Animation<double> pulse;
   final bool delivered;
@@ -486,6 +522,8 @@ class SenderTrackingMapLayer extends StatelessWidget {
     super.key,
     required this.content,
     required this.riderPosition,
+    required this.vehicleKind,
+    this.headingDegrees,
     required this.mapDrift,
     required this.pulse,
     this.delivered = false,
@@ -546,13 +584,18 @@ class SenderTrackingMapLayer extends StatelessWidget {
             ],
             if (content.showRider)
               AnimatedAlign(
-                duration: const Duration(milliseconds: 380),
+                duration: const Duration(milliseconds: 900),
                 curve: Curves.easeOutCubic,
                 alignment: Alignment(
                   riderPosition.dx * 2 - 1,
                   riderPosition.dy * 2 - 1,
                 ),
-                child: _RiderMarker(pulse: markerPulse, settled: delivered),
+                child: _VehicleMarker(
+                  kind: vehicleKind,
+                  pulse: markerPulse,
+                  settled: delivered,
+                  headingDegrees: headingDegrees,
+                ),
               ),
             AnimatedOpacity(
               opacity: content.dimMap ? .52 : 0,
@@ -1567,6 +1610,116 @@ class _TopStatusPill extends StatelessWidget {
   }
 }
 
+class _StaleLocationPill extends StatelessWidget {
+  final String label;
+
+  const _StaleLocationPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 58),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5A623).withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: const Color(0xFFF5A623).withValues(alpha: .34),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF5C77E),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Color(0xFFF5C77E),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecenterButton extends StatelessWidget {
+  const _RecenterButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 16,
+      bottom: 226,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0A0C14).withValues(alpha: .78),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFF3B82F6).withValues(alpha: .28),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .22),
+                  blurRadius: 18,
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.my_location_rounded,
+                  color: Color(0xFFF2F4F8),
+                  size: 13,
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'Recenter',
+                  style: TextStyle(
+                    color: Color(0xFFF2F4F8),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LoadingTracking extends StatelessWidget {
   const _LoadingTracking();
 
@@ -1787,38 +1940,240 @@ class _AnonymousRiderDotState extends State<_AnonymousRiderDot>
   }
 }
 
-class _RiderMarker extends StatelessWidget {
+class _VehicleMarker extends StatelessWidget {
+  final String kind;
   final double pulse;
   final bool settled;
+  final double? headingDegrees;
 
-  const _RiderMarker({required this.pulse, this.settled = false});
+  const _VehicleMarker({
+    required this.kind,
+    required this.pulse,
+    this.settled = false,
+    this.headingDegrees,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final size = switch (kind) {
+      'van' => const Size(34, 24),
+      'car' => const Size(30, 22),
+      'bike' => const Size(26, 26),
+      _ => const Size(25, 25),
+    };
+    final body = settled ? const Color(0xFF34D399) : const Color(0xFFEDF1F9);
+    final headingTurns = (headingDegrees ?? 0) / 360;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOut,
-      width: settled ? 16 : 18,
-      height: settled ? 16 : 18,
-      decoration: BoxDecoration(
-        color: settled ? const Color(0xFF34D399) : Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: (settled ? const Color(0xFF34D399) : Colors.white)
-                .withValues(alpha: settled ? .16 : .12),
-            spreadRadius: settled ? 6 : 8 + pulse * 3,
-            blurRadius: settled ? 16 : 18,
+      width: 58,
+      height: 58,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 52 + pulse * 8,
+            height: 52 + pulse * 8,
+            decoration: BoxDecoration(
+              color: const Color(0xFF3B82F6).withValues(alpha: .04),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFF3B82F6).withValues(alpha: .24),
+              ),
+            ),
           ),
-          BoxShadow(
-            color:
-                const Color(0xFF3B82F6).withValues(alpha: settled ? .18 : .55),
-            blurRadius: settled ? 10 : 16,
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF3B82F6).withValues(alpha: .30),
+                  blurRadius: 18,
+                ),
+              ],
+            ),
+          ),
+          if (!settled)
+            Transform.rotate(
+              angle: headingTurns * 6.283185307179586,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Container(
+                  width: 0,
+                  height: 0,
+                  margin: const EdgeInsets.only(top: 3),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: Colors.transparent, width: 7),
+                      right: BorderSide(color: Colors.transparent, width: 7),
+                      bottom: BorderSide(color: Color(0x453B82F6), width: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Container(
+            width: size.width,
+            height: size.height,
+            decoration: BoxDecoration(
+              color: body,
+              borderRadius: BorderRadius.circular(kind == 'bike' ? 999 : 8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .88),
+                  spreadRadius: 3,
+                ),
+                BoxShadow(
+                  color: const Color(0xFF3B82F6).withValues(alpha: .48),
+                  blurRadius: 14,
+                ),
+              ],
+            ),
+            child: CustomPaint(
+              painter: _VehicleIconPainter(kind: kind, settled: settled),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class _VehicleIconPainter extends CustomPainter {
+  final String kind;
+  final bool settled;
+
+  const _VehicleIconPainter({required this.kind, required this.settled});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dark = Paint()
+      ..color = settled ? const Color(0xFF06281E) : const Color(0xFF0B0D14)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final fillDark = Paint()
+      ..color = settled ? const Color(0xFF06281E) : const Color(0xFF0B0D14);
+    final accent = Paint()..color = const Color(0xFF3B82F6);
+
+    if (kind == 'bike') {
+      final wheelRadius = size.width * .18;
+      final left = Offset(size.width * .24, size.height * .66);
+      final right = Offset(size.width * .76, size.height * .66);
+      canvas.drawCircle(left, wheelRadius, fillDark);
+      canvas.drawCircle(right, wheelRadius, fillDark);
+      canvas.drawCircle(left, wheelRadius * .42, accent);
+      canvas.drawCircle(right, wheelRadius * .42, accent);
+      final path = Path()
+        ..moveTo(left.dx, left.dy)
+        ..lineTo(size.width * .44, size.height * .28)
+        ..lineTo(size.width * .62, size.height * .66)
+        ..lineTo(right.dx, right.dy)
+        ..moveTo(size.width * .44, size.height * .28)
+        ..lineTo(size.width * .58, size.height * .28)
+        ..moveTo(size.width * .62, size.height * .66)
+        ..lineTo(size.width * .50, size.height * .42);
+      canvas.drawPath(path, dark);
+      canvas.drawCircle(
+        Offset(size.width * .44, size.height * .28),
+        1.8,
+        fillDark,
+      );
+      return;
+    }
+
+    if (kind == 'car') {
+      final body = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .12,
+          size.height * .28,
+          size.width * .76,
+          size.height * .48,
+        ),
+        const Radius.circular(5),
+      );
+      canvas.drawRRect(body, fillDark);
+      final glass = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .32,
+          size.height * .18,
+          size.width * .36,
+          size.height * .28,
+        ),
+        const Radius.circular(3),
+      );
+      canvas.drawRRect(
+          glass, accent..color = accent.color.withValues(alpha: .55));
+      canvas.drawCircle(
+        Offset(size.width * .30, size.height * .78),
+        2.2,
+        accent..color = const Color(0xFF3B82F6),
+      );
+      canvas.drawCircle(
+          Offset(size.width * .70, size.height * .78), 2.2, accent);
+      return;
+    }
+
+    if (kind == 'van') {
+      final body = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .08,
+          size.height * .20,
+          size.width * .84,
+          size.height * .56,
+        ),
+        const Radius.circular(4),
+      );
+      canvas.drawRRect(body, fillDark);
+      final glass = Rect.fromLTWH(
+        size.width * .42,
+        size.height * .26,
+        size.width * .30,
+        size.height * .28,
+      );
+      canvas.drawRect(
+          glass, accent..color = accent.color.withValues(alpha: .55));
+      canvas.drawCircle(
+        Offset(size.width * .30, size.height * .78),
+        2.3,
+        accent..color = const Color(0xFF3B82F6),
+      );
+      canvas.drawCircle(
+          Offset(size.width * .72, size.height * .78), 2.3, accent);
+      return;
+    }
+
+    canvas.drawCircle(
+      Offset(size.width / 2, size.height / 2),
+      size.shortestSide * .32,
+      fillDark,
+    );
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: '?',
+        style: TextStyle(
+          color: Color(0xFF3B82F6),
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        (size.width - textPainter.width) / 2,
+        (size.height - textPainter.height) / 2,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _VehicleIconPainter oldDelegate) =>
+      oldDelegate.kind != kind || oldDelegate.settled != settled;
 }
 
 class _RouteLine extends StatelessWidget {

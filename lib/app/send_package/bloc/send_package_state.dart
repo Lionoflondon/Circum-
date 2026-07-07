@@ -38,6 +38,8 @@ class SendPackageState {
   PlaceCoordinate? pickupCoordinate;
   PlaceCoordinate? desinationCoordinate;
   PlaceCoordinate? riderLocation;
+  final DateTime? riderLiveLocationUpdatedAt;
+  final double? riderLiveLocationHeading;
   double? distance;
   final DeliveryStatus deliveryStatus;
   final String deliveryRequestStatus;
@@ -117,6 +119,8 @@ class SendPackageState {
     this.sourceAndDestinationStatus = SourceAndDestinationStatus.unselected,
     this.mapCameraStatus = MapCameraStatus.initialized,
     this.riderLocation,
+    this.riderLiveLocationUpdatedAt,
+    this.riderLiveLocationHeading,
     this.currency = 'GBP',
     this.chatMessages = const [],
     this.chatStatus = ChatStatus.initial,
@@ -157,6 +161,8 @@ class SendPackageState {
     PlaceCoordinate? pickupCoordinate,
     PlaceCoordinate? desinationCoordinate,
     PlaceCoordinate? riderLocation,
+    DateTime? riderLiveLocationUpdatedAt,
+    double? riderLiveLocationHeading,
     double? distance,
     DeliveryStatus? deliveryStatus,
     String? deliveryRequestStatus,
@@ -219,6 +225,10 @@ class SendPackageState {
       pickupCoordinate: pickupCoordinate ?? this.pickupCoordinate,
       desinationCoordinate: desinationCoordinate ?? this.desinationCoordinate,
       riderLocation: riderLocation ?? this.riderLocation,
+      riderLiveLocationUpdatedAt:
+          riderLiveLocationUpdatedAt ?? this.riderLiveLocationUpdatedAt,
+      riderLiveLocationHeading:
+          riderLiveLocationHeading ?? this.riderLiveLocationHeading,
       distance: distance ?? this.distance,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
       deliveryRequestStatus:

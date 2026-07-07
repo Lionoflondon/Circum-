@@ -168,6 +168,11 @@ class ActiveDeliverySnapshotChanged extends SendPackageEvent {
   const ActiveDeliverySnapshotChanged({this.data, this.errorMessage});
 }
 
+class ActiveDeliveryLiveLocationChanged extends SendPackageEvent {
+  final Map<String, dynamic>? data;
+  const ActiveDeliveryLiveLocationChanged({this.data});
+}
+
 class SetPanelControlStatus extends SendPackageEvent {
   final PanelControlStatus status;
   SetPanelControlStatus({required this.status});

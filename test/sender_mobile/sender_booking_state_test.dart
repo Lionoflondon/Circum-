@@ -724,6 +724,71 @@ void main() {
       expect(source, contains('Timer(const Duration(seconds: 4)'));
       expect(source, isNot(contains('price')));
       expect(source, isNot(contains('eye')));
+      expect(source, isNot(contains('Delivery PIN sent to receiver')));
+    });
+
+    test('sender tracking maps assigned vehicles to live map marker kinds', () {
+      expect(senderVehicleMarkerKindFor('Bike'), 'bike');
+      expect(senderVehicleMarkerKindFor('Scooter'), 'bike');
+      expect(senderVehicleMarkerKindFor('Car'), 'car');
+      expect(senderVehicleMarkerKindFor('Small van'), 'van');
+      expect(senderVehicleMarkerKindFor(''), 'unknown');
+      expect(senderVehicleMarkerKindFor(null), 'unknown');
+    });
+
+    test('sender tracking stale location labels follow live update age', () {
+      final now = DateTime(2026, 7, 7, 12);
+      expect(
+        senderLiveLocationStaleLabel(
+          now.subtract(const Duration(seconds: 44)),
+          now: now,
+        ),
+        isNull,
+      );
+      expect(
+        senderLiveLocationStaleLabel(
+          now.subtract(const Duration(seconds: 45)),
+          now: now,
+        ),
+        'Location updating…',
+      );
+      expect(
+        senderLiveLocationStaleLabel(
+          now.subtract(const Duration(minutes: 2, seconds: 5)),
+          now: now,
+        ),
+        'Last seen 2 min ago',
+      );
+    });
+
+    test('sender tracking renders live-location map affordances', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('_VehicleMarker'));
+      expect(source, contains('_VehicleIconPainter'));
+      expect(source, contains('_StaleLocationPill'));
+      expect(source, contains('_RecenterButton'));
+      expect(source, contains('Recenter'));
+      expect(source, contains('Location updating…'));
+      expect(source, contains('Last seen'));
+      expect(source, contains('duration: const Duration(milliseconds: 900)'));
+    });
+
+    test('sender tracking reads low-cost active delivery live location', () {
+      final blocSource = File(
+        'lib/app/send_package/bloc/send_package_bloc.dart',
+      ).readAsStringSync();
+      final functionSource = File(
+        'server/functions/delivery-tracking.js',
+      ).readAsStringSync();
+
+      expect(blocSource, contains("collection('activeDeliveries')"));
+      expect(blocSource, contains('riderLiveLocation'));
+      expect(functionSource, contains('activeDeliveries'));
+      expect(functionSource, contains('riderLiveLocation'));
+      expect(functionSource, isNot(contains('locationHistory')));
     });
 
     test('delivery data carries existing backend receiver PIN field', () {

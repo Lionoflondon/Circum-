@@ -13,19 +13,68 @@ function normalized(value) {
   return tracking.normalizeStatus(value);
 }
 
-function locationPatch(location) {
+function liveLocationPatch(location) {
   if (!location || typeof location !== "object") return {};
   const lat = Number(location.latitude ?? location.lat);
   const lng = Number(location.longitude ?? location.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {};
+  const heading = Number(location.heading ?? location.bearing);
+  const speed = Number(location.speed);
   return {
-    riderLocation: {
+    riderLiveLocation: {
       geopoint: new GeoPoint(lat, lng),
       latitude: lat,
       longitude: lng,
+      ...(Number.isFinite(heading) ? {heading} : {}),
+      ...(Number.isFinite(speed) ? {speed} : {}),
       updatedAt: FieldValue.serverTimestamp(),
     },
   };
+}
+
+function timestampMs(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return value;
+  return 0;
+}
+
+function distanceMeters(a, b) {
+  if (!a || !b) return Number.POSITIVE_INFINITY;
+  const lat1 = Number(a.latitude ?? a.lat);
+  const lon1 = Number(a.longitude ?? a.lng);
+  const lat2 = Number(b.latitude ?? b.lat);
+  const lon2 = Number(b.longitude ?? b.lng);
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
+  const radians = (deg) => deg * Math.PI / 180;
+  const dLat = radians(lat2 - lat1);
+  const dLon = radians(lon2 - lon1);
+  const rLat1 = radians(lat1);
+  const rLat2 = radians(lat2);
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function headingDelta(a, b) {
+  const h1 = Number(a);
+  const h2 = Number(b);
+  if (!Number.isFinite(h1) || !Number.isFinite(h2)) return 0;
+  const delta = Math.abs(((h2 - h1 + 540) % 360) - 180);
+  return delta;
+}
+
+function shouldWriteLiveLocation(previous, next, nowMs = Date.now()) {
+  if (!next || !next.riderLiveLocation) return false;
+  const previousLocation = previous && previous.riderLiveLocation;
+  if (!previousLocation) return true;
+  const ageMs = nowMs - timestampMs(previousLocation.updatedAt);
+  if (ageMs < 10000) return false;
+  const moved = distanceMeters(previousLocation, next.riderLiveLocation);
+  const turned = headingDelta(previousLocation.heading, next.riderLiveLocation.heading);
+  if (moved >= 25 || turned >= 15) return true;
+  return ageMs >= 30000;
 }
 
 async function findDelivery(db, transaction, deliveryId) {
@@ -55,14 +104,13 @@ function assertRiderOwnsDelivery(delivery, riderId) {
   }
 }
 
-function patchForTransition({action, nextStatus, riderId, location}) {
+function patchForTransition({action, nextStatus, riderId}) {
   const now = FieldValue.serverTimestamp();
   const patch = {
     status: nextStatus,
     updatedAt: now,
     lastRiderAction: action,
     lastRiderActionAt: now,
-    ...locationPatch(location),
   };
 
   if (nextStatus === "navigating_to_pickup") patch.headingToPickupAt = now;
@@ -128,9 +176,30 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       action,
       nextStatus,
       riderId,
-      location: data && data.location,
     });
+    const liveLocation = liveLocationPatch(data && data.location);
+    let activeRef = null;
+    let shouldWriteLocation = false;
+    if (Object.keys(liveLocation).length > 0) {
+      activeRef = db.collection("activeDeliveries").doc(found.id);
+      const activeSnapshot = await transaction.get(activeRef);
+      shouldWriteLocation = shouldWriteLiveLocation(activeSnapshot.data(), liveLocation);
+    }
     transaction.set(found.ref, patch, {merge: true});
+    if (activeRef && shouldWriteLocation) {
+      transaction.set(
+          activeRef,
+          {
+            deliveryId: found.id,
+            requestId: delivery.requestId || found.id,
+            riderId,
+            status: nextStatus,
+            ...liveLocation,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          {merge: true},
+      );
+    }
     return {
       deliveryId: found.id,
       requestId: delivery.requestId || found.id,
@@ -142,6 +211,8 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
 });
 
 exports._private = {
-  locationPatch,
+  liveLocationPatch,
+  shouldWriteLiveLocation,
+  distanceMeters,
   patchForTransition,
 };
