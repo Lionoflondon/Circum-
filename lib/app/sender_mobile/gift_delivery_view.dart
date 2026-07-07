@@ -15,12 +15,6 @@ const senderGiftDeliveryCityFieldName = 'deliveryCity';
 const senderGiftDeliveryCountryFieldName = 'deliveryCountry';
 const senderGiftDeliveryDateFieldName = 'deliveryDate';
 const senderGiftDeliveryTimeWindowFieldName = 'deliveryTimeWindow';
-const senderGiftPreferredDateOptions = [
-  'Tomorrow',
-  'This weekend',
-  'Next week',
-  'Choose with Gifts Team',
-];
 const senderGiftDeliveryTimeWindows = ['Morning', 'Afternoon', 'Evening'];
 const senderGiftAddressLookupCallableName = 'searchFreeUkAddresses';
 
@@ -40,8 +34,6 @@ class GiftDeliveryView extends StatefulWidget {
 
 class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   final _deliveryAddressController = TextEditingController();
-  final _deliveryDateController = TextEditingController();
-  final _deliveryTimeWindowController = TextEditingController();
   final _addressSearch = PlaceApiProvider(
     'sender-mobile-gifts-delivery-address',
   );
@@ -50,34 +42,30 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   Suggestion? _selectedAddressSuggestion;
   bool _isAddressSearching = false;
   String _addressError = '';
-  String? _deliveryDate;
+  DateTime? _deliveryDate;
   String? _deliveryTimeWindow;
+  bool _flexibleDelivery = false;
 
-  bool get _usesFreeEntry => widget.draft.mode == SenderGiftMode.someone;
   bool get _canContinue =>
       _selectedAddressSuggestion != null &&
-      (_usesFreeEntry
-          ? _deliveryDateController.text.trim().isNotEmpty &&
-              _deliveryTimeWindowController.text.trim().isNotEmpty
-          : _deliveryDate != null && _deliveryTimeWindow != null);
+      (_flexibleDelivery ||
+          (_deliveryDate != null && _deliveryTimeWindow != null));
 
   @override
   void initState() {
     super.initState();
     _deliveryAddressController.text = widget.draft.deliveryAddress ?? '';
-    _deliveryDateController.text = widget.draft.deliveryDate ?? '';
-    _deliveryTimeWindowController.text = widget.draft.deliveryTimeWindow ?? '';
     _selectedAddressSuggestion = widget.draft.deliveryAddressData;
-    _deliveryDate = widget.draft.deliveryDate;
+    _deliveryDate = DateTime.tryParse(widget.draft.deliveryDate ?? '');
     _deliveryTimeWindow = widget.draft.deliveryTimeWindow;
+    _flexibleDelivery = widget.draft.deliveryDate == 'Flexible' ||
+        widget.draft.deliveryTimeWindow == 'Flexible';
   }
 
   @override
   void dispose() {
     _addressDebounce?.cancel();
     _deliveryAddressController.dispose();
-    _deliveryDateController.dispose();
-    _deliveryTimeWindowController.dispose();
     super.dispose();
   }
 
@@ -133,6 +121,101 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     });
   }
 
+  Future<void> _pickDeliveryDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _deliveryDate ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'Preferred delivery date',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _deliveryDate = picked;
+      _flexibleDelivery = false;
+    });
+  }
+
+  Future<void> _pickDeliveryWindow() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF12101B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 26),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final window in senderGiftDeliveryTimeWindows)
+                  ListTile(
+                    title: Text(
+                      window,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(context).pop(window),
+                  ),
+                ListTile(
+                  title: const Text(
+                    'Pick an exact time',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop('custom_time'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted) return;
+    if (selected == 'custom_time') {
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.now(),
+        helpText: 'Preferred delivery time',
+      );
+      if (time == null || !mounted) return;
+      setState(() {
+        _deliveryTimeWindow = time.format(context);
+        _flexibleDelivery = false;
+      });
+      return;
+    }
+    setState(() {
+      _deliveryTimeWindow = selected;
+      _flexibleDelivery = false;
+    });
+  }
+
+  void _setFlexibleDelivery(bool value) {
+    setState(() {
+      _flexibleDelivery = value;
+      if (value) {
+        _deliveryDate = null;
+        _deliveryTimeWindow = null;
+      }
+    });
+  }
+
+  String get _deliveryDateLabel {
+    final date = _deliveryDate;
+    if (date == null) return 'Choose a date';
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
@@ -154,56 +237,27 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
           onChanged: _onAddressChanged,
           onSuggestionSelected: _selectAddressSuggestion,
         ),
-        if (_usesFreeEntry) ...[
-          const SizedBox(height: 12),
-          GiftJourneyWidgets.inputCard(
-            controller: _deliveryDateController,
-            label: 'PREFERRED DATE',
-            placeholder: 'Tell us the date that matters',
-            helper: 'Use natural language or a calendar date.',
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          GiftJourneyWidgets.inputCard(
-            controller: _deliveryTimeWindowController,
-            label: 'PREFERRED TIME WINDOW',
-            placeholder: 'Morning, afternoon, evening, or a specific window',
-            helper: 'The Gifts Team will plan around this preference.',
-            onChanged: (_) => setState(() {}),
-          ),
-        ] else ...[
-          const SizedBox(height: 12),
-          _GiftHardcodedChoiceCard(
-            label: 'PREFERRED DATE',
-            helper: 'Choose one option. The Gifts Team will plan around it.',
-            options: senderGiftPreferredDateOptions,
-            selected: _deliveryDate,
-            onSelected: (value) => setState(() => _deliveryDate = value),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'TIME WINDOW',
-            style: const TextStyle(
-              color: Color(0xFFC9B8FF),
-              fontSize: 10.5,
-              letterSpacing: .8,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final window in senderGiftDeliveryTimeWindows)
-                GiftJourneyWidgets.choiceChip(
-                  label: window,
-                  selected: _deliveryTimeWindow == window,
-                  onTap: () => setState(() => _deliveryTimeWindow = window),
-                ),
-            ],
-          ),
-        ],
+        const SizedBox(height: 12),
+        _GiftPickerCard(
+          label: 'PREFERRED DELIVERY DATE',
+          value: _flexibleDelivery ? 'Flexible' : _deliveryDateLabel,
+          icon: Icons.calendar_month_rounded,
+          onTap: _flexibleDelivery ? null : _pickDeliveryDate,
+        ),
+        const SizedBox(height: 12),
+        _GiftPickerCard(
+          label: 'PREFERRED DELIVERY TIME / WINDOW',
+          value: _flexibleDelivery
+              ? 'Flexible'
+              : (_deliveryTimeWindow ?? 'Choose a time or window'),
+          icon: Icons.schedule_rounded,
+          onTap: _flexibleDelivery ? null : _pickDeliveryWindow,
+        ),
+        const SizedBox(height: 12),
+        _GiftFlexibleDeliveryCard(
+          value: _flexibleDelivery,
+          onChanged: _setFlexibleDelivery,
+        ),
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: _canContinue,
@@ -216,11 +270,10 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
                       draft: widget.draft.copyWith(
                         deliveryAddress: _deliveryAddressController.text.trim(),
                         deliveryAddressData: _selectedAddressSuggestion,
-                        deliveryDate: _usesFreeEntry
-                            ? _deliveryDateController.text.trim()
-                            : _deliveryDate,
-                        deliveryTimeWindow: _usesFreeEntry
-                            ? _deliveryTimeWindowController.text.trim()
+                        deliveryDate:
+                            _flexibleDelivery ? 'Flexible' : _deliveryDateLabel,
+                        deliveryTimeWindow: _flexibleDelivery
+                            ? 'Flexible'
                             : _deliveryTimeWindow,
                       ),
                     ),
@@ -356,67 +409,111 @@ class _GiftAddressLookupCard extends StatelessWidget {
   }
 }
 
-class _GiftHardcodedChoiceCard extends StatelessWidget {
+class _GiftPickerCard extends StatelessWidget {
   final String label;
-  final String helper;
-  final List<String> options;
-  final String? selected;
-  final ValueChanged<String> onSelected;
+  final String value;
+  final IconData icon;
+  final VoidCallback? onTap;
 
-  const _GiftHardcodedChoiceCard({
+  const _GiftPickerCard({
     required this.label,
-    required this.helper,
-    required this.options,
-    required this.selected,
-    required this.onSelected,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .052),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: .09)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFFC9B8FF), size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Color(0xFFC9B8FF),
+                      fontSize: 10.5,
+                      letterSpacing: .8,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      height: 1.25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: onTap == null
+                  ? Colors.white.withValues(alpha: .18)
+                  : const Color(0xFFC9B8FF),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftFlexibleDeliveryCard extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _GiftFlexibleDeliveryCard({
+    required this.value,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .052),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: .09)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFFC9B8FF),
-              fontSize: 10.5,
-              letterSpacing: .8,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            helper,
-            style: const TextStyle(
-              color: Color(0xFFB8AAB8),
-              fontSize: 11.5,
+      child: Material(
+        color: Colors.transparent,
+        child: SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          value: value,
+          onChanged: onChanged,
+          activeThumbColor: const Color(0xFFC9B8FF),
+          title: const Text(
+            "I'm flexible. The Gifts Team can optimise delivery.",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
               height: 1.35,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final option in options)
-                GiftJourneyWidgets.choiceChip(
-                  label: option,
-                  selected: selected == option,
-                  onTap: () => onSelected(option),
-                ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

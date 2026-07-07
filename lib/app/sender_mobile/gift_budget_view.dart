@@ -30,9 +30,9 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
     return GiftJourneyWidgets.scaffold(
       activeStep: 10,
       eyebrow: 'STEP 10 — BUDGET',
-      title: 'Set a gift budget',
+      title: 'Experience Budget',
       subtitle:
-          'Choose the experience budget. IRIS will curate the best possible gift within your chosen budget.',
+          'IRIS will curate the best possible experience within your chosen budget.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         Container(
@@ -45,7 +45,7 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
           child: Column(
             children: [
               Text(
-                _budget >= 1500 ? 'Premium Experience' : 'Experience Budget',
+                'Experience Budget',
                 style: GoogleFonts.inter(
                   color: const Color(0xFFC9B8FF),
                   fontSize: 13,
@@ -73,7 +73,16 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
                 onChanged: (value) => setState(() => _budget = value),
               ),
               const SizedBox(height: 8),
-              const _PremiumBudgetNotes(),
+              Text(
+                'IRIS will curate the best possible experience within your chosen budget.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFE4DCF5),
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -103,48 +112,6 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _PremiumBudgetNotes extends StatelessWidget {
-  const _PremiumBudgetNotes();
-
-  @override
-  Widget build(BuildContext context) {
-    const notes = [
-      'Luxury partner access',
-      'Premium presentation',
-      'Handwritten message eligible',
-      'Concierge curation',
-    ];
-    return Column(
-      children: [
-        for (final note in notes)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.check_rounded,
-                  color: Color(0xFFA8EDEA),
-                  size: 15,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    note,
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFFE4DCF5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
     );
   }
 }

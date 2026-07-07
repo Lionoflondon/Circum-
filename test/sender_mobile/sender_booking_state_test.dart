@@ -476,12 +476,19 @@ void main() {
           "Couldn't find matching addresses. Please continue typing or try again.",
         ),
       );
-      expect(deliverySource, contains('PREFERRED DATE'));
-      expect(deliverySource, contains('senderGiftPreferredDateOptions'));
-      expect(deliverySource, contains('_usesFreeEntry'));
-      expect(deliverySource, contains('Tell us the date that matters'));
-      expect(deliverySource, contains('PREFERRED TIME WINDOW'));
-      expect(deliverySource, contains('Choose with Gifts Team'));
+      expect(deliverySource, contains('PREFERRED DELIVERY DATE'));
+      expect(deliverySource, contains('Preferred delivery date'));
+      expect(deliverySource, contains('showDatePicker'));
+      expect(deliverySource, contains('PREFERRED DELIVERY TIME / WINDOW'));
+      expect(deliverySource, contains('Preferred delivery time'));
+      expect(deliverySource, contains('showTimePicker'));
+      expect(
+        deliverySource,
+        contains("I'm flexible. The Gifts Team can optimise delivery."),
+      );
+      expect(deliverySource, isNot(contains('senderGiftPreferredDateOptions')));
+      expect(deliverySource, isNot(contains('Tell us the date that matters')));
+      expect(deliverySource, isNot(contains('Choose with Gifts Team')));
       expect(deliverySource, contains('_selectedAddressSuggestion != null'));
       expect(deliverySource, contains('GiftMessageView'));
       expect(messageSource, contains('Write something from the heart'));
@@ -605,11 +612,20 @@ void main() {
         ),
       );
       expect(budgetSource, contains('STEP 10 — BUDGET'));
-      expect(budgetSource, contains('Premium Experience'));
-      expect(budgetSource, contains('Luxury partner access'));
-      expect(budgetSource, contains('Premium presentation'));
-      expect(budgetSource, contains('Handwritten message eligible'));
-      expect(budgetSource, contains('Concierge curation'));
+      expect(budgetSource, contains('Experience Budget'));
+      expect(
+        budgetSource,
+        contains(
+          'IRIS will curate the best possible experience within your chosen budget.',
+        ),
+      );
+      expect(budgetSource, contains('Slider('));
+      expect(budgetSource, contains('senderGiftBudgetOptions'));
+      expect(budgetSource, isNot(contains('Premium Experience')));
+      expect(budgetSource, isNot(contains('Luxury partner access')));
+      expect(budgetSource, isNot(contains('Premium presentation')));
+      expect(budgetSource, isNot(contains('Handwritten message eligible')));
+      expect(budgetSource, isNot(contains('Concierge curation')));
       expect(draftSource, contains('SenderGiftMode.myself'));
       expect(draftSource, contains('SenderGiftMode.anonymous'));
       expect(draftSource, contains('SenderGiftMode.campaign'));
@@ -993,13 +1009,19 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Tell us the date that matters'), findsOneWidget);
-      final deliveryFields = find.byType(TextField);
-      await tester.enterText(deliveryFields.at(1), 'Friday 18 July');
-      await tester.enterText(deliveryFields.at(2), 'Late afternoon');
+      expect(find.text('PREFERRED DELIVERY DATE'), findsOneWidget);
+      expect(find.text('Choose a date'), findsOneWidget);
+      expect(find.text('PREFERRED DELIVERY TIME / WINDOW'), findsOneWidget);
+      expect(find.text('Choose a time or window'), findsOneWidget);
+      await tester.drag(find.byType(ListView).first, const Offset(0, -260));
       await tester.pumpAndSettle();
-      expect(find.text('Friday 18 July'), findsOneWidget);
-      expect(find.text('Late afternoon'), findsOneWidget);
+      expect(
+        find.text("I'm flexible. The Gifts Team can optimise delivery."),
+        findsOneWidget,
+      );
+      await tester.tap(find.byType(SwitchListTile).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Flexible'), findsWidgets);
 
       await tester.pumpWidget(
         MaterialApp(
