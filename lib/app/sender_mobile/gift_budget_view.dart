@@ -29,10 +29,10 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
-      eyebrow: 'STEP 08 — BUDGET',
+      eyebrow: 'STEP 10 — BUDGET',
       title: 'Set a gift budget',
       subtitle:
-          'The sender sets the experience budget. The Gifts Team reviews it before sourcing.',
+          'Choose the experience budget. The backend enforces the approved Gifts limits.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         Container(

@@ -17,17 +17,14 @@ class GiftStyleView extends StatefulWidget {
 
 class _GiftStyleViewState extends State<GiftStyleView> {
   late final TextEditingController _sizeController;
-  late final TextEditingController _shoeController;
-  late final TextEditingController _ringController;
   late final TextEditingController _coloursController;
   late final TextEditingController _brandsController;
+  final _stylePills = <String>{};
 
   @override
   void initState() {
     super.initState();
     _sizeController = TextEditingController(text: widget.draft.clothingSize);
-    _shoeController = TextEditingController(text: widget.draft.shoeSize);
-    _ringController = TextEditingController(text: widget.draft.ringSize);
     _coloursController =
         TextEditingController(text: widget.draft.favouriteColours);
     _brandsController = TextEditingController(text: widget.draft.likedBrands);
@@ -36,8 +33,6 @@ class _GiftStyleViewState extends State<GiftStyleView> {
   @override
   void dispose() {
     _sizeController.dispose();
-    _shoeController.dispose();
-    _ringController.dispose();
     _coloursController.dispose();
     _brandsController.dispose();
     super.dispose();
@@ -47,7 +42,7 @@ class _GiftStyleViewState extends State<GiftStyleView> {
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
-      eyebrow: 'STEP 06 — STYLE & SIZES',
+      eyebrow: 'STEP 08 — STYLE & SIZES',
       title: 'Help us get it right',
       subtitle:
           'Share useful sizing and style signals for the Gifts Team and IRIS.',
@@ -55,22 +50,8 @@ class _GiftStyleViewState extends State<GiftStyleView> {
       children: [
         GiftJourneyWidgets.inputCard(
           controller: _sizeController,
-          label: 'CLOTHING SIZE',
-          placeholder: 'e.g. UK 10, M',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _shoeController,
-          label: 'SHOE SIZE',
-          placeholder: 'e.g. UK 6',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _ringController,
-          label: 'RING SIZE',
-          placeholder: 'Optional',
+          label: 'CLOTHING / SHOE / RING SIZE',
+          placeholder: 'e.g. UK 10, UK 6, M',
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
@@ -87,6 +68,25 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           placeholder: 'e.g. Aesop, Cos',
           onChanged: (_) => setState(() {}),
         ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final style in const ['Cosy', 'Minimal', 'Bold', 'Classic'])
+              GiftJourneyWidgets.choiceChip(
+                label: style,
+                selected: _stylePills.contains(style),
+                onTap: () => setState(() {
+                  if (_stylePills.contains(style)) {
+                    _stylePills.remove(style);
+                  } else {
+                    _stylePills.add(style);
+                  }
+                }),
+              ),
+          ],
+        ),
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: true,
@@ -96,8 +96,6 @@ class _GiftStyleViewState extends State<GiftStyleView> {
             builder: (_) => GiftPrivacyView(
               draft: widget.draft.copyWith(
                 clothingSize: _sizeController.text.trim(),
-                shoeSize: _shoeController.text.trim(),
-                ringSize: _ringController.text.trim(),
                 favouriteColours: _coloursController.text.trim(),
                 likedBrands: _brandsController.text.trim(),
               ),

@@ -299,40 +299,10 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
                 : senderGiftSelfFrequencyOptions[_selfGiftFrequency],
           ),
         ],
-        if (widget.draft.mode == SenderGiftMode.anonymous ||
-            widget.draft.mode == SenderGiftMode.campaign) ...[
-          const SizedBox(height: 12),
-          _GiftGlassDropdown(
-            label: 'IDENTITY REVEAL',
-            value: _senderRevealMode == null
-                ? null
-                : senderGiftRevealModeOptions[_senderRevealMode],
-            placeholder: 'Choose reveal mode',
-            options: senderGiftRevealModeOptions.values.toList(),
-            onChanged: (value) {
-              final entry = senderGiftRevealModeOptions.entries.firstWhere(
-                (entry) => entry.value == value,
-              );
-              setState(() => _senderRevealMode = entry.key);
-            },
-          ),
-        ],
         const SizedBox(height: 12),
-        _GiftInputCard(
-          controller: _phoneController,
-          label: 'PHONE',
-          helper: 'Used for delivery updates only.',
-          placeholder: 'Phone number',
-          keyboardType: TextInputType.phone,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        _GiftInputCard(
-          controller: _emailController,
-          label: 'EMAIL',
-          helper: 'Used for delivery updates only.',
-          placeholder: 'Email address',
-          keyboardType: TextInputType.emailAddress,
+        _GiftContactCard(
+          phoneController: _phoneController,
+          emailController: _emailController,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
@@ -376,6 +346,107 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
         SenderGiftMode.campaign => 'Who is this campaign for?',
         _ => "Who's receiving this?",
       };
+}
+
+class _GiftContactCard extends StatelessWidget {
+  final TextEditingController phoneController;
+  final TextEditingController emailController;
+  final ValueChanged<String> onChanged;
+
+  const _GiftContactCard({
+    required this.phoneController,
+    required this.emailController,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _GiftJourneyTokens.pearlBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PHONE & EMAIL',
+            style: GoogleFonts.jetBrainsMono(
+              color: _GiftJourneyTokens.htmlIri2,
+              fontSize: 10.5,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Used for delivery updates only.',
+            style: GoogleFonts.inter(
+              color: _GiftJourneyTokens.muted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _GiftInlineTextField(
+            controller: phoneController,
+            placeholder: 'Phone number',
+            keyboardType: TextInputType.phone,
+            onChanged: onChanged,
+          ),
+          const SizedBox(height: 12),
+          Container(height: 1, color: Colors.white.withValues(alpha: .08)),
+          const SizedBox(height: 12),
+          _GiftInlineTextField(
+            controller: emailController,
+            placeholder: 'Email address',
+            keyboardType: TextInputType.emailAddress,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftInlineTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String placeholder;
+  final TextInputType keyboardType;
+  final ValueChanged<String> onChanged;
+
+  const _GiftInlineTextField({
+    required this.controller,
+    required this.placeholder,
+    required this.keyboardType,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      onChanged: onChanged,
+      style: GoogleFonts.inter(
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      decoration: InputDecoration(
+        isDense: true,
+        border: InputBorder.none,
+        hintText: placeholder,
+        hintStyle: GoogleFonts.inter(
+          color: _GiftJourneyTokens.muted.withValues(alpha: .66),
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
 }
 
 class GiftJourneyPlaceholderView extends StatelessWidget {

@@ -18,6 +18,19 @@ const senderGiftPendingIrisSuggestion = 'Pending IRIS gift recommendation';
 const senderGiftPaymentDraftCollectionName = 'giftPaymentDrafts';
 const senderGiftAdminReviewCollectionName = 'giftRequests';
 const senderGiftPaymentCallableName = 'createGiftPayment';
+const senderGiftIrisUnsupportedCopy =
+    'IRIS’s real catalog only tags gift signals for Beauty/Fashion. None of your selected themes fall in that range, so there’s nothing to suggest yet.';
+const senderGiftIrisPartialUnsupportedCopy =
+    'No IRIS coverage yet for some themes.';
+
+const senderGiftIrisSignalMap = {
+  'Fashion': 'fashionInterest',
+  'Beauty': 'beautyInterest',
+  'Makeup': 'beautyInterest',
+  'Skincare': 'skincareInterest',
+  'Fragrance': 'fragranceInterest',
+  'Jewellery': 'jewelleryInterest',
+};
 
 const senderGiftRevealModeOptions = {
   'anonymous_forever': 'Stay anonymous',
@@ -33,6 +46,23 @@ const senderGiftSelfFrequencyOptions = {
 };
 
 const senderGiftBudgetOptions = [50, 100, 250, 500, 1000, 1500];
+
+List<String> senderGiftIrisSignalsForThemes(Iterable<String> themes) {
+  return themes
+      .map((theme) => senderGiftIrisSignalMap[theme.trim()])
+      .whereType<String>()
+      .toSet()
+      .toList();
+}
+
+List<String> senderGiftUnsupportedIrisThemes(Iterable<String> themes) {
+  return themes
+      .where((theme) =>
+          theme.trim().isNotEmpty &&
+          !senderGiftIrisSignalMap.containsKey(theme.trim()))
+      .toSet()
+      .toList();
+}
 
 const senderGiftInterestOptions = [
   'Fashion',
@@ -138,6 +168,9 @@ class GiftJourneyDraft {
   final String? likedBrands;
   final String? senderRevealMode;
   final String? selfGiftFrequency;
+  final bool allowCircumSocialUse;
+  final bool allowBrandTagging;
+  final bool allowPublicPosting;
   final double budget;
 
   const GiftJourneyDraft({
@@ -162,6 +195,9 @@ class GiftJourneyDraft {
     this.likedBrands,
     this.senderRevealMode,
     this.selfGiftFrequency,
+    this.allowCircumSocialUse = false,
+    this.allowBrandTagging = false,
+    this.allowPublicPosting = false,
     this.budget = 100,
   });
 
@@ -225,6 +261,9 @@ class GiftJourneyDraft {
     String? likedBrands,
     String? senderRevealMode,
     String? selfGiftFrequency,
+    bool? allowCircumSocialUse,
+    bool? allowBrandTagging,
+    bool? allowPublicPosting,
     double? budget,
   }) {
     return GiftJourneyDraft(
@@ -249,6 +288,9 @@ class GiftJourneyDraft {
       likedBrands: likedBrands ?? this.likedBrands,
       senderRevealMode: senderRevealMode ?? this.senderRevealMode,
       selfGiftFrequency: selfGiftFrequency ?? this.selfGiftFrequency,
+      allowCircumSocialUse: allowCircumSocialUse ?? this.allowCircumSocialUse,
+      allowBrandTagging: allowBrandTagging ?? this.allowBrandTagging,
+      allowPublicPosting: allowPublicPosting ?? this.allowPublicPosting,
       budget: budget ?? this.budget,
     );
   }
@@ -333,6 +375,9 @@ class GiftJourneyDraft {
       'internalNotes': '',
       'recipientContentConsent': 'pending',
       'senderContentConsent': 'pending',
+      'allowCircumSocialUse': allowCircumSocialUse,
+      'allowBrandTagging': allowBrandTagging,
+      'allowPublicPosting': allowPublicPosting,
       'contentUsageScope': 'private',
       'contentStatus': 'not_started',
       senderGiftCampaignIdFieldName:

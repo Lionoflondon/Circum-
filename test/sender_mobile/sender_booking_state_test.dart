@@ -5,11 +5,17 @@ import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
+import 'package:circum/app/sender_mobile/gift_iris_view.dart';
 import 'package:circum/app/sender_mobile/gift_journey_draft.dart';
 import 'package:circum/app/sender_mobile/gift_message_view.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
+import 'package:circum/app/sender_mobile/gift_payment_view.dart';
 import 'package:circum/app/sender_mobile/gift_review_view.dart';
 import 'package:circum/app/sender_mobile/gift_relationship_view.dart';
+import 'package:circum/app/sender_mobile/gift_status_view.dart';
+import 'package:circum/app/sender_mobile/gift_story_view.dart';
+import 'package:circum/app/sender_mobile/gift_themes_view.dart';
+import 'package:circum/app/sender_mobile/gift_voice_note_view.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
 import 'package:circum/app/sender_mobile/sender_gifts_icon.dart';
 import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
@@ -316,10 +322,29 @@ void main() {
       ).readAsStringSync();
       final messageSource = File('lib/app/sender_mobile/gift_message_view.dart')
           .readAsStringSync();
+      final voiceSource =
+          File('lib/app/sender_mobile/gift_voice_note_view.dart')
+              .readAsStringSync();
+      final themesSource = File('lib/app/sender_mobile/gift_themes_view.dart')
+          .readAsStringSync();
+      final irisSource =
+          File('lib/app/sender_mobile/gift_iris_view.dart').readAsStringSync();
+      final styleSource =
+          File('lib/app/sender_mobile/gift_style_view.dart').readAsStringSync();
+      final privacySource = File('lib/app/sender_mobile/gift_privacy_view.dart')
+          .readAsStringSync();
+      final budgetSource = File('lib/app/sender_mobile/gift_budget_view.dart')
+          .readAsStringSync();
       final draftSource = File('lib/app/sender_mobile/gift_journey_draft.dart')
           .readAsStringSync();
       final reviewSource = File('lib/app/sender_mobile/gift_review_view.dart')
           .readAsStringSync();
+      final paymentSource = File('lib/app/sender_mobile/gift_payment_view.dart')
+          .readAsStringSync();
+      final statusSource = File('lib/app/sender_mobile/gift_status_view.dart')
+          .readAsStringSync();
+      final storySource =
+          File('lib/app/sender_mobile/gift_story_view.dart').readAsStringSync();
 
       expect(giftSource, contains("import 'gift_relationship_view.dart';"));
       expect(giftSource, contains('GiftRelationshipView'));
@@ -329,7 +354,13 @@ void main() {
       );
       expect(GiftDeliveryView.routeName, '/sender-mobile/gifts/delivery');
       expect(GiftMessageView.routeName, '/sender-mobile/gifts/message');
+      expect(GiftVoiceNoteView.routeName, '/sender-mobile/gifts/voice-note');
+      expect(GiftThemesView.routeName, '/sender-mobile/gifts/themes');
+      expect(GiftIrisView.routeName, '/sender-mobile/gifts/iris');
       expect(GiftReviewView.routeName, '/sender-mobile/gifts/review');
+      expect(GiftPaymentView.routeName, '/sender-mobile/gifts/payment');
+      expect(GiftStatusView.routeName, '/sender-mobile/gifts/status');
+      expect(GiftStoryView.routeName, '/sender-mobile/gifts/story');
       expect(senderGiftModeFieldName, 'giftMode');
       expect(senderGiftAnonymousGiftTypeFieldName, 'anonymousGiftType');
       expect(senderGiftSenderRevealModeFieldName, 'senderRevealMode');
@@ -391,9 +422,9 @@ void main() {
           'Tell IRIS who this is for so we can shape the experience.',
         ),
       );
-      expect(relationshipSource, contains('PHONE'));
-      expect(relationshipSource, contains('EMAIL'));
-      expect(relationshipSource, isNot(contains('PHONE & EMAIL')));
+      expect(relationshipSource, contains('PHONE & EMAIL'));
+      expect(relationshipSource, isNot(contains("label: 'PHONE'")));
+      expect(relationshipSource, isNot(contains("label: 'EMAIL'")));
       expect(relationshipSource, contains('Used for delivery updates only.'));
       expect(relationshipSource, contains('TELL US ABOUT THEM'));
       expect(relationshipSource, contains('What makes them special?'));
@@ -418,7 +449,28 @@ void main() {
       expect(messageSource, contains('Write something from the heart'));
       expect(messageSource, contains('PERSONAL MESSAGE'));
       expect(messageSource, contains('What do you want them to know?'));
-      expect(messageSource, contains('GiftThemesView'));
+      expect(messageSource, contains('GiftVoiceNoteView'));
+      expect(voiceSource, contains('STEP 05 — VOICE NOTE'));
+      expect(voiceSource, contains('Skip for now'));
+      expect(voiceSource, contains('GiftThemesView'));
+      expect(themesSource, contains('STEP 06 — THEMES'));
+      expect(themesSource, contains('IRIS signal preview'));
+      expect(themesSource, contains('No IRIS coverage yet'));
+      expect(themesSource, contains('GiftIrisView'));
+      expect(irisSource, contains('STEP 07 — IRIS'));
+      expect(irisSource, contains('IRIS is shaping the experience'));
+      expect(
+        irisSource,
+        contains('IRIS is reading the moment, not building a basket.'),
+      );
+      expect(irisSource, contains('Emotional direction'));
+      expect(irisSource, contains('Suitable gift signals'));
+      expect(irisSource, contains('Things to avoid'));
+      expect(styleSource, contains('STEP 08 — STYLE & SIZES'));
+      expect(styleSource, contains('CLOTHING / SHOE / RING SIZE'));
+      expect(privacySource, contains('STEP 09 — REVEAL & PRIVACY'));
+      expect(privacySource, contains('Allow Circum story use'));
+      expect(budgetSource, contains('STEP 10 — BUDGET'));
       expect(draftSource, contains('SenderGiftMode.myself'));
       expect(draftSource, contains('SenderGiftMode.anonymous'));
       expect(draftSource, contains('SenderGiftMode.campaign'));
@@ -430,12 +482,31 @@ void main() {
       expect(draftSource, contains("'Bringing London Closer'"));
       expect(draftSource, contains("'irisSuggestion'"));
       expect(draftSource, contains('Pending IRIS gift recommendation'));
+      expect(draftSource, contains('fashionInterest'));
+      expect(draftSource, contains('beautyInterest'));
+      expect(draftSource, contains('skincareInterest'));
+      expect(draftSource, contains('fragranceInterest'));
+      expect(draftSource, contains('jewelleryInterest'));
       expect(draftSource, contains('adminReviewPayload'));
-      expect(reviewSource, contains('senderGiftPaymentDraftCollectionName'));
-      expect(reviewSource, contains('senderGiftPaymentCallableName'));
+      expect(reviewSource, contains('STEP 11 — REVIEW'));
+      expect(reviewSource,
+          contains('Gift contents remain confidential before delivery.'));
+      expect(reviewSource, contains('GiftPaymentView'));
+      expect(paymentSource, contains('STEP 12 — PAYMENT'));
+      expect(paymentSource, contains('senderGiftPaymentDraftCollectionName'));
+      expect(paymentSource, contains('senderGiftPaymentCallableName'));
       expect(reviewSource, contains('Campaign · Bringing London Closer'));
       expect(reviewSource, contains('IRIS preview'));
       expect(reviewSource, contains('senderGiftPendingIrisSuggestion'));
+      expect(statusSource, contains('Payment pending'));
+      expect(statusSource, contains('Request submitted'));
+      expect(statusSource, contains('Under review'));
+      expect(statusSource, contains('Approved'));
+      expect(statusSource, contains('Being prepared'));
+      expect(statusSource, contains('Out for delivery'));
+      expect(statusSource, contains('Delivered'));
+      expect(storySource, contains('FINALE — GIFT STORY'));
+      expect(storySource, contains('Story preview disabled'));
       expect(relationshipSource, isNot(contains('createGiftPayment')));
       expect(deliverySource, isNot(contains('createGiftPayment')));
       expect(messageSource, isNot(contains('createGiftPayment')));
@@ -464,6 +535,37 @@ void main() {
       expect(campaignPayload['participantConsentRequired'], isTrue);
     });
 
+    test('Gift themes map only supported IRIS signals', () {
+      expect(
+        senderGiftIrisSignalsForThemes(
+          ['Fashion', 'Beauty', 'Makeup', 'Skincare', 'Fragrance', 'Jewellery'],
+        ),
+        containsAll([
+          'fashionInterest',
+          'beautyInterest',
+          'skincareInterest',
+          'fragranceInterest',
+          'jewelleryInterest',
+        ]),
+      );
+      expect(
+        senderGiftIrisSignalsForThemes(['Tech', 'Gaming', 'Coffee']),
+        isEmpty,
+      );
+      expect(
+        senderGiftUnsupportedIrisThemes(['Fashion', 'Tech', 'Coffee']),
+        ['Tech', 'Coffee'],
+      );
+      expect(
+        senderGiftIrisUnsupportedCopy,
+        "IRIS’s real catalog only tags gift signals for Beauty/Fashion. None of your selected themes fall in that range, so there’s nothing to suggest yet.",
+      );
+      expect(
+        senderGiftIrisPartialUnsupportedCopy,
+        'No IRIS coverage yet for some themes.',
+      );
+    });
+
     testWidgets('Gift someone opens relationship screen and back returns', (
       tester,
     ) async {
@@ -480,7 +582,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Tell us about them'), findsOneWidget);
-      expect(find.text('PHONE'), findsOneWidget);
+      expect(find.text('PHONE & EMAIL'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.arrow_back_rounded));
       await tester.pumpAndSettle();
@@ -561,7 +663,7 @@ void main() {
       await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('What do they love?'), findsNothing);
+      expect(find.text('Add your voice?'), findsNothing);
 
       await tester.enterText(
         find.byType(TextField),
@@ -570,6 +672,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add your voice?'), findsOneWidget);
+      expect(find.text('Skip for now'), findsOneWidget);
+
+      await tester.tap(find.text('Skip for now'));
       await tester.pumpAndSettle();
 
       expect(find.text('What do they love?'), findsOneWidget);

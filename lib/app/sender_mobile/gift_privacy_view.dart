@@ -18,18 +18,24 @@ class GiftPrivacyView extends StatefulWidget {
 
 class _GiftPrivacyViewState extends State<GiftPrivacyView> {
   late String _revealMode;
+  late bool _allowCircumSocialUse;
+  late bool _allowBrandTagging;
+  late bool _allowPublicPosting;
 
   @override
   void initState() {
     super.initState();
     _revealMode = widget.draft.senderRevealMode ?? 'reveal_immediately';
+    _allowCircumSocialUse = widget.draft.allowCircumSocialUse;
+    _allowBrandTagging = widget.draft.allowBrandTagging;
+    _allowPublicPosting = widget.draft.allowPublicPosting;
   }
 
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
-      eyebrow: 'STEP 07 — REVEAL & PRIVACY',
+      eyebrow: 'STEP 09 — REVEAL & PRIVACY',
       title: 'How should we handle privacy?',
       subtitle:
           'These choices map to the same reveal and consent fields used by Gifts on web.',
@@ -45,6 +51,24 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
           const SizedBox(height: 10),
         ],
         const SizedBox(height: 6),
+        _GiftConsentToggle(
+          label: 'Allow Circum story use',
+          value: _allowCircumSocialUse,
+          onChanged: (value) => setState(() => _allowCircumSocialUse = value),
+        ),
+        const SizedBox(height: 10),
+        _GiftConsentToggle(
+          label: 'Allow brand tagging',
+          value: _allowBrandTagging,
+          onChanged: (value) => setState(() => _allowBrandTagging = value),
+        ),
+        const SizedBox(height: 10),
+        _GiftConsentToggle(
+          label: 'Allow public posting',
+          value: _allowPublicPosting,
+          onChanged: (value) => setState(() => _allowPublicPosting = value),
+        ),
+        const SizedBox(height: 14),
         Text(
           'Circum knows who arranged the gift for safety and fraud prevention. Recipient identity reveal follows your selected consent mode.',
           style: GoogleFonts.inter(
@@ -61,7 +85,12 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GiftBudgetView(
-              draft: widget.draft.copyWith(senderRevealMode: _revealMode),
+              draft: widget.draft.copyWith(
+                senderRevealMode: _revealMode,
+                allowCircumSocialUse: _allowCircumSocialUse,
+                allowBrandTagging: _allowBrandTagging,
+                allowPublicPosting: _allowPublicPosting,
+              ),
             ),
             settings: const RouteSettings(name: GiftBudgetView.routeName),
           ),
@@ -76,6 +105,52 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
         'reveal_immediately' => 'Recipient sees your name straight away.',
         _ => '',
       };
+}
+
+class _GiftConsentToggle extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _GiftConsentToggle({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Switch(
+            value: value,
+            activeThumbColor: const Color(0xFFC9B8FF),
+            activeTrackColor: const Color(0xFFC9B8FF).withValues(alpha: .28),
+            inactiveThumbColor: const Color(0xFFB8AAB8),
+            inactiveTrackColor: Colors.white.withValues(alpha: .12),
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _RevealCard extends StatelessWidget {

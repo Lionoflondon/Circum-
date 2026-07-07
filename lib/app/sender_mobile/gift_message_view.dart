@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
-import 'gift_themes_view.dart';
+import 'gift_voice_note_view.dart';
 
 const senderGiftPersonalMessageFieldName = 'personalMessage';
 
@@ -62,13 +62,13 @@ class _GiftMessageViewState extends State<GiftMessageView> {
             ? null
             : () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => GiftThemesView(
+                    builder: (_) => GiftVoiceNoteView(
                       draft: widget.draft.copyWith(
                         personalMessage: _messageController.text.trim(),
                       ),
                     ),
                     settings: const RouteSettings(
-                      name: GiftThemesView.routeName,
+                      name: GiftVoiceNoteView.routeName,
                     ),
                   ),
                 ),
