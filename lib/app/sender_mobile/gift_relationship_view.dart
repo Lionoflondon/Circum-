@@ -372,7 +372,7 @@ class _GiftJourneyScaffold extends StatelessWidget {
                 Text(
                   eyebrow,
                   style: GoogleFonts.jetBrainsMono(
-                    color: _GiftJourneyTokens.champagne,
+                    color: _GiftJourneyTokens.htmlIri2,
                     fontSize: 10.5,
                     letterSpacing: 1.3,
                     fontWeight: FontWeight.w700,
@@ -439,7 +439,7 @@ class _GiftGlassDropdown extends StatelessWidget {
           Text(
             label,
             style: GoogleFonts.jetBrainsMono(
-              color: _GiftJourneyTokens.champagne,
+              color: _GiftJourneyTokens.htmlIri2,
               fontSize: 10.5,
               letterSpacing: .8,
               fontWeight: FontWeight.w700,
@@ -458,7 +458,7 @@ class _GiftGlassDropdown extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              iconEnabledColor: _GiftJourneyTokens.champagne,
+              iconEnabledColor: _GiftJourneyTokens.htmlIri2,
               style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 14,
@@ -517,7 +517,7 @@ class _GiftInputCard extends StatelessWidget {
           Text(
             label,
             style: GoogleFonts.jetBrainsMono(
-              color: _GiftJourneyTokens.champagne,
+              color: _GiftJourneyTokens.htmlIri2,
               fontSize: 10.5,
               letterSpacing: .8,
               fontWeight: FontWeight.w700,
@@ -589,7 +589,7 @@ class _GiftChoiceChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
-                ? _GiftJourneyTokens.champagne.withValues(alpha: .62)
+                ? _GiftJourneyTokens.htmlIri2.withValues(alpha: .62)
                 : _GiftJourneyTokens.pearlBorder,
           ),
         ),
@@ -748,7 +748,7 @@ class _GiftJourneyAmbient extends StatelessWidget {
 class _GiftJourneyTokens {
   static const bg = Color(0xFF07090F);
   static const muted = Color(0xFFB8AAB8);
-  static const champagne = Color(0xFFE7C88F);
+  static const htmlIri2 = Color(0xFFC9B8FF);
   static const rose = Color(0xFFE8B4A0);
   static const pearlBorder = Color(0x24F5F0E8);
   static const iri1 = Color(0xFFA8EDEA);

@@ -184,7 +184,7 @@ class _GiftModeCardState extends State<_GiftModeCard> {
                     ),
                     const Icon(
                       Icons.arrow_forward_rounded,
-                      color: _GiftTokens.champagne,
+                      color: _GiftTokens.htmlIridescent,
                       size: 20,
                     ),
                   ],
@@ -253,7 +253,7 @@ class _GiftAmbient extends StatelessWidget {
 class _GiftTokens {
   static const bg = Color(0xFF07090F);
   static const muted = Color(0xFFB8AAB8);
-  static const champagne = Color(0xFFE7C88F);
+  static const htmlIridescent = Color(0xFFC9B8FF);
   static const rose = Color(0xFFE8B4A0);
   static const pearlBorder = Color(0x24F5F0E8);
 }
