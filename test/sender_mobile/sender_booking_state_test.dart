@@ -6,6 +6,7 @@ import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
+import 'package:circum/app/sender_mobile/sender_gifts_icon.dart';
 import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -228,19 +229,41 @@ void main() {
           .readAsStringSync();
       final giftSource =
           File('lib/app/sender_mobile/gift_mode_view.dart').readAsStringSync();
+      final iconSource = File(
+        'lib/app/sender_mobile/sender_gifts_icon.dart',
+      ).readAsStringSync();
 
       expect(GiftModeView.routeName, '/sender-mobile/gifts');
       expect(homeSource, contains("import 'gift_mode_view.dart';"));
+      expect(homeSource, contains("import 'sender_gifts_icon.dart';"));
       expect(homeSource, contains('onOpenGifts'));
       expect(homeSource, contains('const GiftModeView()'));
+      expect(homeSource, contains('const SenderGiftsIcon()'));
+      expect(homeSource, isNot(contains('_PremiumGiftIcon')));
+      expect(homeSource, isNot(contains('_PremiumGiftPainter')));
       expect(giftSource, contains('class GiftModeView'));
       expect(giftSource, contains('Gift someone'));
       expect(giftSource, contains('Gift myself'));
       expect(giftSource, contains('Anonymous gift'));
       expect(giftSource, contains('Campaign'));
+      expect(giftSource, contains('const SenderGiftsIcon(size: 52)'));
+      expect(giftSource, isNot(contains('Icons.volunteer_activism_rounded')));
+      expect(giftSource, isNot(contains('Icons.self_improvement_rounded')));
+      expect(giftSource, isNot(contains('Icons.theater_comedy_rounded')));
+      expect(giftSource, isNot(contains('Icons.campaign_rounded')));
       expect(giftSource, isNot(contains('parcel')));
       expect(giftSource, isNot(contains('Rothcross')));
       expect(giftSource, isNot(contains('0xFF3B82F6')));
+      expect(const SenderGiftsIcon().size, 44);
+      expect(iconSource, contains('class SenderGiftsIcon'));
+      expect(iconSource, contains('0xFFA8EDEA'));
+      expect(iconSource, contains('0xFFC9B8FF'));
+      expect(iconSource, contains('0xFFFFD6E8'));
+      expect(iconSource, contains('0xFFB8F0D8'));
+      expect(iconSource, contains('0xFFD4C5FF'));
+      expect(iconSource, contains('Rect.fromLTWH(3, 9, 18, 11)'));
+      expect(iconSource, contains('strokeWidth = 1.7'));
+      expect(iconSource, isNot(contains('0xFF3B82F6')));
     });
 
     test('sender mobile pre-auth landing and auth copy are locked', () {

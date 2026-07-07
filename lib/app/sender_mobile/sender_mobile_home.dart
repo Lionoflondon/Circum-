@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'gift_mode_view.dart';
 import 'sender_booking_canvas.dart';
+import 'sender_gifts_icon.dart';
 
 const senderMobileDashboardServiceNames = ['Health+', 'Business', 'Gifts'];
 const senderMobileHeroSubtitle =
@@ -1652,7 +1653,7 @@ class _ServiceCardState extends State<_ServiceCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 widget.title == 'Gifts'
-                    ? const _PremiumGiftIcon()
+                    ? const SenderGiftsIcon()
                     : _ServiceIcon(icon: widget.icon, accent: widget.accent),
                 const Spacer(),
                 Text(
@@ -1717,142 +1718,6 @@ class _ServiceIcon extends StatelessWidget {
       child: Icon(icon, color: accent, size: 24),
     );
   }
-}
-
-class _PremiumGiftIcon extends StatelessWidget {
-  const _PremiumGiftIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _SenderTokens.giftGold.withValues(alpha: .22),
-            _SenderTokens.gifts.withValues(alpha: .18),
-            _SenderTokens.iceBlue.withValues(alpha: .14),
-          ],
-        ),
-        border: Border.all(color: _SenderTokens.pearl.withValues(alpha: .36)),
-        boxShadow: [
-          BoxShadow(
-            color: _SenderTokens.gifts.withValues(alpha: .20),
-            blurRadius: 20,
-          ),
-        ],
-      ),
-      child: CustomPaint(painter: const _PremiumGiftPainter()),
-    );
-  }
-}
-
-class _PremiumGiftPainter extends CustomPainter {
-  const _PremiumGiftPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final box = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        size.width * .22,
-        size.height * .38,
-        size.width * .56,
-        size.height * .38,
-      ),
-      const Radius.circular(5),
-    );
-    final lid = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        size.width * .18,
-        size.height * .30,
-        size.width * .64,
-        size.height * .16,
-      ),
-      const Radius.circular(5),
-    );
-    final bodyPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          _SenderTokens.giftGold,
-          _SenderTokens.pearl,
-          _SenderTokens.gifts,
-        ],
-      ).createShader(Offset.zero & size);
-    canvas.drawRRect(box, bodyPaint);
-    canvas.drawRRect(lid, bodyPaint);
-
-    final ribbonPaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [
-          _SenderTokens.gifts,
-          _SenderTokens.iceBlue,
-          _SenderTokens.softLilac,
-        ],
-      ).createShader(Offset.zero & size);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * .46,
-          size.height * .29,
-          size.width * .10,
-          size.height * .47,
-        ),
-        const Radius.circular(3),
-      ),
-      ribbonPaint,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * .18,
-          size.height * .43,
-          size.width * .64,
-          size.height * .08,
-        ),
-        const Radius.circular(3),
-      ),
-      ribbonPaint,
-    );
-
-    final bowPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..color = _SenderTokens.pearl;
-    canvas.drawArc(
-      Rect.fromLTWH(
-        size.width * .30,
-        size.height * .18,
-        size.width * .22,
-        size.height * .18,
-      ),
-      math.pi * .1,
-      math.pi * 1.25,
-      false,
-      bowPaint,
-    );
-    canvas.drawArc(
-      Rect.fromLTWH(
-        size.width * .48,
-        size.height * .18,
-        size.width * .22,
-        size.height * .18,
-      ),
-      math.pi * -.35,
-      math.pi * 1.25,
-      false,
-      bowPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _PremiumGiftPainter oldDelegate) => false;
 }
 
 class _HeroRouteArt extends StatelessWidget {
@@ -2440,10 +2305,6 @@ class _SenderTokens {
   static const health = Color(0xFF22C55E);
   static const business = Color(0xFF94A3B8);
   static const gifts = Color(0xFFE8B4A0);
-  static const giftGold = Color(0xFFE7C98F);
-  static const pearl = Color(0xFFF7F1E4);
-  static const iceBlue = Color(0xFFA5D8FF);
-  static const softLilac = Color(0xFFCDB4F6);
   static const muted = Color(0xFF9CA3AF);
   static const softText = Color(0xB8F5F7FB);
   static const panel = Color(0xFF0D111C);

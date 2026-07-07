@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'sender_gifts_icon.dart';
+
 class GiftModeView extends StatelessWidget {
   const GiftModeView({super.key});
 
@@ -59,25 +61,21 @@ class GiftModeView extends StatelessWidget {
                 ),
                 const SizedBox(height: 26),
                 const _GiftModeCard(
-                  icon: Icons.volunteer_activism_rounded,
                   title: 'Gift someone',
                   subtitle: 'Create something thoughtful for another person.',
                 ),
                 const SizedBox(height: 12),
                 const _GiftModeCard(
-                  icon: Icons.self_improvement_rounded,
                   title: 'Gift myself',
                   subtitle: 'Choose a considered treat for yourself.',
                 ),
                 const SizedBox(height: 12),
                 const _GiftModeCard(
-                  icon: Icons.theater_comedy_rounded,
                   title: 'Anonymous gift',
                   subtitle: 'Keep the sender hidden until the right moment.',
                 ),
                 const SizedBox(height: 12),
                 const _GiftModeCard(
-                  icon: Icons.campaign_rounded,
                   title: 'Campaign',
                   subtitle: 'Begin a group or brand gifting moment.',
                 ),
@@ -91,12 +89,10 @@ class GiftModeView extends StatelessWidget {
 }
 
 class _GiftModeCard extends StatefulWidget {
-  final IconData icon;
   final String title;
   final String subtitle;
 
   const _GiftModeCard({
-    required this.icon,
     required this.title,
     required this.subtitle,
   });
@@ -141,7 +137,7 @@ class _GiftModeCardState extends State<_GiftModeCard> {
                 ),
                 child: Row(
                   children: [
-                    _GiftIridescentIcon(icon: widget.icon),
+                    const SenderGiftsIcon(size: 52),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -180,41 +176,6 @@ class _GiftModeCardState extends State<_GiftModeCard> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _GiftIridescentIcon extends StatelessWidget {
-  final IconData icon;
-
-  const _GiftIridescentIcon({required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _GiftTokens.champagne,
-            _GiftTokens.rose,
-            _GiftTokens.pearl,
-            _GiftTokens.ice,
-            _GiftTokens.lilac,
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _GiftTokens.rose.withValues(alpha: .20),
-            blurRadius: 22,
-          ),
-        ],
-      ),
-      child: Icon(icon, color: const Color(0xFF160C12), size: 25),
     );
   }
 }
@@ -276,8 +237,5 @@ class _GiftTokens {
   static const muted = Color(0xFFB8AAB8);
   static const champagne = Color(0xFFE7C88F);
   static const rose = Color(0xFFE8B4A0);
-  static const pearl = Color(0xFFF5F0E8);
-  static const ice = Color(0xFFCFE8FF);
-  static const lilac = Color(0xFFD7C5FF);
   static const pearlBorder = Color(0x24F5F0E8);
 }
