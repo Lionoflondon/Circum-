@@ -15,7 +15,6 @@ const senderGiftDeliveryCityFieldName = 'deliveryCity';
 const senderGiftDeliveryCountryFieldName = 'deliveryCountry';
 const senderGiftDeliveryDateFieldName = 'deliveryDate';
 const senderGiftDeliveryTimeWindowFieldName = 'deliveryTimeWindow';
-const senderGiftDeliveryTimeWindows = ['Morning', 'Afternoon', 'Evening'];
 const senderGiftAddressLookupCallableName = 'searchFreeUkAddresses';
 
 class GiftDeliveryView extends StatefulWidget {
@@ -48,8 +47,8 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
 
   bool get _canContinue =>
       _selectedAddressSuggestion != null &&
-      (_flexibleDelivery ||
-          (_deliveryDate != null && _deliveryTimeWindow != null));
+      _deliveryDate != null &&
+      (_flexibleDelivery || _deliveryTimeWindow != null);
 
   @override
   void initState() {
@@ -134,67 +133,18 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     if (picked == null || !mounted) return;
     setState(() {
       _deliveryDate = picked;
-      _flexibleDelivery = false;
     });
   }
 
-  Future<void> _pickDeliveryWindow() async {
-    final selected = await showModalBottomSheet<String>(
+  Future<void> _pickDeliveryTime() async {
+    final picked = await showTimePicker(
       context: context,
-      backgroundColor: const Color(0xFF12101B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 26),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final window in senderGiftDeliveryTimeWindows)
-                  ListTile(
-                    title: Text(
-                      window,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    onTap: () => Navigator.of(context).pop(window),
-                  ),
-                ListTile(
-                  title: const Text(
-                    'Pick an exact time',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  onTap: () => Navigator.of(context).pop('custom_time'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      initialTime: TimeOfDay.now(),
+      helpText: 'Preferred delivery time',
     );
-    if (selected == null || !mounted) return;
-    if (selected == 'custom_time') {
-      final time = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-        helpText: 'Preferred delivery time',
-      );
-      if (time == null || !mounted) return;
-      setState(() {
-        _deliveryTimeWindow = time.format(context);
-        _flexibleDelivery = false;
-      });
-      return;
-    }
+    if (picked == null || !mounted) return;
     setState(() {
-      _deliveryTimeWindow = selected;
+      _deliveryTimeWindow = picked.format(context);
       _flexibleDelivery = false;
     });
   }
@@ -203,7 +153,6 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     setState(() {
       _flexibleDelivery = value;
       if (value) {
-        _deliveryDate = null;
         _deliveryTimeWindow = null;
       }
     });
@@ -217,6 +166,35 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         '${date.day.toString().padLeft(2, '0')}';
   }
 
+  String get _deliverySummaryDateLabel {
+    final date = _deliveryDate;
+    if (date == null) return 'Choose a date';
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${weekdays[date.weekday - 1]} ${date.day} ${months[date.month - 1]}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
@@ -224,7 +202,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
       eyebrow: 'STEP 03 — DELIVERY',
       title: 'Where and when?',
       subtitle:
-          'Choose where this gift should arrive and the preferred window.',
+          'Choose where this gift should arrive and when it should happen.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         _GiftAddressLookupCard(
@@ -241,23 +219,29 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         const SizedBox(height: 12),
         _GiftPickerCard(
           label: 'PREFERRED DELIVERY DATE',
-          value: _flexibleDelivery ? 'Flexible' : _deliveryDateLabel,
+          value: _deliveryDateLabel,
           icon: Icons.calendar_month_rounded,
-          onTap: _flexibleDelivery ? null : _pickDeliveryDate,
+          onTap: _pickDeliveryDate,
         ),
         const SizedBox(height: 12),
         _GiftPickerCard(
-          label: 'PREFERRED DELIVERY TIME / WINDOW',
+          label: 'PREFERRED DELIVERY TIME',
           value: _flexibleDelivery
-              ? 'Flexible'
-              : (_deliveryTimeWindow ?? 'Choose a time or window'),
+              ? 'Flexible delivery selected'
+              : (_deliveryTimeWindow ?? 'Choose a time'),
           icon: Icons.schedule_rounded,
-          onTap: _flexibleDelivery ? null : _pickDeliveryWindow,
+          onTap: _flexibleDelivery ? null : _pickDeliveryTime,
         ),
         const SizedBox(height: 12),
         _GiftFlexibleDeliveryCard(
           value: _flexibleDelivery,
           onChanged: _setFlexibleDelivery,
+        ),
+        const SizedBox(height: 12),
+        _GiftDeliverySummaryCard(
+          flexibleDelivery: _flexibleDelivery,
+          dateLabel: _deliverySummaryDateLabel,
+          timeLabel: _deliveryTimeWindow,
         ),
       ],
       footer: GiftJourneyWidgets.primaryButton(
@@ -272,10 +256,9 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
                         deliveryAddress: _deliveryAddressController.text.trim(),
                         deliveryAddressData: _selectedAddressSuggestion,
                         deliveryDate:
-                            _flexibleDelivery ? 'Flexible' : _deliveryDateLabel,
-                        deliveryTimeWindow: _flexibleDelivery
-                            ? 'Flexible'
-                            : _deliveryTimeWindow,
+                            _deliveryDate == null ? null : _deliveryDateLabel,
+                        deliveryTimeWindow:
+                            _flexibleDelivery ? null : _deliveryTimeWindow,
                         flexibleDelivery: _flexibleDelivery,
                       ),
                     ),
@@ -507,7 +490,7 @@ class _GiftFlexibleDeliveryCard extends StatelessWidget {
           onChanged: onChanged,
           activeThumbColor: const Color(0xFFC9B8FF),
           title: const Text(
-            "I'm flexible. The Gifts Team can optimise delivery.",
+            "I'm flexible. Let the Gifts Team choose the best delivery time.",
             style: TextStyle(
               color: Colors.white,
               fontSize: 13,
@@ -516,6 +499,92 @@ class _GiftFlexibleDeliveryCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GiftDeliverySummaryCard extends StatelessWidget {
+  final bool flexibleDelivery;
+  final String dateLabel;
+  final String? timeLabel;
+
+  const _GiftDeliverySummaryCard({
+    required this.flexibleDelivery,
+    required this.dateLabel,
+    required this.timeLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDate = dateLabel != 'Choose a date';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFC9B8FF).withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFC9B8FF).withValues(alpha: .22),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Delivery',
+            style: TextStyle(
+              color: Color(0xFFC9B8FF),
+              fontSize: 10.5,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (flexibleDelivery) ...[
+            const Text(
+              'Flexible delivery selected',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                height: 1.25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hasDate
+                  ? '$dateLabel\nThe Gifts Team will optimise delivery.'
+                  : 'The Gifts Team will optimise delivery.',
+              style: const TextStyle(
+                color: Color(0xFFE4DCF5),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ] else ...[
+            Text(
+              hasDate ? dateLabel : 'Choose a delivery date',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                height: 1.25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              timeLabel ?? 'Choose a delivery time',
+              style: const TextStyle(
+                color: Color(0xFFE4DCF5),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

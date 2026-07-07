@@ -445,11 +445,6 @@ void main() {
             'Other',
           ]));
       expect(senderGiftOccasionOptions.length, 84);
-      expect(senderGiftDeliveryTimeWindows, const [
-        'Morning',
-        'Afternoon',
-        'Evening',
-      ]);
       expect(relationshipSource, contains('Tell us about them'));
       expect(
         relationshipSource,
@@ -484,13 +479,23 @@ void main() {
       expect(deliverySource, contains('PREFERRED DELIVERY DATE'));
       expect(deliverySource, contains('Preferred delivery date'));
       expect(deliverySource, contains('showDatePicker'));
-      expect(deliverySource, contains('PREFERRED DELIVERY TIME / WINDOW'));
+      expect(deliverySource, contains('PREFERRED DELIVERY TIME'));
       expect(deliverySource, contains('Preferred delivery time'));
       expect(deliverySource, contains('showTimePicker'));
       expect(
         deliverySource,
-        contains("I'm flexible. The Gifts Team can optimise delivery."),
+        contains(
+          "I'm flexible. Let the Gifts Team choose the best delivery time.",
+        ),
       );
+      expect(deliverySource, contains('_GiftDeliverySummaryCard'));
+      expect(deliverySource, contains('Flexible delivery selected'));
+      expect(
+          deliverySource, contains('The Gifts Team will optimise delivery.'));
+      expect(deliverySource, isNot(contains('senderGiftDeliveryTimeWindows')));
+      expect(deliverySource, isNot(contains("'Morning'")));
+      expect(deliverySource, isNot(contains("'Afternoon'")));
+      expect(deliverySource, isNot(contains("'Evening'")));
       expect(deliverySource, isNot(contains('senderGiftPreferredDateOptions')));
       expect(deliverySource, isNot(contains('Tell us the date that matters')));
       expect(deliverySource, isNot(contains('Choose with Gifts Team')));
@@ -1057,17 +1062,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('PREFERRED DELIVERY DATE'), findsOneWidget);
       expect(find.text('Choose a date'), findsOneWidget);
-      expect(find.text('PREFERRED DELIVERY TIME / WINDOW'), findsOneWidget);
-      expect(find.text('Choose a time or window'), findsOneWidget);
+      expect(find.text('PREFERRED DELIVERY TIME'), findsOneWidget);
+      expect(find.text('Choose a time'), findsOneWidget);
       await tester.drag(find.byType(ListView).first, const Offset(0, -260));
       await tester.pumpAndSettle();
       expect(
-        find.text("I'm flexible. The Gifts Team can optimise delivery."),
+        find.text(
+          "I'm flexible. Let the Gifts Team choose the best delivery time.",
+        ),
         findsOneWidget,
       );
       await tester.tap(find.byType(SwitchListTile).first);
       await tester.pumpAndSettle();
-      expect(find.text('Flexible'), findsWidgets);
+      expect(find.text('Flexible delivery selected'), findsWidgets);
+      expect(
+        find.text('The Gifts Team will optimise delivery.'),
+        findsOneWidget,
+      );
 
       await tester.pumpWidget(
         MaterialApp(
