@@ -61,21 +61,25 @@ class GiftModeView extends StatelessWidget {
                 ),
                 const SizedBox(height: 26),
                 const _GiftModeCard(
+                  iconKind: SenderGiftsIconKind.gift,
                   title: 'Gift someone',
                   subtitle: 'Create something thoughtful for another person.',
                 ),
                 const SizedBox(height: 12),
                 const _GiftModeCard(
+                  iconKind: SenderGiftsIconKind.self,
                   title: 'Gift myself',
                   subtitle: 'Choose a considered treat for yourself.',
                 ),
                 const SizedBox(height: 12),
                 const _GiftModeCard(
+                  iconKind: SenderGiftsIconKind.mask,
                   title: 'Anonymous gift',
                   subtitle: 'Keep the sender hidden until the right moment.',
                 ),
                 const SizedBox(height: 12),
                 const _GiftModeCard(
+                  iconKind: SenderGiftsIconKind.people,
                   title: 'Campaign',
                   subtitle: 'Begin a group or brand gifting moment.',
                 ),
@@ -89,10 +93,12 @@ class GiftModeView extends StatelessWidget {
 }
 
 class _GiftModeCard extends StatefulWidget {
+  final SenderGiftsIconKind iconKind;
   final String title;
   final String subtitle;
 
   const _GiftModeCard({
+    required this.iconKind,
     required this.title,
     required this.subtitle,
   });
@@ -137,7 +143,7 @@ class _GiftModeCardState extends State<_GiftModeCard> {
                 ),
                 child: Row(
                   children: [
-                    const SenderGiftsIcon(size: 52),
+                    SenderGiftsIcon(size: 52, kind: widget.iconKind),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(

@@ -246,7 +246,10 @@ void main() {
       expect(giftSource, contains('Gift myself'));
       expect(giftSource, contains('Anonymous gift'));
       expect(giftSource, contains('Campaign'));
-      expect(giftSource, contains('const SenderGiftsIcon(size: 52)'));
+      expect(giftSource, contains('SenderGiftsIconKind.gift'));
+      expect(giftSource, contains('SenderGiftsIconKind.self'));
+      expect(giftSource, contains('SenderGiftsIconKind.mask'));
+      expect(giftSource, contains('SenderGiftsIconKind.people'));
       expect(giftSource, isNot(contains('Icons.volunteer_activism_rounded')));
       expect(giftSource, isNot(contains('Icons.self_improvement_rounded')));
       expect(giftSource, isNot(contains('Icons.theater_comedy_rounded')));
@@ -255,14 +258,44 @@ void main() {
       expect(giftSource, isNot(contains('Rothcross')));
       expect(giftSource, isNot(contains('0xFF3B82F6')));
       expect(const SenderGiftsIcon().size, 44);
+      expect(const SenderGiftsIcon().kind, SenderGiftsIconKind.gift);
       expect(iconSource, contains('class SenderGiftsIcon'));
+      expect(iconSource, contains('SvgPicture.string'));
       expect(iconSource, contains('0xFFA8EDEA'));
       expect(iconSource, contains('0xFFC9B8FF'));
       expect(iconSource, contains('0xFFFFD6E8'));
       expect(iconSource, contains('0xFFB8F0D8'));
       expect(iconSource, contains('0xFFD4C5FF'));
-      expect(iconSource, contains('Rect.fromLTWH(3, 9, 18, 11)'));
-      expect(iconSource, contains('strokeWidth = 1.7'));
+      expect(
+        iconSource,
+        contains(
+          '<rect x="3" y="9" width="18" height="11" rx="1.5" stroke="currentColor" stroke-width="1.7"/>',
+        ),
+      );
+      expect(
+        iconSource,
+        contains(
+          '<path d="M3 9h18M12 9v11M12 9c-2-4-7-4-7-1s3 1 7 1zm0 0c2-4 7-4 7-1s-3 1-7 1z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+        ),
+      );
+      expect(
+        iconSource,
+        contains(
+          '<circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.7"/>',
+        ),
+      );
+      expect(
+        iconSource,
+        contains(
+          '<path d="M4 10c0-3 3.5-6 8-6s8 3 8 6-2 8-8 8-8-5-8-8z" stroke="currentColor" stroke-width="1.7"/>',
+        ),
+      );
+      expect(
+        iconSource,
+        contains(
+          '<path d="M2 20c0-3.5 3-5.5 6-5.5s6 2 6 5.5M14 20c0-2.6 2-4.5 5-4.5s5 1.9 5 4.5" stroke="currentColor" stroke-width="1.7"/>',
+        ),
+      );
       expect(iconSource, isNot(contains('0xFF3B82F6')));
     });
 
