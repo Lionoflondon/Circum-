@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
+import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
+import 'gift_themes_view.dart';
 
 const senderGiftPersonalMessageFieldName = 'personalMessage';
 
 class GiftMessageView extends StatefulWidget {
-  const GiftMessageView({super.key});
+  final GiftJourneyDraft draft;
+
+  const GiftMessageView({
+    super.key,
+    required this.draft,
+  });
 
   static const routeName = '/sender-mobile/gifts/message';
 
@@ -17,6 +24,12 @@ class _GiftMessageViewState extends State<GiftMessageView> {
   final _messageController = TextEditingController();
 
   bool get _canContinue => _messageController.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController.text = widget.draft.personalMessage ?? '';
+  }
 
   @override
   void dispose() {
@@ -49,11 +62,13 @@ class _GiftMessageViewState extends State<GiftMessageView> {
             ? null
             : () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const GiftJourneyPlaceholderView(
-                      message: 'Next Gifts step coming soon',
+                    builder: (_) => GiftThemesView(
+                      draft: widget.draft.copyWith(
+                        personalMessage: _messageController.text.trim(),
+                      ),
                     ),
                     settings: const RouteSettings(
-                      name: '/sender-mobile/gifts/next',
+                      name: GiftThemesView.routeName,
                     ),
                   ),
                 ),

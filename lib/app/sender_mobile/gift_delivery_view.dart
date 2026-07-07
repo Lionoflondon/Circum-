@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../send_package/models/suggestions.m.dart';
 import '../send_package/repo/place_api.dart';
+import 'gift_journey_draft.dart';
 import 'gift_message_view.dart';
 import 'gift_relationship_view.dart';
 
@@ -18,7 +19,12 @@ const senderGiftDeliveryTimeWindows = ['Morning', 'Afternoon', 'Evening'];
 const senderGiftAddressLookupCallableName = 'searchFreeUkAddresses';
 
 class GiftDeliveryView extends StatefulWidget {
-  const GiftDeliveryView({super.key});
+  final GiftJourneyDraft draft;
+
+  const GiftDeliveryView({
+    super.key,
+    required this.draft,
+  });
 
   static const routeName = '/sender-mobile/gifts/delivery';
 
@@ -43,6 +49,15 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
       _deliveryAddressController.text.trim().isNotEmpty &&
       _deliveryDateController.text.trim().isNotEmpty &&
       _deliveryTimeWindow != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _deliveryAddressController.text = widget.draft.deliveryAddress ?? '';
+    _deliveryDateController.text = widget.draft.deliveryDate ?? '';
+    _selectedAddressSuggestion = widget.draft.deliveryAddressData;
+    _deliveryTimeWindow = widget.draft.deliveryTimeWindow;
+  }
 
   @override
   void dispose() {
@@ -154,7 +169,14 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
             ? null
             : () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const GiftMessageView(),
+                    builder: (_) => GiftMessageView(
+                      draft: widget.draft.copyWith(
+                        deliveryAddress: _deliveryAddressController.text.trim(),
+                        deliveryAddressData: _selectedAddressSuggestion,
+                        deliveryDate: _deliveryDateController.text.trim(),
+                        deliveryTimeWindow: _deliveryTimeWindow,
+                      ),
+                    ),
                     settings: const RouteSettings(
                       name: GiftMessageView.routeName,
                     ),

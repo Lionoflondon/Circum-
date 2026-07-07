@@ -5,8 +5,10 @@ import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
+import 'package:circum/app/sender_mobile/gift_journey_draft.dart';
 import 'package:circum/app/sender_mobile/gift_message_view.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
+import 'package:circum/app/sender_mobile/gift_review_view.dart';
 import 'package:circum/app/sender_mobile/gift_relationship_view.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
 import 'package:circum/app/sender_mobile/sender_gifts_icon.dart';
@@ -314,6 +316,10 @@ void main() {
       ).readAsStringSync();
       final messageSource = File('lib/app/sender_mobile/gift_message_view.dart')
           .readAsStringSync();
+      final draftSource = File('lib/app/sender_mobile/gift_journey_draft.dart')
+          .readAsStringSync();
+      final reviewSource = File('lib/app/sender_mobile/gift_review_view.dart')
+          .readAsStringSync();
 
       expect(giftSource, contains("import 'gift_relationship_view.dart';"));
       expect(giftSource, contains('GiftRelationshipView'));
@@ -323,8 +329,22 @@ void main() {
       );
       expect(GiftDeliveryView.routeName, '/sender-mobile/gifts/delivery');
       expect(GiftMessageView.routeName, '/sender-mobile/gifts/message');
+      expect(GiftReviewView.routeName, '/sender-mobile/gifts/review');
+      expect(senderGiftModeFieldName, 'giftMode');
+      expect(senderGiftAnonymousGiftTypeFieldName, 'anonymousGiftType');
+      expect(senderGiftSenderRevealModeFieldName, 'senderRevealMode');
+      expect(senderGiftSelfGiftFrequencyFieldName, 'selfGiftFrequency');
+      expect(senderGiftIrisSuggestionFieldName, 'irisSuggestion');
+      expect(
+        senderGiftPendingIrisSuggestion,
+        'Pending IRIS gift recommendation',
+      );
+      expect(senderGiftPaymentDraftCollectionName, 'giftPaymentDrafts');
+      expect(senderGiftAdminReviewCollectionName, 'giftRequests');
+      expect(senderGiftPaymentCallableName, 'createGiftPayment');
       expect(senderGiftRelationshipFieldName, 'relationship');
       expect(senderGiftOccasionFieldName, 'occasion');
+      expect(senderGiftRecipientNameFieldName, 'recipientName');
       expect(senderGiftRecipientPhoneFieldName, 'recipientPhone');
       expect(senderGiftRecipientEmailFieldName, 'recipientEmail');
       expect(senderGiftRecipientContactFieldName, 'recipientContact');
@@ -398,13 +418,50 @@ void main() {
       expect(messageSource, contains('Write something from the heart'));
       expect(messageSource, contains('PERSONAL MESSAGE'));
       expect(messageSource, contains('What do you want them to know?'));
-      expect(messageSource, contains('Next Gifts step coming soon'));
+      expect(messageSource, contains('GiftThemesView'));
+      expect(draftSource, contains('SenderGiftMode.myself'));
+      expect(draftSource, contains('SenderGiftMode.anonymous'));
+      expect(draftSource, contains('SenderGiftMode.campaign'));
+      expect(draftSource, contains("'gift_myself'"));
+      expect(draftSource, contains("'anonymous_gift'"));
+      expect(draftSource, contains("'anonymousGiftType'"));
+      expect(draftSource, contains("'campaign'"));
+      expect(draftSource, contains("'bringing-london-closer'"));
+      expect(draftSource, contains("'Bringing London Closer'"));
+      expect(draftSource, contains("'irisSuggestion'"));
+      expect(draftSource, contains('Pending IRIS gift recommendation'));
+      expect(draftSource, contains('adminReviewPayload'));
+      expect(reviewSource, contains('senderGiftPaymentDraftCollectionName'));
+      expect(reviewSource, contains('senderGiftPaymentCallableName'));
+      expect(reviewSource, contains('Campaign · Bringing London Closer'));
+      expect(reviewSource, contains('IRIS preview'));
+      expect(reviewSource, contains('senderGiftPendingIrisSuggestion'));
       expect(relationshipSource, isNot(contains('createGiftPayment')));
       expect(deliverySource, isNot(contains('createGiftPayment')));
       expect(messageSource, isNot(contains('createGiftPayment')));
       expect(relationshipSource, isNot(contains('FirebaseFirestore')));
       expect(deliverySource, isNot(contains('FirebaseFirestore')));
       expect(messageSource, isNot(contains('FirebaseFirestore')));
+
+      final campaignDraft = GiftJourneyDraft.forMode(SenderGiftMode.campaign)
+          .copyWith(
+              recipientName: 'Community',
+              recipientPhone: '07123',
+              recipientEmail: 'recipient@example.com');
+      final campaignPayload = campaignDraft.adminReviewPayload(
+        senderId: 'sender-1',
+        senderEmail: 'sender@example.com',
+      );
+      expect(campaignPayload['giftMode'], 'anonymous_gift');
+      expect(campaignPayload['anonymousGiftType'], 'campaign');
+      expect(campaignPayload['giftType'], 'campaign');
+      expect(campaignPayload['campaignId'], 'bringing-london-closer');
+      expect(campaignPayload['campaignName'], 'Bringing London Closer');
+      expect(
+        campaignPayload['irisSuggestion'],
+        'Pending IRIS gift recommendation',
+      );
+      expect(campaignPayload['participantConsentRequired'], isTrue);
     });
 
     testWidgets('Gift someone opens relationship screen and back returns', (
@@ -455,10 +512,11 @@ void main() {
       await tester.tap(find.text('Birthday').last);
       await tester.pumpAndSettle();
       final recipientFields = find.byType(TextField);
-      await tester.enterText(recipientFields.at(0), '07123 456789');
-      await tester.enterText(recipientFields.at(1), 'recipient@example.com');
+      await tester.enterText(recipientFields.at(0), 'Ada Recipient');
+      await tester.enterText(recipientFields.at(1), '07123 456789');
+      await tester.enterText(recipientFields.at(2), 'recipient@example.com');
       await tester.enterText(
-          recipientFields.at(2), 'They love quiet surprises.');
+          recipientFields.at(3), 'They love quiet surprises.');
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
@@ -503,7 +561,7 @@ void main() {
       await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Next Gifts step coming soon'), findsNothing);
+      expect(find.text('What do they love?'), findsNothing);
 
       await tester.enterText(
         find.byType(TextField),
@@ -514,7 +572,8 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Next Gifts step coming soon'), findsOneWidget);
+      expect(find.text('What do they love?'), findsOneWidget);
+      expect(find.text('ADD A THEME'), findsOneWidget);
     });
 
     test('sender mobile pre-auth landing and auth copy are locked', () {

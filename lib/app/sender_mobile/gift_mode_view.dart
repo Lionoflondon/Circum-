@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'sender_gifts_icon.dart';
 
@@ -64,38 +65,59 @@ class GiftModeView extends StatelessWidget {
                 _GiftModeCard(
                   iconKind: SenderGiftsIconKind.gift,
                   title: 'Gift someone',
-                  subtitle: 'Create something thoughtful for another person.',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const GiftRelationshipView(),
-                      settings: const RouteSettings(
-                        name: GiftRelationshipView.routeName,
-                      ),
-                    ),
+                  subtitle: 'Send to a person you know.',
+                  onTap: () => _openMode(
+                    context,
+                    SenderGiftMode.someone,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const _GiftModeCard(
+                _GiftModeCard(
                   iconKind: SenderGiftsIconKind.self,
                   title: 'Gift myself',
-                  subtitle: 'Choose a considered treat for yourself.',
+                  subtitle: 'Recurring self-treat.',
+                  onTap: () => _openMode(
+                    context,
+                    SenderGiftMode.myself,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                const _GiftModeCard(
+                _GiftModeCard(
                   iconKind: SenderGiftsIconKind.mask,
                   title: 'Anonymous gift',
-                  subtitle: 'Keep the sender hidden until the right moment.',
+                  subtitle: 'Direct, name withheld.',
+                  onTap: () => _openMode(
+                    context,
+                    SenderGiftMode.anonymous,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                const _GiftModeCard(
+                _GiftModeCard(
                   iconKind: SenderGiftsIconKind.people,
                   title: 'Campaign',
-                  subtitle: 'Begin a group or brand gifting moment.',
+                  subtitle: 'Bringing London Closer.',
+                  onTap: () => _openMode(
+                    context,
+                    SenderGiftMode.campaign,
+                  ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openMode(BuildContext context, SenderGiftMode mode) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GiftRelationshipView(
+          draft: GiftJourneyDraft.forMode(mode),
+        ),
+        settings: const RouteSettings(
+          name: GiftRelationshipView.routeName,
+        ),
       ),
     );
   }

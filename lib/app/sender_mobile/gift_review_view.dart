@@ -1,0 +1,228 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import 'gift_journey_draft.dart';
+import 'gift_relationship_view.dart';
+
+class GiftReviewView extends StatefulWidget {
+  final GiftJourneyDraft draft;
+
+  const GiftReviewView({super.key, required this.draft});
+
+  static const routeName = '/sender-mobile/gifts/review';
+
+  @override
+  State<GiftReviewView> createState() => _GiftReviewViewState();
+}
+
+class _GiftReviewViewState extends State<GiftReviewView> {
+  var _submitting = false;
+  String? _message;
+
+  @override
+  Widget build(BuildContext context) {
+    final draft = widget.draft;
+    return GiftJourneyWidgets.scaffold(
+      activeStep: 4,
+      eyebrow: 'STEP 09 — REVIEW',
+      title: 'Review before payment',
+      subtitle:
+          'Gift contents remain confidential before delivery. No products, brands, retailers or basket details are shown.',
+      onBack: () => Navigator.of(context).maybePop(),
+      children: [
+        _ReviewRow(label: 'Gift mode', value: draft.modeLabel),
+        _ReviewRow(label: 'Recipient', value: draft.recipientName ?? 'Not set'),
+        _ReviewRow(label: 'Occasion', value: draft.occasion ?? 'Not set'),
+        _ReviewRow(
+          label: 'Delivery',
+          value:
+              '${draft.deliveryAddress ?? 'Not set'} · ${draft.deliveryDate ?? 'Date not set'} · ${draft.deliveryTimeWindow ?? 'Window not set'}',
+        ),
+        _ReviewRow(
+          label: 'Reveal',
+          value: (senderGiftRevealModeOptions[
+                  draft.senderRevealMode ?? 'reveal_immediately'] ??
+              'Reveal immediately'),
+        ),
+        const _ReviewRow(
+          label: 'IRIS preview',
+          value: senderGiftPendingIrisSuggestion,
+        ),
+        if (draft.mode == SenderGiftMode.campaign) ...[
+          const _ReviewRow(
+            label: 'Admin path',
+            value: 'Campaign · Bringing London Closer',
+          ),
+          const _AdminPathNote(
+            'This mobile request writes the same campaign fields Admin already reads.',
+          ),
+        ],
+        _ReviewRow(
+          label: 'Budget',
+          value: '£${draft.budget.toStringAsFixed(0)}',
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            _message!,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 12,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
+      footer: GiftJourneyWidgets.primaryButton(
+        enabled: !_submitting,
+        label: _submitting ? 'Preparing checkout...' : 'Proceed to Payment',
+        onTap: _submitting ? null : _submitForAdminReview,
+      ),
+    );
+  }
+
+  Future<void> _submitForAdminReview() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _message = 'Sign in to submit this gift request for Admin review.';
+      });
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _message = null;
+    });
+    try {
+      final draftRef = FirebaseFirestore.instance
+          .collection(senderGiftPaymentDraftCollectionName)
+          .doc();
+      final payload = Map<String, Object?>.from(widget.draft.adminReviewPayload(
+        senderId: user.uid,
+        senderEmail: user.email ?? '',
+        senderName: user.displayName,
+      ));
+      final parsedDeliveryDate = DateTime.tryParse(
+        widget.draft.deliveryDate ?? '',
+      );
+      if (parsedDeliveryDate != null) {
+        payload['deliveryDate'] = Timestamp.fromDate(parsedDeliveryDate);
+      }
+      await draftRef.set({
+        ...payload,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      final payment = await FirebaseFunctions.instance
+          .httpsCallable(senderGiftPaymentCallableName)
+          .call({'giftDraftId': draftRef.id});
+      final paymentData = Map<String, dynamic>.from(payment.data as Map);
+      if (paymentData['walletPaidInFull'] == true) {
+        if (!mounted) return;
+        setState(() {
+          _message = 'Your gift request has been submitted for Admin review.';
+        });
+        return;
+      }
+      final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
+      if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
+        throw StateError('Stripe Checkout could not be opened.');
+      }
+      await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error is FirebaseFunctionsException
+            ? (error.message ?? 'Could not start secure checkout.')
+            : 'Could not start secure checkout.';
+      });
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+}
+
+class _ReviewRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReviewRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.jetBrainsMono(
+                color: const Color(0xFFB8AAB8),
+                fontSize: 10.5,
+                letterSpacing: .7,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminPathNote extends StatelessWidget {
+  final String text;
+
+  const _AdminPathNote(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFA8EDEA).withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFA8EDEA).withValues(alpha: .24),
+        ),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          color: const Color(0xFFE4DCF5),
+          fontSize: 12,
+          height: 1.4,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}

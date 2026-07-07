@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'gift_delivery_view.dart';
+import 'gift_journey_draft.dart';
 
 const senderGiftRelationshipFieldName = 'relationship';
 const senderGiftOccasionFieldName = 'occasion';
+const senderGiftRecipientNameFieldName = 'recipientName';
 const senderGiftRecipientPhoneFieldName = 'recipientPhone';
 const senderGiftRecipientEmailFieldName = 'recipientEmail';
 const senderGiftRecipientContactFieldName = 'recipientContact';
@@ -169,7 +171,12 @@ const senderGiftOccasionOptions = [
 ];
 
 class GiftRelationshipView extends StatefulWidget {
-  const GiftRelationshipView({super.key});
+  final GiftJourneyDraft draft;
+
+  const GiftRelationshipView({
+    super.key,
+    this.draft = const GiftJourneyDraft(mode: SenderGiftMode.someone),
+  });
 
   static const routeName = '/sender-mobile/gifts/relationship';
 
@@ -178,20 +185,40 @@ class GiftRelationshipView extends StatefulWidget {
 }
 
 class _GiftRelationshipViewState extends State<GiftRelationshipView> {
+  late final TextEditingController _nameController;
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _notesController = TextEditingController();
-  String? _relationship;
-  String? _occasion;
+  late String? _relationship;
+  late String? _occasion;
+  late String? _senderRevealMode;
+  late String? _selfGiftFrequency;
 
   bool get _canContinue =>
+      _nameController.text.trim().isNotEmpty &&
       _relationship != null &&
       _occasion != null &&
       _phoneController.text.trim().isNotEmpty &&
       _emailController.text.trim().isNotEmpty;
 
   @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(
+      text: widget.draft.recipientName ?? '',
+    );
+    _phoneController.text = widget.draft.recipientPhone ?? '';
+    _emailController.text = widget.draft.recipientEmail ?? '';
+    _notesController.text = widget.draft.notes ?? '';
+    _relationship = widget.draft.relationship;
+    _occasion = widget.draft.occasion;
+    _senderRevealMode = widget.draft.senderRevealMode;
+    _selfGiftFrequency = widget.draft.selfGiftFrequency;
+  }
+
+  @override
   void dispose() {
+    _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _notesController.dispose();
@@ -203,8 +230,8 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
     return _GiftJourneyScaffold(
       activeStep: 2,
       eyebrow: 'STEP 02 — RECIPIENT',
-      title: 'Tell us about them',
-      subtitle: 'Tell IRIS who this is for so we can shape the experience.',
+      title: _title,
+      subtitle: _subtitle,
       onBack: () => Navigator.of(context).maybePop(),
       footer: _GiftPrimaryButton(
         enabled: _canContinue,
@@ -213,7 +240,18 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
             ? null
             : () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const GiftDeliveryView(),
+                    builder: (_) => GiftDeliveryView(
+                      draft: widget.draft.copyWith(
+                        recipientName: _nameController.text.trim(),
+                        relationship: _relationship,
+                        occasion: _occasion,
+                        recipientPhone: _phoneController.text.trim(),
+                        recipientEmail: _emailController.text.trim(),
+                        notes: _notesController.text.trim(),
+                        senderRevealMode: _senderRevealMode,
+                        selfGiftFrequency: _selfGiftFrequency,
+                      ),
+                    ),
                     settings: const RouteSettings(
                       name: GiftDeliveryView.routeName,
                     ),
@@ -221,6 +259,13 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
                 ),
       ),
       children: [
+        _GiftInputCard(
+          controller: _nameController,
+          label: _nameLabel,
+          placeholder: _namePlaceholder,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
         _GiftGlassDropdown(
           label: 'RELATIONSHIP',
           value: _relationship,
@@ -236,6 +281,42 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
           options: senderGiftOccasionOptions,
           onChanged: (value) => setState(() => _occasion = value),
         ),
+        if (widget.draft.mode == SenderGiftMode.myself) ...[
+          const SizedBox(height: 12),
+          _GiftGlassDropdown(
+            label: 'SELF-GIFT FREQUENCY',
+            value: _selfGiftFrequency,
+            placeholder: 'Choose frequency',
+            options: senderGiftSelfFrequencyOptions.values.toList(),
+            onChanged: (value) {
+              final entry = senderGiftSelfFrequencyOptions.entries.firstWhere(
+                (entry) => entry.value == value,
+              );
+              setState(() => _selfGiftFrequency = entry.key);
+            },
+            displayValue: _selfGiftFrequency == null
+                ? null
+                : senderGiftSelfFrequencyOptions[_selfGiftFrequency],
+          ),
+        ],
+        if (widget.draft.mode == SenderGiftMode.anonymous ||
+            widget.draft.mode == SenderGiftMode.campaign) ...[
+          const SizedBox(height: 12),
+          _GiftGlassDropdown(
+            label: 'IDENTITY REVEAL',
+            value: _senderRevealMode == null
+                ? null
+                : senderGiftRevealModeOptions[_senderRevealMode],
+            placeholder: 'Choose reveal mode',
+            options: senderGiftRevealModeOptions.values.toList(),
+            onChanged: (value) {
+              final entry = senderGiftRevealModeOptions.entries.firstWhere(
+                (entry) => entry.value == value,
+              );
+              setState(() => _senderRevealMode = entry.key);
+            },
+          ),
+        ],
         const SizedBox(height: 12),
         _GiftInputCard(
           controller: _phoneController,
@@ -265,6 +346,36 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
       ],
     );
   }
+
+  String get _title => switch (widget.draft.mode) {
+        SenderGiftMode.myself => 'Tell us about you',
+        SenderGiftMode.anonymous => 'Keep it thoughtful',
+        SenderGiftMode.campaign => 'Shape the campaign',
+        SenderGiftMode.someone => 'Tell us about them',
+      };
+
+  String get _subtitle => switch (widget.draft.mode) {
+        SenderGiftMode.myself =>
+          'Tell IRIS what would make this feel considered.',
+        SenderGiftMode.anonymous =>
+          'Circum keeps your identity private while Admin can still review the request safely.',
+        SenderGiftMode.campaign =>
+          'Use the Bringing London Closer campaign path already defined in Gifts.',
+        SenderGiftMode.someone =>
+          'Tell IRIS who this is for so we can shape the experience.',
+      };
+
+  String get _nameLabel => switch (widget.draft.mode) {
+        SenderGiftMode.myself => 'YOUR NAME',
+        SenderGiftMode.campaign => 'RECIPIENT OR GROUP',
+        _ => 'RECIPIENT NAME',
+      };
+
+  String get _namePlaceholder => switch (widget.draft.mode) {
+        SenderGiftMode.myself => 'What should we call you?',
+        SenderGiftMode.campaign => 'Who is this campaign for?',
+        _ => "Who's receiving this?",
+      };
 }
 
 class GiftJourneyPlaceholderView extends StatelessWidget {
@@ -357,6 +468,22 @@ class GiftJourneyWidgets {
     required VoidCallback onTap,
   }) {
     return _GiftChoiceChip(label: label, selected: selected, onTap: onTap);
+  }
+
+  static Widget dropdown({
+    required String label,
+    required String? value,
+    required String placeholder,
+    required List<String> options,
+    required ValueChanged<String> onChanged,
+  }) {
+    return _GiftGlassDropdown(
+      label: label,
+      value: value,
+      placeholder: placeholder,
+      options: options,
+      onChanged: onChanged,
+    );
   }
 }
 
@@ -454,6 +581,7 @@ class _GiftGlassDropdown extends StatelessWidget {
   final String placeholder;
   final List<String> options;
   final ValueChanged<String> onChanged;
+  final String? displayValue;
 
   const _GiftGlassDropdown({
     required this.label,
@@ -461,6 +589,7 @@ class _GiftGlassDropdown extends StatelessWidget {
     required this.placeholder,
     required this.options,
     required this.onChanged,
+    this.displayValue,
   });
 
   @override
@@ -488,7 +617,7 @@ class _GiftGlassDropdown extends StatelessWidget {
             child: DropdownButton<String>(
               isExpanded: true,
               dropdownColor: const Color(0xFF171522),
-              value: value,
+              value: displayValue ?? value,
               hint: Text(
                 placeholder,
                 style: GoogleFonts.inter(
