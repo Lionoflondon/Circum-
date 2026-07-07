@@ -1508,6 +1508,8 @@ void main() {
       expect(routeOnlySuggestion.mainText, 'Eldridge Road');
       expect(routeOnlySuggestion.description, isNot(contains('null')));
       expect(routeOnlySuggestion.subText, isNot(contains('undefined')));
+      expect(routeOnlySuggestion.components['placeId'], 'addr-route-only');
+      expect(routeOnlySuggestion.components['source'], 'autocomplete');
       expect(
         AddressEngine.hasRequiredFields(suggestion: routeOnlySuggestion),
         isTrue,
@@ -1522,6 +1524,18 @@ void main() {
       expect(manualAddressFields['city'], 'London');
       expect(manualAddressFields['postcode'], 'SE9 2DF');
       expect(manualAddressFields['country'], 'United Kingdom');
+      expect(manualAddressFields['source'], 'manual');
+      for (final field in AddressEngine.canonicalFields) {
+        expect(
+          AddressEngine.allSerializableFields,
+          contains(field),
+          reason: 'Canonical Address field $field must remain serializable.',
+        );
+      }
+      expect(
+        manualAddressFields.values.join(' '),
+        isNot(anyOf(contains('null'), contains('undefined'))),
+      );
       expect(
         AddressEngine.hasRequiredFields(
           manualAddress: manualAddress,
@@ -1553,6 +1567,8 @@ void main() {
       expect(verifiedPayload['city'], 'London');
       expect(verifiedPayload['postcode'], 'NW1 6XE');
       expect(verifiedPayload['country'], 'GB');
+      expect(verifiedPayload['latitude'], isNull);
+      expect(verifiedPayload['longitude'], isNull);
       expect(verifiedPayload['formattedAddress'], isNot(contains('null')));
       expect(verifiedPayload['formattedAddress'], isNot(contains('undefined')));
 
@@ -1568,6 +1584,7 @@ void main() {
       expect(manualPayload['country'], 'United Kingdom');
       expect(manualPayload['formattedAddress'], isNot(contains('null')));
       expect(manualPayload['formattedAddress'], isNot(contains('undefined')));
+      expect(manualPayload['deliveryAddressData'], isNull);
       await tester.pumpWidget(
         MaterialApp(
           key: UniqueKey(),
@@ -1822,6 +1839,32 @@ void main() {
         expect(source, contains('AddressEngine.suggestionFromBackend'));
       },
     );
+
+    test('Circum modules consume the shared Address Engine', () {
+      final expectedConsumers = [
+        'lib/app/send_package/repo/place_api.dart',
+        'lib/app/sender_mobile/gift_delivery_view.dart',
+        'lib/app/sender_mobile/gift_journey_draft.dart',
+        'lib/app/health_plus/view/health_plus.dart',
+        'lib/app/admin/admin_operations.dart',
+        'lib/app/rider_jobs/rider_job_models.dart',
+        'lib/app/sender_profile/sender_profile.dart',
+      ];
+
+      for (final path in expectedConsumers) {
+        final source = File(path).readAsStringSync();
+        expect(
+          source,
+          contains('AddressEngine'),
+          reason: '$path must consume the shared Circum Address Engine.',
+        );
+      }
+
+      final oldGiftNormalizer = File(
+        'lib/app/sender_mobile/gift_address_normalizer.dart',
+      );
+      expect(oldGiftNormalizer.existsSync(), isFalse);
+    });
 
     test('payment cannot fake success', () {
       const unpaid = SenderBookingDraft(

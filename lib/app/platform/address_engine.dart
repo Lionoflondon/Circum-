@@ -2,16 +2,36 @@ import '../send_package/models/suggestions.m.dart';
 
 class AddressEngine {
   static const canonicalFields = [
+    'addressId',
+    'formattedAddress',
     'addressLine1',
     'addressLine2',
+    'buildingName',
+    'apartment',
+    'floor',
+    'entranceInstructions',
     'city',
-    'countyState',
+    'county',
     'postcode',
     'country',
-    'formattedAddress',
     'placeId',
     'latitude',
     'longitude',
+    'verified',
+    'source',
+    'createdAt',
+    'updatedAt',
+  ];
+
+  static const compatibilityFields = [
+    'countyState',
+    'lat',
+    'lng',
+  ];
+
+  static const allSerializableFields = [
+    ...canonicalFields,
+    ...compatibilityFields,
   ];
 
   static String clean(Object? value) {
@@ -48,9 +68,14 @@ class AddressEngine {
     Suggestion? suggestion,
     Map<String, dynamic>? components,
     String? manualAddress,
+    Object? addressId,
     Object? placeId,
     Object? latitude,
     Object? longitude,
+    Object? verified,
+    Object? source,
+    Object? createdAt,
+    Object? updatedAt,
   }) {
     final raw = <String, dynamic>{
       ...?components,
@@ -78,6 +103,29 @@ class AddressEngine {
       raw['line1'],
       raw['displayAddressLine1'],
     ]);
+    final buildingName = firstPart([
+      raw['buildingName'],
+      raw['building'],
+      raw['premiseName'],
+      raw['premisesName'],
+    ]);
+    final apartment = firstPart([
+      raw['apartment'],
+      raw['flat'],
+      raw['unit'],
+      raw['suite'],
+      raw['subpremise'],
+    ]);
+    final floor = firstPart([
+      raw['floor'],
+      raw['level'],
+    ]);
+    final entranceInstructions = firstPart([
+      raw['entranceInstructions'],
+      raw['deliveryInstructions'],
+      raw['accessInstructions'],
+      raw['instructions'],
+    ]);
     final addressLine1 = firstPart([
       rawLine1,
       line1FromParts,
@@ -87,8 +135,8 @@ class AddressEngine {
     final addressLine2 = firstPart([
       raw['addressLine2'],
       raw['line2'],
-      raw['unit'],
-      raw['flat'],
+      buildingName,
+      apartment,
     ]);
     final city = firstPart([
       raw['city'],
@@ -101,7 +149,8 @@ class AddressEngine {
               ? manualParts[manualParts.length - 2]
               : null,
     ]);
-    final countyState = firstPart([
+    final county = firstPart([
+      raw['county'],
       raw['countyState'],
       raw['county'],
       raw['state'],
@@ -121,7 +170,7 @@ class AddressEngine {
       addressLine1,
       addressLine2,
       city,
-      countyState,
+      county,
       postcode,
       country,
     ]);
@@ -131,16 +180,39 @@ class AddressEngine {
         longitude ?? raw['longitude'] ?? raw['lng'] ?? suggestion?.lng);
 
     return {
+      'addressId': firstPart([
+        addressId,
+        raw['addressId'],
+        raw['id'],
+      ]),
+      'formattedAddress': formattedAddress,
       'addressLine1': addressLine1,
       'addressLine2': addressLine2,
+      'buildingName': buildingName,
+      'apartment': apartment,
+      'floor': floor,
+      'entranceInstructions': entranceInstructions,
       'city': city,
-      'countyState': countyState,
+      'county': county,
       'postcode': postcode,
       'country': country,
-      'formattedAddress': formattedAddress,
       'placeId': firstPart([placeId, raw['placeId'], suggestion?.placeId]),
       'latitude': lat,
       'longitude': lng,
+      'verified': toBool(verified ?? raw['verified']),
+      'source': firstPart([
+        source,
+        raw['source'],
+        suggestion != null ? 'autocomplete' : null,
+        manualAddress != null ? 'manual' : null,
+      ]),
+      'createdAt': firstPart([createdAt, raw['createdAt']]),
+      'updatedAt': firstPart([updatedAt, raw['updatedAt']]),
+      // Compatibility aliases for older readers while products migrate to the
+      // canonical Address object above.
+      'countyState': county,
+      'lat': lat,
+      'lng': lng,
     }..removeWhere((key, value) => value == null || clean(value).isEmpty);
   }
 
@@ -198,7 +270,7 @@ class AddressEngine {
     ]);
     final subText = joinParts([
       normalized['city'],
-      normalized['countyState'],
+      normalized['county'],
       normalized['postcode'],
       normalized['country'],
     ]);
@@ -221,6 +293,7 @@ class AddressEngine {
         address['addressLine1'],
         address['addressLine2'],
         address['city'],
+        address['county'],
         address['postcode'],
         address['country'],
       ]),
@@ -231,5 +304,13 @@ class AddressEngine {
   static double? toDouble(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse(clean(value));
+  }
+
+  static bool? toBool(Object? value) {
+    if (value is bool) return value;
+    final cleaned = clean(value).toLowerCase();
+    if (cleaned == 'true' || cleaned == 'yes' || cleaned == '1') return true;
+    if (cleaned == 'false' || cleaned == 'no' || cleaned == '0') return false;
+    return null;
   }
 }
