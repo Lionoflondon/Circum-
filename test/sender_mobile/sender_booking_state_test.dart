@@ -428,6 +428,9 @@ void main() {
       expect(relationshipSource, contains('Used for delivery updates only.'));
       expect(relationshipSource, contains('TELL US ABOUT THEM'));
       expect(relationshipSource, contains('What makes them special?'));
+      expect(relationshipSource, contains('Tell us about yourself'));
+      expect(relationshipSource, contains('WHAT MAKES YOU SPECIAL?'));
+      expect(relationshipSource, contains('What makes you special?'));
       expect(relationshipSource, isNot(contains('CONTACT (PHONE OR EMAIL)')));
       expect(relationshipSource, isNot(contains('For delivery updates only')));
       expect(relationshipSource, contains('GiftDeliveryView'));
@@ -597,6 +600,19 @@ void main() {
 
       expect(find.text('Choose your gift mode.'), findsOneWidget);
       expect(find.text('Gift someone'), findsOneWidget);
+    });
+
+    testWidgets('Gift myself uses self-specific recipient copy', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(const MaterialApp(home: GiftModeView()));
+
+      await tester.tap(find.text('Gift myself'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tell us about yourself'), findsOneWidget);
     });
 
     testWidgets('Gift flow validates recipient, delivery, and message steps', (

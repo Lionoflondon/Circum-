@@ -54582,7 +54582,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                                     _giftField(_recipientEmail,
                                         'Recipient email', Icons.email_outlined,
                                         type: TextInputType.emailAddress),
-                                    Text('Tell us about them',
+                                    Text(
+                                        _giftMode == 'gift_myself'
+                                            ? 'Tell us about yourself'
+                                            : 'Tell us about them',
                                         style: TextStyle(
                                             color: colors.text,
                                             fontSize: 18,
@@ -55246,7 +55249,9 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                   ),
                 2 => _giftStepCard(
                     colors: colors,
-                    title: 'Tell me about them',
+                    title: _giftMode == 'gift_myself'
+                        ? 'Tell me about yourself'
+                        : 'Tell me about them',
                     subtitle:
                         'The better the story, the more personal the experience can feel.',
                     body: _giftStoryBriefingPanel(colors),
@@ -55510,6 +55515,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   }
 
   Widget _giftStoryBriefingPanel(_CircumColors colors) {
+    final selfGift = _giftMode == 'gift_myself';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -55540,8 +55546,14 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
             maxLines: 8,
             style: TextStyle(color: colors.text, fontSize: 18, height: 1.55),
             decoration: InputDecoration(
-              hintText:
-                  'Tell us what makes them smile, what they love, what they dislike, what they talk about, what they dream about, and anything that would help Circum create something thoughtful.',
+              labelText: selfGift ? 'What makes you special?' : null,
+              labelStyle: TextStyle(
+                color: colors.adminAccent.withValues(alpha: 0.92),
+                fontWeight: FontWeight.w900,
+              ),
+              hintText: selfGift
+                  ? 'Tell us what makes you smile, what you love, what you dislike, what you talk about, what you dream about, and anything that would help Circum create something thoughtful.'
+                  : 'Tell us what makes them smile, what they love, what they dislike, what they talk about, what they dream about, and anything that would help Circum create something thoughtful.',
               hintStyle:
                   TextStyle(color: colors.mutedText, fontSize: 17, height: 1.5),
               border: InputBorder.none,

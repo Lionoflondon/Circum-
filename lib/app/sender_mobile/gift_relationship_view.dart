@@ -308,8 +308,12 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
         const SizedBox(height: 12),
         _GiftInputCard(
           controller: _notesController,
-          label: 'TELL US ABOUT THEM',
-          placeholder: 'What makes them special?',
+          label: widget.draft.mode == SenderGiftMode.myself
+              ? 'WHAT MAKES YOU SPECIAL?'
+              : 'TELL US ABOUT THEM',
+          placeholder: widget.draft.mode == SenderGiftMode.myself
+              ? 'What makes you special?'
+              : 'What makes them special?',
           maxLines: 5,
           onChanged: (_) => setState(() {}),
         ),
@@ -318,7 +322,7 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
   }
 
   String get _title => switch (widget.draft.mode) {
-        SenderGiftMode.myself => 'Tell us about you',
+        SenderGiftMode.myself => 'Tell us about yourself',
         SenderGiftMode.anonymous => 'Keep it thoughtful',
         SenderGiftMode.campaign => 'Shape the campaign',
         SenderGiftMode.someone => 'Tell us about them',
