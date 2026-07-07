@@ -4,8 +4,10 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/send_package/models/suggestions.m.dart';
+import 'package:circum/app/gifts/gift_system_policy.dart';
 import 'package:circum/app/gifts/gifts_social_policy.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/sender_mobile/gift_campaign_view.dart';
 import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
 import 'package:circum/app/sender_mobile/gift_iris_view.dart';
 import 'package:circum/app/sender_mobile/gift_journey_draft.dart';
@@ -1285,6 +1287,89 @@ void main() {
       expect(safe, isNot(contains('paymentMethod')));
       expect(safe, isNot(contains('rothApplied')));
       expect(safe, isNot(contains('cardAmount')));
+    });
+
+    test('Gifts shared system resumes all sender paths from backend state', () {
+      final someoneDraft =
+          GiftJourneyDraft.forMode(SenderGiftMode.someone).copyWith(
+        recipientName: 'Ada',
+        relationship: 'Friend',
+        occasion: 'Birthday',
+        recipientPhone: '07123',
+        recipientEmail: 'ada@example.com',
+        deliveryAddress: '10 Downing Street',
+        deliveryDate: '2026-07-12',
+        deliveryTimeWindow: '15:30',
+      );
+      final someonePayload = someoneDraft.adminReviewPayload(
+        senderId: 'sender-1',
+        senderEmail: 'sender@example.com',
+      );
+      expect(someonePayload['giftType'], GiftSystemPolicy.normalGiftType);
+      expect(someonePayload['flowStatus'], 'submitted');
+      expect(someonePayload['currentStep'], 13);
+      expect(someonePayload['completedSteps'], contains(12));
+      expect(someonePayload['lastActiveAt'], isNotNull);
+
+      final myselfPayload =
+          GiftJourneyDraft.forMode(SenderGiftMode.myself).adminReviewPayload(
+        senderId: 'sender-2',
+        senderEmail: 'me@example.com',
+      );
+      final anonymousPayload =
+          GiftJourneyDraft.forMode(SenderGiftMode.anonymous).adminReviewPayload(
+        senderId: 'sender-3',
+        senderEmail: 'anon@example.com',
+      );
+      final campaignPayload =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).adminReviewPayload(
+        senderId: 'sender-4',
+        senderEmail: 'campaign@example.com',
+      );
+
+      expect(myselfPayload['giftType'], GiftSystemPolicy.normalGiftType);
+      expect(anonymousPayload['giftType'], GiftSystemPolicy.normalGiftType);
+      expect(campaignPayload['giftType'], GiftSystemPolicy.campaignGiftType);
+      expect(campaignPayload['storyStatus'], 'locked');
+
+      expect(
+        GiftSystemPolicy.resumeRoute({
+          'giftType': 'normal',
+          'flowStatus': 'draft',
+          'currentStep': 4,
+        }),
+        GiftMessageView.routeName,
+      );
+      expect(
+        GiftSystemPolicy.resumeRoute({
+          'giftType': 'normal',
+          'flowStatus': 'submitted',
+          'paymentStatus': 'paid',
+        }),
+        GiftStatusView.routeName,
+      );
+      expect(
+        GiftSystemPolicy.resumeRoute({
+          'giftType': 'campaign',
+          'flowStatus': 'paid_waiting_for_match',
+          'paymentStatus': 'paid',
+        }),
+        GiftCampaignView.routeName,
+      );
+      expect(
+        GiftSystemPolicy.resumeRoute({
+          'giftType': 'normal',
+          'deliveryStatus': 'in_delivery',
+        }),
+        GiftStatusView.routeName,
+      );
+      expect(
+        GiftSystemPolicy.resumeRoute({
+          'giftType': 'normal',
+          'storyStatus': 'unlocked',
+        }),
+        GiftStoryView.routeName,
+      );
     });
 
     testWidgets('Gift flow validates recipient, delivery, and message steps', (

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../gifts/gift_system_policy.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_status_view.dart';
@@ -271,6 +272,16 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      await FirebaseFirestore.instance.collection('notifications').doc().set(
+            GiftSystemPolicy.notificationPayload(
+              event: 'gift_request_submitted',
+              userId: user.uid,
+              giftId: draftRef.id,
+              title: 'Gift request submitted',
+              body: 'Your gift request has been saved for the Gifts Team.',
+              createdAt: FieldValue.serverTimestamp(),
+            ),
+          );
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
           .call({

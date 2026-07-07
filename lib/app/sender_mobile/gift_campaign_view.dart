@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../gifts/gift_system_policy.dart';
 import '../gifts/gifts_social_policy.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
@@ -1119,6 +1120,12 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     await participantRef.set({
       'paymentStatus': 'paid',
       'paymentMethod': _verifiedPaymentMethod,
+      'giftType': GiftSystemPolicy.campaignGiftType,
+      'flowStatus': 'paid_waiting_for_match',
+      'currentStep': 8,
+      'completedSteps': const [1, 2, 3, 4, 5, 6, 7],
+      'deliveryStatus': 'not_started',
+      'storyStatus': 'locked',
       'giftCampaignTotal': _budget,
       'rothApplied': _rothApplied,
       'remainingCardAmount': _cardAmount,
@@ -1130,7 +1137,21 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'campaignStatus': 'paid_waiting_for_match',
       'matchStatus': 'awaiting_admin_pairing',
       'updatedAt': FieldValue.serverTimestamp(),
+      'lastActiveAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('notifications').doc().set(
+            GiftSystemPolicy.notificationPayload(
+              event: 'campaign_waiting_for_match',
+              userId: user.uid,
+              giftId: participantRef.id,
+              title: 'Campaign joined',
+              body: 'Your anonymous campaign gift is waiting for a safe match.',
+              createdAt: FieldValue.serverTimestamp(),
+            ),
+          );
+    }
   }
 
   void _listenForApprovedMatch() {
@@ -1170,6 +1191,18 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     return {
       'userId': userId,
       'email': email,
+      ...GiftSystemPolicy.progressPatch(
+        userId: userId,
+        email: email,
+        giftType: GiftSystemPolicy.campaignGiftType,
+        flowStatus: 'draft',
+        currentStep: _step + 1,
+        completedSteps: List<int>.generate(_step, (index) => index + 1),
+        paymentStatus: 'payment_pending',
+        deliveryStatus: 'not_started',
+        storyStatus: 'locked',
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+      ),
       'displayName': _displayNameController.text.trim(),
       'campaignId': campaign.id,
       'campaignName': campaign.name,

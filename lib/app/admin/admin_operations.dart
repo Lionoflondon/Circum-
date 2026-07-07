@@ -1,3 +1,5 @@
+import '../gifts/gift_system_policy.dart';
+
 enum AdminRole {
   superAdmin('super_admin'),
   operationsAdmin('operations_admin'),
@@ -504,6 +506,164 @@ class AdminHealthPlusTools {
       'updatedAt': updatedAt,
     };
   }
+}
+
+class AdminGiftsOperations {
+  static const filters = GiftSystemPolicy.filters;
+
+  static List<Map<String, dynamic>> filter(
+    Iterable<Map<String, dynamic>> records,
+    String filter,
+  ) =>
+      GiftSystemPolicy.filterGifts(records, filter);
+
+  static String statusBucket(Map<String, dynamic> record) =>
+      GiftSystemPolicy.statusBucket(record);
+
+  static Map<String, Object?> approveRequestPatch({
+    required String adminUserId,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'approved',
+        'status': 'approved',
+        'adminReviewStatus': 'approved',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          actionType: 'gift_request_approved',
+          previousStatus: previousStatus,
+          newStatus: 'approved',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> rejectRequestPatch({
+    required String adminUserId,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'rejected',
+        'status': 'rejected',
+        'adminReviewStatus': 'rejected',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          actionType: 'gift_request_rejected',
+          previousStatus: previousStatus,
+          newStatus: 'rejected',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> approveCampaignMatchPatch({
+    required String adminUserId,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'match_found',
+        'campaignStatus': 'match_found',
+        'matchStatus': 'approved',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          actionType: 'campaign_match_approved',
+          previousStatus: previousStatus,
+          newStatus: 'match_found',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> rejectCampaignMatchPatch({
+    required String adminUserId,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'admin_review_required',
+        'campaignStatus': 'admin_review_required',
+        'matchStatus': 'rejected',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          actionType: 'campaign_match_rejected',
+          previousStatus: previousStatus,
+          newStatus: 'admin_review_required',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> assignGiftsTeamStatusPatch({
+    required String adminUserId,
+    required String previousStatus,
+    required String newStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': newStatus,
+        'giftsTeamStatus': newStatus,
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          actionType: 'gifts_team_status_changed',
+          previousStatus: previousStatus,
+          newStatus: newStatus,
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> linkCampaignDeliveryPatch({
+    required String campaignParticipantId,
+    required String giftRequestId,
+    required String giftDeliveryId,
+    required Object updatedAt,
+  }) =>
+      GiftSystemPolicy.deliveryHandoffPatch(
+        campaignParticipantId: campaignParticipantId,
+        giftRequestId: giftRequestId,
+        giftDeliveryId: giftDeliveryId,
+        updatedAt: updatedAt,
+      );
+
+  static Map<String, Object?> storyOverridePatch({
+    required String adminUserId,
+    required String previousStoryStatus,
+    required String reason,
+    required Object actionAt,
+    required bool unlock,
+  }) =>
+      GiftSystemPolicy.storyOverridePatch(
+        adminUserId: adminUserId,
+        previousStoryStatus: previousStoryStatus,
+        overrideReason: reason,
+        overrideAt: actionAt,
+        unlock: unlock,
+      );
+
+  static Map<String, Object?> notificationPayload({
+    required String event,
+    required String userId,
+    required String giftId,
+    required String title,
+    required String body,
+    Object? createdAt,
+  }) =>
+      GiftSystemPolicy.notificationPayload(
+        event: event,
+        userId: userId,
+        giftId: giftId,
+        title: title,
+        body: body,
+        createdAt: createdAt,
+      );
 }
 
 List<Map<String, dynamic>> adminSearch(

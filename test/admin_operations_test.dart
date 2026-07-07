@@ -337,5 +337,153 @@ void main() {
       expect(source, contains("'giftIrisLearning'"));
       expect(source, contains('Gift workspace updated'));
     });
+
+    test('admin can filter and operate every Gifts path with audit metadata',
+        () {
+      final records = [
+        {
+          'giftType': 'normal',
+          'flowStatus': 'submitted',
+          'paymentStatus': 'payment_pending',
+        },
+        {
+          'giftType': 'normal',
+          'paymentStatus': 'paid',
+          'flowStatus': 'paid',
+        },
+        {
+          'giftType': 'campaign',
+          'campaignStatus': 'paid_waiting_for_match',
+        },
+        {
+          'giftType': 'campaign',
+          'campaignStatus': 'match_found',
+        },
+        {
+          'giftType': 'normal',
+          'deliveryStatus': 'in_delivery',
+        },
+        {
+          'giftType': 'normal',
+          'deliveryStatus': 'delivered',
+        },
+        {
+          'giftType': 'campaign',
+          'flowStatus': 'ready_for_gift_delivery',
+        },
+        {
+          'giftType': 'normal',
+          'storyStatus': 'unlocked',
+        },
+        {
+          'giftType': 'normal',
+          'activeDeliveryDispute': true,
+        },
+      ];
+
+      expect(AdminGiftsOperations.filters, contains('ready_for_gift_delivery'));
+      expect(AdminGiftsOperations.filter(records, 'submitted'), hasLength(1));
+      expect(AdminGiftsOperations.filter(records, 'paid'), hasLength(1));
+      expect(AdminGiftsOperations.filter(records, 'waiting_for_match'),
+          hasLength(1));
+      expect(AdminGiftsOperations.filter(records, 'match_found'), hasLength(1));
+      expect(AdminGiftsOperations.filter(records, 'in_delivery'), hasLength(1));
+      expect(AdminGiftsOperations.filter(records, 'delivered'), hasLength(1));
+      expect(
+        AdminGiftsOperations.filter(records, 'ready_for_gift_delivery'),
+        hasLength(1),
+      );
+      expect(
+          AdminGiftsOperations.filter(records, 'story_unlocked'), hasLength(1));
+      expect(AdminGiftsOperations.filter(records, 'disputed'), hasLength(1));
+
+      final approval = AdminGiftsOperations.approveRequestPatch(
+        adminUserId: 'admin-1',
+        previousStatus: 'submitted',
+        reason: 'Approved for curation',
+        actionAt: DateTime(2026, 7, 7),
+      );
+      expect(approval['flowStatus'], 'approved');
+      expect(approval['adminUserId'], 'admin-1');
+      expect(approval['actionType'], 'gift_request_approved');
+      expect(approval['previousStatus'], 'submitted');
+      expect(approval['newStatus'], 'approved');
+      expect(approval['reason'], 'Approved for curation');
+
+      final matchApproval = AdminGiftsOperations.approveCampaignMatchPatch(
+        adminUserId: 'admin-2',
+        previousStatus: 'admin_pairing_pending',
+        reason: 'Safe anonymous match approved',
+        actionAt: DateTime(2026, 7, 7),
+      );
+      expect(matchApproval['campaignStatus'], 'match_found');
+      expect(matchApproval['matchStatus'], 'approved');
+
+      final handoff = AdminGiftsOperations.linkCampaignDeliveryPatch(
+        campaignParticipantId: 'participant-1',
+        giftRequestId: 'gift-1',
+        giftDeliveryId: 'delivery-1',
+        updatedAt: DateTime(2026, 7, 7),
+      );
+      expect(handoff['campaignParticipantId'], 'participant-1');
+      expect(handoff['giftRequestId'], 'gift-1');
+      expect(handoff['giftDeliveryId'], 'delivery-1');
+      expect(handoff['campaignStatus'], 'ready_for_gift_delivery');
+      expect(handoff['storyStatus'], 'locked');
+    });
+
+    test('admin story lock unlock and notifications use shared Gifts audit',
+        () {
+      final unlock = AdminGiftsOperations.storyOverridePatch(
+        adminUserId: 'admin-1',
+        previousStoryStatus: 'locked',
+        reason: 'Manual proof review complete',
+        actionAt: DateTime(2026, 7, 7, 10),
+        unlock: true,
+      );
+      expect(unlock['storyStatus'], 'unlocked');
+      expect(unlock['giftStoryOverrideType'], 'manual_unlock');
+      expect(unlock['giftStoryAdminUserId'], 'admin-1');
+      expect(unlock['giftStoryAdminOverrideReason'],
+          'Manual proof review complete');
+      expect(unlock['giftStoryPreviousStatus'], 'locked');
+
+      final lock = AdminGiftsOperations.storyOverridePatch(
+        adminUserId: 'admin-2',
+        previousStoryStatus: 'unlocked',
+        reason: 'Recipient dispute under review',
+        actionAt: DateTime(2026, 7, 7, 11),
+        unlock: false,
+      );
+      expect(lock['storyStatus'], 'locked');
+      expect(lock['giftStoryOverrideType'], 'manual_lock');
+      expect(lock['actionType'], 'manual_lock');
+
+      expect(
+        () => AdminGiftsOperations.storyOverridePatch(
+          adminUserId: 'admin-2',
+          previousStoryStatus: 'unlocked',
+          reason: '',
+          actionAt: DateTime(2026, 7, 7, 11),
+          unlock: false,
+        ),
+        throwsArgumentError,
+      );
+
+      final notification = AdminGiftsOperations.notificationPayload(
+        event: 'gift_story_unlocked',
+        userId: 'sender-1',
+        giftId: 'gift-1',
+        title: 'Gift Story unlocked',
+        body: 'Your Gift Story is ready.',
+        createdAt: DateTime(2026, 7, 7),
+      );
+      expect(notification['recipientId'], 'sender-1');
+      expect(notification['recipientRole'], 'sender');
+      expect(notification['giftEvent'], 'gift_story_unlocked');
+      expect(notification['privacySafe'], isTrue);
+      expect(notification.containsKey('matchedParticipantBudget'), isFalse);
+      expect(notification.containsKey('internalNotes'), isFalse);
+    });
   });
 }

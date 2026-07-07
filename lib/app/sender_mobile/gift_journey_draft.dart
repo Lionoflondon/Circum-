@@ -1,3 +1,4 @@
+import '../gifts/gift_system_policy.dart';
 import '../send_package/models/suggestions.m.dart';
 
 enum SenderGiftMode {
@@ -735,10 +736,25 @@ class GiftJourneyDraft {
     final themes = normalizedGiftThemes;
     final selectedInterests = giftThemeLabels;
     final brief = irisGiftBrief ?? generateIrisBrief();
+    final giftType = mode == SenderGiftMode.campaign
+        ? GiftSystemPolicy.campaignGiftType
+        : GiftSystemPolicy.normalGiftType;
     return {
       'senderId': senderId,
       'senderName': senderName ?? '',
       'senderEmail': senderEmail.toLowerCase(),
+      ...GiftSystemPolicy.progressPatch(
+        userId: senderId,
+        email: senderEmail,
+        giftType: giftType,
+        flowStatus: 'submitted',
+        currentStep: 13,
+        completedSteps: const [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        paymentStatus: 'payment_pending',
+        deliveryStatus: linkedGiftDeliveryStatus ?? 'not_started',
+        storyStatus: giftStoryStatus,
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+      ),
       'recipientName': recipientName?.trim() ?? '',
       'recipientPhone': recipientPhone?.trim() ?? '',
       'recipientEmail': recipientEmail?.trim().toLowerCase() ?? '',
@@ -820,7 +836,7 @@ class GiftJourneyDraft {
         'brandsDisliked': '',
         'preferredStyles': preferredStyles,
       },
-      'giftType': mode == SenderGiftMode.campaign ? 'campaign' : 'standard',
+      'giftType': giftType,
       'paymentStatus': 'payment_pending',
       'source': 'sender_mobile',
       'paymentMethod': 'card',
