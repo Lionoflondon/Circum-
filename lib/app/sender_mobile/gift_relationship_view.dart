@@ -5,7 +5,10 @@ import 'gift_delivery_view.dart';
 
 const senderGiftRelationshipFieldName = 'relationship';
 const senderGiftOccasionFieldName = 'occasion';
+const senderGiftRecipientPhoneFieldName = 'recipientPhone';
+const senderGiftRecipientEmailFieldName = 'recipientEmail';
 const senderGiftRecipientContactFieldName = 'recipientContact';
+const senderGiftRecipientNotesFieldName = 'notes';
 
 const senderGiftRelationshipOptions = [
   'Partner',
@@ -175,18 +178,23 @@ class GiftRelationshipView extends StatefulWidget {
 }
 
 class _GiftRelationshipViewState extends State<GiftRelationshipView> {
-  final _contactController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _notesController = TextEditingController();
   String? _relationship;
   String? _occasion;
 
   bool get _canContinue =>
       _relationship != null &&
       _occasion != null &&
-      _contactController.text.trim().isNotEmpty;
+      _phoneController.text.trim().isNotEmpty &&
+      _emailController.text.trim().isNotEmpty;
 
   @override
   void dispose() {
-    _contactController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -198,6 +206,20 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
       title: 'Tell us about them',
       subtitle: 'Tell IRIS who this is for so we can shape the experience.',
       onBack: () => Navigator.of(context).maybePop(),
+      footer: _GiftPrimaryButton(
+        enabled: _canContinue,
+        label: 'Continue',
+        onTap: !_canContinue
+            ? null
+            : () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const GiftDeliveryView(),
+                    settings: const RouteSettings(
+                      name: GiftDeliveryView.routeName,
+                    ),
+                  ),
+                ),
+      ),
       children: [
         _GiftGlassDropdown(
           label: 'RELATIONSHIP',
@@ -216,27 +238,29 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
         ),
         const SizedBox(height: 12),
         _GiftInputCard(
-          controller: _contactController,
-          label: 'PHONE & EMAIL',
+          controller: _phoneController,
+          label: 'PHONE',
           helper: 'Used for delivery updates only.',
-          placeholder: 'Phone or email',
+          placeholder: 'Phone number',
+          keyboardType: TextInputType.phone,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        _GiftInputCard(
+          controller: _emailController,
+          label: 'EMAIL',
+          helper: 'Used for delivery updates only.',
+          placeholder: 'Email address',
           keyboardType: TextInputType.emailAddress,
           onChanged: (_) => setState(() {}),
         ),
-        const SizedBox(height: 28),
-        _GiftPrimaryButton(
-          enabled: _canContinue,
-          label: 'Continue',
-          onTap: !_canContinue
-              ? null
-              : () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const GiftDeliveryView(),
-                      settings: const RouteSettings(
-                        name: GiftDeliveryView.routeName,
-                      ),
-                    ),
-                  ),
+        const SizedBox(height: 12),
+        _GiftInputCard(
+          controller: _notesController,
+          label: 'TELL US ABOUT THEM',
+          placeholder: 'What makes them special?',
+          maxLines: 5,
+          onChanged: (_) => setState(() {}),
         ),
       ],
     );
@@ -286,6 +310,7 @@ class GiftJourneyWidgets {
     required String subtitle,
     required VoidCallback onBack,
     required List<Widget> children,
+    Widget? footer,
   }) {
     return _GiftJourneyScaffold(
       activeStep: activeStep,
@@ -293,6 +318,7 @@ class GiftJourneyWidgets {
       title: title,
       subtitle: subtitle,
       onBack: onBack,
+      footer: footer,
       children: children,
     );
   }
@@ -341,6 +367,7 @@ class _GiftJourneyScaffold extends StatelessWidget {
   final String subtitle;
   final VoidCallback onBack;
   final List<Widget> children;
+  final Widget? footer;
 
   const _GiftJourneyScaffold({
     required this.activeStep,
@@ -349,6 +376,7 @@ class _GiftJourneyScaffold extends StatelessWidget {
     required this.subtitle,
     required this.onBack,
     required this.children,
+    this.footer,
   });
 
   @override
@@ -359,47 +387,58 @@ class _GiftJourneyScaffold extends StatelessWidget {
         children: [
           const _GiftJourneyAmbient(),
           SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+            child: Column(
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: _GiftBackButton(onTap: onBack),
-                ),
-                const SizedBox(height: 28),
-                _GiftStepProgress(activeStep: activeStep),
-                const SizedBox(height: 20),
-                Text(
-                  eyebrow,
-                  style: GoogleFonts.jetBrainsMono(
-                    color: _GiftJourneyTokens.htmlIri2,
-                    fontSize: 10.5,
-                    letterSpacing: 1.3,
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _GiftBackButton(onTap: onBack),
+                      ),
+                      const SizedBox(height: 34),
+                      _GiftStepProgress(activeStep: activeStep),
+                      const SizedBox(height: 24),
+                      Text(
+                        eyebrow,
+                        style: GoogleFonts.jetBrainsMono(
+                          color: _GiftJourneyTokens.htmlIri2,
+                          fontSize: 10.5,
+                          letterSpacing: 1.3,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        title,
+                        style: GoogleFonts.dmSerifDisplay(
+                          color: Colors.white,
+                          fontSize: 44,
+                          height: 1.04,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.inter(
+                          color: _GiftJourneyTokens.muted,
+                          fontSize: 15,
+                          height: 1.55,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 34),
+                      ...children,
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  style: GoogleFonts.dmSerifDisplay(
-                    color: Colors.white,
-                    fontSize: 38,
-                    height: 1.05,
-                    fontWeight: FontWeight.w600,
+                if (footer != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
+                    child: footer,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.inter(
-                    color: _GiftJourneyTokens.muted,
-                    fontSize: 14.5,
-                    height: 1.45,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 26),
-                ...children,
               ],
             ),
           ),
@@ -427,7 +466,7 @@ class _GiftGlassDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+      padding: const EdgeInsets.fromLTRB(16, 18, 12, 14),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .052),
         borderRadius: BorderRadius.circular(18),
@@ -505,7 +544,7 @@ class _GiftInputCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .052),
         borderRadius: BorderRadius.circular(18),
@@ -534,7 +573,7 @@ class _GiftInputCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           TextField(
             controller: controller,
             keyboardType: keyboardType,

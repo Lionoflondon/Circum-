@@ -41,24 +41,23 @@ class _GiftMessageViewState extends State<GiftMessageView> {
           maxLines: 5,
           onChanged: (_) => setState(() {}),
         ),
-        const SizedBox(height: 28),
-        GiftJourneyWidgets.primaryButton(
-          enabled: _canContinue,
-          label: 'Continue',
-          onTap: !_canContinue
-              ? null
-              : () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const GiftJourneyPlaceholderView(
-                        message: 'Next Gifts step coming soon',
-                      ),
-                      settings: const RouteSettings(
-                        name: '/sender-mobile/gifts/next',
-                      ),
+      ],
+      footer: GiftJourneyWidgets.primaryButton(
+        enabled: _canContinue,
+        label: 'Continue',
+        onTap: !_canContinue
+            ? null
+            : () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const GiftJourneyPlaceholderView(
+                      message: 'Next Gifts step coming soon',
+                    ),
+                    settings: const RouteSettings(
+                      name: '/sender-mobile/gifts/next',
                     ),
                   ),
-        ),
-      ],
+                ),
+      ),
     );
   }
 }
