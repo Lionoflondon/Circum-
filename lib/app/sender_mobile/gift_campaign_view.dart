@@ -32,6 +32,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _matchSub;
 
   final _displayNameController = TextEditingController();
+  final _customInspirationController = TextEditingController();
   final _allergiesController = TextEditingController();
   final _dietaryController = TextEditingController();
   final _medicalController = TextEditingController();
@@ -63,16 +64,21 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   var _submitting = false;
   String? _message;
 
-  bool get _hasAboutSignal =>
-      _displayNameController.text.trim().isNotEmpty &&
-      _selected.values.any((values) => values.isNotEmpty);
+  bool get _hasAboutSignal {
+    final hasSelectedSignal =
+        _selected.values.any((values) => values.isNotEmpty);
+    final hasCustomSignal = _customInspirationController.text.trim().isNotEmpty;
+    return _displayNameController.text.trim().isNotEmpty &&
+        (hasSelectedSignal || hasCustomSignal);
+  }
 
+  bool get _wantsRoth => _paymentMethod != 'Card' && _applyRoth;
   double get _rothApplied =>
-      _applyRoth ? _rothBalance.clamp(0, _budget).toDouble() : 0;
+      _wantsRoth ? _rothBalance.clamp(0, _budget).toDouble() : 0;
   double get _cardAmount => (_budget - _rothApplied).clamp(0, _budget);
   String get _verifiedPaymentMethod {
-    if (_rothApplied >= _budget) return 'roth';
-    if (_rothApplied > 0) return 'roth_card';
+    if (_paymentMethod == 'Roth') return 'roth';
+    if (_paymentMethod == 'Roth + Card') return 'roth_card';
     return 'card';
   }
 
@@ -102,6 +108,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   void dispose() {
     _matchSub?.cancel();
     _displayNameController.dispose();
+    _customInspirationController.dispose();
     _allergiesController.dispose();
     _dietaryController.dispose();
     _medicalController.dispose();
@@ -151,7 +158,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         5 => 'Campaign gift budget',
         6 => 'Review your campaign join',
         7 => 'Secure participation',
-        8 => 'Finding a compatible match',
+        8 => 'Waiting for your match',
         9 => 'Anonymous match found',
         _ => 'Campaign',
       };
@@ -170,7 +177,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           'No recipient, delivery address or delivery date is collected yet.',
         7 => 'Pay with Roth, card, or Roth plus card.',
         8 =>
-          'Admin pairing and GiftsSocialPolicy matching happen before any private recipient details are used.',
+          'We’ll only reveal what the policy allows. You’ll be notified when a safe match is approved.',
         9 =>
           'Only anonymous compatibility is shown. Names, photos and addresses stay hidden.',
         _ => '',
@@ -178,7 +185,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
 
   String get _primaryLabel => switch (_step) {
         0 => 'Join Campaign',
-        7 => _submitting ? 'Securing...' : 'Continue to Secure Payment',
+        7 => _submitting ? 'Processing...' : 'Continue to Secure Payment',
         8 => 'Refresh Match',
         9 => 'Continue',
         _ => 'Continue',
@@ -303,6 +310,16 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           'Home Fragrance',
           'Accessories',
         ]),
+        const SizedBox(height: 4),
+        GiftJourneyWidgets.inputCard(
+          controller: _customInspirationController,
+          label: 'ADD YOUR OWN INSPIRATION',
+          placeholder: 'Write your own inspiration...',
+          helper:
+              'Choose from the ideas above, then add anything personal: memories, inside jokes, colours, places, dreams, style, dislikes, or the kind of person you want to meet.',
+          onChanged: (_) => setState(() {}),
+          maxLines: 4,
+        ),
       ];
 
   List<Widget> get _safetyChildren => [
@@ -347,9 +364,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         const SizedBox(height: 12),
         GiftJourneyWidgets.inputCard(
           controller: _blockedController,
-          label: 'BLOCKLIST',
-          placeholder: 'Optional blocked user IDs',
-          helper: 'Used only if applicable.',
+          label: 'PEOPLE TO AVOID',
+          placeholder: 'Name, handle, phone, or email if known',
+          helper:
+              'Optional. Add anyone you do not want to be matched with, if applicable.',
           onChanged: (_) => setState(() {}),
         ),
       ];
@@ -502,10 +520,13 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           title: 'Remaining card amount',
           body: '£${_cardAmount.toStringAsFixed(0)}',
         ),
-        if (_message != null) ...[
-          const SizedBox(height: 12),
-          _CampaignGlassCard(title: 'Payment', body: _message!),
-        ],
+        const SizedBox(height: 12),
+        _CampaignGlassCard(
+          title: 'Payment',
+          body: _submitting
+              ? 'Processing payment...'
+              : (_message ?? 'Payment ready'),
+        ),
       ];
 
   List<Widget> get _waitingChildren => [
@@ -530,7 +551,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Finding a compatible match',
+                'Waiting for your match',
                 style: GoogleFonts.dmSerifDisplay(
                   color: Colors.white,
                   fontSize: 24,
@@ -539,7 +560,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
               ),
               const SizedBox(height: 10),
               Text(
-                'We only show anonymous compatibility after GiftsSocialPolicy and Admin pairing approve the match.',
+                'We’ll only reveal what the policy allows. You’ll be notified when a safe match is approved.',
                 style: GoogleFonts.inter(
                   color: const Color(0xFFE7DFF5),
                   fontSize: 13,
@@ -736,6 +757,18 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       });
       return;
     }
+    if (_paymentMethod == 'Roth' && _rothBalance < _budget) {
+      setState(() {
+        _message = 'Roth balance is not enough for this campaign gift.';
+      });
+      return;
+    }
+    if (_paymentMethod == 'Roth + Card' && _rothBalance <= 0) {
+      setState(() {
+        _message = 'Roth is unavailable. Choose card to continue securely.';
+      });
+      return;
+    }
     setState(() {
       _submitting = true;
       _message = null;
@@ -759,42 +792,71 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       if (result.score == 0) {
         throw StateError(result.reason);
       }
-      if (_verifiedPaymentMethod == 'roth' ||
-          _verifiedPaymentMethod == 'roth_card') {
-        final payment = await FirebaseFunctions.instance
-            .httpsCallable(senderGiftPaymentCallableName)
-            .call({
-          'campaignParticipantId': participantRef.id,
-          'source': senderGiftCampaignPaymentSource,
-          'applyRoth': true,
-          'grossGiftBudget': _budget,
-          'returnOrigin': Uri.base.origin,
-        });
-        final data = Map<String, dynamic>.from(payment.data as Map);
-        if (data['walletPaidInFull'] != true) {
-          final checkoutUrl = Uri.tryParse('${data['url'] ?? ''}');
-          if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
-            throw StateError('Secure checkout could not be opened.');
-          }
-          await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
-          return;
-        }
+      final paymentDraftRef = FirebaseFirestore.instance
+          .collection(senderGiftPaymentDraftCollectionName)
+          .doc();
+      await paymentDraftRef.set({
+        ...participant,
+        'senderId': user.uid,
+        'senderEmail': user.email ?? '',
+        'giftDraftId': paymentDraftRef.id,
+        'campaignParticipantId': participantRef.id,
+        'campaignFlow': 'anonymous',
+        'source': senderGiftCampaignPaymentSource,
+        'status': 'draft',
+        'giftStatus': 'campaign_participation',
+        'paymentStatus': 'payment_pending',
+        'selectedBudgetGbp': _budget,
+        'grossBudget': _budget,
+        'grossGiftBudget': _budget,
+        'applyRoth': _wantsRoth,
+        'paymentMethod': _verifiedPaymentMethod,
+        'rothApplied': _rothApplied,
+        'cardAmount': _cardAmount,
+        'returnOrigin': Uri.base.origin,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      final payment = await FirebaseFunctions.instance
+          .httpsCallable(senderGiftPaymentCallableName)
+          .call({
+        'giftDraftId': paymentDraftRef.id,
+        'campaignParticipantId': participantRef.id,
+        'source': senderGiftCampaignPaymentSource,
+        'applyRoth': _wantsRoth,
+        'grossGiftBudget': _budget,
+        'returnOrigin': Uri.base.origin,
+      });
+      final data = Map<String, dynamic>.from(payment.data as Map);
+      if (data['walletPaidInFull'] == true ||
+          data['campaignParticipantPaid'] == true) {
+        await _markParticipantPaid(
+          participantRef,
+          paymentDraftId: paymentDraftRef.id,
+          stripeSessionId: null,
+        );
       } else {
-        final payment = await FirebaseFunctions.instance
-            .httpsCallable(senderGiftPaymentCallableName)
-            .call({
-          'campaignParticipantId': participantRef.id,
-          'source': senderGiftCampaignPaymentSource,
-          'applyRoth': false,
-          'grossGiftBudget': _budget,
-          'returnOrigin': Uri.base.origin,
-        });
-        final data = Map<String, dynamic>.from(payment.data as Map);
         final checkoutUrl = Uri.tryParse('${data['url'] ?? ''}');
         if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
           throw StateError('Secure checkout could not be opened.');
         }
-        await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+        await participantRef.set({
+          'paymentStatus': 'checkout_pending',
+          'paymentMethod': _verifiedPaymentMethod,
+          'giftCampaignTotal': _budget,
+          'rothApplied': (data['walletContributionGbp'] as num?)?.toDouble() ??
+              _rothApplied,
+          'remainingCardAmount':
+              (data['remainingStripeAmountGbp'] as num?)?.toDouble() ??
+                  _cardAmount,
+          'stripeCheckoutSessionId': data['sessionId'],
+          'paymentDraftId': paymentDraftRef.id,
+          'campaignFlow': 'anonymous',
+          'campaignStatus': 'checkout_pending',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+        if (!opened) throw StateError('Secure checkout could not be opened.');
         return;
       }
       _listenForApprovedMatch();
@@ -810,6 +872,27 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _markParticipantPaid(
+    DocumentReference<Map<String, dynamic>> participantRef, {
+    required String paymentDraftId,
+    required String? stripeSessionId,
+  }) async {
+    await participantRef.set({
+      'paymentStatus': 'paid',
+      'paymentMethod': _verifiedPaymentMethod,
+      'giftCampaignTotal': _budget,
+      'rothApplied': _rothApplied,
+      'remainingCardAmount': _cardAmount,
+      'paidAt': FieldValue.serverTimestamp(),
+      'paymentDraftId': paymentDraftId,
+      'stripeCheckoutSessionId': stripeSessionId,
+      'campaignFlow': 'anonymous',
+      'campaignStatus': 'waiting_for_match',
+      'matchStatus': 'awaiting_admin_pairing',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> _refreshApprovedMatch() async {
@@ -863,12 +946,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'favouriteFoodsDrinks': _selected['favouriteFoodsDrinks']!.toList(),
       'lifestyle': _selected['lifestyle']!.toList(),
       'preferredGiftCategories': _selected['preferredGiftCategories']!.toList(),
+      'customInspiration': _customInspirationController.text.trim(),
       'allergies': _commaList(_allergiesController.text),
       'dietaryRestrictions': _dietaryController.text.trim(),
       'medicalRestrictions': _medicalController.text.trim(),
       'culturalOrReligiousConsiderations': _culturalController.text.trim(),
       'thingsToAvoid': _avoidController.text.trim(),
       'blockedUserIds': _commaList(_blockedController.text),
+      'avoidanceSignals': _commaList(_blockedController.text),
       'senderRevealMode': _senderRevealMode,
       'senderRevealConsent': 'pending',
       'recipientRevealRequestStatus': 'pending',
@@ -883,7 +968,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'rothApplied': _rothApplied,
       'cardAmount': _cardAmount,
       'paymentStatus': 'payment_pending',
-      'source': 'sender_mobile',
+      'source': senderGiftCampaignPaymentSource,
       'giftRequestCreated': false,
       'recipientKnown': false,
       'deliveryCollected': false,

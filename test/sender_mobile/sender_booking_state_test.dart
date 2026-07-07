@@ -977,7 +977,7 @@ void main() {
     testWidgets('Campaign opens native anonymous matching flow', (
       tester,
     ) async {
-      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.binding.setSurfaceSize(const Size(390, 1800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(const MaterialApp(home: GiftModeView()));
 
@@ -994,6 +994,39 @@ void main() {
       expect(find.text('Bringing London Closer'), findsOneWidget);
       expect(find.text('Tell us about them'), findsNothing);
       expect(find.text('Where and when?'), findsNothing);
+
+      await tester.tap(find.text('Bringing London Closer'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('About you'), findsOneWidget);
+      await tester.enterText(find.byType(TextField).first, 'North Londoner');
+      await tester.tap(find.text('Travel'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -900));
+      await tester.pumpAndSettle();
+      expect(find.text('ADD YOUR OWN INSPIRATION'), findsOneWidget);
+      expect(find.text('Write your own inspiration...'), findsOneWidget);
+      await tester.drag(find.byType(ListView), const Offset(0, 900));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Safety'), findsOneWidget);
+      await tester.drag(find.byType(ListView), const Offset(0, -700));
+      await tester.pumpAndSettle();
+      expect(find.text('PEOPLE TO AVOID'), findsOneWidget);
+      expect(
+          find.text('Name, handle, phone, or email if known'), findsOneWidget);
+      expect(find.text('Blocklist'), findsNothing);
+      expect(find.text('Optional blocked user IDs'), findsNothing);
+      await tester.drag(find.byType(ListView), const Offset(0, 700));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Privacy'), findsOneWidget);
     });
 
     test('Campaign Gifts is separate from known-recipient Gifts flow', () {
@@ -1003,6 +1036,24 @@ void main() {
 
       expect(campaignSource, contains('giftCampaignParticipants'));
       expect(campaignSource, contains('giftCampaignMatches'));
+      expect(campaignSource, contains('senderGiftPaymentDraftCollectionName'));
+      expect(campaignSource, contains('giftDraftId'));
+      expect(campaignSource, contains('campaignParticipantId'));
+      expect(campaignSource, contains('campaignFlow'));
+      expect(campaignSource, contains('waiting_for_match'));
+      expect(campaignSource, contains('checkout_pending'));
+      expect(campaignSource, contains('Payment ready'));
+      expect(campaignSource, contains('Processing payment...'));
+      expect(campaignSource, contains('Continue to Secure Payment'));
+      expect(campaignSource, contains('customInspiration'));
+      expect(campaignSource, contains('ADD YOUR OWN INSPIRATION'));
+      expect(campaignSource, contains('Write your own inspiration...'));
+      expect(campaignSource, contains('PEOPLE TO AVOID'));
+      expect(
+        campaignSource,
+        contains('Name, handle, phone, or email if known'),
+      );
+      expect(campaignSource, contains('avoidanceSignals'));
       expect(campaignSource, contains('awaiting_admin_pairing'));
       expect(campaignSource, contains('recipientKnown'));
       expect(campaignSource, contains('deliveryCollected'));
@@ -1012,7 +1063,7 @@ void main() {
       expect(campaignSource, contains('GiftsSocialPolicy.canPostPublicly'));
       expect(campaignSource, contains('GiftsSocialPolicy.canApproveBrandTags'));
       expect(campaignSource, contains('Anonymous match found'));
-      expect(campaignSource, contains('Finding a compatible match'));
+      expect(campaignSource, contains('Waiting for your match'));
       expect(campaignSource, contains('No recipient fields here.'));
       expect(campaignSource, contains('Delivery address'));
       expect(
@@ -1026,6 +1077,8 @@ void main() {
       expect(campaignSource, isNot(contains('GiftDeliveryView(')));
       expect(campaignSource, isNot(contains("import 'gift_review_view.dart'")));
       expect(campaignSource, isNot(contains('GiftReviewView(')));
+      expect(campaignSource, isNot(contains("label: 'BLOCKLIST'")));
+      expect(campaignSource, isNot(contains('Optional blocked user IDs')));
     });
 
     testWidgets('Gift flow validates recipient, delivery, and message steps', (
