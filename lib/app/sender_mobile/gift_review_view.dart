@@ -20,6 +20,7 @@ class _GiftReviewViewState extends State<GiftReviewView> {
   @override
   Widget build(BuildContext context) {
     final draft = widget.draft;
+    final brief = draft.giftBriefPreview;
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
       eyebrow: 'STEP 11 — REVIEW',
@@ -41,9 +42,8 @@ class _GiftReviewViewState extends State<GiftReviewView> {
                   draft.senderRevealMode ?? 'reveal_immediately'] ??
               'Reveal immediately'),
         ),
-        const _ReviewRow(
-          label: 'IRIS preview',
-          value: senderGiftPendingIrisSuggestion,
+        _GiftBriefCard(
+          brief: brief,
         ),
         if (draft.mode == SenderGiftMode.campaign) ...[
           const _ReviewRow(
@@ -68,6 +68,93 @@ class _GiftReviewViewState extends State<GiftReviewView> {
             settings: const RouteSettings(name: GiftPaymentView.routeName),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GiftBriefCard extends StatelessWidget {
+  final SenderGiftBriefPreview brief;
+
+  const _GiftBriefCard({required this.brief});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFC9B8FF).withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFC9B8FF).withValues(alpha: .26),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'IRIS GIFT BRIEF',
+            style: GoogleFonts.jetBrainsMono(
+              color: const Color(0xFFC9B8FF),
+              fontSize: 10.5,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _BriefLine(
+            label: 'Emotional Direction',
+            value: brief.emotionalDirection,
+          ),
+          _BriefLine(
+            label: 'Experience Direction',
+            value: brief.experienceDirection,
+          ),
+          _BriefLine(label: 'Things To Avoid', value: brief.thingsToAvoid),
+          _BriefLine(label: 'Confidence', value: brief.confidence),
+          _BriefLine(
+            label: 'Human review required',
+            value: brief.humanReviewRequired ? 'Yes' : 'No',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BriefLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _BriefLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: const Color(0xFFB8AAB8),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 13,
+              height: 1.35,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

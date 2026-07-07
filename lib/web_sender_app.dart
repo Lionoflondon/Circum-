@@ -5261,6 +5261,252 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await _loadAdminData();
   }
 
+  Widget _adminGiftIntelligenceStack(Map<String, dynamic> item) {
+    final brief = item['giftBrief'] is Map
+        ? Map<String, dynamic>.from(item['giftBrief'] as Map)
+        : const <String, dynamic>{};
+    final voice = item['voiceNote'] is Map
+        ? Map<String, dynamic>.from(item['voiceNote'] as Map)
+        : const <String, dynamic>{};
+    final payment = item['paymentBreakdown'] is Map
+        ? Map<String, dynamic>.from(item['paymentBreakdown'] as Map)
+        : const <String, dynamic>{};
+    final customInterests = <String>{
+      ..._giftStringList(brief['customInterests']),
+      ..._giftStringList(brief['pendingInterests']),
+      ..._giftStringList(item['irisPendingInterests']),
+      ..._giftStringList(item['customInterests']),
+    }.toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _adminGiftDetailPanel(
+          icon: Icons.auto_awesome,
+          title: 'IRIS Gift Brief',
+          children: [
+            _adminGiftDetailLine('Recipient summary',
+                _giftBriefText(brief, ['recipientProfile', 'summary'])),
+            _adminGiftDetailLine(
+                'Relationship', _giftBriefText(brief, ['relationship'])),
+            _adminGiftDetailLine(
+                'Occasion', _giftBriefText(brief, ['occasion'])),
+            _adminGiftDetailLine('Emotional direction',
+                _giftBriefText(brief, ['emotionalTone', 'emotionalDirection'])),
+            _adminGiftDetailLine(
+                'Experience direction',
+                _giftBriefText(
+                    brief, ['experienceDirection', 'giftDirection'])),
+            _adminGiftDetailLine('Message summary',
+                _giftBriefText(brief, ['messageSummary', 'writingStyle'])),
+            _adminGiftDetailLine(
+                'Voice summary', _giftBriefText(brief, ['voiceSummary'])),
+            _adminGiftDetailLine(
+                'Voice sentiment', _giftBriefText(brief, ['voiceSentiment'])),
+            _adminGiftDetailLine(
+                'Themes', _giftBriefList(brief['selectedInterests'])),
+            _adminGiftDetailLine(
+                'Brands', _giftBriefText(brief, ['brandSummary'])),
+            _adminGiftDetailLine(
+                'Colours', _giftBriefText(brief, ['colourSummary'])),
+            _adminGiftDetailLine(
+                'Sizes', _giftBriefText(brief, ['styleSummary'])),
+            _adminGiftDetailLine(
+                'Gift direction', _giftBriefText(brief, ['giftDirection'])),
+            _adminGiftDetailLine(
+                'Avoid', _giftBriefList(brief['avoidSignals'])),
+            _adminGiftDetailLine('Confidence',
+                '${brief['confidenceScore'] ?? brief['confidence'] ?? 'Pending'}'),
+            _adminGiftDetailLine('Missing information',
+                _giftBriefList(brief['missingInformation'])),
+            _adminGiftDetailLine('Outstanding questions',
+                _giftBriefList(brief['outstandingQuestions'])),
+            _adminGiftDetailLine(
+              'Manual review',
+              brief['manualReviewRequired'] == true
+                  ? 'Required'
+                  : 'Not flagged',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _adminGiftDetailPanel(
+          icon: Icons.mic_none,
+          title: 'Voice Note',
+          children: [
+            _adminGiftDetailLine('Processing status',
+                '${item['voiceProcessingStatus'] ?? voice['processingStatus'] ?? 'Not provided'}'),
+            _adminGiftDetailLine(
+                'Duration',
+                voice['durationSeconds'] == null
+                    ? 'Not provided'
+                    : '${voice['durationSeconds']} seconds'),
+            _adminGiftDetailLine(
+                'Transcript', '${voice['transcript'] ?? 'Not available'}'),
+            _adminGiftDetailLine(
+                'Language', '${voice['language'] ?? 'Not provided'}'),
+            _adminGiftDetailLine(
+                'Sentiment', '${voice['sentiment'] ?? 'Not available'}'),
+            _adminGiftDetailLine(
+                'Key phrases', _giftBriefList(voice['keyPhrases'])),
+            _adminGiftDetailLine(
+                'IRIS summary', '${voice['irisSummary'] ?? 'Not available'}'),
+            if ('${voice['downloadUrl'] ?? ''}'.trim().isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      launchUrl(Uri.parse('${voice['downloadUrl']}')),
+                  icon: const Icon(Icons.play_circle_outline),
+                  label: const Text('Play voice note'),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _adminGiftDetailPanel(
+          icon: Icons.hub_outlined,
+          title: 'Custom Interests Review',
+          children: [
+            if (customInterests.isEmpty)
+              const Text('No pending custom interests for this request.')
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: customInterests
+                    .map((interest) => Chip(label: Text(interest)))
+                    .toList(),
+              ),
+            const SizedBox(height: 8),
+            const Text(
+              'Approve, reject, or merge these through the existing IRIS/Admin review process. Nothing is promoted automatically.',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _adminGiftDetailPanel(
+          icon: Icons.receipt_long_outlined,
+          title: 'Payment Breakdown',
+          children: [
+            _adminGiftDetailLine('Total',
+                _giftMoney(payment['totalAmount'] ?? item['grossBudget'])),
+            _adminGiftDetailLine(
+                'Roth applied', _giftMoney(payment['rothApplied'])),
+            _adminGiftDetailLine(
+                'Card amount', _giftMoney(payment['cardAmount'])),
+            _adminGiftDetailLine('Currency',
+                '${payment['currency'] ?? item['currency'] ?? 'GBP'}'),
+            _adminGiftDetailLine('Payment method',
+                '${payment['paymentMethod'] ?? item['paymentMethod'] ?? 'Pending'}'),
+            _adminGiftDetailLine('Stripe session',
+                '${payment['stripeSessionId'] ?? item['stripeSessionId'] ?? 'Not available'}'),
+            _adminGiftDetailLine(
+                'Paid at', _adminDateText(payment['paidAt'] ?? item['paidAt'])),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _adminGiftDetailPanel({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: widget.colors.field.withValues(alpha: 0.68),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: widget.colors.adminAccent.withValues(alpha: 0.24),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: widget.colors.adminAccent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _adminGiftDetailLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 156,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: widget.colors.mutedText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.trim().isEmpty ? 'Not provided' : value,
+              style: TextStyle(
+                color: widget.colors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _giftBriefText(Map<String, dynamic> brief, List<String> keys) {
+    for (final key in keys) {
+      final value = brief[key];
+      if (value is Iterable) return _giftBriefList(value);
+      if (value is Map) {
+        final nested = value.values
+            .map((item) => '$item'.trim())
+            .where((item) => item.isNotEmpty)
+            .join(' · ');
+        if (nested.isNotEmpty) return nested;
+      }
+      final text = '$value'.trim();
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    return 'Not provided';
+  }
+
+  String _giftBriefList(dynamic value) {
+    final items = _giftStringList(value);
+    return items.isEmpty ? 'Not provided' : items.join(', ');
+  }
+
+  String _giftMoney(dynamic value) {
+    final amount = value is num ? value.toDouble() : double.tryParse('$value');
+    if (amount == null) return 'Not provided';
+    return '£${amount.toStringAsFixed(2)}';
+  }
+
   Map<String, dynamic> _birdBlendBrandPartnerSeed() => {
         'partnerId': 'bird-and-blend-tea-co',
         'partnerName': 'Bird & Blend Tea Co.',
@@ -5591,6 +5837,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _adminGiftIntelligenceStack(item),
+                  const SizedBox(height: 18),
+                  const Divider(),
+                  const Text('Raw request fields',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
                   Text(
                       'Sender: ${item['senderName']} · ${item['senderEmail']}'),
                   Text(

@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const rothLedger = require("./roth-ledger");
 const {calculateWalletCheckout} = require("./wallet-core");
+const giftBriefEngine = require("./gift-brief-engine");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -108,8 +109,11 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       const latest = await transaction.get(ref);
       const existingGift = await transaction.get(giftRef);
       if (existingGift.exists) return;
+      const latestGift = latest.data() || {};
+      const giftBrief = giftBriefEngine.giftBriefUpdate(latestGift, {giftRequestId: giftDraftId});
       transaction.set(giftRef, {
-        ...latest.data(),
+        ...latestGift,
+        ...giftBrief,
         paymentStatus: "paid",
         giftStatus: "submitted_for_review",
         status: "submitted_for_review",
@@ -239,8 +243,10 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
     });
   }
   await db.runTransaction(async (transaction) => {
+    const giftBrief = giftBriefEngine.giftBriefUpdate(gift, {giftRequestId: giftDraftId});
     transaction.set(giftRef, {
       ...gift,
+      ...giftBrief,
       paymentStatus: "paid",
       giftStatus: "submitted_for_review",
       status: "submitted_for_review",

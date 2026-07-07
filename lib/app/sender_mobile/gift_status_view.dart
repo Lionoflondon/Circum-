@@ -13,13 +13,17 @@ class GiftStatusView extends StatelessWidget {
   static const routeName = '/sender-mobile/gifts/status';
 
   static const statusLabels = [
-    'Payment pending',
-    'Request submitted',
-    'Under review',
-    'Approved',
-    'Being prepared',
+    'IRIS analysing',
+    'Gift Brief complete',
+    'Gifts Team reviewing',
+    'Experience approved',
+    'Being sourced',
+    'Preparing',
+    'Awaiting rider',
     'Out for delivery',
     'Delivered',
+    'Gift Story rendering',
+    'Gift Story ready',
   ];
 
   @override
@@ -29,7 +33,7 @@ class GiftStatusView extends StatelessWidget {
       eyebrow: 'STEP 13 — STATUS',
       title: "Your gift's journey",
       subtitle:
-          'These are the existing sender-facing Gifts status labels Admin can drive.',
+          'IRIS and the Gifts Team move the experience through each approved stage.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         for (var i = 0; i < statusLabels.length; i++)

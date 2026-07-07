@@ -64,6 +64,22 @@ List<String> senderGiftUnsupportedIrisThemes(Iterable<String> themes) {
       .toList();
 }
 
+class SenderGiftBriefPreview {
+  final String emotionalDirection;
+  final String experienceDirection;
+  final String thingsToAvoid;
+  final String confidence;
+  final bool humanReviewRequired;
+
+  const SenderGiftBriefPreview({
+    required this.emotionalDirection,
+    required this.experienceDirection,
+    required this.thingsToAvoid,
+    required this.confidence,
+    required this.humanReviewRequired,
+  });
+}
+
 const senderGiftInterestOptions = [
   'Fashion',
   'Beauty',
@@ -239,6 +255,45 @@ class GiftJourneyDraft {
         SenderGiftMode.anonymous => 'Anonymous gift',
         SenderGiftMode.campaign => 'Campaign',
       };
+
+  SenderGiftBriefPreview get giftBriefPreview {
+    final selectedInterests = {
+      ...interests,
+      if ((customInterest ?? '').trim().isNotEmpty) customInterest!.trim(),
+    }.toList();
+    final signals = senderGiftIrisSignalsForThemes(selectedInterests);
+    final unsupported = senderGiftUnsupportedIrisThemes(selectedInterests);
+    final hasRelationship = (relationship ?? '').trim().isNotEmpty;
+    final hasOccasion = (occasion ?? '').trim().isNotEmpty;
+    final hasNotes = (notes ?? '').trim().isNotEmpty;
+    final confidenceScore = 42 +
+        (hasRelationship ? 10 : 0) +
+        (hasOccasion ? 10 : 0) +
+        (hasNotes ? 12 : 0) +
+        ((personalMessage ?? '').trim().isNotEmpty ? 8 : 0) +
+        (selectedInterests.isNotEmpty ? 8 : 0) +
+        ((likedBrands ?? '').trim().isNotEmpty ? 3 : 0) +
+        ((favouriteColours ?? '').trim().isNotEmpty ? 3 : 0);
+    final humanReview =
+        confidenceScore < 70 || unsupported.isNotEmpty || !hasNotes;
+    return SenderGiftBriefPreview(
+      emotionalDirection: hasOccasion
+          ? 'Shape a ${occasion!.toLowerCase()} gift around ${relationship ?? 'the relationship'}.'
+          : 'Shape a warm, relationship-led gift experience.',
+      experienceDirection: signals.isEmpty
+          ? 'Thoughtful concierge curation before product selection.'
+          : 'Supported IRIS signals: ${signals.join(' · ')}.',
+      thingsToAvoid: unsupported.isEmpty
+          ? 'Avoid product assumptions until the Gifts Team reviews the request.'
+          : 'Avoid unsupported catalogue guesses for ${unsupported.join(', ')}.',
+      confidence: confidenceScore >= 82
+          ? 'High'
+          : confidenceScore >= 70
+              ? 'Medium'
+              : 'Needs review',
+      humanReviewRequired: humanReview,
+    );
+  }
 
   GiftJourneyDraft copyWith({
     String? recipientName,

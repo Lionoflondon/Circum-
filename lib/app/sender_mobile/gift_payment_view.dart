@@ -63,7 +63,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       ],
       footer: GiftJourneyWidgets.primaryButton(
         enabled: !_submitting,
-        label: _submitting ? 'Preparing checkout...' : 'Proceed to Payment',
+        label: _submitting ? 'Preparing checkout...' : 'Gift this experience',
         onTap: _submitting ? null : _submitForAdminReview,
       ),
     );
