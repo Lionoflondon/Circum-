@@ -298,6 +298,13 @@ class GiftJourneyDraft {
   final bool allowCircumSocialUse;
   final bool allowBrandTagging;
   final bool allowPublicPosting;
+  final String? recipientContentConsent;
+  final String? campaignId;
+  final String? campaignName;
+  final String? campaignType;
+  final String? campaignTagline;
+  final double? campaignCompatibilityScore;
+  final String? campaignMatchSummary;
   final double budget;
 
   const GiftJourneyDraft({
@@ -329,6 +336,13 @@ class GiftJourneyDraft {
     this.allowCircumSocialUse = false,
     this.allowBrandTagging = false,
     this.allowPublicPosting = false,
+    this.recipientContentConsent,
+    this.campaignId,
+    this.campaignName,
+    this.campaignType,
+    this.campaignTagline,
+    this.campaignCompatibilityScore,
+    this.campaignMatchSummary,
     this.budget = 100,
   });
 
@@ -514,6 +528,13 @@ class GiftJourneyDraft {
     bool? allowCircumSocialUse,
     bool? allowBrandTagging,
     bool? allowPublicPosting,
+    String? recipientContentConsent,
+    String? campaignId,
+    String? campaignName,
+    String? campaignType,
+    String? campaignTagline,
+    double? campaignCompatibilityScore,
+    String? campaignMatchSummary,
     double? budget,
   }) {
     return GiftJourneyDraft(
@@ -545,6 +566,15 @@ class GiftJourneyDraft {
       allowCircumSocialUse: allowCircumSocialUse ?? this.allowCircumSocialUse,
       allowBrandTagging: allowBrandTagging ?? this.allowBrandTagging,
       allowPublicPosting: allowPublicPosting ?? this.allowPublicPosting,
+      recipientContentConsent:
+          recipientContentConsent ?? this.recipientContentConsent,
+      campaignId: campaignId ?? this.campaignId,
+      campaignName: campaignName ?? this.campaignName,
+      campaignType: campaignType ?? this.campaignType,
+      campaignTagline: campaignTagline ?? this.campaignTagline,
+      campaignCompatibilityScore:
+          campaignCompatibilityScore ?? this.campaignCompatibilityScore,
+      campaignMatchSummary: campaignMatchSummary ?? this.campaignMatchSummary,
       budget: budget ?? this.budget,
     );
   }
@@ -644,22 +674,27 @@ class GiftJourneyDraft {
       senderGiftIrisSuggestionFieldName: senderGiftPendingIrisSuggestion,
       'adminDecision': '',
       'internalNotes': '',
-      'recipientContentConsent': 'pending',
+      'recipientContentConsent': recipientContentConsent ?? 'pending',
       'senderContentConsent': 'pending',
       'allowCircumSocialUse': allowCircumSocialUse,
       'allowBrandTagging': allowBrandTagging,
       'allowPublicPosting': allowPublicPosting,
       'contentUsageScope': 'private',
       'contentStatus': 'not_started',
-      senderGiftCampaignIdFieldName:
-          mode == SenderGiftMode.campaign ? 'bringing-london-closer' : null,
-      senderGiftCampaignNameFieldName:
-          mode == SenderGiftMode.campaign ? 'Bringing London Closer' : null,
-      'campaignTagline': mode == SenderGiftMode.campaign
-          ? '100 Londoners. 100 gifts. 100 stories.'
+      senderGiftCampaignIdFieldName: mode == SenderGiftMode.campaign
+          ? (campaignId ?? 'bringing-london-closer')
           : null,
-      'campaignType':
-          mode == SenderGiftMode.campaign ? 'anonymous_gifting' : null,
+      senderGiftCampaignNameFieldName: mode == SenderGiftMode.campaign
+          ? (campaignName ?? 'Bringing London Closer')
+          : null,
+      'campaignTagline': mode == SenderGiftMode.campaign
+          ? (campaignTagline ?? '100 Londoners. 100 gifts. 100 stories.')
+          : null,
+      'campaignType': mode == SenderGiftMode.campaign
+          ? (campaignType ?? 'anonymous_gifting')
+          : null,
+      'campaignCompatibilityScore': campaignCompatibilityScore,
+      'campaignMatchSummary': campaignMatchSummary,
       'participantConsentRequired': mode == SenderGiftMode.campaign,
       'recordingConsentRequired': mode == SenderGiftMode.campaign,
       'mutualRevealAllowed': mode == SenderGiftMode.campaign,

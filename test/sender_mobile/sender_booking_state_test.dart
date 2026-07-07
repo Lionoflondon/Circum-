@@ -243,6 +243,9 @@ void main() {
           .readAsStringSync();
       final giftSource =
           File('lib/app/sender_mobile/gift_mode_view.dart').readAsStringSync();
+      final campaignSource =
+          File('lib/app/sender_mobile/gift_campaign_view.dart')
+              .readAsStringSync();
       final iconSource = File(
         'lib/app/sender_mobile/sender_gifts_icon.dart',
       ).readAsStringSync();
@@ -260,6 +263,13 @@ void main() {
       expect(giftSource, contains('Gift myself'));
       expect(giftSource, contains('Anonymous gift'));
       expect(giftSource, contains('Campaign'));
+      expect(giftSource, contains('GiftCampaignView'));
+      expect(campaignSource, contains('Gift a stranger. Bring London closer.'));
+      expect(campaignSource, contains('GiftsSocialPolicy.scoreMatch'));
+      expect(campaignSource, contains('GiftsSocialPolicy.canRevealSender'));
+      expect(campaignSource, contains('GiftsSocialPolicy.canPostPublicly'));
+      expect(campaignSource, contains('GiftsSocialPolicy.canApproveBrandTags'));
+      expect(campaignSource, contains('GiftsSocialPolicy.recipientSafeView'));
       expect(giftSource, contains('SenderGiftsIconKind.gift'));
       expect(giftSource, contains('SenderGiftsIconKind.self'));
       expect(giftSource, contains('SenderGiftsIconKind.mask'));
@@ -724,11 +734,19 @@ void main() {
       expect(deliverySource, isNot(contains('FirebaseFirestore')));
       expect(messageSource, isNot(contains('FirebaseFirestore')));
 
-      final campaignDraft = GiftJourneyDraft.forMode(SenderGiftMode.campaign)
-          .copyWith(
-              recipientName: 'Community',
-              recipientPhone: '07123',
-              recipientEmail: 'recipient@example.com');
+      final campaignDraft =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        recipientName: 'Anonymous campaign match',
+        recipientPhone: '07123',
+        recipientEmail: 'recipient@example.com',
+        campaignId: 'christmas-giving',
+        campaignName: 'Christmas Giving',
+        campaignType: 'seasonal_kindness',
+        campaignTagline: 'Small gestures for the festive season.',
+        campaignCompatibilityScore: 69,
+        campaignMatchSummary: 'Matched because both selected coffee.',
+        recipientContentConsent: 'not_requested',
+      );
       final campaignPayload = campaignDraft.adminReviewPayload(
         senderId: 'sender-1',
         senderEmail: 'sender@example.com',
@@ -736,8 +754,13 @@ void main() {
       expect(campaignPayload['giftMode'], 'anonymous_gift');
       expect(campaignPayload['anonymousGiftType'], 'campaign');
       expect(campaignPayload['giftType'], 'campaign');
-      expect(campaignPayload['campaignId'], 'bringing-london-closer');
-      expect(campaignPayload['campaignName'], 'Bringing London Closer');
+      expect(campaignPayload['campaignId'], 'christmas-giving');
+      expect(campaignPayload['campaignName'], 'Christmas Giving');
+      expect(campaignPayload['campaignType'], 'seasonal_kindness');
+      expect(campaignPayload['campaignCompatibilityScore'], 69);
+      expect(campaignPayload['campaignMatchSummary'],
+          'Matched because both selected coffee.');
+      expect(campaignPayload['recipientContentConsent'], 'not_requested');
       expect(
         campaignPayload['irisSuggestion'],
         'Pending IRIS gift recommendation',
@@ -869,6 +892,27 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Tell us about yourself'), findsOneWidget);
+    });
+
+    testWidgets('Campaign opens native anonymous matching flow', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(const MaterialApp(home: GiftModeView()));
+
+      await tester.tap(find.text('Campaign'));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.text('Gift a stranger. Bring London closer.'), findsOneWidget);
+      expect(find.text('Join Campaign'), findsOneWidget);
+
+      await tester.tap(find.text('Join Campaign'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Choose campaign'), findsOneWidget);
+      expect(find.text('Bringing London Closer'), findsOneWidget);
     });
 
     testWidgets('Gift flow validates recipient, delivery, and message steps', (

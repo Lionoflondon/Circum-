@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'gift_campaign_view.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'sender_gifts_icon.dart';
@@ -96,10 +97,7 @@ class GiftModeView extends StatelessWidget {
                   iconKind: SenderGiftsIconKind.people,
                   title: 'Campaign',
                   subtitle: 'Bringing London Closer.',
-                  onTap: () => _openMode(
-                    context,
-                    SenderGiftMode.campaign,
-                  ),
+                  onTap: () => _openCampaign(context),
                 ),
               ],
             ),
@@ -118,6 +116,15 @@ class GiftModeView extends StatelessWidget {
         settings: const RouteSettings(
           name: GiftRelationshipView.routeName,
         ),
+      ),
+    );
+  }
+
+  void _openCampaign(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const GiftCampaignView(),
+        settings: const RouteSettings(name: GiftCampaignView.routeName),
       ),
     );
   }
