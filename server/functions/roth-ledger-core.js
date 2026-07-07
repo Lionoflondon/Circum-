@@ -8,6 +8,10 @@ const BALANCE_TYPES = Object.freeze({
 });
 
 const TRANSACTION_TYPES = Object.freeze({
+  adminIssue: "admin_issue",
+  giftPaymentDebit: "gift_payment_debit",
+  refundCredit: "refund_credit",
+  adjustment: "adjustment",
   rothCredit: "roth_credit",
   rothDebit: "roth_debit",
   rothSpend: "roth_spend",
@@ -24,6 +28,14 @@ const TRANSACTION_TYPES = Object.freeze({
   stripePaymentRecord: "stripe_payment_record",
   refundRecord: "refund_record",
   reversal: "reversal",
+});
+
+const LEDGER_EVENTS = Object.freeze({
+  walletCreated: "roth_wallet_created",
+  adminIssued: "roth_admin_issued",
+  paymentDebited: "roth_payment_debited",
+  paymentRefunded: "roth_payment_refunded",
+  paymentFailed: "roth_payment_failed",
 });
 
 function roundMoney(value) {
@@ -60,13 +72,72 @@ function nextBalance({balanceBefore, amount, allowNegative = false, type}) {
   return after;
 }
 
+function senderWalletRecord({walletId, userId, email, balance = 0, createdAt = null, updatedAt = null}) {
+  return {
+    walletId,
+    userId,
+    email: `${email || ""}`.trim().toLowerCase(),
+    walletType: "sender",
+    balance: roundMoney(balance),
+    currencyEquivalent: "GBP",
+    createdAt,
+    updatedAt: updatedAt || createdAt,
+  };
+}
+
+function ledgerTransactionRecord({
+  transactionId,
+  walletId,
+  userId,
+  email,
+  type,
+  direction,
+  amount,
+  balanceBefore,
+  source,
+  referenceType,
+  referenceId,
+  reason,
+  createdBy,
+  createdAt = null,
+}) {
+  assertTransactionType(type);
+  const roundedAmount = roundMoney(amount);
+  const signedAmount = direction === "debit" ? -Math.abs(roundedAmount) : Math.abs(roundedAmount);
+  const balanceAfter = nextBalance({
+    balanceBefore: roundMoney(balanceBefore),
+    amount: signedAmount,
+    type,
+  });
+  return {
+    transactionId,
+    walletId,
+    userId,
+    email: `${email || ""}`.trim().toLowerCase(),
+    type,
+    direction,
+    amount: roundedAmount,
+    balanceBefore: roundMoney(balanceBefore),
+    balanceAfter,
+    source,
+    referenceType,
+    referenceId,
+    reason,
+    createdBy,
+    createdAt,
+  };
+}
+
 module.exports = {
   BALANCE_TYPES,
+  LEDGER_EVENTS,
   TRANSACTION_TYPES,
   roundMoney,
   assertBalanceType,
   assertTransactionType,
   canWithdraw,
   isRothCreditWithdrawable,
+  ledgerTransactionRecord,
   nextBalance,
+  senderWalletRecord,
 };

@@ -119,12 +119,20 @@ void main() {
         isSenderScheduledDateValid('2026-07-05', now: DateTime(2026, 7, 6)),
         isFalse,
       );
+      final validScheduledDate = DateTime.now().add(const Duration(days: 1));
+      final validScheduledDateText =
+          '${validScheduledDate.year.toString().padLeft(4, '0')}-'
+          '${validScheduledDate.month.toString().padLeft(2, '0')}-'
+          '${validScheduledDate.day.toString().padLeft(2, '0')}';
       final scheduled = incomplete.copyWith(
-        scheduledDate: '2026-07-07',
+        scheduledDate: validScheduledDateText,
         scheduledWindow: 'Morning',
       );
       expect(scheduled.canContinue, isTrue);
-      expect(scheduled.deliveryTimeSummary, 'Scheduled: 2026-07-07, Morning');
+      expect(
+        scheduled.deliveryTimeSummary,
+        'Scheduled: $validScheduledDateText, Morning',
+      );
       expect(isSenderCustomWindowValid('14:00', '16:00'), isTrue);
       expect(isSenderCustomWindowValid('16:00', '14:00'), isFalse);
     });

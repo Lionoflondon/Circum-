@@ -538,6 +538,7 @@ class AdminGiftsOperations {
 
   static Map<String, Object?> approveRequestPatch({
     required String adminUserId,
+    String? adminEmail,
     required String previousStatus,
     required String reason,
     required Object actionAt,
@@ -548,6 +549,7 @@ class AdminGiftsOperations {
         'adminReviewStatus': 'approved',
         ...GiftSystemPolicy.adminActionPatch(
           adminUserId: adminUserId,
+          adminEmail: adminEmail,
           actionType: 'gift_request_approved',
           previousStatus: previousStatus,
           newStatus: 'approved',
@@ -558,6 +560,7 @@ class AdminGiftsOperations {
 
   static Map<String, Object?> rejectRequestPatch({
     required String adminUserId,
+    String? adminEmail,
     required String previousStatus,
     required String reason,
     required Object actionAt,
@@ -568,6 +571,7 @@ class AdminGiftsOperations {
         'adminReviewStatus': 'rejected',
         ...GiftSystemPolicy.adminActionPatch(
           adminUserId: adminUserId,
+          adminEmail: adminEmail,
           actionType: 'gift_request_rejected',
           previousStatus: previousStatus,
           newStatus: 'rejected',
@@ -578,6 +582,7 @@ class AdminGiftsOperations {
 
   static Map<String, Object?> approveCampaignMatchPatch({
     required String adminUserId,
+    String? adminEmail,
     required String previousStatus,
     required String reason,
     required Object actionAt,
@@ -588,6 +593,7 @@ class AdminGiftsOperations {
         'matchStatus': 'approved',
         ...GiftSystemPolicy.adminActionPatch(
           adminUserId: adminUserId,
+          adminEmail: adminEmail,
           actionType: 'campaign_match_approved',
           previousStatus: previousStatus,
           newStatus: 'match_found',
@@ -598,6 +604,7 @@ class AdminGiftsOperations {
 
   static Map<String, Object?> rejectCampaignMatchPatch({
     required String adminUserId,
+    String? adminEmail,
     required String previousStatus,
     required String reason,
     required Object actionAt,
@@ -608,6 +615,7 @@ class AdminGiftsOperations {
         'matchStatus': 'rejected',
         ...GiftSystemPolicy.adminActionPatch(
           adminUserId: adminUserId,
+          adminEmail: adminEmail,
           actionType: 'campaign_match_rejected',
           previousStatus: previousStatus,
           newStatus: 'admin_review_required',
@@ -618,6 +626,7 @@ class AdminGiftsOperations {
 
   static Map<String, Object?> assignGiftsTeamStatusPatch({
     required String adminUserId,
+    String? adminEmail,
     required String previousStatus,
     required String newStatus,
     required String reason,
@@ -628,6 +637,7 @@ class AdminGiftsOperations {
         'giftsTeamStatus': newStatus,
         ...GiftSystemPolicy.adminActionPatch(
           adminUserId: adminUserId,
+          adminEmail: adminEmail,
           actionType: 'gifts_team_status_changed',
           previousStatus: previousStatus,
           newStatus: newStatus,
@@ -651,6 +661,7 @@ class AdminGiftsOperations {
 
   static Map<String, Object?> storyOverridePatch({
     required String adminUserId,
+    String? adminEmail,
     required String previousStoryStatus,
     required String reason,
     required Object actionAt,
@@ -658,6 +669,7 @@ class AdminGiftsOperations {
   }) =>
       GiftSystemPolicy.storyOverridePatch(
         adminUserId: adminUserId,
+        adminEmail: adminEmail,
         previousStoryStatus: previousStoryStatus,
         overrideReason: reason,
         overrideAt: actionAt,
@@ -667,7 +679,9 @@ class AdminGiftsOperations {
   static Map<String, Object?> notificationPayload({
     required String event,
     required String userId,
+    String? email,
     required String giftId,
+    String giftType = GiftSystemPolicy.sendToSomeoneGiftType,
     required String title,
     required String body,
     Object? createdAt,
@@ -675,7 +689,9 @@ class AdminGiftsOperations {
       GiftSystemPolicy.notificationPayload(
         event: event,
         userId: userId,
+        email: email,
         giftId: giftId,
+        giftType: giftType,
         title: title,
         body: body,
         createdAt: createdAt,
@@ -685,16 +701,130 @@ class AdminGiftsOperations {
     required String previousStatus,
     required String newStatus,
     required String userId,
+    String? email,
     required String giftId,
+    String giftType = GiftSystemPolicy.sendToSomeoneGiftType,
     Object? createdAt,
   }) =>
       GiftSystemPolicy.statusChangeNotificationPayload(
         previousStatus: previousStatus,
         newStatus: newStatus,
         userId: userId,
+        email: email,
         giftId: giftId,
+        giftType: giftType,
         createdAt: createdAt,
       );
+}
+
+class AdminRothOperations {
+  static Map<String, Object?> walletCreatePatch({
+    required String walletId,
+    required String userId,
+    required String email,
+    required Object createdAt,
+  }) =>
+      {
+        'walletId': walletId,
+        'userId': userId,
+        'email': email.trim().toLowerCase(),
+        'walletType': 'sender',
+        'balance': 0,
+        'currencyEquivalent': 'GBP',
+        'createdAt': createdAt,
+        'updatedAt': createdAt,
+      };
+
+  static Map<String, Object?> issueRothPatch({
+    required String walletId,
+    required String userId,
+    required String email,
+    required num balanceBefore,
+    required num amount,
+    required String adminUserId,
+    required String adminEmail,
+    required String reason,
+    required Object createdAt,
+  }) {
+    if (amount <= 0) {
+      throw ArgumentError('Roth issue amount must be greater than zero.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('Roth issue requires an audit reason.');
+    }
+    final after = _round2(balanceBefore.toDouble() + amount.toDouble());
+    return {
+      'wallet': {
+        'walletId': walletId,
+        'userId': userId,
+        'email': email.trim().toLowerCase(),
+        'walletType': 'sender',
+        'balance': after,
+        'currencyEquivalent': 'GBP',
+        'updatedAt': createdAt,
+      },
+      'ledger': ledgerTransaction(
+        transactionId: 'roth_admin_issue_$walletId',
+        walletId: walletId,
+        userId: userId,
+        email: email,
+        type: 'admin_issue',
+        direction: 'credit',
+        amount: amount,
+        balanceBefore: balanceBefore,
+        balanceAfter: after,
+        source: 'admin',
+        referenceType: 'admin_roth_issue',
+        referenceId: walletId,
+        reason: reason,
+        createdBy: adminUserId,
+        createdAt: createdAt,
+      ),
+      'audit': {
+        'adminUserId': adminUserId,
+        'adminEmail': adminEmail.trim().toLowerCase(),
+        'targetUserId': userId,
+        'amount': amount,
+        'reason': reason.trim(),
+        'createdAt': createdAt,
+      },
+    };
+  }
+
+  static Map<String, Object?> ledgerTransaction({
+    required String transactionId,
+    required String walletId,
+    required String userId,
+    required String email,
+    required String type,
+    required String direction,
+    required num amount,
+    required num balanceBefore,
+    required num balanceAfter,
+    required String source,
+    required String referenceType,
+    required String referenceId,
+    required String reason,
+    required String createdBy,
+    required Object createdAt,
+  }) =>
+      {
+        'transactionId': transactionId,
+        'walletId': walletId,
+        'userId': userId,
+        'email': email.trim().toLowerCase(),
+        'type': type,
+        'direction': direction,
+        'amount': _round2(amount.toDouble()),
+        'balanceBefore': _round2(balanceBefore.toDouble()),
+        'balanceAfter': _round2(balanceAfter.toDouble()),
+        'source': source,
+        'referenceType': referenceType,
+        'referenceId': referenceId,
+        'reason': reason.trim(),
+        'createdBy': createdBy,
+        'createdAt': createdAt,
+      };
 }
 
 List<Map<String, dynamic>> adminSearch(

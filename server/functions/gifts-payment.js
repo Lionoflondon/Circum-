@@ -5,9 +5,12 @@ const rothLedger = require("./roth-ledger");
 const {calculateWalletCheckout} = require("./wallet-core");
 const giftBriefEngine = require("./gift-brief-engine");
 const {
+  giftCheckoutMode,
   giftPaymentMethodFromSplit,
+  giftPaymentStatusForStripeMode,
   giftReturnUrls,
   selectedGiftBudgetGbp,
+  subscriptionIntervalForSelfGiftFrequency,
 } = require("./gifts-payment-core");
 
 function requireAuth(context) {
@@ -175,16 +178,21 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
   const giftDescription = safeOccasion && safeRecipient ?
     `Curated ${safeOccasion} gift experience for ${safeRecipient}` :
     "Gifts by Circum curated experience";
+  const stripeMode = giftCheckoutMode(gift);
+  const recurring = stripeMode === "subscription" ?
+    subscriptionIntervalForSelfGiftFrequency(gift.selfGiftFrequency) :
+    null;
   let session;
   try {
     session = await stripe.checkout.sessions.create({
-      mode: "payment",
+      mode: stripeMode,
       customer_email: gift.senderEmail,
       line_items: [{
         quantity: 1,
         price_data: {
           currency: split.customerPaymentCurrency,
           unit_amount: split.stripeAmountMinor,
+          ...(recurring ? {recurring} : {}),
           product_data: {
             name: "Gifts by Circum Experience",
             description: giftDescription,
@@ -200,6 +208,8 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
         senderEmail: gift.senderEmail || context.auth.token.email || "",
         type: "gift_experience",
         paymentType: "gifts",
+        stripeMode,
+        selfGiftFrequency: gift.selfGiftFrequency || "one_time",
         totalBudget: `${split.orderTotalGbp}`,
         rothApplied: `${split.walletContributionGbp}`,
         stripeAmount: `${split.remainingGbp}`,
@@ -217,7 +227,13 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
   }
   await ref.update({
     paymentStatus: "payment_pending",
+    stripeMode,
     stripeCheckoutSessionId: session.id,
+    stripeSubscriptionId: session.subscription || null,
+    subscriptionStatus: stripeMode === "subscription" ? "checkout_started" : null,
+    subscriptionInterval: recurring ? recurring.interval : null,
+    subscriptionIntervalCount: recurring ? recurring.interval_count : null,
+    cancelAtPeriodEnd: false,
     paymentMethod: verifiedPaymentMethod,
     rothApplied: split.walletContributionGbp,
     cardAmount: split.remainingGbp,
@@ -254,8 +270,12 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
     throw new functions.https.HttpsError("invalid-argument", "Invalid checkout session.");
   }
   const session = await stripe.checkout.sessions.retrieve(sessionId);
-  if (session.payment_status !== "paid") {
+  const stripeMode = gift.stripeMode || "payment";
+  if (stripeMode === "payment" && session.payment_status !== "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Payment has not completed.");
+  }
+  if (stripeMode === "subscription" && !["complete", "paid"].includes(`${session.status || session.payment_status || ""}`.toLowerCase())) {
+    throw new functions.https.HttpsError("failed-precondition", "Subscription checkout has not completed.");
   }
   const walletContribution = Number(gift.walletContributionGbp || 0);
   const cardAmount = Number(gift.remainingStripeAmountGbp || Math.max(0, gross - walletContribution));
@@ -282,10 +302,16 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
     transaction.set(giftRef, {
       ...gift,
       ...giftBrief,
-      paymentStatus: "paid",
+      paymentStatus: giftPaymentStatusForStripeMode(stripeMode, stripeMode === "subscription" ? "active" : session.payment_status),
       giftStatus: "submitted_for_review",
       status: "submitted_for_review",
       stripeCheckoutSessionId: session.id,
+      stripeMode,
+      stripeSubscriptionId: session.subscription || gift.stripeSubscriptionId || null,
+      subscriptionStatus: stripeMode === "subscription" ? "active" : gift.subscriptionStatus || null,
+      subscriptionInterval: gift.subscriptionInterval || null,
+      subscriptionIntervalCount: gift.subscriptionIntervalCount || null,
+      cancelAtPeriodEnd: gift.cancelAtPeriodEnd === true,
       stripePaymentIntentId: session.payment_intent,
       walletDeducted: walletContribution > 0 || gift.walletDeducted === true,
       paymentMethod,

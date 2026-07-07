@@ -1,9 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  giftCheckoutMode,
   giftPaymentMethodFromSplit,
+  giftPaymentStatusForStripeMode,
   giftReturnUrls,
+  normalizeSelfGiftFrequency,
   selectedGiftBudgetGbp,
+  stripeModeForSelfGiftFrequency,
+  subscriptionIntervalForSelfGiftFrequency,
 } = require("./gifts-payment-core");
 const {calculateWalletCheckout} = require("./wallet-core");
 
@@ -77,4 +82,47 @@ test("web gifts checkout keeps web gifts return routing", () => {
     urls.cancelUrl,
     "https://circumuk.com/?app=gifts&gift_payment=cancelled&giftDraftId=draft_123",
   );
+});
+
+test("send to me frequency controls Stripe payment versus subscriptions", () => {
+  assert.equal(normalizeSelfGiftFrequency("one_time"), "one_time");
+  assert.equal(normalizeSelfGiftFrequency("monthly"), "monthly");
+  assert.equal(normalizeSelfGiftFrequency("quarterly"), "quarterly");
+  assert.equal(stripeModeForSelfGiftFrequency("one_time"), "payment");
+  assert.equal(stripeModeForSelfGiftFrequency("monthly"), "subscription");
+  assert.equal(stripeModeForSelfGiftFrequency("quarterly"), "subscription");
+  assert.deepEqual(subscriptionIntervalForSelfGiftFrequency("monthly"), {
+    interval: "month",
+    interval_count: 1,
+  });
+  assert.deepEqual(subscriptionIntervalForSelfGiftFrequency("quarterly"), {
+    interval: "month",
+    interval_count: 4,
+  });
+});
+
+test("only send to me recurring gifts create subscription checkout mode", () => {
+  assert.equal(giftCheckoutMode({
+    giftType: "send_to_me",
+    selfGiftFrequency: "monthly",
+  }), "subscription");
+  assert.equal(giftCheckoutMode({
+    giftType: "send_to_me",
+    selfGiftFrequency: "quarterly",
+  }), "subscription");
+  assert.equal(giftCheckoutMode({
+    giftType: "send_to_me",
+    selfGiftFrequency: "one_time",
+  }), "payment");
+  assert.equal(giftCheckoutMode({
+    giftType: "send_to_someone",
+    selfGiftFrequency: "monthly",
+  }), "payment");
+});
+
+test("subscription status is active only after Stripe confirms active state", () => {
+  assert.equal(giftPaymentStatusForStripeMode("subscription", "active"), "active");
+  assert.equal(giftPaymentStatusForStripeMode("subscription", "trialing"), "active");
+  assert.equal(giftPaymentStatusForStripeMode("subscription", "incomplete"), "pending");
+  assert.equal(giftPaymentStatusForStripeMode("payment", "paid"), "paid");
 });

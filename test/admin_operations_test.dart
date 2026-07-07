@@ -501,7 +501,7 @@ void main() {
       );
 
       final notification = AdminGiftsOperations.notificationPayload(
-        event: 'gift_story_unlocked',
+        event: 'story_unlocked',
         userId: 'sender-1',
         giftId: 'gift-1',
         title: 'Gift Story unlocked',
@@ -510,7 +510,8 @@ void main() {
       );
       expect(notification['recipientId'], 'sender-1');
       expect(notification['recipientRole'], 'sender');
-      expect(notification['giftEvent'], 'gift_story_unlocked');
+      expect(notification['giftEvent'], 'story_unlocked');
+      expect(notification['eventType'], 'story_unlocked');
       expect(notification['privacySafe'], isTrue);
       expect(notification.containsKey('matchedParticipantBudget'), isFalse);
       expect(notification.containsKey('internalNotes'), isFalse);
@@ -534,8 +535,7 @@ void main() {
         createdAt: DateTime(2026, 7, 7),
       );
       expect(statusNotification, isNotNull);
-      expect(
-          statusNotification!['giftEvent'], 'gift_ready_for_delivery_workflow');
+      expect(statusNotification!['giftEvent'], 'ready_for_gift_delivery');
       expect(statusNotification['privacySafe'], isTrue);
     });
   });

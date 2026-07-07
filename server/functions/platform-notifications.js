@@ -6,6 +6,31 @@ const {riderMatchesIris} = require("./iris-core");
 
 const text = (value) => `${value || ""}`.trim();
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
+const giftEvents = new Set([
+  "gift_draft_saved",
+  "gift_submitted",
+  "payment_succeeded",
+  "payment_failed",
+  "subscription_created",
+  "subscription_cancelled",
+  "campaign_waiting_for_match",
+  "campaign_match_found",
+  "campaign_match_confirmed",
+  "gift_approved",
+  "gift_rejected",
+  "curation_started",
+  "ready_for_gift_delivery",
+  "delivery_started",
+  "rider_assigned",
+  "gift_delivered",
+  "story_locked",
+  "story_unlocked",
+  "story_manually_locked",
+  "story_manually_unlocked",
+  "issue_raised",
+  "dispute_opened",
+  "dispute_resolved",
+]);
 
 async function profileToken(uid, role) {
   if (!uid) return "";
@@ -68,6 +93,71 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
     }).catch((error) => console.error("Notification failed", error));
   }
   return ref.id;
+}
+
+function giftNotificationRecord({
+  notificationId = "",
+  userId,
+  email = "",
+  giftId,
+  giftType,
+  eventType,
+  title,
+  body,
+  channel = "in_app",
+  deliveryStatus = "pending",
+  createdAt = FieldValue.serverTimestamp(),
+  sentAt = null,
+  failureReason = "",
+}) {
+  if (!giftEvents.has(eventType)) {
+    throw new Error(`Unsupported Gifts notification event: ${eventType}`);
+  }
+  const channelName = text(channel) || "in_app";
+  const configured = channelName === "in_app" ||
+    (channelName === "email" && text(process.env.GIFTS_EMAIL_PROVIDER)) ||
+    (channelName === "push" && text(process.env.FCM_SERVER_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS));
+  const finalStatus = channelName === "in_app" ? deliveryStatus : configured ? deliveryStatus : "skipped";
+  const skippedReason = configured ? failureReason : `${channelName}_not_configured`;
+  return {
+    notificationId: notificationId || `${giftId}_${eventType}_${channelName}`,
+    userId,
+    email: text(email).toLowerCase(),
+    giftId,
+    giftType,
+    eventType,
+    title,
+    body,
+    channel: channelName,
+    deliveryStatus: finalStatus,
+    createdAt,
+    sentAt: sentAt || null,
+    failureReason: finalStatus === "skipped" || failureReason ? skippedReason : null,
+  };
+}
+
+function giftNotificationRecordsForTransition({
+  userId,
+  email = "",
+  giftId,
+  giftType,
+  eventType,
+  title,
+  body,
+  channels = ["in_app", "email", "push"],
+  createdAt = FieldValue.serverTimestamp(),
+}) {
+  return channels.map((channel) => giftNotificationRecord({
+    userId,
+    email,
+    giftId,
+    giftType,
+    eventType,
+    title,
+    body,
+    channel,
+    createdAt,
+  }));
 }
 
 function deliveryIds(data) {
@@ -200,3 +290,6 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
   }
   return null;
 });
+
+exports.giftNotificationRecord = giftNotificationRecord;
+exports.giftNotificationRecordsForTransition = giftNotificationRecordsForTransition;

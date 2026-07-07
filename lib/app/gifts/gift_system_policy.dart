@@ -1,6 +1,55 @@
 class GiftSystemPolicy {
-  static const normalGiftType = 'normal';
+  static const sendToSomeoneGiftType = 'send_to_someone';
+  static const sendToMeGiftType = 'send_to_me';
   static const campaignGiftType = 'campaign';
+  static const anonymousGiftType = 'anonymous';
+  static const normalGiftType = sendToSomeoneGiftType;
+
+  static const giftTypes = [
+    sendToSomeoneGiftType,
+    sendToMeGiftType,
+    campaignGiftType,
+    anonymousGiftType,
+  ];
+
+  static const backendFields = [
+    'giftId',
+    'giftType',
+    'userId',
+    'email',
+    'flowStatus',
+    'currentStep',
+    'completedSteps',
+    'paymentStatus',
+    'deliveryStatus',
+    'storyStatus',
+    'approvalStatus',
+    'curationStatus',
+    'giftRequestId',
+    'giftDeliveryId',
+    'notificationStatus',
+    'createdAt',
+    'updatedAt',
+    'lastActiveAt',
+  ];
+
+  static const campaignBackendFields = [
+    'campaignStatus',
+    'matchStatus',
+    'revealPolicy',
+    'linkedGiftId',
+    'linkedParticipantId',
+  ];
+
+  static const sendToMeBackendFields = [
+    'selfGiftFrequency',
+    'stripeMode',
+    'stripeSubscriptionId',
+    'subscriptionStatus',
+    'subscriptionInterval',
+    'subscriptionIntervalCount',
+    'cancelAtPeriodEnd',
+  ];
 
   static const canonicalLifecycle = [
     'draft',
@@ -41,23 +90,32 @@ class GiftSystemPolicy {
 
   static const notificationEvents = [
     'gift_draft_saved',
-    'gift_request_submitted',
-    'gift_payment_succeeded',
+    'gift_submitted',
+    'payment_succeeded',
+    'payment_failed',
+    'subscription_created',
+    'subscription_cancelled',
     'campaign_waiting_for_match',
     'campaign_match_found',
     'campaign_match_confirmed',
-    'gift_curation_started',
-    'gift_ready_for_delivery_workflow',
-    'gift_delivery_started',
-    'gift_rider_assigned',
+    'gift_approved',
+    'gift_rejected',
+    'curation_started',
+    'ready_for_gift_delivery',
+    'delivery_started',
+    'rider_assigned',
     'gift_delivered',
-    'gift_story_unlocked',
-    'gift_story_admin_locked',
-    'gift_story_admin_unlocked',
-    'gift_issue_or_dispute',
+    'story_locked',
+    'story_unlocked',
+    'story_manually_locked',
+    'story_manually_unlocked',
+    'issue_raised',
+    'dispute_opened',
+    'dispute_resolved',
   ];
 
   static Map<String, Object?> progressPatch({
+    String? giftId,
     required String userId,
     required String email,
     required String giftType,
@@ -67,23 +125,91 @@ class GiftSystemPolicy {
     String paymentStatus = 'payment_pending',
     String deliveryStatus = 'not_started',
     String storyStatus = 'locked',
+    String approvalStatus = 'draft',
+    String curationStatus = 'not_started',
+    String? giftRequestId,
+    String? giftDeliveryId,
+    String notificationStatus = 'none',
+    Map<String, Object?> pathFields = const {},
     Object? createdAt,
     required Object updatedAt,
     Object? lastActiveAt,
   }) {
+    final normalizedType = normalizeGiftType(giftType);
     return {
+      if (giftId != null && giftId.trim().isNotEmpty) 'giftId': giftId.trim(),
       'userId': userId,
       'email': email.trim().toLowerCase(),
-      'giftType': giftType,
+      'giftType': normalizedType,
       'flowStatus': flowStatus,
       'currentStep': currentStep,
       'completedSteps': completedSteps,
       'paymentStatus': paymentStatus,
       'deliveryStatus': deliveryStatus,
       'storyStatus': storyStatus,
-      if (createdAt != null) 'createdAt': createdAt,
+      'approvalStatus': approvalStatus,
+      'curationStatus': curationStatus,
+      'giftRequestId': giftRequestId?.trim() ?? '',
+      'giftDeliveryId': giftDeliveryId?.trim() ?? '',
+      'notificationStatus': notificationStatus,
+      ...pathFields,
+      'createdAt': createdAt ?? updatedAt,
       'updatedAt': updatedAt,
       'lastActiveAt': lastActiveAt ?? updatedAt,
+    };
+  }
+
+  static Map<String, Object?> canonicalRecord({
+    required String giftId,
+    required String giftType,
+    required String userId,
+    required String email,
+    String flowStatus = 'draft',
+    int currentStep = 1,
+    List<int> completedSteps = const [],
+    String paymentStatus = 'payment_pending',
+    String deliveryStatus = 'not_started',
+    String storyStatus = 'locked',
+    String approvalStatus = 'draft',
+    String curationStatus = 'not_started',
+    String? giftRequestId,
+    String? giftDeliveryId,
+    String notificationStatus = 'none',
+    Object? createdAt,
+    required Object updatedAt,
+    Object? lastActiveAt,
+    Map<String, Object?> pathFields = const {},
+  }) =>
+      progressPatch(
+        giftId: giftId,
+        userId: userId,
+        email: email,
+        giftType: giftType,
+        flowStatus: flowStatus,
+        currentStep: currentStep,
+        completedSteps: completedSteps,
+        paymentStatus: paymentStatus,
+        deliveryStatus: deliveryStatus,
+        storyStatus: storyStatus,
+        approvalStatus: approvalStatus,
+        curationStatus: curationStatus,
+        giftRequestId: giftRequestId,
+        giftDeliveryId: giftDeliveryId,
+        notificationStatus: notificationStatus,
+        pathFields: pathFields,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        lastActiveAt: lastActiveAt,
+      );
+
+  static String normalizeGiftType(Object? value) {
+    final raw = _status(value);
+    return switch (raw) {
+      'normal' || 'send_to_someone' || 'someone' => sendToSomeoneGiftType,
+      'send_to_me' || 'self' || 'myself' => sendToMeGiftType,
+      'campaign' || 'campaign_gift' || 'anonymous_campaign' => campaignGiftType,
+      'anonymous' || 'anonymous_gift' => anonymousGiftType,
+      _ => sendToSomeoneGiftType,
     };
   }
 
@@ -207,6 +333,7 @@ class GiftSystemPolicy {
 
   static Map<String, Object?> adminActionPatch({
     required String adminUserId,
+    String? adminEmail,
     required String actionType,
     required String previousStatus,
     required String newStatus,
@@ -218,6 +345,8 @@ class GiftSystemPolicy {
     }
     return {
       'adminUserId': adminUserId,
+      if (adminEmail != null && adminEmail.trim().isNotEmpty)
+        'adminEmail': adminEmail.trim().toLowerCase(),
       'actionType': actionType,
       'previousStatus': previousStatus,
       'newStatus': newStatus,
@@ -229,6 +358,7 @@ class GiftSystemPolicy {
 
   static Map<String, Object?> storyOverridePatch({
     required String adminUserId,
+    String? adminEmail,
     required String previousStoryStatus,
     required String overrideReason,
     required Object overrideAt,
@@ -246,6 +376,7 @@ class GiftSystemPolicy {
       'giftStoryAdminOverride': true,
       ...adminActionPatch(
         adminUserId: adminUserId,
+        adminEmail: adminEmail,
         actionType: overrideType,
         previousStatus: previousStoryStatus,
         newStatus: unlock ? 'unlocked' : 'locked',
@@ -277,24 +408,40 @@ class GiftSystemPolicy {
   static Map<String, Object?> notificationPayload({
     required String event,
     required String userId,
+    String? email,
     required String giftId,
+    String giftType = sendToSomeoneGiftType,
     required String title,
     required String body,
     String channel = 'in_app',
+    String deliveryStatus = 'pending',
+    String? failureReason,
+    Object? sentAt,
     Object? createdAt,
   }) {
     if (!notificationEvents.contains(event)) {
       throw ArgumentError('Unsupported Gifts notification event: $event');
     }
     return {
-      'recipientId': userId,
-      'recipientRole': 'sender',
+      'notificationId': giftId.isEmpty ? event : '${giftId}_$event',
+      'userId': userId,
+      if (email != null && email.trim().isNotEmpty)
+        'email': email.trim().toLowerCase(),
       'giftId': giftId,
-      'giftEvent': event,
+      'giftType': normalizeGiftType(giftType),
+      'eventType': event,
       'title': title,
       'body': body,
       'channel': channel,
+      'deliveryStatus': deliveryStatus,
       'createdAt': createdAt,
+      if (sentAt != null) 'sentAt': sentAt,
+      if (failureReason != null && failureReason.trim().isNotEmpty)
+        'failureReason': failureReason.trim(),
+      // Compatibility for existing admin tests/readers.
+      'recipientId': userId,
+      'recipientRole': 'sender',
+      'giftEvent': event,
       'read': false,
       'privacySafe': true,
     };
@@ -304,7 +451,9 @@ class GiftSystemPolicy {
     required String previousStatus,
     required String newStatus,
     required String userId,
+    String? email,
     required String giftId,
+    String giftType = sendToSomeoneGiftType,
     Object? createdAt,
   }) {
     if (_status(previousStatus) == _status(newStatus)) return null;
@@ -314,7 +463,9 @@ class GiftSystemPolicy {
     return notificationPayload(
       event: event,
       userId: userId,
+      email: email,
       giftId: giftId,
+      giftType: giftType,
       title: copy.$1,
       body: copy.$2,
       createdAt: createdAt,
@@ -387,17 +538,20 @@ class GiftSystemPolicy {
   }
 
   static String _giftType(Map<String, dynamic> record) {
-    final raw = _status(record['giftType']);
-    if (raw == campaignGiftType) return campaignGiftType;
-    if (raw == 'campaign_gift' || raw == 'anonymous_campaign') {
-      return campaignGiftType;
+    final normalized = normalizeGiftType(record['giftType']);
+    if (record['giftType'] != null && giftTypes.contains(normalized)) {
+      return normalized;
     }
     final mode = _status(record['giftMode']);
     final anonymousType = _status(record['anonymousGiftType']);
     if (mode == 'campaign' || anonymousType == 'campaign') {
       return campaignGiftType;
     }
-    return normalGiftType;
+    if (mode == 'myself' || mode == 'self') return sendToMeGiftType;
+    if (mode == 'anonymous' || anonymousType == 'anonymous_gift') {
+      return anonymousGiftType;
+    }
+    return sendToSomeoneGiftType;
   }
 
   static String _deliveryStatus(Map<String, dynamic> record) {
@@ -572,19 +726,19 @@ class GiftSystemPolicy {
   static String? _eventForStatus(String status) {
     return switch (_normalizeFlowStatus(_status(status))) {
       'draft' => 'gift_draft_saved',
-      'submitted' => 'gift_request_submitted',
-      'paid' => 'gift_payment_succeeded',
+      'submitted' => 'gift_submitted',
+      'paid' => 'payment_succeeded',
       'waiting_for_match' => 'campaign_waiting_for_match',
       'match_found' => 'campaign_match_found',
       'match_confirmed' => 'campaign_match_confirmed',
-      'approved' => 'gift_request_submitted',
-      'curating' => 'gift_curation_started',
-      'ready_for_gift_delivery' => 'gift_ready_for_delivery_workflow',
-      'in_delivery' => 'gift_delivery_started',
+      'approved' => 'gift_approved',
+      'curating' => 'curation_started',
+      'ready_for_gift_delivery' => 'ready_for_gift_delivery',
+      'in_delivery' => 'delivery_started',
       'delivered' => 'gift_delivered',
-      'story_locked' => 'gift_story_admin_locked',
-      'story_unlocked' => 'gift_story_unlocked',
-      'disputed' => 'gift_issue_or_dispute',
+      'story_locked' => 'story_locked',
+      'story_unlocked' => 'story_unlocked',
+      'disputed' => 'dispute_opened',
       _ => null,
     };
   }
@@ -595,13 +749,25 @@ class GiftSystemPolicy {
           'Gift draft saved',
           'Your gift progress is saved.'
         ),
-      'gift_request_submitted' => (
+      'gift_submitted' => (
           'Gift request submitted',
           'Your gift request has been saved for the Gifts Team.',
         ),
-      'gift_payment_succeeded' => (
+      'payment_succeeded' => (
           'Gift payment confirmed',
           'Your gift is secured with the Gifts Team.',
+        ),
+      'payment_failed' => (
+          'Gift payment failed',
+          'Your payment did not complete. Your gift progress is still saved.',
+        ),
+      'subscription_created' => (
+          'Gift subscription active',
+          'Your recurring self-gift is active.',
+        ),
+      'subscription_cancelled' => (
+          'Gift subscription cancelled',
+          'Your recurring self-gift subscription has been cancelled.',
         ),
       'campaign_waiting_for_match' => (
           'Campaign joined',
@@ -615,38 +781,58 @@ class GiftSystemPolicy {
           'Match confirmed',
           'The Gifts Team confirmed your anonymous match.',
         ),
-      'gift_curation_started' => (
+      'gift_approved' => (
+          'Gift approved',
+          'The Gifts Team approved your gift.'
+        ),
+      'gift_rejected' => (
+          'Gift needs attention',
+          'The Gifts Team could not approve this request yet.',
+        ),
+      'curation_started' => (
           'Curation started',
           'The Gifts Team has started shaping your gift.',
         ),
-      'gift_ready_for_delivery_workflow' => (
+      'ready_for_gift_delivery' => (
           'Ready for Gift Delivery',
           'Your gift is moving into the standard delivery workflow.',
         ),
-      'gift_delivery_started' => (
+      'delivery_started' => (
           'Delivery started',
           'Your gift delivery has started.',
         ),
-      'gift_rider_assigned' => (
+      'rider_assigned' => (
           'Rider assigned',
           'A rider has been assigned to your gift delivery.',
         ),
       'gift_delivered' => ('Gift delivered', 'Your gift has been delivered.'),
-      'gift_story_unlocked' => (
+      'story_locked' => (
+          'Gift Story locked',
+          'Your story will unlock after delivery is confirmed.',
+        ),
+      'story_unlocked' => (
           'Gift Story unlocked',
           'Your Gift Story is ready.',
         ),
-      'gift_story_admin_locked' => (
+      'story_manually_locked' => (
           'Gift Story locked',
           'This story is currently under review.',
         ),
-      'gift_story_admin_unlocked' => (
+      'story_manually_unlocked' => (
           'Gift Story unlocked',
           'Your Gift Story is ready.',
         ),
-      'gift_issue_or_dispute' => (
+      'issue_raised' => (
+          'Gift issue raised',
+          'The Gifts Team is reviewing an issue with this gift.',
+        ),
+      'dispute_opened' => (
           'Gift update',
           'The Gifts Team is reviewing an issue with this gift.',
+        ),
+      'dispute_resolved' => (
+          'Gift issue resolved',
+          'The Gifts Team has resolved the issue with this gift.',
         ),
       _ => ('Gift update', 'There is an update on your gift.'),
     };
