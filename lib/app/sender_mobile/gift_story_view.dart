@@ -14,13 +14,16 @@ class GiftStoryView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unlocked = draft.giftStoryUnlocked;
+    final manualLock = draft.giftStoryManuallyLocked;
     return GiftJourneyWidgets.scaffold(
       activeStep: 14,
       eyebrow: 'FINALE — GIFT STORY',
       title: unlocked ? 'Your Gift Story is ready' : 'Gift Story locked',
       subtitle: unlocked
           ? 'Your gift has been delivered, so the story can now be viewed.'
-          : 'Your story will unlock after delivery is confirmed.',
+          : manualLock
+              ? 'This story is currently under review.'
+              : 'Your story will unlock after delivery is confirmed.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         Container(
@@ -55,7 +58,9 @@ class GiftStoryView extends StatelessWidget {
               Text(
                 unlocked
                     ? 'Gift reveal assets can appear here now that the linked Gift Delivery is delivered.'
-                    : 'Your story will unlock after delivery is confirmed.',
+                    : manualLock
+                        ? 'This story is currently under review.'
+                        : 'Your story will unlock after delivery is confirmed.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   color: const Color(0xFFB8AAB8),

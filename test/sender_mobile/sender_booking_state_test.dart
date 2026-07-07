@@ -1139,6 +1139,12 @@ void main() {
       expect(draftSource, contains('activeDeliveryDispute'));
       expect(draftSource, contains('giftStoryStatus'));
       expect(draftSource, contains('giftStoryAdminOverrideReason'));
+      expect(draftSource, contains('giftStoryAdminUserId'));
+      expect(draftSource, contains('giftStoryAdminOverrideAt'));
+      expect(draftSource, contains('giftStoryPreviousStatus'));
+      expect(draftSource, contains('giftStoryOverrideType'));
+      expect(draftSource, contains('manual_unlock'));
+      expect(draftSource, contains('manual_lock'));
       expect(draftSource, contains("linkedGiftDeliveryStatus == 'delivered'"));
       expect(
         draftSource,
@@ -1155,6 +1161,7 @@ void main() {
         storySource,
         contains('Your story will unlock after delivery is confirmed.'),
       );
+      expect(storySource, contains('This story is currently under review.'));
       expect(storySource, contains('Your Gift Story is ready'));
       expect(storySource, contains('draft.giftStoryUnlocked'));
 
@@ -1183,6 +1190,35 @@ void main() {
         deliveryAuditSuccessful: true,
         activeDeliveryDispute: true,
       );
+      final manualUnlockBeforeDelivery =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        linkedGiftDeliveryStatus: 'ready_for_gift_delivery',
+        giftStoryAdminUserId: 'admin-1',
+        giftStoryAdminOverrideReason: 'Approved after manual proof review',
+        giftStoryAdminOverrideAt: '2026-07-07T10:00:00Z',
+        giftStoryPreviousStatus: 'locked',
+        giftStoryOverrideType: 'manual_unlock',
+      );
+      final incompleteManualUnlock =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        linkedGiftDeliveryStatus: 'ready_for_gift_delivery',
+        giftStoryAdminUserId: 'admin-1',
+        giftStoryAdminOverrideReason: 'Approved after manual proof review',
+        giftStoryPreviousStatus: 'locked',
+        giftStoryOverrideType: 'manual_unlock',
+      );
+      final manualLockAfterDelivery =
+          GiftJourneyDraft.forMode(SenderGiftMode.campaign).copyWith(
+        linkedGiftDeliveryStatus: 'delivered',
+        riderCompletionAccepted: true,
+        deliveryVerificationCompleted: true,
+        deliveryAuditSuccessful: true,
+        giftStoryAdminUserId: 'admin-2',
+        giftStoryAdminOverrideReason: 'Under review after recipient report',
+        giftStoryAdminOverrideAt: '2026-07-07T11:00:00Z',
+        giftStoryPreviousStatus: 'unlocked',
+        giftStoryOverrideType: 'manual_lock',
+      );
 
       expect(locked.giftStoryUnlocked, isFalse);
       expect(locked.giftStoryStatus, 'locked');
@@ -1190,6 +1226,12 @@ void main() {
       expect(operationallyComplete.giftStoryUnlocked, isTrue);
       expect(operationallyComplete.giftStoryStatus, 'unlocked');
       expect(disputed.giftStoryUnlocked, isFalse);
+      expect(manualUnlockBeforeDelivery.giftStoryUnlocked, isTrue);
+      expect(manualUnlockBeforeDelivery.giftStoryStatus, 'unlocked');
+      expect(incompleteManualUnlock.giftStoryUnlocked, isFalse);
+      expect(manualLockAfterDelivery.giftStoryUnlocked, isFalse);
+      expect(manualLockAfterDelivery.giftStoryManuallyLocked, isTrue);
+      expect(manualLockAfterDelivery.giftStoryStatus, 'locked');
     });
 
     test('Campaign matching is budget-independent and budget-private', () {

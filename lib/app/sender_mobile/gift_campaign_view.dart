@@ -239,9 +239,24 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           _truthy(data['deliveryInvestigationActive']) ||
           _truthy(data['activeDeliveryInvestigation']),
       giftStoryAdminOverride: data['giftStoryAdminOverride'] == true,
+      giftStoryAdminUserId:
+          '${data['giftStoryAdminUserId'] ?? data['adminUserId'] ?? ''}',
       giftStoryAdminOverrideReason:
-          '${data['giftStoryAdminOverrideReason'] ?? ''}',
+          '${data['giftStoryAdminOverrideReason'] ?? data['overrideReason'] ?? ''}',
+      giftStoryAdminOverrideAt:
+          _stringValue(data['giftStoryAdminOverrideAt'] ?? data['overrideAt']),
+      giftStoryPreviousStatus:
+          '${data['giftStoryPreviousStatus'] ?? data['previousStoryStatus'] ?? ''}',
+      giftStoryOverrideType:
+          '${data['giftStoryOverrideType'] ?? data['overrideType'] ?? ''}',
     );
+  }
+
+  static String _stringValue(Object? value) {
+    if (value == null) return '';
+    if (value is Timestamp) return value.toDate().toIso8601String();
+    if (value is DateTime) return value.toIso8601String();
+    return '$value';
   }
 
   static bool _truthy(Object? value) {
@@ -809,7 +824,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
               : 'Gift Story locked',
           body: _linkedGiftStoryUnlocked
               ? 'View Gift Story'
-              : 'Your story will unlock after delivery is confirmed.',
+              : _campaignStoryDraft.giftStoryManuallyLocked
+                  ? 'This story is currently under review.'
+                  : 'Your story will unlock after delivery is confirmed.',
         ),
       ],
       const SizedBox(height: 12),

@@ -321,7 +321,11 @@ class GiftJourneyDraft {
   final bool deliveryAuditSuccessful;
   final bool activeDeliveryDispute;
   final bool giftStoryAdminOverride;
+  final String? giftStoryAdminUserId;
   final String? giftStoryAdminOverrideReason;
+  final String? giftStoryAdminOverrideAt;
+  final String? giftStoryPreviousStatus;
+  final String? giftStoryOverrideType;
   final double budget;
 
   const GiftJourneyDraft({
@@ -376,7 +380,11 @@ class GiftJourneyDraft {
     this.deliveryAuditSuccessful = false,
     this.activeDeliveryDispute = false,
     this.giftStoryAdminOverride = false,
+    this.giftStoryAdminUserId,
     this.giftStoryAdminOverrideReason,
+    this.giftStoryAdminOverrideAt,
+    this.giftStoryPreviousStatus,
+    this.giftStoryOverrideType,
     this.budget = 100,
   });
 
@@ -420,6 +428,8 @@ class GiftJourneyDraft {
       };
 
   bool get giftStoryUnlocked {
+    if (_hasAuditedManualLock) return false;
+    if (_hasAuditedManualUnlock) return true;
     return linkedGiftDeliveryStatus == 'delivered' &&
         riderCompletionAccepted &&
         deliveryVerificationCompleted &&
@@ -428,6 +438,20 @@ class GiftJourneyDraft {
   }
 
   String get giftStoryStatus => giftStoryUnlocked ? 'unlocked' : 'locked';
+
+  bool get giftStoryManuallyLocked => _hasAuditedManualLock;
+
+  bool get _hasAuditedManualUnlock =>
+      giftStoryOverrideType == 'manual_unlock' && _hasCompleteOverrideAudit;
+
+  bool get _hasAuditedManualLock =>
+      giftStoryOverrideType == 'manual_lock' && _hasCompleteOverrideAudit;
+
+  bool get _hasCompleteOverrideAudit =>
+      (giftStoryAdminUserId ?? '').trim().isNotEmpty &&
+      (giftStoryAdminOverrideReason ?? '').trim().isNotEmpty &&
+      (giftStoryAdminOverrideAt ?? '').trim().isNotEmpty &&
+      (giftStoryPreviousStatus ?? '').trim().isNotEmpty;
 
   SenderGiftBriefPreview get giftBriefPreview {
     if (irisGiftBrief != null) {
@@ -621,7 +645,11 @@ class GiftJourneyDraft {
     bool? deliveryAuditSuccessful,
     bool? activeDeliveryDispute,
     bool? giftStoryAdminOverride,
+    String? giftStoryAdminUserId,
     String? giftStoryAdminOverrideReason,
+    String? giftStoryAdminOverrideAt,
+    String? giftStoryPreviousStatus,
+    String? giftStoryOverrideType,
     double? budget,
   }) {
     return GiftJourneyDraft(
@@ -686,8 +714,15 @@ class GiftJourneyDraft {
           activeDeliveryDispute ?? this.activeDeliveryDispute,
       giftStoryAdminOverride:
           giftStoryAdminOverride ?? this.giftStoryAdminOverride,
+      giftStoryAdminUserId: giftStoryAdminUserId ?? this.giftStoryAdminUserId,
       giftStoryAdminOverrideReason:
           giftStoryAdminOverrideReason ?? this.giftStoryAdminOverrideReason,
+      giftStoryAdminOverrideAt:
+          giftStoryAdminOverrideAt ?? this.giftStoryAdminOverrideAt,
+      giftStoryPreviousStatus:
+          giftStoryPreviousStatus ?? this.giftStoryPreviousStatus,
+      giftStoryOverrideType:
+          giftStoryOverrideType ?? this.giftStoryOverrideType,
       budget: budget ?? this.budget,
     );
   }
@@ -836,7 +871,11 @@ class GiftJourneyDraft {
       'activeDeliveryDispute': activeDeliveryDispute,
       'giftStoryStatus': giftStoryStatus,
       'giftStoryAdminOverride': giftStoryAdminOverride,
+      'giftStoryAdminUserId': giftStoryAdminUserId,
       'giftStoryAdminOverrideReason': giftStoryAdminOverrideReason,
+      'giftStoryAdminOverrideAt': giftStoryAdminOverrideAt,
+      'giftStoryPreviousStatus': giftStoryPreviousStatus,
+      'giftStoryOverrideType': giftStoryOverrideType,
       'participantConsentRequired': mode == SenderGiftMode.campaign,
       'recordingConsentRequired': mode == SenderGiftMode.campaign,
       'mutualRevealAllowed': mode == SenderGiftMode.campaign,
