@@ -28,7 +28,7 @@ class _GiftBudgetViewState extends State<GiftBudgetView> {
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 10,
       eyebrow: 'STEP 10 — BUDGET',
       title: 'Set a gift budget',
       subtitle:

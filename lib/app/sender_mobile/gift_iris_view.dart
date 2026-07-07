@@ -47,7 +47,7 @@ class _GiftIrisViewState extends State<GiftIrisView> {
         .toList();
 
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 7,
       eyebrow: 'STEP 07 — IRIS',
       title: 'How IRIS understands this moment',
       subtitle: 'IRIS is reading the moment, not building a basket.',

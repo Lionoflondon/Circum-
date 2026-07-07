@@ -350,6 +350,20 @@ void main() {
       final storySource =
           File('lib/app/sender_mobile/gift_story_view.dart').readAsStringSync();
 
+      expect(relationshipSource, contains('static const _totalSteps = 14'));
+      expect(relationshipSource, contains('step <= _totalSteps'));
+      expect(deliverySource, contains('activeStep: 3'));
+      expect(voiceSource, contains('activeStep: 5'));
+      expect(themesSource, contains('activeStep: 6'));
+      expect(irisSource, contains('activeStep: 7'));
+      expect(styleSource, contains('activeStep: 8'));
+      expect(privacySource, contains('activeStep: 9'));
+      expect(budgetSource, contains('activeStep: 10'));
+      expect(reviewSource, contains('activeStep: 11'));
+      expect(paymentSource, contains('activeStep: 12'));
+      expect(statusSource, contains('activeStep: 13'));
+      expect(storySource, contains('activeStep: 14'));
+
       expect(giftSource, contains("import 'gift_relationship_view.dart';"));
       expect(giftSource, contains('GiftRelationshipView'));
       expect(

@@ -34,7 +34,7 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 9,
       eyebrow: 'STEP 09 — REVEAL & PRIVACY',
       title: 'How should we handle privacy?',
       subtitle:

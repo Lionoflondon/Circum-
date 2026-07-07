@@ -27,7 +27,7 @@ class GiftStatusView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 13,
       eyebrow: 'STEP 13 — STATUS',
       title: 'Your gift is in safe hands.',
       subtitle:

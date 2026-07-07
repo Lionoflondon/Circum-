@@ -53,7 +53,7 @@ class _GiftStyleViewState extends State<GiftStyleView> {
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 8,
       eyebrow: 'STEP 08 — STYLE & SIZES',
       title: 'Their style',
       subtitle:

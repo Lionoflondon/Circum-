@@ -934,6 +934,8 @@ class _GiftBackButton extends StatelessWidget {
 }
 
 class _GiftStepProgress extends StatelessWidget {
+  static const _totalSteps = 14;
+
   final int activeStep;
 
   const _GiftStepProgress({required this.activeStep});
@@ -942,7 +944,7 @@ class _GiftStepProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (var step = 1; step <= 4; step++) ...[
+        for (var step = 1; step <= _totalSteps; step++) ...[
           Expanded(
             child: Container(
               height: 4,
@@ -963,7 +965,7 @@ class _GiftStepProgress extends StatelessWidget {
               ),
             ),
           ),
-          if (step != 4) const SizedBox(width: 5),
+          if (step != _totalSteps) const SizedBox(width: 3),
         ],
       ],
     );

@@ -41,7 +41,7 @@ class _GiftThemesViewState extends State<GiftThemesView> {
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 6,
       eyebrow: 'STEP 06 — INTERESTS',
       title: 'What makes them smile?',
       subtitle:

@@ -16,7 +16,7 @@ class GiftPrePaymentView extends StatelessWidget {
   Widget build(BuildContext context) {
     final brief = draft.irisGiftBrief ?? draft.generateIrisBrief();
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 11,
       eyebrow: 'BEFORE PAYMENT',
       title: "We've understood the moment",
       subtitle:

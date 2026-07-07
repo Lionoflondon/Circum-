@@ -30,7 +30,7 @@ class _GiftReviewViewState extends State<GiftReviewView> {
         .map((theme) => theme.label)
         .toList();
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 11,
       eyebrow: 'STEP 11 — REVIEW',
       title: 'Review before payment',
       subtitle: 'Gift contents remain confidential before delivery.',

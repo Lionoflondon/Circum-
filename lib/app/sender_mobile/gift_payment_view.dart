@@ -50,7 +50,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 12,
       eyebrow: 'STEP 12 — PAYMENT',
       title: 'Secure the request',
       subtitle:

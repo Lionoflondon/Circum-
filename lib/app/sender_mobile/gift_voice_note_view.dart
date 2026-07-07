@@ -66,7 +66,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
   @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
-      activeStep: 4,
+      activeStep: 5,
       eyebrow: 'STEP 05 — VOICE NOTE',
       title: 'Leave a personal message',
       subtitle:
