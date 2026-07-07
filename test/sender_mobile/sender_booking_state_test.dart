@@ -4,6 +4,8 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
+import 'package:circum/app/sender_mobile/gift_message_view.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
 import 'package:circum/app/sender_mobile/gift_relationship_view.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
@@ -301,12 +303,17 @@ void main() {
       expect(iconSource, isNot(contains('0xFF3B82F6')));
     });
 
-    test('sender mobile Gift someone relationship screen is wired', () {
+    test('sender mobile Gifts flow uses web-backed draft field names', () {
       final giftSource =
           File('lib/app/sender_mobile/gift_mode_view.dart').readAsStringSync();
       final relationshipSource = File(
         'lib/app/sender_mobile/gift_relationship_view.dart',
       ).readAsStringSync();
+      final deliverySource = File(
+        'lib/app/sender_mobile/gift_delivery_view.dart',
+      ).readAsStringSync();
+      final messageSource = File('lib/app/sender_mobile/gift_message_view.dart')
+          .readAsStringSync();
 
       expect(giftSource, contains("import 'gift_relationship_view.dart';"));
       expect(giftSource, contains('GiftRelationshipView'));
@@ -314,26 +321,69 @@ void main() {
         GiftRelationshipView.routeName,
         '/sender-mobile/gifts/relationship',
       );
-      expect(senderGiftRelationshipOptions, const [
-        'Partner',
-        'Parent',
-        'Sibling',
-        'Friend',
-        'Child',
-        'Colleague',
-        'Client',
-        'Other',
+      expect(GiftDeliveryView.routeName, '/sender-mobile/gifts/delivery');
+      expect(GiftMessageView.routeName, '/sender-mobile/gifts/message');
+      expect(senderGiftRelationshipFieldName, 'relationship');
+      expect(senderGiftOccasionFieldName, 'occasion');
+      expect(senderGiftRecipientContactFieldName, 'recipientContact');
+      expect(senderGiftDeliveryAddressFieldName, 'deliveryAddress');
+      expect(senderGiftDeliveryDateFieldName, 'deliveryDate');
+      expect(senderGiftDeliveryTimeWindowFieldName, 'deliveryTimeWindow');
+      expect(senderGiftPersonalMessageFieldName, 'personalMessage');
+      expect(
+          senderGiftRelationshipOptions,
+          containsAll([
+            'Partner',
+            'Husband',
+            'Wife',
+            'Business Partner',
+            'Anonymous Recipient',
+            'Other',
+          ]));
+      expect(senderGiftRelationshipOptions.length, 68);
+      expect(
+          senderGiftOccasionOptions,
+          containsAll([
+            'Birthday',
+            'Anniversary',
+            'Community Campaign',
+            'Bringing London Together',
+            'Other',
+          ]));
+      expect(senderGiftOccasionOptions.length, 84);
+      expect(senderGiftDeliveryTimeWindows, const [
+        'Morning',
+        'Afternoon',
+        'Evening',
       ]);
-      expect(relationshipSource, contains('Who are we gifting?'));
+      expect(relationshipSource, contains('Tell us about them'));
       expect(
         relationshipSource,
         contains(
           'Tell IRIS who this is for so we can shape the experience.',
         ),
       );
-      expect(relationshipSource, contains('Occasion screen coming next'));
+      expect(relationshipSource, contains('PHONE & EMAIL'));
+      expect(relationshipSource, contains('Used for delivery updates only.'));
+      expect(relationshipSource, isNot(contains('CONTACT (PHONE OR EMAIL)')));
+      expect(relationshipSource, isNot(contains('For delivery updates only')));
+      expect(relationshipSource, contains('GiftDeliveryView'));
+      expect(deliverySource, contains('Where and when?'));
+      expect(deliverySource, contains('DELIVERY ADDRESS'));
+      expect(deliverySource, contains('Where should it arrive?'));
+      expect(deliverySource, contains('PREFERRED DATE'));
+      expect(deliverySource, contains('Choose a date'));
+      expect(deliverySource, contains('GiftMessageView'));
+      expect(messageSource, contains('Write something from the heart'));
+      expect(messageSource, contains('PERSONAL MESSAGE'));
+      expect(messageSource, contains('What do you want them to know?'));
+      expect(messageSource, contains('Next Gifts step coming soon'));
       expect(relationshipSource, isNot(contains('createGiftPayment')));
+      expect(deliverySource, isNot(contains('createGiftPayment')));
+      expect(messageSource, isNot(contains('createGiftPayment')));
       expect(relationshipSource, isNot(contains('FirebaseFirestore')));
+      expect(deliverySource, isNot(contains('FirebaseFirestore')));
+      expect(messageSource, isNot(contains('FirebaseFirestore')));
     });
 
     testWidgets('Gift someone opens relationship screen and back returns', (
@@ -349,8 +399,9 @@ void main() {
       await tester.tap(find.text('Gift someone'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Who are we gifting?'), findsOneWidget);
-      expect(find.text('Partner'), findsOneWidget);
+      expect(find.text('Tell us about them'), findsOneWidget);
+      expect(find.text('PHONE & EMAIL'), findsOneWidget);
+      expect(find.text('Used for delivery updates only.'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.arrow_back_rounded));
       await tester.pumpAndSettle();
@@ -359,22 +410,87 @@ void main() {
       expect(find.text('Gift someone'), findsOneWidget);
     });
 
-    testWidgets('Gift relationship continue requires a selected option', (
+    testWidgets('Gift flow validates recipient, delivery, and message steps', (
       tester,
     ) async {
       await tester.pumpWidget(const MaterialApp(home: GiftRelationshipView()));
 
       expect(find.text('Continue'), findsOneWidget);
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Where and when?'), findsNothing);
+
+      await tester.ensureVisible(find.text('Choose relationship'));
+      await tester.tap(find.byType(DropdownButton<String>).at(0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Partner').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButton<String>).at(1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Birthday').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'recipient@example.com');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Occasion screen coming next'), findsNothing);
 
-      await tester.tap(find.text('Friend'));
+      expect(find.text('Where and when?'), findsOneWidget);
+      expect(find.text('DELIVERY ADDRESS'), findsOneWidget);
+      expect(find.text('PREFERRED DATE'), findsOneWidget);
+      expect(find.text('Morning'), findsOneWidget);
+      expect(find.text('Afternoon'), findsOneWidget);
+      expect(find.text('Evening'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
       await tester.pumpAndSettle();
+      expect(find.text('Tell us about them'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Where and when?'), findsOneWidget);
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Write something from the heart'), findsNothing);
+
+      final deliveryFields = find.byType(TextField);
+      await tester.enterText(deliveryFields.at(0), '221B Baker Street');
+      await tester.enterText(deliveryFields.at(1), '2026-07-12');
+      await tester.tap(find.text('Afternoon'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Occasion screen coming next'), findsOneWidget);
+      expect(find.text('Write something from the heart'), findsOneWidget);
+      expect(find.text('PERSONAL MESSAGE'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+      expect(find.text('Where and when?'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Write something from the heart'), findsOneWidget);
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Next Gifts step coming soon'), findsNothing);
+
+      await tester.enterText(
+        find.byType(TextField),
+        'You mean the world to me.',
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Next Gifts step coming soon'), findsOneWidget);
     });
 
     test('sender mobile pre-auth landing and auth copy are locked', () {
