@@ -7,6 +7,33 @@ import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_style_view.dart';
 
+const senderGiftIrisHardcodedInsights = [
+  (
+    title: "The feeling we're creating",
+    body:
+        'A thoughtful, personal experience that feels considered rather than performative.',
+  ),
+  (
+    title: "How we'll bring it to life",
+    body:
+        'The Gifts Team will use the relationship, occasion and interests to shape a bespoke direction.',
+  ),
+  (
+    title: "We'll avoid",
+    body:
+        'Generic choices, rushed assumptions and anything that feels disconnected from the moment.',
+  ),
+  (
+    title: 'Our confidence',
+    body: "We're confident we've understood what matters.",
+  ),
+  (
+    title: 'Reviewed by the Gifts Team',
+    body:
+        'Every experience is reviewed by a real person before sourcing begins.',
+  ),
+];
+
 class GiftIrisView extends StatefulWidget {
   final GiftJourneyDraft draft;
 
@@ -62,34 +89,10 @@ class _GiftIrisViewState extends State<GiftIrisView> {
             const _IrisNote(
               "We've saved the personal interests as context for planning.",
             ),
-          const SizedBox(height: 12),
-          _IrisInsightCard(
-            title: "The feeling we're creating",
-            body: _brief!.emotionalDirection,
-          ),
-          const SizedBox(height: 12),
-          _IrisInsightCard(
-            title: "How we'll bring it to life",
-            body: _brief!.experienceDirection,
-          ),
-          const SizedBox(height: 12),
-          _IrisInsightCard(
-            title: "We'll avoid",
-            body: _brief!.thingsToAvoid,
-          ),
-          const SizedBox(height: 12),
-          _IrisInsightCard(
-            title: 'Our confidence',
-            body: _brief!.catalogueCoverage.isEmpty
-                ? 'A real member of the Gifts Team will guide this carefully.'
-                : "We're confident we've understood what matters.",
-          ),
-          const SizedBox(height: 12),
-          const _IrisInsightCard(
-            title: 'Reviewed by the Gifts Team',
-            body:
-                'Every experience is reviewed by a real person before sourcing begins.',
-          ),
+          for (final insight in senderGiftIrisHardcodedInsights) ...[
+            const SizedBox(height: 12),
+            _IrisInsightCard(title: insight.title, body: insight.body),
+          ],
         ],
       ],
       footer: GiftJourneyWidgets.primaryButton(

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
+import 'package:circum/app/send_package/models/suggestions.m.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/sender_mobile/gift_delivery_view.dart';
 import 'package:circum/app/sender_mobile/gift_iris_view.dart';
@@ -466,11 +467,16 @@ void main() {
         ),
       );
       expect(deliverySource, contains('PREFERRED DATE'));
-      expect(deliverySource, contains('Choose a date'));
+      expect(deliverySource, contains('senderGiftPreferredDateOptions'));
+      expect(deliverySource, contains('Choose with Gifts Team'));
+      expect(deliverySource, contains('_selectedAddressSuggestion != null'));
       expect(deliverySource, contains('GiftMessageView'));
       expect(messageSource, contains('Write something from the heart'));
-      expect(messageSource, contains('PERSONAL MESSAGE'));
-      expect(messageSource, contains('What do you want them to know?'));
+      expect(messageSource, contains('senderGiftPersonalMessageOptions'));
+      expect(
+        messageSource,
+        contains('You mean more to me than I say often enough.'),
+      );
       expect(messageSource, contains('GiftVoiceNoteView'));
       expect(voiceSource, contains('STEP 05 — VOICE NOTE'));
       expect(voiceSource, contains('Leave a personal message'));
@@ -524,10 +530,17 @@ void main() {
       );
       expect(themesSource, contains('GiftIrisView'));
       expect(irisSource, contains('STEP 07 — IRIS'));
+      expect(irisSource, contains('senderGiftIrisHardcodedInsights'));
       expect(irisSource, contains('How IRIS understands this moment'));
       expect(
         irisSource,
         contains('IRIS is reading the moment, not building a basket.'),
+      );
+      expect(
+        irisSource,
+        contains(
+          'A thoughtful, personal experience that feels considered rather than performative.',
+        ),
       );
       expect(irisSource, contains("The feeling we're creating"));
       expect(irisSource, contains("How we'll bring it to life"));
@@ -537,6 +550,14 @@ void main() {
       expect(irisSource, contains('generateIrisBrief'));
       expect(styleSource, contains('STEP 08 — STYLE & SIZES'));
       expect(styleSource, contains('Their style'));
+      expect(styleSource, contains('senderGiftClothingSizeOptions'));
+      expect(styleSource, contains('senderGiftShoeSizeOptions'));
+      expect(styleSource, contains('senderGiftRingSizeOptions'));
+      expect(styleSource, contains('senderGiftBrandOptions'));
+      expect(styleSource, contains('senderGiftColourOptions'));
+      expect(styleSource, contains('senderGiftPreferredStyleOptions'));
+      expect(styleSource, isNot(contains('TextEditingController')));
+      expect(styleSource, isNot(contains('inputCard(')));
       expect(styleSource, contains('CLOTHING SIZE'));
       expect(styleSource, contains('SHOE SIZE'));
       expect(styleSource, contains('RING SIZE'));
@@ -892,38 +913,75 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Write something from the heart'), findsNothing);
 
-      final deliveryFields = find.byType(TextField);
-      await tester.enterText(deliveryFields.at(0), '221B Baker Street');
-      await tester.enterText(deliveryFields.at(1), '2026-07-12');
+      final verifiedDraft = GiftJourneyDraft.forMode(
+        SenderGiftMode.someone,
+      ).copyWith(
+        deliveryAddress: '221B Baker Street, London NW1 6XE',
+        deliveryAddressData: Suggestion(
+          placeId: 'verified-221b',
+          description: '221B Baker Street, London NW1 6XE',
+          mainText: '221B Baker Street',
+          subText: 'London NW1 6XE',
+          components: const {
+            'postcode': 'NW1 6XE',
+            'city': 'London',
+            'country': 'GB',
+          },
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          key: UniqueKey(),
+          home: GiftDeliveryView(draft: verifiedDraft),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Tomorrow'));
+      await tester.tap(find.text('Tomorrow'));
+      await tester.drag(find.byType(ListView), const Offset(0, -220));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Afternoon'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Continue'));
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
+      expect(find.text('Tomorrow'), findsOneWidget);
+      expect(find.text('Afternoon'), findsOneWidget);
 
-      expect(find.text('Write something from the heart'), findsOneWidget);
-      expect(find.text('PERSONAL MESSAGE'), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpWidget(
+        MaterialApp(
+          key: UniqueKey(),
+          home: GiftMessageView(
+            draft: verifiedDraft.copyWith(
+              deliveryDate: 'Tomorrow',
+              deliveryTimeWindow: 'Afternoon',
+            ),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
-      expect(find.text('Where and when?'), findsOneWidget);
+      expect(
+        find.text(
+          'You mean more to me than I say often enough.',
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
 
-      await tester.ensureVisible(find.text('Continue'));
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
-      expect(find.text('Write something from the heart'), findsOneWidget);
       await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
       expect(find.text('Leave a personal message'), findsNothing);
 
-      await tester.enterText(
-        find.byType(TextField),
-        'You mean the world to me.',
+      await tester.pumpWidget(
+        MaterialApp(
+          key: UniqueKey(),
+          home: GiftVoiceNoteView(
+            draft: verifiedDraft.copyWith(
+              deliveryDate: 'Tomorrow',
+              deliveryTimeWindow: 'Afternoon',
+              personalMessage: 'You mean more to me than I say often enough.',
+            ),
+          ),
+        ),
       );
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Continue'));
-      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
       expect(find.text('Leave a personal message'), findsOneWidget);

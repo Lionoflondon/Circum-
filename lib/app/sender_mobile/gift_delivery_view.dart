@@ -15,6 +15,12 @@ const senderGiftDeliveryCityFieldName = 'deliveryCity';
 const senderGiftDeliveryCountryFieldName = 'deliveryCountry';
 const senderGiftDeliveryDateFieldName = 'deliveryDate';
 const senderGiftDeliveryTimeWindowFieldName = 'deliveryTimeWindow';
+const senderGiftPreferredDateOptions = [
+  'Tomorrow',
+  'This weekend',
+  'Next week',
+  'Choose with Gifts Team',
+];
 const senderGiftDeliveryTimeWindows = ['Morning', 'Afternoon', 'Evening'];
 const senderGiftAddressLookupCallableName = 'searchFreeUkAddresses';
 
@@ -34,7 +40,6 @@ class GiftDeliveryView extends StatefulWidget {
 
 class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   final _deliveryAddressController = TextEditingController();
-  final _deliveryDateController = TextEditingController();
   final _addressSearch = PlaceApiProvider(
     'sender-mobile-gifts-delivery-address',
   );
@@ -43,19 +48,20 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   Suggestion? _selectedAddressSuggestion;
   bool _isAddressSearching = false;
   String _addressError = '';
+  String? _deliveryDate;
   String? _deliveryTimeWindow;
 
   bool get _canContinue =>
-      _deliveryAddressController.text.trim().isNotEmpty &&
-      _deliveryDateController.text.trim().isNotEmpty &&
+      _selectedAddressSuggestion != null &&
+      _deliveryDate != null &&
       _deliveryTimeWindow != null;
 
   @override
   void initState() {
     super.initState();
     _deliveryAddressController.text = widget.draft.deliveryAddress ?? '';
-    _deliveryDateController.text = widget.draft.deliveryDate ?? '';
     _selectedAddressSuggestion = widget.draft.deliveryAddressData;
+    _deliveryDate = widget.draft.deliveryDate;
     _deliveryTimeWindow = widget.draft.deliveryTimeWindow;
   }
 
@@ -63,7 +69,6 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   void dispose() {
     _addressDebounce?.cancel();
     _deliveryAddressController.dispose();
-    _deliveryDateController.dispose();
     super.dispose();
   }
 
@@ -141,14 +146,24 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
           onSuggestionSelected: _selectAddressSuggestion,
         ),
         const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _deliveryDateController,
+        _GiftHardcodedChoiceCard(
           label: 'PREFERRED DATE',
-          placeholder: 'Choose a date',
-          keyboardType: TextInputType.datetime,
-          onChanged: (_) => setState(() {}),
+          helper: 'Choose one option. The Gifts Team will plan around it.',
+          options: senderGiftPreferredDateOptions,
+          selected: _deliveryDate,
+          onSelected: (value) => setState(() => _deliveryDate = value),
         ),
         const SizedBox(height: 16),
+        Text(
+          'TIME WINDOW',
+          style: const TextStyle(
+            color: Color(0xFFC9B8FF),
+            fontSize: 10.5,
+            letterSpacing: .8,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -173,7 +188,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
                       draft: widget.draft.copyWith(
                         deliveryAddress: _deliveryAddressController.text.trim(),
                         deliveryAddressData: _selectedAddressSuggestion,
-                        deliveryDate: _deliveryDateController.text.trim(),
+                        deliveryDate: _deliveryDate,
                         deliveryTimeWindow: _deliveryTimeWindow,
                       ),
                     ),
@@ -219,7 +234,7 @@ class _GiftAddressLookupCard extends StatelessWidget {
           controller: controller,
           label: label,
           helper: selectedSuggestion == null
-              ? 'Start typing to search verified delivery addresses.'
+              ? 'Select a verified delivery address to continue.'
               : 'Verified delivery address selected.',
           placeholder: placeholder,
           onChanged: onChanged,
@@ -305,6 +320,72 @@ class _GiftAddressLookupCard extends StatelessWidget {
             ),
         ],
       ],
+    );
+  }
+}
+
+class _GiftHardcodedChoiceCard extends StatelessWidget {
+  final String label;
+  final String helper;
+  final List<String> options;
+  final String? selected;
+  final ValueChanged<String> onSelected;
+
+  const _GiftHardcodedChoiceCard({
+    required this.label,
+    required this.helper,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFFC9B8FF),
+              fontSize: 10.5,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            helper,
+            style: const TextStyle(
+              color: Color(0xFFB8AAB8),
+              fontSize: 11.5,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in options)
+                GiftJourneyWidgets.choiceChip(
+                  label: option,
+                  selected: selected == option,
+                  onTap: () => onSelected(option),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

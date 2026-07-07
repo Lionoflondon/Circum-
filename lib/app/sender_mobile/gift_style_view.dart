@@ -5,6 +5,50 @@ import 'gift_journey_draft.dart';
 import 'gift_privacy_view.dart';
 import 'gift_relationship_view.dart';
 
+const senderGiftClothingSizeOptions = ['XS', 'S', 'M', 'L', 'XL', 'Unknown'];
+const senderGiftShoeSizeOptions = [
+  'UK 4',
+  'UK 5',
+  'UK 6',
+  'UK 7',
+  'UK 8',
+  'Unknown'
+];
+const senderGiftRingSizeOptions = ['J', 'K', 'L', 'M', 'N', 'Unknown'];
+const senderGiftBrandOptions = [
+  'Aesop',
+  'COS',
+  'Jo Malone',
+  'Selfridges',
+  'Fortnum & Mason',
+  'Independent makers',
+  'No preference',
+];
+const senderGiftColourOptions = [
+  'Black',
+  'White',
+  'Navy',
+  'Cream',
+  'Sage',
+  'Pink',
+  'Gold',
+  'Silver',
+  'Brown',
+  'Green',
+];
+const senderGiftPreferredStyleOptions = [
+  'Minimal',
+  'Classic',
+  'Modern',
+  'Bold',
+  'Luxury',
+  'Streetwear',
+  'Vintage',
+  'Elegant',
+  'Sporty',
+  'Cosy',
+];
+
 class GiftStyleView extends StatefulWidget {
   final GiftJourneyDraft draft;
 
@@ -17,37 +61,33 @@ class GiftStyleView extends StatefulWidget {
 }
 
 class _GiftStyleViewState extends State<GiftStyleView> {
-  late final TextEditingController _clothingSizeController;
-  late final TextEditingController _shoeSizeController;
-  late final TextEditingController _ringSizeController;
-  late final TextEditingController _brandsController;
+  String? _clothingSize;
+  String? _shoeSize;
+  String? _ringSize;
+  final _brandPills = <String>{};
   final _stylePills = <String>{};
   final _colourPills = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _clothingSizeController =
-        TextEditingController(text: widget.draft.clothingSize);
-    _shoeSizeController = TextEditingController(text: widget.draft.shoeSize);
-    _ringSizeController = TextEditingController(text: widget.draft.ringSize);
-    _brandsController = TextEditingController(text: widget.draft.likedBrands);
+    _clothingSize = _existingOrNull(
+      widget.draft.clothingSize,
+      senderGiftClothingSizeOptions,
+    );
+    _shoeSize = _existingOrNull(
+      widget.draft.shoeSize,
+      senderGiftShoeSizeOptions,
+    );
+    _ringSize = _existingOrNull(
+      widget.draft.ringSize,
+      senderGiftRingSizeOptions,
+    );
+    _brandPills
+        .addAll(_existingSet(widget.draft.likedBrands, senderGiftBrandOptions));
     _stylePills.addAll(widget.draft.preferredStyles);
     _colourPills.addAll(
-      (widget.draft.favouriteColours ?? '')
-          .split(',')
-          .map((colour) => colour.trim())
-          .where((colour) => colour.isNotEmpty),
-    );
-  }
-
-  @override
-  void dispose() {
-    _clothingSizeController.dispose();
-    _shoeSizeController.dispose();
-    _ringSizeController.dispose();
-    _brandsController.dispose();
-    super.dispose();
+        _existingSet(widget.draft.favouriteColours, senderGiftColourOptions));
   }
 
   @override
@@ -60,54 +100,53 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           'These choices help us understand what naturally feels like them.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
-        GiftJourneyWidgets.inputCard(
-          controller: _clothingSizeController,
+        _FixedChoiceSection(
           label: 'CLOTHING SIZE',
-          placeholder: 'e.g. UK 10, M',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _shoeSizeController,
-          label: 'SHOE SIZE',
-          placeholder: 'e.g. UK 6',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _ringSizeController,
-          label: 'RING SIZE',
-          placeholder: 'e.g. L, 52, unknown',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _brandsController,
-          label: 'BRANDS THEY LOVE',
-          placeholder: 'e.g. Aesop, Cos',
-          onChanged: (_) => setState(() {}),
+          helper: 'Choose the closest known size.',
+          options: senderGiftClothingSizeOptions,
+          selected: _clothingSize == null ? const {} : {_clothingSize!},
+          onToggle: (value) => setState(() => _clothingSize = value),
         ),
         const SizedBox(height: 14),
-        _ColourChips(
-          selectedColours: _colourPills,
-          onToggle: (colour) => setState(() {
-            if (_colourPills.contains(colour)) {
-              _colourPills.remove(colour);
-            } else {
-              _colourPills.add(colour);
-            }
-          }),
+        _FixedChoiceSection(
+          label: 'SHOE SIZE',
+          helper: 'Choose the closest known size.',
+          options: senderGiftShoeSizeOptions,
+          selected: _shoeSize == null ? const {} : {_shoeSize!},
+          onToggle: (value) => setState(() => _shoeSize = value),
         ),
-        const SizedBox(height: 16),
-        _PreferredStyleChips(
-          selectedStyles: _stylePills,
-          onToggle: (style) => setState(() {
-            if (_stylePills.contains(style)) {
-              _stylePills.remove(style);
-            } else {
-              _stylePills.add(style);
-            }
-          }),
+        const SizedBox(height: 14),
+        _FixedChoiceSection(
+          label: 'RING SIZE',
+          helper: 'Choose a known size or mark it unknown.',
+          options: senderGiftRingSizeOptions,
+          selected: _ringSize == null ? const {} : {_ringSize!},
+          onToggle: (value) => setState(() => _ringSize = value),
+        ),
+        const SizedBox(height: 14),
+        _FixedChoiceSection(
+          label: 'BRANDS THEY LOVE',
+          helper: 'Select any known preferences.',
+          options: senderGiftBrandOptions,
+          selected: _brandPills,
+          onToggle: (value) => _toggle(_brandPills, value),
+        ),
+        const SizedBox(height: 14),
+        _FixedChoiceSection(
+          label: 'COLOUR NOTES',
+          helper: 'Select colours that feel natural for them.',
+          options: senderGiftColourOptions,
+          selected: _colourPills,
+          onToggle: (value) => _toggle(_colourPills, value),
+        ),
+        const SizedBox(height: 14),
+        _FixedChoiceSection(
+          label: 'PREFERRED STYLE',
+          helper:
+              'Choose the styles that best describe what they enjoy wearing, collecting or surrounding themselves with.',
+          options: senderGiftPreferredStyleOptions,
+          selected: _stylePills,
+          onToggle: (value) => _toggle(_stylePills, value),
         ),
       ],
       footer: GiftJourneyWidgets.primaryButton(
@@ -117,11 +156,11 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           MaterialPageRoute<void>(
             builder: (_) => GiftPrivacyView(
               draft: widget.draft.copyWith(
-                clothingSize: _clothingSizeController.text.trim(),
-                shoeSize: _shoeSizeController.text.trim(),
-                ringSize: _ringSizeController.text.trim(),
+                clothingSize: _clothingSize,
+                shoeSize: _shoeSize,
+                ringSize: _ringSize,
                 favouriteColours: _colourPills.join(', '),
-                likedBrands: _brandsController.text.trim(),
+                likedBrands: _brandPills.join(', '),
                 preferredStyles: _stylePills.toList(),
               ),
             ),
@@ -131,118 +170,93 @@ class _GiftStyleViewState extends State<GiftStyleView> {
       ),
     );
   }
-}
 
-class _ColourChips extends StatelessWidget {
-  final Set<String> selectedColours;
-  final ValueChanged<String> onToggle;
+  void _toggle(Set<String> target, String value) {
+    setState(() {
+      if (target.contains(value)) {
+        target.remove(value);
+      } else {
+        target.add(value);
+      }
+    });
+  }
 
-  const _ColourChips({
-    required this.selectedColours,
-    required this.onToggle,
-  });
+  static String? _existingOrNull(String? value, List<String> options) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return options.contains(trimmed) ? trimmed : null;
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    const colours = [
-      'Black',
-      'White',
-      'Navy',
-      'Cream',
-      'Sage',
-      'Pink',
-      'Gold',
-      'Silver',
-      'Brown',
-      'Green',
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'COLOUR NOTES',
-          style: GoogleFonts.jetBrainsMono(
-            color: const Color(0xFFB8AAB8),
-            fontSize: 10,
-            letterSpacing: .7,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final colour in colours)
-              GiftJourneyWidgets.choiceChip(
-                label: colour,
-                selected: selectedColours.contains(colour),
-                onTap: () => onToggle(colour),
-              ),
-          ],
-        ),
-      ],
-    );
+  static Set<String> _existingSet(String? value, List<String> options) {
+    return {
+      for (final item in (value ?? '').split(',').map((item) => item.trim()))
+        if (item.isNotEmpty && options.contains(item)) item,
+    };
   }
 }
 
-class _PreferredStyleChips extends StatelessWidget {
-  final Set<String> selectedStyles;
+class _FixedChoiceSection extends StatelessWidget {
+  final String label;
+  final String helper;
+  final List<String> options;
+  final Set<String> selected;
   final ValueChanged<String> onToggle;
 
-  const _PreferredStyleChips({
-    required this.selectedStyles,
+  const _FixedChoiceSection({
+    required this.label,
+    required this.helper,
+    required this.options,
+    required this.selected,
     required this.onToggle,
   });
 
   @override
   Widget build(BuildContext context) {
-    const styles = [
-      'Minimal',
-      'Classic',
-      'Modern',
-      'Bold',
-      'Luxury',
-      'Streetwear',
-      'Vintage',
-      'Elegant',
-      'Sporty',
-      'Cosy',
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'PREFERRED STYLE',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: const Color(0xFFB8AAB8),
-                fontWeight: FontWeight.w800,
-                letterSpacing: .7,
-              ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Choose the styles that best describe what they enjoy wearing, collecting or surrounding themselves with.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: const Color(0xFFE4DCF5).withValues(alpha: .72),
-                height: 1.45,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final style in styles)
-              GiftJourneyWidgets.choiceChip(
-                label: style,
-                selected: selectedStyles.contains(style),
-                onTap: () => onToggle(style),
-              ),
-          ],
-        ),
-      ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .052),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.jetBrainsMono(
+              color: const Color(0xFFC9B8FF),
+              fontSize: 10.5,
+              letterSpacing: .8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            helper,
+            style: GoogleFonts.inter(
+              color: const Color(0xFFB8AAB8),
+              fontSize: 11.5,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in options)
+                GiftJourneyWidgets.choiceChip(
+                  label: option,
+                  selected: selected.contains(option),
+                  onTap: () => onToggle(option),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
