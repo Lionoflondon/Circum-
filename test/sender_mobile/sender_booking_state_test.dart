@@ -496,8 +496,23 @@ void main() {
           contains('Gift contents remain confidential before delivery.'));
       expect(reviewSource, contains('GiftPaymentView'));
       expect(paymentSource, contains('STEP 12 — PAYMENT'));
-      expect(paymentSource, contains('senderGiftPaymentDraftCollectionName'));
       expect(paymentSource, contains('senderGiftPaymentCallableName'));
+      expect(paymentSource, contains('Roth applied'));
+      expect(paymentSource, contains('Card amount'));
+      expect(paymentSource, contains('Final total'));
+      expect(paymentSource, contains("'source': 'sender_mobile'"));
+      expect(paymentSource, contains("'applyRoth': false"));
+      expect(paymentSource, contains("'returnOrigin': Uri.base.origin"));
+      expect(
+        paymentSource,
+        contains(
+            'Payment cancelled. Your gift request is saved. You can try again.'),
+      );
+      expect(draftSource, contains("'selectedBudgetGbp': budget"));
+      expect(draftSource, contains("'source': 'sender_mobile'"));
+      expect(draftSource, contains("'applyRoth': false"));
+      expect(draftSource, contains("'walletContributionGbp': 0"));
+      expect(draftSource, contains("'remainingStripeAmountGbp': budget"));
       expect(reviewSource, contains('Campaign · Bringing London Closer'));
       expect(reviewSource, contains('IRIS GIFT BRIEF'));
       expect(reviewSource, contains('Emotional Direction'));

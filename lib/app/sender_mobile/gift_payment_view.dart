@@ -25,6 +25,18 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   String? _message;
 
   @override
+  void initState() {
+    super.initState();
+    final uri = Uri.base;
+    final cancelled = uri.queryParameters['payment'] == 'cancelled' ||
+        uri.fragment.contains('payment=cancelled');
+    if (cancelled) {
+      _message =
+          'Payment cancelled. Your gift request is saved. You can try again.';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GiftJourneyWidgets.scaffold(
       activeStep: 4,
@@ -40,13 +52,18 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         ),
         const SizedBox(height: 10),
         const _PaymentSummary(
-          label: 'Admin pathway',
-          value: senderGiftPaymentDraftCollectionName,
+          label: 'Roth applied',
+          value: '£0',
         ),
         const SizedBox(height: 10),
-        const _PaymentSummary(
-          label: 'Checkout',
-          value: senderGiftPaymentCallableName,
+        _PaymentSummary(
+          label: 'Card amount',
+          value: '£${widget.draft.budget.toStringAsFixed(0)}',
+        ),
+        const SizedBox(height: 10),
+        _PaymentSummary(
+          label: 'Final total',
+          value: '£${widget.draft.budget.toStringAsFixed(0)}',
         ),
         if (_message != null) ...[
           const SizedBox(height: 14),
@@ -103,7 +120,12 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       });
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
-          .call({'giftDraftId': draftRef.id});
+          .call({
+        'giftDraftId': draftRef.id,
+        'source': 'sender_mobile',
+        'applyRoth': false,
+        'returnOrigin': Uri.base.origin,
+      });
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       if (paymentData['walletPaidInFull'] == true) {
         if (!mounted) return;

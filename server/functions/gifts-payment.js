@@ -4,6 +4,10 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const rothLedger = require("./roth-ledger");
 const {calculateWalletCheckout} = require("./wallet-core");
 const giftBriefEngine = require("./gift-brief-engine");
+const {
+  giftReturnUrls,
+  selectedGiftBudgetGbp,
+} = require("./gifts-payment-core");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -49,14 +53,20 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     throw new functions.https.HttpsError("not-found", "Gift draft not found.");
   }
   const gift = snap.data();
-  const gross = Number(gift.grossGiftBudget || gift.grossBudget || 0);
+  const gross = selectedGiftBudgetGbp(gift);
   if (gross < 50 || gift.paymentStatus === "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
   const config = functions.config().gifts || {};
-  const baseUrl = "https://circumuk.com/?app=gifts";
-  const successUrl = config.success_url || `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = config.cancel_url || `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`;
+  const source = String(data.source || gift.source || "");
+  const returnOrigin = String(data.returnOrigin || gift.returnOrigin || "").replace(/\/+$/, "");
+  const {successUrl, cancelUrl} = giftReturnUrls({
+    giftDraftId,
+    source,
+    origin: returnOrigin,
+    config,
+  });
+  const rothRequested = data.applyRoth === true || gift.applyRoth === true;
   let split;
   if (gift.walletDeducted === true) {
     const storedWalletContribution = Number(gift.walletContributionGbp || 0);
@@ -64,15 +74,15 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     split = calculateWalletCheckout({
       orderTotalGbp: storedRemaining,
       walletBalanceGbp: 0,
-      selectedCurrency: gift.paymentCurrency || data.paymentCurrency || "gbp",
+      selectedCurrency: "gbp",
     });
     split.orderTotalGbp = gross;
     split.walletContributionGbp = storedWalletContribution;
     split.remainingGbp = storedRemaining;
     split.stripeRequired = split.remainingGbp > 0;
   } else {
-    const walletBalance = await giftWalletBalanceForUser(db, context);
-    const selectedCurrency = gift.paymentCurrency || data.paymentCurrency || "gbp";
+    const walletBalance = rothRequested ? await giftWalletBalanceForUser(db, context) : 0;
+    const selectedCurrency = "gbp";
     split = calculateWalletCheckout({
       orderTotalGbp: gross,
       walletBalanceGbp: walletBalance,
@@ -102,6 +112,14 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     estimatedCustomerPaymentAmount: split.customerPaymentAmount,
     walletDeducted: split.walletContributionGbp > 0 && !split.stripeRequired,
     updatedAt: FieldValue.serverTimestamp(),
+  });
+  console.info("createGiftPayment checkout amount", {
+    selectedBudget: gross,
+    rothApplied: split.walletContributionGbp,
+    stripeAmount: split.stripeAmountMinor,
+    currency: split.customerPaymentCurrency,
+    draftId: giftDraftId,
+    source,
   });
   if (!split.stripeRequired) {
     const giftRef = db.collection("giftRequests").doc(giftDraftId);
@@ -216,7 +234,7 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
     throw new functions.https.HttpsError("not-found", "Gift draft not found.");
   }
   const gift = snap.data();
-  const gross = Number(gift.grossGiftBudget || gift.grossBudget || 0);
+  const gross = selectedGiftBudgetGbp(gift);
   if (!sessionId || sessionId !== gift.stripeCheckoutSessionId) {
     throw new functions.https.HttpsError("invalid-argument", "Invalid checkout session.");
   }
