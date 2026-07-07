@@ -45,8 +45,10 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
             }
           : null;
   Map<String, dynamic>? _approvedMatch;
+  Map<String, dynamic>? _visibleRevealedMatch;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _participantSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _matchSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _visibleMatchSub;
 
   final _displayNameController = TextEditingController();
   final _customInspirationController = TextEditingController();
@@ -312,12 +314,14 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   void initState() {
     super.initState();
     _loadRothBalance();
+    _listenForVisibleMatch();
   }
 
   @override
   void dispose() {
     _participantSub?.cancel();
     _matchSub?.cancel();
+    _visibleMatchSub?.cancel();
     _displayNameController.dispose();
     _customInspirationController.dispose();
     _allergiesController.dispose();
@@ -830,6 +834,21 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
                   : 'Your story will unlock after delivery is confirmed.',
         ),
       ],
+      if (_visibleRevealedMatch != null) ...[
+        const SizedBox(height: 12),
+        const _CampaignGlassCard(
+          title: 'Your campaign match is now revealed.',
+          body:
+              'View Match. We only show the identity details both participants agreed to reveal.',
+        ),
+      ] else if (_linkedGiftStoryUnlocked) ...[
+        const SizedBox(height: 12),
+        const _CampaignGlassCard(
+          title: 'Waiting for mutual reveal consent.',
+          body:
+              'Your Gift Story is unlocked, but the match profile appears only after both people agree to identity reveal.',
+        ),
+      ],
       const SizedBox(height: 12),
       const _CampaignGlassCard(
         title: 'No recipient form',
@@ -1174,6 +1193,32 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     });
   }
 
+  void _listenForVisibleMatch() {
+    User? user;
+    try {
+      user = FirebaseAuth.instance.currentUser;
+    } catch (_) {
+      return;
+    }
+    if (user == null) return;
+    _visibleMatchSub?.cancel();
+    _visibleMatchSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('matches')
+        .where('source', isEqualTo: 'gift_campaign')
+        .where('status', isEqualTo: 'revealed')
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _visibleRevealedMatch =
+            snapshot.docs.isEmpty ? null : snapshot.docs.first.data();
+      });
+    });
+  }
+
   void _listenForParticipantStatus() {
     final participantId = _participantId;
     if (participantId == null) return;
@@ -1186,6 +1231,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       if (!mounted || !snapshot.exists) return;
       setState(() => _participantStatusData = snapshot.data());
     });
+    _listenForVisibleMatch();
   }
 
   Map<String, dynamic> _participantPayload(String userId, String email) {

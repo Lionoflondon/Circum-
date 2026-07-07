@@ -66,6 +66,172 @@ function safeStory(giftId, gift) {
   };
 }
 
+function list(value) {
+  return Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [];
+}
+
+function bool(value) {
+  if (value === true) return true;
+  if (value === false || value == null) return false;
+  return ["true", "yes", "accepted", "consented", "allow", "allowed"].includes(text(value).toLowerCase());
+}
+
+function hasActiveGiftDispute(gift = {}) {
+  return bool(gift.activeDispute) ||
+    bool(gift.activeInvestigation) ||
+    bool(gift.deliveryInvestigationActive) ||
+    bool(gift.activeDeliveryDispute) ||
+    bool(gift.hasActiveDeliveryDispute) ||
+    bool(gift.disputeOpen) ||
+    ["open", "active", "investigating", "under_review"].includes(text(gift.disputeStatus).toLowerCase()) ||
+    ["open", "active", "investigating", "under_review"].includes(text(gift.investigationStatus).toLowerCase());
+}
+
+function revealPolicyAllowsMutualReveal(policy) {
+  const clean = text(policy).toLowerCase();
+  if (!clean || clean === "anonymous_only" || clean === "anonymous") return false;
+  return [
+    "mutual_consent",
+    "anonymous_until_consent",
+    "reveal_after_delivery",
+    "reveal_immediately",
+    "mutual-reveal",
+  ].includes(clean);
+}
+
+function participantRevealConsent(participant = {}) {
+  return bool(participant.revealConsent) ||
+    bool(participant.identityRevealConsent) ||
+    bool(participant.senderRevealConsent) ||
+    bool(participant.matchRevealConsent);
+}
+
+function storyViewedByRequiredUsers(gift = {}, participantA = {}, participantB = {}) {
+  const viewedBy = new Set([
+    ...list(gift.storyViewedBy),
+    ...list(gift.giftStoryViewedBy),
+    ...list(gift.giftStoryViewedByUserIds),
+  ]);
+  const aUserId = text(participantA.userId || participantA.uid);
+  const bUserId = text(participantB.userId || participantB.uid);
+  if (aUserId && bUserId) return viewedBy.has(aUserId) && viewedBy.has(bUserId);
+  return bool(gift.storyViewedByBothParticipants) || bool(gift.giftStoryViewedByBothParticipants);
+}
+
+function campaignRevealMatchDecision({gift = {}, participantA = {}, participantB = {}} = {}) {
+  const storyStatus = text(gift.giftStoryStatus || gift.storyStatus || (gift.giftStoryUnlocked ? "unlocked" : "")).toLowerCase();
+  if (storyStatus !== "unlocked") return {create: false, reason: "story_locked"};
+  if (!storyViewedByRequiredUsers(gift, participantA, participantB)) return {create: false, reason: "story_not_viewed"};
+  if (!participantRevealConsent(participantA) || !participantRevealConsent(participantB)) {
+    return {create: false, reason: "waiting_for_mutual_reveal_consent"};
+  }
+  if (!revealPolicyAllowsMutualReveal(gift.revealPolicy || gift.senderRevealMode || participantA.revealPolicy || participantB.revealPolicy)) {
+    return {create: false, reason: "reveal_policy_blocks"};
+  }
+  if (hasActiveGiftDispute(gift)) return {create: false, reason: "active_dispute"};
+  return {create: true, reason: "eligible"};
+}
+
+function safeName(participant = {}) {
+  return text(participant.displayName || participant.name || participant.anonymousHandle || "Campaign match");
+}
+
+function buildRevealedCampaignMatchRecord({matchId, giftStoryId, gift = {}, participantA = {}, participantB = {}, now = null} = {}) {
+  const sharedInterests = list(gift.sharedInterests).length ?
+    list(gift.sharedInterests) :
+    [...new Set([...list(participantA.interests), ...list(participantB.interests)].filter((interest) => list(participantA.interests).includes(interest) && list(participantB.interests).includes(interest)))];
+  return {
+    matchId,
+    campaignId: text(gift.campaignId || participantA.campaignId || participantB.campaignId),
+    giftStoryId: text(giftStoryId || gift.giftStoryId || gift.id),
+    participantAUserId: text(participantA.userId || participantA.uid),
+    participantBUserId: text(participantB.userId || participantB.uid),
+    participantAName: safeName(participantA),
+    participantBName: safeName(participantB),
+    participantAProfilePhotoUrl: text(participantA.profilePhotoUrl || participantA.photoUrl),
+    participantBProfilePhotoUrl: text(participantB.profilePhotoUrl || participantB.photoUrl),
+    sharedInterests,
+    matchDate: now,
+    revealConfirmedAt: now,
+    storyViewedAt: now,
+    createdAt: now,
+    status: "revealed",
+    source: "gift_campaign",
+  };
+}
+
+async function maybeCreateRevealedCampaignMatch(db, giftRef, giftId, gift, viewerUserId = "") {
+  if (text(gift.giftType) !== "campaign" && text(gift.anonymousGiftType) !== "campaign" && text(gift.source) !== "gift_campaign") {
+    return {created: false, reason: "not_campaign"};
+  }
+  const viewedBy = new Set([...list(gift.storyViewedBy), ...list(gift.giftStoryViewedBy)]);
+  if (viewerUserId) viewedBy.add(viewerUserId);
+  const nextGift = {
+    ...gift,
+    id: giftId,
+    storyViewedBy: [...viewedBy],
+    giftStoryStatus: gift.giftStoryStatus || (gift.giftStoryUnlocked ? "unlocked" : ""),
+  };
+  const participantAId = text(gift.campaignParticipantId || gift.participantAId || gift.senderCampaignParticipantId);
+  const participantBId = text(gift.linkedParticipantId || gift.participantBId || gift.matchedParticipantId || gift.recipientCampaignParticipantId);
+  if (!participantAId || !participantBId) return {created: false, reason: "missing_participants"};
+  const [aSnap, bSnap] = await Promise.all([
+    db.collection("giftCampaignParticipants").doc(participantAId).get(),
+    db.collection("giftCampaignParticipants").doc(participantBId).get(),
+  ]);
+  if (!aSnap.exists || !bSnap.exists) return {created: false, reason: "participant_not_found"};
+  const participantA = {id: aSnap.id, ...(aSnap.data() || {})};
+  const participantB = {id: bSnap.id, ...(bSnap.data() || {})};
+  const decision = campaignRevealMatchDecision({gift: nextGift, participantA, participantB});
+  if (!decision.create) {
+    await giftRef.set({
+      storyViewedBy: [...viewedBy],
+      giftStoryViewedBy: [...viewedBy],
+      visibleMatchStatus: decision.reason,
+      giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {created: false, reason: decision.reason};
+  }
+  const matchId = text(gift.visibleMatchId || gift.matchId) || `${participantAId}_${participantBId}_${giftId}`;
+  const now = FieldValue.serverTimestamp();
+  const record = buildRevealedCampaignMatchRecord({
+    matchId,
+    giftStoryId: giftId,
+    gift: nextGift,
+    participantA,
+    participantB,
+    now,
+  });
+  const batch = db.batch();
+  const matchRef = db.collection("matches").doc(matchId);
+  batch.set(matchRef, record, {merge: true});
+  for (const participant of [participantA, participantB]) {
+    const userId = text(participant.userId || participant.uid);
+    if (!userId) continue;
+    batch.set(db.collection("users").doc(userId).collection("matches").doc(matchId), {
+      matchId,
+      campaignId: record.campaignId,
+      giftStoryId: record.giftStoryId,
+      status: "revealed",
+      source: "gift_campaign",
+      createdAt: now,
+      revealConfirmedAt: now,
+    }, {merge: true});
+  }
+  batch.set(giftRef, {
+    storyViewedBy: [...viewedBy],
+    giftStoryViewedBy: [...viewedBy],
+    visibleMatchId: matchId,
+    visibleMatchStatus: "revealed",
+    visibleMatchRevealedAt: now,
+    giftStoryUpdatedAt: now,
+  }, {merge: true});
+  batch.set(aSnap.ref, {visibleMatchId: matchId, visibleMatchStatus: "revealed", updatedAt: now}, {merge: true});
+  batch.set(bSnap.ref, {visibleMatchId: matchId, visibleMatchStatus: "revealed", updatedAt: now}, {merge: true});
+  await batch.commit();
+  return {created: true, matchId};
+}
+
 async function findGift(db, delivery) {
   const directId = text(delivery.giftOrderId || delivery.giftRequestId);
   if (directId) {
@@ -215,7 +381,7 @@ async function tokenRecord(db, token) {
   return {snap, data};
 }
 
-exports.resolveGiftStoryAccess = functions.https.onCall(async (data) => {
+exports.resolveGiftStoryAccess = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const record = await tokenRecord(db, data && data.token);
   if (!record) throw new functions.https.HttpsError("permission-denied", "This Gift Story link is invalid or expired.");
@@ -225,12 +391,22 @@ exports.resolveGiftStoryAccess = functions.https.onCall(async (data) => {
   if (!isComplete(gift.giftStatus || gift.status) || gift.giftStoryEnabled === false || gift.giftStoryApproved === false) {
     throw new functions.https.HttpsError("failed-precondition", "This Gift Story is not available yet.");
   }
+  const viewerUserId = context.auth && context.auth.uid ? context.auth.uid : text(data && data.viewerUserId);
   await record.snap.ref.set({views: FieldValue.increment(1), lastViewedAt: FieldValue.serverTimestamp()}, {merge: true});
-  await giftSnap.ref.set({giftStoryViews: FieldValue.increment(1), giftStoryUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  const storyViewPatch = {
+    giftStoryViews: FieldValue.increment(1),
+    giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+  };
+  if (viewerUserId) {
+    storyViewPatch.storyViewedBy = FieldValue.arrayUnion(viewerUserId);
+    storyViewPatch.giftStoryViewedBy = FieldValue.arrayUnion(viewerUserId);
+  }
+  await giftSnap.ref.set(storyViewPatch, {merge: true});
+  await maybeCreateRevealedCampaignMatch(db, giftSnap.ref, giftSnap.id, gift, viewerUserId);
   return {story: safeStory(giftSnap.id, gift), expiresAt: record.data.expiresAt.toMillis()};
 });
 
-exports.recordGiftStoryEvent = functions.https.onCall(async (data) => {
+exports.recordGiftStoryEvent = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const record = await tokenRecord(db, data && data.token);
   if (!record) throw new functions.https.HttpsError("permission-denied", "Gift Story access expired.");
@@ -244,10 +420,26 @@ exports.recordGiftStoryEvent = functions.https.onCall(async (data) => {
   };
   const field = fields[event];
   if (!field) throw new functions.https.HttpsError("invalid-argument", "Unknown Gift Story event.");
+  const viewerUserId = context.auth && context.auth.uid ? context.auth.uid : text(data && data.viewerUserId);
+  const giftRef = db.collection("giftRequests").doc(record.data.giftRequestId);
+  const giftPatch = {
+    [`giftStory${field[0].toUpperCase()}${field.slice(1)}`]: FieldValue.increment(1),
+    giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+  };
+  if (event === "view" && viewerUserId) {
+    giftPatch.storyViewedBy = FieldValue.arrayUnion(viewerUserId);
+    giftPatch.giftStoryViewedBy = FieldValue.arrayUnion(viewerUserId);
+  }
   await Promise.all([
     record.snap.ref.set({[field]: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp()}, {merge: true}),
-    db.collection("giftRequests").doc(record.data.giftRequestId).set({[`giftStory${field[0].toUpperCase()}${field.slice(1)}`]: FieldValue.increment(1), giftStoryUpdatedAt: FieldValue.serverTimestamp()}, {merge: true}),
+    giftRef.set(giftPatch, {merge: true}),
   ]);
+  if (event === "view" || event === "complete") {
+    const giftSnap = await giftRef.get();
+    if (giftSnap.exists) {
+      await maybeCreateRevealedCampaignMatch(db, giftRef, giftSnap.id, giftSnap.data() || {}, viewerUserId);
+    }
+  }
   return {ok: true};
 });
 
@@ -456,3 +648,7 @@ module.exports.isGiftDelivery = isGiftDelivery;
 module.exports.isComplete = isComplete;
 module.exports.tokenHash = tokenHash;
 module.exports.safeStory = safeStory;
+module.exports.hasActiveGiftDispute = hasActiveGiftDispute;
+module.exports.revealPolicyAllowsMutualReveal = revealPolicyAllowsMutualReveal;
+module.exports.campaignRevealMatchDecision = campaignRevealMatchDecision;
+module.exports.buildRevealedCampaignMatchRecord = buildRevealedCampaignMatchRecord;
