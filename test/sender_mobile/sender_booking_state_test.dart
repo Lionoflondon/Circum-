@@ -4,6 +4,7 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_data.m.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/sender_mobile/gift_mode_view.dart';
 import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
 import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -220,6 +221,26 @@ void main() {
         'Passport',
         'Prescription collection',
       ]);
+    });
+
+    test('sender mobile Gifts entry opens GiftModeView shell only', () {
+      final homeSource = File('lib/app/sender_mobile/sender_mobile_home.dart')
+          .readAsStringSync();
+      final giftSource =
+          File('lib/app/sender_mobile/gift_mode_view.dart').readAsStringSync();
+
+      expect(GiftModeView.routeName, '/sender-mobile/gifts');
+      expect(homeSource, contains("import 'gift_mode_view.dart';"));
+      expect(homeSource, contains('onOpenGifts'));
+      expect(homeSource, contains('const GiftModeView()'));
+      expect(giftSource, contains('class GiftModeView'));
+      expect(giftSource, contains('Gift someone'));
+      expect(giftSource, contains('Gift myself'));
+      expect(giftSource, contains('Anonymous gift'));
+      expect(giftSource, contains('Campaign'));
+      expect(giftSource, isNot(contains('parcel')));
+      expect(giftSource, isNot(contains('Rothcross')));
+      expect(giftSource, isNot(contains('0xFF3B82F6')));
     });
 
     test('sender mobile pre-auth landing and auth copy are locked', () {

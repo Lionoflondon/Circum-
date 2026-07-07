@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'gift_mode_view.dart';
 import 'sender_booking_canvas.dart';
 
 const senderMobileDashboardServiceNames = ['Health+', 'Business', 'Gifts'];
@@ -92,7 +93,15 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         return IndexedStack(
           index: _index,
           children: [
-            _SenderDashboard(onStartDelivery: () => setState(() => _index = 1)),
+            _SenderDashboard(
+              onStartDelivery: () => setState(() => _index = 1),
+              onOpenGifts: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const GiftModeView(),
+                  settings: const RouteSettings(name: GiftModeView.routeName),
+                ),
+              ),
+            ),
             const SenderBookingCanvas(),
             const _SenderActivitySurface(),
             const _SenderProfileSurface(),
@@ -1343,8 +1352,12 @@ class _AuthFinePrint extends StatelessWidget {
 
 class _SenderDashboard extends StatelessWidget {
   final VoidCallback onStartDelivery;
+  final VoidCallback onOpenGifts;
 
-  const _SenderDashboard({required this.onStartDelivery});
+  const _SenderDashboard({
+    required this.onStartDelivery,
+    required this.onOpenGifts,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1381,7 +1394,7 @@ class _SenderDashboard extends StatelessWidget {
         const SizedBox(height: 18),
         _HeroSendCard(onTap: onStartDelivery),
         const SizedBox(height: 18),
-        const _YourCircumHub(),
+        _YourCircumHub(onOpenGifts: onOpenGifts),
         const SizedBox(height: 16),
         const _RecentOrdersCard(),
       ],
@@ -1542,14 +1555,16 @@ class _HeroSendCard extends StatelessWidget {
 }
 
 class _YourCircumHub extends StatelessWidget {
-  const _YourCircumHub();
+  final VoidCallback onOpenGifts;
+
+  const _YourCircumHub({required this.onOpenGifts});
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Your Circum',
           style: TextStyle(
             color: Colors.white,
@@ -1568,7 +1583,7 @@ class _YourCircumHub extends StatelessWidget {
                 accent: _SenderTokens.health,
               ),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Expanded(
               child: _ServiceCard(
                 title: 'Business',
@@ -1577,13 +1592,14 @@ class _YourCircumHub extends StatelessWidget {
                 accent: _SenderTokens.business,
               ),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Expanded(
               child: _ServiceCard(
                 title: 'Gifts',
                 subtitle: 'Thoughtful gfts, delivered.',
                 icon: Icons.card_giftcard_rounded,
                 accent: _SenderTokens.gifts,
+                onTap: onOpenGifts,
               ),
             ),
           ],
@@ -1598,12 +1614,14 @@ class _ServiceCard extends StatefulWidget {
   final String subtitle;
   final IconData icon;
   final Color accent;
+  final VoidCallback? onTap;
 
   const _ServiceCard({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.accent,
+    this.onTap,
   });
 
   @override
@@ -1618,7 +1636,10 @@ class _ServiceCardState extends State<_ServiceCard> {
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
       onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap?.call();
+      },
       child: AnimatedScale(
         duration: const Duration(milliseconds: 120),
         scale: _pressed ? 1.02 : 1,
