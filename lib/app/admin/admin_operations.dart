@@ -1,4 +1,5 @@
 import '../gifts/gift_system_policy.dart';
+import '../gifts/gift_story_studio_policy.dart';
 import '../platform/address_engine.dart';
 
 enum AdminRole {
@@ -675,6 +676,77 @@ class AdminGiftsOperations {
         overrideAt: actionAt,
         unlock: unlock,
       );
+
+  static Map<String, Object?> storyStudioPatch({
+    required String giftId,
+    required String skin,
+    required Iterable<GiftStorySlide> slides,
+    bool silentVersion = true,
+    bool soundVersion = false,
+    String? silentVersionUrl,
+    String? soundVersionUrl,
+    String? musicVideoStatus,
+    String? musicVideoPath,
+    required Object updatedAt,
+    required String adminUserId,
+    String? adminEmail,
+    String reason = 'Gift Story Studio updated',
+  }) {
+    return {
+      ...GiftStoryStudioPolicy.studioPatch(
+        giftId: giftId,
+        skin: GiftStorySkin.fromValue(skin),
+        slides: slides,
+        silentVersion: silentVersion,
+        soundVersion: soundVersion,
+        silentVersionUrl: silentVersionUrl,
+        soundVersionUrl: soundVersionUrl,
+        musicVideoStatus: musicVideoStatus,
+        musicVideoPath: musicVideoPath,
+        updatedAt: updatedAt,
+      ),
+      ...GiftSystemPolicy.adminActionPatch(
+        adminUserId: adminUserId,
+        adminEmail: adminEmail,
+        actionType: 'gift_story_studio_updated',
+        previousStatus: 'story_draft',
+        newStatus: 'story_ready',
+        reason: reason,
+        actionAt: updatedAt,
+      ),
+    };
+  }
+
+  static Map<String, Object?> storyNotificationAdminPatch({
+    required String action,
+    required String adminUserId,
+    String? adminEmail,
+    required String reason,
+    required Object actionAt,
+  }) {
+    final normalized = switch (action.trim().toLowerCase()) {
+      'resend_email' => 'resend_email',
+      'resend_whatsapp' => 'resend_whatsapp',
+      'send_both' => 'send_both',
+      'cancel_pending' => 'cancel_pending',
+      _ => throw ArgumentError('Unknown Gift Story notification action.'),
+    };
+    return {
+      'storyNotificationAction': normalized,
+      'storyNotificationStatus':
+          normalized == 'cancel_pending' ? 'cancelled' : 'queued',
+      'storyNotificationUpdatedAt': actionAt,
+      ...GiftSystemPolicy.adminActionPatch(
+        adminUserId: adminUserId,
+        adminEmail: adminEmail,
+        actionType: 'gift_story_notification_$normalized',
+        previousStatus: 'pending',
+        newStatus: normalized == 'cancel_pending' ? 'cancelled' : 'queued',
+        reason: reason,
+        actionAt: actionAt,
+      ),
+    };
+  }
 
   static Map<String, Object?> notificationPayload({
     required String event,

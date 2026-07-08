@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:circum/app/admin/admin_operations.dart';
+import 'package:circum/app/gifts/gift_story_studio_policy.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -488,6 +489,8 @@ void main() {
       expect(lock['storyStatus'], 'locked');
       expect(lock['giftStoryOverrideType'], 'manual_lock');
       expect(lock['actionType'], 'manual_lock');
+      expect(lock['giftStoryAccessStatus'], 'revoked');
+      expect(lock['recipientStoryAccessStatus'], 'revoked');
 
       expect(
         () => AdminGiftsOperations.storyOverridePatch(
@@ -537,6 +540,47 @@ void main() {
       expect(statusNotification, isNotNull);
       expect(statusNotification!['giftEvent'], 'ready_for_gift_delivery');
       expect(statusNotification['privacySafe'], isTrue);
+
+      final storyStudio = AdminGiftsOperations.storyStudioPatch(
+        giftId: 'gift-1',
+        skin: 'pink',
+        slides: const [
+          GiftStorySlide(
+            type: GiftStorySlideType.arrival,
+            eyebrow: 'GIFTS BY CIRCUM',
+            headline: 'Your gift has arrived, Ada.',
+            body: 'A small story before the reveal.',
+          ),
+          GiftStorySlide(
+            type: GiftStorySlideType.finale,
+            eyebrow: 'Finale',
+            headline: 'Tell sender thank you',
+            body: 'Replay story',
+          ),
+        ],
+        silentVersionUrl: 'gifts/gift-1/story/exports/silent/v1.webm',
+        soundVersion: true,
+        soundVersionUrl: 'gifts/gift-1/story/exports/sound/v1.webm',
+        updatedAt: DateTime(2026, 7, 7, 12),
+        adminUserId: 'admin-1',
+      );
+      expect(storyStudio['giftStorySkin'], 'pink');
+      expect((storyStudio['giftStorySlides'] as List).length, 2);
+      expect(storyStudio['giftStorySilentVersionUrl'],
+          'gifts/gift-1/story/exports/silent/v1.webm');
+      expect(storyStudio['giftStorySoundVersionUrl'],
+          'gifts/gift-1/story/exports/sound/v1.webm');
+      expect(storyStudio['actionType'], 'gift_story_studio_updated');
+
+      final resend = AdminGiftsOperations.storyNotificationAdminPatch(
+        action: 'send_both',
+        adminUserId: 'admin-1',
+        reason: 'Recipient asked for both channels',
+        actionAt: DateTime(2026, 7, 7, 13),
+      );
+      expect(resend['storyNotificationAction'], 'send_both');
+      expect(resend['storyNotificationStatus'], 'queued');
+      expect(resend['actionType'], 'gift_story_notification_send_both');
     });
   });
 }

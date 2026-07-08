@@ -374,6 +374,8 @@ class GiftSystemPolicy {
       'giftStoryPreviousStatus': previousStoryStatus,
       'giftStoryOverrideType': overrideType,
       'giftStoryAdminOverride': true,
+      if (!unlock) 'giftStoryAccessStatus': 'revoked',
+      if (!unlock) 'recipientStoryAccessStatus': 'revoked',
       ...adminActionPatch(
         adminUserId: adminUserId,
         adminEmail: adminEmail,
