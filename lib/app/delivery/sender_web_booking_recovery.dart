@@ -138,6 +138,7 @@ class SenderWebBookingRecovery {
       delivery['status'],
       delivery['flowStatus'],
     ]);
+    requireText('tracking URL', [delivery['trackingUrl']]);
 
     final vanguardEnabled = delivery['vanguardEnabled'] == true;
     final requiresPins = vanguardEnabled ||

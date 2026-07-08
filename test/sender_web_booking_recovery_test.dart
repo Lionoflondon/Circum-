@@ -103,6 +103,77 @@ void main() {
       );
     });
 
+    test('My Bookings recovers signed-in sender deliveries by UID and email',
+        () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(source, contains(".where('senderId', isEqualTo: uid)"));
+      expect(source, contains(".where('userId', isEqualTo: uid)"));
+      expect(source, contains(".where('senderEmailLower', isEqualTo: email)"));
+      expect(source, contains(".where('senderEmail', isEqualTo: rawEmail)"));
+      expect(source, contains('ownDeliveriesForIdentity'));
+    });
+
+    test('recovered incomplete bookings are marked and blocked on load', () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(
+        source,
+        contains('sender_web_booking_recovery_marked_on_load'),
+      );
+      expect(source, contains("'broadcastBlocked': true"));
+      expect(
+        source,
+        contains("'broadcastBlockReason': 'missing_canonical_booking_fields'"),
+      );
+    });
+
+    test('canonical delivery persists recovery aliases for tracking and PINs',
+        () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(source, contains("'senderEmailLower': senderEmail"));
+      expect(source, contains("'authenticatedUserUid': senderId"));
+      expect(source, contains("'trackingUrl': '/?app=sender&deliveryId=\$id'"));
+      expect(source, contains("'pickupPin': collectionPin"));
+      expect(source, contains("'dropoffPin': deliveryPin"));
+      expect(source, contains("'pinVerification':"));
+    });
+
+    test('tracking resolver never falls back to stale or mock delivery data',
+        () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(source, contains('Future<String?> _resolveDeliveryId'));
+      expect(source, contains('notFound: true'));
+      expect(source, contains("collection('deliveryRequests')"));
+      expect(source, contains("'paymentReferenceId'"));
+      expect(source, isNot(contains('test-route-verification')));
+    });
+
+    test('rider queue and accept path block stale archive records', () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(source, contains('_isBroadcastBlockedDelivery(job)'));
+      expect(
+        source,
+        contains(
+            'This delivery is blocked for recovery and cannot be accepted.'),
+      );
+      expect(source, contains("'admin_removed_stale'"));
+      expect(source, contains("'archived_expired'"));
+    });
+
+    test('Admin Archives section keeps stale records searchable', () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(source, contains('Delivery Archives'));
+      expect(source, contains('_deliveryArchiveRows'));
+      expect(source, contains('_deliveryArchiveRow'));
+      expect(source, contains('Remove Stale Order'));
+      expect(source, contains('admin_removed_stale'));
+    });
+
     test('completed and cancelled bookings are terminal', () {
       expect(
         SenderWebBookingRecovery.isTerminal({
@@ -141,6 +212,7 @@ Map<String, dynamic> _completeBooking() {
     'status': 'requested',
     'deliveryStatus': SenderWebBookingRecovery.broadcasting,
     'flowStatus': SenderWebBookingRecovery.broadcasting,
+    'trackingUrl': '/?app=sender&deliveryId=CIR-123456',
     'createdAt': DateTime(2026),
     'updatedAt': DateTime(2026),
     'vanguardEnabled': false,

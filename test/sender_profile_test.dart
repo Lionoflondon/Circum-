@@ -60,6 +60,31 @@ void main() {
       expect(own.map((delivery) => delivery.requestId), contains('CIR-2'));
     });
 
+    test('recovers deliveries belonging to the signed-in sender email', () {
+      final deliveries = [
+        SenderDeliveryRecord.fromMap('CIR-EMAIL', {
+          'senderEmail': 'sender@example.com',
+          'requestId': 'CIR-EMAIL',
+          'status': 'requested',
+          'price': 33.70,
+        }),
+        SenderDeliveryRecord.fromMap('CIR-OTHER', {
+          'senderEmail': 'other@example.com',
+          'requestId': 'CIR-OTHER',
+          'status': 'requested',
+          'price': 5,
+        }),
+      ];
+
+      final own = SenderProfileService.ownDeliveriesForIdentity(
+        'sender-1',
+        'sender@example.com',
+        deliveries,
+      );
+
+      expect(own.map((delivery) => delivery.requestId), ['CIR-EMAIL']);
+    });
+
     test('reads assigned rider photo snapshot for sender history', () {
       final delivery = SenderDeliveryRecord.fromMap('CIR-1', {
         'senderId': 'sender-1',

@@ -227,6 +227,85 @@ void main() {
       expect(summary['issueHistory'], isNotEmpty);
     });
 
+    test('stale delivery removal archives without hard delete', () {
+      final delivery = {
+        'requestId': 'CIR-STALE',
+        'status': 'requested',
+        'matchingStatus': 'available',
+        'createdAt': DateTime(2026, 7, 1),
+        'senderId': 'sender-1',
+        'senderEmail': 'sender@example.com',
+      };
+
+      expect(AdminDeliveryTools.canRemoveAsStale(delivery), isTrue);
+
+      final patch = AdminDeliveryTools.removeStaleOrderPatch(
+        delivery: delivery,
+        adminUserId: 'admin-1',
+        adminEmail: 'admin@example.com',
+        reason: 'Mistaken stale order after failed booking recovery.',
+        removedAt: DateTime(2026, 7, 8),
+      );
+
+      expect(patch['status'], 'admin_removed_stale');
+      expect(patch['matchingStatus'], 'blocked');
+      expect(patch['dispatchStatus'], 'blocked');
+      expect(patch['broadcastBlocked'], isTrue);
+      expect(patch['active'], isFalse);
+      expect(patch['archived'], isTrue);
+      expect(patch['adminRemovedStale'], isTrue);
+      expect(patch.containsKey('deletedAt'), isFalse);
+      expect((patch['adminRemoval'] as Map)['previousStatus'], 'requested');
+      expect((patch['adminRemoval'] as Map)['reason'], contains('Mistaken'));
+    });
+
+    test('active and paid unresolved deliveries are not auto archived', () {
+      final now = DateTime(2026, 7, 8);
+      expect(
+        AdminDeliveryTools.canAutoArchiveExpired({
+          'status': 'in_transit',
+          'createdAt': DateTime(2026, 7, 1),
+        }, now: now),
+        isFalse,
+      );
+      expect(
+        AdminDeliveryTools.canAutoArchiveExpired({
+          'status': 'requested',
+          'paymentStatus': 'paid',
+          'createdAt': DateTime(2026, 7, 1),
+        }, now: now),
+        isFalse,
+      );
+    });
+
+    test('old incomplete delivery is eligible for automatic archive', () {
+      final eligible = AdminDeliveryTools.canAutoArchiveExpired({
+        'status': 'requested',
+        'matchingStatus': 'available',
+        'createdAt': DateTime(2026, 7, 1),
+        'senderId': 'sender-1',
+      }, now: DateTime(2026, 7, 8));
+
+      expect(eligible, isTrue);
+    });
+
+    test('archive records remain identifiable for Admin Archives', () {
+      expect(
+        AdminDeliveryTools.isArchiveRecord({
+          'status': 'admin_removed_stale',
+          'archived': true,
+        }),
+        isTrue,
+      );
+      expect(
+        AdminDeliveryTools.isArchiveRecord({
+          'status': 'requested',
+          'archived': false,
+        }),
+        isFalse,
+      );
+    });
+
     test('creates audit log entries', () {
       final audit = AdminAuditEntry(
         adminUserId: 'admin-1',

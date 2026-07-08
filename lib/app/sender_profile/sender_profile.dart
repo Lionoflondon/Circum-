@@ -279,6 +279,7 @@ class SavedRecipient {
 class SenderDeliveryRecord {
   final String id;
   final String senderId;
+  final String senderEmail;
   final String requestId;
   final String parcelDescription;
   final String pickupAddress;
@@ -307,6 +308,7 @@ class SenderDeliveryRecord {
   const SenderDeliveryRecord({
     required this.id,
     required this.senderId,
+    required this.senderEmail,
     required this.requestId,
     required this.parcelDescription,
     required this.pickupAddress,
@@ -353,6 +355,8 @@ class SenderDeliveryRecord {
     return SenderDeliveryRecord(
       id: id,
       senderId: '${data['senderId'] ?? data['userId'] ?? ''}',
+      senderEmail:
+          '${data['senderEmail'] ?? data['email'] ?? ''}'.trim().toLowerCase(),
       requestId: requestId,
       parcelDescription:
           '${data['packageDescription'] ?? pickupDetails['moreInformation'] ?? 'Parcel'}',
@@ -439,6 +443,19 @@ class SenderProfileService {
     return deliveries
         .where((delivery) => delivery.senderId == senderUid)
         .toList(growable: false);
+  }
+
+  static List<SenderDeliveryRecord> ownDeliveriesForIdentity(
+    String senderUid,
+    String senderEmail,
+    Iterable<SenderDeliveryRecord> deliveries,
+  ) {
+    final normalizedEmail = senderEmail.trim().toLowerCase();
+    return deliveries.where((delivery) {
+      if (delivery.senderId == senderUid) return true;
+      return normalizedEmail.isNotEmpty &&
+          delivery.senderEmail == normalizedEmail;
+    }).toList(growable: false);
   }
 
   static SenderProfileSummary summarize(

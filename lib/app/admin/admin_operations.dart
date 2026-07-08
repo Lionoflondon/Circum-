@@ -1,5 +1,6 @@
 import '../gifts/gift_system_policy.dart';
 import '../gifts/gift_story_studio_policy.dart';
+import '../delivery/sender_web_booking_recovery.dart';
 import '../platform/address_engine.dart';
 
 enum AdminRole {
@@ -390,6 +391,213 @@ class AdminAuditEntry {
 }
 
 class AdminDeliveryTools {
+  static List<String> staleDeliveryReasons(Map<String, dynamic> delivery) {
+    final reasons = <String>[];
+    reasons.addAll(SenderWebBookingRecovery.missingCanonicalFields(delivery));
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final matchingStatus =
+        '${delivery['matchingStatus'] ?? ''}'.toLowerCase().trim();
+    final dispatchStatus =
+        '${delivery['dispatchStatus'] ?? ''}'.toLowerCase().trim();
+    final paymentStatus =
+        '${delivery['paymentStatus'] ?? ''}'.toLowerCase().trim();
+    final flowStatus = SenderWebBookingRecovery.visibleStatus(delivery);
+    final activeLike = {
+      'requested',
+      'pending',
+      'finding_rider',
+      'broadcasting',
+      'available',
+      'accepted',
+      'rider_assigned',
+      'en_route_to_pickup',
+    };
+    if (activeLike.contains(status) ||
+        activeLike.contains(matchingStatus) ||
+        activeLike.contains(dispatchStatus)) {
+      if (paymentStatus.isEmpty && delivery['paid'] != true) {
+        reasons.add('payment status');
+      }
+    }
+    if (flowStatus == SenderWebBookingRecovery.recoverableIncomplete) {
+      reasons.add('recoverable incomplete status');
+    }
+    if (delivery['broadcastBlocked'] == true) {
+      reasons.add('broadcast blocked');
+    }
+    if (status == 'stale_blocked' || status == 'admin_review_required') {
+      reasons.add(status.replaceAll('_', ' '));
+    }
+    return reasons.toSet().toList(growable: false);
+  }
+
+  static bool canRemoveAsStale(Map<String, dynamic> delivery) {
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final matchingStatus =
+        '${delivery['matchingStatus'] ?? ''}'.toLowerCase().trim();
+    final dispatchStatus =
+        '${delivery['dispatchStatus'] ?? ''}'.toLowerCase().trim();
+    const terminalStatuses = {
+      'completed',
+      'delivered',
+      'cancelled',
+      'cancelled_admin',
+      'admin_removed_stale',
+      'archived_stale',
+      'deleted',
+      'resolved',
+    };
+    if (terminalStatuses.contains(status) ||
+        terminalStatuses.contains(matchingStatus) ||
+        terminalStatuses.contains(dispatchStatus)) {
+      return false;
+    }
+    return staleDeliveryReasons(delivery).isNotEmpty ||
+        delivery['stale'] == true ||
+        delivery['manuallyMarkedStale'] == true;
+  }
+
+  static bool isArchiveRecord(Map<String, dynamic> delivery) {
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final deliveryStatus =
+        '${delivery['deliveryStatus'] ?? ''}'.toLowerCase().trim();
+    final flowStatus = '${delivery['flowStatus'] ?? ''}'.toLowerCase().trim();
+    const archiveStatuses = {
+      'archived_stale',
+      'archived_expired',
+      'admin_removed_stale',
+      'cancelled_admin',
+      'recoverable_incomplete',
+      'stale_blocked',
+    };
+    return delivery['archived'] == true ||
+        delivery['adminRemovedStale'] == true ||
+        archiveStatuses.contains(status) ||
+        archiveStatuses.contains(deliveryStatus) ||
+        archiveStatuses.contains(flowStatus);
+  }
+
+  static bool canAutoArchiveExpired(
+    Map<String, dynamic> delivery, {
+    required DateTime now,
+  }) {
+    if (isArchiveRecord(delivery)) return false;
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final deliveryStatus =
+        '${delivery['deliveryStatus'] ?? ''}'.toLowerCase().trim();
+    final flowStatus = '${delivery['flowStatus'] ?? ''}'.toLowerCase().trim();
+    final paymentStatus =
+        '${delivery['paymentStatus'] ?? ''}'.toLowerCase().trim();
+    const protectedStatuses = {
+      'accepted',
+      'rider_assigned',
+      'en_route_to_pickup',
+      'arrived_at_pickup',
+      'rider_arrived_pickup',
+      'collected',
+      'picked_up',
+      'in_transit',
+      'arriving',
+      'delivered',
+      'completed',
+      'under_review',
+      'disputed',
+      'dispute',
+      'payment_complete',
+      'paid',
+    };
+    final statuses = {status, deliveryStatus, flowStatus, paymentStatus};
+    if (statuses.any(protectedStatuses.contains)) return false;
+    if (delivery['disputeOpen'] == true ||
+        delivery['underReview'] == true ||
+        delivery['paymentInvestigation'] == true) {
+      return false;
+    }
+    if (paymentStatus == 'paid' || delivery['paid'] == true) return false;
+    final createdAt = _readDate(delivery['createdAt']) ??
+        _readDate(delivery['requestedAt']) ??
+        _readDate(delivery['updatedAt']);
+    if (createdAt == null) return false;
+    if (now.difference(createdAt).inHours < 24) return false;
+    return staleDeliveryReasons(delivery).isNotEmpty ||
+        status == 'requested' ||
+        status == 'pending' ||
+        status == 'finding_rider' ||
+        flowStatus == SenderWebBookingRecovery.recoverableIncomplete;
+  }
+
+  static Map<String, dynamic> autoArchiveExpiredPatch({
+    required Map<String, dynamic> delivery,
+    required Object archivedAt,
+    String reason =
+        'Automatic cleanup archived stale or incomplete booking older than 24 hours.',
+  }) {
+    return {
+      ...removeStaleOrderPatch(
+        delivery: delivery,
+        adminUserId: 'system',
+        adminEmail: 'system@circum',
+        reason: reason,
+        removedAt: archivedAt,
+      ),
+      'status': 'archived_expired',
+      'deliveryStatus': 'archived_expired',
+      'flowStatus': 'archived_expired',
+      'staleState': 'archived_expired',
+      'broadcastBlockReason': 'archived_expired',
+      'systemArchived': true,
+    };
+  }
+
+  static DateTime? _readDate(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  static Map<String, dynamic> removeStaleOrderPatch({
+    required Map<String, dynamic> delivery,
+    required String adminUserId,
+    String? adminEmail,
+    required String reason,
+    required Object removedAt,
+  }) {
+    final previousStatus = '${delivery['status'] ?? ''}';
+    final staleReasons = staleDeliveryReasons(delivery);
+    return {
+      'status': 'admin_removed_stale',
+      'deliveryStatus': 'admin_removed_stale',
+      'flowStatus': 'admin_removed_stale',
+      'matchingStatus': 'blocked',
+      'dispatchStatus': 'blocked',
+      'broadcastBlocked': true,
+      'broadcastBlockReason': 'admin_removed_stale',
+      'active': false,
+      'archived': true,
+      'staleArchived': true,
+      'staleState': 'admin_removed_stale',
+      'staleReasons': staleReasons,
+      'removedFromActiveQueues': true,
+      'adminRemovedStale': true,
+      'adminRemovalReason': reason,
+      'staleCleanupReason': reason,
+      'adminRemovedAt': removedAt,
+      'archivedAt': removedAt,
+      'archivedByAdminId': adminUserId,
+      'archivedByAdminEmail': adminEmail,
+      'updatedAt': removedAt,
+      'adminRemoval': {
+        'adminUserId': adminUserId,
+        'adminEmail': adminEmail,
+        'reason': reason,
+        'previousStatus': previousStatus,
+        'newStatus': 'admin_removed_stale',
+        'removedAt': removedAt,
+        'staleReasons': staleReasons,
+      },
+    };
+  }
+
   static Map<String, dynamic> vanguardProtocolSummary(
     Map<String, dynamic> delivery,
   ) {

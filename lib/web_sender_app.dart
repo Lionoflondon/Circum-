@@ -1458,8 +1458,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   List<Map<String, dynamic>> _websiteVisitors = const [];
   List<Map<String, dynamic>> _riderDocuments = const [];
   bool _adminChatOpen = false;
-  bool _showDeletedDeliveries = false;
   String _deliveryServiceFilter = 'ALL';
+  String _deliveryArchiveStatusFilter = 'ALL';
+  String _deliveryArchiveDateFilter = 'ALL';
   String? _activeAdminChatId;
   String? _activeAdminTicketId;
   String _activeAdminChatTitle = 'Booking chat';
@@ -2041,14 +2042,14 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         context: context,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Archive stale order?'),
+            title: const Text('Remove stale order?'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'This removes order ${delivery['trackingReference'] ?? delivery['reference'] ?? id} '
-                  'from active matching, sender tracking, dispatch and active admin views. '
+                  'from active matching, rider queues, sender active bookings, dispatch and active admin views. '
                   'Payment records and audit logs are preserved.',
                 ),
                 const SizedBox(height: 12),
@@ -2079,7 +2080,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   }
                   Navigator.pop(dialogContext, reason);
                 },
-                child: const Text('Archive stale order'),
+                child: const Text('Remove stale order'),
               ),
             ],
           ),
@@ -2090,50 +2091,44 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       final reference =
           '${delivery['trackingReference'] ?? delivery['reference'] ?? delivery['requestId'] ?? id}';
       final adminId = _adminUser?.uid ?? _adminUser?.email ?? 'unknown-admin';
+      final removedAt = FieldValue.serverTimestamp();
       final batch = FirebaseFirestore.instance.batch();
       final deliveryRef =
           FirebaseFirestore.instance.collection('deliveryRequests').doc(id);
       final cleanupRef = FirebaseFirestore.instance
           .collection('deliveryStaleCleanupEvents')
           .doc();
-      batch.set(
-          deliveryRef,
-          {
-            'status': 'archived',
-            'matchingStatus': 'archived',
-            'dispatchStatus': 'archived',
-            'archived': true,
-            'staleArchived': true,
-            'active': false,
-            'archivedAt': FieldValue.serverTimestamp(),
-            'archivedByAdminId': adminId,
-            'archivedByAdminEmail': _adminUser?.email,
-            'staleCleanupReason': reason,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
+      final removalPatch = AdminDeliveryTools.removeStaleOrderPatch(
+        delivery: delivery,
+        adminUserId: adminId,
+        adminEmail: _adminUser?.email,
+        reason: reason,
+        removedAt: removedAt,
+      );
+      batch.set(deliveryRef, removalPatch, SetOptions(merge: true));
       final auditPayload = {
         'adminId': adminId,
         'adminEmail': _adminUser?.email,
         'orderId': id,
         'reference': reference,
         'previousStatus': previousStatus,
-        'newStatus': 'archived',
+        'newStatus': 'admin_removed_stale',
         'reason': reason,
-        'timestamp': FieldValue.serverTimestamp(),
+        'staleReasons': AdminDeliveryTools.staleDeliveryReasons(delivery),
+        'timestamp': removedAt,
       };
       batch.set(cleanupRef, auditPayload);
       batch.set(FirebaseFirestore.instance.collection('adminAuditLogs').doc(), {
         ...auditPayload,
-        'action': 'stale_delivery_archived',
-        'actionType': 'stale_delivery_archived',
+        'action': 'stale_delivery_removed',
+        'actionType': 'stale_delivery_removed',
         'recordType': 'deliveryRequests',
         'recordId': id,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': removedAt,
       });
       await batch.commit();
-      setState(() =>
-          _message = 'Order $reference was archived from active system views.');
+      setState(() => _message =
+          'Order $reference was removed from active operations and added to Delivery Archives.');
       await _loadAdminData();
     } finally {
       reasonController.dispose();
@@ -4314,74 +4309,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rowBuilder: _driverRow,
           emptyText: 'No driver profiles yet.',
         ),
-      _AdminSection.deliveries => _AdminDataSection(
-          colors: colors,
-          title: 'Deliveries',
-          subtitle:
-              'Track, edit safe fields, duplicate, cancel, and resolve orders.',
-          headerActions: [
-            for (final serviceType in const [
-              'ALL',
-              'STANDARD',
-              'SCHEDULED',
-              'HEAVY_DUTY',
-              'BUSINESS',
-              'VANGUARD',
-              'GIFTS',
-              'HEALTH_PLUS',
-            ])
-              FilterChip(
-                selected: _deliveryServiceFilter == serviceType,
-                onSelected: (_) =>
-                    setState(() => _deliveryServiceFilter = serviceType),
-                label: Text(serviceType == 'ALL'
-                    ? 'All'
-                    : _movementServiceLabel(serviceType)),
-              ),
-            FilterChip(
-              selected: _showDeletedDeliveries,
-              onSelected: (selected) =>
-                  setState(() => _showDeletedDeliveries = selected),
-              label: const Text('Show deleted'),
-              avatar: Icon(
-                _showDeletedDeliveries
-                    ? Icons.visibility
-                    : Icons.visibility_off,
-                size: 18,
-              ),
-            ),
-          ],
-          records: adminSearch(
-              _deliveries.where((delivery) {
-                final visible = _showDeletedDeliveries ||
-                    !_isArchivedDeliveryRecord(delivery);
-                final serviceMatches = _deliveryServiceFilter == 'ALL' ||
-                    _movementServiceType(delivery) == _deliveryServiceFilter;
-                return visible && serviceMatches;
-              }).toList(growable: false),
-              query,
-              [
-                'requestId',
-                'pickupAddress',
-                'dropoffAddress',
-                'senderName',
-                'riderName',
-                'status',
-                'serviceType',
-                'sourceModule',
-              ]),
-          columns: const [
-            'ID',
-            'Received',
-            'Route',
-            'Status',
-            'Weight / IRIS',
-            'Price',
-            'Actions',
-          ],
-          rowBuilder: _deliveryRow,
-          emptyText: 'No delivery records yet.',
-        ),
+      _AdminSection.deliveries => _buildDeliveriesSection(colors, query),
       _AdminSection.irisRepository => _AdminIrisRepositorySection(
           colors: colors,
           query: query,
@@ -4598,6 +4526,229 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           emptyText: 'No audit entries yet.',
         ),
     };
+  }
+
+  Widget _buildDeliveriesSection(_CircumColors colors, String query) {
+    final activeRecords = adminSearch(
+      _deliveries.where((delivery) {
+        final visible = !AdminDeliveryTools.isArchiveRecord(delivery) &&
+            !_isArchivedDeliveryRecord(delivery);
+        final serviceMatches = _deliveryServiceFilter == 'ALL' ||
+            _movementServiceType(delivery) == _deliveryServiceFilter;
+        return visible && serviceMatches;
+      }).toList(growable: false),
+      query,
+      [
+        'requestId',
+        'pickupAddress',
+        'dropoffAddress',
+        'senderName',
+        'riderName',
+        'status',
+        'serviceType',
+        'sourceModule',
+      ],
+    );
+    final archiveRecords = adminSearch(
+      _deliveryArchiveRows(),
+      query,
+      [
+        'requestId',
+        'deliveryId',
+        'senderEmail',
+        'senderId',
+        'userId',
+        'riderName',
+        'riderId',
+        'pickupAddress',
+        'dropoffAddress',
+        'paymentStatus',
+        'status',
+        'deliveryStatus',
+        'staleCleanupReason',
+        'adminRemovalReason',
+        'archivedByAdminEmail',
+      ],
+    );
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        _adminTablePanel(
+          colors: colors,
+          title: 'Deliveries',
+          subtitle:
+              'Track, edit safe fields, duplicate, cancel, and resolve active orders.',
+          headerActions: [
+            for (final serviceType in const [
+              'ALL',
+              'STANDARD',
+              'SCHEDULED',
+              'HEAVY_DUTY',
+              'BUSINESS',
+              'VANGUARD',
+              'GIFTS',
+              'HEALTH_PLUS',
+            ])
+              FilterChip(
+                selected: _deliveryServiceFilter == serviceType,
+                onSelected: (_) =>
+                    setState(() => _deliveryServiceFilter = serviceType),
+                label: Text(serviceType == 'ALL'
+                    ? 'All'
+                    : _movementServiceLabel(serviceType)),
+              ),
+          ],
+          records: activeRecords,
+          columns: const [
+            'ID',
+            'Received',
+            'Route',
+            'Status',
+            'Weight / IRIS',
+            'Price',
+            'Actions',
+          ],
+          rowBuilder: _deliveryRow,
+          emptyText: 'No active delivery records yet.',
+        ),
+        const SizedBox(height: 18),
+        _adminTablePanel(
+          colors: colors,
+          title: 'Delivery Archives',
+          subtitle:
+              'Archived stale, expired, removed, cancelled, and recoverable orders remain available for support, audit, refunds, and payment reconciliation.',
+          headerActions: [
+            for (final status in const [
+              'ALL',
+              'archived_stale',
+              'archived_expired',
+              'admin_removed_stale',
+              'cancelled_admin',
+              'recoverable_incomplete',
+              'stale_blocked',
+            ])
+              FilterChip(
+                selected: _deliveryArchiveStatusFilter == status,
+                onSelected: (_) =>
+                    setState(() => _deliveryArchiveStatusFilter = status),
+                label: Text(status == 'ALL'
+                    ? 'All archive statuses'
+                    : _displayStatusLabel(status)),
+              ),
+            for (final range in const ['ALL', '7D', '30D'])
+              FilterChip(
+                selected: _deliveryArchiveDateFilter == range,
+                onSelected: (_) =>
+                    setState(() => _deliveryArchiveDateFilter = range),
+                label: Text(switch (range) {
+                  '7D' => 'Last 7 days',
+                  '30D' => 'Last 30 days',
+                  _ => 'All dates',
+                }),
+              ),
+          ],
+          records: archiveRecords,
+          columns: const [
+            'Delivery',
+            'Sender',
+            'Rider',
+            'Route',
+            'Payment',
+            'Status',
+            'Archive',
+            'Created / Updated',
+            'Actions',
+          ],
+          rowBuilder: _deliveryArchiveRow,
+          emptyText: 'No archived delivery records yet.',
+        ),
+      ],
+    );
+  }
+
+  Widget _adminTablePanel({
+    required _CircumColors colors,
+    required String title,
+    required String subtitle,
+    required List<Map<String, dynamic>> records,
+    required List<String> columns,
+    required List<Widget> Function(Map<String, dynamic>) rowBuilder,
+    required String emptyText,
+    List<Widget> headerActions = const [],
+  }) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (headerActions.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: headerActions,
+            ),
+          ],
+          const SizedBox(height: 16),
+          if (records.isEmpty)
+            Text(
+              emptyText,
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 24,
+                horizontalMargin: 16,
+                dataRowMinHeight: 64,
+                dataRowMaxHeight: double.infinity,
+                headingTextStyle: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+                dataTextStyle: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w700,
+                ),
+                columns: columns
+                    .map((column) => DataColumn(label: Text(column)))
+                    .toList(),
+                rows: records
+                    .map(
+                      (record) => DataRow(
+                        cells: rowBuilder(record)
+                            .map((child) => DataCell(child))
+                            .toList(),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   List<Widget> _senderRow(Map<String, dynamic> item) {
@@ -7467,7 +7618,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             onTap: () => _openAdminChat(item),
           ),
           _AdminAction(
-            label: 'Archive stale order',
+            label: 'Remove Stale Order',
             enabled: _can(AdminPermission.editDeliveries) &&
                 (_isStaleDeliveryArchiveEligible(item) ||
                     (_roles.contains(AdminRole.superAdmin.value) &&
@@ -7483,6 +7634,209 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         ],
       ),
     ];
+  }
+
+  List<Map<String, dynamic>> _deliveryArchiveRows() {
+    final now = DateTime.now();
+    return _deliveries.where((delivery) {
+      if (!AdminDeliveryTools.isArchiveRecord(delivery)) return false;
+      final status = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+          .toLowerCase()
+          .trim();
+      if (_deliveryArchiveStatusFilter != 'ALL' &&
+          status != _deliveryArchiveStatusFilter) {
+        return false;
+      }
+      final date = _deliveryRecordDate({
+        'createdAt': delivery['archivedAt'] ??
+            delivery['adminRemovedAt'] ??
+            delivery['updatedAt'] ??
+            delivery['createdAt'],
+      });
+      if (_deliveryArchiveDateFilter == '7D') {
+        return date != null && now.difference(date).inDays <= 7;
+      }
+      if (_deliveryArchiveDateFilter == '30D') {
+        return date != null && now.difference(date).inDays <= 30;
+      }
+      return true;
+    }).toList(growable: false)
+      ..sort((a, b) {
+        final left = _deliveryRecordDate({
+              'createdAt': a['archivedAt'] ??
+                  a['adminRemovedAt'] ??
+                  a['updatedAt'] ??
+                  a['createdAt'],
+            }) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final right = _deliveryRecordDate({
+              'createdAt': b['archivedAt'] ??
+                  b['adminRemovedAt'] ??
+                  b['updatedAt'] ??
+                  b['createdAt'],
+            }) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return right.compareTo(left);
+      });
+  }
+
+  List<Widget> _deliveryArchiveRow(Map<String, dynamic> item) {
+    final id = '${item['_docId'] ?? item['requestId'] ?? item['id'] ?? ''}';
+    final sender = [
+      '${item['senderEmail'] ?? item['senderEmailLower'] ?? ''}'.trim(),
+      '${item['senderId'] ?? item['userId'] ?? item['authenticatedUserUid'] ?? ''}'
+          .trim(),
+    ].where((value) => value.isNotEmpty).join('\n');
+    final rider = [
+      '${item['riderName'] ?? item['driverName'] ?? ''}'.trim(),
+      '${item['riderId'] ?? item['driverId'] ?? item['assignedRiderId'] ?? ''}'
+          .trim(),
+    ].where((value) => value.isNotEmpty).join('\n');
+    final archiveReason =
+        '${item['adminRemovalReason'] ?? item['staleCleanupReason'] ?? item['broadcastBlockReason'] ?? ''}'
+            .trim();
+    final staleReasons = AdminDeliveryTools.staleDeliveryReasons(item);
+    final paymentReference = [
+      '${item['paymentStatus'] ?? 'unknown'}',
+      '${item['paymentReferenceId'] ?? item['paymentReference'] ?? item['paymentIntentId'] ?? item['stripePaymentId'] ?? item['stripeSessionId'] ?? ''}'
+          .trim(),
+    ].where((value) => value.isNotEmpty).join('\n');
+    final archiveSummary = [
+      archiveReason.isEmpty ? 'No reason recorded' : archiveReason,
+      if (staleReasons.isNotEmpty) 'Why: ${staleReasons.join(', ')}',
+      if ('${item['archivedByAdminEmail'] ?? item['archivedByAdminId'] ?? ''}'
+          .trim()
+          .isNotEmpty)
+        'By: ${item['archivedByAdminEmail'] ?? item['archivedByAdminId']}',
+      if (_adminTimestampText(item['archivedAt'] ?? item['adminRemovedAt'])
+          .isNotEmpty)
+        'At: ${_adminTimestampText(item['archivedAt'] ?? item['adminRemovedAt'])}',
+    ].join('\n');
+    return [
+      _AdminCell.primary('${item['requestId'] ?? id}\n$id'),
+      _AdminCell(sender.isEmpty ? 'Not recorded' : sender),
+      _AdminCell(rider.isEmpty ? 'Unassigned' : rider),
+      _AdminCell(
+        '${item['pickupAddress'] ?? 'Pickup unavailable'}\n→ ${item['dropoffAddress'] ?? 'Drop-off unavailable'}',
+      ),
+      _AdminCell(paymentReference),
+      _AdminStatusCell(
+        colors: widget.colors,
+        status: '${item['status'] ?? item['deliveryStatus'] ?? ''}',
+      ),
+      _AdminCell(archiveSummary),
+      _AdminCell(
+        'Created: ${_adminTimestampText(item['createdAt'])}\nUpdated: ${_adminTimestampText(item['updatedAt'])}',
+      ),
+      _AdminActions(
+        colors: widget.colors,
+        actions: [
+          _AdminAction(
+            label: 'Open detail',
+            enabled: true,
+            onTap: () => _showArchivedDeliveryDetails(item),
+          ),
+          _AdminAction(
+            label: 'Audit',
+            enabled: true,
+            onTap: () => setState(() {
+              _section = _AdminSection.audit;
+              _search.text = id;
+            }),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  void _showArchivedDeliveryDetails(Map<String, dynamic> item) {
+    final id = '${item['_docId'] ?? item['requestId'] ?? item['id'] ?? ''}';
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Archived delivery $id'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _archiveDetailLine('Status', '${item['status'] ?? ''}'),
+              _archiveDetailLine(
+                  'Payment status', '${item['paymentStatus'] ?? ''}'),
+              _archiveDetailLine(
+                'Payment reference',
+                '${item['paymentReferenceId'] ?? item['paymentReference'] ?? item['paymentIntentId'] ?? item['stripePaymentId'] ?? item['stripeSessionId'] ?? ''}',
+              ),
+              _archiveDetailLine(
+                'Sender',
+                '${item['senderEmail'] ?? item['senderEmailLower'] ?? item['senderId'] ?? item['userId'] ?? ''}',
+              ),
+              _archiveDetailLine(
+                'Rider',
+                '${item['riderName'] ?? item['riderId'] ?? item['driverId'] ?? 'Unassigned'}',
+              ),
+              _archiveDetailLine('Pickup', '${item['pickupAddress'] ?? ''}'),
+              _archiveDetailLine('Drop-off', '${item['dropoffAddress'] ?? ''}'),
+              _archiveDetailLine(
+                'Archive reason',
+                '${item['adminRemovalReason'] ?? item['staleCleanupReason'] ?? item['broadcastBlockReason'] ?? ''}',
+              ),
+              _archiveDetailLine(
+                'Why archived',
+                AdminDeliveryTools.staleDeliveryReasons(item).join(', '),
+              ),
+              _archiveDetailLine(
+                'Archived by',
+                '${item['archivedByAdminEmail'] ?? item['archivedByAdminId'] ?? ''}',
+              ),
+              _archiveDetailLine(
+                'Archived at',
+                _adminTimestampText(
+                    item['archivedAt'] ?? item['adminRemovedAt']),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _archiveDetailLine(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: RichText(
+          text: TextSpan(
+            style: TextStyle(color: widget.colors.text, height: 1.35),
+            children: [
+              TextSpan(
+                text: '$label\n',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              TextSpan(
+                text: value.trim().isEmpty ? 'Not recorded' : value.trim(),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  String _adminTimestampText(dynamic value) {
+    DateTime? date;
+    if (value is Timestamp) date = value.toDate();
+    if (value is DateTime) date = value;
+    if (value is String) date = DateTime.tryParse(value);
+    if (date == null) return '';
+    final local = date.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/'
+        '${local.year} '
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
   }
 
   List<Map<String, dynamic>> _businessDeliveryRows() =>
@@ -14997,9 +15351,13 @@ bool _isArchivedDeliveryRecord(Map<String, dynamic> delivery) {
       '${delivery['dispatchStatus'] ?? ''}'.toLowerCase().trim();
   const archivedStatuses = {
     'archived',
+    'archived_stale',
+    'archived_expired',
+    'admin_removed_stale',
     'void',
     'voided',
     'cancelled_by_admin',
+    'cancelled_admin',
     'deleted',
     'resolved',
   };
@@ -15015,13 +15373,34 @@ bool _isArchivedDeliveryRecord(Map<String, dynamic> delivery) {
 
 bool _isStaleDeliveryArchiveEligible(Map<String, dynamic> delivery) {
   if (_isArchivedDeliveryRecord(delivery)) return false;
-  if (delivery['stale'] == true || delivery['manuallyMarkedStale'] == true) {
-    return true;
-  }
+  if (AdminDeliveryTools.canRemoveAsStale(delivery)) return true;
   if (!_isStaleDeliveryCandidate(delivery)) return false;
   final createdAt = _deliveryRecordDate(delivery);
   if (createdAt == null) return false;
   return DateTime.now().difference(createdAt).inHours >= 24;
+}
+
+bool _isBroadcastBlockedDelivery(Map<String, dynamic> delivery) {
+  final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+  final matchingStatus =
+      '${delivery['matchingStatus'] ?? ''}'.toLowerCase().trim();
+  final dispatchStatus =
+      '${delivery['dispatchStatus'] ?? ''}'.toLowerCase().trim();
+  const blockedStatuses = {
+    'recoverable_incomplete',
+    'stale_blocked',
+    'admin_review_required',
+    'admin_removed_stale',
+    'archived_stale',
+    'cancelled_admin',
+    'blocked',
+    'archived',
+  };
+  return delivery['broadcastBlocked'] == true ||
+      blockedStatuses.contains(status) ||
+      blockedStatuses.contains(matchingStatus) ||
+      blockedStatuses.contains(dispatchStatus) ||
+      AdminDeliveryTools.staleDeliveryReasons(delivery).isNotEmpty;
 }
 
 bool _isStaleDeliveryCandidate(Map<String, dynamic> delivery) {
@@ -15088,9 +15467,14 @@ bool _isActiveSenderDeliveryStatus(String status) {
     'failed',
     'refunded',
     'archived',
+    'archived_stale',
+    'archived_expired',
+    'admin_removed_stale',
+    'stale_blocked',
     'voided',
     'void',
     'cancelled_by_admin',
+    'cancelled_admin',
     'deleted',
   };
   if (inactiveStatuses.contains(normalized)) return false;
@@ -18062,6 +18446,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             final matchingStatus =
                 '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
             if (_isArchivedDeliveryRecord(job)) return false;
+            if (_isBroadcastBlockedDelivery(job)) return false;
             final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
             final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
             final currentRider = _riderUser?.uid;
@@ -18252,6 +18637,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
+    if (_isBroadcastBlockedDelivery(job)) {
+      setState(() => _jobMessage =
+          'This delivery is blocked for recovery and cannot be accepted.');
+      return;
+    }
     setState(() => _jobMessage = 'Accepting job $requestId...');
     try {
       await _ensureCircumFirebaseReady();
@@ -26095,23 +26485,89 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Future<void> _loadSenderDeliveries(String uid) async {
     try {
       final db = FirebaseFirestore.instance;
+      final rawEmail =
+          (_senderUser?.email ?? FirebaseAuth.instance.currentUser?.email ?? '')
+              .trim();
+      final email = rawEmail.toLowerCase();
       final snapshots = await Future.wait([
         db
             .collection('deliveryRequests')
             .where('senderId', isEqualTo: uid)
             .get(),
         db.collection('deliveryRequests').where('userId', isEqualTo: uid).get(),
+        if (email.isNotEmpty)
+          db
+              .collection('deliveryRequests')
+              .where('senderEmailLower', isEqualTo: email)
+              .get(),
+        if (email.isNotEmpty)
+          db
+              .collection('deliveryRequests')
+              .where('senderEmail', isEqualTo: email)
+              .get(),
+        if (rawEmail.isNotEmpty && rawEmail != email)
+          db
+              .collection('deliveryRequests')
+              .where('senderEmail', isEqualTo: rawEmail)
+              .get(),
         db.collection('history').where('userId', isEqualTo: uid).get(),
+        if (email.isNotEmpty)
+          db
+              .collection('history')
+              .where('senderEmailLower', isEqualTo: email)
+              .get(),
       ]);
       final byId = <String, SenderDeliveryRecord>{};
+      final recoveryUpdates = <Future<void>>[];
       for (final snapshot in snapshots) {
         for (final doc in snapshot.docs) {
-          final record = SenderDeliveryRecord.fromMap(doc.id, doc.data());
+          final data = Map<String, dynamic>.from(doc.data());
+          final visibleStatus = SenderWebBookingRecovery.visibleStatus(data);
+          final missing = SenderWebBookingRecovery.missingCanonicalFields(data);
+          final needsRecoveryMark = missing.isNotEmpty &&
+              !SenderWebBookingRecovery.isTerminal(data) &&
+              visibleStatus != SenderWebBookingRecovery.recoverableIncomplete;
+          if (needsRecoveryMark) {
+            data.addAll(SenderWebBookingRecovery.lifecycleFields(
+              status: SenderWebBookingRecovery.recoverableIncomplete,
+              currentStep: 'recovery',
+            ));
+            data.addAll({
+              'matchingStatus': 'blocked',
+              'dispatchStatus': 'blocked',
+              'broadcastBlocked': true,
+              'broadcastBlockReason': 'missing_canonical_booking_fields',
+              'missingCanonicalFields': missing,
+            });
+            recoveryUpdates.add(doc.reference.set({
+              ...SenderWebBookingRecovery.lifecycleFields(
+                status: SenderWebBookingRecovery.recoverableIncomplete,
+                currentStep: 'recovery',
+              ),
+              'matchingStatus': 'blocked',
+              'dispatchStatus': 'blocked',
+              'broadcastBlocked': true,
+              'broadcastBlockReason': 'missing_canonical_booking_fields',
+              'missingCanonicalFields': missing,
+              'updatedAt': FieldValue.serverTimestamp(),
+              'auditTrail': FieldValue.arrayUnion([
+                {
+                  'event': 'sender_web_booking_recovery_marked_on_load',
+                  'status': SenderWebBookingRecovery.recoverableIncomplete,
+                  'missingCanonicalFields': missing,
+                  'source': 'sender_web',
+                  'createdAt': DateTime.now().toIso8601String(),
+                },
+              ]),
+            }, SetOptions(merge: true)));
+          }
+          final record = SenderDeliveryRecord.fromMap(doc.id, data);
           byId[record.requestId] = record;
         }
       }
-      final records = SenderProfileService.ownDeliveries(
+      final records = SenderProfileService.ownDeliveriesForIdentity(
         uid,
+        email,
         byId.values,
       ).toList(growable: false)
         ..sort((a, b) {
@@ -26124,6 +26580,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderDeliveries = records;
         _senderDeliveryLoadError = null;
       });
+      await Future.wait(recoveryUpdates);
       await _syncSenderTrustBaseline(uid, records);
     } catch (error) {
       debugPrint('Could not load sender deliveries: $error');
@@ -28173,6 +28630,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     var cardPaymentCompleted = false;
     var rothDebited = false;
+    var paymentIntentId = '';
+    var clientSecret = '';
     if (cardRemaining > 0) {
       try {
         Stripe.publishableKey = Env.publishableLiveKey;
@@ -28195,7 +28654,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           }),
         );
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final clientSecret = '${data['clientSecret'] ?? ''}';
+        clientSecret = '${data['clientSecret'] ?? ''}';
+        paymentIntentId = '${data['paymentIntentId'] ?? data['id'] ?? ''}';
         if (clientSecret.isEmpty || data['error'] != null) {
           throw StateError(
               '${data['error'] ?? 'Could not start card payment.'}');
@@ -28234,6 +28694,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'walletContributionGbp': rothDebited ? rothApplied : 0,
       'cardRemaining': cardRemaining,
       'stripeAmount': cardRemaining,
+      'paymentReferenceId': requestId,
+      'paymentIntentId': paymentIntentId,
+      'stripePaymentId': paymentIntentId,
+      'stripeClientSecret': clientSecret,
     };
   }
 
@@ -28929,6 +29393,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final irisVerified = (_irisWeightConfidence ?? '').toLowerCase() != 'low';
     final senderUser = _senderUser ?? FirebaseAuth.instance.currentUser;
     final senderId = senderUser?.uid ?? 'web-sender';
+    final senderEmail = (senderUser?.email ?? '').trim().toLowerCase();
     final senderName = _effectiveSenderName;
     final senderPhone = _effectiveSenderPhone;
     final receiverName = _receiverName.text.trim();
@@ -28947,6 +29412,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       manuallySelected: _vanguardAddonSelected,
     );
     final vanguardEnabled = vanguardFields['vanguardEnabled'] == true;
+    final vanguardProtection =
+        (vanguardFields['vanguardProtection'] as Map?)?.cast<String, dynamic>();
+    final collectionPin = '${vanguardProtection?['collectionPin'] ?? ''}';
+    final deliveryPin = '${vanguardProtection?['deliveryPin'] ?? ''}';
     final hasPhoto = parcelPhotoData['hasPhoto'] == true;
     final parcelPhotoUrl =
         parcelPhotoData['imageUrl'] ?? parcelPhotoData['photoUrl'];
@@ -29326,6 +29795,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'vanguardAddonPrice': vanguardAddon,
       'vanguardAssignmentPolicy': 'trusted_rider_prioritisation',
       ...vanguardFields,
+      if (vanguardEnabled) ...{
+        'pickupPin': collectionPin,
+        'dropoffPin': deliveryPin,
+        'collectionPin': collectionPin,
+        'deliveryPin': deliveryPin,
+        'pinCreatedAt': FieldValue.serverTimestamp(),
+        'pickupPinCreatedAt': FieldValue.serverTimestamp(),
+        'dropoffPinCreatedAt': FieldValue.serverTimestamp(),
+        'pickupPinVerificationStatus': 'pending',
+        'collectionPinVerificationStatus': 'pending',
+        'dropoffPinVerificationStatus': 'pending',
+        'receiverPinVerificationStatus': 'pending',
+        'pinVerification': {
+          'pickupStatus': 'pending',
+          'dropoffStatus': 'pending',
+        },
+      },
       'currency': 'GBP',
       'status': 'requested',
       'dispatchStatus': 'requested',
@@ -29353,12 +29839,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'userId': senderId,
       'senderName': senderName,
       'senderPhone': senderPhone,
-      'senderEmail': senderUser?.email,
+      'senderEmail': senderEmail,
+      'senderEmailLower': senderEmail,
+      'authenticatedUserUid': senderId,
+      'trackingUrl': '/?app=sender&deliveryId=$id',
+      'recoveryKeys': {
+        'deliveryId': id,
+        'requestId': id,
+        'senderId': senderId,
+        'userId': senderId,
+        'senderEmail': senderEmail,
+      },
       'senderDetails': {
         'userId': senderId,
         'name': senderName,
         'phone': senderPhone,
-        'email': senderUser?.email,
+        'email': senderEmail,
       },
       'collectionContact': {
         'name': collectionContactName,
@@ -42062,11 +42558,20 @@ class _SenderTrackingScreenState extends State<_SenderTrackingScreen> {
                 onBack: _openSenderBookings,
               );
             }
+            final data = deliverySnapshot.data!.data()!;
+            if (!_canCurrentSenderAccessDelivery(data)) {
+              return _SenderTrackingSurface(
+                colors: widget.colors,
+                delivery: const {},
+                notFound: true,
+                onBack: _openSenderBookings,
+              );
+            }
             return _SenderTrackingSurface(
               colors: widget.colors,
               delivery: {
                 'id': deliverySnapshot.data!.id,
-                ...deliverySnapshot.data!.data()!,
+                ...data,
               },
             );
           },
@@ -42095,6 +42600,12 @@ class _SenderTrackingScreenState extends State<_SenderTrackingScreen> {
       'trackingReference',
       'reference',
       'purchaseId',
+      'paymentReference',
+      'paymentReferenceId',
+      'paymentIntentId',
+      'stripePaymentId',
+      'stripeSessionId',
+      'stripeCheckoutSessionId',
     ]) {
       final match = await db
           .collection('deliveryRequests')
@@ -42104,6 +42615,27 @@ class _SenderTrackingScreenState extends State<_SenderTrackingScreen> {
       if (match.docs.isNotEmpty) return match.docs.first.id;
     }
     return null;
+  }
+
+  bool _canCurrentSenderAccessDelivery(Map<String, dynamic> delivery) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+    final uid = user.uid;
+    final email = (user.email ?? '').trim().toLowerCase();
+    final ownerIds = [
+      delivery['senderId'],
+      delivery['userId'],
+      delivery['bookedByUserId'],
+      delivery['authenticatedUserUid'],
+    ].map((value) => '${value ?? ''}'.trim());
+    if (ownerIds.any((value) => value == uid)) return true;
+    if (email.isEmpty) return false;
+    final ownerEmails = [
+      delivery['senderEmailLower'],
+      delivery['senderEmail'],
+      (delivery['senderDetails'] as Map?)?['email'],
+    ].map((value) => '${value ?? ''}'.trim().toLowerCase());
+    return ownerEmails.any((value) => value == email);
   }
 }
 

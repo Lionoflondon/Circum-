@@ -25,6 +25,23 @@ void main() {
       );
     });
 
+    test('accepts payment and session references as recovery route ids', () {
+      expect(
+        senderDeliveryRouteIdFromUri(
+          Uri.parse(
+            'https://circumuk.com/?app=sender&paymentReference=pi_123',
+          ),
+        ),
+        'pi_123',
+      );
+      expect(
+        senderDeliveryRouteIdFromUri(
+          Uri.parse('https://circumuk.com/?app=sender&session_id=cs_123'),
+        ),
+        'cs_123',
+      );
+    });
+
     test('ignores empty and literal null delivery ids', () {
       expect(
         senderDeliveryRouteIdFromUri(
