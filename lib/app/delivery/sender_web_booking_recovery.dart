@@ -152,13 +152,13 @@ class SenderWebBookingRecovery {
       requireText('pickup PIN', [
         delivery['pickupPin'],
         delivery['collectionPin'],
-        vanguardProtection?['collectionPin'],
+        vanguardProtection['collectionPin'],
       ]);
       requireText('drop-off PIN', [
         delivery['dropoffPin'],
         delivery['receiverPin'],
         delivery['deliveryPin'],
-        vanguardProtection?['deliveryPin'],
+        vanguardProtection['deliveryPin'],
       ]);
       requireText('PIN createdAt', [
         delivery['pinCreatedAt'],

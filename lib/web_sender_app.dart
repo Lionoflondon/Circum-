@@ -23681,6 +23681,18 @@ enum _CheckoutState {
   failed,
 }
 
+class _SenderBookingPaymentCompletion {
+  final bool readyToBroadcast;
+  final List<String> missingCanonicalFields;
+  final Map<String, dynamic> requestPatch;
+
+  const _SenderBookingPaymentCompletion({
+    required this.readyToBroadcast,
+    required this.missingCanonicalFields,
+    required this.requestPatch,
+  });
+}
+
 class _CustomerPortal extends StatefulWidget {
   final bool darkMode;
   final _CircumColors colors;
@@ -28004,58 +28016,29 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           },
         ],
       });
-      await _saveSenderBookingSnapshot(
+      await _createCanonicalSenderBookingTransaction(
         db: db,
         id: id,
         request: request,
         irisEstimate: irisEstimate,
       );
       final paymentResult = await _collectDeliveryPayment(id, _quoteTotal);
-      request.addAll(paymentResult);
-      final missingCanonicalFields =
-          SenderWebBookingRecovery.missingCanonicalFields(request);
-      final readyToBroadcast = SenderWebBookingRecovery.canBroadcast(request);
-      request.addAll(SenderWebBookingRecovery.lifecycleFields(
-        status: readyToBroadcast
-            ? SenderWebBookingRecovery.broadcasting
-            : SenderWebBookingRecovery.recoverableIncomplete,
-        currentStep: readyToBroadcast ? 'tracking' : 'recovery',
-      ));
-      request.addAll({
-        'matchingStatus': readyToBroadcast ? 'available' : 'blocked',
-        'dispatchStatus': readyToBroadcast ? 'requested' : 'blocked',
-        'broadcastBlocked': !readyToBroadcast,
-        'broadcastBlockReason':
-            readyToBroadcast ? null : 'missing_canonical_booking_fields',
-        'missingCanonicalFields': missingCanonicalFields,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'auditTrail': FieldValue.arrayUnion([
-          {
-            'event': readyToBroadcast
-                ? 'sender_web_booking_ready_for_broadcast'
-                : 'sender_web_booking_recoverable_incomplete',
-            'status': request['deliveryStatus'],
-            'missingCanonicalFields': missingCanonicalFields,
-            'source': 'sender_web',
-            'createdAt': DateTime.now().toIso8601String(),
-          },
-        ]),
-      });
+      final completion = await _completeSenderBookingPaymentTransaction(
+        db: db,
+        id: id,
+        request: request,
+        paymentResult: paymentResult,
+      );
+      request
+        ..addAll(paymentResult)
+        ..addAll(completion.requestPatch);
+      final readyToBroadcast = completion.readyToBroadcast;
       _activeVanguardData = request['vanguardEnabled'] == true
           ? Map<String, dynamic>.from(request)
           : null;
       _activeRequestData = Map<String, dynamic>.from(request);
       final senderId = '${request['senderId']}';
       final batch = db.batch();
-      batch.set(db.collection('webSenderRequests').doc(id), request,
-          SetOptions(merge: true));
-      batch.set(db.collection('deliveryRequests').doc(id), request,
-          SetOptions(merge: true));
-      batch.set(
-        db.collection('irisDeliveryEstimates').doc(id),
-        irisEstimate,
-        SetOptions(merge: true),
-      );
       if (readyToBroadcast) {
         batch.set(
             db.collection('chats').doc(id),
@@ -28095,8 +28078,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'createdAt': FieldValue.serverTimestamp(),
           'timeStamp': DateTime.now().toIso8601String(),
         });
+        await batch.commit();
       }
-      await batch.commit();
       _listenToRequest(id);
       if (readyToBroadcast) _listenToChat(id);
       if (!mounted) return;
@@ -28227,29 +28210,154 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     };
   }
 
-  Future<void> _saveSenderBookingSnapshot({
+  Future<void> _createCanonicalSenderBookingTransaction({
     required FirebaseFirestore db,
     required String id,
     required Map<String, dynamic> request,
     required Map<String, dynamic> irisEstimate,
   }) async {
-    final batch = db.batch();
-    batch.set(
-      db.collection('webSenderRequests').doc(id),
-      request,
-      SetOptions(merge: true),
-    );
-    batch.set(
-      db.collection('deliveryRequests').doc(id),
-      request,
-      SetOptions(merge: true),
-    );
-    batch.set(
-      db.collection('irisDeliveryEstimates').doc(id),
-      irisEstimate,
-      SetOptions(merge: true),
-    );
-    await batch.commit();
+    final missing = SenderWebBookingRecovery.missingCanonicalFields(request);
+    final hasMissingFields = missing.isNotEmpty;
+    if (missing.isNotEmpty) {
+      request.addAll(SenderWebBookingRecovery.lifecycleFields(
+        status: SenderWebBookingRecovery.recoverableIncomplete,
+        currentStep: 'recovery',
+      ));
+      request.addAll({
+        'matchingStatus': 'blocked',
+        'dispatchStatus': 'blocked',
+        'broadcastBlocked': true,
+        'broadcastBlockReason': 'missing_canonical_booking_fields',
+        'missingCanonicalFields': missing,
+        'auditTrail': [
+          {
+            'event': 'sender_web_booking_recoverable_incomplete',
+            'status': SenderWebBookingRecovery.recoverableIncomplete,
+            'missingCanonicalFields': missing,
+            'source': 'sender_web',
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+        ],
+      });
+    }
+
+    await db.runTransaction((transaction) async {
+      final deliveryRef = db.collection('deliveryRequests').doc(id);
+      final webRef = db.collection('webSenderRequests').doc(id);
+      final irisRef = db.collection('irisDeliveryEstimates').doc(id);
+      final existing = await transaction.get(deliveryRef);
+      if (existing.exists) {
+        throw StateError('This booking already exists. Refresh to resume it.');
+      }
+      transaction.set(webRef, request, SetOptions(merge: true));
+      transaction.set(deliveryRef, request, SetOptions(merge: true));
+      transaction.set(irisRef, irisEstimate, SetOptions(merge: true));
+    });
+    if (hasMissingFields) {
+      throw StateError(
+        'This booking was saved for recovery, but it is missing required delivery details: ${missing.join(', ')}.',
+      );
+    }
+  }
+
+  Future<_SenderBookingPaymentCompletion>
+      _completeSenderBookingPaymentTransaction({
+    required FirebaseFirestore db,
+    required String id,
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> paymentResult,
+  }) async {
+    final deliveryRef = db.collection('deliveryRequests').doc(id);
+    final webRef = db.collection('webSenderRequests').doc(id);
+    return db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(deliveryRef);
+      if (!snapshot.exists) {
+        throw StateError(
+          'Payment cannot be recorded because the delivery was not saved.',
+        );
+      }
+      final canonical = <String, dynamic>{
+        ...(snapshot.data() ?? const <String, dynamic>{}),
+        ...paymentResult,
+        'paymentStatus': paymentResult['paymentStatus'] ?? 'paid',
+      };
+      final paymentReference = _firstNonEmpty([
+        paymentResult['paymentIntentId'],
+        paymentResult['stripePaymentId'],
+        paymentResult['stripeIntentId'],
+        paymentResult['referenceId'],
+      ]);
+      canonical.addAll(SenderWebBookingRecovery.lifecycleFields(
+        status: SenderWebBookingRecovery.paymentComplete,
+        currentStep: 'payment_complete',
+      ));
+      final paymentAuditEntry = {
+        'event': 'sender_web_payment_complete',
+        'status': SenderWebBookingRecovery.paymentComplete,
+        'paymentReference': paymentReference.isEmpty ? id : paymentReference,
+        'source': 'sender_web',
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+      final paymentCompletePatch = {
+        ...paymentResult,
+        ...SenderWebBookingRecovery.lifecycleFields(
+          status: SenderWebBookingRecovery.paymentComplete,
+          currentStep: 'payment_complete',
+        ),
+        'paymentReference': paymentReference.isEmpty ? id : paymentReference,
+        'paymentCompletedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      final readyToBroadcast = SenderWebBookingRecovery.canBroadcast(canonical);
+      final missingCanonicalFields =
+          SenderWebBookingRecovery.missingCanonicalFields(canonical);
+      final broadcastAuditEntry = {
+        'event': readyToBroadcast
+            ? 'sender_web_booking_ready_for_broadcast'
+            : 'sender_web_booking_recoverable_incomplete',
+        'status': readyToBroadcast
+            ? SenderWebBookingRecovery.broadcasting
+            : SenderWebBookingRecovery.recoverableIncomplete,
+        'missingCanonicalFields': missingCanonicalFields,
+        'source': 'sender_web',
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+      final broadcastPatch = {
+        ...SenderWebBookingRecovery.lifecycleFields(
+          status: readyToBroadcast
+              ? SenderWebBookingRecovery.broadcasting
+              : SenderWebBookingRecovery.recoverableIncomplete,
+          currentStep: readyToBroadcast ? 'tracking' : 'recovery',
+        ),
+        'matchingStatus': readyToBroadcast ? 'available' : 'blocked',
+        'dispatchStatus': readyToBroadcast ? 'requested' : 'blocked',
+        'broadcastBlocked': !readyToBroadcast,
+        'broadcastBlockReason':
+            readyToBroadcast ? null : 'missing_canonical_booking_fields',
+        'missingCanonicalFields': missingCanonicalFields,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      final persistencePatch = {
+        ...paymentCompletePatch,
+        ...broadcastPatch,
+        'auditTrail': FieldValue.arrayUnion([
+          paymentAuditEntry,
+          broadcastAuditEntry,
+        ]),
+      };
+      transaction.set(deliveryRef, persistencePatch, SetOptions(merge: true));
+      transaction.set(webRef, persistencePatch, SetOptions(merge: true));
+      return _SenderBookingPaymentCompletion(
+        readyToBroadcast: readyToBroadcast,
+        missingCanonicalFields: missingCanonicalFields,
+        requestPatch: {
+          ...paymentCompletePatch,
+          ...broadcastPatch,
+          'auditTrail': [paymentAuditEntry, broadcastAuditEntry],
+        },
+      );
+    });
   }
 
   Future<void> _bookHealthPlus() async {

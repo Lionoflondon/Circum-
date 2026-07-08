@@ -1,5 +1,6 @@
 import 'package:circum/app/delivery/sender_web_booking_recovery.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 
 void main() {
   group('SenderWebBookingRecovery', () {
@@ -65,6 +66,41 @@ void main() {
       );
       expect(SenderWebBookingRecovery.isRecoverableOrActive(booking), isTrue);
       expect(SenderWebBookingRecovery.canBroadcast(booking), isFalse);
+    });
+
+    test('release standard requires end-to-end workflow verification', () {
+      final standard = File('docs/rothcross_engineering_release_standard.md')
+          .readAsStringSync();
+
+      expect(standard, contains('end-to-end workflows are verified'));
+      expect(standard, contains('Booking creation must be atomic'));
+      expect(
+          standard,
+          contains(
+              'Payment must never exist without a canonical delivery record'));
+      expect(
+          standard,
+          contains(
+              'Rider broadcast only happens after a valid canonical delivery record exists'));
+      expect(
+          standard, contains('Vanguard/PIN data exists and survives reload'));
+    });
+
+    test('Sender Web creates canonical booking before payment collection', () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+      final createIndex =
+          source.indexOf('_createCanonicalSenderBookingTransaction(');
+      final paymentIndex = source.indexOf('_collectDeliveryPayment(');
+
+      expect(createIndex, isNonNegative);
+      expect(paymentIndex, isNonNegative);
+      expect(createIndex, lessThan(paymentIndex));
+      expect(source, contains('db.runTransaction((transaction) async'));
+      expect(
+        source,
+        contains(
+            'Payment cannot be recorded because the delivery was not saved.'),
+      );
     });
 
     test('completed and cancelled bookings are terminal', () {
