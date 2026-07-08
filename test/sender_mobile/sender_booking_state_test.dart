@@ -1096,11 +1096,9 @@ void main() {
       expect(campaignSource, contains('handoffStatus'));
       expect(campaignSource, contains('View Gift Story'));
       expect(campaignSource, contains("collection('matches')"));
-      expect(campaignSource,
-          contains('Your campaign match is now revealed.'));
+      expect(campaignSource, contains('Your campaign match is now revealed.'));
       expect(campaignSource, contains('View Match'));
-      expect(campaignSource,
-          contains('Waiting for mutual reveal consent.'));
+      expect(campaignSource, contains('Waiting for mutual reveal consent.'));
       expect(campaignSource, isNot(contains("title: 'Delivered'")));
       expect(campaignSource, isNot(contains('STEP 10 · Delivered')));
       expect(campaignSource, contains('campaignStatus'));

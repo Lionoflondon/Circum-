@@ -13,6 +13,7 @@ import 'package:circum/app/admin/admin_operations.dart';
 import 'package:circum/app/authentication/access/role_access.dart';
 import 'package:circum/app/delivery_security/vanguard_protection.dart';
 import 'package:circum/app/delivery/booking_cancellation.dart';
+import 'package:circum/app/delivery/sender_web_booking_recovery.dart';
 import 'package:circum/app/delivery/sender_tracking_policy.dart';
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
@@ -15038,6 +15039,13 @@ DateTime? _deliveryRecordDate(Map<String, dynamic> delivery) {
 bool _isActiveSenderDeliveryStatus(String status) {
   final normalized = status.toLowerCase().trim().replaceAll('-', '_');
   const activeStatuses = {
+    'draft',
+    'awaiting_payment',
+    'payment_complete',
+    'awaiting_broadcast',
+    'broadcasting',
+    'recoverable_incomplete',
+    'under_review',
     'pending',
     'requested',
     'received',
@@ -25263,6 +25271,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _attachIncomingReferralIfPresent();
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
+      await _resumeLatestSenderBookingFromFirestore(user.uid);
       await _loadSenderBusinessAccounts(user.uid);
     } catch (_) {
       if (!mounted) return;
@@ -26096,6 +26105,50 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderDeliveryLoadError =
             'We could not load your delivery status. Please refresh or contact support.';
       });
+    }
+  }
+
+  Future<void> _resumeLatestSenderBookingFromFirestore(String uid) async {
+    final latest = _senderDeliveries
+        .where((delivery) => _isActiveSenderDeliveryStatus(delivery.status))
+        .toList()
+      ..sort((a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    if (latest.isEmpty) return;
+    final candidate = latest.first;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(candidate.requestId)
+          .get();
+      if (!mounted || !snapshot.exists) return;
+      final data = snapshot.data() ?? const <String, dynamic>{};
+      final visibleStatus = SenderWebBookingRecovery.visibleStatus(data);
+      setState(() {
+        _activeOrderId = candidate.requestId;
+        _activeRequestDocId = candidate.requestId;
+        _activeRequestData = Map<String, dynamic>.from(data);
+        _activeVanguardData = data['vanguardEnabled'] == true
+            ? Map<String, dynamic>.from(data)
+            : null;
+        _activeRequestReceivedAt = _jobReceivedDate(data);
+        _checkoutState = _checkoutStateForFirestoreStatus(visibleStatus);
+        _broadcasting =
+            visibleStatus == SenderWebBookingRecovery.broadcasting ||
+                visibleStatus == 'requested' ||
+                visibleStatus == 'finding_rider';
+        _statusIndex = _statusIndexFromFirebase(visibleStatus);
+        _step = _senderStepForFirestoreStatus(visibleStatus);
+        _firebaseOnline = true;
+        _firebaseError = visibleStatus ==
+                SenderWebBookingRecovery.recoverableIncomplete
+            ? 'This delivery is saved but needs a quick repair before rider matching can start.'
+            : null;
+      });
+      _listenToRequest(candidate.requestId);
+      _listenToChat(candidate.requestId);
+    } catch (error) {
+      debugPrint('Could not resume sender delivery: $error');
     }
   }
 
@@ -27928,63 +27981,134 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       request['irisConfidenceBand'] = irisEstimate['confidenceBand'];
       request['irisRequiresAdminReview'] = irisEstimate['requiresAdminReview'];
       request['irisRequiresVanguard'] = irisEstimate['requiresVanguard'];
+      request.addAll(SenderWebBookingRecovery.lifecycleFields(
+        status: SenderWebBookingRecovery.awaitingPayment,
+        currentStep: 'payment',
+      ));
+      request.addAll({
+        'deliveryId': id,
+        'paymentStatus': 'payment_pending',
+        'paymentStatusUpdatedAt': FieldValue.serverTimestamp(),
+        'completedSteps': [
+          'details',
+          'vehicle',
+          'quote',
+          'canonical_record_saved',
+        ],
+        'auditTrail': [
+          {
+            'event': 'sender_web_booking_saved_before_payment',
+            'status': SenderWebBookingRecovery.awaitingPayment,
+            'source': 'sender_web',
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+        ],
+      });
+      await _saveSenderBookingSnapshot(
+        db: db,
+        id: id,
+        request: request,
+        irisEstimate: irisEstimate,
+      );
       final paymentResult = await _collectDeliveryPayment(id, _quoteTotal);
       request.addAll(paymentResult);
+      final missingCanonicalFields =
+          SenderWebBookingRecovery.missingCanonicalFields(request);
+      final readyToBroadcast = SenderWebBookingRecovery.canBroadcast(request);
+      request.addAll(SenderWebBookingRecovery.lifecycleFields(
+        status: readyToBroadcast
+            ? SenderWebBookingRecovery.broadcasting
+            : SenderWebBookingRecovery.recoverableIncomplete,
+        currentStep: readyToBroadcast ? 'tracking' : 'recovery',
+      ));
+      request.addAll({
+        'matchingStatus': readyToBroadcast ? 'available' : 'blocked',
+        'dispatchStatus': readyToBroadcast ? 'requested' : 'blocked',
+        'broadcastBlocked': !readyToBroadcast,
+        'broadcastBlockReason':
+            readyToBroadcast ? null : 'missing_canonical_booking_fields',
+        'missingCanonicalFields': missingCanonicalFields,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'auditTrail': FieldValue.arrayUnion([
+          {
+            'event': readyToBroadcast
+                ? 'sender_web_booking_ready_for_broadcast'
+                : 'sender_web_booking_recoverable_incomplete',
+            'status': request['deliveryStatus'],
+            'missingCanonicalFields': missingCanonicalFields,
+            'source': 'sender_web',
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+        ]),
+      });
       _activeVanguardData = request['vanguardEnabled'] == true
           ? Map<String, dynamic>.from(request)
           : null;
       _activeRequestData = Map<String, dynamic>.from(request);
       final senderId = '${request['senderId']}';
       final batch = db.batch();
-      batch.set(db.collection('webSenderRequests').doc(id), request);
-      batch.set(db.collection('deliveryRequests').doc(id), request);
+      batch.set(db.collection('webSenderRequests').doc(id), request,
+          SetOptions(merge: true));
+      batch.set(db.collection('deliveryRequests').doc(id), request,
+          SetOptions(merge: true));
       batch.set(
         db.collection('irisDeliveryEstimates').doc(id),
         irisEstimate,
         SetOptions(merge: true),
       );
-      batch.set(
-          db.collection('chats').doc(id),
-          {
-            'threadId': id,
-            'bookingId': id,
-            'requestId': id,
-            'participants': [senderId, 'circum-support'],
-            'participantRoles': {senderId: 'sender', 'circum-support': 'admin'},
-            'lastMessage':
-                'Your request is live. Iris is checking nearby riders now.',
-            'lastMessageTimestamp': FieldValue.serverTimestamp(),
-            'unreadBy': ['admin'],
-            'updatedAt': FieldValue.serverTimestamp(),
-            'source': 'circum-web',
-          },
-          SetOptions(merge: true));
-      batch.set(db.collection('chats').doc(id).collection('messages').doc(), {
-        'threadId': id,
-        'bookingId': id,
-        'requestId': id,
-        'senderId': senderId,
-        'senderRole': 'system',
-        'senderType': 'support',
-        'recipientId': senderId,
-        'recipientType': 'sender',
-        'messageText':
-            'Your request is live. Iris is checking nearby riders now.',
-        'message': 'Your request is live. Iris is checking nearby riders now.',
-        'readBy': [senderId],
-        'system': true,
-        'status': 'sent',
-        'createdAt': FieldValue.serverTimestamp(),
-        'timeStamp': DateTime.now().toIso8601String(),
-      });
+      if (readyToBroadcast) {
+        batch.set(
+            db.collection('chats').doc(id),
+            {
+              'threadId': id,
+              'bookingId': id,
+              'requestId': id,
+              'participants': [senderId, 'circum-support'],
+              'participantRoles': {
+                senderId: 'sender',
+                'circum-support': 'admin',
+              },
+              'lastMessage':
+                  'Your request is live. Iris is checking nearby riders now.',
+              'lastMessageTimestamp': FieldValue.serverTimestamp(),
+              'unreadBy': ['admin'],
+              'updatedAt': FieldValue.serverTimestamp(),
+              'source': 'circum-web',
+            },
+            SetOptions(merge: true));
+        batch.set(db.collection('chats').doc(id).collection('messages').doc(), {
+          'threadId': id,
+          'bookingId': id,
+          'requestId': id,
+          'senderId': senderId,
+          'senderRole': 'system',
+          'senderType': 'support',
+          'recipientId': senderId,
+          'recipientType': 'sender',
+          'messageText':
+              'Your request is live. Iris is checking nearby riders now.',
+          'message':
+              'Your request is live. Iris is checking nearby riders now.',
+          'readBy': [senderId],
+          'system': true,
+          'status': 'sent',
+          'createdAt': FieldValue.serverTimestamp(),
+          'timeStamp': DateTime.now().toIso8601String(),
+        });
+      }
       await batch.commit();
       _listenToRequest(id);
-      _listenToChat(id);
+      if (readyToBroadcast) _listenToChat(id);
       if (!mounted) return;
       setState(() {
-        _checkoutState = _CheckoutState.matchingRiders;
-        _broadcasting = true;
+        _checkoutState = readyToBroadcast
+            ? _CheckoutState.matchingRiders
+            : _CheckoutState.failed;
+        _broadcasting = readyToBroadcast;
         _firebaseOnline = true;
+        _firebaseError = readyToBroadcast
+            ? null
+            : 'This booking was saved, but it needs a quick repair before rider matching can start.';
         _step = _SenderStep.tracking;
       });
     } on StateError catch (error) {
@@ -28101,6 +28225,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'cardRemaining': cardRemaining,
       'stripeAmount': cardRemaining,
     };
+  }
+
+  Future<void> _saveSenderBookingSnapshot({
+    required FirebaseFirestore db,
+    required String id,
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> irisEstimate,
+  }) async {
+    final batch = db.batch();
+    batch.set(
+      db.collection('webSenderRequests').doc(id),
+      request,
+      SetOptions(merge: true),
+    );
+    batch.set(
+      db.collection('deliveryRequests').doc(id),
+      request,
+      SetOptions(merge: true),
+    );
+    batch.set(
+      db.collection('irisDeliveryEstimates').doc(id),
+      irisEstimate,
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> _bookHealthPlus() async {
@@ -29170,19 +29319,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       (snapshot) {
         final data = snapshot.data();
         if (!mounted || data == null) return;
-        final status = '${data['status'] ?? 'requested'}'.toLowerCase();
+        final status = SenderWebBookingRecovery.visibleStatus(data);
         final driverId = _driverIdFromRequest(data);
         setState(() {
-          final matchingStatus = status == 'requested' || status == 'pending';
-          if (driverId != null || _statusIndexFromFirebase(status) > 0) {
+          final matchingStatus =
+              status == SenderWebBookingRecovery.broadcasting ||
+                  status == 'requested' ||
+                  status == 'pending' ||
+                  status == 'finding_rider';
+          if (status == SenderWebBookingRecovery.recoverableIncomplete) {
+            _checkoutState = _CheckoutState.failed;
+            _firebaseError =
+                'This delivery is saved but needs a quick repair before rider matching can start.';
+          } else if (driverId != null || _statusIndexFromFirebase(status) > 0) {
             _checkoutState = _CheckoutState.riderAssigned;
           } else if (matchingStatus &&
               (_checkoutState == _CheckoutState.bookingCreated ||
                   _checkoutState == _CheckoutState.matchingRiders)) {
             _checkoutState = _CheckoutState.matchingRiders;
+          } else {
+            _checkoutState = _checkoutStateForFirestoreStatus(status);
           }
           _firebaseOnline = true;
-          _firebaseError = null;
+          if (status != SenderWebBookingRecovery.recoverableIncomplete) {
+            _firebaseError = null;
+          }
           _broadcasting =
               _checkoutState == _CheckoutState.matchingRiders && matchingStatus;
           _statusIndex = _statusIndexFromFirebase(status);
@@ -29706,6 +29867,39 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return 1;
     }
     return 0;
+  }
+
+  _CheckoutState _checkoutStateForFirestoreStatus(String status) {
+    final normalized = SenderWebBookingRecovery.normalizeStatus(status);
+    if (normalized == SenderWebBookingRecovery.awaitingPayment ||
+        normalized == SenderWebBookingRecovery.draft) {
+      return _CheckoutState.awaitingPayment;
+    }
+    if (normalized == SenderWebBookingRecovery.recoverableIncomplete ||
+        normalized == SenderWebBookingRecovery.failed) {
+      return _CheckoutState.failed;
+    }
+    if (normalized == SenderWebBookingRecovery.broadcasting ||
+        normalized == 'requested' ||
+        normalized == 'pending' ||
+        normalized == 'finding_rider' ||
+        normalized == SenderWebBookingRecovery.awaitingBroadcast ||
+        normalized == SenderWebBookingRecovery.paymentComplete) {
+      return _CheckoutState.matchingRiders;
+    }
+    if (normalized == SenderWebBookingRecovery.delivered) {
+      return _CheckoutState.riderAssigned;
+    }
+    return _CheckoutState.riderAssigned;
+  }
+
+  _SenderStep _senderStepForFirestoreStatus(String status) {
+    final normalized = SenderWebBookingRecovery.normalizeStatus(status);
+    if (normalized == SenderWebBookingRecovery.awaitingPayment ||
+        normalized == SenderWebBookingRecovery.draft) {
+      return _SenderStep.payment;
+    }
+    return _SenderStep.tracking;
   }
 
   String _formatMessageTime(dynamic timestamp, dynamic fallback) {

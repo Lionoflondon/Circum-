@@ -49,18 +49,23 @@ void main() {
       expect(RoleAccessPolicy.rolesCanAccessAdmin(roles), isTrue);
     });
 
-    test('super admin rider bypass requires the configured account and role', () {
+    test('super admin rider bypass requires the configured account and role',
+        () {
       expect(
         RoleAccessPolicy.isSuperAdmin(
           email: 'ayojason600@gmail.com',
-          claims: const {'roles': ['super_admin']},
+          claims: const {
+            'roles': ['super_admin']
+          },
         ),
         isTrue,
       );
       expect(
         RoleAccessPolicy.isSuperAdmin(
           email: 'normal@example.com',
-          claims: const {'roles': ['super_admin']},
+          claims: const {
+            'roles': ['super_admin']
+          },
         ),
         isFalse,
       );
