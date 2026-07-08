@@ -11952,12 +11952,12 @@ class _AdminIrisRepositorySectionState
                 colors: colors,
                 label: 'Approved Today',
                 value:
-                    '${_auditLog.where((entry) => entry['action'] == 'Approved').length}'),
+                    '${_auditLog.where((entry) => entry['action'] == 'APPROVE_TO_REPOSITORY' || entry['action'] == 'Approved').length}'),
             _AdminMetricCard(
                 colors: colors,
                 label: 'Rejected Today',
                 value:
-                    '${_auditLog.where((entry) => entry['action'] == 'Rejected').length}'),
+                    '${_auditLog.where((entry) => entry['action'] == 'REJECT_LEARNING_CANDIDATE' || entry['action'] == 'Rejected').length}'),
             _AdminMetricCard(
                 colors: colors, label: 'Repository Health', value: 'Guarded'),
             _AdminMetricCard(
@@ -12049,6 +12049,17 @@ class _AdminIrisRepositorySectionState
                 label: 'Bulk Export',
                 onTap: _bulkExport,
               ),
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Use Approve Selected to accept review candidates into the canonical IRIS Repository. Use Bulk Activate only for inactive canonical records.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -12079,18 +12090,75 @@ class _AdminIrisRepositorySectionState
   }
 
   Widget _learningCandidatesSection(_CircumColors colors) {
-    return SizedBox(
-      height: 430,
-      child: _AdminDataSection(
-        colors: colors,
-        title: 'Learning candidates',
-        subtitle:
-            'Unknown or corrected items wait here until an admin approves, rejects, merges, creates a new item, saves as alias, or marks suspicious.',
-        records: _learningCandidates,
-        columns: const ['Entered item', 'Category', 'Confidence', 'Workflow'],
-        rowBuilder: _candidateRow,
-        emptyText: 'No learning candidates waiting for review.',
-      ),
+    final activeCandidates = _learningCandidates
+        .where((candidate) =>
+            candidate['reviewStatus'] != 'approved' &&
+            candidate['reviewStatus'] != 'rejected')
+        .toList();
+    return Column(
+      children: [
+        _GlassPanel(
+          colors: colors,
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '${_selectedItems.length} selected',
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (_hasSelectedPendingCandidates) ...[
+                _AdminActionButton(
+                  colors: colors,
+                  label: '✓ Approve Selected',
+                  primary: true,
+                  onTap: _approveSelected,
+                ),
+                _AdminActionButton(
+                  colors: colors,
+                  label: 'Reject Selected',
+                  onTap: _rejectSelected,
+                ),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Use Approve Selected to accept review candidates into the canonical IRIS Repository. Use Bulk Activate only for inactive canonical records.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 430,
+          child: _AdminDataSection(
+            colors: colors,
+            title: 'Learning candidates',
+            subtitle:
+                'Unknown or corrected items wait here until an admin approves, rejects, merges, creates a new item, saves as alias, or marks suspicious.',
+            records: activeCandidates,
+            columns: const [
+              '',
+              'Entered item',
+              'Category',
+              'Confidence',
+              'Workflow'
+            ],
+            rowBuilder: _candidateRow,
+            emptyText: 'No learning candidates waiting for review.',
+          ),
+        ),
+      ],
     );
   }
 
@@ -12329,12 +12397,25 @@ class _AdminIrisRepositorySectionState
     required String action,
     required String affectedItem,
     required String reason,
+    String? itemId,
+    String? itemName,
+    String? oldStatus,
+    String? newStatus,
+    String? source,
+    String? rollbackReference,
   }) {
     _auditLog.add({
       'administrator': 'Jason Adesanya',
+      'adminEmail': 'jason@circumuk.com',
       'timestamp': DateTime.now().toIso8601String().substring(0, 19),
       'action': action,
       'affectedItem': affectedItem,
+      if (itemId != null) 'itemId': itemId,
+      if (itemName != null) 'itemName': itemName,
+      if (oldStatus != null) 'oldStatus': oldStatus,
+      if (newStatus != null) 'newStatus': newStatus,
+      if (source != null) 'source': source,
+      if (rollbackReference != null) 'rollbackReference': rollbackReference,
       'reason': reason,
     });
   }
@@ -12673,6 +12754,234 @@ class _AdminIrisRepositorySectionState
     });
   }
 
+  List<Map<String, dynamic>> _selectedCanonicalRows() {
+    return _managedItems.where((item) {
+      final id = '${item['id'] ?? item['canonicalName']}';
+      return _selectedItems.contains(id);
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _selectedCandidateRows() {
+    return _learningCandidates.where((item) {
+      final id = '${item['id'] ?? item['enteredText']}';
+      return _selectedItems.contains(id) &&
+          item['reviewStatus'] != 'approved' &&
+          item['reviewStatus'] != 'rejected';
+    }).toList();
+  }
+
+  bool get _hasSelectedPendingCandidates => _selectedCandidateRows().isNotEmpty;
+
+  String _normaliseRepositoryName(Object? value) {
+    return '$value'.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  Map<String, dynamic>? _canonicalDuplicateFor(Map<String, dynamic> item) {
+    final candidateName =
+        _normaliseRepositoryName(item['normalizedText'] ?? item['enteredText']);
+    for (final canonical in _managedItems) {
+      final names = [
+        canonical['canonicalName'],
+        canonical['displayName'],
+        ...((canonical['aliases'] as List?) ?? const []),
+      ].map(_normaliseRepositoryName);
+      if (names.contains(candidateName)) return canonical;
+    }
+    return null;
+  }
+
+  Future<void> _approveSelected() async {
+    if (_selectedItems.isEmpty) {
+      _showRepositoryToast('Select one or more items to approve.');
+      return;
+    }
+    final confirmed = await _confirmRepositoryAction(
+      title: 'Approve selected items to IRIS Repository?',
+      body:
+          'Approved items become canonical IRIS repository records. Learning candidates will be removed from the review queue. This action will be audited and can be rolled back.',
+      confirmLabel: 'Approve to Repository',
+    );
+    if (confirmed != true) return;
+
+    var approved = 0;
+    var alreadyCanonical = 0;
+    final duplicateWarnings = <String>[];
+    final candidates = _selectedCandidateRows();
+    final canonicalRows = _selectedCanonicalRows();
+    setState(() {
+      for (final item in canonicalRows) {
+        alreadyCanonical += 1;
+        _recordAudit(
+          action: 'APPROVE_TO_REPOSITORY',
+          affectedItem: '${item['canonicalName']}',
+          itemId: '${item['id'] ?? item['canonicalName']}',
+          itemName: '${item['canonicalName']}',
+          oldStatus: '${item['status'] ?? 'canonical'}',
+          newStatus: '${item['status'] ?? 'canonical'}',
+          source: 'IRIS Repository',
+          rollbackReference:
+              'rollback_${DateTime.now().microsecondsSinceEpoch}',
+          reason: 'This item is already canonical.',
+        );
+      }
+      for (final candidate in candidates) {
+        final duplicate = _canonicalDuplicateFor(candidate);
+        final candidateName = '${candidate['enteredText'] ?? ''}'.trim();
+        if (candidateName.isEmpty) continue;
+        if (duplicate != null) {
+          duplicateWarnings.add(
+            '$candidateName matches ${duplicate['canonicalName']}. Merge Into Existing instead.',
+          );
+          _recordAudit(
+            action: 'APPROVE_TO_REPOSITORY',
+            affectedItem: candidateName,
+            itemId: '${candidate['id'] ?? candidateName}',
+            itemName: candidateName,
+            oldStatus: '${candidate['reviewStatus'] ?? 'pending'}',
+            newStatus: 'duplicate_review_required',
+            source: 'IRIS Repository',
+            rollbackReference:
+                'rollback_${DateTime.now().microsecondsSinceEpoch}',
+            reason:
+                'Duplicate canonical item exists. Merge Into Existing required.',
+          );
+          continue;
+        }
+        final canonical = <String, dynamic>{
+          'id': 'iris_${DateTime.now().microsecondsSinceEpoch}_$approved',
+          'canonicalName': candidateName,
+          'displayName': candidateName,
+          'categoryPath': candidate['estimatedCategory'] ?? 'Uncategorised',
+          'typicalWeightKg': candidate['estimatedWeightKg'] ?? 0,
+          'minWeightKg': candidate['minWeightKg'] ?? 0,
+          'maxWeightKg':
+              candidate['maxWeightKg'] ?? candidate['estimatedWeightKg'] ?? 0,
+          'recommendedVehicle': candidate['recommendedVehicle'] ?? 'Car',
+          'confidence': candidate['confidence'] ?? 0.72,
+          'aliases': <String>[
+            if ('${candidate['normalizedText'] ?? ''}'.trim().isNotEmpty)
+              '${candidate['normalizedText']}',
+          ],
+          'status': 'active',
+          'verificationStatus': 'canonical',
+          'source': 'learning_candidate',
+          'version': 1,
+        };
+        _managedItems.insert(0, canonical);
+        candidate['reviewStatus'] = 'approved';
+        candidate['approvedAt'] = DateTime.now().toIso8601String();
+        candidate['approvedBy'] = 'Jason Adesanya';
+        candidate['canonicalItemId'] = canonical['id'];
+        approved += 1;
+        _recordAudit(
+          action: 'APPROVE_TO_REPOSITORY',
+          affectedItem: candidateName,
+          itemId: '${candidate['id'] ?? candidateName}',
+          itemName: candidateName,
+          oldStatus: 'pending',
+          newStatus: 'canonical',
+          source: 'IRIS Repository',
+          rollbackReference: 'rollback_${canonical['id']}',
+          reason:
+              'Learning candidate approved into the canonical IRIS Repository.',
+        );
+      }
+      _selectedItems.clear();
+      if (approved > 0) {
+        _message = approved == 1
+            ? '1 item approved and added to the IRIS Repository.'
+            : '$approved items approved and added to the IRIS Repository.';
+      } else if (alreadyCanonical > 0) {
+        _message = 'This item is already canonical.';
+      } else if (duplicateWarnings.isNotEmpty) {
+        _message = duplicateWarnings.join(' ');
+      }
+    });
+
+    if (duplicateWarnings.isNotEmpty) {
+      _showRepositoryToast(
+        '${duplicateWarnings.length} duplicate warning(s). Use Merge Into Existing.',
+      );
+    } else if (approved > 0) {
+      _showRepositoryToast(
+        approved == 1
+            ? '1 item approved and added to the IRIS Repository.'
+            : '$approved items approved and added to the IRIS Repository.',
+      );
+    } else if (alreadyCanonical > 0) {
+      _showRepositoryToast('This item is already canonical.');
+    }
+  }
+
+  Future<void> _rejectSelected() async {
+    final candidates = _selectedCandidateRows();
+    if (candidates.isEmpty) {
+      _showRepositoryToast('Select one or more review candidates to reject.');
+      return;
+    }
+    final confirmed = await _confirmRepositoryAction(
+      title: 'Reject selected review candidates?',
+      body:
+          'Rejected candidates leave the active review queue but remain retained for audit, rollback and future investigation. Nothing is permanently deleted.',
+      confirmLabel: 'Reject Selected',
+    );
+    if (confirmed != true) return;
+    setState(() {
+      for (final candidate in candidates) {
+        final name = '${candidate['enteredText'] ?? ''}'.trim();
+        candidate['reviewStatus'] = 'rejected';
+        candidate['rejectedAt'] = DateTime.now().toIso8601String();
+        candidate['rejectedBy'] = 'Jason Adesanya';
+        _recordAudit(
+          action: 'REJECT_LEARNING_CANDIDATE',
+          affectedItem: name,
+          itemId: '${candidate['id'] ?? name}',
+          itemName: name,
+          oldStatus: 'pending',
+          newStatus: 'rejected',
+          source: 'IRIS Repository',
+          rollbackReference:
+              'rollback_${DateTime.now().microsecondsSinceEpoch}',
+          reason: 'Selected learning candidate rejected from active review.',
+        );
+      }
+      _selectedItems.clear();
+      _message =
+          '${candidates.length} candidate(s) rejected. Records remain auditable and rollback-capable.';
+    });
+    _showRepositoryToast('${candidates.length} candidate(s) rejected.');
+  }
+
+  Future<bool?> _confirmRepositoryAction({
+    required String title,
+    required String body,
+    required String confirmLabel,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRepositoryToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   void _deactivateItem(Map<String, dynamic> item) {
     setState(() {
       item['status'] = 'deactivated';
@@ -12939,7 +13248,20 @@ class _AdminIrisRepositorySectionState
 
   List<Widget> _candidateRow(Map<String, dynamic> item) {
     final confidence = (item['confidence'] as num?)?.toDouble() ?? 0;
+    final id = '${item['id'] ?? item['enteredText']}';
     return [
+      Checkbox(
+        value: _selectedItems.contains(id),
+        onChanged: (selected) {
+          setState(() {
+            if (selected == true) {
+              _selectedItems.add(id);
+            } else {
+              _selectedItems.remove(id);
+            }
+          });
+        },
+      ),
       _AdminCell.primary('${item['enteredText']}\n${item['normalizedText']}'),
       _AdminCell('${item['estimatedCategory']}'),
       _AdminStatusCell(
@@ -12978,11 +13300,13 @@ class _AdminActionButton extends StatelessWidget {
   final _CircumColors colors;
   final String label;
   final VoidCallback onTap;
+  final bool primary;
 
   const _AdminActionButton({
     required this.colors,
     required this.label,
     required this.onTap,
+    this.primary = false,
   });
 
   @override
@@ -12990,8 +13314,13 @@ class _AdminActionButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        foregroundColor: colors.text,
-        side: BorderSide(color: colors.adminAccent.withValues(alpha: .45)),
+        backgroundColor: primary ? colors.adminAccent : null,
+        foregroundColor: primary ? Colors.white : colors.text,
+        side: BorderSide(
+          color: primary
+              ? colors.adminAccent
+              : colors.adminAccent.withValues(alpha: .45),
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),

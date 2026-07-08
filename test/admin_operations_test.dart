@@ -348,6 +348,30 @@ void main() {
       expect(source, contains('Gift workspace updated'));
     });
 
+    test('IRIS Repository exposes candidate approval workflow', () {
+      final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(source, contains('✓ Approve Selected'));
+      expect(source, contains('Approve selected items to IRIS Repository?'));
+      expect(source, contains('Approve to Repository'));
+      expect(source, contains('APPROVE_TO_REPOSITORY'));
+      expect(source, contains('Reject Selected'));
+      expect(source, contains('REJECT_LEARNING_CANDIDATE'));
+      expect(source, contains('_hasSelectedPendingCandidates'));
+      expect(source, contains('This item is already canonical.'));
+      expect(source, contains('Merge Into Existing'));
+      expect(
+        source,
+        contains(
+          'Use Approve Selected to accept review candidates into the canonical IRIS Repository. Use Bulk Activate only for inactive canonical records.',
+        ),
+      );
+      expect(source, contains('Bulk Edit'));
+      expect(source, contains('Bulk Merge'));
+      expect(source, contains('Bulk Activate'));
+      expect(source, contains('Bulk Export'));
+    });
+
     test('admin can filter and operate every Gifts path with audit metadata',
         () {
       final records = [
