@@ -1108,6 +1108,38 @@ void main() {
       expect(campaignSource, isNot(contains('campaign_preview_step')));
       expect(campaignSource, isNot(contains('STEP 09 — MATCH FOUND')));
       expect(campaignSource, contains('No recipient fields here.'));
+      expect(
+        campaignSource,
+        contains('Review your campaign participation'),
+      );
+      expect(
+        campaignSource,
+        contains(
+          "We'll protect everyone's privacy until a safe match has been approved.",
+        ),
+      );
+      expect(campaignSource, contains('Recipient details'));
+      expect(
+        campaignSource,
+        contains(
+          'Recipient details are collected only after a compatible match has been approved. Until then, both participants remain protected.',
+        ),
+      );
+      expect(
+        campaignSource,
+        contains(
+          'Your payment is ready. IRIS will recommend only gifts that satisfy all recorded safety requirements.',
+        ),
+      );
+      expect(campaignSource, isNot(contains('No recipient form')));
+      expect(
+        campaignSource,
+        isNot(
+          contains(
+            'Not matched because a selected gift preference conflicts with an allergy.',
+          ),
+        ),
+      );
       expect(campaignSource, contains('Delivery address'));
       expect(
         campaignSource,

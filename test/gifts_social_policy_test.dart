@@ -63,4 +63,31 @@ void main() {
     expect(result.score, greaterThan(0));
     expect(result.reason, contains('books'));
   });
+
+  test('allergies filter gifts but do not block participant matching', () {
+    final result = GiftsSocialPolicy.scoreMatch(
+      {
+        'userId': 'a',
+        'matchConsent': true,
+        'matchStatus': 'unmatched',
+        'interests': ['Coffee', 'Travel'],
+        'favouriteFoodsDrinks': ['Nut pastry'],
+        'allergies': ['nut'],
+      },
+      {
+        'userId': 'b',
+        'matchConsent': true,
+        'matchStatus': 'unmatched',
+        'interests': ['Coffee', 'Architecture'],
+        'allergies': <String>[],
+      },
+    );
+
+    expect(result.score, greaterThan(0));
+    expect(result.reason.toLowerCase(), isNot(contains('allergy')));
+    expect(
+      GiftsSocialPolicy.campaignSafetyFilteringRule,
+      contains('must only filter IRIS gift recommendations'),
+    );
+  });
 }

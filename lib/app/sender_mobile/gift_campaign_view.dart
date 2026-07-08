@@ -174,7 +174,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       _ => const _CampaignStatusCopy(
           title: 'Waiting for your match',
           subtitle:
-              'We’ll only reveal what the policy allows. You’ll be notified when a safe match is approved.',
+              "We'll protect everyone's privacy until a safe match has been approved.",
           body:
               'Your campaign participation is paid and waiting for a compatible, policy-safe match.',
           privacyNote:
@@ -387,7 +387,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         3 => 'Safety',
         4 => 'Privacy',
         5 => 'Campaign gift budget',
-        6 => 'Review your campaign join',
+        6 => 'Review your campaign participation',
         7 => 'Secure participation',
         8 => _campaignStatusCopy.title,
         _ => 'Campaign',
@@ -400,7 +400,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         2 =>
           'Share the participant signals used for anonymous matching. No recipient fields here.',
         3 =>
-          'These notes are used by GiftsSocialPolicy to hard-block unsafe matches.',
+          'These notes help IRIS recommend only gifts that satisfy recorded safety requirements.',
         4 => 'Your identity stays private unless the reveal policy allows it.',
         5 => 'Set the budget for your anonymous campaign gift.',
         6 =>
@@ -851,9 +851,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       ],
       const SizedBox(height: 12),
       const _CampaignGlassCard(
-        title: 'No recipient form',
+        title: 'Recipient details',
         body:
-            'Campaign stays participant to match to gift. Delivery details are handled only after policy-safe matching and Admin approval.',
+            'Recipient details are collected only after a compatible match has been approved. Until then, both participants remain protected.',
       ),
     ];
   }
@@ -1042,7 +1042,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         _policyOnlyMatchEligibilityPreview(campaign),
       );
       if (result.score == 0) {
-        throw StateError(result.reason);
+        throw StateError(
+          'Your payment is ready. IRIS will recommend only gifts that satisfy all recorded safety requirements.',
+        );
       }
       final paymentDraftRef = FirebaseFirestore.instance
           .collection(senderGiftPaymentDraftCollectionName)

@@ -1,6 +1,8 @@
 class GiftsSocialPolicy {
   static const campaignBudgetIndependenceRule =
       'Campaign matching is budget-independent. Budget must not be used to calculate compatibility score, rank matches, approve matches, or explain matches. Budget is private payment/procurement data only.';
+  static const campaignSafetyFilteringRule =
+      'Campaign matching is separate from gift selection. Allergies, dietary requirements, medical restrictions, age restrictions and similar constraints must only filter IRIS gift recommendations, not participant compatibility. Progression should stop only when no safe gifts remain after filtering.';
 
   static bool canPostPublicly(Map<String, dynamic> gift) {
     return gift['recipientContentConsent'] == 'granted' &&
@@ -71,8 +73,6 @@ class GiftsSocialPolicy {
     final firstTerms = _terms(first);
     final secondTerms = _terms(second);
     final overlap = firstTerms.intersection(secondTerms).toList()..sort();
-    final allergyConflict = _allergyConflict(first, second);
-    if (allergyConflict != null) return (score: 0, reason: allergyConflict);
     final score = overlap.isEmpty
         ? 25.0
         : (45 + overlap.length * 12).clamp(0, 100).toDouble();
@@ -97,25 +97,5 @@ class GiftsSocialPolicy {
         .map((value) => '$value'.trim().toLowerCase())
         .where((value) => value.isNotEmpty)
         .toSet();
-  }
-
-  static String? _allergyConflict(
-    Map<String, dynamic> first,
-    Map<String, dynamic> second,
-  ) {
-    final allergies = <String>{
-      ...?((first['allergies'] as List?)
-          ?.map((value) => '$value'.toLowerCase())),
-      ...?((second['allergies'] as List?)
-          ?.map((value) => '$value'.toLowerCase())),
-    };
-    final preferences = {..._terms(first), ..._terms(second)};
-    for (final allergy in allergies) {
-      if (allergy.isNotEmpty &&
-          preferences.any((term) => term.contains(allergy))) {
-        return 'Not matched because a selected gift preference conflicts with an allergy.';
-      }
-    }
-    return null;
   }
 }
