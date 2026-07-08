@@ -14,6 +14,7 @@ import 'package:circum/app/authentication/access/role_access.dart';
 import 'package:circum/app/delivery_security/vanguard_protection.dart';
 import 'package:circum/app/delivery/booking_cancellation.dart';
 import 'package:circum/app/delivery/sender_web_booking_recovery.dart';
+import 'package:circum/app/delivery/sender_web_tracking_route.dart';
 import 'package:circum/app/delivery/sender_tracking_policy.dart';
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
@@ -161,6 +162,7 @@ class CircumRouteDecision {
   final bool openSenderGifts;
   final bool useSenderPreview;
   final bool useRiderPreview;
+  final String? routeDeliveryId;
 
   const CircumRouteDecision({
     required this.surface,
@@ -170,6 +172,7 @@ class CircumRouteDecision {
     this.openSenderGifts = false,
     this.useSenderPreview = false,
     this.useRiderPreview = false,
+    this.routeDeliveryId,
   });
 
   _SenderStep get _senderInitialStep => switch (senderEntry) {
@@ -203,6 +206,7 @@ CircumRouteDecision resolveCircumRoute(
   final path = uri.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
   final app = uri.queryParameters['app'];
   final senderMobileGifts = uri.queryParameters['sender_mobile_gifts'] == '1';
+  final routeDeliveryId = senderDeliveryRouteIdFromUri(uri);
 
   if ((adminHostingTarget && !_isPublicHostingHostFor(uri)) ||
       path == '/admin') {
@@ -274,19 +278,22 @@ CircumRouteDecision resolveCircumRoute(
         surface: CircumAppSurface.senderApp,
         senderEntry: CircumSenderEntry.dashboard,
         openSenderGifts: senderMobileGifts,
-        useSenderPreview: true,
+        routeDeliveryId: routeDeliveryId,
+        useSenderPreview: routeDeliveryId == null,
       ),
     'health' => const CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
         senderEntry: CircumSenderEntry.healthPlus,
       ),
-    'business' => const CircumRouteDecision(
+    'business' => CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
         senderEntry: CircumSenderEntry.business,
+        routeDeliveryId: routeDeliveryId,
       ),
-    'profile' => const CircumRouteDecision(
+    'profile' => CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
         senderEntry: CircumSenderEntry.account,
+        routeDeliveryId: routeDeliveryId,
       ),
     'rider' ||
     'driver' ||
@@ -399,6 +406,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     initialStep: _senderInitialStep,
                     usePreview: _route.useSenderPreview,
                     openGifts: _route.openSenderGifts,
+                    routeDeliveryId: _route.routeDeliveryId,
                     onBack: _openPublicHome,
                     onRoleSelected: _openRole,
                     onOpenBooking: _openSenderBooking,
@@ -618,6 +626,7 @@ class CircumSenderAppRoot extends StatelessWidget {
   final _SenderStep initialStep;
   final bool usePreview;
   final bool openGifts;
+  final String? routeDeliveryId;
   final VoidCallback onBack;
   final ValueChanged<CircumRole> onRoleSelected;
   final VoidCallback onOpenBooking;
@@ -631,6 +640,7 @@ class CircumSenderAppRoot extends StatelessWidget {
     required this.initialStep,
     required this.usePreview,
     required this.openGifts,
+    this.routeDeliveryId,
     required this.onBack,
     required this.onRoleSelected,
     required this.onOpenBooking,
@@ -642,23 +652,28 @@ class CircumSenderAppRoot extends StatelessWidget {
   Widget build(BuildContext context) {
     return _PhoneStage(
       colors: colors,
-      child: openGifts
-          ? const GiftModeView()
-          : usePreview
-              ? _SenderArchitecturePreviewApp(
-                  colors: colors,
-                  onOpenBooking: onOpenBooking,
-                  onOpenGifts: onOpenGifts,
-                )
-              : _CustomerPortal(
-                  darkMode: darkMode,
-                  colors: colors,
-                  initialStep: initialStep,
-                  onBack: onBack,
-                  onRoleSelected: onRoleSelected,
-                  onOpenGifts: onOpenGifts,
-                  onToggleTheme: onToggleTheme,
-                ),
+      child: routeDeliveryId != null
+          ? _SenderTrackingScreen(
+              colors: colors,
+              deliveryId: routeDeliveryId!,
+            )
+          : openGifts
+              ? const GiftModeView()
+              : usePreview
+                  ? _SenderArchitecturePreviewApp(
+                      colors: colors,
+                      onOpenBooking: onOpenBooking,
+                      onOpenGifts: onOpenGifts,
+                    )
+                  : _CustomerPortal(
+                      darkMode: darkMode,
+                      colors: colors,
+                      initialStep: initialStep,
+                      onBack: onBack,
+                      onRoleSelected: onRoleSelected,
+                      onOpenGifts: onOpenGifts,
+                      onToggleTheme: onToggleTheme,
+                    ),
     );
   }
 }
@@ -24636,6 +24651,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       onSelectDelivery: (delivery) =>
           setState(() => _selectedSenderDelivery = delivery),
       onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
+      onViewDeliveryTracking: _openSenderDeliveryTracking,
       onCancelBooking: _cancelSenderBooking,
     );
   }
@@ -26118,6 +26134,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'We could not load your delivery status. Please refresh or contact support.';
       });
     }
+  }
+
+  void _openSenderDeliveryTracking(SenderDeliveryRecord delivery) {
+    final id = delivery.requestId.trim().isNotEmpty
+        ? delivery.requestId.trim()
+        : delivery.trackingReference.trim();
+    if (id.isEmpty) return;
+    unawaited(launchUrl(
+      Uri.base.resolve('/?app=sender&deliveryId=$id'),
+      webOnlyWindowName: '_self',
+    ));
   }
 
   Future<void> _resumeLatestSenderBookingFromFirestore(String uid) async {
@@ -35369,6 +35396,7 @@ class _SenderProfileStep extends StatelessWidget {
   final ValueChanged<String> onSavedAddressEdited;
   final ValueChanged<SenderDeliveryRecord> onSelectDelivery;
   final VoidCallback onCloseDelivery;
+  final ValueChanged<SenderDeliveryRecord> onViewDeliveryTracking;
   final ValueChanged<SenderDeliveryRecord> onCancelBooking;
 
   const _SenderProfileStep({
@@ -35414,6 +35442,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.onSavedAddressEdited,
     required this.onSelectDelivery,
     required this.onCloseDelivery,
+    required this.onViewDeliveryTracking,
     required this.onCancelBooking,
   });
 
@@ -36016,6 +36045,7 @@ class _SenderProfileStep extends StatelessWidget {
         colors: colors,
         delivery: selectedDelivery!,
         onClose: onCloseDelivery,
+        onViewTracking: onViewDeliveryTracking,
         onCancelBooking: onCancelBooking,
       );
     }
@@ -38171,12 +38201,14 @@ class _SenderDeliveryDetails extends StatelessWidget {
   final _CircumColors colors;
   final SenderDeliveryRecord delivery;
   final VoidCallback onClose;
+  final ValueChanged<SenderDeliveryRecord> onViewTracking;
   final ValueChanged<SenderDeliveryRecord> onCancelBooking;
 
   const _SenderDeliveryDetails({
     required this.colors,
     required this.delivery,
     required this.onClose,
+    required this.onViewTracking,
     required this.onCancelBooking,
   });
 
@@ -38267,6 +38299,12 @@ class _SenderDeliveryDetails extends StatelessWidget {
             'Proof of delivery is attached.',
             style: TextStyle(color: colors.mutedText),
           ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: () => onViewTracking(delivery),
+          icon: const Icon(Icons.route_outlined),
+          label: const Text('View tracking'),
+        ),
         if (BookingCancellationPolicy.canSenderCancel(delivery.status)) ...[
           const SizedBox(height: 16),
           OutlinedButton.icon(
@@ -41951,13 +41989,26 @@ class _SenderTrackingScreen extends StatefulWidget {
 }
 
 class _SenderTrackingScreenState extends State<_SenderTrackingScreen> {
+  late Future<String?> _resolvedDeliveryId;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedDeliveryId = _resolveDeliveryId(widget.deliveryId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SenderTrackingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.deliveryId != widget.deliveryId) {
+      _resolvedDeliveryId = _resolveDeliveryId(widget.deliveryId);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(widget.deliveryId)
-          .snapshots(),
+    return FutureBuilder<String?>(
+      future: _resolvedDeliveryId,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _SenderTrackingSurface(
@@ -41973,22 +42024,86 @@ class _SenderTrackingScreenState extends State<_SenderTrackingScreen> {
             loading: true,
           );
         }
-        if (!snapshot.hasData || snapshot.data?.exists != true) {
+        final deliveryId = snapshot.data;
+        if (deliveryId == null || deliveryId.isEmpty) {
           return _SenderTrackingSurface(
             colors: widget.colors,
             delivery: const {},
             notFound: true,
+            onBack: _openSenderBookings,
           );
         }
-        return _SenderTrackingSurface(
-          colors: widget.colors,
-          delivery: {
-            'id': snapshot.data!.id,
-            ...snapshot.data!.data()!,
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('deliveryRequests')
+              .doc(deliveryId)
+              .snapshots(),
+          builder: (context, deliverySnapshot) {
+            if (deliverySnapshot.hasError) {
+              return _SenderTrackingSurface(
+                colors: widget.colors,
+                delivery: const {},
+                networkError: 'Tracking could not be loaded.',
+              );
+            }
+            if (deliverySnapshot.connectionState == ConnectionState.waiting) {
+              return _SenderTrackingSurface(
+                colors: widget.colors,
+                delivery: const {},
+                loading: true,
+              );
+            }
+            if (!deliverySnapshot.hasData ||
+                deliverySnapshot.data?.exists != true) {
+              return _SenderTrackingSurface(
+                colors: widget.colors,
+                delivery: const {},
+                notFound: true,
+                onBack: _openSenderBookings,
+              );
+            }
+            return _SenderTrackingSurface(
+              colors: widget.colors,
+              delivery: {
+                'id': deliverySnapshot.data!.id,
+                ...deliverySnapshot.data!.data()!,
+              },
+            );
           },
         );
       },
     );
+  }
+
+  void _openSenderBookings() {
+    unawaited(launchUrl(
+      Uri.base.resolve('/?app=profile'),
+      webOnlyWindowName: '_self',
+    ));
+  }
+
+  Future<String?> _resolveDeliveryId(String routeId) async {
+    final cleanId = routeId.trim();
+    if (cleanId.isEmpty || cleanId.toLowerCase() == 'null') return null;
+    final db = FirebaseFirestore.instance;
+    final direct = await db.collection('deliveryRequests').doc(cleanId).get();
+    if (direct.exists) return direct.id;
+
+    for (final field in const [
+      'deliveryId',
+      'requestId',
+      'trackingReference',
+      'reference',
+      'purchaseId',
+    ]) {
+      final match = await db
+          .collection('deliveryRequests')
+          .where(field, isEqualTo: cleanId)
+          .limit(1)
+          .get();
+      if (match.docs.isNotEmpty) return match.docs.first.id;
+    }
+    return null;
   }
 }
 
@@ -42001,6 +42116,7 @@ class _SenderTrackingSurface extends StatelessWidget {
   final String? networkError;
   final VoidCallback? onMessageRider;
   final VoidCallback? onContactSupport;
+  final VoidCallback? onBack;
   final bool embedded;
 
   const _SenderTrackingSurface({
@@ -42012,6 +42128,7 @@ class _SenderTrackingSurface extends StatelessWidget {
     this.networkError,
     this.onMessageRider,
     this.onContactSupport,
+    this.onBack,
     this.embedded = false,
   });
 
@@ -42081,6 +42198,7 @@ class _SenderTrackingSurface extends StatelessWidget {
                         body:
                             'We could not find this delivery. Please check the tracking link or contact support.',
                         onContactSupport: onContactSupport,
+                        onBack: onBack,
                       )
                     else ...[
                       _SenderTrackingStatusCard(
@@ -43357,6 +43475,7 @@ class _TrackingMessagePanel extends StatelessWidget {
   final String title;
   final String body;
   final VoidCallback? onContactSupport;
+  final VoidCallback? onBack;
 
   const _TrackingMessagePanel({
     required this.colors,
@@ -43364,6 +43483,7 @@ class _TrackingMessagePanel extends StatelessWidget {
     required this.title,
     required this.body,
     required this.onContactSupport,
+    this.onBack,
   });
 
   @override
@@ -43392,10 +43512,22 @@ class _TrackingMessagePanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onContactSupport,
-            icon: const Icon(Icons.support_agent_outlined),
-            label: const Text('Contact support'),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (onBack != null)
+                OutlinedButton.icon(
+                  onPressed: onBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Back to My Bookings'),
+                ),
+              OutlinedButton.icon(
+                onPressed: onContactSupport,
+                icon: const Icon(Icons.support_agent_outlined),
+                label: const Text('Contact support'),
+              ),
+            ],
           ),
         ],
       ),
@@ -53279,7 +53411,7 @@ void _openBusinessTracking(Map<String, dynamic> delivery) {
   final id =
       '${delivery['id'] ?? delivery['deliveryId'] ?? delivery['requestId'] ?? ''}';
   final uri = Uri.base
-      .resolve(id.isEmpty ? '/?app=profile' : '/?app=profile&deliveryId=$id');
+      .resolve(id.isEmpty ? '/?app=business' : '/?app=sender&deliveryId=$id');
   unawaited(launchUrl(uri, webOnlyWindowName: '_self'));
 }
 
