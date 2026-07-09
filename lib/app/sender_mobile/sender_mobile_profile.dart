@@ -15,6 +15,7 @@ class SenderMobileProfileData {
   final String phone;
   final String photoUrl;
   final String accountType;
+  final DateTime? createdAt;
 
   const SenderMobileProfileData({
     required this.userId,
@@ -23,6 +24,7 @@ class SenderMobileProfileData {
     required this.phone,
     required this.photoUrl,
     this.accountType = 'sender',
+    this.createdAt,
   });
 
   factory SenderMobileProfileData.fromSources({
@@ -51,7 +53,18 @@ class SenderMobileProfileData {
         user.photoURL,
       ]),
       accountType: 'sender',
+      createdAt:
+          _profileDate(profile['createdAt']) ?? user.metadata.creationTime,
     );
+  }
+
+  String get memberSinceYear => '${createdAt?.year ?? DateTime.now().year}';
+
+  static DateTime? _profileDate(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   static String _firstText(Iterable<Object?> values) {
@@ -178,6 +191,9 @@ class FirebaseSenderMobileProfileRepository
       email: user.email?.trim() ?? '',
       phone: phone.trim(),
       photoUrl: user.photoURL?.trim() ?? '',
+      createdAt: existing.data()?['createdAt'] is Timestamp
+          ? (existing.data()!['createdAt'] as Timestamp).toDate()
+          : user.metadata.creationTime,
     );
   }
 
@@ -225,6 +241,7 @@ class FirebaseSenderMobileProfileRepository
       email: current.email,
       phone: current.phone,
       photoUrl: downloadUrl,
+      createdAt: current.createdAt,
     );
   }
 
@@ -450,7 +467,19 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                 ),
               ),
               const SizedBox(height: 12),
-              const _AccountTypeBadge(),
+              _AccountTypeBadge(memberSinceYear: profile.memberSinceYear),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('sender-profile-primary-edit'),
+                  onPressed:
+                      _editing ? null : () => setState(() => _editing = true),
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit Profile'),
+                  style: _secondaryButtonStyle(),
+                ),
+              ),
             ],
           ),
         ),
@@ -484,7 +513,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               _ProfileShortcut(
                 icon: Icons.location_on_outlined,
                 title: 'Saved addresses',
-                subtitle: 'Manage your saved places',
+                subtitle: 'Manage your saved pickup and delivery locations.',
                 onTap: () => _showLocalMessage(
                   'Saved addresses will open here.',
                 ),
@@ -492,15 +521,74 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               _ProfileShortcut(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'Wallet',
-                subtitle: 'Coming soon',
-                onTap: () => _showLocalMessage('Wallet is coming soon.'),
+                subtitle:
+                    'Available soon · Manage your Roth balance and rewards.',
+                onTap: () => _showLocalMessage('Wallet is available soon.'),
               ),
               _ProfileShortcut(
                 icon: Icons.group_add_outlined,
                 title: 'Referrals',
-                subtitle: 'Coming soon',
-                onTap: () => _showLocalMessage('Referrals are coming soon.'),
+                subtitle: 'Invite friends and earn Roth rewards.',
+                onTap: () => _showLocalMessage('Referrals are available soon.'),
+                showDivider: false,
               ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        const _ProfileSectionTitle(title: 'Account'),
+        const SizedBox(height: 10),
+        _ProfileGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _ProfileShortcut(
+                icon: Icons.notifications_none_rounded,
+                title: 'Notifications',
+                subtitle: 'Choose how Circum keeps you informed.',
+                onTap: () => _showLocalMessage(
+                  'Notification preferences will open here.',
+                ),
+              ),
+              _ProfileShortcut(
+                icon: Icons.credit_card_rounded,
+                title: 'Payment methods',
+                subtitle: 'Manage saved payment methods.',
+                onTap: () => _showLocalMessage(
+                  'Payment methods will open here.',
+                ),
+              ),
+              _ProfileShortcut(
+                icon: Icons.lock_outline_rounded,
+                title: 'Security',
+                subtitle: 'Password and account protection.',
+                onTap: () => _showLocalMessage('Security will open here.'),
+              ),
+              _ProfileShortcut(
+                icon: Icons.language_rounded,
+                title: 'Language',
+                subtitle: 'Choose your preferred language.',
+                onTap: () => _showLocalMessage('Language will open here.'),
+              ),
+              _ProfileShortcut(
+                icon: Icons.accessibility_new_rounded,
+                title: 'Accessibility',
+                subtitle: 'Adjust your Circum experience.',
+                onTap: () => _showLocalMessage(
+                  'Accessibility settings will open here.',
+                ),
+                showDivider: false,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        const _ProfileSectionTitle(title: 'Help'),
+        const SizedBox(height: 10),
+        _ProfileGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
               _ProfileShortcut(
                 icon: Icons.support_agent_rounded,
                 title: 'Help & support',
@@ -876,6 +964,24 @@ class _ProfileShortcut extends StatelessWidget {
   }
 }
 
+class _ProfileSectionTitle extends StatelessWidget {
+  final String title;
+
+  const _ProfileSectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: GoogleFonts.inter(
+        color: Colors.white,
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
 class _ProfileAvatar extends StatelessWidget {
   final SenderMobileProfileData profile;
   final bool uploading;
@@ -898,21 +1004,42 @@ class _ProfileAvatar extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          CircleAvatar(
-            radius: 43,
-            backgroundColor: _ProfileTokens.accent,
-            backgroundImage: profile.photoUrl.isEmpty
-                ? null
-                : NetworkImage(profile.photoUrl),
-            child: profile.photoUrl.isEmpty
-                ? Text(
-                    initial,
-                    style: GoogleFonts.dmSerifDisplay(
-                      color: Colors.white,
-                      fontSize: 34,
-                    ),
-                  )
-                : null,
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  _ProfileTokens.lightAccent,
+                  Color(0xFF38BDF8),
+                  _ProfileTokens.accent,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _ProfileTokens.accent.withValues(alpha: .28),
+                  blurRadius: 24,
+                ),
+              ],
+            ),
+            child: CircleAvatar(
+              radius: 52,
+              backgroundColor: _ProfileTokens.accent,
+              backgroundImage: profile.photoUrl.isEmpty
+                  ? null
+                  : NetworkImage(profile.photoUrl),
+              child: profile.photoUrl.isEmpty
+                  ? Text(
+                      initial,
+                      style: GoogleFonts.dmSerifDisplay(
+                        color: Colors.white,
+                        fontSize: 40,
+                      ),
+                    )
+                  : null,
+            ),
           ),
           Positioned(
             right: -2,
@@ -959,7 +1086,9 @@ class _ProfileAvatar extends StatelessWidget {
 }
 
 class _AccountTypeBadge extends StatelessWidget {
-  const _AccountTypeBadge();
+  final String memberSinceYear;
+
+  const _AccountTypeBadge({required this.memberSinceYear});
 
   @override
   Widget build(BuildContext context) {
@@ -972,13 +1101,27 @@ class _AccountTypeBadge extends StatelessWidget {
           color: _ProfileTokens.accent.withValues(alpha: .35),
         ),
       ),
-      child: Text(
-        'SENDER ACCOUNT',
-        style: GoogleFonts.jetBrainsMono(
-          color: _ProfileTokens.lightAccent,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'SENDER ACCOUNT',
+            style: GoogleFonts.jetBrainsMono(
+              color: _ProfileTokens.lightAccent,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Member since $memberSinceYear',
+            style: GoogleFonts.inter(
+              color: _ProfileTokens.muted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

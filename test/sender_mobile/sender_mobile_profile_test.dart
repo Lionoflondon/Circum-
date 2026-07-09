@@ -88,12 +88,13 @@ Widget _app(
 }
 
 void main() {
-  const completeProfile = SenderMobileProfileData(
+  final completeProfile = SenderMobileProfileData(
     userId: 'sender-1',
     displayName: 'Jason Adesanya',
     email: 'jason@example.com',
     phone: '+44 7700 900123',
     photoUrl: '',
+    createdAt: DateTime(2021, 3, 14),
   );
 
   testWidgets('renders Sender profile details and V1 shortcuts',
@@ -107,9 +108,29 @@ void main() {
     expect(find.text('jason@example.com'), findsWidgets);
     expect(find.text('+44 7700 900123'), findsOneWidget);
     expect(find.text('SENDER ACCOUNT'), findsOneWidget);
+    expect(find.text('Member since 2021'), findsOneWidget);
+    expect(find.text('Edit Profile'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Saved addresses'), 250);
     expect(find.text('Saved addresses'), findsOneWidget);
+    expect(
+      find.text('Manage your saved pickup and delivery locations.'),
+      findsOneWidget,
+    );
     expect(find.text('Wallet'), findsOneWidget);
+    expect(
+      find.text('Available soon · Manage your Roth balance and rewards.'),
+      findsOneWidget,
+    );
     expect(find.text('Referrals'), findsOneWidget);
+    expect(find.text('Invite friends and earn Roth rewards.'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Accessibility'), 300);
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.text('Payment methods'), findsOneWidget);
+    expect(find.text('Security'), findsOneWidget);
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('Accessibility'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Help & support'), 250);
+    expect(find.text('Help'), findsOneWidget);
     expect(find.text('Help & support'), findsOneWidget);
     expect(find.text('Legal'), findsOneWidget);
     await tester.scrollUntilVisible(
