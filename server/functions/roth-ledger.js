@@ -157,7 +157,13 @@ async function initialiseSenderWalletRecord(context) {
       balance, balanceRoth: balance, currency: "ROTH", walletType: "sender",
       createdAt: role.createdAt || now, updatedAt: now,
     }, {merge: true});
-    result = record;
+    result = {
+      userId: context.auth.uid,
+      balance,
+      currency: "ROTH",
+      status: frozen ? "frozen" : "active",
+      version: record.version,
+    };
   });
   return result;
 }
