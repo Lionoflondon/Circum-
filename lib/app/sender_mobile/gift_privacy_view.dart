@@ -38,7 +38,7 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
       eyebrow: 'STEP 09 — REVEAL & PRIVACY',
       title: 'How should we handle privacy?',
       subtitle:
-          'These choices map to the same reveal and consent fields used by Gifts on web.',
+          'Choose when, or if, the recipient learns this gift is from you.',
       onBack: () => Navigator.of(context).maybePop(),
       children: [
         for (final entry in senderGiftRevealModeOptions.entries) ...[
@@ -110,9 +110,11 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
   }
 
   String _subtitleFor(String key) => switch (key) {
-        'anonymous_forever' => 'Recipient never learns who sent this.',
-        'reveal_after_delivery' => 'Your name appears once the gift arrives.',
-        'reveal_immediately' => 'Recipient sees your name straight away.',
+        'anonymous_forever' => 'Your identity will remain private.',
+        'reveal_after_delivery' =>
+          "We'll reveal your name once the gift has safely arrived.",
+        'reveal_immediately' =>
+          'The recipient will know you sent the gift straight away.',
         _ => '',
       };
 }

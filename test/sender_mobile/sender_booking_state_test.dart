@@ -600,41 +600,52 @@ void main() {
       expect(irisSource, contains('Our confidence'));
       expect(irisSource, contains('Reviewed by the Gifts Team'));
       expect(irisSource, contains('generateIrisBrief'));
-      expect(styleSource, contains('STEP 08 — STYLE & SIZES'));
-      expect(styleSource, contains('Their style'));
-      expect(styleSource, contains('senderGiftClothingSizeOptions'));
-      expect(styleSource, contains('senderGiftShoeSizeOptions'));
-      expect(styleSource, contains('senderGiftRingSizeOptions'));
-      expect(styleSource, contains('senderGiftBrandOptions'));
-      expect(styleSource, contains('senderGiftColourOptions'));
-      expect(styleSource, contains('senderGiftPreferredStyleOptions'));
-      expect(styleSource, contains('_usesFreeEntry'));
+      expect(styleSource, contains('STEP 08 — IRIS CONTEXT'));
+      expect(styleSource, contains('Tell IRIS what you know about them'));
       expect(styleSource, contains('TextEditingController'));
       expect(styleSource, contains('inputCard('));
-      expect(styleSource, contains('Tell us what you know'));
-      expect(styleSource, contains('CLOTHING SIZE'));
-      expect(styleSource, contains('SHOE SIZE'));
-      expect(styleSource, contains('RING SIZE'));
-      expect(styleSource, contains('COLOUR NOTES'));
-      expect(styleSource, contains('PREFERRED STYLE'));
       expect(
         styleSource,
         contains(
-          'Choose the styles that best describe what they enjoy wearing, collecting or surrounding themselves with.',
+          'Share anything that could help us choose something that feels right.',
         ),
       );
-      expect(styleSource, contains('Minimal'));
-      expect(styleSource, contains('Classic'));
-      expect(styleSource, contains('Modern'));
-      expect(styleSource, contains('Bold'));
-      expect(styleSource, contains('Luxury'));
-      expect(styleSource, contains('Streetwear'));
-      expect(styleSource, contains('Vintage'));
-      expect(styleSource, contains('Elegant'));
-      expect(styleSource, contains('Sporty'));
-      expect(styleSource, contains('Cosy'));
-      expect(styleSource, contains('preferredStyles'));
+      expect(styleSource, contains('WHAT WE KNOW ABOUT THEM'));
+      expect(styleSource, contains('senderGiftPreferenceHelperChips'));
+      expect(styleSource, contains('Sizes'));
+      expect(styleSource, contains('Brands'));
+      expect(styleSource, contains('Colours'));
+      expect(styleSource, contains('Dislikes'));
+      expect(styleSource, contains('No idea'));
+      expect(styleSource, contains('recipientPreferencesFreeform'));
+      expect(styleSource, isNot(contains('senderGiftClothingSizeOptions')));
+      expect(styleSource, isNot(contains('senderGiftShoeSizeOptions')));
+      expect(styleSource, isNot(contains('senderGiftRingSizeOptions')));
+      expect(styleSource, isNot(contains('senderGiftBrandOptions')));
+      expect(styleSource, isNot(contains('senderGiftColourOptions')));
+      expect(styleSource, isNot(contains('senderGiftPreferredStyleOptions')));
+      expect(styleSource, isNot(contains('_usesFreeEntry')));
       expect(privacySource, contains('STEP 09 — REVEAL & PRIVACY'));
+      expect(privacySource, contains('How should we handle privacy?'));
+      expect(
+        privacySource,
+        contains(
+          'Choose when, or if, the recipient learns this gift is from you.',
+        ),
+      );
+      expect(privacySource, contains('Your identity will remain private.'));
+      expect(
+        privacySource,
+        contains(
+          "We'll reveal your name once the gift has safely arrived.",
+        ),
+      );
+      expect(
+        privacySource,
+        contains('The recipient will know you sent the gift straight away.'),
+      );
+      expect(privacySource, isNot(contains('Gifts on web')));
+      expect(privacySource, isNot(contains('same reveal and consent fields')));
       expect(privacySource, contains('Allow Circum story use'));
       expect(
         privacySource,
@@ -745,6 +756,8 @@ void main() {
       expect(draftSource, contains("'remainingStripeAmountGbp': budget"));
       expect(draftSource, contains("'voiceNote': voiceNote?.toMap()"));
       expect(draftSource, contains("'localUrl': localUrl ?? localPath"));
+      expect(draftSource, contains('recipientPreferencesFreeform'));
+      expect(draftSource, contains('recipientPreferencesContext'));
       expect(draftSource, contains('preferredStyles'));
       expect(draftSource, contains("'giftThemes':"));
       expect(draftSource, contains("'giftThemeLabels':"));
@@ -752,6 +765,8 @@ void main() {
       expect(reviewSource, contains('Voice note'));
       expect(reviewSource, contains('Added ·'));
       expect(reviewSource, contains('Chosen themes'));
+      expect(reviewSource, contains('What we know about them'));
+      expect(reviewSource, contains('No extra preferences provided.'));
       expect(reviewSource, contains('Personal themes'));
       expect(reviewSource, contains('Safety / allergies'));
       expect(reviewSource, contains('Roth payment summary'));
@@ -889,6 +904,8 @@ void main() {
           createdAt: DateTime.utc(2026),
         ),
         preferredStyles: const ['Minimal', 'Elegant'],
+        recipientPreferencesFreeform:
+            'Likes Jo Malone, navy, quiet luxury and no roses.',
         foodAllergies: 'Nut allergy',
         medicalAllergies: 'Sensitive skin',
         dietaryRestrictions: 'Vegan',
@@ -936,6 +953,14 @@ void main() {
         containsPair('downloadUrl', 'https://storage.example/voice.webm'),
       );
       expect(payload['preferredStyles'], ['Minimal', 'Elegant']);
+      expect(
+        payload['recipientPreferencesFreeform'],
+        'Likes Jo Malone, navy, quiet luxury and no roses.',
+      );
+      expect(
+        payload['recipientPreferencesContext'],
+        'Likes Jo Malone, navy, quiet luxury and no roses.',
+      );
       expect(payload['foodAllergies'], 'Nut allergy');
       expect(payload['medicalAllergies'], 'Sensitive skin');
       expect(payload['dietaryRestrictions'], 'Vegan');

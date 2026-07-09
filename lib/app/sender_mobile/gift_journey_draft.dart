@@ -296,6 +296,7 @@ class GiftJourneyDraft {
   final String? favouriteColours;
   final String? likedBrands;
   final List<String> preferredStyles;
+  final String? recipientPreferencesFreeform;
   final String? foodAllergies;
   final String? medicalAllergies;
   final String? dietaryRestrictions;
@@ -355,6 +356,7 @@ class GiftJourneyDraft {
     this.favouriteColours,
     this.likedBrands,
     this.preferredStyles = const [],
+    this.recipientPreferencesFreeform,
     this.foodAllergies,
     this.medicalAllergies,
     this.dietaryRestrictions,
@@ -472,14 +474,14 @@ class GiftJourneyDraft {
     final hasRelationship = (relationship ?? '').trim().isNotEmpty;
     final hasOccasion = (occasion ?? '').trim().isNotEmpty;
     final hasNotes = (notes ?? '').trim().isNotEmpty;
+    final hasRecipientPreferences = recipientPreferencesContext.isNotEmpty;
     final confidenceScore = 42 +
         (hasRelationship ? 10 : 0) +
         (hasOccasion ? 10 : 0) +
         (hasNotes ? 12 : 0) +
         ((personalMessage ?? '').trim().isNotEmpty ? 8 : 0) +
         (selectedInterests.isNotEmpty ? 8 : 0) +
-        ((likedBrands ?? '').trim().isNotEmpty ? 3 : 0) +
-        ((favouriteColours ?? '').trim().isNotEmpty ? 3 : 0);
+        (hasRecipientPreferences ? 6 : 0);
     final humanReview =
         confidenceScore < 70 || unsupported.isNotEmpty || !hasNotes;
     return SenderGiftBriefPreview(
@@ -521,6 +523,23 @@ class GiftJourneyDraft {
     ];
   }
 
+  String get recipientPreferencesContext {
+    final freeform = (recipientPreferencesFreeform ?? '').trim();
+    if (freeform.isNotEmpty) return freeform;
+    final legacy = [
+      if ((clothingSize ?? '').trim().isNotEmpty)
+        'Clothing size: ${clothingSize!.trim()}',
+      if ((shoeSize ?? '').trim().isNotEmpty) 'Shoe size: ${shoeSize!.trim()}',
+      if ((ringSize ?? '').trim().isNotEmpty) 'Ring size: ${ringSize!.trim()}',
+      if ((likedBrands ?? '').trim().isNotEmpty)
+        'Brands: ${likedBrands!.trim()}',
+      if ((favouriteColours ?? '').trim().isNotEmpty)
+        'Colours: ${favouriteColours!.trim()}',
+      if (preferredStyles.isNotEmpty) 'Style: ${preferredStyles.join(', ')}',
+    ];
+    return legacy.join('\n').trim();
+  }
+
   String get safetySummary {
     final parts = [
       if ((foodAllergies ?? '').trim().isNotEmpty)
@@ -554,6 +573,7 @@ class GiftJourneyDraft {
         'No allergies, restrictions, or safety notes supplied.';
     final hasMessage = (personalMessage ?? '').trim().isNotEmpty;
     final hasVoice = voiceNote?.hasVoiceNote == true;
+    final hasRecipientPreferences = recipientPreferencesContext.isNotEmpty;
     final score = (52 +
             ((relationship ?? '').trim().isNotEmpty ? 8 : 0) +
             ((occasion ?? '').trim().isNotEmpty ? 8 : 0) +
@@ -561,9 +581,7 @@ class GiftJourneyDraft {
             (hasMessage ? 8 : 0) +
             (hasVoice ? 6 : 0) +
             (themes.isNotEmpty ? 8 : 0) +
-            ((likedBrands ?? '').trim().isNotEmpty ? 3 : 0) +
-            ((favouriteColours ?? '').trim().isNotEmpty ? 3 : 0) +
-            (preferredStyles.isNotEmpty ? 4 : 0) +
+            (hasRecipientPreferences ? 8 : 0) +
             (hasSafetyNotes ? 4 : 0))
         .clamp(0, 96);
     final confidence = score >= 82
@@ -620,6 +638,7 @@ class GiftJourneyDraft {
     String? favouriteColours,
     String? likedBrands,
     List<String>? preferredStyles,
+    String? recipientPreferencesFreeform,
     String? foodAllergies,
     String? medicalAllergies,
     String? dietaryRestrictions,
@@ -679,6 +698,8 @@ class GiftJourneyDraft {
       favouriteColours: favouriteColours ?? this.favouriteColours,
       likedBrands: likedBrands ?? this.likedBrands,
       preferredStyles: preferredStyles ?? this.preferredStyles,
+      recipientPreferencesFreeform:
+          recipientPreferencesFreeform ?? this.recipientPreferencesFreeform,
       foodAllergies: foodAllergies ?? this.foodAllergies,
       medicalAllergies: medicalAllergies ?? this.medicalAllergies,
       dietaryRestrictions: dietaryRestrictions ?? this.dietaryRestrictions,
@@ -848,8 +869,11 @@ class GiftJourneyDraft {
       },
       'voiceNote': voiceNote?.toMap(),
       'irisGiftBrief': brief.toMap(),
+      'recipientPreferencesFreeform': recipientPreferencesContext,
+      'recipientPreferencesContext': recipientPreferencesContext,
       'preferredStyles': preferredStyles,
       'sizesAndPreferences': {
+        'recipientPreferencesFreeform': recipientPreferencesContext,
         'clothingSize': clothingSize?.trim() ?? '',
         'shoeSize': shoeSize?.trim() ?? '',
         'ringSize': ringSize?.trim() ?? '',

@@ -65,6 +65,12 @@ class _GiftReviewViewState extends State<GiftReviewView> {
           value: customThemes.isEmpty ? 'None' : customThemes.join(', '),
         ),
         _ReviewRow(
+          label: 'What we know about them',
+          value: draft.recipientPreferencesContext.isEmpty
+              ? 'No extra preferences provided.'
+              : draft.recipientPreferencesContext,
+        ),
+        _ReviewRow(
           label: 'Safety / allergies',
           value: draft.safetySummary,
         ),
