@@ -20,6 +20,13 @@ const senderMobileDashboardServiceSubtitles = {
   'Gifts': 'Thoughtful gfts, delivered.',
 };
 const senderMobileRecentOrderTitles = ['Passport', 'Prescription collection'];
+const senderMobileBottomNavigationLabels = [
+  'Home',
+  'Send',
+  'Activity',
+  'Wallet',
+  'Profile',
+];
 const senderMobilePreAuthHeadline = 'Deliver anything with confidence.';
 const senderMobilePreAuthSubtitle =
     'Fast, trusted delivery powered by IRIS and verified riders.';
@@ -106,6 +113,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
             ),
             const SenderBookingCanvas(),
             const _SenderActivitySurface(),
+            const _SenderWalletSurface(),
             SenderMobileProfileView(
               onLoggedOut: () => setState(() {
                 _index = 0;
@@ -1404,6 +1412,8 @@ class _SenderDashboard extends StatelessWidget {
         _YourCircumHub(onOpenGifts: onOpenGifts),
         const SizedBox(height: 16),
         const _RecentOrdersCard(),
+        const SizedBox(height: 16),
+        const _HomeWalletSummaryCard(),
       ],
     );
   }
@@ -1939,6 +1949,184 @@ class _SenderActivitySurface extends StatelessWidget {
   }
 }
 
+class _HomeWalletSummaryCard extends StatelessWidget {
+  const _HomeWalletSummaryCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _GlassCard(
+      child: Row(
+        children: [
+          _ServiceIcon(
+            icon: Icons.account_balance_wallet_outlined,
+            accent: _SenderTokens.lightBlue,
+          ),
+          SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Roth balance',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Available soon',
+                  style: TextStyle(
+                    color: _SenderTokens.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '—',
+            semanticsLabel: 'Balance unavailable',
+            style: TextStyle(
+              color: _SenderTokens.lightBlue,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderWalletSurface extends StatelessWidget {
+  const _SenderWalletSurface();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      children: const [
+        Text(
+          'Wallet',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        SizedBox(height: 6),
+        Text(
+          'Circum Finance',
+          style: TextStyle(
+            color: _SenderTokens.muted,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: 18),
+        _GlassCard(
+          child: Column(
+            children: [
+              _WalletPlaceholderRow(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Roth Balance',
+              ),
+              _WalletPlaceholderRow(
+                icon: Icons.credit_card_outlined,
+                label: 'Roth Cards',
+              ),
+              _WalletPlaceholderRow(
+                icon: Icons.receipt_long_outlined,
+                label: 'Transaction History',
+              ),
+              _WalletPlaceholderRow(
+                icon: Icons.redeem_outlined,
+                label: 'Referral Rewards',
+              ),
+              _WalletPlaceholderRow(
+                icon: Icons.calendar_month_outlined,
+                label: 'Monthly Promotions',
+              ),
+              _WalletPlaceholderRow(
+                icon: Icons.add_circle_outline_rounded,
+                label: 'Top Up Roth',
+              ),
+              _WalletPlaceholderRow(
+                icon: Icons.check_circle_outline_rounded,
+                label: 'Apply Roth',
+              ),
+              _WalletPlaceholderRow(
+                icon: Icons.history_rounded,
+                label: 'Settlement history',
+                detail: 'Future',
+                showDivider: false,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WalletPlaceholderRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String detail;
+  final bool showDivider;
+
+  const _WalletPlaceholderRow({
+    required this.icon,
+    required this.label,
+    this.detail = 'Available soon',
+    this.showDivider = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label. $detail',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 58),
+        decoration: BoxDecoration(
+          border: showDivider
+              ? const Border(
+                  bottom: BorderSide(color: _SenderTokens.hairline),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: _SenderTokens.lightBlue, size: 21),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              detail,
+              style: const TextStyle(
+                color: _SenderTokens.muted,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SenderBottomNav extends StatelessWidget {
   final int index;
   final ValueChanged<int> onChanged;
@@ -1979,6 +2167,13 @@ class _SenderBottomNav extends StatelessWidget {
             ),
             _NavItem(
               index: 3,
+              selected: index,
+              icon: Icons.account_balance_wallet_rounded,
+              label: 'Wallet',
+              onTap: onChanged,
+            ),
+            _NavItem(
+              index: 4,
               selected: index,
               icon: Icons.person_rounded,
               label: 'Profile',

@@ -24,6 +24,12 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
   }
 
   @override
+  Stream<SenderMobileProfileData> watch() {
+    if (failLoad) return Stream.error(Exception('offline'));
+    return Stream.value(profile);
+  }
+
+  @override
   Future<SenderMobileProfileData> save({
     required String displayName,
     required String phone,
@@ -35,6 +41,13 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
       email: profile.email,
       phone: phone,
       photoUrl: profile.photoUrl,
+      createdAt: profile.createdAt,
+      trustScore: profile.trustScore,
+      trustTier: profile.trustTier,
+      nextTier: profile.nextTier,
+      pointsToNextTier: profile.pointsToNextTier,
+      completedDeliveries: profile.completedDeliveries,
+      trustHistory: profile.trustHistory,
     );
     return profile;
   }
@@ -55,6 +68,13 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
       email: profile.email,
       phone: profile.phone,
       photoUrl: '',
+      createdAt: profile.createdAt,
+      trustScore: profile.trustScore,
+      trustTier: profile.trustTier,
+      nextTier: profile.nextTier,
+      pointsToNextTier: profile.pointsToNextTier,
+      completedDeliveries: profile.completedDeliveries,
+      trustHistory: profile.trustHistory,
     );
     return profile;
   }
@@ -95,6 +115,17 @@ void main() {
     phone: '+44 7700 900123',
     photoUrl: '',
     createdAt: DateTime(2021, 3, 14),
+    trustScore: 342,
+    trustTier: 'priority_sender',
+    nextTier: 'platinum_sender',
+    pointsToNextTier: 408,
+    completedDeliveries: 48,
+    trustHistory: [
+      SenderTrustActivity(points: 5, label: 'Successful Delivery'),
+      SenderTrustActivity(points: 7, label: 'Referral Completed'),
+      SenderTrustActivity(points: 3, label: 'Gift Delivery'),
+      SenderTrustActivity(points: -3, label: 'Customer Cancellation'),
+    ],
   );
 
   testWidgets('renders Sender profile details and V1 shortcuts',
@@ -106,10 +137,30 @@ void main() {
 
     expect(find.text('Jason Adesanya'), findsWidgets);
     expect(find.text('jason@example.com'), findsWidgets);
-    expect(find.text('+44 7700 900123'), findsOneWidget);
     expect(find.text('SENDER ACCOUNT'), findsOneWidget);
     expect(find.text('Member since 2021'), findsOneWidget);
     expect(find.text('Edit Profile'), findsOneWidget);
+    expect(find.text('★★★★★'), findsOneWidget);
+    expect(find.text('Priority Sender'), findsOneWidget);
+    expect(find.text('342'), findsOneWidget);
+    expect(find.text('48'), findsOneWidget);
+    expect(find.text('408 Trust Points until Platinum'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('+44 7700 900123'), 250);
+    expect(find.text('+44 7700 900123'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Trust'), 250);
+    expect(find.text('Trust'), findsOneWidget);
+    expect(find.text('Recent Trust Activity'), findsOneWidget);
+    expect(find.text('Successful Delivery'), findsOneWidget);
+    expect(find.text('Referral Completed'), findsOneWidget);
+    expect(find.text('Gift Delivery'), findsOneWidget);
+    expect(find.text('Customer Cancellation'), findsNothing);
+    expect(find.text('View Full History'), findsOneWidget);
+    expect(find.text('View Trust Details →'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Priority Sender Benefits'),
+      250,
+    );
+    expect(find.text('Priority Sender Benefits'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Saved addresses'), 250);
     expect(find.text('Saved addresses'), findsOneWidget);
     expect(
@@ -156,11 +207,44 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Add your name'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Phone'), 250);
     expect(find.text('Not added yet'), findsNWidgets(2));
-    await tester.tap(find.byTooltip('Edit profile'));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('sender-profile-primary-edit')),
+      -250,
+    );
+    await tester.tap(find.byKey(const Key('sender-profile-primary-edit')));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('sender-profile-view')),
+      const Offset(0, -400),
+    );
     await tester.pumpAndSettle();
     expect(find.text('known@example.com'), findsWidgets);
     expect(find.widgetWithText(TextField, 'Email'), findsNothing);
+  });
+
+  testWidgets('handles missing trust data gracefully', (tester) async {
+    final repository = _FakeProfileRepository(
+      profile: const SenderMobileProfileData(
+        userId: 'sender-new',
+        displayName: 'New Sender',
+        email: 'new@example.com',
+        phone: '',
+        photoUrl: '',
+      ),
+    );
+    await tester.pumpWidget(_app(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('New Sender'), findsWidgets);
+    expect(find.text('0'), findsWidgets);
+    expect(find.text('25 Trust Points until Active'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('No recent trust activity yet.'),
+      250,
+    );
+    expect(find.text('No recent trust activity yet.'), findsOneWidget);
   });
 
   testWidgets('edits and saves display name and phone', (tester) async {
@@ -168,8 +252,12 @@ void main() {
     await tester.pumpWidget(_app(repository));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Edit profile'));
+    await tester.tap(find.byKey(const Key('sender-profile-primary-edit')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('sender-profile-name-field')),
+      250,
+    );
     await tester.enterText(
       find.byKey(const Key('sender-profile-name-field')),
       'Jason A',
@@ -210,8 +298,12 @@ void main() {
     );
     await tester.pumpWidget(_app(repository));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Edit profile'));
+    await tester.tap(find.byKey(const Key('sender-profile-primary-edit')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('sender-profile-save')),
+      250,
+    );
     await tester.ensureVisible(find.byKey(const Key('sender-profile-save')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sender-profile-save')));
@@ -241,6 +333,7 @@ void main() {
     expect(find.text('Try again'), findsOneWidget);
     repository.failLoad = false;
     await tester.tap(find.text('Try again'));
+    await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
     expect(find.text('Jason Adesanya'), findsWidgets);
   });

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +8,50 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+
+import '../sender_profile/sender_profile.dart';
+
+class SenderTrustActivity {
+  final int points;
+  final String label;
+  final DateTime? occurredAt;
+
+  const SenderTrustActivity({
+    required this.points,
+    required this.label,
+    this.occurredAt,
+  });
+
+  factory SenderTrustActivity.fromMap(Map<String, dynamic> data) {
+    final rawType = SenderMobileProfileData.firstText([
+      data['label'],
+      data['eventLabel'],
+      data['reason'],
+      data['eventType'],
+      data['action'],
+    ]);
+    return SenderTrustActivity(
+      points: ((data['points'] ?? data['delta'] ?? data['amount']) as num?)
+              ?.toInt() ??
+          0,
+      label: _friendlyTrustLabel(rawType),
+      occurredAt: SenderMobileProfileData.profileDate(
+        data['createdAt'] ?? data['occurredAt'] ?? data['timestamp'],
+      ),
+    );
+  }
+
+  static String _friendlyTrustLabel(String value) {
+    if (value.isEmpty) return 'Trust activity';
+    return value
+        .replaceAll('_', ' ')
+        .replaceAll('-', ' ')
+        .split(' ')
+        .where((word) => word.isNotEmpty)
+        .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+        .join(' ');
+  }
+}
 
 class SenderMobileProfileData {
   final String userId;
@@ -16,6 +61,12 @@ class SenderMobileProfileData {
   final String photoUrl;
   final String accountType;
   final DateTime? createdAt;
+  final int trustScore;
+  final String trustTier;
+  final String? nextTier;
+  final int pointsToNextTier;
+  final int completedDeliveries;
+  final List<SenderTrustActivity> trustHistory;
 
   const SenderMobileProfileData({
     required this.userId,
@@ -25,49 +76,115 @@ class SenderMobileProfileData {
     required this.photoUrl,
     this.accountType = 'sender',
     this.createdAt,
+    this.trustScore = 0,
+    this.trustTier = 'new_sender',
+    this.nextTier,
+    this.pointsToNextTier = 25,
+    this.completedDeliveries = 0,
+    this.trustHistory = const [],
   });
 
   factory SenderMobileProfileData.fromSources({
     required User user,
     Map<String, dynamic>? data,
+    List<Map<String, dynamic>>? trustEvents,
   }) {
     final profile = data ?? const <String, dynamic>{};
+    final trustScore = ((profile['trustScore'] ??
+                profile['senderTrustPoints'] ??
+                profile['trustPoints']) as num?)
+            ?.toInt() ??
+        0;
+    final trustTier = SenderTrustPolicy.normalizeTier(
+      profile['trustTier'] ?? profile['senderTier'],
+      points: trustScore,
+    );
+    final backendNextTier = firstText([profile['nextTier']]);
+    final nextTier = backendNextTier.isNotEmpty
+        ? SenderTrustPolicy.normalizeTier(backendNextTier)
+        : SenderTrustPolicy.nextTier(trustTier);
+    final embeddedHistory = (profile['trustHistory'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList(growable: false);
+    final historySource =
+        trustEvents?.isNotEmpty == true ? trustEvents! : embeddedHistory;
+    final history = historySource
+        .map(SenderTrustActivity.fromMap)
+        .toList(growable: false)
+      ..sort((a, b) {
+        final aDate = a.occurredAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bDate = b.occurredAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bDate.compareTo(aDate);
+      });
     return SenderMobileProfileData(
       userId: user.uid,
-      displayName: _firstText([
+      displayName: firstText([
         profile['displayName'],
         profile['fullName'],
         profile['fullname'],
         profile['name'],
         user.displayName,
       ]),
-      email: _firstText([profile['email'], user.email]),
-      phone: _firstText([
+      email: firstText([profile['email'], user.email]),
+      phone: firstText([
         profile['phone'],
         profile['phoneNumber'],
         user.phoneNumber,
       ]),
-      photoUrl: _firstText([
+      photoUrl: firstText([
         profile['photoURL'],
         profile['photoUrl'],
         user.photoURL,
       ]),
       accountType: 'sender',
       createdAt:
-          _profileDate(profile['createdAt']) ?? user.metadata.creationTime,
+          profileDate(profile['createdAt']) ?? user.metadata.creationTime,
+      trustScore: trustScore,
+      trustTier: trustTier,
+      nextTier: nextTier,
+      pointsToNextTier: (profile['pointsToNextTier'] as num?)?.toInt() ??
+          SenderTrustPolicy.pointsForNextTier(trustScore),
+      completedDeliveries: ((profile['completedDeliveries'] ??
+                  profile['deliveriesCompleted']) as num?)
+              ?.toInt() ??
+          0,
+      trustHistory: history.take(3).toList(growable: false),
     );
   }
 
   String get memberSinceYear => '${createdAt?.year ?? DateTime.now().year}';
 
-  static DateTime? _profileDate(Object? value) {
+  double get trustProgress {
+    final resolvedNextTier = nextTier ?? SenderTrustPolicy.nextTier(trustTier);
+    if (resolvedNextTier == null) return 1;
+    final currentThreshold = SenderTrustPolicy.thresholds[trustTier] ?? 0;
+    final nextThreshold =
+        SenderTrustPolicy.thresholds[resolvedNextTier] ?? trustScore;
+    final range = nextThreshold - currentThreshold;
+    if (range <= 0) return 1;
+    return ((trustScore - currentThreshold) / range).clamp(0, 1).toDouble();
+  }
+
+  String get trustTierLabel =>
+      (SenderTrustPolicy.tierLabels[trustTier] ?? 'New Sender')
+          .replaceAll(' Sender', '');
+
+  String? get nextTierLabel {
+    final resolvedNextTier = nextTier ?? SenderTrustPolicy.nextTier(trustTier);
+    return resolvedNextTier == null
+        ? null
+        : (SenderTrustPolicy.tierLabels[resolvedNextTier] ?? '')
+            .replaceAll(' Sender', '');
+  }
+
+  static DateTime? profileDate(Object? value) {
     if (value is Timestamp) return value.toDate();
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value);
     return null;
   }
 
-  static String _firstText(Iterable<Object?> values) {
+  static String firstText(Iterable<Object?> values) {
     for (final value in values) {
       final text = value == null ? '' : '$value'.trim();
       if (text.isNotEmpty && text != 'null' && text != 'undefined') {
@@ -80,6 +197,8 @@ class SenderMobileProfileData {
 
 abstract class SenderMobileProfileRepository {
   Future<SenderMobileProfileData> load();
+
+  Stream<SenderMobileProfileData> watch();
 
   Future<SenderMobileProfileData> save({
     required String displayName,
@@ -154,10 +273,55 @@ class FirebaseSenderMobileProfileRepository
       );
     }
     final snapshot = await firestore.collection('users').doc(user.uid).get();
+    List<Map<String, dynamic>> trustEvents = const [];
+    try {
+      final eventSnapshot = await firestore
+          .collection('senderTrustEvents')
+          .where('userId', isEqualTo: user.uid)
+          .limit(20)
+          .get();
+      trustEvents = eventSnapshot.docs
+          .map((document) => document.data())
+          .toList(growable: false);
+    } catch (_) {
+      // The profile's embedded trust history remains the safe fallback.
+    }
     return SenderMobileProfileData.fromSources(
       user: user,
       data: snapshot.data(),
+      trustEvents: trustEvents,
     );
+  }
+
+  @override
+  Stream<SenderMobileProfileData> watch() async* {
+    final user = auth.currentUser;
+    if (user == null) {
+      throw const SenderMobileProfileException(
+        'Sign in again to load your profile.',
+      );
+    }
+    await for (final snapshot
+        in firestore.collection('users').doc(user.uid).snapshots()) {
+      List<Map<String, dynamic>> trustEvents = const [];
+      try {
+        final eventSnapshot = await firestore
+            .collection('senderTrustEvents')
+            .where('userId', isEqualTo: user.uid)
+            .limit(20)
+            .get();
+        trustEvents = eventSnapshot.docs
+            .map((document) => document.data())
+            .toList(growable: false);
+      } catch (_) {
+        // The profile's embedded trust history remains the safe fallback.
+      }
+      yield SenderMobileProfileData.fromSources(
+        user: user,
+        data: snapshot.data(),
+        trustEvents: trustEvents,
+      );
+    }
   }
 
   @override
@@ -185,15 +349,15 @@ class FirebaseSenderMobileProfileRepository
     if (user.displayName != displayName.trim()) {
       await user.updateDisplayName(displayName.trim());
     }
-    return SenderMobileProfileData(
-      userId: user.uid,
-      displayName: displayName.trim(),
-      email: user.email?.trim() ?? '',
-      phone: phone.trim(),
-      photoUrl: user.photoURL?.trim() ?? '',
-      createdAt: existing.data()?['createdAt'] is Timestamp
-          ? (existing.data()!['createdAt'] as Timestamp).toDate()
-          : user.metadata.creationTime,
+    return SenderMobileProfileData.fromSources(
+      user: user,
+      data: {
+        ...?existing.data(),
+        'displayName': displayName.trim(),
+        'email': user.email?.trim() ?? '',
+        'phone': phone.trim(),
+        'photoURL': user.photoURL?.trim() ?? '',
+      },
     );
   }
 
@@ -242,6 +406,12 @@ class FirebaseSenderMobileProfileRepository
       phone: current.phone,
       photoUrl: downloadUrl,
       createdAt: current.createdAt,
+      trustScore: current.trustScore,
+      trustTier: current.trustTier,
+      nextTier: current.nextTier,
+      pointsToNextTier: current.pointsToNextTier,
+      completedDeliveries: current.completedDeliveries,
+      trustHistory: current.trustHistory,
     );
   }
 
@@ -286,6 +456,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   bool _editing = false;
   bool _saving = false;
   bool _uploadingPhoto = false;
+  StreamSubscription<SenderMobileProfileData>? _profileSubscription;
 
   @override
   void initState() {
@@ -297,12 +468,14 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   @override
   void dispose() {
+    _profileSubscription?.cancel();
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    await _profileSubscription?.cancel();
     setState(() {
       _loading = true;
       _error = null;
@@ -314,6 +487,20 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       setState(() {
         _profile = profile;
         _loading = false;
+        _error = null;
+      });
+      _profileSubscription = _repository.watch().listen((liveProfile) {
+        if (!mounted) return;
+        if (!_editing && !_saving) _applyProfile(liveProfile);
+        setState(() {
+          _profile = liveProfile;
+          _error = null;
+        });
+      }, onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'Live profile updates are temporarily unavailable.';
+        });
       });
     } catch (_) {
       if (!mounted) return;
@@ -468,6 +655,8 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               ),
               const SizedBox(height: 12),
               _AccountTypeBadge(memberSinceYear: profile.memberSinceYear),
+              const SizedBox(height: 16),
+              _ProfileTrustHeader(profile: profile),
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
@@ -505,6 +694,16 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
           )
         else
           _ProfileDetailsCard(profile: profile),
+        const SizedBox(height: 16),
+        _ProfileTrustCard(
+          profile: profile,
+          onViewDetails: () =>
+              _showLocalMessage('Trust details will open here.'),
+          onViewHistory: () =>
+              _showLocalMessage('Full trust history will open here.'),
+        ),
+        const SizedBox(height: 16),
+        _ProfileTrustBenefits(profile: profile),
         const SizedBox(height: 16),
         _ProfileGlassCard(
           padding: EdgeInsets.zero,
@@ -817,6 +1016,447 @@ class _ProfileDetailsCard extends StatelessWidget {
             label: 'Phone',
             value: profile.phone.isEmpty ? 'Not added yet' : profile.phone,
             showDivider: false,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileTrustHeader extends StatelessWidget {
+  final SenderMobileProfileData profile;
+
+  const _ProfileTrustHeader({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final progressCopy = profile.nextTierLabel == null
+        ? 'Highest Sender tier reached'
+        : '${profile.pointsToNextTier} Trust Points until ${profile.nextTierLabel}';
+    return Semantics(
+      label:
+          '${profile.trustTierLabel} Sender. Trust Score ${profile.trustScore}. '
+          '${profile.completedDeliveries} deliveries completed. $progressCopy.',
+      child: Column(
+        children: [
+          const ExcludeSemantics(
+            child: Text(
+              '★★★★★',
+              style: TextStyle(
+                color: _ProfileTokens.lightAccent,
+                fontSize: 19,
+                letterSpacing: 2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '${profile.trustTierLabel} Sender',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _TrustMetric(
+                  label: 'Trust Score',
+                  value: '${profile.trustScore}',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TrustMetric(
+                  label: 'Deliveries Completed',
+                  value: '${profile.completedDeliveries}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _TrustProgress(
+            value: profile.trustProgress,
+            label: progressCopy,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileTrustCard extends StatelessWidget {
+  final SenderMobileProfileData profile;
+  final VoidCallback onViewDetails;
+  final VoidCallback onViewHistory;
+
+  const _ProfileTrustCard({
+    required this.profile,
+    required this.onViewDetails,
+    required this.onViewHistory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progressCopy = profile.nextTierLabel == null
+        ? 'Highest Sender tier reached'
+        : '${profile.pointsToNextTier} Trust Points until ${profile.nextTierLabel}';
+    return _ProfileGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _ProfileTokens.accent.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _ProfileTokens.accent.withValues(alpha: .35),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.verified_user_outlined,
+                  color: _ProfileTokens.lightAccent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Trust',
+                      style: GoogleFonts.dmSerifDisplay(
+                        color: Colors.white,
+                        fontSize: 24,
+                      ),
+                    ),
+                    Text(
+                      'Your standing across Circum',
+                      style: GoogleFonts.inter(
+                        color: _ProfileTokens.muted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _TrustMetric(
+                  label: 'Current Tier',
+                  value: profile.trustTierLabel,
+                  compact: true,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TrustMetric(
+                  label: 'Trust Score',
+                  value: '${profile.trustScore}',
+                  compact: true,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _TrustProgress(value: profile.trustProgress, label: progressCopy),
+          const SizedBox(height: 20),
+          Text(
+            'Recent Trust Activity',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (profile.trustHistory.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                'No recent trust activity yet.',
+                style: GoogleFonts.inter(
+                  color: _ProfileTokens.muted,
+                  fontSize: 12,
+                ),
+              ),
+            )
+          else
+            ...profile.trustHistory.take(3).map(_TrustActivityRow.new),
+          const SizedBox(height: 8),
+          _TrustTextAction(
+            label: 'View Full History',
+            onTap: onViewHistory,
+          ),
+          _TrustTextAction(
+            label: 'View Trust Details →',
+            onTap: onViewDetails,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileTrustBenefits extends StatelessWidget {
+  final SenderMobileProfileData profile;
+
+  const _ProfileTrustBenefits({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProfileGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${profile.trustTierLabel} Sender Benefits',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Maintaining trust strengthens your standing across Circum.',
+            style: GoogleFonts.inter(
+              color: _ProfileTokens.muted,
+              fontSize: 11.5,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const _TrustBenefitLine(
+            icon: Icons.bolt_outlined,
+            text: 'Eligibility for earlier rider acceptance',
+          ),
+          const _TrustBenefitLine(
+            icon: Icons.redeem_outlined,
+            text: 'Future rewards as they become available',
+          ),
+          const _TrustBenefitLine(
+            icon: Icons.support_agent_rounded,
+            text: 'Priority support at eligible tiers',
+          ),
+          const _TrustBenefitLine(
+            icon: Icons.workspace_premium_outlined,
+            text: 'Stronger marketplace reputation (future)',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrustMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool compact;
+
+  const _TrustMetric({
+    required this.label,
+    required this.value,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 70),
+      padding: EdgeInsets.all(compact ? 11 : 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _ProfileTokens.border),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: _ProfileTokens.muted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: compact ? 17 : 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrustProgress extends StatelessWidget {
+  final double value;
+  final String label;
+
+  const _TrustProgress({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      value: '${(value * 100).round()} percent',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: value,
+              backgroundColor: Colors.white.withValues(alpha: .08),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                _ProfileTokens.lightAccent,
+              ),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: _ProfileTokens.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrustActivityRow extends StatelessWidget {
+  final SenderTrustActivity activity;
+
+  const _TrustActivityRow(this.activity);
+
+  @override
+  Widget build(BuildContext context) {
+    final positive = activity.points >= 0;
+    final points =
+        activity.points == 0 ? '—' : '${positive ? '+' : ''}${activity.points}';
+    return Semantics(
+      label: '$points ${activity.label}',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: _ProfileTokens.border)),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 38,
+              child: Text(
+                points,
+                style: GoogleFonts.jetBrainsMono(
+                  color: positive
+                      ? const Color(0xFF86EFAC)
+                      : const Color(0xFFFCA5A5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                activity.label,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrustTextAction extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _TrustTextAction({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 46),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: _ProfileTokens.lightAccent,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrustBenefitLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _TrustBenefitLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _ProfileTokens.lightAccent, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 12.5,
+                height: 1.35,
+              ),
+            ),
           ),
         ],
       ),

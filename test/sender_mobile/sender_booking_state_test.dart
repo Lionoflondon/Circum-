@@ -228,6 +228,30 @@ void main() {
       expect(senderMobileDashboardServiceNames, isNot(contains('Vanguard')));
     });
 
+    test('Sender bottom navigation uses the canonical five pillars', () {
+      expect(senderMobileBottomNavigationLabels, const [
+        'Home',
+        'Send',
+        'Activity',
+        'Wallet',
+        'Profile',
+      ]);
+      expect(senderMobileBottomNavigationLabels, isNot(contains('Chat')));
+      expect(
+        senderMobileBottomNavigationLabels,
+        isNot(contains('Notifications')),
+      );
+
+      final source = File(
+        'lib/app/sender_mobile/sender_mobile_home.dart',
+      ).readAsStringSync();
+      expect(source, contains('const _SenderWalletSurface()'));
+      expect(source, contains("label: 'Wallet'"));
+      expect(source, contains('index: 4'));
+      expect(source, contains('Icons.notifications_none_rounded'));
+      expect(source, isNot(contains("label: 'Chat'")));
+    });
+
     test('dashboard copy uses approved service hub language', () {
       expect(
         senderMobileHeroSubtitle,
