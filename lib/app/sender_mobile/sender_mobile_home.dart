@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'gift_mode_view.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
+import 'sender_mobile_profile.dart';
 
 const senderMobileDashboardServiceNames = ['Health+', 'Business', 'Gifts'];
 const senderMobileHeroSubtitle =
@@ -105,7 +106,12 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
             ),
             const SenderBookingCanvas(),
             const _SenderActivitySurface(),
-            const _SenderProfileSurface(),
+            SenderMobileProfileView(
+              onLoggedOut: () => setState(() {
+                _index = 0;
+                _entry = _SenderEntryScreen.landing;
+              }),
+            ),
           ],
         );
     }
@@ -1926,22 +1932,6 @@ class _SenderActivitySurface extends StatelessWidget {
       child: _GlassCard(
         child: Text(
           'Activity and live tracking appear here after booking.',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-        ),
-      ),
-    );
-  }
-}
-
-class _SenderProfileSurface extends StatelessWidget {
-  const _SenderProfileSurface();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: _GlassCard(
-        child: Text(
-          'Profile, saved places and support stay connected to the existing app.',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
       ),
