@@ -27,6 +27,10 @@ const TRANSACTION_TYPES = Object.freeze({
   withdrawal: "withdrawal",
   stripePaymentRecord: "stripe_payment_record",
   refundRecord: "refund_record",
+  rothCardConversion: "roth_card_conversion",
+  checkoutSpend: "checkout_spend",
+  refund: "refund",
+  promotionalReward: "promotional_reward",
   reversal: "reversal",
 });
 
@@ -85,6 +89,68 @@ function senderWalletRecord({walletId, userId, email, balance = 0, createdAt = n
   };
 }
 
+function senderWalletProjectionRecord({
+  userId,
+  balance = 0,
+  frozen = false,
+  version = 1,
+  createdAt = null,
+  updatedAt = null,
+}) {
+  const normalizedBalance = roundMoney(balance);
+  if (normalizedBalance < 0) {
+    throw new Error("Sender Roth balance cannot be negative.");
+  }
+  return {
+    userId,
+    balance: normalizedBalance,
+    currency: "ROTH",
+    status: frozen ? "frozen" : "active",
+    createdAt,
+    updatedAt: updatedAt || createdAt,
+    version: Math.max(1, Number(version || 1)),
+  };
+}
+
+function walletTransactionView(record) {
+  const rawAmount = roundMoney(record.amount);
+  const rawDirection = `${record.direction || (rawAmount < 0 ? "debit" : "credit")}`.toLowerCase();
+  return {
+    transactionId: `${record.transactionId || record.id || ""}`,
+    userId: `${record.uid || record.userId || ""}`,
+    walletType: "sender",
+    direction: rawDirection === "debit" ? "debit" : "credit",
+    type: `${record.type || "adjustment"}`,
+    amount: Math.abs(rawAmount),
+    balanceBefore: roundMoney(record.balanceBefore),
+    balanceAfter: roundMoney(record.balanceAfter),
+    description: `${record.description || record.reason || record.notes || record.type || "Roth activity"}`,
+    relatedEntityId: record.relatedEntityId || record.referenceId || null,
+    idempotencyKey: record.idempotencyKey || record.transactionId || record.id || null,
+    createdBy: record.createdBy || record.issuedByAdminId || "system",
+    createdAt: record.createdAt || null,
+    status: `${record.status || "completed"}`,
+    metadata: record.metadata || {},
+  };
+}
+
+function paginateWalletTransactions(records, {pageSize = 20, pageOffset = 0} = {}) {
+  const safeSize = Math.min(50, Math.max(1, Number(pageSize || 20)));
+  const safeOffset = Math.max(0, Number(pageOffset || 0));
+  const sorted = [...records].sort((a, b) => {
+    const aTime = Number(a.createdAtMillis || 0);
+    const bTime = Number(b.createdAtMillis || 0);
+    if (aTime !== bTime) return bTime - aTime;
+    return `${b.transactionId || b.id || ""}`.localeCompare(`${a.transactionId || a.id || ""}`);
+  });
+  const page = sorted.slice(safeOffset, safeOffset + safeSize);
+  const nextOffset = safeOffset + page.length;
+  return {
+    records: page,
+    nextPageToken: nextOffset < sorted.length ? `${nextOffset}` : null,
+  };
+}
+
 function ledgerTransactionRecord({
   transactionId,
   walletId,
@@ -139,5 +205,8 @@ module.exports = {
   isRothCreditWithdrawable,
   ledgerTransactionRecord,
   nextBalance,
+  paginateWalletTransactions,
   senderWalletRecord,
+  senderWalletProjectionRecord,
+  walletTransactionView,
 };

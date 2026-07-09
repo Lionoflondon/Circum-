@@ -8,7 +8,10 @@ const {
   isRothCreditWithdrawable,
   ledgerTransactionRecord,
   nextBalance,
+  paginateWalletTransactions,
+  senderWalletProjectionRecord,
   senderWalletRecord,
+  walletTransactionView,
 } = require("./roth-ledger-core");
 
 test("Roth credit is not withdrawable", () => {
@@ -16,6 +19,33 @@ test("Roth credit is not withdrawable", () => {
   assert.equal(canWithdraw(BALANCE_TYPES.rothCredit), false);
   assert.equal(canWithdraw(BALANCE_TYPES.pendingEarnings), false);
   assert.equal(canWithdraw(BALANCE_TYPES.availableEarnings), true);
+});
+
+test("Sender Wallet projection is ROTH, versioned and never negative", () => {
+  const wallet = senderWalletProjectionRecord({
+    userId: "sender-1",
+    balance: 42,
+    version: 3,
+    createdAt: "created",
+  });
+  assert.equal(wallet.currency, "ROTH");
+  assert.equal(wallet.status, "active");
+  assert.equal(wallet.version, 3);
+  assert.throws(() => senderWalletProjectionRecord({
+    userId: "sender-1",
+    balance: -1,
+  }), /cannot be negative/);
+});
+
+test("Wallet transaction view and pagination preserve newest-first ledger order", () => {
+  const transactions = [
+    {...walletTransactionView({id: "old", amount: 5, createdAt: "old"}), createdAtMillis: 1},
+    {...walletTransactionView({id: "new", amount: -2, createdAt: "new"}), createdAtMillis: 2},
+  ];
+  const page = paginateWalletTransactions(transactions, {pageSize: 1});
+  assert.equal(page.records[0].transactionId, "new");
+  assert.equal(page.records[0].direction, "debit");
+  assert.equal(page.nextPageToken, "1");
 });
 
 test("Roth credit cannot go negative unless reversal is explicit", () => {

@@ -169,7 +169,7 @@ void main() {
     );
     expect(find.text('Wallet'), findsOneWidget);
     expect(
-      find.text('Available soon · Manage your Roth balance and rewards.'),
+      find.text('Manage your Roth balance and rewards.'),
       findsOneWidget,
     );
     expect(find.text('Referrals'), findsOneWidget);

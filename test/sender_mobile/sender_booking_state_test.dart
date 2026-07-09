@@ -245,7 +245,7 @@ void main() {
       final source = File(
         'lib/app/sender_mobile/sender_mobile_home.dart',
       ).readAsStringSync();
-      expect(source, contains('const _SenderWalletSurface()'));
+      expect(source, contains('const SenderWalletView()'));
       expect(source, contains("label: 'Wallet'"));
       expect(source, contains('index: 4'));
       expect(source, contains('Icons.notifications_none_rounded'));

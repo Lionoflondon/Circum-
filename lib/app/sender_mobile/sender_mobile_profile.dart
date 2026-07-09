@@ -432,12 +432,14 @@ class SenderMobileProfileView extends StatefulWidget {
   final SenderMobileProfileRepository? repository;
   final SenderProfilePhotoPicker? photoPicker;
   final VoidCallback? onLoggedOut;
+  final VoidCallback? onOpenWallet;
 
   const SenderMobileProfileView({
     super.key,
     this.repository,
     this.photoPicker,
     this.onLoggedOut,
+    this.onOpenWallet,
   });
 
   @override
@@ -720,9 +722,9 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               _ProfileShortcut(
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'Wallet',
-                subtitle:
-                    'Available soon · Manage your Roth balance and rewards.',
-                onTap: () => _showLocalMessage('Wallet is available soon.'),
+                subtitle: 'Manage your Roth balance and rewards.',
+                onTap: widget.onOpenWallet ??
+                    () => _showLocalMessage('Wallet is unavailable.'),
               ),
               _ProfileShortcut(
                 icon: Icons.group_add_outlined,

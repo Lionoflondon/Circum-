@@ -11,6 +11,9 @@ const {
   assertTransactionType,
   nextBalance,
   roundMoney,
+  senderWalletProjectionRecord,
+  walletTransactionView,
+  paginateWalletTransactions,
 } = require("./roth-ledger-core");
 const {
   canRedeemGiftCard,
@@ -106,6 +109,59 @@ async function resolveRecipientUser({recipientUid = "", recipientEmail = ""}) {
   }
 }
 
+async function requireSenderIdentity(context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in to access your Wallet.");
+  }
+  return resolveWalletIdentity({
+    userId: context.auth.uid,
+    email: context.auth.token.email,
+    authUid: context.auth.uid,
+  });
+}
+
+async function initialiseSenderWalletRecord(context) {
+  const identity = await requireSenderIdentity(context);
+  const db = getFirestore();
+  const projectionRef = db.collection("senderWallets").doc(context.auth.uid);
+  const legacyRef = db.collection("wallets").doc(identity.walletId);
+  const roleRef = db.collection("users").doc(context.auth.uid).collection("wallets").doc("sender");
+  let result;
+  await db.runTransaction(async (transaction) => {
+    const [projectionSnap, legacySnap, roleSnap] = await Promise.all([
+      transaction.get(projectionRef), transaction.get(legacyRef), transaction.get(roleRef),
+    ]);
+    const projection = projectionSnap.exists ? projectionSnap.data() : {};
+    const legacy = legacySnap.exists ? legacySnap.data() : {};
+    const role = roleSnap.exists ? roleSnap.data() : {};
+    const balance = roundWalletMoney(legacy.balance == null ?
+      (legacy.rothCredit == null ? role.balance || 0 : legacy.rothCredit) : legacy.balance);
+    const frozen = legacy.isFrozen === true || projection.status === "frozen";
+    const now = FieldValue.serverTimestamp();
+    const record = senderWalletProjectionRecord({
+      userId: context.auth.uid,
+      balance,
+      frozen,
+      version: Number(projection.version || 0) || 1,
+      createdAt: projection.createdAt || legacy.createdAt || now,
+      updatedAt: now,
+    });
+    transaction.set(projectionRef, record, {merge: true});
+    transaction.set(legacyRef, {
+      userId: identity.walletId, uid: context.auth.uid, userEmail: identity.userEmail,
+      normalizedEmail: identity.userEmail, balance, rothCredit: balance,
+      currency: legacy.currency || "GBP", isFrozen: frozen,
+      createdAt: legacy.createdAt || now, updatedAt: now,
+    }, {merge: true});
+    transaction.set(roleRef, {
+      balance, balanceRoth: balance, currency: "ROTH", walletType: "sender",
+      createdAt: role.createdAt || now, updatedAt: now,
+    }, {merge: true});
+    result = record;
+  });
+  return result;
+}
+
 function walletTargetsFor(value) {
   const target = `${value || ""}`.trim().toLowerCase();
   if (target === "sender") return ["sender"];
@@ -143,11 +199,16 @@ async function recordRothMovement({
   const ledgerRef = transactionId ?
     db.collection("walletTransactions").doc(transactionId) :
     db.collection("walletTransactions").doc();
+  const senderWalletRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
   await db.runTransaction(async (transaction) => {
-    const existingLedger = await transaction.get(ledgerRef);
+    const [existingLedger, wallet, senderWalletSnap] = await Promise.all([
+      transaction.get(ledgerRef),
+      transaction.get(walletRef),
+      senderWalletRef ? transaction.get(senderWalletRef) : Promise.resolve(null),
+    ]);
     if (existingLedger.exists) return;
-    const wallet = await transaction.get(walletRef);
     const walletData = wallet.exists ? wallet.data() : {};
+    const senderWallet = senderWalletSnap && senderWalletSnap.exists ? senderWalletSnap.data() : {};
     const rawBalance = balanceType === BALANCE_TYPES.rothCredit ?
       (walletData.balance == null ? walletData.rothCredit : walletData.balance) :
       walletData[balanceType];
@@ -178,6 +239,16 @@ async function recordRothMovement({
       createdAt: walletData.createdAt || now,
       updatedAt: now,
     }, {merge: true});
+    if (senderWalletRef && balanceType === BALANCE_TYPES.rothCredit && !ledgerOnly) {
+      transaction.set(senderWalletRef, senderWalletProjectionRecord({
+        userId: identity.uid,
+        balance: balanceAfter,
+        frozen: walletData.isFrozen === true,
+        version: Number(senderWallet.version || 0) + 1,
+        createdAt: senderWallet.createdAt || walletData.createdAt || now,
+        updatedAt: now,
+      }), {merge: true});
+    }
     transaction.set(ledgerRef, {
       id: ledgerRef.id,
       userId: identity.walletId,
@@ -186,10 +257,16 @@ async function recordRothMovement({
       normalizedEmail: identity.userEmail,
       walletId: identity.walletId,
       amount: roundedAmount,
+      direction: roundedAmount < 0 ? "debit" : "credit",
+      walletType: "sender",
       balanceType,
       type,
       reason: reason || type,
+      description: reason || type,
       relatedEntityId,
+      idempotencyKey: transactionId || providerTransactionId || ledgerRef.id,
+      createdBy: issuedByAdminId || "system",
+      status: "completed",
       paymentProvider,
       providerTransactionId,
       issuedByAdminId,
@@ -256,10 +333,12 @@ async function applyWalletDebit({
   const txRef = transactionId ?
     db.collection("walletTransactions").doc(transactionId) :
     db.collection("walletTransactions").doc();
+  const senderWalletRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
   await db.runTransaction(async (transaction) => {
-    const [walletSnap, existingTx] = await Promise.all([
+    const [walletSnap, existingTx, senderWalletSnap] = await Promise.all([
       transaction.get(walletRef),
       transaction.get(txRef),
+      senderWalletRef ? transaction.get(senderWalletRef) : Promise.resolve(null),
     ]);
     if (existingTx.exists) return;
     const wallet = walletSnap.exists ? walletSnap.data() : {};
@@ -267,6 +346,7 @@ async function applyWalletDebit({
     const before = roundWalletMoney(wallet.balance == null ? wallet.rothCredit : wallet.balance);
     if (before < debit) throw new Error("Wallet balance is too low.");
     const after = roundWalletMoney(before - debit);
+    const senderWallet = senderWalletSnap && senderWalletSnap.exists ? senderWalletSnap.data() : {};
     const now = FieldValue.serverTimestamp();
     transaction.set(walletRef, {
       userId: identity.walletId,
@@ -282,6 +362,16 @@ async function applyWalletDebit({
       createdAt: wallet.createdAt || now,
       updatedAt: now,
     }, {merge: true});
+    if (senderWalletRef) {
+      transaction.set(senderWalletRef, senderWalletProjectionRecord({
+        userId: identity.uid,
+        balance: after,
+        frozen: wallet.isFrozen === true,
+        version: Number(senderWallet.version || 0) + 1,
+        createdAt: senderWallet.createdAt || wallet.createdAt || now,
+        updatedAt: now,
+      }), {merge: true});
+    }
     transaction.set(txRef, {
       id: txRef.id,
       userId: identity.walletId,
@@ -291,12 +381,18 @@ async function applyWalletDebit({
       walletId: identity.walletId,
       type,
       amount: -debit,
+      direction: "debit",
+      walletType: "sender",
       balanceType: BALANCE_TYPES.rothCredit,
       balanceBefore: before,
       balanceAfter: after,
       referenceId,
       relatedEntityId: referenceId,
       notes,
+      description: notes || type,
+      idempotencyKey: transactionId || txRef.id,
+      createdBy: "system",
+      status: "completed",
       paymentProvider: "roth_internal",
       createdAt: now,
       metadata,
@@ -306,6 +402,87 @@ async function applyWalletDebit({
 }
 
 exports.applyWalletDebit = applyWalletDebit;
+
+exports.initialiseSenderWallet = functions.https.onCall(async (_data, context) => {
+  return initialiseSenderWalletRecord(context);
+});
+
+exports.getSenderWallet = functions.https.onCall(async (_data, context) => {
+  return initialiseSenderWalletRecord(context);
+});
+
+exports.getSenderWalletTransactions = functions.https.onCall(async (data, context) => {
+  const identity = await requireSenderIdentity(context);
+  const db = getFirestore();
+  const [uidSnap, walletSnap] = await Promise.all([
+    db.collection("walletTransactions").where("uid", "==", context.auth.uid).limit(100).get(),
+    db.collection("walletTransactions").where("walletId", "==", identity.walletId).limit(100).get(),
+  ]);
+  const seen = new Set();
+  const records = [...uidSnap.docs, ...walletSnap.docs].filter((doc) => {
+    if (seen.has(doc.id)) return false;
+    seen.add(doc.id);
+    return true;
+  }).map((doc) => {
+    const value = walletTransactionView({...doc.data(), transactionId: doc.id});
+    const createdAt = doc.data().createdAt;
+    return {...value, createdAtMillis: createdAt && typeof createdAt.toMillis === "function" ? createdAt.toMillis() : 0};
+  });
+  const page = paginateWalletTransactions(records, {
+    pageSize: data && data.pageSize,
+    pageOffset: Number(data && data.pageToken || 0),
+  });
+  return {
+    transactions: page.records.map(({createdAtMillis, ...record}) => record),
+    nextPageToken: page.nextPageToken,
+  };
+});
+
+exports.completeSenderWalletOnboarding = functions.https.onCall(async (_data, context) => {
+  await requireSenderIdentity(context);
+  await getFirestore().collection("users").doc(context.auth.uid).set({
+    senderWalletOnboardingCompleted: true,
+    senderWalletOnboardingCompletedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return {completed: true};
+});
+
+exports.requestSenderWalletDebit = functions.https.onCall(async (data, context) => {
+  await requireSenderIdentity(context);
+  const amount = roundWalletMoney(data.amount);
+  const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
+  const relatedEntityId = `${data.relatedEntityId || ""}`.trim();
+  if (amount <= 0 || !idempotencyKey || !relatedEntityId) {
+    throw new functions.https.HttpsError("invalid-argument", "A positive amount, reference and idempotency key are required.");
+  }
+  try {
+    return await applyWalletDebit({
+      userId: context.auth.uid, uid: context.auth.uid, userEmail: context.auth.token.email,
+      amount, type: TRANSACTION_TYPES.checkoutSpend, referenceId: relatedEntityId,
+      notes: "Roth used on an eligible Circum purchase.", transactionId: idempotencyKey,
+      metadata: {source: "sender_wallet", ...(data.metadata || {})},
+    });
+  } catch (error) {
+    throw new functions.https.HttpsError("failed-precondition", error.message);
+  }
+});
+
+exports.requestSenderWalletRefund = functions.https.onCall(async (data, context) => {
+  const admin = await requireTrustedRothAdmin(context);
+  const amount = roundWalletMoney(data.amount);
+  const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
+  if (amount <= 0 || !idempotencyKey || !data.userId) {
+    throw new functions.https.HttpsError("invalid-argument", "User, positive amount and idempotency key are required.");
+  }
+  return recordRothMovement({
+    userId: data.userId, userEmail: data.email || null, amount,
+    balanceType: BALANCE_TYPES.rothCredit, type: TRANSACTION_TYPES.refund,
+    reason: `${data.reason || "Roth refund"}`, relatedEntityId: data.relatedEntityId || null,
+    transactionId: idempotencyKey, issuedByAdminId: admin.uid, issuedByAdminEmail: admin.email,
+    metadata: {source: "sender_wallet_refund"},
+  });
+});
 
 exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -469,10 +646,13 @@ exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
     }
     const legacyWalletRef = targets.includes("sender") ?
       db.collection("wallets").doc(legacyIdentity.walletId) : null;
+    const senderProjectionRef = targets.includes("sender") ?
+      db.collection("senderWallets").doc(recipient.uid) : null;
     const legacyTxRef = targets.includes("sender") ?
       db.collection("walletTransactions").doc(`${adminIssueId}_sender_legacy`) : null;
     const legacyWalletSnap = legacyWalletRef ? await transaction.get(legacyWalletRef) : null;
     const legacyTxSnap = legacyTxRef ? await transaction.get(legacyTxRef) : null;
+    const senderProjectionSnap = senderProjectionRef ? await transaction.get(senderProjectionRef) : null;
     const credited = [];
     for (let index = 0; index < ledgerRefs.length; index++) {
       const item = ledgerRefs[index];
@@ -557,6 +737,12 @@ exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
           createdAt: now,
           metadata: {adminIssueId, idempotencyKey, walletType: "sender"},
         });
+        const projection = senderProjectionSnap && senderProjectionSnap.exists ? senderProjectionSnap.data() : {};
+        transaction.set(senderProjectionRef, senderWalletProjectionRecord({
+          userId: recipient.uid, balance: after, frozen: legacyWallet.isFrozen === true,
+          version: Number(projection.version || 0) + 1,
+          createdAt: projection.createdAt || legacyWallet.createdAt || now, updatedAt: now,
+        }), {merge: true});
       }
     }
     const issueRecord = {
@@ -674,15 +860,29 @@ exports.setWalletFrozen = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "User and reason are required.");
   }
   const identity = await resolveWalletIdentity({userId, email: data.email});
-  await getFirestore().collection("wallets").doc(identity.walletId).set({
-    userId: identity.walletId,
-    uid: identity.uid,
-    userEmail: identity.userEmail,
-    normalizedEmail: identity.userEmail,
-    isFrozen: frozen,
-    currency: "GBP",
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  const db = getFirestore();
+  await db.runTransaction(async (transaction) => {
+    const legacyRef = db.collection("wallets").doc(identity.walletId);
+    const projectionRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
+    const [legacySnap, projectionSnap] = await Promise.all([
+      transaction.get(legacyRef), projectionRef ? transaction.get(projectionRef) : Promise.resolve(null),
+    ]);
+    const legacy = legacySnap.exists ? legacySnap.data() : {};
+    const projection = projectionSnap && projectionSnap.exists ? projectionSnap.data() : {};
+    const now = FieldValue.serverTimestamp();
+    transaction.set(legacyRef, {
+      userId: identity.walletId, uid: identity.uid, userEmail: identity.userEmail,
+      normalizedEmail: identity.userEmail, isFrozen: frozen, currency: "GBP", updatedAt: now,
+    }, {merge: true});
+    if (projectionRef) {
+      transaction.set(projectionRef, senderWalletProjectionRecord({
+        userId: identity.uid,
+        balance: projection.balance == null ? (legacy.balance == null ? legacy.rothCredit || 0 : legacy.balance) : projection.balance,
+        frozen, version: Number(projection.version || 0) + 1,
+        createdAt: projection.createdAt || legacy.createdAt || now, updatedAt: now,
+      }), {merge: true});
+    }
+  });
   await writeRothAudit({
     adminId: context.auth.uid,
     adminEmail: context.auth.token.email || null,
@@ -710,11 +910,13 @@ exports.redeemGiftCard = functions.https.onCall(async (data, context) => {
   const cardRef = db.collection("giftCards").doc(code);
   const walletRef = db.collection("wallets").doc(identity.walletId);
   const txRef = db.collection("walletTransactions").doc(`gift_card_${code}`);
+  const senderWalletRef = db.collection("senderWallets").doc(context.auth.uid);
   await db.runTransaction(async (transaction) => {
-    const [cardSnap, walletSnap, existingTx] = await Promise.all([
+    const [cardSnap, walletSnap, existingTx, senderWalletSnap] = await Promise.all([
       transaction.get(cardRef),
       transaction.get(walletRef),
       transaction.get(txRef),
+      transaction.get(senderWalletRef),
     ]);
     if (existingTx.exists) {
       throw new functions.https.HttpsError("already-exists", "This gift card has already been redeemed.");
@@ -748,6 +950,12 @@ exports.redeemGiftCard = functions.https.onCall(async (data, context) => {
       createdAt: wallet.createdAt || now,
       updatedAt: now,
     }, {merge: true});
+    const senderWallet = senderWalletSnap.exists ? senderWalletSnap.data() : {};
+    transaction.set(senderWalletRef, senderWalletProjectionRecord({
+      userId: context.auth.uid, balance: after, frozen: false,
+      version: Number(senderWallet.version || 0) + 1,
+      createdAt: senderWallet.createdAt || wallet.createdAt || now, updatedAt: now,
+    }), {merge: true});
     transaction.set(txRef, {
       id: txRef.id,
       userId: identity.walletId,

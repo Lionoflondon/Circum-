@@ -465,6 +465,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /senderWallets/{userId} {
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && request.auth.uid == userId);
+      allow create, update, delete: if false;
+    }
+
     match /walletTransactions/{transactionId} {
       allow read: if isFinanceAdmin() ||
         (signedIn() && (
