@@ -6,21 +6,54 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../utils/theme/theme.dart';
 import '../../platform/address_engine.dart';
+import '../../send_package/models/suggestions.m.dart';
+import '../../send_package/repo/place_api.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
 import '../models/recurring_pickup_schedule.dart';
 
-class HealthPlusView extends StatefulWidget {
+class HealthPlusView extends HealthStatusView {
   const HealthPlusView({super.key});
-
-  @override
-  State<HealthPlusView> createState() => _HealthPlusViewState();
 }
 
-class _HealthPlusViewState extends State<HealthPlusView> {
+class HealthStatusView extends StatefulWidget {
+  const HealthStatusView({super.key});
+
+  @override
+  State<HealthStatusView> createState() => _HealthStatusViewState();
+}
+
+enum _HealthStep {
+  status,
+  details,
+  pharmacy,
+  delivery,
+  frequency,
+  plan,
+  notes,
+  review,
+  checkout,
+  confirmed,
+}
+
+class _HealthPlanOption {
+  final String value;
+  final String title;
+  final String subtitle;
+
+  const _HealthPlanOption({
+    required this.value,
+    required this.title,
+    required this.subtitle,
+  });
+}
+
+class _HealthStatusViewState extends State<HealthStatusView> {
   final _fullName = TextEditingController();
+  final _careName = TextEditingController();
+  final _careRelationship = TextEditingController();
+  final _carePhone = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
   final _pharmacyAddress = TextEditingController();
@@ -28,21 +61,53 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   final _notes = TextEditingController();
   final _preferredTime = TextEditingController(text: 'Tuesday, 10:00 AM');
   final _customSchedule = TextEditingController();
+  final _pharmacySearch = TextEditingController();
+  final _deliverySearch = TextEditingController();
 
-  HealthPlusFrequency _frequency = HealthPlusFrequency.monthly;
-  bool _consent = false;
-  bool _savePaymentMethod = true;
-  bool _submitting = false;
+  late final PlaceApiProvider _pharmacyLookup;
+  late final PlaceApiProvider _deliveryLookup;
+  var _step = _HealthStep.status;
+  var _forSomeoneElse = false;
+  var _frequency = HealthPlusFrequency.monthly;
+  var _subscriptionPlan = HealthPlusPricing.supportedSubscriptionPlans.first;
+  var _consent = false;
+  var _savePaymentMethod = true;
+  var _submitting = false;
+  var _searchingPharmacy = false;
+  var _searchingDelivery = false;
   String? _profileId;
   String? _scheduleId;
   String? _message;
   String? _checkoutUrl;
+  String? _pharmacySearchError;
+  String? _deliverySearchError;
   Map<String, dynamic>? _latestPickup;
+  List<Suggestion> _pharmacySuggestions = const [];
+  List<Suggestion> _deliverySuggestions = const [];
   final List<Map<String, dynamic>> _payments = [];
+
+  static const _plans = <_HealthPlanOption>[
+    _HealthPlanOption(
+      value: 'basic',
+      title: 'Basic',
+      subtitle: 'Standard prescription delivery',
+    ),
+    _HealthPlanOption(
+      value: 'priority',
+      title: 'Priority',
+      subtitle: 'Faster rider assignment',
+    ),
+    _HealthPlanOption(
+      value: 'family',
+      title: 'Family support',
+      subtitle: 'Manage pickups for a household member',
+    ),
+  ];
 
   HealthPlusPriceBreakdown get _quote {
     return HealthPlusPricing.calculate(
       recurring: _frequency != HealthPlusFrequency.oneOff,
+      subscriptionPlan: _subscriptionPlan,
     );
   }
 
@@ -53,11 +118,16 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     _fullName.text = user?.displayName ?? '';
     _email.text = user?.email ?? '';
     _phone.text = user?.phoneNumber ?? '';
+    _pharmacyLookup = PlaceApiProvider(Object());
+    _deliveryLookup = PlaceApiProvider(Object());
   }
 
   @override
   void dispose() {
     _fullName.dispose();
+    _careName.dispose();
+    _careRelationship.dispose();
+    _carePhone.dispose();
     _phone.dispose();
     _email.dispose();
     _pharmacyAddress.dispose();
@@ -65,8 +135,110 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     _notes.dispose();
     _preferredTime.dispose();
     _customSchedule.dispose();
+    _pharmacySearch.dispose();
+    _deliverySearch.dispose();
     super.dispose();
   }
+
+  void _goTo(_HealthStep step) {
+    FocusScope.of(context).unfocus();
+    setState(() => _step = step);
+  }
+
+  void _back() {
+    final index = _HealthStep.values.indexOf(_step);
+    if (index <= 0) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    _goTo(_HealthStep.values[index - 1]);
+  }
+
+  Future<void> _searchAddress({
+    required bool pharmacy,
+    required String query,
+  }) async {
+    setState(() {
+      if (pharmacy) {
+        _searchingPharmacy = true;
+        _pharmacySearchError = null;
+      } else {
+        _searchingDelivery = true;
+        _deliverySearchError = null;
+      }
+    });
+    try {
+      final suggestions = await (pharmacy ? _pharmacyLookup : _deliveryLookup)
+          .fetchSuggestions(query, 'en_GB');
+      if (!mounted) return;
+      setState(() {
+        if (pharmacy) {
+          _pharmacySuggestions = suggestions;
+        } else {
+          _deliverySuggestions = suggestions;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        if (pharmacy) {
+          _pharmacySearchError =
+              'Address search is unavailable. You can type it manually.';
+          _pharmacySuggestions = const [];
+        } else {
+          _deliverySearchError =
+              'Address search is unavailable. You can type it manually.';
+          _deliverySuggestions = const [];
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (pharmacy) {
+            _searchingPharmacy = false;
+          } else {
+            _searchingDelivery = false;
+          }
+        });
+      }
+    }
+  }
+
+  void _selectSuggestion({required bool pharmacy, required Suggestion item}) {
+    final display = item.description.isNotEmpty
+        ? item.description
+        : [item.mainText, item.subText]
+            .where((part) => part.trim().isNotEmpty)
+            .join(', ');
+    setState(() {
+      if (pharmacy) {
+        _pharmacyAddress.text = display;
+        _pharmacySearch.text = display;
+        _pharmacySuggestions = const [];
+      } else {
+        _deliveryAddress.text = display;
+        _deliverySearch.text = display;
+        _deliverySuggestions = const [];
+      }
+    });
+    _goTo(pharmacy ? _HealthStep.delivery : _HealthStep.frequency);
+  }
+
+  bool get _detailsReady {
+    if (_fullName.text.trim().isEmpty || _phone.text.trim().isEmpty) {
+      return false;
+    }
+    if (!_forSomeoneElse) return true;
+    return _careName.text.trim().isNotEmpty &&
+        _careRelationship.text.trim().isNotEmpty &&
+        _carePhone.text.trim().isNotEmpty;
+  }
+
+  bool get _pharmacyReady => _pharmacyAddress.text.trim().isNotEmpty;
+
+  bool get _deliveryReady => _deliveryAddress.text.trim().isNotEmpty;
+
+  bool get _notesReady => _consent;
 
   Future<void> _bookHealthPlus() async {
     if (_submitting) return;
@@ -102,20 +274,27 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       final deliveryAddress = AddressEngine.normalize(
         manualAddress: _deliveryAddress.text.trim(),
       );
+      final pharmacyDisplay = AddressEngine.display(
+        pharmacyAddress,
+        fallback: _pharmacyAddress.text.trim(),
+      );
+      final deliveryDisplay = AddressEngine.display(
+        deliveryAddress,
+        fallback: _deliveryAddress.text.trim(),
+      );
 
       final profile = {
         'id': id,
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
         'email': _email.text.trim(),
-        'pharmacyAddress': AddressEngine.display(
-          pharmacyAddress,
-          fallback: _pharmacyAddress.text.trim(),
-        ),
-        'deliveryAddress': AddressEngine.display(
-          deliveryAddress,
-          fallback: _deliveryAddress.text.trim(),
-        ),
+        'careRecipientType': _forSomeoneElse ? 'someone_else' : 'me',
+        'careRecipientName': _forSomeoneElse ? _careName.text.trim() : null,
+        'careRecipientRelationship':
+            _forSomeoneElse ? _careRelationship.text.trim() : null,
+        'careRecipientPhone': _forSomeoneElse ? _carePhone.text.trim() : null,
+        'pharmacyAddress': pharmacyDisplay,
+        'deliveryAddress': deliveryDisplay,
         'pharmacyAddressData': pharmacyAddress,
         'deliveryAddressData': deliveryAddress,
         'notes': _notes.text.trim(),
@@ -131,19 +310,19 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         'scheduleId': scheduleId,
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
-        'pharmacyAddress': AddressEngine.display(
-          pharmacyAddress,
-          fallback: _pharmacyAddress.text.trim(),
-        ),
-        'deliveryAddress': AddressEngine.display(
-          deliveryAddress,
-          fallback: _deliveryAddress.text.trim(),
-        ),
+        'careRecipientType': _forSomeoneElse ? 'someone_else' : 'me',
+        'careRecipientName': _forSomeoneElse ? _careName.text.trim() : null,
+        'careRecipientRelationship':
+            _forSomeoneElse ? _careRelationship.text.trim() : null,
+        'careRecipientPhone': _forSomeoneElse ? _carePhone.text.trim() : null,
+        'pharmacyAddress': pharmacyDisplay,
+        'deliveryAddress': deliveryDisplay,
         'pharmacyAddressData': pharmacyAddress,
         'deliveryAddressData': deliveryAddress,
         'notes': _notes.text.trim(),
         'preferredPickupTime': _preferredTime.text.trim(),
         'frequency': _frequency.value,
+        'subscriptionPlan': _subscriptionPlan,
         'status': PickupStatus.scheduled.value,
         'price': quote.total,
         'currency': 'GBP',
@@ -224,6 +403,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         _message = checkoutUrl == null
             ? 'Health+ pickup saved. Secure checkout needs configuration.'
             : 'Health+ pickup saved. Secure checkout is ready.';
+        _step = _HealthStep.confirmed;
       });
 
       if (checkoutUrl != null) {
@@ -335,23 +515,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     });
   }
 
-  Future<void> _adminStatus(String status) async {
-    final pickupId = _latestPickup?['id']?.toString();
-    if (pickupId == null) return;
-    final response = await http.post(
-      Uri.parse(
-        'https://us-central1-circum-2797c.cloudfunctions.net/updateHealthPlusPickupStatus',
-      ),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'pickupId': pickupId, 'status': status}),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      setState(() {
-        _latestPickup = {...?_latestPickup, 'status': status};
-        _message = 'Health+ status updated to $status.';
-      });
-    }
-  }
+  // Admin status overrides belong in Admin.
 
   void _logUsageEvent({
     required WriteBatch batch,
@@ -399,149 +563,611 @@ class _HealthPlusViewState extends State<HealthPlusView> {
 
   @override
   Widget build(BuildContext context) {
-    final quote = _quote;
     return Scaffold(
-      backgroundColor: AppColors.secondary,
+      backgroundColor: _HealthTokens.navy,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+        child: Stack(
           children: [
-            Row(
+            const _HealthBackdrop(),
+            Column(
               children: [
-                Container(
-                  height: 42,
-                  width: 42,
-                  decoration: BoxDecoration(
-                    color: const Color(0xffdcfce7),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.health_and_safety,
-                      color: Color(0xff16a34a)),
+                _HealthTopBar(
+                  step: _step,
+                  onBack: _back,
                 ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                     children: [
-                      AppText.text('Health+',
-                          fontSize: 28, fontWeight: FontWeight.w800),
-                      const SizedBox(height: 2),
-                      AppText.text('Starting from £11',
-                          color: AppColors.textGrey,
-                          fontWeight: FontWeight.w700),
+                      _HealthHeader(step: _step),
+                      const SizedBox(height: 18),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        child: _stepBody(),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            _Panel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppText.text('Get your meds before you need them.',
-                      fontSize: 28, fontWeight: FontWeight.w900),
-                  const SizedBox(height: 8),
-                  AppText.text(
-                    'Medication and prescription pickup management from pharmacy to door.',
-                    color: AppColors.textGrey,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: const [
-                      _ChipText('One-off'),
-                      _ChipText('Recurring'),
-                      _ChipText('Secure checkout'),
-                      _ChipText('Sealed packages only'),
-                    ],
-                  ),
-                ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stepBody() {
+    return KeyedSubtree(
+      key: ValueKey(_step),
+      child: switch (_step) {
+        _HealthStep.status => _statusStep(),
+        _HealthStep.details => _detailsStep(),
+        _HealthStep.pharmacy => _addressStep(pharmacy: true),
+        _HealthStep.delivery => _addressStep(pharmacy: false),
+        _HealthStep.frequency => _frequencyStep(),
+        _HealthStep.plan => _planStep(),
+        _HealthStep.notes => _notesStep(),
+        _HealthStep.review => _reviewStep(),
+        _HealthStep.checkout => _checkoutStep(),
+        _HealthStep.confirmed => _confirmedStep(),
+      },
+    );
+  }
+
+  Widget _statusStep() {
+    return Column(
+      children: [
+        _StatusCard(
+          pickup: _latestPickup,
+          payments: _payments,
+          onPauseSchedule: _pauseSchedule,
+          onCancelPickup: _cancelPickup,
+          onUpdatePayment: _openCheckout,
+        ),
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: 'Book a new pickup',
+          icon: Icons.medication_liquid_outlined,
+          onTap: () => _goTo(_HealthStep.details),
+        ),
+        const SizedBox(height: 12),
+        const _TrustStrip(),
+      ],
+    );
+  }
+
+  Widget _detailsStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CareChoice(
+          selected: !_forSomeoneElse,
+          title: 'Me',
+          onTap: () => setState(() => _forSomeoneElse = false),
+        ),
+        _CareChoice(
+          selected: _forSomeoneElse,
+          title: 'Someone else',
+          onTap: () => setState(() => _forSomeoneElse = true),
+        ),
+        const SizedBox(height: 10),
+        _HealthInput(controller: _fullName, label: 'Full name'),
+        _HealthInput(controller: _phone, label: 'Phone'),
+        _HealthInput(controller: _email, label: 'Email'),
+        if (_forSomeoneElse) ...[
+          _HealthInput(controller: _careName, label: 'Name'),
+          _HealthInput(controller: _careRelationship, label: 'Relationship'),
+          _HealthInput(controller: _carePhone, label: 'Phone'),
+        ],
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: 'Continue',
+          enabled: _detailsReady,
+          onTap: () => _goTo(_HealthStep.pharmacy),
+        ),
+      ],
+    );
+  }
+
+  Widget _addressStep({required bool pharmacy}) {
+    final controller = pharmacy ? _pharmacySearch : _deliverySearch;
+    final manual = pharmacy ? _pharmacyAddress : _deliveryAddress;
+    final suggestions = pharmacy ? _pharmacySuggestions : _deliverySuggestions;
+    final searching = pharmacy ? _searchingPharmacy : _searchingDelivery;
+    final error = pharmacy ? _pharmacySearchError : _deliverySearchError;
+    final ready = pharmacy ? _pharmacyReady : _deliveryReady;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SearchField(
+          controller: controller,
+          hint: pharmacy
+              ? 'Search pharmacy or address'
+              : 'Search delivery address',
+          loading: searching,
+          onChanged: (value) {
+            manual.text = value;
+            if (value.trim().length >= 3) {
+              _searchAddress(pharmacy: pharmacy, query: value);
+            } else {
+              setState(() {
+                if (pharmacy) {
+                  _pharmacySuggestions = const [];
+                } else {
+                  _deliverySuggestions = const [];
+                }
+              });
+            }
+          },
+        ),
+        if (error != null) _HealthNote(error, warning: true),
+        ...suggestions.map(
+          (item) => _SuggestionRow(
+            item: item,
+            onTap: () => _selectSuggestion(pharmacy: pharmacy, item: item),
+          ),
+        ),
+        _HealthInput(
+          controller: manual,
+          label: pharmacy ? 'Selected pharmacy' : 'Selected delivery address',
+          maxLines: 2,
+        ),
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: pharmacy ? 'Choose Pharmacy' : 'Continue to Delivery',
+          enabled: ready,
+          onTap: () =>
+              _goTo(pharmacy ? _HealthStep.delivery : _HealthStep.frequency),
+        ),
+      ],
+    );
+  }
+
+  Widget _frequencyStep() {
+    return Column(
+      children: [
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.55,
+          children: HealthPlusFrequency.values.map((frequency) {
+            return _FrequencyCard(
+              selected: _frequency == frequency,
+              title: frequency.label,
+              subtitle: _frequencySubtitle(frequency),
+              onTap: () => setState(() => _frequency = frequency),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        _HealthInput(
+          controller: _preferredTime,
+          label: 'Preferred pickup day/time',
+        ),
+        if (_frequency == HealthPlusFrequency.custom)
+          _HealthInput(
+            controller: _customSchedule,
+            label: 'Custom repeat schedule',
+          ),
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: 'Continue',
+          onTap: () => _goTo(_HealthStep.plan),
+        ),
+      ],
+    );
+  }
+
+  Widget _planStep() {
+    final base = HealthPlusPricing.calculate(subscriptionPlan: 'basic');
+    final plans = _plans.where(
+      (plan) =>
+          HealthPlusPricing.supportedSubscriptionPlans.contains(plan.value),
+    );
+    return Column(
+      children: [
+        ...plans.map((plan) {
+          final quote = HealthPlusPricing.calculate(
+            subscriptionPlan: plan.value,
+            recurring: _frequency != HealthPlusFrequency.oneOff,
+          );
+          final delta = quote.total - base.total;
+          return _PlanCard(
+            selected: _subscriptionPlan == plan.value,
+            title: plan.title,
+            subtitle: plan.subtitle,
+            price: delta <= 0 ? 'Included' : '+£${delta.toStringAsFixed(2)}',
+            onTap: () => setState(() => _subscriptionPlan = plan.value),
+          );
+        }),
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: 'Choose Plan',
+          onTap: () => _goTo(_HealthStep.notes),
+        ),
+      ],
+    );
+  }
+
+  Widget _notesStep() {
+    return Column(
+      children: [
+        _HealthInput(
+          controller: _notes,
+          label: 'Notes for the rider (optional)',
+          hint: 'e.g. Leave with concierge, ring buzzer 2B',
+          maxLines: 4,
+        ),
+        _ConsentCard(
+          checked: _consent,
+          onTap: () => setState(() => _consent = !_consent),
+        ),
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: 'Review Booking',
+          enabled: _notesReady,
+          onTap: () => _goTo(_HealthStep.review),
+        ),
+      ],
+    );
+  }
+
+  Widget _reviewStep() {
+    final quote = _quote;
+    return Column(
+      children: [
+        _ReviewPanel(
+          rows: [
+            ('Pharmacy', _pharmacyAddress.text.trim()),
+            ('Delivery', _deliveryAddress.text.trim()),
+            ('Frequency', _frequency.label),
+            ('Plan', _planTitle(_subscriptionPlan)),
+            (
+              'Delivery + service fee',
+              '£${(quote.delivery.total + quote.serviceFee).toStringAsFixed(2)}'
+            ),
+            if (quote.priorityFee > 0)
+              ('Priority fee', '£${quote.priorityFee.toStringAsFixed(2)}'),
+            if (quote.familySupportFee > 0)
+              (
+                'Family support fee',
+                '£${quote.familySupportFee.toStringAsFixed(2)}'
               ),
-            ),
-            const SizedBox(height: 14),
-            _SectionTitle('Enrolment details'),
-            _HealthInput(controller: _fullName, hint: 'Full name'),
-            _HealthInput(controller: _phone, hint: 'Phone number'),
-            _HealthInput(controller: _email, hint: 'Email'),
-            _HealthInput(
-                controller: _pharmacyAddress,
-                hint: 'Pickup address / pharmacy address'),
-            _HealthInput(
-                controller: _deliveryAddress, hint: 'Delivery address'),
-            _HealthInput(
-              controller: _notes,
-              hint: 'Prescription / pickup notes',
-              maxLines: 3,
-            ),
-            const SizedBox(height: 14),
-            _SectionTitle('Pickup schedule'),
-            _FrequencyPicker(
-              selected: _frequency,
-              onChanged: (value) => setState(() => _frequency = value),
-            ),
-            _HealthInput(
-                controller: _preferredTime, hint: 'Preferred pickup day/time'),
-            if (_frequency == HealthPlusFrequency.custom)
-              _HealthInput(
-                  controller: _customSchedule, hint: 'Custom repeat schedule'),
-            const SizedBox(height: 14),
-            _PricePanel(quote: quote, frequency: _frequency),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              activeColor: AppColors.primary,
-              value: _savePaymentMethod,
-              onChanged: (value) => setState(() => _savePaymentMethod = value),
-              title: AppText.text('Save payment method for Health+',
-                  fontWeight: FontWeight.w700),
-            ),
-            _Disclaimer(),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              activeColor: AppColors.primary,
-              value: _consent,
-              onChanged: (value) => setState(() => _consent = value ?? false),
-              title: AppText.text(
-                'I confirm the prescription is valid and ready or will be ready for pharmacy collection.',
-                fontWeight: FontWeight.w700,
+            if (quote.recurringDiscount > 0)
+              (
+                'Recurring discount',
+                '-£${quote.recurringDiscount.toStringAsFixed(2)}'
               ),
+          ],
+          total: quote.total,
+        ),
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: 'Pay Securely',
+          onTap: () => _goTo(_HealthStep.checkout),
+        ),
+      ],
+    );
+  }
+
+  Widget _checkoutStep() {
+    return Column(
+      children: [
+        const _CheckoutNote(),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          activeThumbColor: _HealthTokens.health,
+          value: _savePaymentMethod,
+          onChanged: (value) => setState(() => _savePaymentMethod = value),
+          title: const Text(
+            'Save payment method for Health+',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        ),
+        if (_message != null) _HealthNote(_message!),
+        const SizedBox(height: 18),
+        _PrimaryHealthButton(
+          label: _submitting ? 'Creating Health+...' : 'Pay Securely',
+          icon: Icons.lock_outline_rounded,
+          enabled: !_submitting,
+          onTap: _bookHealthPlus,
+        ),
+        if (_checkoutUrl != null) ...[
+          const SizedBox(height: 10),
+          _SecondaryHealthButton(
+            label: 'Open secure checkout',
+            icon: Icons.open_in_new_rounded,
+            onTap: _openCheckout,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _confirmedStep() {
+    return Column(
+      children: [
+        const _HealthTimeline(),
+        if (_message != null) _HealthNote(_message!),
+        const SizedBox(height: 18),
+        _SecondaryHealthButton(
+          label: 'Back to Your Care',
+          onTap: () => _goTo(_HealthStep.status),
+        ),
+        const SizedBox(height: 12),
+        const _TrustStrip(),
+      ],
+    );
+  }
+
+  String _frequencySubtitle(HealthPlusFrequency frequency) {
+    return switch (frequency) {
+      HealthPlusFrequency.oneOff => 'Single collection',
+      HealthPlusFrequency.weekly => 'Every 7 days',
+      HealthPlusFrequency.everyTwoWeeks => 'Fortnightly',
+      HealthPlusFrequency.every28Days => '4-week cycle',
+      HealthPlusFrequency.monthly => 'Calendar month',
+      HealthPlusFrequency.custom => 'Set your own repeat',
+    };
+  }
+
+  String _planTitle(String value) {
+    return _plans
+        .firstWhere(
+          (plan) => plan.value == value,
+          orElse: () => _plans.first,
+        )
+        .title;
+  }
+}
+
+class _HealthTokens {
+  static const navy = Color(0xFF07090F);
+  static const input = Color(0xFF1F292E);
+  static const border = Color(0x29FFFFFF);
+  static const health = Color(0xFF2FAE8C);
+  static const healthDeep = Color(0xFF1F7A63);
+  static const muted = Color(0x99FFFFFF);
+  static const soft = Color(0x6EC9D2D7);
+  static const warning = Color(0xFFE0A93A);
+}
+
+class _HealthBackdrop extends StatelessWidget {
+  const _HealthBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(-.8, -1.1),
+          radius: 1.2,
+          colors: [
+            _HealthTokens.health.withValues(alpha: .15),
+            _HealthTokens.navy,
+          ],
+        ),
+      ),
+      child: const SizedBox.expand(),
+    );
+  }
+}
+
+class _HealthTopBar extends StatelessWidget {
+  final _HealthStep step;
+  final VoidCallback onBack;
+
+  const _HealthTopBar({required this.step, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    final index = _HealthStep.values.indexOf(step);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Row(
+        children: [
+          _IconGlassButton(icon: Icons.chevron_left_rounded, onTap: onBack),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              children: List.generate(_HealthStep.values.length - 1, (i) {
+                return Expanded(
+                  child: Container(
+                    height: 4,
+                    margin: EdgeInsets.only(
+                        right: i == _HealthStep.values.length - 2 ? 0 : 4),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(99),
+                      gradient: i < index
+                          ? const LinearGradient(
+                              colors: [
+                                _HealthTokens.health,
+                                _HealthTokens.healthDeep
+                              ],
+                            )
+                          : null,
+                      color: i < index
+                          ? null
+                          : Colors.white.withValues(alpha: .08),
+                    ),
+                  ),
+                );
+              }),
             ),
-            if (_message != null) ...[
-              const SizedBox(height: 8),
-              AppText.text(_message!, fontWeight: FontWeight.w800),
-            ],
-            const SizedBox(height: 12),
-            AppButton.button(
-              isLoading: _submitting,
-              onPressed: _bookHealthPlus,
-              minimumSize: const Size(double.maxFinite, 54),
-              widget: AppText.text(
-                _submitting
-                    ? 'Creating Health+...'
-                    : 'Pay £${quote.total.toStringAsFixed(2)} securely',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthHeader extends StatelessWidget {
+  final _HealthStep step;
+
+  const _HealthHeader({required this.step});
+
+  @override
+  Widget build(BuildContext context) {
+    final eyebrow = switch (step) {
+      _HealthStep.status => 'HEALTH+',
+      _HealthStep.details => 'STEP 01 — YOUR DETAILS',
+      _HealthStep.pharmacy => 'STEP 02 — PHARMACY',
+      _HealthStep.delivery => 'STEP 03 — DELIVERY',
+      _HealthStep.frequency => 'STEP 04 — FREQUENCY',
+      _HealthStep.plan => 'STEP 05 — PLAN',
+      _HealthStep.notes => 'STEP 06 — NOTES & CONSENT',
+      _HealthStep.review => 'STEP 07 — REVIEW',
+      _HealthStep.checkout => 'STEP 08 — CHECKOUT',
+      _HealthStep.confirmed => 'STEP 09 — CONFIRMED',
+    };
+    final title = switch (step) {
+      _HealthStep.status => 'Your Care',
+      _HealthStep.details => 'Who are we caring for?',
+      _HealthStep.pharmacy => 'Which pharmacy has your prescription?',
+      _HealthStep.delivery => 'Where should we deliver it?',
+      _HealthStep.frequency => 'How should we look after this prescription?',
+      _HealthStep.plan => 'Choose your plan',
+      _HealthStep.notes => 'Anything we should know?',
+      _HealthStep.review => 'Everything looks ready.',
+      _HealthStep.checkout => 'Secure payment',
+      _HealthStep.confirmed => "You're all set.",
+    };
+    final subtitle = step == _HealthStep.status
+        ? "We'll help you stay on schedule."
+        : step == _HealthStep.confirmed
+            ? "We'll collect your prescription and keep you updated every step of the way."
+            : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow,
+          style: const TextStyle(
+            color: _HealthTokens.health,
+            fontFamily: 'JetBrains Mono',
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            height: 1.16,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Inter',
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: _HealthTokens.muted,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _IconGlassButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _IconGlassButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _HealthTokens.border),
+        ),
+        child: Icon(icon, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets padding;
+  final bool selected;
+
+  const _GlassCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(14),
+    this.selected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: selected
+            ? _HealthTokens.health.withValues(alpha: .10)
+            : Colors.white.withValues(alpha: .04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected ? _HealthTokens.health : _HealthTokens.border,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CareChoice extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final VoidCallback onTap;
+
+  const _CareChoice({
+    required this.selected,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: _GlassCard(
+        selected: selected,
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? _HealthTokens.health : _HealthTokens.muted,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            if (_checkoutUrl != null) ...[
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: _openCheckout,
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('Open secure checkout'),
-              ),
-            ],
-            const SizedBox(height: 18),
-            _Dashboard(
-              pickup: _latestPickup,
-              payments: _payments,
-              onPauseSchedule: _pauseSchedule,
-              onCancelPickup: _cancelPickup,
-              onUpdatePayment: _openCheckout,
-            ),
-            const SizedBox(height: 14),
-            _AdminPanel(pickup: _latestPickup, onStatus: _adminStatus),
           ],
         ),
       ),
@@ -549,217 +1175,100 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   }
 }
 
-class _Panel extends StatelessWidget {
-  final Widget child;
-
-  const _Panel({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.maxFinite,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.sheetBackground,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.borderColor),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String title;
-
-  const _SectionTitle(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: AppText.text(title, fontSize: 18, fontWeight: FontWeight.w800),
-    );
-  }
-}
-
 class _HealthInput extends StatelessWidget {
   final TextEditingController controller;
-  final String hint;
+  final String label;
+  final String? hint;
   final int maxLines;
 
   const _HealthInput({
     required this.controller,
-    required this.hint,
+    required this.label,
+    this.hint,
     this.maxLines = 1,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        style: const TextStyle(color: Colors.white, fontFamily: 'Helvetica'),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.42)),
-          filled: true,
-          fillColor: AppColors.input,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        color: _HealthTokens.input,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xE62F3B42)),
       ),
-    );
-  }
-}
-
-class _FrequencyPicker extends StatelessWidget {
-  final HealthPlusFrequency selected;
-  final ValueChanged<HealthPlusFrequency> onChanged;
-
-  const _FrequencyPicker({required this.selected, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: HealthPlusFrequency.values.map((frequency) {
-          final active = frequency == selected;
-          return ChoiceChip(
-            selected: active,
-            label: Text(frequency.label),
-            onSelected: (_) => onChanged(frequency),
-            selectedColor: AppColors.primary,
-            backgroundColor: AppColors.input,
-            labelStyle: TextStyle(
-              color: active ? Colors.white : AppColors.textGrey,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Helvetica',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: _HealthTokens.soft,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .6,
             ),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          );
-        }).toList(),
+          ),
+          TextField(
+            controller: controller,
+            maxLines: maxLines,
+            style: const TextStyle(color: Colors.white, fontFamily: 'Inter'),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(color: _HealthTokens.muted),
+              border: InputBorder.none,
+              isDense: true,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ChipText extends StatelessWidget {
-  final String label;
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final bool loading;
+  final ValueChanged<String> onChanged;
 
-  const _ChipText(this.label);
+  const _SearchField({
+    required this.controller,
+    required this.hint,
+    required this.loading,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xffdcfce7),
-        borderRadius: BorderRadius.circular(12),
+        color: _HealthTokens.input,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xE62F3B42)),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xff166534),
-          fontWeight: FontWeight.w800,
-          fontFamily: 'Helvetica',
-        ),
-      ),
-    );
-  }
-}
-
-class _PricePanel extends StatelessWidget {
-  final HealthPlusPriceBreakdown quote;
-  final HealthPlusFrequency frequency;
-
-  const _PricePanel({required this.quote, required this.frequency});
-
-  @override
-  Widget build(BuildContext context) {
-    return _Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionTitle('Price breakdown'),
-          _PriceRow('Base fare', quote.delivery.baseFare),
-          _PriceRow('Mileage fare', quote.delivery.distanceFare),
-          _PriceRow(
-              'Medication parcel surcharge', quote.delivery.weightSurcharge),
-          _PriceRow('Health+ service fee', quote.serviceFee),
-          if (quote.minimumAdjustment > 0)
-            _PriceRow('Health+ minimum adjustment', quote.minimumAdjustment),
-          const Divider(color: AppColors.borderColor, height: 24),
-          _PriceRow(
-            frequency == HealthPlusFrequency.oneOff
-                ? 'One-off total'
-                : 'Recurring pickup total',
-            quote.total,
-            strong: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PriceRow extends StatelessWidget {
-  final String label;
-  final double value;
-  final bool strong;
-
-  const _PriceRow(this.label, this.value, {this.strong = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          Expanded(
-            child: AppText.text(label,
-                color: AppColors.textGrey,
-                fontWeight: strong ? FontWeight.w800 : FontWeight.w600),
+          Icon(
+            loading ? Icons.hourglass_top_rounded : Icons.search_rounded,
+            color: _HealthTokens.health,
+            size: 20,
           ),
-          AppText.text('£${value.toStringAsFixed(2)}',
-              fontWeight: strong ? FontWeight.w900 : FontWeight.w700),
-        ],
-      ),
-    );
-  }
-}
-
-class _Disclaimer extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      'Health+ is a pickup and delivery service only.',
-      'Circum does not prescribe medication.',
-      'Users are responsible for valid prescriptions that are ready for collection.',
-      'Drivers collect and deliver sealed pharmacy packages only.',
-    ];
-
-    return _Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppText.text('Safety and compliance', fontWeight: FontWeight.w800),
-          const SizedBox(height: 8),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: AppText.text('• $item',
-                  color: AppColors.textGrey, fontWeight: FontWeight.w600),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(color: _HealthTokens.muted),
+                border: InputBorder.none,
+              ),
             ),
           ),
         ],
@@ -768,14 +1277,368 @@ class _Disclaimer extends StatelessWidget {
   }
 }
 
-class _Dashboard extends StatelessWidget {
+class _SuggestionRow extends StatelessWidget {
+  final Suggestion item;
+  final VoidCallback onTap;
+
+  const _SuggestionRow({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        child: Row(
+          children: [
+            const Icon(Icons.location_on_outlined, color: _HealthTokens.health),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.mainText.isEmpty ? item.description : item.mainText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (item.subText.isNotEmpty)
+                    Text(
+                      item.subText,
+                      style: const TextStyle(
+                        color: _HealthTokens.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FrequencyCard extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _FrequencyCard({
+    required this.selected,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: _GlassCard(
+        selected: selected,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: _HealthTokens.muted,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final String subtitle;
+  final String price;
+  final VoidCallback onTap;
+
+  const _PlanCard({
+    required this.selected,
+    required this.title,
+    required this.subtitle,
+    required this.price,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: _GlassCard(
+        selected: selected,
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? _HealthTokens.health : _HealthTokens.muted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: _HealthTokens.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              price,
+              style: const TextStyle(
+                color: _HealthTokens.health,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConsentCard extends StatelessWidget {
+  final bool checked;
+  final VoidCallback onTap;
+
+  const _ConsentCard({required this.checked, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: _GlassCard(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              checked ? Icons.check_box_rounded : Icons.check_box_outline_blank,
+              color: checked ? _HealthTokens.health : _HealthTokens.muted,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'I confirm the prescription is valid and ready or will be ready for pharmacy collection.',
+                style: TextStyle(
+                  color: Color(0xFFC9D2D7),
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewPanel extends StatelessWidget {
+  final List<(String, String)> rows;
+  final double total;
+
+  const _ReviewPanel({required this.rows, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      child: Column(
+        children: [
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.$1,
+                      style: const TextStyle(color: _HealthTokens.muted),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      row.$2,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(color: _HealthTokens.border),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Total',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                '£${total.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckoutNote extends StatelessWidget {
+  const _CheckoutNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Icon(Icons.lock_outline_rounded, color: _HealthTokens.health),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "You'll be taken to a secure Stripe checkout page to complete payment, then brought straight back here.",
+              style: TextStyle(
+                color: Color(0xFFC9D2D7),
+                height: 1.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthTimeline extends StatelessWidget {
+  const _HealthTimeline();
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = [
+      'Prescription ready',
+      'Rider assigned',
+      'Collected',
+      'On the way',
+      'Delivered',
+    ];
+    return _GlassCard(
+      child: Column(
+        children: List.generate(labels.length, (index) {
+          final done = index == 0;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: done ? _HealthTokens.health : _HealthTokens.border,
+                      boxShadow: done
+                          ? [
+                              BoxShadow(
+                                color:
+                                    _HealthTokens.health.withValues(alpha: .32),
+                                blurRadius: 12,
+                              )
+                            ]
+                          : null,
+                    ),
+                  ),
+                  if (index < labels.length - 1)
+                    Container(
+                      width: 1.5,
+                      height: 26,
+                      color: _HealthTokens.border,
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: Text(
+                  labels[index],
+                  style: TextStyle(
+                    color: done ? Colors.white : _HealthTokens.muted,
+                    fontWeight: done ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _StatusCard extends StatelessWidget {
   final Map<String, dynamic>? pickup;
   final List<Map<String, dynamic>> payments;
   final VoidCallback onPauseSchedule;
   final VoidCallback onCancelPickup;
   final VoidCallback onUpdatePayment;
 
-  const _Dashboard({
+  const _StatusCard({
     required this.pickup,
     required this.payments,
     required this.onPauseSchedule,
@@ -785,132 +1648,272 @@ class _Dashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppText.text('Your Health+ dashboard',
-              fontSize: 18, fontWeight: FontWeight.w800),
-          const SizedBox(height: 10),
-          if (pickup == null)
-            AppText.text(
-              'Upcoming pickups, payment history, and recurring controls will appear here after enrolment.',
-              color: AppColors.textGrey,
-              fontWeight: FontWeight.w600,
-            )
-          else ...[
-            _DashboardRow('Upcoming pickup',
-                pickup!['preferredPickupTime']?.toString() ?? 'Scheduled'),
-            _DashboardRow(
-                'Status', pickup!['status']?.toString() ?? 'scheduled'),
-            _DashboardRow(
-              'Payment history',
-              payments.isEmpty
-                  ? 'No payments yet'
-                  : '£${payments.first['amount']} - ${payments.first['status']}',
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: onPauseSchedule,
-                  icon: const Icon(Icons.pause),
-                  label: const Text('Pause recurring'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onCancelPickup,
-                  icon: const Icon(Icons.cancel_outlined),
-                  label: const Text('Cancel pickup'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onUpdatePayment,
-                  icon: const Icon(Icons.credit_card),
-                  label: const Text('Update payment'),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _DashboardRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _DashboardRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Expanded(
-              child: AppText.text(label,
-                  color: AppColors.textGrey, fontWeight: FontWeight.w700)),
-          Flexible(
-              child: AppText.text(value,
-                  textAlign: TextAlign.right, fontWeight: FontWeight.w900)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AdminPanel extends StatelessWidget {
-  final Map<String, dynamic>? pickup;
-  final ValueChanged<String> onStatus;
-
-  const _AdminPanel({required this.pickup, required this.onStatus});
-
-  @override
-  Widget build(BuildContext context) {
-    final statuses = [
-      PickupStatus.assigned.value,
-      PickupStatus.awaitingPharmacyCollection.value,
-      PickupStatus.collected.value,
-      PickupStatus.outForDelivery.value,
-      PickupStatus.delivered.value,
-      PickupStatus.failed.value,
-    ];
-    return _Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppText.text('Admin operations',
-              fontSize: 18, fontWeight: FontWeight.w800),
-          const SizedBox(height: 8),
-          AppText.text(
-            pickup == null
-                ? 'Create a Health+ booking to expose admin status actions.'
-                : 'Assign drivers, mark collection/delivery, flag failed pickups, and contact the user when there is an issue.',
-            color: AppColors.textGrey,
+    if (pickup == null) {
+      return const _GlassCard(
+        child: Text(
+          'No active pickup yet. Book your first Health+ collection and your care timeline will appear here.',
+          style: TextStyle(
+            color: Color(0xFFC9D2D7),
+            height: 1.5,
             fontWeight: FontWeight.w600,
           ),
+        ),
+      );
+    }
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _HealthTokens.health.withValues(alpha: .14),
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: Text(
+              _pickupStatusLabel(
+                      '${pickup!['status'] ?? PickupStatus.scheduled.value}')
+                  .toUpperCase(),
+              style: const TextStyle(
+                color: _HealthTokens.health,
+                fontFamily: 'JetBrains Mono',
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+              ),
+            ),
+          ),
           const SizedBox(height: 10),
+          Text(
+            '${pickup!['frequency'] ?? 'monthly'} pickup',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${pickup!['preferredPickupTime'] ?? 'Scheduled'} · ${payments.isEmpty ? 'Checkout pending' : payments.first['status']}',
+            style: const TextStyle(color: _HealthTokens.muted),
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: statuses.map((status) {
-              return ActionChip(
-                label: Text(status.replaceAll('_', ' ')),
-                onPressed: pickup == null ? null : () => onStatus(status),
-                backgroundColor: AppColors.input,
-                labelStyle: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Helvetica',
-                  fontWeight: FontWeight.w700,
-                ),
-              );
-            }).toList(),
+            children: [
+              _SmallAction(label: 'Pause schedule', onTap: onPauseSchedule),
+              _SmallAction(
+                  label: 'Cancel', danger: true, onTap: onCancelPickup),
+              _SmallAction(label: 'Update payment', onTap: onUpdatePayment),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  static String _pickupStatusLabel(String value) {
+    return switch (PickupStatusValue.fromValue(value)) {
+      PickupStatus.scheduled => 'Prescription ready',
+      PickupStatus.assigned => 'Rider assigned',
+      PickupStatus.awaitingPharmacyCollection => 'Rider assigned',
+      PickupStatus.collected => 'Collected',
+      PickupStatus.outForDelivery => 'On the way',
+      PickupStatus.delivered => 'Delivered',
+      PickupStatus.failed => 'Delivery update',
+      PickupStatus.cancelled => 'Delivery update',
+    };
+  }
+}
+
+class _SmallAction extends StatelessWidget {
+  final String label;
+  final bool danger;
+  final VoidCallback onTap;
+
+  const _SmallAction({
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: danger
+                ? const Color(0xFFFF452B).withValues(alpha: .30)
+                : _HealthTokens.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: danger ? const Color(0xFFFF452B) : const Color(0xFFC9D2D7),
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrimaryHealthButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _PrimaryHealthButton({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : .45,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              colors: [_HealthTokens.health, _HealthTokens.healthDeep],
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryHealthButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final VoidCallback onTap;
+
+  const _SecondaryHealthButton({
+    required this.label,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _HealthTokens.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthNote extends StatelessWidget {
+  final String text;
+  final bool warning;
+
+  const _HealthNote(this.text, {this.warning = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: (warning ? _HealthTokens.warning : _HealthTokens.health)
+            .withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: (warning ? _HealthTokens.warning : _HealthTokens.health)
+              .withValues(alpha: .30),
+        ),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Color(0xFFC9D2D7), height: 1.45),
+      ),
+    );
+  }
+}
+
+class _TrustStrip extends StatelessWidget {
+  const _TrustStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.shield_outlined, color: _HealthTokens.muted, size: 14),
+        SizedBox(width: 6),
+        Text(
+          'Every step is saved. Nothing is lost.',
+          style: TextStyle(
+            color: _HealthTokens.muted,
+            fontFamily: 'JetBrains Mono',
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }

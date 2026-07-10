@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/health_plus_profile.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
@@ -172,6 +174,60 @@ void main() {
       );
       expect(event.toJson()['publicMessage'], contains('verified rider'));
       expect(event.toJson()['internalNote'], isNull);
+    });
+
+    test('guided mobile Health+ view uses approved customer copy', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('class HealthStatusView'));
+      expect(source, contains('class HealthPlusView extends HealthStatusView'));
+      expect(source, contains('Your Care'));
+      expect(source, contains("We'll help you stay on schedule."));
+      expect(source, contains('Who are we caring for?'));
+      expect(source, contains('Which pharmacy has your prescription?'));
+      expect(source, contains('Where should we deliver it?'));
+      expect(
+        source,
+        contains('How should we look after this prescription?'),
+      );
+      expect(source, contains('Anything we should know?'));
+      expect(source, contains('Everything looks ready.'));
+      expect(source, contains("You're all set."));
+      expect(
+        source,
+        contains(
+          "We'll collect your prescription and keep you updated every step of the way.",
+        ),
+      );
+    });
+
+    test('guided mobile Health+ reuses backend integrations', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('HealthPlusPricing.calculate'));
+      expect(source, contains('HealthPlusFrequency.values'));
+      expect(source, contains('PickupStatus.scheduled.value'));
+      expect(source, contains('PlaceApiProvider'));
+      expect(source, contains('createHealthPlusCheckoutSession'));
+      expect(source, contains('launchUrl'));
+      expect(source, contains("collection('healthPlusProfiles')"));
+      expect(source, contains("collection('prescriptionPickups')"));
+      expect(source, contains("collection('recurringPickupSchedules')"));
+      expect(source, contains("collection('healthPlusPayments')"));
+      expect(source, contains('pricingBreakdown'));
+      expect(source, contains('Admin status overrides belong in Admin.'));
+      expect(source, isNot(contains('class _AdminPanel')));
+      expect(source, isNot(contains('Admin operations')));
+    });
+
+    test('Health+ tab renders the guided status view', () {
+      final source =
+          File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
+
+      expect(source, contains('const HealthStatusView()'));
+      expect(source, isNot(contains('const HealthPlusView(),')));
     });
   });
 }

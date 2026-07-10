@@ -1,6 +1,11 @@
 import '../../pricing/delivery_pricing.dart';
 
 class HealthPlusPricing {
+  static const List<String> supportedSubscriptionPlans = [
+    'basic',
+    'priority',
+    'family',
+  ];
   static const double serviceFeeGbp = 1.2;
   static const double priorityFeeGbp = 2.99;
   static const double familySupportFeeGbp = 3.99;

@@ -186,7 +186,7 @@ class AppNavState extends State<AppNavView> {
       const HomeView(),
       const HistoryView(),
       const SupportView(),
-      const HealthPlusView(),
+      const HealthStatusView(),
       const AccountView(),
     ];
     return children[index];
