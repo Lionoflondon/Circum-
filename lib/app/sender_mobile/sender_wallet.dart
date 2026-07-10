@@ -439,7 +439,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         MaterialPageRoute<void>(
           builder: (_) => const _WalletInformationScreen(
             title: 'Roth',
-            icon: Icons.auto_awesome_rounded,
+            icon: Icons.account_balance_wallet_outlined,
             body:
                 'Use Roth to reduce the cost of eligible Circum services. When Roth does not cover the full total, Circum can apply Roth first and charge the remainder to your chosen payment method.',
           ),
@@ -855,7 +855,7 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
                           MaterialPageRoute<void>(
                             builder: (_) => const _WalletInformationScreen(
                               title: 'Roth',
-                              icon: Icons.auto_awesome_rounded,
+                              icon: Icons.account_balance_wallet_outlined,
                               body:
                                   'Roth can be used alone or with a card when an eligible purchase costs more than your available Roth.',
                             ),
@@ -1664,7 +1664,7 @@ class _RothPayWithRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _WalletLink(
-        icon: Icons.auto_awesome_rounded,
+        icon: Icons.account_balance_wallet_outlined,
         title: 'Roth',
         detail:
             '${wallet.balance.toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2)} available',
@@ -1679,15 +1679,10 @@ class _AvailableRothCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final highContrast =
-        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
     return _WalletGlass(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(
         children: [
-          _RothEmblem(highContrast: highContrast),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1721,16 +1716,7 @@ class _AvailableRothCard extends StatelessWidget {
                   style: TextStyle(
                       color: Colors.white,
                       fontSize: 40,
-                      fontWeight:
-                          highContrast ? FontWeight.w900 : FontWeight.w900,
-                      shadows: highContrast
-                          ? const [
-                              Shadow(
-                                color: Color(0x99000000),
-                                blurRadius: 3,
-                              ),
-                            ]
-                          : null)),
+                      fontWeight: FontWeight.w900)),
               const SizedBox(width: 8),
               const Padding(
                 padding: EdgeInsets.only(bottom: 7),
@@ -1750,33 +1736,6 @@ class _AvailableRothCard extends StatelessWidget {
       ),
     ]));
   }
-}
-
-class _RothEmblem extends StatelessWidget {
-  final bool highContrast;
-  const _RothEmblem({this.highContrast = false});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        height: 44,
-        width: 44,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const LinearGradient(
-            colors: [Color(0xFF60A5FA), Color(0xFF34D399)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: _WalletColors.lightBlue
-                  .withValues(alpha: highContrast ? .52 : .24),
-              blurRadius: highContrast ? 28 : 20,
-              spreadRadius: highContrast ? 2 : 0,
-            ),
-          ],
-        ),
-        child: const Icon(Icons.auto_awesome_rounded,
-            color: Colors.white, size: 22),
-      );
 }
 
 class _OfferRow extends StatelessWidget {
