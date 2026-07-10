@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../business/business_view.dart';
 import '../health_plus/view/health_plus.dart';
 import 'gift_mode_view.dart';
+import 'sender_activity.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
 import 'sender_mobile_profile.dart';
@@ -130,7 +131,15 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               ),
             ),
             const SenderBookingCanvas(),
-            const _SenderActivitySurface(),
+            SenderActivityView(
+              onSendParcel: () => setState(() => _index = 1),
+              onExploreGifts: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const GiftModeView(),
+                  settings: const RouteSettings(name: GiftModeView.routeName),
+                ),
+              ),
+            ),
             const SenderWalletView(),
             SenderMobileProfileView(
               onOpenWallet: () => setState(() => _index = 3),
@@ -2465,22 +2474,6 @@ class _OrderLine extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SenderActivitySurface extends StatelessWidget {
-  const _SenderActivitySurface();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: _GlassCard(
-        child: Text(
-          'Activity and live tracking appear here after booking.',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-        ),
       ),
     );
   }
