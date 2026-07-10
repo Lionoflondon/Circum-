@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
+import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 
 enum SenderTrackingState {
@@ -782,44 +783,29 @@ class FloatingGlassPanel extends StatelessWidget {
       builder: (context, controller) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .048),
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(
-                    color: const Color(0xFF3B82F6).withValues(alpha: .28),
+          child: AppGlassContainer(
+            radius: 26,
+            padding: EdgeInsets.zero,
+            accent: AppTokens.primary,
+            surfaceColor: Colors.white.withValues(alpha: .048),
+            borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
+            child: ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .18),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .34),
-                      blurRadius: 34,
-                      offset: const Offset(0, -10),
-                    ),
-                  ],
                 ),
-                child: ListView(
-                  controller: controller,
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 38,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .18),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                    ),
-                    child,
-                  ],
-                ),
-              ),
+                child,
+              ],
             ),
           ),
         );
