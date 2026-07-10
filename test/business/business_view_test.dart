@@ -77,6 +77,31 @@ void main() {
     expect(find.text('Visa •••• 4242'), findsOneWidget);
     expect(find.text('Default payment method'), findsOneWidget);
   });
+
+  testWidgets('Connected Products contains only current Business products',
+      (tester) async {
+    await tester.pumpWidget(_app(status: 'approved'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(-1100, 0));
+    await tester.pumpAndSettle();
+    final settingsTab = tester.widget<ChoiceChip>(
+      find.byKey(const ValueKey('business-tab-settings')),
+    );
+    settingsTab.onSelected!(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('CONNECTED PRODUCTS'), findsOneWidget);
+    expect(find.text('Business'), findsWidgets);
+    expect(find.text('Health+'), findsWidgets);
+    expect(find.text('Gifts'), findsWidgets);
+    expect(find.text('Marketplace'), findsNothing);
+    expect(find.text('Portal'), findsNothing);
+    expect(find.text('ParkPal'), findsNothing);
+    expect(find.text('FUTURE ACCESS'), findsNothing);
+    expect(find.text('API Access'), findsNothing);
+    expect(find.text('Approval Workflows'), findsNothing);
+  });
 }
 
 Widget _app({required String status}) {

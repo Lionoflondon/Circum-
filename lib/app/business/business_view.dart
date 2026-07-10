@@ -745,9 +745,6 @@ class _BusinessViewState extends State<BusinessView> {
           account.connectedProducts.contains('gifts') ||
               _workspace!.giftRequests.isNotEmpty
         ),
-        ('Marketplace', account.connectedProducts.contains('marketplace')),
-        ('Portal', account.connectedProducts.contains('portal')),
-        ('ParkPal', account.connectedProducts.contains('parkpal')),
       ].map((item) => _SimpleRow(
             icon: item.$2
                 ? Icons.check_circle_rounded
@@ -777,15 +774,6 @@ class _BusinessViewState extends State<BusinessView> {
               _saveNotificationPreference(label.toLowerCase(), value),
         );
       }),
-      const _SectionLabel('Future access'),
-      const _SimpleRow(
-          icon: Icons.api_rounded,
-          title: 'API Access',
-          subtitle: 'Available in a future Business release'),
-      const _SimpleRow(
-          icon: Icons.approval_rounded,
-          title: 'Approval Workflows',
-          subtitle: 'Available in a future Business release'),
     ]);
   }
 
