@@ -23,6 +23,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   String? _chatId;
+  String? _markedReadChatId;
   bool _sending = false;
   Timer? _typingDebounce;
 
@@ -59,6 +60,16 @@ class _RideChatPageViewState extends State<RideChatPageView> {
           .call({'chatId': chatId, 'typing': typing});
     } catch (_) {
       // Typing is deliberately best-effort and never blocks messaging.
+    }
+  }
+
+  Future<void> _markConversationRead(String chatId) async {
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('markConversationRead')
+          .call({'chatId': chatId});
+    } catch (_) {
+      // The visible stream remains available when acknowledgement is offline.
     }
   }
 
@@ -109,6 +120,10 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                   return _UnavailableChat(
                       onBack: () => Navigator.of(context).pop());
                 final chat = chatSnapshot.data!.data()!;
+                if (_markedReadChatId != chatId) {
+                  _markedReadChatId = chatId;
+                  unawaited(_markConversationRead(chatId));
+                }
                 final readOnly = chat['readOnly'] == true;
                 final typing = Map<String, dynamic>.from(
                     chat['typing'] as Map? ?? const {});
