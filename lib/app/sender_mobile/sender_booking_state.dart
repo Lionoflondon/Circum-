@@ -18,7 +18,7 @@ enum SenderPaymentStatus { notReady, ready, processing, paid, failed }
 
 enum SenderDeliveryTimingType { now, scheduled }
 
-enum SenderFallbackPaymentMethod { card, applePay }
+enum SenderFallbackPaymentMethod { card, applePay, googlePay }
 
 const senderDeliverySpeeds = ['Economy', 'Standard', 'Express'];
 const senderVanguardAddOnPriceGbp = 1.99;
@@ -34,6 +34,8 @@ String senderPaymentMethodLabel(SenderFallbackPaymentMethod method) {
       return 'Card';
     case SenderFallbackPaymentMethod.applePay:
       return 'Apple Pay';
+    case SenderFallbackPaymentMethod.googlePay:
+      return 'Google Pay';
   }
 }
 
@@ -217,6 +219,8 @@ class SenderBookingDraft {
   final SenderPaymentStatus paymentStatus;
   final bool bookingConfirmed;
   final SenderFallbackPaymentMethod? selectedPaymentMethod;
+  final String selectedPaymentMethodId;
+  final String selectedPaymentMethodLabel;
   final bool rothEnabled;
   final double? rothAvailableCredits;
   final double rothAppliedAmount;
@@ -250,6 +254,8 @@ class SenderBookingDraft {
     this.paymentStatus = SenderPaymentStatus.notReady,
     this.bookingConfirmed = false,
     this.selectedPaymentMethod,
+    this.selectedPaymentMethodId = '',
+    this.selectedPaymentMethodLabel = '',
     this.rothEnabled = false,
     this.rothAvailableCredits,
     this.rothAppliedAmount = 0,
@@ -367,6 +373,8 @@ class SenderBookingDraft {
     SenderPaymentStatus? paymentStatus,
     bool? bookingConfirmed,
     SenderFallbackPaymentMethod? selectedPaymentMethod,
+    String? selectedPaymentMethodId,
+    String? selectedPaymentMethodLabel,
     bool clearSelectedPaymentMethod = false,
     bool? rothEnabled,
     double? rothAvailableCredits,
@@ -405,6 +413,12 @@ class SenderBookingDraft {
       selectedPaymentMethod: clearSelectedPaymentMethod
           ? null
           : selectedPaymentMethod ?? this.selectedPaymentMethod,
+      selectedPaymentMethodId: clearSelectedPaymentMethod
+          ? ''
+          : selectedPaymentMethodId ?? this.selectedPaymentMethodId,
+      selectedPaymentMethodLabel: clearSelectedPaymentMethod
+          ? ''
+          : selectedPaymentMethodLabel ?? this.selectedPaymentMethodLabel,
       rothEnabled: rothEnabled ?? this.rothEnabled,
       rothAvailableCredits: clearRothAvailableCredits
           ? null

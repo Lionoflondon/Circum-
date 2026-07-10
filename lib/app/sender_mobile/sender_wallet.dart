@@ -5,7 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/intl.dart';
+
+import 'sender_finance.dart';
 
 class SenderWalletData {
   final double balance;
@@ -75,7 +78,8 @@ class SenderWalletPage {
   const SenderWalletPage(this.transactions, this.nextPageToken);
 }
 
-abstract class SenderWalletRepository {
+abstract class SenderWalletRepository
+    implements SenderPaymentProfileRepository {
   Future<SenderWalletData> initialise();
   Stream<SenderWalletData> watch();
   Future<SenderWalletPage> transactions({String? pageToken});
@@ -147,6 +151,44 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   }
 
   @override
+  Future<SenderPaymentMethodsData> paymentMethods() async {
+    final result =
+        await functions.httpsCallable('listSenderPaymentMethods').call();
+    return SenderPaymentMethodsData.fromMap(
+        Map<String, dynamic>.from(result.data as Map));
+  }
+
+  @override
+  Future<SenderSetupIntentData> createSetupIntent() async {
+    final result =
+        await functions.httpsCallable('createSenderSetupIntent').call();
+    return SenderSetupIntentData.fromMap(
+        Map<String, dynamic>.from(result.data as Map));
+  }
+
+  @override
+  Future<void> detachPaymentMethod(String paymentMethodId) async {
+    await functions
+        .httpsCallable('detachSenderPaymentMethod')
+        .call({'paymentMethodId': paymentMethodId});
+  }
+
+  @override
+  Future<void> setDefaultPaymentMethod(String paymentMethodId) async {
+    await functions
+        .httpsCallable('setDefaultSenderPaymentMethod')
+        .call({'paymentMethodId': paymentMethodId});
+  }
+
+  @override
+  Future<void> saveCheckoutPreference(
+      SenderCheckoutPreference preference) async {
+    await functions.httpsCallable('saveSenderCheckoutPreference').call({
+      'preference': senderCheckoutPreferenceValue(preference),
+    });
+  }
+
+  @override
   Future<void> completeOnboarding() async {
     await functions.httpsCallable('completeSenderWalletOnboarding').call();
   }
@@ -178,11 +220,13 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   late final SenderWalletRepository _repository;
   StreamSubscription<SenderWalletData>? _subscription;
   SenderWalletData? _wallet;
+  SenderPaymentMethodsData _paymentMethods = SenderPaymentMethodsData.empty();
   final List<SenderWalletTransaction> _transactions = [];
   String? _nextPage;
   String? _error;
   bool _loading = true;
   bool _loadingMore = false;
+  bool _paymentActionLoading = false;
 
   @override
   void initState() {
@@ -198,10 +242,16 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     });
     try {
       final wallet = await _repository.initialise();
-      final page = await _repository.transactions();
+      final results = await Future.wait([
+        _repository.transactions(),
+        _repository.paymentMethods(),
+      ]);
+      final page = results[0] as SenderWalletPage;
+      final methods = results[1] as SenderPaymentMethodsData;
       if (!mounted) return;
       setState(() {
         _wallet = wallet;
+        _paymentMethods = methods;
         _transactions
           ..clear()
           ..addAll(page.transactions);
@@ -250,6 +300,105 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  Future<void> _refreshPaymentMethods() async {
+    final methods = await _repository.paymentMethods();
+    if (mounted) setState(() => _paymentMethods = methods);
+  }
+
+  Future<void> _addPaymentMethod() async {
+    if (_paymentActionLoading) return;
+    setState(() {
+      _paymentActionLoading = true;
+      _error = null;
+    });
+    try {
+      final setup = await _repository.createSetupIntent();
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          merchantDisplayName: 'Circum',
+          customerId: setup.customerId,
+          customerEphemeralKeySecret: setup.ephemeralKeySecret,
+          setupIntentClientSecret: setup.setupIntentClientSecret,
+          applePay: const PaymentSheetApplePay(merchantCountryCode: 'GB'),
+          googlePay: const PaymentSheetGooglePay(
+            merchantCountryCode: 'GB',
+            currencyCode: 'GBP',
+          ),
+          style: ThemeMode.dark,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+      await _refreshPaymentMethods();
+      if (mounted) {
+        _notice(context, 'Payment method added.');
+      }
+    } on StripeException catch (error) {
+      if (mounted) {
+        _notice(
+            context, error.error.localizedMessage ?? 'Card setup cancelled.');
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    } finally {
+      if (mounted) setState(() => _paymentActionLoading = false);
+    }
+  }
+
+  Future<void> _setDefaultPaymentMethod(String id) async {
+    if (_paymentActionLoading) return;
+    setState(() => _paymentActionLoading = true);
+    try {
+      await _repository.setDefaultPaymentMethod(id);
+      await _refreshPaymentMethods();
+    } catch (error) {
+      if (mounted) _notice(context, 'Could not update default card.');
+    } finally {
+      if (mounted) setState(() => _paymentActionLoading = false);
+    }
+  }
+
+  Future<void> _removePaymentMethod(SenderPaymentMethod method) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Remove payment method?'),
+            content: Text('${method.title} will be removed from Circum.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Remove')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || _paymentActionLoading) return;
+    setState(() => _paymentActionLoading = true);
+    try {
+      await _repository.detachPaymentMethod(method.id);
+      await _refreshPaymentMethods();
+    } catch (error) {
+      if (mounted) _notice(context, 'Could not remove payment method.');
+    } finally {
+      if (mounted) setState(() => _paymentActionLoading = false);
+    }
+  }
+
+  Future<void> _savePreference(SenderCheckoutPreference preference) async {
+    if (_paymentActionLoading) return;
+    setState(() => _paymentActionLoading = true);
+    try {
+      await _repository.saveCheckoutPreference(preference);
+      await _refreshPaymentMethods();
+    } catch (error) {
+      if (mounted) _notice(context, 'Could not save checkout preference.');
+    } finally {
+      if (mounted) setState(() => _paymentActionLoading = false);
     }
   }
 
@@ -302,6 +451,20 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         const Text('Circum Finance',
             style: TextStyle(
                 color: _WalletColors.muted, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 18),
+        _PaymentMethodsSection(
+          data: _paymentMethods,
+          busy: _paymentActionLoading,
+          onAdd: _addPaymentMethod,
+          onSetDefault: _setDefaultPaymentMethod,
+          onRemove: _removePaymentMethod,
+        ),
+        const SizedBox(height: 18),
+        _CheckoutPreferenceSection(
+          preference: _paymentMethods.preference,
+          busy: _paymentActionLoading,
+          onChanged: _savePreference,
+        ),
         const SizedBox(height: 18),
         _WalletGlass(
             child:
@@ -391,9 +554,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
           _WalletLink(
               icon: Icons.shopping_bag_outlined,
               title: 'Use Roth at checkout',
-              detail: 'Coming next',
-              onTap: () =>
-                  _notice(context, 'Checkout support is coming next.')),
+              detail: 'Available for eligible Sender payments',
+              onTap: () => _notice(context, 'Choose Roth on Sender checkout.')),
         ])),
       ],
     );
@@ -569,6 +731,191 @@ class _TransactionRow extends StatelessWidget {
                       color: Colors.white, fontWeight: FontWeight.w900))
             ])));
   }
+}
+
+class _PaymentMethodsSection extends StatelessWidget {
+  final SenderPaymentMethodsData data;
+  final bool busy;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onSetDefault;
+  final ValueChanged<SenderPaymentMethod> onRemove;
+
+  const _PaymentMethodsSection({
+    required this.data,
+    required this.busy,
+    required this.onAdd,
+    required this.onSetDefault,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _WalletSectionTitle('Payment methods'),
+          const SizedBox(height: 10),
+          _WalletGlass(
+            child: Column(
+              children: [
+                _WalletLink(
+                  icon: Icons.add_card_outlined,
+                  title: busy ? 'Updating payment methods...' : 'Add card',
+                  detail: 'Saved securely with Stripe',
+                  onTap: busy ? () {} : onAdd,
+                ),
+                const Divider(color: _WalletColors.hairline),
+                _WalletLink(
+                  icon: Icons.apple_rounded,
+                  title: 'Apple Pay',
+                  detail: data.applePaySupported
+                      ? 'Available on supported iOS devices'
+                      : 'Unavailable on this device',
+                  onTap: () => _SenderWalletViewState._notice(
+                      context, 'Apple Pay appears during checkout.'),
+                ),
+                const Divider(color: _WalletColors.hairline),
+                _WalletLink(
+                  icon: Icons.android_rounded,
+                  title: 'Google Pay',
+                  detail: data.googlePaySupported
+                      ? 'Available on supported Android devices'
+                      : 'Unavailable on this device',
+                  onTap: () => _SenderWalletViewState._notice(
+                      context, 'Google Pay appears during checkout.'),
+                ),
+                if (data.methods.isEmpty) ...[
+                  const Divider(color: _WalletColors.hairline),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        'No saved cards yet. Add a card to make future Sender payments faster.',
+                        style:
+                            TextStyle(color: _WalletColors.muted, height: 1.4),
+                      ),
+                    ),
+                  ),
+                ] else
+                  ...data.methods.map((method) => Column(
+                        children: [
+                          const Divider(color: _WalletColors.hairline),
+                          _SavedCardRow(
+                            method: method,
+                            busy: busy,
+                            onSetDefault: () => onSetDefault(method.id),
+                            onRemove: () => onRemove(method),
+                          ),
+                        ],
+                      )),
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
+class _SavedCardRow extends StatelessWidget {
+  final SenderPaymentMethod method;
+  final bool busy;
+  final VoidCallback onSetDefault;
+  final VoidCallback onRemove;
+
+  const _SavedCardRow({
+    required this.method,
+    required this.busy,
+    required this.onSetDefault,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 72),
+        child: Row(
+          children: [
+            const Icon(Icons.credit_card_rounded,
+                color: _WalletColors.lightBlue),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(method.title,
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 3),
+                  Text(
+                    method.isDefault
+                        ? '${method.expiry} · Default'
+                        : method.expiry,
+                    style: const TextStyle(
+                        color: _WalletColors.muted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            PopupMenuButton<String>(
+              enabled: !busy,
+              icon: const Icon(Icons.more_horiz, color: _WalletColors.muted),
+              onSelected: (value) {
+                if (value == 'default') onSetDefault();
+                if (value == 'remove') onRemove();
+              },
+              itemBuilder: (context) => [
+                if (!method.isDefault)
+                  const PopupMenuItem(
+                      value: 'default', child: Text('Set as default')),
+                const PopupMenuItem(value: 'remove', child: Text('Remove')),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _CheckoutPreferenceSection extends StatelessWidget {
+  final SenderCheckoutPreference preference;
+  final bool busy;
+  final ValueChanged<SenderCheckoutPreference> onChanged;
+
+  const _CheckoutPreferenceSection({
+    required this.preference,
+    required this.busy,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _WalletSectionTitle('Checkout preferences'),
+          const SizedBox(height: 10),
+          _WalletGlass(
+            child: DropdownButtonFormField<SenderCheckoutPreference>(
+              initialValue: preference,
+              dropdownColor: const Color(0xFF111827),
+              decoration: const InputDecoration(
+                labelText: 'Preferred payment order',
+                labelStyle: TextStyle(color: _WalletColors.muted),
+                border: InputBorder.none,
+              ),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+              items: SenderCheckoutPreference.values
+                  .map((item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(senderCheckoutPreferenceLabel(item)),
+                      ))
+                  .toList(growable: false),
+              onChanged: busy
+                  ? null
+                  : (value) {
+                      if (value != null) onChanged(value);
+                    },
+            ),
+          ),
+        ],
+      );
 }
 
 class _WalletLink extends StatelessWidget {

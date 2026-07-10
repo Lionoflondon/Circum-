@@ -752,6 +752,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'quoteId': state.senderQuoteId,
         'rothEnabled': event.rothEnabled,
         'fallbackMethod': event.fallbackMethod,
+        'paymentMethodId': event.paymentMethodId,
       });
       emit(
         state.copyWith(

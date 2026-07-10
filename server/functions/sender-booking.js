@@ -105,6 +105,14 @@ async function walletBalanceForSender(sender) {
   return money(wallet.balance == null ? wallet.rothCredit : wallet.balance);
 }
 
+async function stripeCustomerForSender(sender) {
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(sender.uid);
+  const userSnap = await userRef.get();
+  const user = userSnap.exists ? userSnap.data() : {};
+  return user.stripeCustomerId || user.customerId || null;
+}
+
 exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
   const sender = requireSender(context);
   const balance = await walletBalanceForSender(sender);
@@ -141,6 +149,8 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
   const total = money(quote.total || quote.finalAmount || quote.amountDue);
   const rothEnabled = data.rothEnabled === true;
   const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
+  const savedPaymentMethodId = text(data.paymentMethodId);
+  const requestedFallback = text(data.fallbackMethod) || "card";
   const split = calculateWalletCheckout({
     orderTotalGbp: total,
     walletBalanceGbp: rothEnabled ? rothBalance : 0,
@@ -185,10 +195,23 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       paymentMethod: "roth",
     };
   }
+  const customerId = savedPaymentMethodId ? await stripeCustomerForSender(sender) : null;
+  if (savedPaymentMethodId && !customerId) {
+    throw new functions.https.HttpsError("failed-precondition", "Saved payment method is unavailable.");
+  }
+  if (savedPaymentMethodId) {
+    const method = await stripe.paymentMethods.retrieve(savedPaymentMethodId);
+    if (method.customer !== customerId) {
+      throw new functions.https.HttpsError("permission-denied", "Saved payment method does not belong to this Sender.");
+    }
+  }
   const intent = await stripe.paymentIntents.create({
     amount: minorUnits(split.customerPaymentAmount, "gbp"),
     currency: "gbp",
     payment_method_types: ["card"],
+    customer: customerId || undefined,
+    payment_method: savedPaymentMethodId || undefined,
+    setup_future_usage: savedPaymentMethodId ? undefined : "off_session",
     metadata: {
       paymentType: "delivery",
       userId: sender.uid,
@@ -197,13 +220,16 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       paymentSessionId: sessionRef.id,
       rothAppliedAmount: `${split.walletContributionGbp}`,
       remainingAmount: `${split.remainingGbp}`,
+      fallbackMethod: requestedFallback,
+      savedPaymentMethodId,
     },
   });
   await sessionRef.set({
     ...sessionBase,
     status: intent.status,
     paymentStatus: intent.status,
-    paymentMethod: text(data.fallbackMethod) || "card",
+    paymentMethod: requestedFallback,
+    savedPaymentMethodId: savedPaymentMethodId || null,
     stripePaymentIntentId: intent.id,
     clientSecret: intent.client_secret,
   });
@@ -211,7 +237,8 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     ...sessionBase,
     status: intent.status,
     paymentStatus: intent.status,
-    paymentMethod: text(data.fallbackMethod) || "card",
+    paymentMethod: requestedFallback,
+    savedPaymentMethodId: savedPaymentMethodId || null,
     stripePaymentIntentId: intent.id,
     clientSecret: intent.client_secret,
   };

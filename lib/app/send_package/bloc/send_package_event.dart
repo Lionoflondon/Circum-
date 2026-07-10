@@ -115,10 +115,12 @@ class LoadSenderRothBalance extends SendPackageEvent {
 class StartSenderPaymentSession extends SendPackageEvent {
   final bool rothEnabled;
   final String fallbackMethod;
+  final String paymentMethodId;
 
   const StartSenderPaymentSession({
     required this.rothEnabled,
     required this.fallbackMethod,
+    this.paymentMethodId = '',
   });
 }
 

@@ -7,6 +7,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
 import 'sender_booking_state.dart';
+import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
 
@@ -1422,8 +1423,8 @@ class _PaymentPanel extends StatelessWidget {
                       SenderFallbackPaymentMethod.card,
                     ),
           ),
-          if (draft.selectedPaymentMethod ==
-              SenderFallbackPaymentMethod.card) ...[
+          if (draft.selectedPaymentMethod == SenderFallbackPaymentMethod.card &&
+              draft.selectedPaymentMethodId.isEmpty) ...[
             const SizedBox(height: 10),
             CardField(
               decoration: InputDecoration(
@@ -1460,6 +1461,63 @@ class _PaymentPanel extends StatelessWidget {
                       availableRoth,
                       SenderFallbackPaymentMethod.applePay,
                     ),
+          ),
+          const SizedBox(height: 8),
+          _PaymentMethodTile(
+            title: 'Google Pay',
+            subtitle: 'Fast checkout on supported Android devices.',
+            icon: Icons.android_rounded,
+            selected: draft.selectedPaymentMethod ==
+                SenderFallbackPaymentMethod.googlePay,
+            onTap: total == null
+                ? null
+                : () => _selectMethod(
+                      total,
+                      availableRoth,
+                      SenderFallbackPaymentMethod.googlePay,
+                    ),
+          ),
+          const SizedBox(height: 8),
+          FutureBuilder<SenderPaymentMethodsData>(
+            future: FirebaseSenderPaymentProfileRepository().paymentMethods(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const _InfoNote(text: 'Loading saved cards...');
+              }
+              final methods = snapshot.data?.methods ?? const [];
+              if (methods.isEmpty) {
+                return const _InfoNote(
+                  text:
+                      'Saved cards from Wallet will appear here after you add one.',
+                );
+              }
+              return Column(
+                children: methods
+                    .map(
+                      (method) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _PaymentMethodTile(
+                          title: method.isDefault
+                              ? '${method.title} · Default'
+                              : method.title,
+                          subtitle: method.expiry,
+                          icon: Icons.credit_card_rounded,
+                          selected: draft.selectedPaymentMethodId == method.id,
+                          onTap: total == null
+                              ? null
+                              : () => _selectMethod(
+                                    total,
+                                    availableRoth,
+                                    SenderFallbackPaymentMethod.card,
+                                    paymentMethodId: method.id,
+                                    paymentMethodLabel: method.title,
+                                  ),
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
           ),
         ],
         const SizedBox(height: 14),
@@ -1542,8 +1600,10 @@ class _PaymentPanel extends StatelessWidget {
   void _selectMethod(
     double total,
     double availableRoth,
-    SenderFallbackPaymentMethod method,
-  ) {
+    SenderFallbackPaymentMethod method, {
+    String paymentMethodId = '',
+    String paymentMethodLabel = '',
+  }) {
     final split = SenderPaymentSplit.calculate(
       totalDue: total,
       rothEnabled: draft.rothEnabled,
@@ -1553,6 +1613,8 @@ class _PaymentPanel extends StatelessWidget {
     onDraft(
       draft.copyWith(
         selectedPaymentMethod: method,
+        selectedPaymentMethodId: paymentMethodId,
+        selectedPaymentMethodLabel: paymentMethodLabel,
         paymentStatus: SenderPaymentStatus.ready,
         rothAvailableCredits: availableRoth,
         rothAppliedAmount: split.rothAppliedAmount,
@@ -1586,7 +1648,10 @@ class _PaymentPanel extends StatelessWidget {
             rothEnabled: split.rothEnabled,
             fallbackMethod: split.fallbackMethod == null
                 ? 'roth'
-                : senderPaymentMethodLabel(split.fallbackMethod!),
+                : draft.selectedPaymentMethodLabel.isNotEmpty
+                    ? 'saved_card'
+                    : senderPaymentMethodLabel(split.fallbackMethod!),
+            paymentMethodId: draft.selectedPaymentMethodId,
           ),
         );
   }
@@ -1597,11 +1662,18 @@ class _PaymentPanel extends StatelessWidget {
     SendPackageState engine,
   ) async {
     try {
+      final params = draft.selectedPaymentMethodId.isEmpty
+          ? const PaymentMethodParams.card(
+              paymentMethodData: PaymentMethodData(),
+            )
+          : PaymentMethodParams.cardFromMethodId(
+              paymentMethodData: PaymentMethodDataCardFromMethod(
+                paymentMethodId: draft.selectedPaymentMethodId,
+              ),
+            );
       final intent = await Stripe.instance.confirmPayment(
         paymentIntentClientSecret: clientSecret,
-        data: const PaymentMethodParams.card(
-          paymentMethodData: PaymentMethodData(),
-        ),
+        data: params,
       );
       if (!context.mounted) return;
       if (intent.status != PaymentIntentsStatus.Succeeded) {

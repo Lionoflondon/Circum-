@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:circum/app/sender_mobile/sender_finance.dart';
 import 'package:circum/app/sender_mobile/sender_wallet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,13 +8,20 @@ import 'package:flutter_test/flutter_test.dart';
 class FakeWalletRepository implements SenderWalletRepository {
   SenderWalletData wallet;
   List<SenderWalletPage> pages;
+  SenderPaymentMethodsData methods;
   Object? failure;
   int initialiseCalls = 0;
   int pageCalls = 0;
   final controller = StreamController<SenderWalletData>.broadcast();
 
   FakeWalletRepository(
-      {required this.wallet, this.pages = const [], this.failure});
+      {required this.wallet,
+      this.pages = const [],
+      this.methods = const SenderPaymentMethodsData(
+        methods: [],
+        preference: SenderCheckoutPreference.askEveryCheckout,
+      ),
+      this.failure});
 
   @override
   Future<SenderWalletData> initialise() async {
@@ -34,6 +42,54 @@ class FakeWalletRepository implements SenderWalletRepository {
     return index < pages.length
         ? pages[index]
         : const SenderWalletPage([], null);
+  }
+
+  @override
+  Future<SenderPaymentMethodsData> paymentMethods() async => methods;
+
+  @override
+  Future<SenderSetupIntentData> createSetupIntent() async =>
+      const SenderSetupIntentData(
+          customerId: 'cus_test',
+          ephemeralKeySecret: 'eph_test',
+          setupIntentClientSecret: 'seti_secret');
+
+  @override
+  Future<void> detachPaymentMethod(String paymentMethodId) async {
+    methods = SenderPaymentMethodsData(
+      methods:
+          methods.methods.where((item) => item.id != paymentMethodId).toList(),
+      preference: methods.preference,
+      defaultPaymentMethodId: methods.defaultPaymentMethodId,
+    );
+  }
+
+  @override
+  Future<void> setDefaultPaymentMethod(String paymentMethodId) async {
+    methods = SenderPaymentMethodsData(
+      methods: methods.methods
+          .map((item) => SenderPaymentMethod(
+                id: item.id,
+                brand: item.brand,
+                last4: item.last4,
+                expMonth: item.expMonth,
+                expYear: item.expYear,
+                isDefault: item.id == paymentMethodId,
+              ))
+          .toList(),
+      preference: methods.preference,
+      defaultPaymentMethodId: paymentMethodId,
+    );
+  }
+
+  @override
+  Future<void> saveCheckoutPreference(
+      SenderCheckoutPreference preference) async {
+    methods = SenderPaymentMethodsData(
+      methods: methods.methods,
+      preference: preference,
+      defaultPaymentMethodId: methods.defaultPaymentMethodId,
+    );
   }
 
   @override
@@ -69,7 +125,8 @@ void main() {
     expect(repository.initialiseCalls, 1);
     await tester.tap(find.text('Continue to Wallet'));
     await tester.pumpAndSettle();
-    expect(find.text('0 Roth'), findsOneWidget);
+    expect(find.text('Wallet'), findsOneWidget);
+    expect(find.text('Payment methods'), findsOneWidget);
   });
 
   testWidgets('renders balance, ordered transactions and pagination',
@@ -102,11 +159,50 @@ void main() {
     );
     await tester.pumpWidget(app(SenderWalletView(repository: repository)));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('25 Roth'), 120,
+        scrollable: find.byType(Scrollable));
     expect(find.text('25 Roth'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Referral reward'), 120,
+        scrollable: find.byType(Scrollable));
     expect(find.text('Referral reward'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('View all transactions'), 120,
+        scrollable: find.byType(Scrollable));
     await tester.tap(find.text('View all transactions'));
     await tester.pumpAndSettle();
     expect(find.text('Used on delivery'), findsOneWidget);
+  });
+
+  testWidgets('renders payment methods and checkout preferences',
+      (tester) async {
+    final repository = FakeWalletRepository(
+      wallet: const SenderWalletData(
+          balance: 25, frozen: false, onboardingCompleted: true),
+      methods: const SenderPaymentMethodsData(
+        preference: SenderCheckoutPreference.rothThenCard,
+        defaultPaymentMethodId: 'pm_1',
+        methods: [
+          SenderPaymentMethod(
+            id: 'pm_1',
+            brand: 'visa',
+            last4: '4242',
+            expMonth: 12,
+            expYear: 2030,
+            isDefault: true,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(app(SenderWalletView(repository: repository)));
+    await tester.pumpAndSettle();
+    expect(find.text('Payment methods'), findsOneWidget);
+    expect(find.text('Visa •••• 4242'), findsOneWidget);
+    expect(find.text('Roth then card'), findsOneWidget);
+    await tester.tap(find.text('Roth then card'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ask every checkout').last);
+    await tester.pumpAndSettle();
+    expect(repository.methods.preference,
+        SenderCheckoutPreference.askEveryCheckout);
   });
 
   testWidgets('shows empty and frozen states', (tester) async {
@@ -115,7 +211,13 @@ void main() {
             balance: 4, frozen: true, onboardingCompleted: true));
     await tester.pumpWidget(app(SenderWalletView(repository: repository)));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.textContaining('Wallet is frozen'), 120,
+        scrollable: find.byType(Scrollable));
     expect(find.textContaining('Wallet is frozen'), findsOneWidget);
+    await tester.scrollUntilVisible(
+        find.textContaining('No Roth activity yet'), 120,
+        scrollable: find.byType(Scrollable));
     expect(find.textContaining('No Roth activity yet'), findsOneWidget);
   });
 
