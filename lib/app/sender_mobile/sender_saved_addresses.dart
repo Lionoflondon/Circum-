@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../platform/address_engine.dart';
 import '../send_package/models/suggestions.m.dart';
+import 'design_system/sender_design_system.dart';
 
 class SenderSavedAddress {
   final String id;
@@ -735,18 +734,10 @@ class _Glass extends StatelessWidget {
   final Widget child;
   const _Glass({required this.child});
   @override
-  Widget build(BuildContext context) => ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .04),
-                  borderRadius: BorderRadius.circular(22),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: .12))),
-              child: child)));
+  Widget build(BuildContext context) => AppGlassContainer(
+        radius: AppTokens.radius22,
+        child: child,
+      );
 }
 
 class _AddressColors {

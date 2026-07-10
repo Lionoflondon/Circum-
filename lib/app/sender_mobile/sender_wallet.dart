@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 import 'sender_finance.dart';
 
@@ -1916,46 +1915,19 @@ class _WalletGlass extends StatelessWidget {
   const _WalletGlass(
       {required this.child, this.padding = const EdgeInsets.all(16)});
   @override
-  Widget build(BuildContext context) {
-    final highContrast =
-        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: highContrast ? const Color(0xFA0C121C) : _WalletColors.glass,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color:
-                  highContrast ? const Color(0x2EFFFFFF) : _WalletColors.border,
-              width: highContrast ? 1.3 : 1,
-            ),
-            boxShadow: highContrast
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .58),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
-                    ),
-                  ]
-                : null,
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppGlassContainer(
+        padding: padding,
+        accent: AppTokens.primaryLight,
+        highContrast:
+            SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+                false,
+        child: child,
+      );
 }
 
 class _WalletColors {
   static const lightBlue = Color(0xFF60A5FA);
   static const muted = Color(0xFF9CA3AF);
-  static const glass = Color(0x0DF5F7FB);
-  static const border = Color(0x29FFFFFF);
   static const hairline = Color(0x14F5F7FB);
 }
 

@@ -9,6 +9,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'design_system/sender_design_system.dart';
+
 enum SenderTextSize { small, standard, large, extraLarge }
 
 enum SenderDeliveryAlertLevel { normal, persistent, extraLoud }
@@ -1015,13 +1017,11 @@ class _Section extends StatelessWidget {
               child: Text(title,
                   style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
             ),
-            Material(
-              color: Colors.white.withValues(alpha: .06),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: Colors.white.withValues(alpha: .12)),
-              ),
-              clipBehavior: Clip.antiAlias,
+            AppGlassContainer(
+              radius: AppTokens.radius16,
+              padding: EdgeInsets.zero,
+              surfaceColor: Colors.white.withValues(alpha: .06),
+              borderColor: Colors.white.withValues(alpha: .12),
               child: Column(children: children),
             ),
           ],
@@ -1042,9 +1042,9 @@ class _SwitchTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => SwitchListTile.adaptive(
-        title: Text(title),
-        subtitle: subtitle == null ? null : Text(subtitle!),
+  Widget build(BuildContext context) => AppToggle(
+        label: title,
+        detail: subtitle,
         value: value,
         onChanged: onChanged,
       );

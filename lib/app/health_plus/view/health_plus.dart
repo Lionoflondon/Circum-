@@ -13,6 +13,7 @@ import '../../send_package/repo/place_api.dart';
 import '../../sender_mobile/sender_finance.dart';
 import '../../sender_mobile/sender_accessibility.dart';
 import '../../sender_mobile/sender_wallet.dart';
+import '../../sender_mobile/design_system/sender_design_system.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
 import '../models/recurring_pickup_schedule.dart';
@@ -1254,23 +1255,19 @@ class _GlassCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: selected
-            ? _HealthTokens.health.withValues(alpha: .10)
-            : Colors.white.withValues(alpha: .04),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: selected ? _HealthTokens.health : _HealthTokens.border,
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: AppGlassContainer(
+          padding: padding,
+          radius: AppTokens.radius16,
+          accent: _HealthTokens.health,
+          surfaceColor: selected
+              ? _HealthTokens.health.withValues(alpha: .10)
+              : Colors.white.withValues(alpha: .04),
+          borderColor: selected ? _HealthTokens.health : _HealthTokens.border,
+          child: child,
         ),
-      ),
-      child: child,
-    );
-  }
+      );
 }
 
 class _CareChoice extends StatelessWidget {

@@ -9,6 +9,7 @@ import '../health_plus/view/health_plus.dart';
 import '../sender_mobile/gift_mode_view.dart';
 import '../sender_mobile/sender_booking_canvas.dart';
 import '../sender_mobile/sender_finance.dart';
+import '../sender_mobile/design_system/sender_design_system.dart';
 import 'business_iris_moments.dart';
 import 'business_journey_context.dart';
 import 'business_models.dart';
@@ -132,10 +133,10 @@ class _BusinessViewState extends State<BusinessView> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData.dark(useMaterial3: true).copyWith(
+    final theme = AppTheme.dark().copyWith(
       scaffoldBackgroundColor: _navy,
       colorScheme: const ColorScheme.dark(primary: _blue, surface: _panel),
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme)
+      textTheme: GoogleFonts.interTextTheme(AppTheme.dark().textTheme)
           .apply(bodyColor: _text, displayColor: _text),
     );
     return Theme(
@@ -1626,15 +1627,14 @@ class _GlassCard extends StatelessWidget {
   final VoidCallback? onTap;
   const _GlassCard({required this.child, this.onTap});
   @override
-  Widget build(BuildContext context) => Material(
-        color: _panel,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: _border)),
-        child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(padding: const EdgeInsets.all(14), child: child)),
+  Widget build(BuildContext context) => AppGlassContainer(
+        padding: const EdgeInsets.all(14),
+        radius: AppTokens.radius16,
+        surfaceColor: _panel,
+        borderColor: _border,
+        accent: _blue,
+        onTap: onTap,
+        child: child,
       );
 }
 
@@ -1831,16 +1831,8 @@ class _PrimaryButton extends StatelessWidget {
   final VoidCallback? onTap;
   const _PrimaryButton({required this.label, required this.icon, this.onTap});
   @override
-  Widget build(BuildContext context) => SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-          onPressed: onTap,
-          icon: Icon(icon),
-          label: Text(label),
-          style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)))));
+  Widget build(BuildContext context) =>
+      AppButton(label: label, icon: icon, onPressed: onTap);
 }
 
 class _SecondaryButton extends StatelessWidget {
@@ -1849,15 +1841,12 @@ class _SecondaryButton extends StatelessWidget {
   final VoidCallback? onTap;
   const _SecondaryButton({required this.label, required this.icon, this.onTap});
   @override
-  Widget build(BuildContext context) => OutlinedButton.icon(
+  Widget build(BuildContext context) => AppButton(
+      label: label,
+      icon: icon,
       onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(44),
-          side: const BorderSide(color: _border),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
+      style: AppButtonStyle.secondary,
+      expanded: false);
 }
 
 class _CompactAction extends StatelessWidget {

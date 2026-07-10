@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
+import 'design_system/sender_design_system.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_accessibility.dart';
 import 'sender_wallet.dart';
@@ -1579,24 +1578,10 @@ class ActivityStatusBadge extends StatelessWidget {
     final color = _statusColor(status, type);
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: highContrast ? .22 : .11),
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(
-            color: color.withValues(alpha: highContrast ? .84 : .28),
-            width: highContrast ? 1.3 : 1,
-          ),
-        ),
-        child: Text(
-          status,
-          style: GoogleFonts.inter(
-            color: highContrast ? Colors.white : color,
-            fontSize: 10.5,
-            fontWeight: highContrast ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
+      child: AppStatusBadge(
+        label: status,
+        color: color,
+        highContrast: highContrast,
       ),
     );
   }
@@ -2052,38 +2037,14 @@ class _ActivityGlass extends StatelessWidget {
   final Widget child;
   const _ActivityGlass({required this.child});
   @override
-  Widget build(BuildContext context) {
-    final highContrast =
-        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: highContrast
-                ? const Color(0xFA0C121C)
-                : Colors.white.withValues(alpha: .05),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: highContrast ? .18 : .08),
-              width: highContrast ? 1.3 : 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: highContrast ? .48 : .18),
-                blurRadius: highContrast ? 30 : 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppGlassContainer(
+        padding: const EdgeInsets.all(AppTokens.space20),
+        accent: AppTokens.primary,
+        highContrast:
+            SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+                false,
+        child: child,
+      );
 }
 
 void _openTracking(BuildContext context, SenderActivityItem item) {

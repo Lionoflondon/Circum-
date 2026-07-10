@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../sender_profile/sender_profile.dart';
+import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 import 'sender_saved_addresses.dart';
 
@@ -1905,24 +1905,15 @@ class _ProfileGlassCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: double.infinity,
+  Widget build(BuildContext context) => SizedBox(
+        width: double.infinity,
+        child: AppGlassContainer(
           padding: padding,
-          decoration: BoxDecoration(
-            color: _ProfileTokens.glass,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _ProfileTokens.border),
-          ),
+          radius: AppTokens.radius22,
+          accent: AppTokens.primary,
           child: child,
         ),
-      ),
-    );
-  }
+      );
 }
 
 InputDecoration _fieldDecoration(String label) {

@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../gifts/gift_system_policy.dart';
 import '../gifts/gifts_social_policy.dart';
+import 'design_system/sender_design_system.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_story_view.dart';
@@ -1476,15 +1477,12 @@ class _CampaignGlassCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+  Widget build(BuildContext context) => AppGlassContainer(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .052),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: .10)),
-      ),
+      radius: 20,
+      accent: const Color(0xFFC9B8FF),
+      surfaceColor: Colors.white.withValues(alpha: .052),
+      borderColor: Colors.white.withValues(alpha: .10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1518,9 +1516,7 @@ class _CampaignGlassCard extends StatelessWidget {
             trailing!,
           ],
         ],
-      ),
-    );
-  }
+      ));
 }
 
 class _CampaignToggle extends StatelessWidget {

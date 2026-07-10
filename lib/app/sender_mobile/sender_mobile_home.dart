@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../business/business_view.dart';
 import '../health_plus/view/health_plus.dart';
+import 'design_system/sender_design_system.dart';
 import 'gift_mode_view.dart';
 import 'sender_accessibility.dart';
 import 'sender_activity.dart';
@@ -2658,30 +2659,12 @@ class _GlassCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: _SenderTokens.glass,
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: _SenderTokens.border),
-            boxShadow: [
-              BoxShadow(
-                color: _SenderTokens.blue.withValues(alpha: .10),
-                blurRadius: 28,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppGlassContainer(
+        padding: padding,
+        radius: radius,
+        accent: AppTokens.primary,
+        child: child,
+      );
 }
 
 class _IrisOrb extends StatefulWidget {

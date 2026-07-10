@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../firebase_options.dart';
 import '../send_package/bloc/send_package_bloc.dart';
+import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 import 'sender_mobile_home.dart';
 
@@ -27,6 +28,7 @@ class SenderMobilePreviewApp extends StatelessWidget {
       create: (_) => SendPackageBloc(),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
+        theme: AppTheme.dark(),
         builder: (context, child) => SenderAccessibilityHost(
           child: child ?? const SizedBox.shrink(),
         ),
