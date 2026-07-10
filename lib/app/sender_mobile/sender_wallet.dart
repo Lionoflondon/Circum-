@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../business/business_view.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 import 'sender_finance.dart';
@@ -823,6 +824,24 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     ));
   }
 
+  Future<void> _rename(SenderPaymentMethod method) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename payment method'),
+        content: Text(
+          '${method.title} is securely managed by its payment provider. Custom card names are not available yet.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: const Color(0xFF07090F),
@@ -847,9 +866,11 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
                         data: _profile!,
                         wallet: widget.wallet,
                         busy: _busy,
+                        premiumCards: true,
                         onAdd: _add,
                         onSetDefault: _setDefault,
                         onRemove: _remove,
+                        onRename: _rename,
                         onOpenMethod: _openMethod,
                         onOpenRoth: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
@@ -865,35 +886,27 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
                       const SizedBox(height: 18),
                       _CheckoutPreferenceSection(
                         preference: _profile!.preference,
+                        profile: _profile!,
                         busy: _busy,
                         onChanged: _savePreference,
                       ),
                       const SizedBox(height: 18),
                       const _WalletSectionTitle('Split Payment'),
                       const SizedBox(height: 10),
-                      const _WalletGlass(
-                        child: Text(
-                          'Choose Roth then card to apply available Roth first and charge only the remaining amount to your payment method.',
-                          style: TextStyle(
-                            color: _WalletColors.muted,
-                            height: 1.45,
+                      _SplitPaymentPreview(
+                        preference: _profile!.preference,
+                        profile: _profile!,
+                        wallet: widget.wallet,
+                      ),
+                      const SizedBox(height: 18),
+                      _BusinessPaymentProfileCard(
+                        connected: _businessAccount,
+                        onOpenBusiness: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const BusinessView(),
                           ),
                         ),
                       ),
-                      if (_businessAccount) ...[
-                        const SizedBox(height: 18),
-                        const _WalletSectionTitle('Business payment methods'),
-                        const SizedBox(height: 10),
-                        const _WalletGlass(
-                          child: Text(
-                            'Business Finance uses this same payment profile for authorised Business checkout.',
-                            style: TextStyle(
-                              color: _WalletColors.muted,
-                              height: 1.45,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
       );
@@ -1467,9 +1480,11 @@ class _PaymentMethodsSection extends StatelessWidget {
   final SenderPaymentMethodsData data;
   final SenderWalletData wallet;
   final bool busy;
+  final bool premiumCards;
   final VoidCallback onAdd;
   final ValueChanged<String> onSetDefault;
   final ValueChanged<SenderPaymentMethod> onRemove;
+  final ValueChanged<SenderPaymentMethod>? onRename;
   final ValueChanged<SenderPaymentProfileOptionType> onOpenMethod;
   final VoidCallback onOpenRoth;
 
@@ -1478,67 +1493,104 @@ class _PaymentMethodsSection extends StatelessWidget {
     required this.data,
     required this.wallet,
     required this.busy,
+    this.premiumCards = false,
     required this.onAdd,
     required this.onSetDefault,
     required this.onRemove,
+    this.onRename,
     required this.onOpenMethod,
     required this.onOpenRoth,
   });
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _WalletSectionTitle(sectionTitle),
-          const SizedBox(height: 10),
+  Widget build(BuildContext context) {
+    final options = senderOrderedPaymentOptions(data)
+        .where((option) =>
+            option.type != SenderPaymentProfileOptionType.addPaymentMethod)
+        .toList(growable: false);
+    final cards = options
+        .where((item) => item.type == SenderPaymentProfileOptionType.savedCard)
+        .toList(growable: false);
+    final otherMethods = options
+        .where((item) => item.type != SenderPaymentProfileOptionType.savedCard)
+        .toList(growable: false);
+
+    Widget optionRow(SenderPaymentProfileOption option, int index,
+            {bool premium = false}) =>
+        _PaymentProfileOptionRow(
+          option: option,
+          busy: busy,
+          premiumCard: premium,
+          showDefaultBadge: option.isDefault ||
+              (index == 0 &&
+                  (option.type == SenderPaymentProfileOptionType.applePay ||
+                      option.type == SenderPaymentProfileOptionType.googlePay)),
+          onAdd: onAdd,
+          onSetDefault: onSetDefault,
+          onRemove: onRemove,
+          onRename: onRename,
+          onOpenMethod: onOpenMethod,
+        );
+
+    final standardRows = <Widget>[
+      ...options.asMap().entries.expand((entry) => [
+            if (entry.key > 0) const Divider(color: _WalletColors.hairline),
+            optionRow(entry.value, entry.key),
+          ]),
+      if (options.isNotEmpty) const Divider(color: _WalletColors.hairline),
+      _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
+      const Divider(color: _WalletColors.hairline),
+      optionRow(
+        const SenderPaymentProfileOption(
+          SenderPaymentProfileOptionType.addPaymentMethod,
+        ),
+        options.length,
+      ),
+      if (data.methods.isEmpty)
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Text(
+              'Add a card to make future Sender payments faster.',
+              style: TextStyle(color: _WalletColors.muted, height: 1.4),
+            ),
+          ),
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _WalletSectionTitle(sectionTitle),
+        const SizedBox(height: 10),
+        if (!premiumCards) _WalletGlass(child: Column(children: standardRows)),
+        if (premiumCards) ...[
+          ...cards.map((card) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: optionRow(
+                  card,
+                  options.indexOf(card),
+                  premium: true,
+                ),
+              )),
           _WalletGlass(
             child: Column(
               children: [
-                ...senderOrderedPaymentOptions(data)
-                    .where((option) =>
-                        option.type !=
-                        SenderPaymentProfileOptionType.addPaymentMethod)
-                    .toList(growable: false)
-                    .asMap()
-                    .entries
-                    .map((entry) => Column(
-                          children: [
-                            if (entry.key > 0)
-                              const Divider(color: _WalletColors.hairline),
-                            _PaymentProfileOptionRow(
-                              option: entry.value,
-                              busy: busy,
-                              showDefaultBadge: entry.value.isDefault ||
-                                  (entry.key == 0 &&
-                                      (entry.value.type ==
-                                              SenderPaymentProfileOptionType
-                                                  .applePay ||
-                                          entry.value.type ==
-                                              SenderPaymentProfileOptionType
-                                                  .googlePay)),
-                              onAdd: onAdd,
-                              onSetDefault: onSetDefault,
-                              onRemove: onRemove,
-                              onOpenMethod: onOpenMethod,
-                            ),
-                          ],
-                        )),
-                if (data.applePaySupported ||
-                    data.googlePaySupported ||
-                    data.methods.isNotEmpty)
+                ...otherMethods.asMap().entries.expand((entry) => [
+                      if (entry.key > 0)
+                        const Divider(color: _WalletColors.hairline),
+                      optionRow(entry.value, entry.key),
+                    ]),
+                if (otherMethods.isNotEmpty)
                   const Divider(color: _WalletColors.hairline),
                 _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
                 const Divider(color: _WalletColors.hairline),
-                _PaymentProfileOptionRow(
-                  option: const SenderPaymentProfileOption(
+                optionRow(
+                  const SenderPaymentProfileOption(
                     SenderPaymentProfileOptionType.addPaymentMethod,
                   ),
-                  busy: busy,
-                  showDefaultBadge: false,
-                  onAdd: onAdd,
-                  onSetDefault: onSetDefault,
-                  onRemove: onRemove,
-                  onOpenMethod: onOpenMethod,
+                  otherMethods.length,
                 ),
                 if (data.methods.isEmpty)
                   const Align(
@@ -1547,8 +1599,10 @@ class _PaymentMethodsSection extends StatelessWidget {
                       padding: EdgeInsets.only(top: 10),
                       child: Text(
                         'Add a card to make future Sender payments faster.',
-                        style:
-                            TextStyle(color: _WalletColors.muted, height: 1.4),
+                        style: TextStyle(
+                          color: _WalletColors.muted,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ),
@@ -1556,25 +1610,31 @@ class _PaymentMethodsSection extends StatelessWidget {
             ),
           ),
         ],
-      );
+      ],
+    );
+  }
 }
 
 class _PaymentProfileOptionRow extends StatelessWidget {
   final SenderPaymentProfileOption option;
   final bool busy;
   final bool showDefaultBadge;
+  final bool premiumCard;
   final VoidCallback onAdd;
   final ValueChanged<String> onSetDefault;
   final ValueChanged<SenderPaymentMethod> onRemove;
+  final ValueChanged<SenderPaymentMethod>? onRename;
   final ValueChanged<SenderPaymentProfileOptionType> onOpenMethod;
 
   const _PaymentProfileOptionRow({
     required this.option,
     required this.busy,
     required this.showDefaultBadge,
+    this.premiumCard = false,
     required this.onAdd,
     required this.onSetDefault,
     required this.onRemove,
+    this.onRename,
     required this.onOpenMethod,
   });
 
@@ -1612,7 +1672,7 @@ class _PaymentProfileOptionRow extends StatelessWidget {
       );
     }
     if (method == null) return const SizedBox.shrink();
-    return ConstrainedBox(
+    final cardRow = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 72),
       child: Row(
         children: [
@@ -1622,14 +1682,17 @@ class _PaymentProfileOptionRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(method.title,
+                Text(
+                    premiumCard
+                        ? (method.brand.isEmpty
+                            ? 'Card'
+                            : _titleCase(method.brand))
+                        : method.title,
                     style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 3),
                 Text(
-                  method.isDefault
-                      ? '${method.expiry} · ✓ Default'
-                      : method.expiry,
+                  '•••• ${method.last4.isEmpty ? '----' : method.last4}',
                   style:
                       const TextStyle(color: _WalletColors.muted, fontSize: 11),
                 ),
@@ -1641,16 +1704,106 @@ class _PaymentProfileOptionRow extends StatelessWidget {
             icon: const Icon(Icons.more_horiz, color: _WalletColors.muted),
             onSelected: (value) {
               if (value == 'default') onSetDefault(method.id);
+              if (value == 'rename') onRename?.call(method);
               if (value == 'remove') onRemove(method);
             },
             itemBuilder: (context) => [
               if (!method.isDefault)
                 const PopupMenuItem(
                     value: 'default', child: Text('Set as default')),
+              const PopupMenuItem(value: 'rename', child: Text('Rename')),
               const PopupMenuItem(value: 'remove', child: Text('Remove')),
             ],
           ),
         ],
+      ),
+    );
+    if (!premiumCard) return cardRow;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Semantics(
+      label:
+          '${method.title}, ${method.isDefault ? 'default payment method' : 'available payment method'}, ${method.expiry}',
+      button: true,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : AppTokens.standard,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: method.isDefault ? .08 : .045),
+          borderRadius: BorderRadius.circular(AppTokens.radius16),
+          border: Border.all(
+            color: method.isDefault
+                ? _WalletColors.lightBlue.withValues(alpha: .62)
+                : Colors.white.withValues(alpha: .12),
+          ),
+          boxShadow: method.isDefault
+              ? [
+                  BoxShadow(
+                    color: _WalletColors.lightBlue.withValues(alpha: .14),
+                    blurRadius: 18,
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  method.brand.isEmpty ? 'Card' : _titleCase(method.brand),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                if (method.isDefault) const AppStatusBadge(label: 'Default'),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '•••• ${method.last4.isEmpty ? '----' : method.last4}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.3,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(
+                  method.expiry,
+                  style: const TextStyle(
+                    color: _WalletColors.muted,
+                    fontSize: 12,
+                  ),
+                ),
+                const Spacer(),
+                PopupMenuButton<String>(
+                  enabled: !busy,
+                  icon:
+                      const Icon(Icons.more_horiz, color: _WalletColors.muted),
+                  onSelected: (value) {
+                    if (value == 'default') onSetDefault(method.id);
+                    if (value == 'rename') onRename?.call(method);
+                    if (value == 'remove') onRemove(method);
+                  },
+                  itemBuilder: (context) => [
+                    if (!method.isDefault)
+                      const PopupMenuItem(
+                        value: 'default',
+                        child: Text('Set as default'),
+                      ),
+                    const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                    const PopupMenuItem(value: 'remove', child: Text('Remove')),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1783,43 +1936,321 @@ class _OfferRow extends StatelessWidget {
 
 class _CheckoutPreferenceSection extends StatelessWidget {
   final SenderCheckoutPreference preference;
+  final SenderPaymentProfile profile;
   final bool busy;
   final ValueChanged<SenderCheckoutPreference> onChanged;
 
   const _CheckoutPreferenceSection({
     required this.preference,
+    required this.profile,
     required this.busy,
     required this.onChanged,
+  });
+
+  List<SenderCheckoutPreference> get _availablePreferences => [
+        SenderCheckoutPreference.askEveryCheckout,
+        SenderCheckoutPreference.rothFirst,
+        SenderCheckoutPreference.rothThenCard,
+        if (profile.applePaySupported) SenderCheckoutPreference.applePayFirst,
+        if (profile.googlePaySupported) SenderCheckoutPreference.googlePayFirst,
+        if (profile.methods.isNotEmpty) SenderCheckoutPreference.defaultCard,
+      ];
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _WalletSectionTitle('Preferred Checkout Behaviour'),
+          const SizedBox(height: 10),
+          _WalletGlass(
+            child: Column(
+              children: _availablePreferences
+                  .map(
+                    (item) => _PaymentPriorityOption(
+                      preference: item,
+                      selected: item == preference,
+                      enabled: !busy,
+                      onChanged: () => onChanged(item),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+        ],
+      );
+}
+
+class _PaymentPriorityOption extends StatelessWidget {
+  final SenderCheckoutPreference preference;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onChanged;
+
+  const _PaymentPriorityOption({
+    required this.preference,
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  String get _label => switch (preference) {
+        SenderCheckoutPreference.askEveryCheckout => 'Ask every checkout',
+        SenderCheckoutPreference.rothFirst => 'Use Roth first',
+        SenderCheckoutPreference.rothThenCard => 'Use Roth then card',
+        SenderCheckoutPreference.applePayFirst => 'Use Apple Pay first',
+        SenderCheckoutPreference.googlePayFirst => 'Use Google Pay first',
+        SenderCheckoutPreference.defaultCard => 'Use saved card first',
+      };
+
+  String? get _detail => switch (preference) {
+        SenderCheckoutPreference.rothThenCard =>
+          'Apply Roth, then charge the remainder automatically.',
+        SenderCheckoutPreference.askEveryCheckout =>
+          'Choose how to pay when you check out.',
+        _ => null,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Semantics(
+      label:
+          '$_label, ${selected ? 'selected' : 'not selected'}, ${enabled ? 'available' : 'updating'}',
+      inMutuallyExclusiveGroup: true,
+      selected: selected,
+      child: InkWell(
+        onTap: enabled ? onChanged : null,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : AppTokens.fast,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? _WalletColors.lightBlue.withValues(alpha: .11)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: selected ? _WalletColors.lightBlue : _WalletColors.muted,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _label,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                    if (_detail != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        _detail!,
+                        style: const TextStyle(
+                          color: _WalletColors.muted,
+                          fontSize: 11,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SplitPaymentPreview extends StatelessWidget {
+  final SenderCheckoutPreference preference;
+  final SenderPaymentProfile profile;
+  final SenderWalletData wallet;
+
+  const _SplitPaymentPreview({
+    required this.preference,
+    required this.profile,
+    required this.wallet,
+  });
+
+  String get _paymentLabel => switch (preference) {
+        SenderCheckoutPreference.applePayFirst => 'Apple Pay',
+        SenderCheckoutPreference.googlePayFirst => 'Google Pay',
+        SenderCheckoutPreference.defaultCard => 'Saved Card',
+        SenderCheckoutPreference.askEveryCheckout => 'Choose at checkout',
+        _ when profile.applePaySupported => 'Apple Pay',
+        _ when profile.googlePaySupported => 'Google Pay',
+        _ => profile.methods.isNotEmpty ? 'Saved Card' : 'Payment Method',
+      };
+
+  bool get _usesRoth =>
+      preference == SenderCheckoutPreference.rothFirst ||
+      preference == SenderCheckoutPreference.rothThenCard;
+
+  @override
+  Widget build(BuildContext context) {
+    const total = 58.50;
+    final rothAmount = _usesRoth ? wallet.balance.clamp(0, 40.0) : 0.0;
+    final remaining = (total - rothAmount).clamp(0, total);
+    return _WalletGlass(
+      child: Semantics(
+        label:
+            'Split payment visual example. Delivery total £58.50. ${_usesRoth ? 'Roth ${rothAmount.toStringAsFixed(2)}. $_paymentLabel £${remaining.toStringAsFixed(2)}.' : '$_paymentLabel £58.50.'}',
+        child: Column(
+          children: [
+            _PaymentBreakdownRow(label: 'Delivery Total', value: '£58.50'),
+            const _PaymentBreakdownArrow(),
+            if (_usesRoth) ...[
+              _PaymentBreakdownRow(
+                label: 'Roth',
+                value: '−${rothAmount.toStringAsFixed(2)} Roth',
+                accent: _WalletColors.lightBlue,
+              ),
+              const _PaymentBreakdownArrow(),
+            ],
+            _PaymentBreakdownRow(
+              label: _paymentLabel,
+              value: '£${remaining.toStringAsFixed(2)}',
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Remaining charged automatically',
+              style: TextStyle(
+                color: _WalletColors.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentBreakdownRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? accent;
+
+  const _PaymentBreakdownRow({
+    required this.label,
+    required this.value,
+    this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: accent ?? Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      );
+}
+
+class _PaymentBreakdownArrow extends StatelessWidget {
+  const _PaymentBreakdownArrow();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 7),
+        child: Icon(
+          Icons.south_rounded,
+          size: 18,
+          color: _WalletColors.muted,
+        ),
+      );
+}
+
+class _BusinessPaymentProfileCard extends StatelessWidget {
+  final bool connected;
+  final VoidCallback onOpenBusiness;
+
+  const _BusinessPaymentProfileCard({
+    required this.connected,
+    required this.onOpenBusiness,
   });
 
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _WalletSectionTitle('Checkout preferences'),
+          const _WalletSectionTitle('Business Payment Profile'),
           const SizedBox(height: 10),
           _WalletGlass(
-            child: DropdownButtonFormField<SenderCheckoutPreference>(
-              initialValue: preference,
-              dropdownColor: const Color(0xFF111827),
-              decoration: const InputDecoration(
-                labelText: 'Preferred payment order',
-                labelStyle: TextStyle(color: _WalletColors.muted),
-                border: InputBorder.none,
-              ),
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700),
-              items: SenderCheckoutPreference.values
-                  .map((item) => DropdownMenuItem(
-                        value: item,
-                        child: Text(senderCheckoutPreferenceLabel(item)),
-                      ))
-                  .toList(growable: false),
-              onChanged: busy
-                  ? null
-                  : (value) {
-                      if (value != null) onChanged(value);
-                    },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      connected
+                          ? Icons.verified_outlined
+                          : Icons.business_outlined,
+                      color: connected
+                          ? const Color(0xFF34D399)
+                          : _WalletColors.muted,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        connected
+                            ? 'Connected'
+                            : 'No Business payment profile connected.',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  connected
+                      ? 'Business Finance uses your approved payment profile during authorised Business checkouts.'
+                      : 'Create or join a Circum Business account to manage authorised Business payments.',
+                  style: const TextStyle(
+                    color: _WalletColors.muted,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextButton.icon(
+                  onPressed: onOpenBusiness,
+                  icon: Icon(connected
+                      ? Icons.arrow_forward_rounded
+                      : Icons.add_business_outlined),
+                  label: Text(connected
+                      ? 'Manage Business Payments'
+                      : 'Create Business Account'),
+                ),
+              ],
             ),
           ),
         ],
@@ -1907,6 +2338,12 @@ Color _walletStatusColor(String value) {
     'Cancelled' => const Color(0xFF9CA3AF),
     _ => const Color(0xFF34D399),
   };
+}
+
+String _titleCase(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return 'Card';
+  return '${trimmed[0].toUpperCase()}${trimmed.substring(1).toLowerCase()}';
 }
 
 String _walletFriendlyDate(DateTime date, {DateTime? now}) {

@@ -290,6 +290,62 @@ void main() {
     expect(find.text('Manage Payments'), findsOneWidget);
   });
 
+  testWidgets('Manage Payments renders the visual payment profile polish',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final repository = FakeWalletRepository(
+      wallet: const SenderWalletData(
+        balance: 40,
+        frozen: false,
+        onboardingCompleted: true,
+      ),
+      methods: const SenderPaymentMethodsData(
+        preference: SenderCheckoutPreference.rothThenCard,
+        defaultPaymentMethodId: 'pm_1',
+        applePaySupported: true,
+        googlePaySupported: false,
+        methods: [
+          SenderPaymentMethod(
+            id: 'pm_1',
+            brand: 'visa',
+            last4: '4242',
+            expMonth: 8,
+            expYear: 2029,
+            isDefault: true,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(app(SenderWalletView(repository: repository)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manage Payments'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preferred Checkout Behaviour'), findsOneWidget);
+    expect(find.text('Use Roth first'), findsOneWidget);
+    expect(find.text('Use Apple Pay first'), findsOneWidget);
+    expect(find.text('Use Google Pay first'), findsNothing);
+    expect(find.text('Delivery Total'), findsOneWidget);
+    expect(find.text('−40.00 Roth'), findsOneWidget);
+    expect(find.text('Remaining charged automatically'), findsOneWidget);
+    expect(find.text('Business Payment Profile'), findsOneWidget);
+    expect(
+      find.text('No Business payment profile connected.'),
+      findsOneWidget,
+    );
+    expect(find.text('Visa'), findsOneWidget);
+    expect(find.text('•••• 4242'), findsOneWidget);
+    expect(find.text('Expires 08/2029'), findsOneWidget);
+
+    await tester.tap(find.text('Use Apple Pay first'));
+    await tester.pumpAndSettle();
+    expect(
+        repository.methods.preference, SenderCheckoutPreference.applePayFirst);
+  });
+
   testWidgets('wallet actions and offers render after recent activity',
       (tester) async {
     final repository = FakeWalletRepository(
