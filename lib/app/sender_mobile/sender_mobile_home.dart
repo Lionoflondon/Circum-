@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../business/business_view.dart';
 import '../health_plus/view/health_plus.dart';
 import 'gift_mode_view.dart';
 import 'sender_booking_canvas.dart';
@@ -117,6 +118,9 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               onOpenWallet: () => setState(() => _index = 3),
               onOpenHealth: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
+              ),
+              onOpenBusiness: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const BusinessView()),
               ),
               onOpenGifts: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -1636,6 +1640,7 @@ class _SenderDashboard extends StatefulWidget {
   final VoidCallback onOpenGifts;
   final VoidCallback onOpenWallet;
   final VoidCallback onOpenHealth;
+  final VoidCallback onOpenBusiness;
   final VoidCallback onOpenActivity;
 
   const _SenderDashboard({
@@ -1644,6 +1649,7 @@ class _SenderDashboard extends StatefulWidget {
     required this.onOpenGifts,
     required this.onOpenWallet,
     required this.onOpenHealth,
+    required this.onOpenBusiness,
     required this.onOpenActivity,
   });
 
@@ -1835,6 +1841,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
         _YourCircumHub(
           onOpenGifts: widget.onOpenGifts,
           onOpenHealth: widget.onOpenHealth,
+          onOpenBusiness: widget.onOpenBusiness,
           summary: _summary,
           hasError: _summaryError != null,
         ),
@@ -2017,12 +2024,14 @@ class _HeroSendCard extends StatelessWidget {
 class _YourCircumHub extends StatelessWidget {
   final VoidCallback onOpenGifts;
   final VoidCallback onOpenHealth;
+  final VoidCallback onOpenBusiness;
   final SenderHomeSummary? summary;
   final bool hasError;
 
   const _YourCircumHub({
     required this.onOpenGifts,
     required this.onOpenHealth,
+    required this.onOpenBusiness,
     required this.summary,
     required this.hasError,
   });
@@ -2075,6 +2084,7 @@ class _YourCircumHub extends StatelessWidget {
                 ),
                 icon: Icons.business_center_rounded,
                 accent: _SenderTokens.business,
+                onTap: onOpenBusiness,
               ),
             ),
             const SizedBox(width: 10),

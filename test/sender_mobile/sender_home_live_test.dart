@@ -43,6 +43,7 @@ void main() {
     expect(source, contains("collection('notifications')"));
     expect(source, contains("collection('healthPlusProfiles')"));
     expect(source, contains("collection('businessAccounts')"));
+    expect(source, contains('builder: (_) => const BusinessView()'));
     expect(source, contains("collection('giftRequests')"));
     expect(source, contains('SenderWalletHomeSummary'));
     expect(source, contains('Loading recent orders…'));
