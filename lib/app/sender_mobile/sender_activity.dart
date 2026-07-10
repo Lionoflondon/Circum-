@@ -1004,7 +1004,10 @@ class _TrustFeature extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
         children: [
-          Icon(icon, color: color, size: 15),
+          if (icon == Icons.blur_circular_rounded)
+            _IrisActivityOrb(color: color)
+          else
+            Icon(icon, color: color, size: 15),
           const SizedBox(width: 8),
           Text(
             label,
@@ -1015,6 +1018,66 @@ class _TrustFeature extends StatelessWidget {
             ),
           ),
         ],
+      );
+}
+
+class _IrisActivityOrb extends StatefulWidget {
+  final Color color;
+  const _IrisActivityOrb({required this.color});
+
+  @override
+  State<_IrisActivityOrb> createState() => _IrisActivityOrbState();
+}
+
+class _IrisActivityOrbState extends State<_IrisActivityOrb>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 4),
+  )..repeat(reverse: true);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => Container(
+          width: 15,
+          height: 15,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              center: const Alignment(-.35, -.45),
+              colors: [
+                Colors.white.withValues(alpha: .9),
+                widget.color.withValues(alpha: .72),
+                const Color(0xFF60A5FA).withValues(alpha: .55),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(
+                  alpha: .14 + (_controller.value * .12),
+                ),
+                blurRadius: 8,
+              ),
+            ],
+          ),
+        ),
       );
 }
 
