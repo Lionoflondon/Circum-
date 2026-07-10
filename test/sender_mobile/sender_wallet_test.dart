@@ -127,6 +127,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Wallet'), findsOneWidget);
     expect(find.text('Pay With'), findsOneWidget);
+    expect(find.text('Available Roth'), findsOneWidget);
   });
 
   testWidgets('renders balance, ordered transactions and pagination',
@@ -159,9 +160,10 @@ void main() {
     );
     await tester.pumpWidget(app(SenderWalletView(repository: repository)));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('25 Roth'), 120,
+    await tester.scrollUntilVisible(find.text('Available Roth'), 120,
         scrollable: find.byType(Scrollable));
-    expect(find.text('25 Roth'), findsOneWidget);
+    expect(find.text('Available Roth'), findsOneWidget);
+    expect(find.text('ROTH'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Referral reward'), 120,
         scrollable: find.byType(Scrollable));
     expect(find.text('Referral reward'), findsOneWidget);
@@ -221,13 +223,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pay With'), findsOneWidget);
     expect(find.text('Visa •••• 4242'), findsOneWidget);
-    expect(find.text('Roth then card'), findsOneWidget);
-    await tester.tap(find.text('Roth then card'));
+    expect(find.text('Roth'), findsOneWidget);
+    expect(find.text('✓ Default'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Manage Payments'), 120,
+        scrollable: find.byType(Scrollable));
+    expect(find.text('Manage Payments'), findsOneWidget);
+  });
+
+  testWidgets('wallet actions and offers render after recent activity',
+      (tester) async {
+    final repository = FakeWalletRepository(
+        wallet: const SenderWalletData(
+            balance: 4, frozen: false, onboardingCompleted: true));
+    await tester.pumpWidget(app(SenderWalletView(repository: repository)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ask every checkout').last);
-    await tester.pumpAndSettle();
-    expect(repository.methods.preference,
-        SenderCheckoutPreference.askEveryCheckout);
+    await tester.scrollUntilVisible(find.text('Wallet Actions'), 120,
+        scrollable: find.byType(Scrollable));
+    expect(find.text('Redeem Roth Card'), findsOneWidget);
+    expect(find.text('Earn Roth'), findsOneWidget);
+    expect(find.text('Manage Payments'), findsOneWidget);
+    expect(find.text('Support'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Offers'), 120,
+        scrollable: find.byType(Scrollable));
+    expect(find.text('Earn 5 Roth'), findsOneWidget);
+    expect(find.text('Health+ Bonus'), findsOneWidget);
   });
 
   testWidgets('shows empty and frozen states', (tester) async {

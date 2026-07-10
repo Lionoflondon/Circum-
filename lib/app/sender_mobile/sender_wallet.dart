@@ -442,10 +442,6 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     if (!wallet.onboardingCompleted) {
       return _WalletOnboarding(onContinue: _continueOnboarding);
     }
-    final referralTotal = _transactions
-        .where((item) =>
-            item.type == 'referral_reward' && item.direction == 'credit')
-        .fold<double>(0, (total, item) => total + item.amount);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
       children: [
@@ -461,43 +457,14 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         const SizedBox(height: 18),
         _PaymentMethodsSection(
           data: _paymentMethods,
+          wallet: wallet,
           busy: _paymentActionLoading,
           onAdd: _addPaymentMethod,
           onSetDefault: _setDefaultPaymentMethod,
           onRemove: _removePaymentMethod,
         ),
         const SizedBox(height: 18),
-        _CheckoutPreferenceSection(
-          preference: _paymentMethods.preference,
-          busy: _paymentActionLoading,
-          onChanged: _savePreference,
-        ),
-        const SizedBox(height: 18),
-        _WalletGlass(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('ROTH BALANCE',
-              style: TextStyle(
-                  color: _WalletColors.lightBlue,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.1)),
-          const SizedBox(height: 8),
-          Semantics(
-              label: '${wallet.balance.toStringAsFixed(0)} Roth available',
-              child: Text(
-                  '${wallet.balance.toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2)} Roth',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w900))),
-          const SizedBox(height: 8),
-          Text(
-              wallet.updatedAt == null
-                  ? 'Ready'
-                  : 'Updated ${DateFormat('d MMM, HH:mm').format(wallet.updatedAt!)}',
-              style: const TextStyle(color: _WalletColors.muted, fontSize: 12)),
-        ])),
+        _AvailableRothCard(wallet: wallet),
         if (wallet.frozen) ...[
           const SizedBox(height: 12),
           const _WalletGlass(
@@ -532,39 +499,72 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               onPressed: _loadingMore ? null : _loadMore,
               child: Text(_loadingMore ? 'Loading…' : 'View all activity')),
         const SizedBox(height: 18),
-        const _WalletSectionTitle('Rewards'),
+        const _WalletSectionTitle('Wallet Actions'),
         const SizedBox(height: 10),
-        _WalletGlass(
-            child: _WalletLink(
-                icon: Icons.group_add_outlined,
-                title: 'Referral rewards',
-                detail: '${referralTotal.toStringAsFixed(0)} Roth earned',
-                onTap: () =>
-                    _notice(context, 'Invite friends is coming next.'))),
-        const SizedBox(height: 12),
         _WalletGlass(
             child: Column(children: [
           _WalletLink(
               icon: Icons.credit_card_outlined,
-              title: 'Roth Cards',
-              detail: 'Available soon',
-              onTap: () => _notice(context, 'Roth Cards are available soon.')),
+              title: 'Redeem Roth Card',
+              detail: 'Apply approved Roth rewards.',
+              onTap: () =>
+                  _notice(context, 'Roth Card redemption is coming next.')),
+          const Divider(color: _WalletColors.hairline),
+          _WalletLink(
+              icon: Icons.group_add_outlined,
+              title: 'Earn Roth',
+              detail: 'Referral Code · Invite Friends · Rewards',
+              onTap: () => _notice(context,
+                  'Referral Code, Invite Friends, Friends Invited, Pending Rewards and Lifetime Roth Earned are coming next.')),
+          const Divider(color: _WalletColors.hairline),
+          _WalletLink(
+              icon: Icons.tune_rounded,
+              title: 'Manage Payments',
+              detail: 'Default method and checkout preferences',
+              onTap: () => _showCheckoutPreferences(context)),
           const Divider(color: _WalletColors.hairline),
           _WalletLink(
               icon: Icons.help_outline,
-              title: 'How Roth works',
-              detail:
-                  'Roth is Circum credit. It cannot be withdrawn or transferred.',
-              onTap: () => _notice(context,
-                  'Use Roth on eligible Circum purchases. Roth is not cash and cannot be withdrawn.')),
-          const Divider(color: _WalletColors.hairline),
-          _WalletLink(
-              icon: Icons.shopping_bag_outlined,
-              title: 'Use Roth at checkout',
-              detail: 'Available for eligible Sender payments',
-              onTap: () => _notice(context, 'Choose Roth on Sender checkout.')),
+              title: 'Support',
+              detail: 'Get help with payments and Roth.',
+              onTap: () => _notice(context, 'Wallet support is coming next.')),
         ])),
+        const SizedBox(height: 18),
+        const _WalletSectionTitle('Offers'),
+        const SizedBox(height: 10),
+        const _WalletGlass(
+          child: Column(
+            children: [
+              _OfferRow(title: 'Earn 5 Roth', detail: 'Referral reward'),
+              Divider(color: _WalletColors.hairline),
+              _OfferRow(title: 'Health+ Bonus', detail: 'Eligible care runs'),
+              Divider(color: _WalletColors.hairline),
+              _OfferRow(title: 'Business Reward', detail: 'Future benefit'),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+
+  void _showCheckoutPreferences(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF07090F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: _CheckoutPreferenceSection(
+          preference: _paymentMethods.preference,
+          busy: _paymentActionLoading,
+          onChanged: (value) {
+            Navigator.pop(context);
+            _savePreference(value);
+          },
+        ),
+      ),
     );
   }
 
@@ -750,6 +750,7 @@ class _TransactionRow extends StatelessWidget {
 
 class _PaymentMethodsSection extends StatelessWidget {
   final SenderPaymentMethodsData data;
+  final SenderWalletData wallet;
   final bool busy;
   final VoidCallback onAdd;
   final ValueChanged<String> onSetDefault;
@@ -757,6 +758,7 @@ class _PaymentMethodsSection extends StatelessWidget {
 
   const _PaymentMethodsSection({
     required this.data,
+    required this.wallet,
     required this.busy,
     required this.onAdd,
     required this.onSetDefault,
@@ -773,6 +775,10 @@ class _PaymentMethodsSection extends StatelessWidget {
             child: Column(
               children: [
                 ...senderOrderedPaymentOptions(data)
+                    .where((option) =>
+                        option.type !=
+                        SenderPaymentProfileOptionType.addPaymentMethod)
+                    .toList(growable: false)
                     .asMap()
                     .entries
                     .map((entry) => Column(
@@ -782,12 +788,36 @@ class _PaymentMethodsSection extends StatelessWidget {
                             _PaymentProfileOptionRow(
                               option: entry.value,
                               busy: busy,
+                              showDefaultBadge: entry.value.isDefault ||
+                                  (entry.key == 0 &&
+                                      (entry.value.type ==
+                                              SenderPaymentProfileOptionType
+                                                  .applePay ||
+                                          entry.value.type ==
+                                              SenderPaymentProfileOptionType
+                                                  .googlePay)),
                               onAdd: onAdd,
                               onSetDefault: onSetDefault,
                               onRemove: onRemove,
                             ),
                           ],
                         )),
+                if (data.applePaySupported ||
+                    data.googlePaySupported ||
+                    data.methods.isNotEmpty)
+                  const Divider(color: _WalletColors.hairline),
+                _RothPayWithRow(wallet: wallet),
+                const Divider(color: _WalletColors.hairline),
+                _PaymentProfileOptionRow(
+                  option: const SenderPaymentProfileOption(
+                    SenderPaymentProfileOptionType.addPaymentMethod,
+                  ),
+                  busy: busy,
+                  showDefaultBadge: false,
+                  onAdd: onAdd,
+                  onSetDefault: onSetDefault,
+                  onRemove: onRemove,
+                ),
                 if (data.methods.isEmpty)
                   const Align(
                     alignment: Alignment.centerLeft,
@@ -810,6 +840,7 @@ class _PaymentMethodsSection extends StatelessWidget {
 class _PaymentProfileOptionRow extends StatelessWidget {
   final SenderPaymentProfileOption option;
   final bool busy;
+  final bool showDefaultBadge;
   final VoidCallback onAdd;
   final ValueChanged<String> onSetDefault;
   final ValueChanged<SenderPaymentMethod> onRemove;
@@ -817,6 +848,7 @@ class _PaymentProfileOptionRow extends StatelessWidget {
   const _PaymentProfileOptionRow({
     required this.option,
     required this.busy,
+    required this.showDefaultBadge,
     required this.onAdd,
     required this.onSetDefault,
     required this.onRemove,
@@ -836,8 +868,8 @@ class _PaymentProfileOptionRow extends StatelessWidget {
     if (option.type == SenderPaymentProfileOptionType.applePay) {
       return _WalletLink(
         icon: Icons.apple_rounded,
-        title: 'Apple Pay${option.isDefault ? ' (Default)' : ''}',
-        detail: 'Use on supported iOS devices',
+        title: 'Apple Pay',
+        detail: showDefaultBadge ? '✓ Default' : 'Use on supported iOS devices',
         onTap: () => _SenderWalletViewState._notice(
             context, 'Apple Pay appears during checkout.'),
       );
@@ -845,8 +877,9 @@ class _PaymentProfileOptionRow extends StatelessWidget {
     if (option.type == SenderPaymentProfileOptionType.googlePay) {
       return _WalletLink(
         icon: Icons.android_rounded,
-        title: 'Google Pay${option.isDefault ? ' (Default)' : ''}',
-        detail: 'Use on supported Android devices',
+        title: 'Google Pay',
+        detail:
+            showDefaultBadge ? '✓ Default' : 'Use on supported Android devices',
         onTap: () => _SenderWalletViewState._notice(
             context, 'Google Pay appears during checkout.'),
       );
@@ -868,7 +901,7 @@ class _PaymentProfileOptionRow extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   method.isDefault
-                      ? '${method.expiry} · Default'
+                      ? '${method.expiry} · ✓ Default'
                       : method.expiry,
                   style:
                       const TextStyle(color: _WalletColors.muted, fontSize: 11),
@@ -894,6 +927,149 @@ class _PaymentProfileOptionRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RothPayWithRow extends StatelessWidget {
+  final SenderWalletData wallet;
+
+  const _RothPayWithRow({required this.wallet});
+
+  @override
+  Widget build(BuildContext context) => _WalletLink(
+        icon: Icons.auto_awesome_rounded,
+        title: 'Roth',
+        detail:
+            '${wallet.balance.toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2)} available',
+        onTap: () => _SenderWalletViewState._notice(
+          context,
+          'Use Roth during eligible Circum checkout.',
+        ),
+      );
+}
+
+class _AvailableRothCard extends StatelessWidget {
+  final SenderWalletData wallet;
+
+  const _AvailableRothCard({required this.wallet});
+
+  @override
+  Widget build(BuildContext context) => _WalletGlass(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(
+            children: [
+              const _RothEmblem(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Available Roth',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 3),
+                    Text(
+                        wallet.updatedAt == null
+                            ? 'Ready'
+                            : 'Updated ${DateFormat('d MMM, HH:mm').format(wallet.updatedAt!)}',
+                        style: const TextStyle(
+                            color: _WalletColors.muted, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Semantics(
+              label: '${wallet.balance.toStringAsFixed(0)} Roth available',
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                      wallet.balance
+                          .toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 40,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(width: 8),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 7),
+                    child: Text('ROTH',
+                        style: TextStyle(
+                            color: _WalletColors.lightBlue,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1)),
+                  ),
+                ],
+              )),
+          const SizedBox(height: 10),
+          const Text(
+            'Use Roth to reduce the cost of eligible Circum services.',
+            style: TextStyle(color: _WalletColors.muted, height: 1.45),
+          ),
+        ]),
+      );
+}
+
+class _RothEmblem extends StatelessWidget {
+  const _RothEmblem();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 44,
+        width: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            colors: [Color(0xFF60A5FA), Color(0xFF34D399)],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _WalletColors.lightBlue.withValues(alpha: .24),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: const Icon(Icons.auto_awesome_rounded,
+            color: Colors.white, size: 22),
+      );
+}
+
+class _OfferRow extends StatelessWidget {
+  final String title;
+  final String detail;
+
+  const _OfferRow({required this.title, required this.detail});
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 54),
+        child: Row(
+          children: [
+            const Icon(Icons.local_offer_outlined,
+                color: _WalletColors.lightBlue),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 3),
+                  Text(detail,
+                      style: const TextStyle(
+                          color: _WalletColors.muted, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _CheckoutPreferenceSection extends StatelessWidget {
