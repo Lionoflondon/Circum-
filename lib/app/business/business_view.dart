@@ -9,6 +9,7 @@ import '../health_plus/view/health_plus.dart';
 import '../sender_mobile/gift_mode_view.dart';
 import '../sender_mobile/sender_booking_canvas.dart';
 import '../sender_mobile/sender_finance.dart';
+import 'business_iris_moments.dart';
 import 'business_journey_context.dart';
 import 'business_models.dart';
 import 'business_repository.dart';
@@ -371,6 +372,16 @@ class _BusinessViewState extends State<BusinessView> {
               subtitle: 'Create a confidential gift request',
               onTap: _openGifts),
         ],
+      ),
+      const SizedBox(height: 18),
+      BusinessIrisMomentsPanel(
+        businessName: data.account.name,
+        moments: data.account.irisMoments,
+        canOperate: data.account.isApproved,
+        onAddMoment: _addIrisMoment,
+        onSendGift: _openGifts,
+        onCreateDelivery: _bookDelivery,
+        onScheduleHealthPlus: _openHealthPlus,
       ),
       const _SectionLabel('Recent activity'),
       if (data.deliveries.isEmpty && data.invoices.isEmpty)
@@ -936,6 +947,21 @@ class _BusinessViewState extends State<BusinessView> {
       _showMessage('Team invitation saved.');
     } catch (error) {
       _showMessage('Invitation failed: $error');
+    }
+  }
+
+  Future<void> _addIrisMoment() async {
+    final moment = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const BusinessMomentDialog(),
+    );
+    if (moment == null) return;
+    try {
+      await _repository.addIrisMoment(account: _account!, moment: moment);
+      await _load(accountId: _account!.id);
+      _showMessage('IRIS Moment added.');
+    } catch (error) {
+      _showMessage('IRIS Moment could not be saved: $error');
     }
   }
 

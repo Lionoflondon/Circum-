@@ -20,6 +20,10 @@ abstract class BusinessRepository {
     String? status,
     bool remove = false,
   });
+  Future<void> addIrisMoment({
+    required BusinessAccount account,
+    required Map<String, dynamic> moment,
+  });
   Future<Uri> createInvoiceCheckout({
     required BusinessAccount account,
     required BusinessInvoice invoice,
@@ -229,6 +233,17 @@ class FirebaseBusinessRepository implements BusinessRepository {
       'teamMembers': members,
       'teamMemberIds': ids,
       'managerIds': managers,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> addIrisMoment({
+    required BusinessAccount account,
+    required Map<String, dynamic> moment,
+  }) async {
+    await firestore.collection('businessAccounts').doc(account.id).set({
+      'irisMoments': FieldValue.arrayUnion([moment]),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

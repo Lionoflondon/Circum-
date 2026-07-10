@@ -181,6 +181,12 @@ class _FakeBusinessRepository implements BusinessRepository {
   Future<List<BusinessAccount>> loadAccounts() async => [account];
 
   @override
+  Future<void> addIrisMoment({
+    required BusinessAccount account,
+    required Map<String, dynamic> moment,
+  }) async {}
+
+  @override
   Future<BusinessWorkspaceData> loadWorkspace(BusinessAccount account) async {
     return BusinessWorkspaceData(
       account: account,

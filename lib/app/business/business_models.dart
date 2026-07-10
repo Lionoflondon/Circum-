@@ -30,6 +30,7 @@ class BusinessAccount {
   final List<String> connectedProducts;
   final Map<String, dynamic> notificationPreferences;
   final Map<String, dynamic> paymentPreferences;
+  final List<Map<String, dynamic>> irisMoments;
 
   const BusinessAccount({
     required this.id,
@@ -46,6 +47,7 @@ class BusinessAccount {
     required this.connectedProducts,
     required this.notificationPreferences,
     required this.paymentPreferences,
+    this.irisMoments = const [],
   });
 
   factory BusinessAccount.fromMap(String id, Map<String, dynamic> data) {
@@ -78,6 +80,13 @@ class BusinessAccount {
       paymentPreferences: Map<String, dynamic>.from(
         data['paymentPreferences'] as Map? ?? const {},
       ),
+      irisMoments: ((data['irisMoments'] ??
+                  data['moments'] ??
+                  data['businessMoments']) as List? ??
+              const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false),
     );
   }
 
