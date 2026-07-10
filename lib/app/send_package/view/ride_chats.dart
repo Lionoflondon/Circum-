@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../sender_mobile/design_system/sender_design_system.dart';
@@ -97,6 +98,55 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     }
   }
 
+  Future<void> _shareCurrentLocation(bool readOnly) async {
+    final chatId = _chatId;
+    if (chatId == null || readOnly || _sending) return;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw StateError('Location services are unavailable.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw StateError(
+            'Location permission is required to share your location.');
+      }
+      setState(() => _sending = true);
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': 'Current delivery location shared.',
+        'messageType': 'location',
+        'location': {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracyMetres': position.accuracy,
+          'sharedAt': DateTime.now().toUtc().toIso8601String(),
+        },
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(error.message ?? 'Location could not be shared.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatId = _chatId;
@@ -159,6 +209,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                         _input.selection =
                             TextSelection.collapsed(offset: reply.length);
                       },
+                      onShareLocation: () => _shareCurrentLocation(readOnly),
                       onSend: () => _send(readOnly),
                     ),
                   ],
@@ -228,6 +279,13 @@ class _MessageBubble extends StatelessWidget {
     final mine = data['senderId'] == FirebaseAuth.instance.currentUser?.uid;
     final admin = '${data['senderRole'] ?? ''}' == 'admin';
     final message = '${data['messageText'] ?? data['message'] ?? ''}'.trim();
+    final attachments = (data['attachmentUrls'] as List? ?? const [])
+        .map((item) => '$item'.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    final location = data['location'] is Map
+        ? Map<String, dynamic>.from(data['location'] as Map)
+        : const <String, dynamic>{};
     final timestamp = data['createdAt'] is Timestamp
         ? (data['createdAt'] as Timestamp).toDate()
         : null;
@@ -251,6 +309,26 @@ class _MessageBubble extends StatelessWidget {
                     label: 'Circum Support', tone: AppStatusTone.success),
               if (admin) const SizedBox(height: 6),
               Text(message),
+              if (attachments.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: attachments
+                      .map((url) => _MessageAttachment(url: url))
+                      .toList(),
+                ),
+              ],
+              if (location.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Semantics(
+                  label: 'Shared current delivery location',
+                  child: const AppStatusBadge(
+                    label: 'Current delivery location shared',
+                    tone: AppStatusTone.info,
+                  ),
+                ),
+              ],
               if (timestamp != null) ...[
                 const SizedBox(height: 5),
                 Text(
@@ -273,6 +351,7 @@ class _Composer extends StatelessWidget {
   final String role;
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onQuickReply;
+  final VoidCallback onShareLocation;
   final VoidCallback onSend;
 
   const _Composer(
@@ -282,6 +361,7 @@ class _Composer extends StatelessWidget {
       required this.role,
       required this.onChanged,
       required this.onQuickReply,
+      required this.onShareLocation,
       required this.onSend});
 
   @override
@@ -305,6 +385,11 @@ class _Composer extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: Row(children: [
+              IconButton(
+                onPressed: readOnly || sending ? null : onShareLocation,
+                tooltip: 'Share current delivery location',
+                icon: const Icon(Icons.my_location_outlined),
+              ),
               Expanded(
                 child: TextField(
                   controller: controller,
@@ -356,6 +441,51 @@ class _Composer extends StatelessWidget {
           "I'm running late.",
           'Thank you.',
         ];
+}
+
+class _MessageAttachment extends StatelessWidget {
+  final String url;
+  const _MessageAttachment({required this.url});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: 'Open message image attachment',
+        child: InkWell(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (context) => Dialog.fullscreen(
+              backgroundColor: Colors.black,
+              child: Stack(children: [
+                Center(child: InteractiveViewer(child: Image.network(url))),
+                Positioned(
+                  top: 18,
+                  right: 18,
+                  child: IconButton.filled(
+                    tooltip: 'Close image',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppTokens.radius12),
+            child: Image.network(
+              url,
+              width: 108,
+              height: 108,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox(
+                width: 108,
+                height: 108,
+                child: Icon(Icons.broken_image_outlined),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _ChatNotice extends StatelessWidget {

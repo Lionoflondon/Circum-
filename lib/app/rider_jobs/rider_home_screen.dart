@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../rider_marketplace/rider_onboarding_policy.dart';
+import '../send_package/view/ride_chats.dart';
+import '../sender_mobile/sender_notifications.dart';
 import 'rider_accept_controller.dart';
 import 'rider_home_state_mapper.dart';
 import 'rider_iris_orb.dart';
@@ -213,6 +215,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                                                                     'dashboard'),
                                                                 user: user,
                                                                 state: state,
+                                                                activeDelivery:
+                                                                    activeDelivery,
                                                                 profile:
                                                                     profile,
                                                                 presence:
@@ -238,6 +242,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                                                                     _toggleAvailability,
                                                                 onOpenTab:
                                                                     _openTab,
+                                                                onOpenNotifications: () =>
+                                                                    _openNotifications(
+                                                                        context),
                                                               ),
                                                   ),
                                                 ),
@@ -410,6 +417,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                           user: null,
                           firstNameOverride: '${profile['firstName']}',
                           state: state,
+                          activeDelivery: null,
                           profile: profile,
                           presence: presence,
                           earnings: earnings,
@@ -428,6 +436,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                                 'Preview only. Use the app to change live presence.',
                           ),
                           onOpenTab: _openTab,
+                          onOpenNotifications: () => setState(() => _message =
+                              'Notifications are available in the authenticated Rider app.'),
                         ),
                 ),
                 _RiderBottomNav(
@@ -509,6 +519,24 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       _tab = index;
       if (index == 0 || index == 1 || index == 3) _message = null;
     });
+  }
+
+  void _openNotifications(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SenderNotificationsView(
+        onOpenNotification: (notification) {
+          final destination = notification.destination;
+          if ('${destination['route'] ?? ''}' == 'conversation') {
+            final chatId = '${destination['chatId'] ?? ''}'.trim();
+            if (chatId.isNotEmpty) {
+              Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => RideChatPageView(chatId: chatId),
+              ));
+            }
+          }
+        },
+      ),
+    ));
   }
 
   Future<void> _toggleAvailability() async {
@@ -682,6 +710,7 @@ class _DashboardPane extends StatelessWidget {
   final User? user;
   final String? firstNameOverride;
   final RiderJobUiState state;
+  final Map<String, dynamic>? activeDelivery;
   final Map<String, dynamic> profile;
   final Map<String, dynamic> presence;
   final Map<String, dynamic> earnings;
@@ -696,12 +725,14 @@ class _DashboardPane extends StatelessWidget {
   final bool available;
   final VoidCallback onToggleAvailability;
   final ValueChanged<int> onOpenTab;
+  final VoidCallback onOpenNotifications;
 
   const _DashboardPane({
     super.key,
     required this.user,
     this.firstNameOverride,
     required this.state,
+    required this.activeDelivery,
     required this.profile,
     required this.presence,
     required this.earnings,
@@ -716,6 +747,7 @@ class _DashboardPane extends StatelessWidget {
     required this.available,
     required this.onToggleAvailability,
     required this.onOpenTab,
+    required this.onOpenNotifications,
   });
 
   @override
@@ -727,6 +759,7 @@ class _DashboardPane extends StatelessWidget {
         _GreetingCard(
           firstName: firstName,
           unread: unreadNotifications,
+          onTapNotifications: onOpenNotifications,
         ),
         const SizedBox(height: 14),
         if (loading)
@@ -747,6 +780,10 @@ class _DashboardPane extends StatelessWidget {
         _RankCard(profile: profile),
         const SizedBox(height: 14),
         _TodaySummary(earnings: earnings),
+        if (_deliveryChatId.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _RiderDeliveryChatShortcut(chatId: _deliveryChatId),
+        ],
         const SizedBox(height: 14),
         _PriorityOpportunities(offers: offers),
         const SizedBox(height: 14),
@@ -768,6 +805,10 @@ class _DashboardPane extends StatelessWidget {
     }
     return 'Rider';
   }
+
+  String get _deliveryChatId =>
+      '${activeDelivery?['requestId'] ?? activeDelivery?['id'] ?? activeDelivery?['_docId'] ?? ''}'
+          .trim();
 }
 
 class _OffersPane extends StatelessWidget {
@@ -1546,8 +1587,13 @@ class _FinanceTransactionRow extends StatelessWidget {
 class _GreetingCard extends StatelessWidget {
   final String firstName;
   final int unread;
+  final VoidCallback onTapNotifications;
 
-  const _GreetingCard({required this.firstName, required this.unread});
+  const _GreetingCard({
+    required this.firstName,
+    required this.unread,
+    required this.onTapNotifications,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1578,31 +1624,67 @@ class _GreetingCard extends StatelessWidget {
           ),
         ),
         Semantics(
-          label: 'Notifications',
+          label: unread > 0 ? 'Notifications, $unread unread' : 'Notifications',
           button: true,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const _CircleIcon(icon: Icons.notifications_none_rounded),
-              if (unread > 0)
-                Positioned(
-                  top: -2,
-                  right: -2,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFF4D5E),
-                      shape: BoxShape.circle,
+          child: InkWell(
+            onTap: onTapNotifications,
+            borderRadius: BorderRadius.circular(999),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const _CircleIcon(icon: Icons.notifications_none_rounded),
+                if (unread > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF4D5E),
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
     );
   }
+}
+
+class _RiderDeliveryChatShortcut extends StatelessWidget {
+  final String chatId;
+  const _RiderDeliveryChatShortcut({required this.chatId});
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        child: Row(children: [
+          const _CircleIcon(icon: Icons.forum_outlined),
+          const SizedBox(width: 12),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Delivery chat',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text('Message the sender or Circum Support for this delivery.',
+                  style: TextStyle(
+                      color: Colors.white.withValues(alpha: .58),
+                      fontSize: 12)),
+            ]),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => RideChatPageView(chatId: chatId),
+            )),
+            child: const Text('Open'),
+          ),
+        ]),
+      );
 }
 
 class _OnlineStatusCard extends StatelessWidget {

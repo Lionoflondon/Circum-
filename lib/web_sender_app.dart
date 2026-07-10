@@ -27,6 +27,7 @@ import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/rider_profiles/uk_phone_number.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
+import 'package:circum/app/send_package/view/ride_chats.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/pricing/special_handling_engine.dart';
 import 'package:circum/env/env.dart';
@@ -4465,23 +4466,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rowBuilder: _healthPlusRow,
           emptyText: 'No Health+ records yet.',
         ),
-      _AdminSection.support => _AdminDataSection(
-          colors: colors,
-          title: 'Support',
-          subtitle:
-              'Live chat tickets, refund requests, customer messages, admin assignment, and resolution notes.',
-          records: adminSearch(_supportTickets, query, [
-            'id',
-            'name',
-            'email',
-            'message',
-            'status',
-            'type',
-          ]),
-          columns: const ['Ticket', 'Customer', 'Status', 'Message', 'Actions'],
-          rowBuilder: _supportRow,
-          emptyText: 'No support tickets yet.',
-        ),
+      _AdminSection.support => _AdminCommunicationWorkspace(colors: colors),
       _AdminSection.issues => _AdminDataSection(
           colors: colors,
           title: 'Troubleshooting',
@@ -12366,6 +12351,348 @@ List<String> _criteria(Map<String, dynamic> item) {
       ? ['Analysis is available without further criteria']
       : result;
 }
+
+/// Admin-only reader for the canonical conversation and report records. It
+/// deliberately uses the deployed callables rather than an admin chat model.
+class _AdminCommunicationWorkspace extends StatefulWidget {
+  final _CircumColors colors;
+  const _AdminCommunicationWorkspace({required this.colors});
+
+  @override
+  State<_AdminCommunicationWorkspace> createState() =>
+      _AdminCommunicationWorkspaceState();
+}
+
+class _AdminCommunicationWorkspaceState
+    extends State<_AdminCommunicationWorkspace> {
+  String _section = 'Active Conversations';
+  final _search = TextEditingController();
+
+  static const _sections = [
+    'Active Conversations',
+    'Delivery Conversations',
+    'Sender Conversations',
+    'Rider Conversations',
+    'Reported Conversations',
+    'Announcements',
+    'Archived',
+  ];
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('chats')
+            .limit(160)
+            .snapshots(),
+        builder: (context, snapshot) {
+          final conversations = (snapshot.data?.docs ?? const [])
+              .map((document) => {'id': document.id, ...document.data()})
+              .toList();
+          final visible = _filterConversations(conversations);
+          return ListView(padding: const EdgeInsets.all(18), children: [
+            _GlassPanel(
+              colors: widget.colors,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Communication Centre',
+                        style: TextStyle(
+                            color: widget.colors.text,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 6),
+                    Text(
+                        'Delivery conversations, verified support messages, reports and platform broadcasts.',
+                        style: TextStyle(
+                            color: widget.colors.mutedText, height: 1.35)),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _search,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search_rounded),
+                        hintText: 'Search delivery, participant or message',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _sections
+                          .map((section) => ChoiceChip(
+                                label: Text(section),
+                                selected: _section == section,
+                                onSelected: (_) =>
+                                    setState(() => _section = section),
+                              ))
+                          .toList(),
+                    ),
+                  ]),
+            ),
+            const SizedBox(height: 14),
+            if (_section == 'Announcements')
+              _BroadcastCentre(colors: widget.colors)
+            else if (_section == 'Reported Conversations')
+              _ReportedConversations(colors: widget.colors)
+            else if (snapshot.connectionState == ConnectionState.waiting)
+              const Padding(
+                padding: EdgeInsets.all(36),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (visible.isEmpty)
+              _GlassPanel(
+                colors: widget.colors,
+                child: Text('No conversations match this view.',
+                    style: TextStyle(color: widget.colors.mutedText)),
+              )
+            else
+              ...visible.map((conversation) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _AdminConversationCard(
+                      colors: widget.colors,
+                      conversation: conversation,
+                    ),
+                  )),
+          ]);
+        },
+      );
+
+  List<Map<String, dynamic>> _filterConversations(
+      List<Map<String, dynamic>> conversations) {
+    final query = _search.text.trim().toLowerCase();
+    return conversations.where((item) {
+      final type = '${item['conversationType'] ?? 'sender_rider'}';
+      final readOnly = item['readOnly'] == true;
+      final matchesSection = switch (_section) {
+        'Active Conversations' => !readOnly,
+        'Delivery Conversations' => type == 'sender_rider',
+        'Sender Conversations' => type == 'admin_sender',
+        'Rider Conversations' => type == 'admin_rider',
+        'Archived' => readOnly,
+        _ => true,
+      };
+      if (!matchesSection) return false;
+      if (query.isEmpty) return true;
+      return [
+        item['id'],
+        item['deliveryId'],
+        item['bookingId'],
+        item['lastMessage'],
+        ...(item['participants'] as List? ?? const []),
+      ]
+          .map((value) => '$value'.toLowerCase())
+          .any((value) => value.contains(query));
+    }).toList()
+      ..sort((a, b) => _adminDateMillis(b['updatedAt'])
+          .compareTo(_adminDateMillis(a['updatedAt'])));
+  }
+}
+
+class _AdminConversationCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> conversation;
+  const _AdminConversationCard(
+      {required this.colors, required this.conversation});
+
+  @override
+  Widget build(BuildContext context) {
+    final chatId = '${conversation['id'] ?? ''}';
+    final deliveryId =
+        '${conversation['deliveryId'] ?? conversation['bookingId'] ?? 'Not linked'}';
+    final roles = Map<String, dynamic>.from(
+        conversation['participantRoles'] as Map? ?? const {});
+    final sender = roles.entries
+        .where((entry) => entry.value == 'sender')
+        .map((entry) => entry.key)
+        .join(', ');
+    final rider = roles.entries
+        .where((entry) => entry.value == 'rider')
+        .map((entry) => entry.key)
+        .join(', ');
+    final readOnly = conversation['readOnly'] == true;
+    return _GlassPanel(
+      colors: colors,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(readOnly ? Icons.lock_outline : Icons.forum_outlined,
+            color: readOnly ? colors.mutedText : colors.adminAccent),
+        const SizedBox(width: 12),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Delivery · $deliveryId',
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(
+              'Sender: ${sender.isEmpty ? 'Not available' : sender}\nRider: ${rider.isEmpty ? 'Not available' : rider}',
+              style: TextStyle(
+                  color: colors.mutedText, fontSize: 12, height: 1.35)),
+          if ('${conversation['lastMessage'] ?? ''}'.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('${conversation['lastMessage']}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w700)),
+          ],
+          const SizedBox(height: 8),
+          _AdminStatusCell(
+              colors: colors, status: readOnly ? 'Archived' : 'Active'),
+        ])),
+        const SizedBox(width: 10),
+        FilledButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => RideChatPageView(chatId: chatId),
+          )),
+          child: const Text('Open'),
+        ),
+      ]),
+    );
+  }
+}
+
+class _BroadcastCentre extends StatefulWidget {
+  final _CircumColors colors;
+  const _BroadcastCentre({required this.colors});
+  @override
+  State<_BroadcastCentre> createState() => _BroadcastCentreState();
+}
+
+class _BroadcastCentreState extends State<_BroadcastCentre> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  String _audience = 'everyone';
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_title.text.trim().isEmpty || _body.text.trim().isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('sendCircumAnnouncement')
+          .call({
+        'title': _title.text.trim(),
+        'body': _body.text.trim(),
+        'audience': _audience,
+      });
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Broadcast queued.')));
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(error.message ?? 'Broadcast could not be sent.')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: widget.colors,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Broadcast Centre',
+              style: TextStyle(
+                  color: widget.colors.text,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          TextField(
+              controller: _title,
+              decoration:
+                  const InputDecoration(labelText: 'Announcement title')),
+          const SizedBox(height: 10),
+          TextField(
+              controller: _body,
+              maxLines: 4,
+              decoration: const InputDecoration(labelText: 'Message')),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: _audience,
+            items: const [
+              DropdownMenuItem(value: 'everyone', child: Text('Everyone')),
+              DropdownMenuItem(value: 'senders', child: Text('Senders')),
+              DropdownMenuItem(value: 'riders', child: Text('Riders')),
+              DropdownMenuItem(
+                  value: 'business', child: Text('Business accounts')),
+              DropdownMenuItem(value: 'health', child: Text('Health+')),
+            ],
+            onChanged: (value) =>
+                setState(() => _audience = value ?? 'everyone'),
+            decoration: const InputDecoration(labelText: 'Audience'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _sending ? null : _send,
+            icon: const Icon(Icons.campaign_outlined),
+            label: Text(_sending ? 'Sending...' : 'Preview and Send'),
+          ),
+        ]),
+      );
+}
+
+class _ReportedConversations extends StatelessWidget {
+  final _CircumColors colors;
+  const _ReportedConversations({required this.colors});
+  @override
+  Widget build(BuildContext context) =>
+      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('messageReports')
+            .limit(100)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
+          if (snapshot.data!.docs.isEmpty)
+            return _GlassPanel(
+                colors: colors,
+                child: Text('No reported conversations.',
+                    style: TextStyle(color: colors.mutedText)));
+          return Column(
+              children: snapshot.data!.docs.map((document) {
+            final report = document.data();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _GlassPanel(
+                  colors: colors,
+                  child: ListTile(
+                    leading: const Icon(Icons.flag_outlined),
+                    title: Text(
+                        'Reported conversation · ${report['chatId'] ?? ''}'),
+                    subtitle: Text(
+                        'Reason: ${report['reason'] ?? 'Not provided'}\nStatus: ${report['status'] ?? 'open'}'),
+                    trailing: TextButton(
+                      onPressed: () =>
+                          Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => RideChatPageView(
+                            chatId: '${report['chatId'] ?? ''}'),
+                      )),
+                      child: const Text('Review'),
+                    ),
+                  )),
+            );
+          }).toList());
+        },
+      );
+}
+
+int _adminDateMillis(Object? value) =>
+    value is Timestamp ? value.millisecondsSinceEpoch : 0;
 
 class _AdminBusinessControlTowerSection extends StatelessWidget {
   final _CircumColors colors;
