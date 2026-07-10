@@ -1,0 +1,307 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+enum BusinessSection {
+  overview,
+  deliveries,
+  invoices,
+  team,
+  healthPlus,
+  gifts,
+  vanguard,
+  analytics,
+  finance,
+  settings,
+}
+
+enum BusinessDeliverySegment { active, scheduled, completed }
+
+class BusinessAccount {
+  final String id;
+  final String name;
+  final String status;
+  final String contactName;
+  final String contactEmail;
+  final String phone;
+  final String billingEmail;
+  final String businessAddress;
+  final String companyNumber;
+  final String defaultPickupAddress;
+  final List<Map<String, dynamic>> teamMembers;
+  final List<String> connectedProducts;
+  final Map<String, dynamic> notificationPreferences;
+  final Map<String, dynamic> paymentPreferences;
+
+  const BusinessAccount({
+    required this.id,
+    required this.name,
+    required this.status,
+    required this.contactName,
+    required this.contactEmail,
+    required this.phone,
+    required this.billingEmail,
+    required this.businessAddress,
+    required this.companyNumber,
+    required this.defaultPickupAddress,
+    required this.teamMembers,
+    required this.connectedProducts,
+    required this.notificationPreferences,
+    required this.paymentPreferences,
+  });
+
+  factory BusinessAccount.fromMap(String id, Map<String, dynamic> data) {
+    final pickups = (data['defaultPickupAddresses'] as List? ?? const [])
+        .map((item) => '$item'.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    return BusinessAccount(
+      id: id,
+      name: '${data['businessName'] ?? 'Business'}'.trim(),
+      status: '${data['status'] ?? 'pending'}'.trim().toLowerCase(),
+      contactName: '${data['contactName'] ?? ''}'.trim(),
+      contactEmail: '${data['contactEmail'] ?? ''}'.trim(),
+      phone: '${data['phone'] ?? ''}'.trim(),
+      billingEmail: '${data['billingEmail'] ?? ''}'.trim(),
+      businessAddress: '${data['businessAddress'] ?? ''}'.trim(),
+      companyNumber: '${data['companyNumber'] ?? ''}'.trim(),
+      defaultPickupAddress: pickups.isEmpty ? '' : pickups.first,
+      teamMembers: (data['teamMembers'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false),
+      connectedProducts: (data['connectedProducts'] as List? ?? const [])
+          .map((item) => '$item'.trim().toLowerCase())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false),
+      notificationPreferences: Map<String, dynamic>.from(
+        data['notificationPreferences'] as Map? ?? const {},
+      ),
+      paymentPreferences: Map<String, dynamic>.from(
+        data['paymentPreferences'] as Map? ?? const {},
+      ),
+    );
+  }
+
+  bool get isApproved => status == 'approved' || status == 'verified';
+  String get statusLabel =>
+      isApproved ? 'Verified Business' : 'Pending Approval';
+}
+
+class BusinessDelivery {
+  final String id;
+  final String pickup;
+  final String dropoff;
+  final String status;
+  final String bookedBy;
+  final String vehicle;
+  final String category;
+  final double amount;
+  final DateTime? createdAt;
+  final DateTime? scheduledAt;
+  final Duration? duration;
+
+  const BusinessDelivery({
+    required this.id,
+    required this.pickup,
+    required this.dropoff,
+    required this.status,
+    required this.bookedBy,
+    required this.vehicle,
+    required this.category,
+    required this.amount,
+    this.createdAt,
+    this.scheduledAt,
+    this.duration,
+  });
+
+  factory BusinessDelivery.fromMap(String id, Map<String, dynamic> data) {
+    return BusinessDelivery(
+      id: id,
+      pickup: _addressLabel(data['pickupAddress'] ?? data['pickup']),
+      dropoff: _addressLabel(
+        data['dropoffAddress'] ?? data['dropOffAddress'] ?? data['dropoff'],
+      ),
+      status: '${data['deliveryStatus'] ?? data['status'] ?? 'draft'}'
+          .trim()
+          .toLowerCase(),
+      bookedBy: '${data['bookedByName'] ?? data['senderName'] ?? ''}'.trim(),
+      vehicle: '${data['vehicleType'] ?? data['vehicle'] ?? ''}'.trim(),
+      category:
+          '${data['category'] ?? data['itemCategory'] ?? 'Delivery'}'.trim(),
+      amount: _money(
+        data['totalAmount'] ?? data['price'] ?? data['amountPaid'],
+      ),
+      createdAt: _date(data['createdAt']),
+      scheduledAt: _date(
+        data['scheduledAt'] ?? data['preferredDeliveryDate'],
+      ),
+      duration: data['durationMinutes'] is num
+          ? Duration(minutes: (data['durationMinutes'] as num).round())
+          : null,
+    );
+  }
+
+  bool get isCompleted => const {
+        'delivered',
+        'completed',
+        'cancelled',
+        'cancelled_admin',
+      }.contains(status);
+
+  bool get isScheduled =>
+      !isCompleted &&
+      const {
+        'scheduled',
+        'awaiting_payment',
+        'payment_complete',
+        'awaiting_broadcast',
+      }.contains(status);
+
+  bool get isActive => !isCompleted && !isScheduled;
+  bool get hasVanguard => category.toLowerCase().contains('vanguard');
+}
+
+class BusinessInvoice {
+  final String id;
+  final String number;
+  final String status;
+  final double total;
+  final double balanceDue;
+  final double rothApplied;
+  final int deliveryCount;
+  final DateTime? dueAt;
+  final DateTime? createdAt;
+  final String paymentReference;
+
+  const BusinessInvoice({
+    required this.id,
+    required this.number,
+    required this.status,
+    required this.total,
+    required this.balanceDue,
+    required this.rothApplied,
+    required this.deliveryCount,
+    required this.paymentReference,
+    this.dueAt,
+    this.createdAt,
+  });
+
+  factory BusinessInvoice.fromMap(String id, Map<String, dynamic> data) {
+    return BusinessInvoice(
+      id: id,
+      number: '${data['invoiceNumber'] ?? id}'.trim(),
+      status: '${data['status'] ?? 'draft'}'.trim().toLowerCase(),
+      total: _money(data['total'] ?? data['subtotal']),
+      balanceDue: _money(data['balanceDue'] ?? data['total']),
+      rothApplied: _money(data['rothApplied'] ?? data['rothAmount']),
+      deliveryCount: (data['deliveryCount'] as num?)?.toInt() ??
+          (data['deliveryIds'] as List?)?.length ??
+          0,
+      dueAt: _date(data['dueAt'] ?? data['dueDate']),
+      createdAt: _date(data['createdAt']),
+      paymentReference:
+          '${data['stripePaymentIntentId'] ?? data['paymentReference'] ?? ''}'
+              .trim(),
+    );
+  }
+
+  bool get isPaid => status == 'paid' || status == 'paid_manually';
+}
+
+class BusinessRequestSummary {
+  final String id;
+  final String title;
+  final String status;
+  final DateTime? createdAt;
+
+  const BusinessRequestSummary({
+    required this.id,
+    required this.title,
+    required this.status,
+    this.createdAt,
+  });
+}
+
+class BusinessWalletSummary {
+  final double rothBalance;
+  final double lifetimeOffset;
+  final String status;
+
+  const BusinessWalletSummary({
+    required this.rothBalance,
+    required this.lifetimeOffset,
+    required this.status,
+  });
+
+  static const empty = BusinessWalletSummary(
+    rothBalance: 0,
+    lifetimeOffset: 0,
+    status: 'active',
+  );
+}
+
+class BusinessWorkspaceData {
+  final BusinessAccount account;
+  final List<BusinessDelivery> deliveries;
+  final List<BusinessInvoice> invoices;
+  final List<BusinessRequestSummary> healthRequests;
+  final List<BusinessRequestSummary> giftRequests;
+  final BusinessWalletSummary wallet;
+
+  const BusinessWorkspaceData({
+    required this.account,
+    required this.deliveries,
+    required this.invoices,
+    required this.healthRequests,
+    required this.giftRequests,
+    required this.wallet,
+  });
+
+  int get monthlyDeliveries {
+    final now = DateTime.now();
+    return deliveries.where((item) {
+      final date = item.createdAt;
+      return date != null && date.year == now.year && date.month == now.month;
+    }).length;
+  }
+
+  double get outstandingBalance => invoices
+      .where((item) => !item.isPaid)
+      .fold<double>(0, (total, item) => total + item.balanceDue);
+
+  int get activeHealthRequests => healthRequests
+      .where((item) => !const {'completed', 'delivered'}.contains(item.status))
+      .length;
+
+  int get activeGiftRequests => giftRequests
+      .where((item) => !const {'completed', 'delivered'}.contains(item.status))
+      .length;
+}
+
+DateTime? _date(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+double _money(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value') ?? 0;
+}
+
+String _addressLabel(dynamic value) {
+  if (value is Map) {
+    final map = Map<String, dynamic>.from(value);
+    for (final key in const [
+      'formattedAddress',
+      'addressLine1',
+      'address',
+      'description',
+    ]) {
+      final text = '${map[key] ?? ''}'.trim();
+      if (text.isNotEmpty && text != 'null' && text != 'undefined') return text;
+    }
+  }
+  final text = '${value ?? ''}'.trim();
+  return text == 'null' || text == 'undefined' ? '' : text;
+}
