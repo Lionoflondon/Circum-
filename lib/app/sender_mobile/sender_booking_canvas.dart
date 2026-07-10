@@ -129,7 +129,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           backgroundColor: _Tokens.bg,
           body: Stack(
             children: [
-              const _SenderMobileMap(active: true),
+              _SenderMobileMap(
+                active: true,
+                showDestination: engine.desinationCoordinate != null ||
+                    _dropoff.text.trim().isNotEmpty,
+                showVanguardShield: _draft.vanguard,
+                distanceKm: engine.distance,
+              ),
               SafeArea(
                 child: Column(
                   children: [
@@ -2584,8 +2590,16 @@ class _IrisOrb extends StatelessWidget {
 
 class _SenderMobileMap extends StatefulWidget {
   final bool active;
+  final bool showDestination;
+  final bool showVanguardShield;
+  final double? distanceKm;
 
-  const _SenderMobileMap({required this.active});
+  const _SenderMobileMap({
+    required this.active,
+    this.showDestination = false,
+    this.showVanguardShield = false,
+    this.distanceKm,
+  });
 
   @override
   State<_SenderMobileMap> createState() => _SenderMobileMapState();
@@ -2612,11 +2626,116 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) => CustomPaint(
-        painter: _MapPainter(t: _controller.value, active: widget.active),
-        child: const SizedBox.expand(),
+    final distance = widget.distanceKm;
+    final etaMinutes =
+        distance == null ? null : math.max(6, distance * 4).round();
+    return Stack(
+      children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => CustomPaint(
+            painter: _MapPainter(
+              t: _controller.value,
+              active: widget.active,
+              showDestination: widget.showDestination,
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+        if (widget.showDestination)
+          Positioned(
+            left: 18,
+            bottom: 24,
+            child: _BookingMapMetricPill(
+              distanceLabel: distance == null
+                  ? 'Distance calculating'
+                  : '${distance.toStringAsFixed(1)} km',
+              etaLabel: etaMinutes == null
+                  ? 'ETA calculating'
+                  : '$etaMinutes min estimated',
+            ),
+          ),
+        if (widget.showDestination && widget.showVanguardShield)
+          const Align(
+            alignment: Alignment(-.02, -.12),
+            child: _BookingMapVanguardShield(),
+          ),
+      ],
+    );
+  }
+}
+
+class _BookingMapMetricPill extends StatelessWidget {
+  final String distanceLabel;
+  final String etaLabel;
+
+  const _BookingMapMetricPill({
+    required this.distanceLabel,
+    required this.etaLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _Tokens.glass,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _Tokens.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .24),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            distanceLabel,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            etaLabel,
+            style: const TextStyle(color: _Tokens.muted, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BookingMapVanguardShield extends StatelessWidget {
+  const _BookingMapVanguardShield();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _Tokens.glass,
+        border: Border.all(color: _Tokens.lightBlue.withValues(alpha: .34)),
+        boxShadow: [
+          BoxShadow(
+            color: _Tokens.vanguard.withValues(alpha: .16),
+            blurRadius: 18,
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.shield_outlined,
+        color: _Tokens.lightBlue,
+        size: 18,
       ),
     );
   }
@@ -2625,8 +2744,13 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
 class _MapPainter extends CustomPainter {
   final double t;
   final bool active;
+  final bool showDestination;
 
-  const _MapPainter({required this.t, required this.active});
+  const _MapPainter({
+    required this.t,
+    required this.active,
+    required this.showDestination,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2662,36 +2786,40 @@ class _MapPainter extends CustomPainter {
         dropoff.dx,
         dropoff.dy,
       );
-    canvas.drawPath(
-      route,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round
-        ..color = _Tokens.lightBlue.withValues(alpha: active ? .68 : .24),
-    );
-    final metrics = route.computeMetrics().toList();
-    if (metrics.isNotEmpty) {
-      final metric = metrics.first;
-      final start = (metric.length * t) % metric.length;
-      final end = math.min(metric.length, start + metric.length * .24);
+    if (showDestination) {
       canvas.drawPath(
-        metric.extractPath(start, end),
+        route,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 5
+          ..strokeWidth = 3
           ..strokeCap = StrokeCap.round
-          ..shader = LinearGradient(
-            colors: [
-              _Tokens.iris.withValues(alpha: 0),
-              _Tokens.iris.withValues(alpha: .72),
-              _Tokens.lightBlue.withValues(alpha: 0),
-            ],
-          ).createShader(rect),
+          ..color = _Tokens.lightBlue.withValues(alpha: active ? .68 : .24),
       );
+      final metrics = route.computeMetrics().toList();
+      if (metrics.isNotEmpty) {
+        final metric = metrics.first;
+        final start = (metric.length * t) % metric.length;
+        final end = math.min(metric.length, start + metric.length * .24);
+        canvas.drawPath(
+          metric.extractPath(start, end),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 5
+            ..strokeCap = StrokeCap.round
+            ..shader = LinearGradient(
+              colors: [
+                _Tokens.iris.withValues(alpha: 0),
+                _Tokens.iris.withValues(alpha: .72),
+                _Tokens.lightBlue.withValues(alpha: 0),
+              ],
+            ).createShader(rect),
+        );
+      }
     }
     _pin(canvas, pickup, _Tokens.blue, t);
-    _pin(canvas, dropoff, const Color(0xFF22C55E), (t + .45) % 1);
+    if (showDestination) {
+      _pin(canvas, dropoff, const Color(0xFF22C55E), (t + .45) % 1);
+    }
   }
 
   void _pin(Canvas canvas, Offset point, Color color, double phase) {
@@ -2705,7 +2833,9 @@ class _MapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MapPainter oldDelegate) =>
-      oldDelegate.t != t || oldDelegate.active != active;
+      oldDelegate.t != t ||
+      oldDelegate.active != active ||
+      oldDelegate.showDestination != showDestination;
 }
 
 class _Tokens {

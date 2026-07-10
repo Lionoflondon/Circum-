@@ -2117,10 +2117,71 @@ void main() {
           senderTrackingContentFor(SenderTrackingState.findingRider);
 
       expect(content.showPickupPin, isTrue);
-      expect(content.showAnonymousRiders, isTrue);
+      expect(content.showAnonymousRiders, isFalse);
       expect(content.showRiderCard, isFalse);
       expect(content.showCollectionPin, isFalse);
       expect(content.showReceiverPin, isFalse);
+    });
+
+    test('dual map mode requires payment completion and rider acceptance', () {
+      expect(
+        senderDeliveryMapModeFor(
+          paymentStatus: 'succeeded',
+          trackingState: SenderTrackingState.findingRider,
+        ),
+        SenderDeliveryMapMode.bookingPlanning,
+      );
+      expect(
+        senderDeliveryMapModeFor(
+          paymentStatus: 'requires_payment_method',
+          trackingState: SenderTrackingState.riderAssigned,
+        ),
+        SenderDeliveryMapMode.bookingPlanning,
+      );
+      expect(
+        senderDeliveryMapModeFor(
+          paymentStatus: 'payment_complete',
+          trackingState: SenderTrackingState.riderAssigned,
+        ),
+        SenderDeliveryMapMode.liveTracking,
+      );
+    });
+
+    test(
+        'booking map stays planning-only with route metrics and Vanguard shield',
+        () {
+      final source = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('showDestination'));
+      expect(source, contains('_BookingMapMetricPill'));
+      expect(source, contains('_BookingMapVanguardShield'));
+      expect(source, contains('Icons.shield_outlined'));
+      expect(source, contains('Distance calculating'));
+      expect(source, contains('ETA calculating'));
+      expect(source, isNot(contains('_AnonymousRiderDot(')));
+    });
+
+    test('live delivery map never fabricates riders before backend unlock', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('SenderDeliveryMapMode.liveTracking'));
+      expect(source, contains('senderPaymentCompleteForLiveMap'));
+      expect(source, contains('senderRiderAcceptedForLiveMap'));
+      expect(
+        source,
+        contains(
+          'Live tracking begins once payment is complete and your rider has accepted.',
+        ),
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.findingRider)
+            .showAnonymousRiders,
+        isFalse,
+      );
     });
 
     test('both PINs appear together after rider assignment', () {

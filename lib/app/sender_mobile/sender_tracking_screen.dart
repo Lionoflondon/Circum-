@@ -21,6 +21,8 @@ enum SenderTrackingState {
   error,
 }
 
+enum SenderDeliveryMapMode { bookingPlanning, liveTracking }
+
 class SenderTrackingContent {
   final String title;
   final String body;
@@ -65,6 +67,74 @@ class SenderTrackingContent {
     this.deliveredVerified = false,
     this.eta = '',
   });
+
+  SenderTrackingContent copyWith({
+    bool? showRider,
+    bool? showAnonymousRiders,
+    bool? showRiderCard,
+  }) {
+    return SenderTrackingContent(
+      title: title,
+      body: body,
+      pill: pill,
+      progress: progress,
+      riderPosition: riderPosition,
+      dimMap: dimMap,
+      showRoute: showRoute,
+      showPickupPin: showPickupPin,
+      showDropoffPin: showDropoffPin,
+      showRider: showRider ?? this.showRider,
+      showAnonymousRiders: showAnonymousRiders ?? this.showAnonymousRiders,
+      showCollectionPin: showCollectionPin,
+      showReceiverPin: showReceiverPin,
+      showRiderCard: showRiderCard ?? this.showRiderCard,
+      showIris: showIris,
+      showVanguard: showVanguard,
+      quietVanguard: quietVanguard,
+      issueVanguard: issueVanguard,
+      deliveredVerified: deliveredVerified,
+      eta: eta,
+    );
+  }
+}
+
+bool senderPaymentCompleteForLiveMap(Object? status) {
+  return switch (_normalizeTrackingStatus(status)) {
+    'paid' ||
+    'payment_complete' ||
+    'payment_completed' ||
+    'succeeded' ||
+    'success' ||
+    'complete' =>
+      true,
+    _ => false,
+  };
+}
+
+bool senderRiderAcceptedForLiveMap(SenderTrackingState state) {
+  return switch (state) {
+    SenderTrackingState.riderAssigned ||
+    SenderTrackingState.riderEnRouteToPickup ||
+    SenderTrackingState.riderArrivedAtPickup ||
+    SenderTrackingState.pickupComplete ||
+    SenderTrackingState.inTransit ||
+    SenderTrackingState.riderArrivingAtDropoff ||
+    SenderTrackingState.delivered ||
+    SenderTrackingState.issue =>
+      true,
+    _ => false,
+  };
+}
+
+SenderDeliveryMapMode senderDeliveryMapModeFor({
+  required Object? paymentStatus,
+  required SenderTrackingState trackingState,
+}) {
+  if (senderPaymentCompleteForLiveMap(paymentStatus) &&
+      senderRiderAcceptedForLiveMap(trackingState)) {
+    return SenderDeliveryMapMode.liveTracking;
+  }
+  return SenderDeliveryMapMode.bookingPlanning;
 }
 
 SenderTrackingState senderTrackingStateForEngine(SendPackageState engine) {
@@ -178,7 +248,6 @@ SenderTrackingContent senderTrackingContentFor(
         progress: 0,
         dimMap: true,
         showPickupPin: true,
-        showAnonymousRiders: true,
         showVanguard: true,
         riderPosition: Offset(.34, .44),
         eta: 'Usually under 6 min',
@@ -442,15 +511,26 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       state,
       deliveryVerified: widget.deliveryVerified,
     );
+    final mapMode = senderDeliveryMapModeFor(
+      paymentStatus: widget.engine.senderPaymentStatus,
+      trackingState: state,
+    );
+    final visibleContent = mapMode == SenderDeliveryMapMode.liveTracking
+        ? content.copyWith(showAnonymousRiders: false)
+        : content.copyWith(
+            showRider: false,
+            showAnonymousRiders: false,
+            showRiderCard: false,
+          );
     final riderPosition = _riderPositionForEngine(widget.engine, content);
-    final staleLabel = content.showRider
+    final staleLabel = visibleContent.showRider
         ? senderLiveLocationStaleLabel(widget.engine.riderLiveLocationUpdatedAt)
         : null;
     final delivered = state == SenderTrackingState.delivered;
     return Stack(
       children: [
         SenderTrackingMapLayer(
-          content: content,
+          content: visibleContent,
           riderPosition: riderPosition,
           vehicleKind: senderVehicleMarkerKindFor(
             widget.engine.deliveryData?.typeOfVehicle,
@@ -471,13 +551,14 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
             ),
           ),
         if (staleLabel != null) _StaleLocationPill(label: staleLabel),
-        if (content.showRider && !delivered) const _RecenterButton(),
+        if (visibleContent.showRider && !delivered) const _RecenterButton(),
         if (delivered) const _DeliveredConfirmationOverlay(),
         FloatingGlassPanel(
           child: _TrackingPanelContent(
             state: state,
-            content: content,
+            content: visibleContent,
             engine: widget.engine,
+            mapMode: mapMode,
           ),
         ),
       ],
@@ -676,11 +757,13 @@ class _TrackingPanelContent extends StatelessWidget {
   final SenderTrackingState state;
   final SenderTrackingContent content;
   final SendPackageState engine;
+  final SenderDeliveryMapMode mapMode;
 
   const _TrackingPanelContent({
     required this.state,
     required this.content,
     required this.engine,
+    required this.mapMode,
   });
 
   @override
@@ -725,6 +808,11 @@ class _TrackingPanelContent extends StatelessWidget {
         if (state == SenderTrackingState.findingRider) ...[
           const SizedBox(height: 8),
           const _FindingPulse(),
+        ],
+        if (mapMode == SenderDeliveryMapMode.bookingPlanning &&
+            senderRiderAcceptedForLiveMap(state)) ...[
+          const SizedBox(height: 8),
+          const _LiveMapPendingPaymentNote(),
         ],
         if (content.showRiderCard) ...[
           const SizedBox(height: 12),
@@ -1839,6 +1927,39 @@ class _FindingPulse extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LiveMapPendingPaymentNote extends StatelessWidget {
+  const _LiveMapPendingPaymentNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: .10)),
+      ),
+      child: const Row(
+        children: [
+          Icon(
+            Icons.lock_clock_outlined,
+            color: Color(0xFF60A5FA),
+            size: 18,
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Live tracking begins once payment is complete and your rider has accepted.',
+              style: TextStyle(color: _TrackingTokens.muted, height: 1.35),
+            ),
+          ),
+        ],
       ),
     );
   }
