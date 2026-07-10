@@ -171,6 +171,9 @@ void main() {
         scrollable: find.byType(Scrollable));
     await tester.tap(find.text('View all activity'));
     await tester.pumpAndSettle();
+    expect(find.text('Recent Activity'), findsOneWidget);
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
     expect(find.text('Used on delivery'), findsOneWidget);
   });
 
@@ -246,7 +249,86 @@ void main() {
     await tester.scrollUntilVisible(find.text('Offers'), 120,
         scrollable: find.byType(Scrollable));
     expect(find.text('Earn 5 Roth'), findsOneWidget);
-    expect(find.text('Health+ Bonus'), findsOneWidget);
+    expect(find.text('Health+ Bonus'), findsNothing);
+    expect(find.text('Business Reward'), findsNothing);
+    expect(
+      find.text(
+          'Refer friends and earn 5 Roth when they complete their first successful Circum delivery.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('all Wallet chevrons open an intentional destination',
+      (tester) async {
+    final repository = FakeWalletRepository(
+      wallet: const SenderWalletData(
+          balance: 25, frozen: false, onboardingCompleted: true),
+      methods: const SenderPaymentMethodsData(
+        methods: [],
+        preference: SenderCheckoutPreference.rothThenCard,
+        applePaySupported: true,
+        googlePaySupported: true,
+      ),
+    );
+    await tester.pumpWidget(app(SenderWalletView(repository: repository)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Apple Pay'));
+    await tester.pumpAndSettle();
+    expect(find.text('Apple Pay'), findsWidgets);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Google Pay'));
+    await tester.pumpAndSettle();
+    expect(find.text('Google Pay'), findsWidgets);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Roth').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Use Roth to reduce'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('View all activity'), 120,
+        scrollable: find.byType(Scrollable));
+    await tester.tap(find.text('View all activity'));
+    await tester.pumpAndSettle();
+    expect(find.text('Recent Activity'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Manage Payments'), 120,
+        scrollable: find.byType(Scrollable));
+    await tester.tap(find.text('Manage Payments'));
+    await tester.pumpAndSettle();
+    expect(find.text('Manage Payments'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Split Payment'), 120,
+        scrollable: find.byType(Scrollable).last);
+    expect(find.text('Split Payment'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Redeem Roth Card'), 120,
+        scrollable: find.byType(Scrollable));
+    await tester.tap(find.text('Redeem Roth Card'));
+    await tester.pumpAndSettle();
+    expect(find.text('Card code'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Support'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wallet Support'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Earn Roth'), 120,
+        scrollable: find.byType(Scrollable));
+    await tester.tap(find.text('Earn Roth'));
+    await tester.pump();
+    expect(find.text('Earn Roth'), findsOneWidget);
   });
 
   testWidgets('shows empty and frozen states', (tester) async {

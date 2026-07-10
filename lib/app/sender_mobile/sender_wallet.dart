@@ -7,6 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'sender_finance.dart';
 
@@ -232,7 +234,6 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   String? _nextPage;
   String? _error;
   bool _loading = true;
-  bool _loadingMore = false;
   bool _paymentActionLoading = false;
 
   @override
@@ -265,6 +266,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         _nextPage = page.nextPageToken;
         _loading = false;
       });
+      await _subscription?.cancel();
       _subscription = _repository.watch().listen((value) {
         if (mounted) setState(() => _wallet = value);
       }, onError: (_) {});
@@ -291,22 +293,6 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       }
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (_nextPage == null || _loadingMore) return;
-    setState(() => _loadingMore = true);
-    try {
-      final page = await _repository.transactions(pageToken: _nextPage);
-      if (mounted) {
-        setState(() {
-          _transactions.addAll(page.transactions);
-          _nextPage = page.nextPageToken;
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -396,16 +382,105 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     }
   }
 
-  Future<void> _savePreference(SenderCheckoutPreference preference) async {
-    if (_paymentActionLoading) return;
-    setState(() => _paymentActionLoading = true);
+  void _openManagePayments() {
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(
+          builder: (_) => _ManagePaymentsScreen(
+            repository: _repository,
+            wallet: _wallet!,
+          ),
+          settings: const RouteSettings(name: '/sender-mobile/wallet/payments'),
+        ))
+        .then((_) => _refreshPaymentMethods());
+  }
+
+  void _openPaymentInformation(SenderPaymentProfileOptionType type) {
+    final platform = Theme.of(context).platform;
+    final appleAvailable = platform == TargetPlatform.iOS;
+    final googleAvailable = platform == TargetPlatform.android;
+    final title = type == SenderPaymentProfileOptionType.applePay
+        ? 'Apple Pay'
+        : 'Google Pay';
+    final available = type == SenderPaymentProfileOptionType.applePay
+        ? appleAvailable
+        : googleAvailable;
+    final platformName = type == SenderPaymentProfileOptionType.applePay
+        ? 'an iPhone or iPad'
+        : 'an Android device';
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => _WalletInformationScreen(
+        title: title,
+        icon: type == SenderPaymentProfileOptionType.applePay
+            ? Icons.apple_rounded
+            : Icons.android_rounded,
+        body: available
+            ? '$title is available during eligible Circum checkout. Manage your preferred checkout order from Manage Payments.'
+            : '$title is available when you use Circum on $platformName. Your saved cards and Roth remain available on this device.',
+      ),
+    ));
+  }
+
+  void _openRothInformation() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const _WalletInformationScreen(
+            title: 'Roth',
+            icon: Icons.auto_awesome_rounded,
+            body:
+                'Use Roth to reduce the cost of eligible Circum services. When Roth does not cover the full total, Circum can apply Roth first and charge the remainder to your chosen payment method.',
+          ),
+        ),
+      );
+
+  void _openEarnRoth() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const _EarnRothScreen(),
+          settings: const RouteSettings(name: '/sender-mobile/wallet/earn'),
+        ),
+      );
+
+  void _openSupport() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const _WalletSupportScreen(),
+          settings: const RouteSettings(name: '/sender-mobile/wallet/support'),
+        ),
+      );
+
+  Future<void> _redeemRothCard() async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Redeem Roth Card'),
+        content: TextField(
+          controller: controller,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(labelText: 'Card code'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Redeem'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (code == null || code.isEmpty) return;
     try {
-      await _repository.saveCheckoutPreference(preference);
-      await _refreshPaymentMethods();
-    } catch (error) {
-      if (mounted) _notice(context, 'Could not save checkout preference.');
-    } finally {
-      if (mounted) setState(() => _paymentActionLoading = false);
+      await FirebaseFunctions.instance
+          .httpsCallable('redeemGiftCard')
+          .call({'code': code});
+      await _load();
+      if (mounted) _notice(context, 'Roth Card redeemed.');
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        _notice(
+            context, error.message ?? 'This Roth Card could not be redeemed.');
+      }
     }
   }
 
@@ -462,6 +537,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
           onAdd: _addPaymentMethod,
           onSetDefault: _setDefaultPaymentMethod,
           onRemove: _removePaymentMethod,
+          onOpenMethod: _openPaymentInformation,
+          onOpenRoth: _openRothInformation,
         ),
         const SizedBox(height: 18),
         _AvailableRothCard(wallet: wallet),
@@ -494,10 +571,18 @@ class _SenderWalletViewState extends State<SenderWalletView> {
                       .map((item) => _TransactionRow(item))
                       .toList()),
         ),
-        if (_nextPage != null)
-          TextButton(
-              onPressed: _loadingMore ? null : _loadMore,
-              child: Text(_loadingMore ? 'Loading…' : 'View all activity')),
+        TextButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => _WalletActivityScreen(
+              repository: _repository,
+              initialTransactions: List.of(_transactions),
+              initialPageToken: _nextPage,
+            ),
+            settings:
+                const RouteSettings(name: '/sender-mobile/wallet/activity'),
+          )),
+          child: const Text('View all activity'),
+        ),
         const SizedBox(height: 18),
         const _WalletSectionTitle('Wallet Actions'),
         const SizedBox(height: 10),
@@ -507,64 +592,38 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               icon: Icons.credit_card_outlined,
               title: 'Redeem Roth Card',
               detail: 'Apply approved Roth rewards.',
-              onTap: () =>
-                  _notice(context, 'Roth Card redemption is coming next.')),
+              onTap: _redeemRothCard),
           const Divider(color: _WalletColors.hairline),
           _WalletLink(
               icon: Icons.group_add_outlined,
               title: 'Earn Roth',
               detail: 'Referral Code · Invite Friends · Rewards',
-              onTap: () => _notice(context,
-                  'Referral Code, Invite Friends, Friends Invited, Pending Rewards and Lifetime Roth Earned are coming next.')),
+              onTap: _openEarnRoth),
           const Divider(color: _WalletColors.hairline),
           _WalletLink(
               icon: Icons.tune_rounded,
               title: 'Manage Payments',
               detail: 'Default method and checkout preferences',
-              onTap: () => _showCheckoutPreferences(context)),
+              onTap: _openManagePayments),
           const Divider(color: _WalletColors.hairline),
           _WalletLink(
               icon: Icons.help_outline,
               title: 'Support',
               detail: 'Get help with payments and Roth.',
-              onTap: () => _notice(context, 'Wallet support is coming next.')),
+              onTap: _openSupport),
         ])),
         const SizedBox(height: 18),
         const _WalletSectionTitle('Offers'),
         const SizedBox(height: 10),
-        const _WalletGlass(
-          child: Column(
-            children: [
-              _OfferRow(title: 'Earn 5 Roth', detail: 'Referral reward'),
-              Divider(color: _WalletColors.hairline),
-              _OfferRow(title: 'Health+ Bonus', detail: 'Eligible care runs'),
-              Divider(color: _WalletColors.hairline),
-              _OfferRow(title: 'Business Reward', detail: 'Future benefit'),
-            ],
+        _WalletGlass(
+          child: _OfferRow(
+            title: 'Earn 5 Roth',
+            detail:
+                'Refer friends and earn 5 Roth when they complete their first successful Circum delivery.',
+            onTap: _openEarnRoth,
           ),
         ),
       ],
-    );
-  }
-
-  void _showCheckoutPreferences(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF07090F),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-        child: _CheckoutPreferenceSection(
-          preference: _paymentMethods.preference,
-          busy: _paymentActionLoading,
-          onChanged: (value) {
-            Navigator.pop(context);
-            _savePreference(value);
-          },
-        ),
-      ),
     );
   }
 
@@ -581,6 +640,615 @@ class SenderWalletHomeSummary extends StatefulWidget {
   @override
   State<SenderWalletHomeSummary> createState() =>
       _SenderWalletHomeSummaryState();
+}
+
+class _ManagePaymentsScreen extends StatefulWidget {
+  final SenderWalletRepository repository;
+  final SenderWalletData wallet;
+
+  const _ManagePaymentsScreen({
+    required this.repository,
+    required this.wallet,
+  });
+
+  @override
+  State<_ManagePaymentsScreen> createState() => _ManagePaymentsScreenState();
+}
+
+class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
+  SenderPaymentProfile? _profile;
+  bool _loading = true;
+  bool _busy = false;
+  bool _businessAccount = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final profile = await widget.repository.paymentMethods();
+      var businessAccount = false;
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final owned = await FirebaseFirestore.instance
+              .collection('businessAccounts')
+              .where('createdByUserId', isEqualTo: user.uid)
+              .limit(1)
+              .get();
+          businessAccount = owned.docs.isNotEmpty;
+        }
+      } catch (_) {
+        businessAccount = false;
+      }
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _businessAccount = businessAccount;
+        _loading = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = '$error';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _add() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final setup = await widget.repository.createSetupIntent();
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          merchantDisplayName: 'Circum',
+          customerId: setup.customerId,
+          customerEphemeralKeySecret: setup.ephemeralKeySecret,
+          setupIntentClientSecret: setup.setupIntentClientSecret,
+          applePay: const PaymentSheetApplePay(merchantCountryCode: 'GB'),
+          googlePay: const PaymentSheetGooglePay(
+            merchantCountryCode: 'GB',
+            currencyCode: 'GBP',
+          ),
+          style: ThemeMode.dark,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+      await _load();
+    } on StripeException catch (error) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          error.error.localizedMessage ?? 'Card setup cancelled.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setDefault(String id) async {
+    setState(() => _busy = true);
+    try {
+      await widget.repository.setDefaultPaymentMethod(id);
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _remove(SenderPaymentMethod method) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Remove payment method?'),
+            content: Text('${method.title} will be removed from Circum.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+    setState(() => _busy = true);
+    try {
+      await widget.repository.detachPaymentMethod(method.id);
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _savePreference(SenderCheckoutPreference value) async {
+    setState(() => _busy = true);
+    try {
+      await widget.repository.saveCheckoutPreference(value);
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _openMethod(SenderPaymentProfileOptionType type) {
+    final apple = type == SenderPaymentProfileOptionType.applePay;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => _WalletInformationScreen(
+        title: apple ? 'Apple Pay' : 'Google Pay',
+        icon: apple ? Icons.apple_rounded : Icons.android_rounded,
+        body:
+            '${apple ? 'Apple Pay' : 'Google Pay'} is offered automatically on supported devices during checkout.',
+      ),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Manage Payments'),
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _WalletMessage(
+                    icon: Icons.error_outline,
+                    title: 'Payments could not load',
+                    body: 'Check your connection and try again.',
+                    action: _load,
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+                    children: [
+                      _PaymentMethodsSection(
+                        sectionTitle: 'Saved Cards',
+                        data: _profile!,
+                        wallet: widget.wallet,
+                        busy: _busy,
+                        onAdd: _add,
+                        onSetDefault: _setDefault,
+                        onRemove: _remove,
+                        onOpenMethod: _openMethod,
+                        onOpenRoth: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const _WalletInformationScreen(
+                              title: 'Roth',
+                              icon: Icons.auto_awesome_rounded,
+                              body:
+                                  'Roth can be used alone or with a card when an eligible purchase costs more than your available Roth.',
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _CheckoutPreferenceSection(
+                        preference: _profile!.preference,
+                        busy: _busy,
+                        onChanged: _savePreference,
+                      ),
+                      const SizedBox(height: 18),
+                      const _WalletSectionTitle('Split Payment'),
+                      const SizedBox(height: 10),
+                      const _WalletGlass(
+                        child: Text(
+                          'Choose Roth then card to apply available Roth first and charge only the remaining amount to your payment method.',
+                          style: TextStyle(
+                            color: _WalletColors.muted,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                      if (_businessAccount) ...[
+                        const SizedBox(height: 18),
+                        const _WalletSectionTitle('Business payment methods'),
+                        const SizedBox(height: 10),
+                        const _WalletGlass(
+                          child: Text(
+                            'Business Finance uses this same payment profile for authorised Business checkout.',
+                            style: TextStyle(
+                              color: _WalletColors.muted,
+                              height: 1.45,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+      );
+}
+
+class _EarnRothScreen extends StatefulWidget {
+  const _EarnRothScreen();
+
+  @override
+  State<_EarnRothScreen> createState() => _EarnRothScreenState();
+}
+
+class _EarnRothScreenState extends State<_EarnRothScreen> {
+  String _code = '';
+  String _link = '';
+  List<Map<String, dynamic>> _referrals = const [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw StateError('Sign in to use referrals.');
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('ensureReferralCode')
+          .call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final referrals = await FirebaseFirestore.instance
+          .collection('referrals')
+          .where('referrerUserId', isEqualTo: user.uid)
+          .limit(100)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _code = '${data['referralCode'] ?? ''}';
+        _link = '${data['referralLink'] ?? ''}';
+        _referrals = referrals.docs.map((doc) => doc.data()).toList();
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = _referrals.where((item) {
+      final status = '${item['status'] ?? ''}'.toUpperCase();
+      return status == 'ROTH_AWARDED' || status == 'REWARDED';
+    }).length;
+    final pending = _referrals.length - completed;
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090F),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        title: const Text('Earn Roth'),
+      ),
+      body: _error != null
+          ? _WalletMessage(
+              icon: Icons.error_outline,
+              title: 'Referrals could not load',
+              body: 'Check your connection and try again.',
+              action: _load,
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+              children: [
+                const _WalletGlass(
+                  child: Text(
+                    'Earn 5 Roth when someone you invite completes their first successful Circum delivery.',
+                    style: TextStyle(color: Colors.white, height: 1.5),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _WalletGlass(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Referral Code',
+                          style: TextStyle(
+                              color: _WalletColors.muted,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Text(_code.isEmpty ? 'Loading…' : _code,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 16),
+                      _WalletLink(
+                        icon: Icons.share_outlined,
+                        title: 'Share Link',
+                        detail: _link.isEmpty ? 'Preparing link' : _link,
+                        onTap: _link.isEmpty
+                            ? () => _SenderWalletViewState._notice(
+                                  context,
+                                  'Your referral link is still loading.',
+                                )
+                            : () => Share.share(
+                                  'Join Circum with my referral link: $_link',
+                                ),
+                      ),
+                      const Divider(color: _WalletColors.hairline),
+                      _WalletLink(
+                        icon: Icons.person_add_alt_1_outlined,
+                        title: 'Invite Friends',
+                        detail: 'Share your secure referral link',
+                        onTap: _link.isEmpty
+                            ? () => _SenderWalletViewState._notice(
+                                  context,
+                                  'Your referral link is still loading.',
+                                )
+                            : () => Share.share(
+                                  'Join Circum with my referral link: $_link',
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _WalletGlass(
+                  child: Column(
+                    children: [
+                      _ReferralMetric('Pending Rewards', '$pending'),
+                      const Divider(color: _WalletColors.hairline),
+                      _ReferralMetric('Completed Rewards', '$completed'),
+                      const Divider(color: _WalletColors.hairline),
+                      _ReferralMetric('Referral Status',
+                          _referrals.isEmpty ? 'Ready' : 'Active'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _ReferralMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  const _ReferralMetric(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  style: const TextStyle(color: _WalletColors.muted)),
+            ),
+            Text(value,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w900)),
+          ],
+        ),
+      );
+}
+
+class _WalletInformationScreen extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String body;
+
+  const _WalletInformationScreen({
+    required this.title,
+    required this.icon,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(backgroundColor: Colors.transparent, title: Text(title)),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _WalletGlass(
+              child: Column(
+                children: [
+                  Icon(icon, color: _WalletColors.lightBlue, size: 42),
+                  const SizedBox(height: 16),
+                  Text(body,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, height: 1.5)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _WalletSupportScreen extends StatelessWidget {
+  const _WalletSupportScreen();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            title: const Text('Wallet Support')),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _WalletGlass(
+              child: _WalletLink(
+                icon: Icons.mail_outline,
+                title: 'Contact Circum Support',
+                detail: 'Get help with payments, cards or Roth',
+                onTap: () => launchUrl(
+                  Uri(
+                    scheme: 'mailto',
+                    path: 'support@circumuk.com',
+                    queryParameters: {'subject': 'Wallet support'},
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _WalletActivityScreen extends StatefulWidget {
+  final SenderWalletRepository repository;
+  final List<SenderWalletTransaction> initialTransactions;
+  final String? initialPageToken;
+
+  const _WalletActivityScreen({
+    required this.repository,
+    required this.initialTransactions,
+    required this.initialPageToken,
+  });
+
+  @override
+  State<_WalletActivityScreen> createState() => _WalletActivityScreenState();
+}
+
+class _WalletActivityScreenState extends State<_WalletActivityScreen> {
+  late final List<SenderWalletTransaction> _transactions;
+  String? _nextPage;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _transactions = List.of(widget.initialTransactions);
+    _nextPage = widget.initialPageToken;
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _nextPage == null) return;
+    setState(() => _loading = true);
+    final page = await widget.repository.transactions(pageToken: _nextPage);
+    if (mounted) {
+      setState(() {
+        _transactions.addAll(page.transactions);
+        _nextPage = page.nextPageToken;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            title: const Text('Recent Activity')),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+          children: [
+            _WalletGlass(
+              padding: EdgeInsets.zero,
+              child: _transactions.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(18),
+                      child: Text('No activity yet.',
+                          style: TextStyle(color: _WalletColors.muted)),
+                    )
+                  : Column(
+                      children: _transactions
+                          .map((item) => InkWell(
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => _TransactionDetailsScreen(
+                                      transaction: item,
+                                    ),
+                                  ),
+                                ),
+                                child: _TransactionRow(item),
+                              ))
+                          .toList(),
+                    ),
+            ),
+            if (_nextPage != null)
+              TextButton(
+                onPressed: _loading ? null : _loadMore,
+                child: Text(_loading ? 'Loading…' : 'Load more'),
+              ),
+          ],
+        ),
+      );
+}
+
+class _TransactionDetailsScreen extends StatelessWidget {
+  final SenderWalletTransaction transaction;
+  const _TransactionDetailsScreen({required this.transaction});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            title: const Text('Activity Details')),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _WalletGlass(
+              child: Column(
+                children: [
+                  _DetailRow('ID', transaction.id),
+                  _DetailRow('Type', transaction.type),
+                  _DetailRow('Amount',
+                      '${transaction.amount.toStringAsFixed(2)} Roth'),
+                  _DetailRow('Status', transaction.status),
+                  _DetailRow(
+                      'Source',
+                      transaction.paymentMethodLabel.isEmpty
+                          ? transaction.description
+                          : transaction.paymentMethodLabel),
+                  _DetailRow('Running balance',
+                      '${transaction.balanceAfter.toStringAsFixed(2)} Roth'),
+                  _DetailRow(
+                    'Timestamp',
+                    transaction.createdAt == null
+                        ? 'Pending'
+                        : DateFormat('d MMM yyyy, HH:mm')
+                            .format(transaction.createdAt!),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _DetailRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 110,
+              child: Text(label,
+                  style: const TextStyle(color: _WalletColors.muted)),
+            ),
+            Expanded(
+              child: Text(value,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
 }
 
 class _SenderWalletHomeSummaryState extends State<SenderWalletHomeSummary> {
@@ -749,27 +1417,33 @@ class _TransactionRow extends StatelessWidget {
 }
 
 class _PaymentMethodsSection extends StatelessWidget {
+  final String sectionTitle;
   final SenderPaymentMethodsData data;
   final SenderWalletData wallet;
   final bool busy;
   final VoidCallback onAdd;
   final ValueChanged<String> onSetDefault;
   final ValueChanged<SenderPaymentMethod> onRemove;
+  final ValueChanged<SenderPaymentProfileOptionType> onOpenMethod;
+  final VoidCallback onOpenRoth;
 
   const _PaymentMethodsSection({
+    this.sectionTitle = 'Pay With',
     required this.data,
     required this.wallet,
     required this.busy,
     required this.onAdd,
     required this.onSetDefault,
     required this.onRemove,
+    required this.onOpenMethod,
+    required this.onOpenRoth,
   });
 
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _WalletSectionTitle('Pay With'),
+          _WalletSectionTitle(sectionTitle),
           const SizedBox(height: 10),
           _WalletGlass(
             child: Column(
@@ -799,6 +1473,7 @@ class _PaymentMethodsSection extends StatelessWidget {
                               onAdd: onAdd,
                               onSetDefault: onSetDefault,
                               onRemove: onRemove,
+                              onOpenMethod: onOpenMethod,
                             ),
                           ],
                         )),
@@ -806,7 +1481,7 @@ class _PaymentMethodsSection extends StatelessWidget {
                     data.googlePaySupported ||
                     data.methods.isNotEmpty)
                   const Divider(color: _WalletColors.hairline),
-                _RothPayWithRow(wallet: wallet),
+                _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
                 const Divider(color: _WalletColors.hairline),
                 _PaymentProfileOptionRow(
                   option: const SenderPaymentProfileOption(
@@ -817,6 +1492,7 @@ class _PaymentMethodsSection extends StatelessWidget {
                   onAdd: onAdd,
                   onSetDefault: onSetDefault,
                   onRemove: onRemove,
+                  onOpenMethod: onOpenMethod,
                 ),
                 if (data.methods.isEmpty)
                   const Align(
@@ -844,6 +1520,7 @@ class _PaymentProfileOptionRow extends StatelessWidget {
   final VoidCallback onAdd;
   final ValueChanged<String> onSetDefault;
   final ValueChanged<SenderPaymentMethod> onRemove;
+  final ValueChanged<SenderPaymentProfileOptionType> onOpenMethod;
 
   const _PaymentProfileOptionRow({
     required this.option,
@@ -852,6 +1529,7 @@ class _PaymentProfileOptionRow extends StatelessWidget {
     required this.onAdd,
     required this.onSetDefault,
     required this.onRemove,
+    required this.onOpenMethod,
   });
 
   @override
@@ -862,7 +1540,12 @@ class _PaymentProfileOptionRow extends StatelessWidget {
         icon: Icons.add_card_outlined,
         title: busy ? 'Updating Pay With...' : '+ Add Payment Method',
         detail: 'Manage securely',
-        onTap: busy ? () {} : onAdd,
+        onTap: busy
+            ? () => _SenderWalletViewState._notice(
+                  context,
+                  'Payment methods are updating.',
+                )
+            : onAdd,
       );
     }
     if (option.type == SenderPaymentProfileOptionType.applePay) {
@@ -870,8 +1553,7 @@ class _PaymentProfileOptionRow extends StatelessWidget {
         icon: Icons.apple_rounded,
         title: 'Apple Pay',
         detail: showDefaultBadge ? '✓ Default' : 'Use on supported iOS devices',
-        onTap: () => _SenderWalletViewState._notice(
-            context, 'Apple Pay appears during checkout.'),
+        onTap: () => onOpenMethod(SenderPaymentProfileOptionType.applePay),
       );
     }
     if (option.type == SenderPaymentProfileOptionType.googlePay) {
@@ -880,8 +1562,7 @@ class _PaymentProfileOptionRow extends StatelessWidget {
         title: 'Google Pay',
         detail:
             showDefaultBadge ? '✓ Default' : 'Use on supported Android devices',
-        onTap: () => _SenderWalletViewState._notice(
-            context, 'Google Pay appears during checkout.'),
+        onTap: () => onOpenMethod(SenderPaymentProfileOptionType.googlePay),
       );
     }
     if (method == null) return const SizedBox.shrink();
@@ -931,8 +1612,9 @@ class _PaymentProfileOptionRow extends StatelessWidget {
 
 class _RothPayWithRow extends StatelessWidget {
   final SenderWalletData wallet;
+  final VoidCallback onTap;
 
-  const _RothPayWithRow({required this.wallet});
+  const _RothPayWithRow({required this.wallet, required this.onTap});
 
   @override
   Widget build(BuildContext context) => _WalletLink(
@@ -940,10 +1622,7 @@ class _RothPayWithRow extends StatelessWidget {
         title: 'Roth',
         detail:
             '${wallet.balance.toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2)} available',
-        onTap: () => _SenderWalletViewState._notice(
-          context,
-          'Use Roth during eligible Circum checkout.',
-        ),
+        onTap: onTap,
       );
 }
 
@@ -1041,33 +1720,42 @@ class _RothEmblem extends StatelessWidget {
 class _OfferRow extends StatelessWidget {
   final String title;
   final String detail;
+  final VoidCallback onTap;
 
-  const _OfferRow({required this.title, required this.detail});
+  const _OfferRow({
+    required this.title,
+    required this.detail,
+    required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 54),
-        child: Row(
-          children: [
-            const Icon(Icons.local_offer_outlined,
-                color: _WalletColors.lightBlue),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 3),
-                  Text(detail,
-                      style: const TextStyle(
-                          color: _WalletColors.muted, fontSize: 11)),
-                ],
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 54),
+          child: Row(
+            children: [
+              const Icon(Icons.local_offer_outlined,
+                  color: _WalletColors.lightBlue),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 3),
+                    Text(detail,
+                        style: const TextStyle(
+                            color: _WalletColors.muted, fontSize: 11)),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const Icon(Icons.chevron_right, color: _WalletColors.muted),
+            ],
+          ),
         ),
       );
 }
