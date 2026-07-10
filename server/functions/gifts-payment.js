@@ -47,6 +47,24 @@ async function giftWalletBalanceForUser(db, context) {
   return 0;
 }
 
+async function requireGiftBusinessAccess(db, gift, context) {
+  if (gift.businessMode !== true) return;
+  const businessId = String(gift.businessId || gift.businessAccountId || "").trim();
+  const accountSnap = await db.collection("businessAccounts").doc(businessId).get();
+  if (!accountSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Business account not found.");
+  }
+  const account = accountSnap.data() || {};
+  const email = String(context.auth.token.email || "").trim().toLowerCase();
+  const members = Array.isArray(account.teamMemberIds) ?
+    account.teamMemberIds.map((item) => `${item}`.trim().toLowerCase()) : [];
+  if (account.createdByUserId !== context.auth.uid &&
+      !members.includes(context.auth.uid.toLowerCase()) &&
+      !(email && members.includes(email))) {
+    throw new functions.https.HttpsError("permission-denied", "Business account access is required.");
+  }
+}
+
 exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
   requireAuth(context);
   const db = getFirestore();
@@ -57,6 +75,7 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     throw new functions.https.HttpsError("not-found", "Gift draft not found.");
   }
   const gift = snap.data();
+  await requireGiftBusinessAccess(db, gift, context);
   const gross = selectedGiftBudgetGbp(gift);
   if (gross < 50 || gift.paymentStatus === "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
@@ -219,6 +238,8 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
         walletContributionGbp: `${split.walletContributionGbp}`,
         remainingGbp: `${split.remainingGbp}`,
         customerPaymentCurrency: split.customerPaymentCurrency,
+        businessId: gift.businessMode === true ? String(gift.businessId || gift.businessAccountId || "") : "",
+        billingSource: gift.businessMode === true ? "business_finance" : "sender_finance",
       },
     });
   } catch (error) {

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../business/business_journey_context.dart';
 import '../../platform/address_engine.dart';
 import '../../send_package/models/suggestions.m.dart';
 import '../../send_package/repo/place_api.dart';
@@ -326,8 +327,11 @@ class _HealthStatusViewState extends State<HealthStatusView> {
       );
       final paymentMethod = _paymentMethodLabel;
       final schedulePreference = _schedulePreference;
+      final business = BusinessJourneyScope.maybeOf(context);
+      final businessFields = business?.toMap() ?? const <String, dynamic>{};
 
       final profile = {
+        ...businessFields,
         'id': id,
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
@@ -364,6 +368,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
       final pickup = {
+        ...businessFields,
         'id': pickupId,
         'profileId': id,
         'scheduleId': scheduleId,
@@ -404,6 +409,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
 
       if (scheduleId != null) {
         batch.set(db.collection('recurringPickupSchedules').doc(scheduleId), {
+          ...businessFields,
           'id': scheduleId,
           'profileId': id,
           'frequency': _frequency.value,
@@ -420,6 +426,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
       }
 
       batch.set(db.collection('healthPlusPayments').doc(pickupId), {
+        ...businessFields,
         'id': pickupId,
         'profileId': id,
         'pickupId': pickupId,
@@ -433,6 +440,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'createdAt': FieldValue.serverTimestamp(),
       });
       batch.set(db.collection('healthPlusNotifications').doc(), {
+        ...businessFields,
         'profileId': id,
         'pickupId': pickupId,
         'type': 'pickup_scheduled',

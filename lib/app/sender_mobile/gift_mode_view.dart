@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../business/business_journey_context.dart';
 import 'gift_campaign_view.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
@@ -108,10 +109,14 @@ class GiftModeView extends StatelessWidget {
   }
 
   void _openMode(BuildContext context, SenderGiftMode mode) {
+    final business = BusinessJourneyScope.maybeOf(context);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => GiftRelationshipView(
-          draft: GiftJourneyDraft.forMode(mode),
+          draft: GiftJourneyDraft.forMode(
+            mode,
+            businessContext: business?.toMap() ?? const {},
+          ),
         ),
         settings: const RouteSettings(
           name: GiftRelationshipView.routeName,

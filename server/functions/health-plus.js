@@ -106,6 +106,24 @@ function sendHttpsError(res, error) {
   return true;
 }
 
+async function requireHealthBusinessAccess(db, payment, decodedToken) {
+  if (payment.businessMode !== true) return;
+  const businessId = `${payment.businessId || payment.businessAccountId || ""}`.trim();
+  const accountSnap = await db.collection("businessAccounts").doc(businessId).get();
+  if (!accountSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Business account not found.");
+  }
+  const account = accountSnap.data() || {};
+  const email = `${decodedToken.email || ""}`.trim().toLowerCase();
+  const members = Array.isArray(account.teamMemberIds) ?
+    account.teamMemberIds.map((item) => `${item}`.trim().toLowerCase()) : [];
+  if (account.createdByUserId !== decodedToken.uid &&
+      !members.includes(decodedToken.uid.toLowerCase()) &&
+      !(email && members.includes(email))) {
+    throw new functions.https.HttpsError("permission-denied", "Business account access is required.");
+  }
+}
+
 exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, res) => {
   allowCors(req, res);
   if (req.method === "OPTIONS") return res.status(204).send("");
@@ -119,6 +137,7 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       frequency,
       userId,
       paymentCurrency,
+      applyRoth,
       successUrl,
       cancelUrl,
     } = req.body;
@@ -151,6 +170,12 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     if (!payment || payment.profileId !== profileId) {
       return res.status(400).send({error: "Health+ checkout is not ready yet. Please try again or contact Circum Support."});
     }
+    try {
+      await requireHealthBusinessAccess(getFirestore(), payment, decodedToken);
+    } catch (error) {
+      if (sendHttpsError(res, error)) return;
+      throw error;
+    }
 
     const storedAmount = Number(payment.amount || 0);
     if (!Number.isFinite(storedAmount) || storedAmount <= 0) {
@@ -162,7 +187,8 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     const walletUserId = userId || decodedToken.uid;
     const walletUserEmail = `${email || decodedToken.email || ""}`.trim().toLowerCase();
     const walletLookupId = walletUserEmail || walletUserId;
-    const walletSnap = walletUserId ?
+    const rothRequested = applyRoth === true || payment.applyRoth === true;
+    const walletSnap = walletUserId && rothRequested ?
       await getFirestore().collection("wallets").doc(walletLookupId).get() :
       null;
     const wallet = walletSnap && walletSnap.exists ? walletSnap.data() : {};
@@ -234,6 +260,8 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       walletContributionGbp: `${split.walletContributionGbp}`,
       orderTotalGbp: `${split.orderTotalGbp}`,
       remainingGbp: `${split.remainingGbp}`,
+      businessId: payment.businessMode === true ? `${payment.businessId || payment.businessAccountId || ""}` : "",
+      billingSource: payment.businessMode === true ? "business_finance" : "sender_finance",
     };
 
     const session = await stripe.checkout.sessions.create(params);

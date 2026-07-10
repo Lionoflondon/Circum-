@@ -628,6 +628,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
     try {
       final data = await _callableMap('createSenderBookingQuote', {
+        if (event.businessContext != null)
+          'businessContext': event.businessContext,
         'selectedSpeed': event.selectedSpeed,
         'vanguardProtocolEnabled': event.vanguardProtocolEnabled,
         'distanceMiles': state.distance == null

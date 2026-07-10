@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import '../business/business_journey_context.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
@@ -84,6 +85,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _requestBackendQuote(SenderBookingDraft draft) {
+    final business = BusinessJourneyScope.maybeOf(context);
     context.read<SendPackageBloc>().add(
           RequestSenderBookingQuote(
             selectedSpeed: draft.selectedOption,
@@ -93,6 +95,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             weightKg: double.tryParse(_weight.text) ?? .5,
             fragile: draft.fragile,
             highValue: draft.highValue,
+            businessContext: business?.toMap(),
           ),
         );
   }

@@ -329,6 +329,19 @@ void main() {
       expect(source, isNot(contains('Admin operations')));
     });
 
+    test('Health+ carries verified Business context into canonical records',
+        () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+      final backend =
+          File('server/functions/health-plus.js').readAsStringSync();
+
+      expect(source, contains('BusinessJourneyScope.maybeOf(context)'));
+      expect(source, contains('...businessFields'));
+      expect(backend, contains('requireHealthBusinessAccess'));
+      expect(backend, contains('billingSource'));
+    });
+
     test('Health+ tab renders the guided status view', () {
       final source =
           File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();

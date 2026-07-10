@@ -96,6 +96,7 @@ class RequestSenderBookingQuote extends SendPackageEvent {
   final double weightKg;
   final bool fragile;
   final bool highValue;
+  final Map<String, dynamic>? businessContext;
 
   const RequestSenderBookingQuote({
     required this.selectedSpeed,
@@ -105,6 +106,7 @@ class RequestSenderBookingQuote extends SendPackageEvent {
     required this.weightKg,
     required this.fragile,
     required this.highValue,
+    this.businessContext,
   });
 }
 

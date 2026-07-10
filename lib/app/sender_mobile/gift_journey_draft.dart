@@ -273,6 +273,7 @@ const senderGiftInterestOptions = [
 
 class GiftJourneyDraft {
   final SenderGiftMode mode;
+  final Map<String, dynamic> businessContext;
   final String? recipientName;
   final String? relationship;
   final String? occasion;
@@ -333,6 +334,7 @@ class GiftJourneyDraft {
 
   const GiftJourneyDraft({
     required this.mode,
+    this.businessContext = const {},
     this.recipientName,
     this.relationship,
     this.occasion,
@@ -392,9 +394,13 @@ class GiftJourneyDraft {
     this.budget = 100,
   });
 
-  factory GiftJourneyDraft.forMode(SenderGiftMode mode) {
+  factory GiftJourneyDraft.forMode(
+    SenderGiftMode mode, {
+    Map<String, dynamic> businessContext = const {},
+  }) {
     return GiftJourneyDraft(
       mode: mode,
+      businessContext: businessContext,
       relationship: switch (mode) {
         SenderGiftMode.myself => 'Myself',
         SenderGiftMode.anonymous => 'Anonymous Recipient',
@@ -614,6 +620,7 @@ class GiftJourneyDraft {
   }
 
   GiftJourneyDraft copyWith({
+    Map<String, dynamic>? businessContext,
     String? recipientName,
     String? relationship,
     String? occasion,
@@ -675,6 +682,7 @@ class GiftJourneyDraft {
   }) {
     return GiftJourneyDraft(
       mode: mode,
+      businessContext: businessContext ?? this.businessContext,
       recipientName: recipientName ?? this.recipientName,
       relationship: relationship ?? this.relationship,
       occasion: occasion ?? this.occasion,
@@ -766,6 +774,7 @@ class GiftJourneyDraft {
         ? GiftSystemPolicy.campaignGiftType
         : GiftSystemPolicy.normalGiftType;
     return {
+      ...businessContext,
       'senderId': senderId,
       'senderName': senderName ?? '',
       'senderEmail': senderEmail.toLowerCase(),

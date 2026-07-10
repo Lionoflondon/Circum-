@@ -33,6 +33,33 @@ function money(value) {
   return roundMoney(Number(value || 0));
 }
 
+async function verifiedBusinessContext(db, sender, rawContext) {
+  const businessId = text(rawContext && rawContext.businessId);
+  if (!businessId) return null;
+  const accountSnap = await db.collection("businessAccounts").doc(businessId).get();
+  if (!accountSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Business account not found.");
+  }
+  const account = accountSnap.data() || {};
+  const email = sender.email.trim().toLowerCase();
+  const members = Array.isArray(account.teamMemberIds) ?
+    account.teamMemberIds.map((item) => `${item}`.trim().toLowerCase()) : [];
+  const allowed = account.createdByUserId === sender.uid ||
+    members.includes(sender.uid.toLowerCase()) || (email && members.includes(email));
+  if (!allowed) {
+    throw new functions.https.HttpsError("permission-denied", "Business account access is required.");
+  }
+  return {
+    businessId,
+    businessAccountId: businessId,
+    businessName: text(account.businessName || account.name),
+    billingEmail: text(account.billingEmail || account.contactEmail),
+    billingSource: "business_finance",
+    paymentProfileSource: "shared_payment_profile",
+    businessMode: true,
+  };
+}
+
 function speedKey(value) {
   const normalized = text(value).toLowerCase();
   if (normalized === "economy") return "economy";
@@ -126,9 +153,12 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
 
 exports.createSenderBookingQuote = functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
+  const db = getFirestore();
+  const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
   const quote = quotePayload(data || {}, sender.uid);
-  await getFirestore().collection("senderBookingQuotes").doc(quote.quoteId).set({
+  await db.collection("senderBookingQuotes").doc(quote.quoteId).set({
     ...quote,
+    ...(businessContext || {}),
     createdAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   return quote;
@@ -162,6 +192,14 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     quoteId,
     userId: sender.uid,
     userEmail: sender.email,
+    ...(quote.businessMode === true ? {
+      businessMode: true,
+      businessId: quote.businessId,
+      businessAccountId: quote.businessAccountId,
+      billingEmail: quote.billingEmail,
+      billingSource: quote.billingSource,
+      paymentProfileSource: quote.paymentProfileSource,
+    } : {}),
     amountDue: total,
     rothEnabled,
     rothAppliedAmount: split.walletContributionGbp,
@@ -312,6 +350,15 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     senderId: sender.uid,
     senderName: sender.name,
     senderEmail: sender.email,
+    ...(quote.businessMode === true ? {
+      businessMode: true,
+      businessId: quote.businessId,
+      businessAccountId: quote.businessAccountId,
+      businessName: quote.businessName,
+      billingEmail: quote.billingEmail,
+      billingSource: quote.billingSource,
+      paymentProfileSource: quote.paymentProfileSource,
+    } : {}),
     pickupDetails: {
       fullname: pickup.fullname || sender.name || "Sender",
       phone: pickup.phone || "",

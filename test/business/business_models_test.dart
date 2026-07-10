@@ -1,9 +1,29 @@
 import 'package:circum/app/business/business_journey_context.dart';
 import 'package:circum/app/business/business_models.dart';
+import 'package:circum/app/sender_mobile/gift_journey_draft.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Business models', () {
+    test('Business Gifts carry account context to canonical payment records',
+        () {
+      final draft = GiftJourneyDraft.forMode(
+        SenderGiftMode.someone,
+        businessContext: const {
+          'businessMode': true,
+          'businessId': 'business-1',
+          'billingSource': 'business_finance',
+        },
+      );
+      final payload = draft.adminReviewPayload(
+        senderId: 'sender-1',
+        senderEmail: 'sender@example.com',
+      );
+
+      expect(payload['businessMode'], isTrue);
+      expect(payload['businessId'], 'business-1');
+      expect(payload['billingSource'], 'business_finance');
+    });
     test('account approval state is backend driven', () {
       final pending = BusinessAccount.fromMap('one', {
         'businessName': 'Lumen Studios Ltd',
