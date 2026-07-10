@@ -37,6 +37,11 @@ class SenderActivityItem {
   final bool vanguardProtected;
   final bool irisVerified;
   final bool repeatRider;
+  final bool riderTrusted;
+  final bool riderVanguardApproved;
+  final int? riderCompletedDeliveries;
+  final DateTime? riderMemberSince;
+  final List<String> riderAchievements;
 
   const SenderActivityItem({
     required this.id,
@@ -60,6 +65,11 @@ class SenderActivityItem {
     this.vanguardProtected = false,
     this.irisVerified = false,
     this.repeatRider = false,
+    this.riderTrusted = false,
+    this.riderVanguardApproved = false,
+    this.riderCompletedDeliveries,
+    this.riderMemberSince,
+    this.riderAchievements = const [],
   });
 
   SenderActivityItem copyWith({bool? repeatRider}) => SenderActivityItem(
@@ -84,6 +94,11 @@ class SenderActivityItem {
         vanguardProtected: vanguardProtected,
         irisVerified: irisVerified,
         repeatRider: repeatRider ?? this.repeatRider,
+        riderTrusted: riderTrusted,
+        riderVanguardApproved: riderVanguardApproved,
+        riderCompletedDeliveries: riderCompletedDeliveries,
+        riderMemberSince: riderMemberSince,
+        riderAchievements: riderAchievements,
       );
 }
 
@@ -102,6 +117,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final SenderWalletRepository walletRepository;
+  final Map<String, Map<String, dynamic>> _riderProfileCache = {};
 
   FirebaseSenderActivityRepository({
     FirebaseAuth? auth,
@@ -208,15 +224,26 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         .take(30)
         .toList();
     if (ids.isEmpty) return const {};
+    final missingIds = ids
+        .where((id) => !_riderProfileCache.containsKey(id))
+        .toList(growable: false);
     try {
-      final snapshot = await firestore
-          .collection('riderProfiles')
-          .where(FieldPath.documentId, whereIn: ids)
-          .get();
-      return {for (final doc in snapshot.docs) doc.id: doc.data()};
+      if (missingIds.isNotEmpty) {
+        final snapshot = await firestore
+            .collection('riderProfiles')
+            .where(FieldPath.documentId, whereIn: missingIds)
+            .get();
+        for (final doc in snapshot.docs) {
+          _riderProfileCache[doc.id] = doc.data();
+        }
+      }
     } catch (_) {
-      return const {};
+      // The delivery's embedded rider snapshot remains the safe fallback.
     }
+    return {
+      for (final id in ids)
+        if (_riderProfileCache[id] case final profile?) id: profile,
+    };
   }
 
   SenderActivityItem _delivery(
@@ -293,6 +320,15 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
           iris.isNotEmpty ||
           data['irisMatchedItemName'] != null ||
           data['normalizedItemName'] != null,
+      riderTrusted: _riderTrusted(profile),
+      riderVanguardApproved: profile['vanguardApproved'] == true ||
+          '${profile['vanguardStatus'] ?? ''}'.toLowerCase() == 'approved',
+      riderCompletedDeliveries: _optionalInt(profile['completedDeliveries'] ??
+          _map(profile['performance'])['completedDeliveries']),
+      riderMemberSince: _date(profile['memberSince'] ?? profile['createdAt']),
+      riderAchievements: _safeAchievementLabels(
+        profile['recentAchievements'] ?? profile['achievements'],
+      ),
     );
   }
 
@@ -792,36 +828,7 @@ class _CompletedDeliverySummary extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        Row(
-          children: [
-            _RiderAvatar(name: riderName, photoUrl: item.riderPhotoUrl),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.repeatRider && item.rider.isNotEmpty
-                        ? 'Delivered by $riderName again'
-                        : item.rider.isEmpty
-                            ? 'Delivered by Circum Rider'
-                            : riderName,
-                    style: GoogleFonts.dmSerifDisplay(
-                      color: Colors.white,
-                      fontSize: 19,
-                    ),
-                  ),
-                  if (item.riderRank.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    _RiderRankBadge(rank: item.riderRank),
-                  ],
-                ],
-              ),
-            ),
-            if (item.riderRating != null && item.riderRating! > 0)
-              _RiderRating(rating: item.riderRating!),
-          ],
-        ),
+        _PremiumRiderSummary(item: item, riderName: riderName),
         if (item.trustPoints > 0) ...[
           const SizedBox(height: 14),
           _TrustFeature(
@@ -923,16 +930,180 @@ class _CompletedDeliverySummary extends StatelessWidget {
   }
 }
 
-class _RiderAvatar extends StatelessWidget {
+class _PremiumRiderSummary extends StatelessWidget {
+  final SenderActivityItem item;
+  final String riderName;
+  const _PremiumRiderSummary({required this.item, required this.riderName});
+
+  @override
+  Widget build(BuildContext context) {
+    final repeatMessage = item.repeatRider && item.rider.isNotEmpty
+        ? 'One of your trusted riders'
+        : null;
+    final trustLabel = item.riderVanguardApproved
+        ? 'Vanguard Approved Rider'
+        : item.riderTrusted
+            ? 'Trusted Circum Rider'
+            : null;
+    final semantic = [
+      'Delivered by $riderName',
+      if (item.riderRank.isNotEmpty) item.riderRank,
+      if (item.riderRating != null) 'rated ${item.riderRating}',
+      if (trustLabel != null) trustLabel,
+    ].join(', ');
+    return Semantics(
+      button: true,
+      label: semantic,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _showRiderProfile(context, item, riderName),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .035),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: .08)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: .07),
+                Colors.white.withValues(alpha: .015),
+              ],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Delivered by',
+                style: GoogleFonts.inter(
+                  color: _ActivityColors.muted,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _RiderAvatar(name: riderName, photoUrl: item.riderPhotoUrl),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          riderName,
+                          style: GoogleFonts.dmSerifDisplay(
+                            color: Colors.white,
+                            fontSize: 20,
+                          ),
+                        ),
+                        if (item.riderRank.isNotEmpty) ...[
+                          const SizedBox(height: 5),
+                          _RiderRankBadge(rank: item.riderRank),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (item.riderRating != null && item.riderRating! > 0)
+                    _RiderRating(rating: item.riderRating!),
+                ],
+              ),
+              if (trustLabel != null || repeatMessage != null) ...[
+                const SizedBox(height: 12),
+                if (trustLabel != null)
+                  _RiderTrustBadge(
+                    label: trustLabel,
+                    vanguard: item.riderVanguardApproved,
+                  ),
+                if (repeatMessage != null) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    repeatMessage,
+                    style: GoogleFonts.inter(
+                      color: _ActivityColors.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderAvatar extends StatefulWidget {
   final String name;
   final String photoUrl;
   const _RiderAvatar({required this.name, required this.photoUrl});
 
   @override
-  Widget build(BuildContext context) => CircleAvatar(
-        radius: 24,
-        backgroundColor: const Color(0xFF13233F),
-        foregroundImage: photoUrl.isEmpty ? null : NetworkImage(photoUrl),
+  State<_RiderAvatar> createState() => _RiderAvatarState();
+}
+
+class _RiderAvatarState extends State<_RiderAvatar> {
+  var _loaded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final child = CircleAvatar(
+      radius: 24,
+      backgroundColor: const Color(0xFF13233F),
+      child: widget.photoUrl.isEmpty
+          ? Text(
+              widget.name.isEmpty
+                  ? 'C'
+                  : widget.name.substring(0, 1).toUpperCase(),
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          : ClipOval(
+              child: Image.network(
+                widget.photoUrl,
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+                frameBuilder: (context, child, frame, _) {
+                  if (frame != null && !_loaded) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() => _loaded = true);
+                    });
+                  }
+                  return AnimatedOpacity(
+                    opacity: frame == null ? 0 : 1,
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 260),
+                    child: child,
+                  );
+                },
+                errorBuilder: (_, __, ___) => _RiderAvatarFallback(
+                  name: widget.name,
+                ),
+              ),
+            ),
+    );
+    return Semantics(
+      image: true,
+      label: '${widget.name} profile photo',
+      child: child,
+    );
+  }
+}
+
+class _RiderAvatarFallback extends StatelessWidget {
+  final String name;
+  const _RiderAvatarFallback({required this.name});
+
+  @override
+  Widget build(BuildContext context) => Center(
         child: Text(
           name.isEmpty ? 'C' : name.substring(0, 1).toUpperCase(),
           style: GoogleFonts.inter(
@@ -943,26 +1114,70 @@ class _RiderAvatar extends StatelessWidget {
       );
 }
 
-class _RiderRankBadge extends StatelessWidget {
+class _RiderRankBadge extends StatefulWidget {
   final String rank;
   const _RiderRankBadge({required this.rank});
 
   @override
+  State<_RiderRankBadge> createState() => _RiderRankBadgeState();
+}
+
+class _RiderRankBadgeState extends State<_RiderRankBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shimmer = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) _shimmer.value = 1;
+  }
+
+  @override
+  void dispose() {
+    _shimmer.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = _rankColor(rank);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .09),
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: color.withValues(alpha: .24)),
-      ),
-      child: Text(
-        rank,
-        style: GoogleFonts.inter(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
+    final color = _rankColor(widget.rank);
+    return AnimatedBuilder(
+      animation: _shimmer,
+      builder: (context, _) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .09),
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(color: color.withValues(alpha: .24)),
+          gradient: LinearGradient(
+            begin: Alignment(-1 + (_shimmer.value * 2), 0),
+            end: Alignment(_shimmer.value * 2, 0),
+            colors: [
+              color.withValues(alpha: .06),
+              Colors.white.withValues(alpha: .16 * (1 - _shimmer.value)),
+              color.withValues(alpha: .06),
+            ],
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.rank.toLowerCase() == 'knight') ...[
+              Icon(Icons.shield_outlined, color: color, size: 11),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              widget.rank,
+              style: GoogleFonts.inter(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -974,20 +1189,237 @@ class _RiderRating extends StatelessWidget {
   const _RiderRating({required this.rating});
 
   @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 420),
+        curve: Curves.easeOut,
+        builder: (context, value, _) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...List.generate(
+              5,
+              (index) => Icon(
+                Icons.star_rounded,
+                color: const Color(0xFFF5C451).withValues(
+                  alpha: value >= ((index + 1) / 5) ? 1 : .28,
+                ),
+                size: 11,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              rating.toStringAsFixed(2),
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _RiderTrustBadge extends StatelessWidget {
+  final String label;
+  final bool vanguard;
+  const _RiderTrustBadge({required this.label, required this.vanguard});
+
+  @override
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.star_rounded, color: Color(0xFFF5C451), size: 15),
-          const SizedBox(width: 4),
+          Icon(
+            vanguard ? Icons.shield_outlined : Icons.verified_rounded,
+            color: vanguard ? const Color(0xFF60A5FA) : const Color(0xFF31D17D),
+            size: 15,
+          ),
+          const SizedBox(width: 7),
           Text(
-            rating.toStringAsFixed(2),
+            label,
             style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 12,
+              color: const Color(0xFFD9E2F0),
+              fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
           ),
         ],
+      );
+}
+
+void _showRiderProfile(
+  BuildContext context,
+  SenderActivityItem item,
+  String riderName,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) => _RiderProfileSheet(item: item, riderName: riderName),
+  );
+}
+
+class _RiderProfileSheet extends StatelessWidget {
+  final SenderActivityItem item;
+  final String riderName;
+  const _RiderProfileSheet({required this.item, required this.riderName});
+
+  @override
+  Widget build(BuildContext context) {
+    final trustLabel = item.riderVanguardApproved
+        ? 'Vanguard Approved Rider'
+        : item.riderTrusted
+            ? 'Trusted Circum Rider'
+            : null;
+    return Semantics(
+      label: '$riderName rider profile',
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 30),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A1020),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: Colors.white.withValues(alpha: .10)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .35),
+              blurRadius: 30,
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(height: 22),
+              _RiderAvatar(name: riderName, photoUrl: item.riderPhotoUrl),
+              const SizedBox(height: 12),
+              Text(
+                riderName,
+                style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontSize: 26,
+                ),
+              ),
+              if (item.riderRank.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _RiderRankBadge(rank: item.riderRank),
+              ],
+              if (item.riderRating != null && item.riderRating! > 0) ...[
+                const SizedBox(height: 12),
+                _RiderRating(rating: item.riderRating!),
+              ],
+              if (trustLabel != null) ...[
+                const SizedBox(height: 14),
+                _RiderTrustBadge(
+                  label: trustLabel,
+                  vanguard: item.riderVanguardApproved,
+                ),
+              ],
+              if (item.riderCompletedDeliveries != null ||
+                  item.riderMemberSince != null ||
+                  item.riderAchievements.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                Divider(color: Colors.white.withValues(alpha: .08), height: 1),
+                const SizedBox(height: 16),
+                if (item.riderCompletedDeliveries != null)
+                  _RiderSheetLine(
+                    label: 'Completed deliveries',
+                    value: '${item.riderCompletedDeliveries}',
+                  ),
+                if (item.riderMemberSince != null)
+                  _RiderSheetLine(
+                    label: 'Member since',
+                    value:
+                        DateFormat('MMMM yyyy').format(item.riderMemberSince!),
+                  ),
+                if (item.riderAchievements.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Recent achievements',
+                      style: GoogleFonts.inter(
+                        color: _ActivityColors.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...item.riderAchievements.map(
+                    (achievement) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.verified_outlined,
+                            color: Color(0xFF60A5FA),
+                            size: 14,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              achievement,
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFFD9E2F0),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderSheetLine extends StatelessWidget {
+  final String label;
+  final String value;
+  const _RiderSheetLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                color: _ActivityColors.muted,
+                fontSize: 12,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              value,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       );
 }
 
@@ -1677,6 +2109,33 @@ Color _rankColor(String rank) => switch (rank.toLowerCase()) {
 
 double? _number(Object? value) =>
     value is num ? value.toDouble() : double.tryParse('$value');
+
+int? _optionalInt(Object? value) {
+  final parsed = _number(value)?.round();
+  return parsed != null && parsed >= 0 ? parsed : null;
+}
+
+bool _riderTrusted(Map<String, dynamic> profile) {
+  if (profile['approved'] == true || profile['isApproved'] == true) return true;
+  final status = _first([
+    profile['verificationStatus'],
+    profile['approvalStatus'],
+    profile['onboardingStatus'],
+  ]).toLowerCase();
+  return status == 'approved' || status == 'verified' || status == 'active';
+}
+
+List<String> _safeAchievementLabels(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .map((entry) => entry is Map
+          ? _first([entry['label'], entry['title'], entry['name']])
+          : '$entry'.trim())
+      .where((label) => label.isNotEmpty && label.length <= 80)
+      .take(3)
+      .toList(growable: false);
+}
+
 DateTime? _date(Object? value) {
   if (value is Timestamp) return value.toDate();
   if (value is DateTime) return value;

@@ -114,6 +114,10 @@ void main() {
           trustPoints: 5,
           vanguardProtected: true,
           irisVerified: true,
+          riderTrusted: true,
+          riderCompletedDeliveries: 124,
+          riderMemberSince: DateTime(2024, 2, 1),
+          riderAchievements: const ['Consistent service'],
         ),
         SenderActivityItem(
           id: 'gift-1',
@@ -162,6 +166,15 @@ void main() {
     expect(find.text('Vanguard Protected'), findsOneWidget);
     expect(find.text('IRIS Verified'), findsOneWidget);
     expect(find.text('View Receipt'), findsOneWidget);
+    await tester.ensureVisible(find.text('Sarah'));
+    await tester.pump();
+    await tester.tap(find.text('Sarah'));
+    await tester.pumpAndSettle();
+    expect(find.text('Completed deliveries'), findsOneWidget);
+    expect(find.text('124'), findsOneWidget);
+    expect(find.text('Consistent service'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Yesterday'),
       180,
