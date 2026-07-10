@@ -47,6 +47,10 @@ class SenderWalletTransaction {
   final double amount;
   final double balanceAfter;
   final DateTime? createdAt;
+  final DateTime? completedAt;
+  final String referenceId;
+  final String createdBy;
+  final String source;
 
   const SenderWalletTransaction({
     required this.id,
@@ -58,10 +62,16 @@ class SenderWalletTransaction {
     required this.amount,
     required this.balanceAfter,
     this.createdAt,
+    this.completedAt,
+    this.referenceId = '',
+    this.createdBy = 'system',
+    this.source = '',
   });
 
   factory SenderWalletTransaction.fromMap(Map<String, dynamic> map) {
     final rawDate = map['createdAt'];
+    final rawCompletedDate =
+        map['completedAt'] ?? map['updatedAt'] ?? map['createdAt'];
     final metadata = map['metadata'] is Map
         ? Map<String, dynamic>.from(map['metadata'] as Map)
         : const <String, dynamic>{};
@@ -76,6 +86,11 @@ class SenderWalletTransaction {
       amount: (map['amount'] as num?)?.toDouble() ?? 0,
       balanceAfter: (map['balanceAfter'] as num?)?.toDouble() ?? 0,
       createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
+      completedAt:
+          rawCompletedDate is Timestamp ? rawCompletedDate.toDate() : null,
+      referenceId: '${map['relatedEntityId'] ?? map['referenceId'] ?? ''}',
+      createdBy: '${map['createdBy'] ?? 'system'}',
+      source: '${map['source'] ?? metadata['source'] ?? ''}',
     );
   }
 }
@@ -568,7 +583,16 @@ class _SenderWalletViewState extends State<SenderWalletView> {
                           TextStyle(color: _WalletColors.muted, height: 1.45)))
               : Column(
                   children: _transactions
-                      .map((item) => _TransactionRow(item))
+                      .map((item) => InkWell(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => _TransactionDetailsScreen(
+                                  transaction: item,
+                                ),
+                              ),
+                            ),
+                            child: _TransactionRow(item),
+                          ))
                       .toList()),
         ),
         TextButton(
@@ -1197,25 +1221,33 @@ class _TransactionDetailsScreen extends StatelessWidget {
             _WalletGlass(
               child: Column(
                 children: [
-                  _DetailRow('ID', transaction.id),
-                  _DetailRow('Type', transaction.type),
+                  Text(
+                    transaction.description,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   _DetailRow('Amount',
                       '${transaction.amount.toStringAsFixed(2)} Roth'),
-                  _DetailRow('Status', transaction.status),
+                  _DetailRow('Status', _walletStatusLabel(transaction.status)),
                   _DetailRow(
-                      'Source',
-                      transaction.paymentMethodLabel.isEmpty
-                          ? transaction.description
-                          : transaction.paymentMethodLabel),
-                  _DetailRow('Running balance',
+                      'Completed date',
+                      _walletTransactionDate(transaction,
+                          includeStatus: false)),
+                  _DetailRow(
+                      'Reference ID',
+                      transaction.referenceId.isEmpty
+                          ? transaction.id
+                          : transaction.referenceId),
+                  _DetailRow('Created by', _walletCreatedBy(transaction)),
+                  _DetailRow('Description', transaction.description),
+                  _DetailRow(
+                      'Transaction type', _walletCategory(transaction.type)),
+                  _DetailRow('Current balance',
                       '${transaction.balanceAfter.toStringAsFixed(2)} Roth'),
-                  _DetailRow(
-                    'Timestamp',
-                    transaction.createdAt == null
-                        ? 'Pending'
-                        : DateFormat('d MMM yyyy, HH:mm')
-                            .format(transaction.createdAt!),
-                  ),
                 ],
               ),
             ),
@@ -1379,34 +1411,48 @@ class _TransactionRow extends StatelessWidget {
                 border:
                     Border(bottom: BorderSide(color: _WalletColors.hairline))),
             child: Row(children: [
-              Icon(
-                  credit
-                      ? Icons.add_circle_outline
-                      : Icons.remove_circle_outline,
-                  color: credit
-                      ? const Color(0xFF34D399)
-                      : const Color(0xFFFBBF24)),
+              Icon(_walletTransactionIcon(transaction.type),
+                  color: _walletStatusColor(transaction.status)),
               const SizedBox(width: 12),
               Expanded(
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    Text(transaction.description,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w700)),
+                    Row(children: [
+                      Expanded(
+                        child: Text(transaction.description,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                      if (_walletCategoryBadge(transaction.type)
+                          case final badge?)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color:
+                                _WalletColors.lightBlue.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(badge,
+                              style: const TextStyle(
+                                  color: _WalletColors.lightBlue,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                    ]),
                     const SizedBox(height: 3),
                     Text(
                         [
                           if (transaction.paymentMethodLabel.isNotEmpty)
                             'Paid with ${transaction.paymentMethodLabel}',
-                          transaction.createdAt == null
-                              ? 'Pending date'
-                              : DateFormat('d MMM · HH:mm')
-                                  .format(transaction.createdAt!),
-                          transaction.status,
+                          _walletTransactionDate(transaction),
                         ].join(' · '),
-                        style: const TextStyle(
-                            color: _WalletColors.muted, fontSize: 11))
+                        style: TextStyle(
+                            color: _walletStatusColor(transaction.status),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600))
                   ])),
               Text(
                   '${credit ? '+' : '-'}${transaction.amount.toStringAsFixed(transaction.amount % 1 == 0 ? 0 : 2)} Roth',
@@ -1872,4 +1918,114 @@ class _WalletColors {
   static const glass = Color(0x0DF5F7FB);
   static const border = Color(0x29FFFFFF);
   static const hairline = Color(0x14F5F7FB);
+}
+
+String _walletStatusLabel(String value) {
+  final status = value.trim().toLowerCase();
+  if (status == 'pending' || status == 'processing') return 'Pending';
+  if (status == 'failed' || status == 'failure') return 'Failed';
+  if (status == 'cancelled' || status == 'canceled' || status == 'reversed') {
+    return 'Cancelled';
+  }
+  return 'Completed';
+}
+
+Color _walletStatusColor(String value) {
+  return switch (_walletStatusLabel(value)) {
+    'Pending' => const Color(0xFFFBBF24),
+    'Failed' => const Color(0xFFEF4444),
+    'Cancelled' => const Color(0xFF9CA3AF),
+    _ => const Color(0xFF34D399),
+  };
+}
+
+String _walletFriendlyDate(DateTime date, {DateTime? now}) {
+  final current = now ?? DateTime.now();
+  final today = DateTime(current.year, current.month, current.day);
+  final day = DateTime(date.year, date.month, date.day);
+  final difference = today.difference(day).inDays;
+  if (difference == 0) return 'Today • ${DateFormat('HH:mm').format(date)}';
+  if (difference == 1) {
+    return 'Yesterday • ${DateFormat('HH:mm').format(date)}';
+  }
+  return DateFormat('d MMM yyyy • HH:mm').format(date);
+}
+
+String _walletTransactionDate(
+  SenderWalletTransaction transaction, {
+  bool includeStatus = true,
+}) {
+  final status = _walletStatusLabel(transaction.status);
+  if (status == 'Pending') {
+    return includeStatus
+        ? 'Pending • Estimated completion'
+        : 'Estimated completion';
+  }
+  final date = transaction.completedAt ?? transaction.createdAt;
+  final dateLabel =
+      date == null ? 'Date unavailable' : _walletFriendlyDate(date);
+  return includeStatus ? '$status • $dateLabel' : dateLabel;
+}
+
+IconData _walletTransactionIcon(String value) {
+  final type = value.toLowerCase();
+  if (type.contains('gift_card') || type.contains('roth_card')) {
+    return Icons.card_giftcard_rounded;
+  }
+  if (type.contains('gift')) return Icons.redeem_rounded;
+  if (type.contains('health')) return Icons.health_and_safety_outlined;
+  if (type.contains('business')) return Icons.business_center_outlined;
+  if (type.contains('referral')) return Icons.group_add_outlined;
+  if (type.contains('refund')) return Icons.undo_rounded;
+  if (type.contains('admin')) return Icons.admin_panel_settings_outlined;
+  if (type.contains('adjust') || type.contains('reversal')) {
+    return Icons.tune_rounded;
+  }
+  if (type.contains('delivery') ||
+      type.contains('checkout') ||
+      type.contains('spend')) {
+    return Icons.local_shipping_outlined;
+  }
+  return Icons.receipt_long_outlined;
+}
+
+String _walletCategory(String value) {
+  final type = value.toLowerCase();
+  if (type.contains('gift_card') || type.contains('roth_card')) {
+    return 'Gift card redemption';
+  }
+  if (type.contains('gift')) return 'Gift purchase';
+  if (type.contains('health')) return 'Health+';
+  if (type.contains('business')) return 'Business';
+  if (type.contains('referral')) return 'Referral reward';
+  if (type.contains('refund')) return 'Refund';
+  if (type.contains('admin')) return 'Admin credit';
+  if (type.contains('adjust') || type.contains('reversal')) return 'Adjustment';
+  if (type.contains('delivery') ||
+      type.contains('checkout') ||
+      type.contains('spend')) {
+    return 'Delivery payment';
+  }
+  return value.replaceAll('_', ' ');
+}
+
+String? _walletCategoryBadge(String type) {
+  final value = type.toLowerCase();
+  return value == 'admin_credit' || value == 'admin_issue'
+      ? 'Admin Credit'
+      : null;
+}
+
+String _walletCreatedBy(SenderWalletTransaction transaction) {
+  final creator = transaction.createdBy.trim().toLowerCase();
+  final type = transaction.type.toLowerCase();
+  if (type.contains('referral')) return 'Referral Engine';
+  if (creator == 'system' || creator.isEmpty) return 'System';
+  final source = transaction.source.toLowerCase();
+  if (creator == 'user' ||
+      source.contains('sender_wallet') ||
+      source.contains('checkout')) {
+    return 'User';
+  }
+  return 'Admin';
 }

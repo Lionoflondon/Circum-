@@ -200,6 +200,63 @@ void main() {
     await tester.scrollUntilVisible(find.text('Parcel Delivery'), 120,
         scrollable: find.byType(Scrollable));
     expect(find.textContaining('Paid with Apple Pay'), findsOneWidget);
+    expect(find.textContaining('Pending date'), findsNothing);
+  });
+
+  testWidgets('ledger rows preserve admin copy and render audited status dates',
+      (tester) async {
+    final now = DateTime.now();
+    final repository = FakeWalletRepository(
+      wallet: const SenderWalletData(
+          balance: 25, frozen: false, onboardingCompleted: true),
+      pages: [
+        SenderWalletPage([
+          SenderWalletTransaction(
+            id: 'admin-1',
+            description: 'nrt',
+            direction: 'credit',
+            status: 'completed',
+            type: 'admin_credit',
+            amount: 20,
+            balanceAfter: 25,
+            createdAt: now,
+            completedAt: now,
+            referenceId: 'campaign-1',
+            createdBy: 'admin-user-1',
+          ),
+          const SenderWalletTransaction(
+            id: 'pending-1',
+            description: 'Delivery payment',
+            direction: 'debit',
+            status: 'pending',
+            type: 'checkout_spend',
+            amount: 8,
+            balanceAfter: 17,
+          ),
+        ], null),
+      ],
+    );
+    await tester.pumpWidget(app(SenderWalletView(repository: repository)));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('nrt'), 120,
+        scrollable: find.byType(Scrollable));
+
+    expect(find.text('nrt'), findsOneWidget);
+    expect(find.text('Admin Credit'), findsOneWidget);
+    expect(find.textContaining('Completed • Today'), findsOneWidget);
+    expect(find.text('Pending • Estimated completion'), findsOneWidget);
+    expect(find.textContaining('Pending date'), findsNothing);
+    expect(find.byIcon(Icons.admin_panel_settings_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.local_shipping_outlined), findsOneWidget);
+
+    await tester.tap(find.text('nrt'));
+    await tester.pumpAndSettle();
+    expect(find.text('Activity Details'), findsOneWidget);
+    expect(find.text('Reference ID'), findsOneWidget);
+    expect(find.text('campaign-1'), findsOneWidget);
+    expect(find.text('Created by'), findsOneWidget);
+    expect(find.text('Admin'), findsOneWidget);
+    expect(find.text('Current balance'), findsOneWidget);
   });
 
   testWidgets('renders payment methods and checkout preferences',
