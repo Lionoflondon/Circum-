@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum BusinessSection {
@@ -214,6 +216,57 @@ class BusinessInvoice {
   }
 
   bool get isPaid => status == 'paid' || status == 'paid_manually';
+}
+
+class BusinessInvoicePaymentPlan {
+  final double total;
+  final double availableRoth;
+  final double rothApplied;
+  final double cardAmount;
+
+  const BusinessInvoicePaymentPlan({
+    required this.total,
+    required this.availableRoth,
+    required this.rothApplied,
+    required this.cardAmount,
+  });
+
+  factory BusinessInvoicePaymentPlan.calculate({
+    required double total,
+    required double availableRoth,
+    required bool applyRoth,
+  }) {
+    final safeTotal = total < 0 ? 0.0 : total;
+    final safeBalance = availableRoth < 0 ? 0.0 : availableRoth;
+    final applied = applyRoth ? math.min(safeTotal, safeBalance) : 0.0;
+    return BusinessInvoicePaymentPlan(
+      total: safeTotal,
+      availableRoth: safeBalance,
+      rothApplied: applied,
+      cardAmount: math.max(0, safeTotal - applied),
+    );
+  }
+
+  bool get isRothOnly => rothApplied > 0 && cardAmount == 0;
+  bool get isSplit => rothApplied > 0 && cardAmount > 0;
+}
+
+class BusinessInvoicePaymentResult {
+  final bool paid;
+  final String method;
+  final double totalInvoice;
+  final double rothApplied;
+  final double cardAmount;
+  final Uri? checkoutUrl;
+
+  const BusinessInvoicePaymentResult({
+    required this.paid,
+    required this.method,
+    required this.totalInvoice,
+    required this.rothApplied,
+    required this.cardAmount,
+    this.checkoutUrl,
+  });
 }
 
 class BusinessRequestSummary {

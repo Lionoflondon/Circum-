@@ -3,6 +3,7 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {calculateWalletCheckout} = require("./wallet-core");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -270,7 +271,6 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
 exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
   const invoiceId = `${data.invoiceId || ""}`.trim();
-  const rothAmount = money(data.rothAmount);
   if (!businessId || !invoiceId) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business invoice.");
   }
@@ -289,16 +289,24 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   if (paymentAmount <= 0 || paymentAmount > balanceDue) {
     throw new functions.https.HttpsError("invalid-argument", "Payment amount must be greater than zero and no more than the invoice balance.");
   }
-  if (rothAmount > paymentAmount) {
-    throw new functions.https.HttpsError("invalid-argument", "Roth cannot exceed the selected payment amount.");
-  }
-  const cardAmount = money(paymentAmount - rothAmount);
+  const useRoth = data.useRoth === true;
+  const walletSnap = await db.collection("business_wallets").doc(businessId).get();
+  const wallet = walletSnap.exists ? walletSnap.data() || {} : {};
+  const walletBalance = useRoth && `${wallet.status || "active"}` === "active" ? money(wallet.balance || wallet.availableBalance) : 0;
+  const split = calculateWalletCheckout({
+    orderTotalGbp: paymentAmount,
+    walletBalanceGbp: walletBalance,
+    selectedCurrency: "gbp",
+  });
+  const rothAmount = split.walletContributionGbp;
+  const cardAmount = split.remainingGbp;
+  const requestedMethod = ["apple_pay", "google_pay", "saved_card", "card"].includes(`${data.paymentMethod || ""}`) ? `${data.paymentMethod}` : "card";
   if (cardAmount <= 0) {
     const paymentId = `roth_${invoiceId}_${Math.round(paymentAmount * 100)}`;
     const debited = await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId}});
     if (!debited) return {paid: true, method: "roth", paymentAmount, duplicate: true};
     await markInvoicePaid({invoiceId, businessId, amount: 0, rothAmount, method: "roth", paymentId});
-    return {paid: true, method: "roth", paymentAmount};
+    return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0};
   }
   const paymentRef = db.collection("businessInvoicePayments").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
@@ -329,6 +337,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
       cardAmountGbp: `${cardAmount}`,
       rothAmountGbp: `${rothAmount}`,
       paymentAmountGbp: `${paymentAmount}`,
+      requestedPaymentMethod: requestedMethod,
       returnUrl: baseUrl,
       paymentStatus: "pending_verification",
       createdByUserId: context.auth.uid,
@@ -341,7 +350,10 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
     bookingId,
     amount: cardAmount,
     rothAmount,
-    method: rothAmount > 0 ? "roth_card" : "card",
+    totalInvoice: balanceDue,
+    cardAmount,
+    method: rothAmount > 0 ? `roth_${requestedMethod}` : requestedMethod,
+    requestedPaymentMethod: requestedMethod,
     status: "pending_verification",
     paymentStatus: "pending_verification",
     stripeSessionId: session.id,
@@ -351,7 +363,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
     createdAt: FieldValue.serverTimestamp(),
     createdByUserId: context.auth.uid,
   });
-  return {checkoutUrl: session.url, sessionId: session.id, paymentId: paymentRef.id};
+  return {checkoutUrl: session.url, sessionId: session.id, paymentId: paymentRef.id, paid: false, method: rothAmount > 0 ? `roth_${requestedMethod}` : requestedMethod, paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount};
 });
 
 exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
@@ -397,12 +409,13 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
     if (rothAmount > 0) {
       await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId, stripeCheckoutSessionId: sessionData.id}});
     }
+    const requestedMethod = `${metadata.requestedPaymentMethod || "card"}`;
     await markInvoicePaid({
       invoiceId,
       businessId,
       amount: cardAmount,
       rothAmount,
-      method: rothAmount > 0 ? "roth_card" : "card",
+      method: rothAmount > 0 ? `roth_${requestedMethod}` : requestedMethod,
       stripeSessionId: sessionData.id,
       stripePaymentIntentId: sessionData.payment_intent || null,
       paymentId,

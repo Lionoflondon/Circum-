@@ -109,5 +109,32 @@ void main() {
       expect(context.paymentProfileSource, 'shared_payment_profile');
       expect(context.toMap()['businessMode'], isTrue);
     });
+
+    test('Roth split is automatic and never exceeds invoice or balance', () {
+      final split = BusinessInvoicePaymentPlan.calculate(
+        total: 250,
+        availableRoth: 100,
+        applyRoth: true,
+      );
+      final fullRoth = BusinessInvoicePaymentPlan.calculate(
+        total: 250,
+        availableRoth: 300,
+        applyRoth: true,
+      );
+      final cardOnly = BusinessInvoicePaymentPlan.calculate(
+        total: 250,
+        availableRoth: 100,
+        applyRoth: false,
+      );
+
+      expect(split.rothApplied, 100);
+      expect(split.cardAmount, 150);
+      expect(split.isSplit, isTrue);
+      expect(fullRoth.rothApplied, 250);
+      expect(fullRoth.cardAmount, 0);
+      expect(fullRoth.isRothOnly, isTrue);
+      expect(cardOnly.rothApplied, 0);
+      expect(cardOnly.cardAmount, 250);
+    });
   });
 }

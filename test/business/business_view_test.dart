@@ -76,6 +76,25 @@ void main() {
     expect(find.text('PAYMENT METHODS'), findsOneWidget);
     expect(find.text('Visa •••• 4242'), findsOneWidget);
     expect(find.text('Default payment method'), findsOneWidget);
+    expect(find.text('Roth'), findsOneWidget);
+  });
+
+  testWidgets('invoice checkout renders automatic Roth split', (tester) async {
+    await tester.pumpWidget(_app(status: 'approved'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Invoices'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Invoice · INV-001'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pay Invoice'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apply Roth'), findsOneWidget);
+    expect(find.text('25.00'), findsWidgets);
+    expect(find.text('£71.00'), findsOneWidget);
+    expect(find.text('Continue with split payment'), findsOneWidget);
+    expect(find.text('Visa •••• 4242'), findsOneWidget);
   });
 
   testWidgets('Connected Products contains only current Business products',
@@ -250,10 +269,20 @@ class _FakeBusinessRepository implements BusinessRepository {
       bool remove = false}) async {}
 
   @override
-  Future<Uri> createInvoiceCheckout(
-          {required BusinessAccount account,
-          required BusinessInvoice invoice}) async =>
-      Uri.parse('https://example.com');
+  Future<BusinessInvoicePaymentResult> payInvoice({
+    required BusinessAccount account,
+    required BusinessInvoice invoice,
+    required bool useRoth,
+    required String paymentMethod,
+  }) async =>
+      BusinessInvoicePaymentResult(
+        paid: false,
+        method: paymentMethod,
+        totalInvoice: invoice.total,
+        rothApplied: useRoth ? 25 : 0,
+        cardAmount: useRoth ? invoice.balanceDue - 25 : invoice.balanceDue,
+        checkoutUrl: Uri.parse('https://example.com'),
+      );
 }
 
 class _FakePaymentRepository implements SenderPaymentProfileRepository {

@@ -24,9 +24,11 @@ abstract class BusinessRepository {
     required BusinessAccount account,
     required Map<String, dynamic> moment,
   });
-  Future<Uri> createInvoiceCheckout({
+  Future<BusinessInvoicePaymentResult> payInvoice({
     required BusinessAccount account,
     required BusinessInvoice invoice,
+    required bool useRoth,
+    required String paymentMethod,
   });
 }
 
@@ -249,22 +251,35 @@ class FirebaseBusinessRepository implements BusinessRepository {
   }
 
   @override
-  Future<Uri> createInvoiceCheckout({
+  Future<BusinessInvoicePaymentResult> payInvoice({
     required BusinessAccount account,
     required BusinessInvoice invoice,
+    required bool useRoth,
+    required String paymentMethod,
   }) async {
     final result =
         await functions.httpsCallable('createBusinessInvoiceCheckout').call({
       'businessId': account.id,
       'invoiceId': invoice.id,
-      'amount': invoice.balanceDue,
+      'paymentAmount': invoice.balanceDue,
+      'useRoth': useRoth,
+      'paymentMethod': paymentMethod,
     });
     final data = Map<String, dynamic>.from(result.data as Map);
     final uri = Uri.tryParse('${data['url'] ?? data['checkoutUrl'] ?? ''}');
-    if (uri == null || !uri.hasScheme) {
+    final paid = data['paid'] == true;
+    if (!paid && (uri == null || !uri.hasScheme)) {
       throw StateError('Secure invoice checkout is unavailable.');
     }
-    return uri;
+    return BusinessInvoicePaymentResult(
+      paid: paid,
+      method: '${data['method'] ?? paymentMethod}',
+      totalInvoice: (data['totalInvoice'] as num?)?.toDouble() ?? invoice.total,
+      rothApplied: (data['rothApplied'] as num?)?.toDouble() ?? 0,
+      cardAmount:
+          (data['cardAmount'] as num?)?.toDouble() ?? invoice.balanceDue,
+      checkoutUrl: uri != null && uri.hasScheme ? uri : null,
+    );
   }
 }
 

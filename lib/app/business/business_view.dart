@@ -730,6 +730,11 @@ class _BusinessViewState extends State<BusinessView> {
                   ? 'Default payment method'
                   : 'Available at checkout',
             )),
+      const _SimpleRow(
+        icon: Icons.diamond_outlined,
+        title: 'Roth',
+        subtitle: 'Available for full or split invoice payment',
+      ),
       const _SectionLabel('Invoices & statements'),
       ..._workspace!.invoices.take(4).map(_invoiceRow),
       if (_workspace!.invoices.isEmpty)
@@ -1001,8 +1006,9 @@ class _BusinessViewState extends State<BusinessView> {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: _raised,
+      isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => Padding(
+      builder: (context) => SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(22, 4, 22, 32),
         child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1028,7 +1034,7 @@ class _BusinessViewState extends State<BusinessView> {
                     icon: Icons.lock_rounded,
                     onTap: () async {
                       Navigator.pop(context);
-                      await _payInvoice(invoice);
+                      await _chooseInvoicePayment(invoice);
                     }),
               const SizedBox(height: 8),
               Row(children: [
@@ -1051,12 +1057,35 @@ class _BusinessViewState extends State<BusinessView> {
     );
   }
 
-  Future<void> _payInvoice(BusinessInvoice invoice) async {
+  Future<void> _chooseInvoicePayment(BusinessInvoice invoice) async {
+    final request = await showModalBottomSheet<_BusinessPaymentRequest>(
+      context: context,
+      backgroundColor: _raised,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _BusinessInvoicePaymentSheet(
+        invoice: invoice,
+        availableRoth: _workspace!.wallet.rothBalance,
+        profile: _paymentProfile ?? SenderPaymentProfile.empty(),
+      ),
+    );
+    if (request == null) return;
     try {
       setState(() => _working = true);
-      final uri = await _repository.createInvoiceCheckout(
-          account: _account!, invoice: invoice);
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      final result = await _repository.payInvoice(
+        account: _account!,
+        invoice: invoice,
+        useRoth: request.useRoth,
+        paymentMethod: request.paymentMethod,
+      );
+      if (result.paid) {
+        await _load(accountId: _account!.id);
+        _showMessage('Invoice paid with Roth.');
+        return;
+      }
+      final uri = result.checkoutUrl;
+      if (uri == null ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         throw StateError('Secure payment could not open.');
       }
     } catch (error) {
@@ -1130,6 +1159,145 @@ class _SettingsForm extends StatefulWidget {
 
   @override
   State<_SettingsForm> createState() => _SettingsFormState();
+}
+
+class _BusinessPaymentRequest {
+  final bool useRoth;
+  final String paymentMethod;
+
+  const _BusinessPaymentRequest({
+    required this.useRoth,
+    required this.paymentMethod,
+  });
+}
+
+class _BusinessInvoicePaymentSheet extends StatefulWidget {
+  final BusinessInvoice invoice;
+  final double availableRoth;
+  final SenderPaymentProfile profile;
+
+  const _BusinessInvoicePaymentSheet({
+    required this.invoice,
+    required this.availableRoth,
+    required this.profile,
+  });
+
+  @override
+  State<_BusinessInvoicePaymentSheet> createState() =>
+      _BusinessInvoicePaymentSheetState();
+}
+
+class _BusinessInvoicePaymentSheetState
+    extends State<_BusinessInvoicePaymentSheet> {
+  late bool _useRoth;
+  late List<SenderPaymentProfileOption> _methods;
+  SenderPaymentProfileOption? _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _useRoth = widget.availableRoth > 0;
+    _methods = senderOrderedPaymentOptions(
+      widget.profile,
+      includeAddMethod: false,
+    );
+    _selected = _methods.isEmpty ? null : _methods.first;
+  }
+
+  BusinessInvoicePaymentPlan get _plan => BusinessInvoicePaymentPlan.calculate(
+        total: widget.invoice.balanceDue,
+        availableRoth: widget.availableRoth,
+        applyRoth: _useRoth,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = _plan;
+    final needsCard = plan.cardAmount > 0;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+            22, 4, 22, 24 + MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Pay Invoice',
+              style: GoogleFonts.dmSerifDisplay(fontSize: 25),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _DetailLine(label: 'Total invoice', value: _gbp(plan.total)),
+          _DetailLine(
+              label: 'Available Roth',
+              value: plan.availableRoth.toStringAsFixed(2)),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Apply Roth',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: const Text(
+                'The Finance Engine applies the best available amount.'),
+            value: _useRoth,
+            onChanged: widget.availableRoth <= 0
+                ? null
+                : (value) => setState(() => _useRoth = value),
+          ),
+          _DetailLine(
+              label: 'Roth applied',
+              value: plan.rothApplied.toStringAsFixed(2)),
+          _DetailLine(label: 'Remaining', value: _gbp(plan.cardAmount)),
+          if (needsCard) ...[
+            const SizedBox(height: 12),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Pay remaining with',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(height: 8),
+            if (_methods.isEmpty)
+              const _EmptyState(
+                icon: Icons.credit_card_off_rounded,
+                message: 'Add a payment method before paying the remainder.',
+              )
+            else
+              ..._methods.map((method) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    onTap: () => setState(() => _selected = method),
+                    leading: Icon(_paymentIcon(method.type)),
+                    title: Text(method.title),
+                    subtitle: method.isDefault ? const Text('Default') : null,
+                    trailing: _selected == method
+                        ? const Icon(Icons.check_circle_rounded, color: _blue)
+                        : const Icon(Icons.circle_outlined, color: _muted),
+                  )),
+          ] else
+            const _SimpleRow(
+              icon: Icons.diamond_outlined,
+              title: 'Roth',
+              subtitle: 'Roth covers this invoice in full',
+            ),
+          const SizedBox(height: 14),
+          _PrimaryButton(
+            label: plan.isRothOnly
+                ? 'Pay with Roth'
+                : plan.isSplit
+                    ? 'Continue with split payment'
+                    : 'Continue to secure payment',
+            icon: Icons.lock_rounded,
+            onTap: needsCard && _selected == null
+                ? null
+                : () => Navigator.pop(
+                      context,
+                      _BusinessPaymentRequest(
+                        useRoth: _useRoth,
+                        paymentMethod: _paymentMethodValue(_selected),
+                      ),
+                    ),
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
 class _SettingsFormState extends State<_SettingsForm> {
@@ -1780,6 +1948,14 @@ IconData _paymentIcon(SenderPaymentProfileOptionType type) => switch (type) {
         Icons.account_balance_wallet_rounded,
       SenderPaymentProfileOptionType.savedCard => Icons.credit_card_rounded,
       SenderPaymentProfileOptionType.addPaymentMethod => Icons.add_card_rounded,
+    };
+
+String _paymentMethodValue(SenderPaymentProfileOption? option) =>
+    switch (option?.type) {
+      SenderPaymentProfileOptionType.applePay => 'apple_pay',
+      SenderPaymentProfileOptionType.googlePay => 'google_pay',
+      SenderPaymentProfileOptionType.savedCard => 'saved_card',
+      _ => 'card',
     };
 
 String _gbp(double value) =>
