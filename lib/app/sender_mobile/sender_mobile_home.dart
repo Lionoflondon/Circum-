@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -6,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../health_plus/view/health_plus.dart';
 import 'gift_mode_view.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
@@ -45,8 +47,13 @@ enum _SenderAuthMode { signIn, createAccount }
 
 class SenderMobileHome extends StatefulWidget {
   final bool previewAuthEnabled;
+  final SenderHomeRepository? homeRepository;
 
-  const SenderMobileHome({super.key, this.previewAuthEnabled = false});
+  const SenderMobileHome({
+    super.key,
+    this.previewAuthEnabled = false,
+    this.homeRepository,
+  });
 
   @override
   State<SenderMobileHome> createState() => _SenderMobileHomeState();
@@ -104,8 +111,13 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           index: _index,
           children: [
             _SenderDashboard(
+              repository: widget.homeRepository,
               onStartDelivery: () => setState(() => _index = 1),
+              onOpenActivity: () => setState(() => _index = 2),
               onOpenWallet: () => setState(() => _index = 3),
+              onOpenHealth: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
+              ),
               onOpenGifts: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const GiftModeView(),
@@ -1368,16 +1380,407 @@ class _AuthFinePrint extends StatelessWidget {
   }
 }
 
-class _SenderDashboard extends StatelessWidget {
+class SenderHomeOrder {
+  final String id;
+  final String title;
+  final String route;
+  final String status;
+  final DateTime? updatedAt;
+
+  const SenderHomeOrder({
+    required this.id,
+    required this.title,
+    required this.route,
+    required this.status,
+    this.updatedAt,
+  });
+
+  factory SenderHomeOrder.fromFirestore(
+    String id,
+    Map<String, dynamic> data,
+  ) {
+    final pickup = Map<String, dynamic>.from(
+      data['pickupDetails'] as Map? ?? data['pickup'] as Map? ?? const {},
+    );
+    final dropoff = Map<String, dynamic>.from(
+      data['dropoffDetails'] as Map? ?? data['dropoff'] as Map? ?? const {},
+    );
+    final parcel = Map<String, dynamic>.from(
+      data['parcel'] as Map? ?? data['package'] as Map? ?? const {},
+    );
+    final rawDate = data['updatedAt'] ?? data['createdAt'];
+    final pickupLabel = _firstText([
+      pickup['locality'],
+      pickup['address'],
+      data['pickupLocality'],
+    ]);
+    final dropoffLabel = _firstText([
+      dropoff['locality'],
+      dropoff['address'],
+      data['destinationLocality'],
+    ]);
+    return SenderHomeOrder(
+      id: id,
+      title: _firstText([
+        parcel['itemName'],
+        parcel['description'],
+        data['itemName'],
+        data['packageDescription'],
+        'Delivery',
+      ]),
+      route: [pickupLabel, dropoffLabel]
+          .where((value) => value.isNotEmpty)
+          .join(' → '),
+      status: _statusLabel(
+        '${data['deliveryStatus'] ?? data['status'] ?? 'requested'}',
+      ),
+      updatedAt: rawDate is Timestamp ? rawDate.toDate() : null,
+    );
+  }
+
+  static String _firstText(List<Object?> values) {
+    for (final value in values) {
+      final text = '${value ?? ''}'.trim();
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    return '';
+  }
+
+  static String _statusLabel(String value) {
+    final normalized = value.trim().toLowerCase();
+    const labels = {
+      'requested': 'Finding a rider',
+      'broadcasting': 'Finding a rider',
+      'accepted': 'Rider assigned',
+      'rider_assigned': 'Rider assigned',
+      'rider_en_route': 'Rider en route',
+      'navigating_to_pickup': 'Rider en route',
+      'arrived_at_pickup': 'At pickup',
+      'pickup_verified': 'Pickup verified',
+      'collected': 'In transit',
+      'in_transit': 'In transit',
+      'navigating_to_dropoff': 'In transit',
+      'arrived_at_dropoff': 'At drop-off',
+      'delivered': 'Delivered',
+      'completed': 'Delivered',
+      'cancelled': 'Cancelled',
+      'cancelled_admin': 'Cancelled',
+    };
+    return labels[normalized] ??
+        normalized
+            .split('_')
+            .where((part) => part.isNotEmpty)
+            .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+            .join(' ');
+  }
+}
+
+class SenderHomeNotification {
+  final String id;
+  final String title;
+  final String body;
+  final bool read;
+  final DateTime? createdAt;
+
+  const SenderHomeNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.read,
+    this.createdAt,
+  });
+}
+
+class SenderHomeSummary {
+  final String displayName;
+  final bool healthProfileExists;
+  final int businessAccountCount;
+  final int giftCount;
+
+  const SenderHomeSummary({
+    required this.displayName,
+    required this.healthProfileExists,
+    required this.businessAccountCount,
+    required this.giftCount,
+  });
+}
+
+abstract class SenderHomeRepository {
+  Future<SenderHomeSummary> loadSummary();
+  Stream<List<SenderHomeOrder>> watchRecentOrders();
+  Stream<List<SenderHomeNotification>> watchNotifications();
+  Future<void> markNotificationsRead(Iterable<String> ids);
+}
+
+class FirebaseSenderHomeRepository implements SenderHomeRepository {
+  final FirebaseAuth auth;
+  final FirebaseFirestore firestore;
+
+  FirebaseSenderHomeRepository({
+    FirebaseAuth? auth,
+    FirebaseFirestore? firestore,
+  })  : auth = auth ?? FirebaseAuth.instance,
+        firestore = firestore ?? FirebaseFirestore.instance;
+
+  User get _user {
+    final user = auth.currentUser;
+    if (user == null) throw StateError('Sign in to load your Home.');
+    return user;
+  }
+
+  @override
+  Future<SenderHomeSummary> loadSummary() async {
+    final user = _user;
+    final email = (user.email ?? '').trim().toLowerCase();
+    final results = await Future.wait([
+      firestore.collection('users').doc(user.uid).get(),
+      firestore.collection('healthPlusProfiles').doc(user.uid).get(),
+      firestore
+          .collection('businessAccounts')
+          .where('createdByUserId', isEqualTo: user.uid)
+          .limit(20)
+          .get(),
+      firestore
+          .collection('businessAccounts')
+          .where(
+            'teamMemberIds',
+            arrayContainsAny: [user.uid, if (email.isNotEmpty) email],
+          )
+          .limit(20)
+          .get(),
+      firestore
+          .collection('giftRequests')
+          .where('senderId', isEqualTo: user.uid)
+          .limit(20)
+          .get(),
+    ]);
+    final profileSnapshot =
+        results[0] as DocumentSnapshot<Map<String, dynamic>>;
+    final healthSnapshot = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+    final ownedSnapshot = results[2] as QuerySnapshot<Map<String, dynamic>>;
+    final teamSnapshot = results[3] as QuerySnapshot<Map<String, dynamic>>;
+    final giftsSnapshot = results[4] as QuerySnapshot<Map<String, dynamic>>;
+    final profile = profileSnapshot.data() ?? const <String, dynamic>{};
+    final ownedBusinesses = ownedSnapshot.docs.map((doc) => doc.id).toSet();
+    final teamBusinesses = teamSnapshot.docs.map((doc) => doc.id).toSet();
+    return SenderHomeSummary(
+      displayName: '${profile['displayName'] ?? user.displayName ?? ''}'.trim(),
+      healthProfileExists: healthSnapshot.exists,
+      businessAccountCount:
+          <String>{...ownedBusinesses, ...teamBusinesses}.length,
+      giftCount: giftsSnapshot.docs.length,
+    );
+  }
+
+  @override
+  Stream<List<SenderHomeOrder>> watchRecentOrders() {
+    final uid = _user.uid;
+    return firestore
+        .collection('deliveryRequests')
+        .where('senderId', isEqualTo: uid)
+        .limit(20)
+        .snapshots()
+        .map((snapshot) {
+      final orders = snapshot.docs
+          .map((doc) => SenderHomeOrder.fromFirestore(doc.id, doc.data()))
+          .toList();
+      orders.sort((a, b) => (b.updatedAt ?? DateTime(1970))
+          .compareTo(a.updatedAt ?? DateTime(1970)));
+      return orders.take(2).toList(growable: false);
+    });
+  }
+
+  @override
+  Stream<List<SenderHomeNotification>> watchNotifications() {
+    final uid = _user.uid;
+    return firestore
+        .collection('notifications')
+        .where('recipientId', isEqualTo: uid)
+        .limit(50)
+        .snapshots()
+        .map((snapshot) {
+      final items = snapshot.docs.map((doc) {
+        final data = doc.data();
+        final rawDate = data['createdAt'];
+        return SenderHomeNotification(
+          id: doc.id,
+          title: '${data['title'] ?? 'Circum update'}'.trim(),
+          body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
+          read: data['read'] == true,
+          createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
+        );
+      }).toList();
+      items.sort((a, b) => (b.createdAt ?? DateTime(1970))
+          .compareTo(a.createdAt ?? DateTime(1970)));
+      return items;
+    });
+  }
+
+  @override
+  Future<void> markNotificationsRead(Iterable<String> ids) async {
+    final batch = firestore.batch();
+    for (final id in ids) {
+      batch.set(
+        firestore.collection('notifications').doc(id),
+        {'read': true, 'readAt': FieldValue.serverTimestamp()},
+        SetOptions(merge: true),
+      );
+    }
+    await batch.commit();
+  }
+}
+
+class _SenderDashboard extends StatefulWidget {
+  final SenderHomeRepository? repository;
   final VoidCallback onStartDelivery;
   final VoidCallback onOpenGifts;
   final VoidCallback onOpenWallet;
+  final VoidCallback onOpenHealth;
+  final VoidCallback onOpenActivity;
 
   const _SenderDashboard({
+    this.repository,
     required this.onStartDelivery,
     required this.onOpenGifts,
     required this.onOpenWallet,
+    required this.onOpenHealth,
+    required this.onOpenActivity,
   });
+
+  @override
+  State<_SenderDashboard> createState() => _SenderDashboardState();
+}
+
+class _SenderDashboardState extends State<_SenderDashboard> {
+  late final SenderHomeRepository _repository;
+  StreamSubscription<List<SenderHomeOrder>>? _ordersSubscription;
+  StreamSubscription<List<SenderHomeNotification>>? _notificationsSubscription;
+  SenderHomeSummary? _summary;
+  List<SenderHomeOrder>? _orders;
+  List<SenderHomeNotification>? _notifications;
+  String? _summaryError;
+  String? _ordersError;
+  String? _notificationsError;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? FirebaseSenderHomeRepository();
+    _load();
+  }
+
+  void _load() {
+    setState(() {
+      _summaryError = null;
+      _ordersError = null;
+      _notificationsError = null;
+    });
+    _repository.loadSummary().then((summary) {
+      if (mounted) setState(() => _summary = summary);
+    }).catchError((Object error) {
+      if (mounted) setState(() => _summaryError = '$error');
+    });
+    _ordersSubscription?.cancel();
+    _ordersSubscription = _repository.watchRecentOrders().listen((orders) {
+      if (mounted) setState(() => _orders = orders);
+    }, onError: (Object error) {
+      if (mounted) setState(() => _ordersError = '$error');
+    });
+    _notificationsSubscription?.cancel();
+    _notificationsSubscription =
+        _repository.watchNotifications().listen((notifications) {
+      if (mounted) setState(() => _notifications = notifications);
+    }, onError: (Object error) {
+      if (mounted) setState(() => _notificationsError = '$error');
+    });
+  }
+
+  @override
+  void dispose() {
+    _ordersSubscription?.cancel();
+    _notificationsSubscription?.cancel();
+    super.dispose();
+  }
+
+  String get _firstName {
+    final name = _summary?.displayName.trim() ?? '';
+    if (name.isNotEmpty) return name.split(RegExp(r'\s+')).first;
+    final user = FirebaseAuth.instance.currentUser;
+    final authName = user?.displayName?.trim() ?? '';
+    if (authName.isNotEmpty) return authName.split(RegExp(r'\s+')).first;
+    return 'there';
+  }
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  int get _unreadCount =>
+      _notifications?.where((item) => !item.read).length ?? 0;
+
+  Future<void> _openNotifications() async {
+    final notifications = _notifications;
+    if (notifications == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _SenderTokens.midnight,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: notifications.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(28),
+                child: Text(
+                  'No notifications yet.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _SenderTokens.muted),
+                ),
+              )
+            : ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                itemCount: notifications.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(color: _SenderTokens.border),
+                itemBuilder: (_, index) {
+                  final item = notifications[index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      item.read
+                          ? Icons.notifications_none_rounded
+                          : Icons.notifications_active_rounded,
+                      color: item.read
+                          ? _SenderTokens.muted
+                          : _SenderTokens.lightBlue,
+                    ),
+                    title: Text(item.title,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w800)),
+                    subtitle: item.body.isEmpty
+                        ? null
+                        : Text(item.body,
+                            style: const TextStyle(
+                                color: _SenderTokens.muted, height: 1.35)),
+                  );
+                },
+              ),
+      ),
+    );
+    final unreadIds = notifications
+        .where((item) => !item.read)
+        .map((item) => item.id)
+        .toList(growable: false);
+    if (unreadIds.isNotEmpty) {
+      try {
+        await _repository.markNotificationsRead(unreadIds);
+      } catch (_) {
+        // The live list remains available if marking read fails offline.
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1396,14 +1799,25 @@ class _SenderDashboard extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            _IconGlassButton(icon: Icons.notifications_none_rounded),
+            Badge(
+              isLabelVisible: _unreadCount > 0 || _notificationsError != null,
+              label: Text(_notificationsError != null
+                  ? '!'
+                  : _unreadCount > 99
+                      ? '99+'
+                      : '$_unreadCount'),
+              child: _IconGlassButton(
+                icon: Icons.notifications_none_rounded,
+                onTap: _notifications == null ? null : _openNotifications,
+              ),
+            ),
             const SizedBox(width: 10),
             const _SenderAvatar(initials: 'JA'),
           ],
         ),
         const SizedBox(height: 22),
-        const Text(
-          'Good morning, Jason',
+        Text(
+          _summaryError == null ? '$_greeting, $_firstName' : 'Welcome back',
           style: TextStyle(
             color: Colors.white,
             fontSize: 27,
@@ -1412,13 +1826,27 @@ class _SenderDashboard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        _HeroSendCard(onTap: onStartDelivery),
+        _HeroSendCard(
+          onTap: widget.onStartDelivery,
+          orderCount: _orders?.length,
+          hasError: _ordersError != null,
+        ),
         const SizedBox(height: 18),
-        _YourCircumHub(onOpenGifts: onOpenGifts),
+        _YourCircumHub(
+          onOpenGifts: widget.onOpenGifts,
+          onOpenHealth: widget.onOpenHealth,
+          summary: _summary,
+          hasError: _summaryError != null,
+        ),
         const SizedBox(height: 16),
-        const _RecentOrdersCard(),
+        _RecentOrdersCard(
+          orders: _orders,
+          error: _ordersError,
+          onRetry: _load,
+          onOpenActivity: widget.onOpenActivity,
+        ),
         const SizedBox(height: 16),
-        SenderWalletHomeSummary(onOpenWallet: onOpenWallet),
+        SenderWalletHomeSummary(onOpenWallet: widget.onOpenWallet),
       ],
     );
   }
@@ -1426,8 +1854,14 @@ class _SenderDashboard extends StatelessWidget {
 
 class _HeroSendCard extends StatelessWidget {
   final VoidCallback onTap;
+  final int? orderCount;
+  final bool hasError;
 
-  const _HeroSendCard({required this.onTap});
+  const _HeroSendCard({
+    required this.onTap,
+    required this.orderCount,
+    required this.hasError,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1468,18 +1902,22 @@ class _HeroSendCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(color: _SenderTokens.border),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.history_rounded,
                         color: _SenderTokens.lightBlue,
                         size: 16,
                       ),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Text(
-                        '2 orders',
-                        style: TextStyle(
+                        hasError
+                            ? 'Orders unavailable'
+                            : orderCount == null
+                                ? 'Loading orders'
+                                : '$orderCount recent',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
                           fontSize: 12,
@@ -1578,8 +2016,22 @@ class _HeroSendCard extends StatelessWidget {
 
 class _YourCircumHub extends StatelessWidget {
   final VoidCallback onOpenGifts;
+  final VoidCallback onOpenHealth;
+  final SenderHomeSummary? summary;
+  final bool hasError;
 
-  const _YourCircumHub({required this.onOpenGifts});
+  const _YourCircumHub({
+    required this.onOpenGifts,
+    required this.onOpenHealth,
+    required this.summary,
+    required this.hasError,
+  });
+
+  String _detail(String ready, String empty) {
+    if (hasError) return 'Unavailable right now';
+    if (summary == null) return 'Loading…';
+    return ready.isEmpty ? empty : ready;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1600,16 +2052,27 @@ class _YourCircumHub extends StatelessWidget {
             Expanded(
               child: _ServiceCard(
                 title: 'Health+',
-                subtitle: 'Trusted medical deliveries',
+                subtitle: _detail(
+                  summary?.healthProfileExists == true
+                      ? 'Health+ profile ready'
+                      : '',
+                  'Trusted medical deliveries',
+                ),
                 icon: Icons.health_and_safety_rounded,
                 accent: _SenderTokens.health,
+                onTap: onOpenHealth,
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: _ServiceCard(
                 title: 'Business',
-                subtitle: 'Business deliveries',
+                subtitle: _detail(
+                  (summary?.businessAccountCount ?? 0) > 0
+                      ? '${summary!.businessAccountCount} account${summary!.businessAccountCount == 1 ? '' : 's'}'
+                      : '',
+                  'Business deliveries',
+                ),
                 icon: Icons.business_center_rounded,
                 accent: _SenderTokens.business,
               ),
@@ -1618,7 +2081,12 @@ class _YourCircumHub extends StatelessWidget {
             Expanded(
               child: _ServiceCard(
                 title: 'Gifts',
-                subtitle: 'Thoughtful gfts, delivered.',
+                subtitle: _detail(
+                  (summary?.giftCount ?? 0) > 0
+                      ? '${summary!.giftCount} gift${summary!.giftCount == 1 ? '' : 's'}'
+                      : '',
+                  'Thoughtful gifts, delivered.',
+                ),
                 icon: Icons.card_giftcard_rounded,
                 accent: _SenderTokens.gifts,
                 onTap: onOpenGifts,
@@ -1812,58 +2280,112 @@ class _HeroRoutePainter extends CustomPainter {
 }
 
 class _RecentOrdersCard extends StatelessWidget {
-  const _RecentOrdersCard();
+  final List<SenderHomeOrder>? orders;
+  final String? error;
+  final VoidCallback onRetry;
+  final VoidCallback onOpenActivity;
+
+  const _RecentOrdersCard({
+    required this.orders,
+    required this.error,
+    required this.onRetry,
+    required this.onOpenActivity,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return const _GlassCard(
+    return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Recent orders',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+          InkWell(
+            onTap: onOpenActivity,
+            child: const Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Recent orders',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Recent deliveries',
-                      style: TextStyle(color: _SenderTokens.muted),
-                    ),
-                  ],
+                      SizedBox(height: 4),
+                      Text(
+                        'Recent deliveries',
+                        style: TextStyle(color: _SenderTokens.muted),
+                      ),
+                    ],
+                  ),
                 ),
+                Icon(Icons.chevron_right_rounded, color: _SenderTokens.muted),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (error != null)
+            _HomeInlineState(
+              message: _isOffline(error!)
+                  ? 'Recent orders are unavailable offline.'
+                  : 'Recent orders could not load.',
+              action: onRetry,
+            )
+          else if (orders == null)
+            const _HomeInlineState(message: 'Loading recent orders…')
+          else if (orders!.isEmpty)
+            const _HomeInlineState(
+              message: 'No deliveries yet. Your first order will appear here.',
+            )
+          else
+            ...orders!.map(
+              (order) => _OrderLine(
+                title: order.title,
+                subtitle: order.route.isEmpty ? 'Circum delivery' : order.route,
+                status: order.status,
+                icon: Icons.local_shipping_outlined,
+                accent: _SenderTokens.business,
               ),
-              Icon(Icons.chevron_right_rounded, color: _SenderTokens.muted),
-            ],
-          ),
-          SizedBox(height: 14),
-          _OrderLine(
-            title: 'Passport',
-            subtitle: 'Marylebone → Chelsea',
-            status: 'In transit',
-            icon: Icons.badge_rounded,
-            accent: _SenderTokens.business,
-          ),
-          _OrderLine(
-            title: 'Prescription collection',
-            subtitle: 'Health+ verified',
-            status: 'Delivered',
-            icon: Icons.medical_services_rounded,
-            accent: _SenderTokens.health,
-          ),
+            ),
         ],
       ),
     );
   }
+
+  static bool _isOffline(String value) {
+    final lower = value.toLowerCase();
+    return lower.contains('unavailable') || lower.contains('network');
+  }
+}
+
+class _HomeInlineState extends StatelessWidget {
+  final String message;
+  final VoidCallback? action;
+
+  const _HomeInlineState({required this.message, this.action});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: _SenderTokens.muted,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            if (action != null)
+              TextButton(onPressed: action, child: const Text('Retry')),
+          ],
+        ),
+      );
 }
 
 class _OrderLine extends StatelessWidget {
@@ -2083,15 +2605,23 @@ class _SenderAvatar extends StatelessWidget {
 
 class _IconGlassButton extends StatelessWidget {
   final IconData icon;
+  final VoidCallback? onTap;
 
-  const _IconGlassButton({required this.icon});
+  const _IconGlassButton({required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return _GlassCard(
       radius: 16,
-      padding: const EdgeInsets.all(10),
-      child: Icon(icon, color: Colors.white),
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Icon(icon, color: Colors.white),
+        ),
+      ),
     );
   }
 }
