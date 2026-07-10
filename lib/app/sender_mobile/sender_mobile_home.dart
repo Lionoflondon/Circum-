@@ -2361,7 +2361,7 @@ class _YourCircumHub extends StatelessWidget {
                 title: 'Health+',
                 subtitle: _detail(
                   summary?.healthProfileExists == true ? 'Profile ready' : '',
-                  'No upcoming deliveries',
+                  'Profile not set up',
                 ),
                 icon: Icons.health_and_safety_rounded,
                 accent: _SenderTokens.health,
