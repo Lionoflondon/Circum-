@@ -4324,12 +4324,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'relationship',
             'status',
           ]),
-          participants: adminSearch(_giftCampaignParticipants, query, [
-            'displayName',
-            'boroughOrArea',
-            'matchStatus',
-            'matchReason',
-          ]),
+          participants: _giftCampaignParticipants,
           brands: adminSearch(_giftBrands, query, [
             'brandName',
             'partnerName',
@@ -4340,7 +4335,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'IRISTags',
           ]),
           requestRowBuilder: _giftRequestRow,
-          participantRowBuilder: _giftCampaignParticipantRow,
+          onSuggestCampaignMatch: _suggestCampaignMatch,
+          onApproveCampaignMatch: _approveCampaignMatch,
+          onRejectCampaignMatch: _rejectCampaignMatch,
+          onRefreshCampaignMatching: _loadAdminData,
           brandRowBuilder: _giftBrandRow,
           onCreateBrand: () => _openGiftBrandPartner(),
           onSeedBirdBlend: _seedBirdBlendPartner,
@@ -5071,34 +5069,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ),
         ],
       ),
-    ];
-  }
-
-  List<Widget> _giftCampaignParticipantRow(Map<String, dynamic> item) {
-    final suggested = '${item['suggestedParticipantId'] ?? ''}'.isNotEmpty;
-    final matched = item['matchStatus'] == 'matched';
-    return [
-      _AdminCell.primary('${item['displayName'] ?? 'Participant'}'),
-      _AdminCell('${item['boroughOrArea'] ?? ''}'),
-      _AdminCell((item['interests'] as List?)?.join(', ') ?? ''),
-      _AdminStatusCell(
-          colors: widget.colors,
-          status: '${item['matchStatus'] ?? 'unmatched'}'),
-      _AdminCell(
-          '${item['matchScore'] ?? item['suggestedMatchScore'] ?? '—'}\n${item['matchReason'] ?? item['suggestedMatchReason'] ?? ''}'),
-      _AdminActions(colors: widget.colors, actions: [
-        _AdminAction(
-          label: matched
-              ? 'Locked'
-              : suggested
-                  ? 'Approve'
-                  : 'Suggest match',
-          enabled: !matched,
-          onTap: suggested
-              ? () => _approveCampaignMatch(item)
-              : () => _suggestCampaignMatch(item),
-        ),
-      ]),
     ];
   }
 
@@ -6285,6 +6255,32 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       'createdAt': FieldValue.serverTimestamp(),
     });
     await batch.commit();
+    await _loadAdminData();
+  }
+
+  Future<void> _rejectCampaignMatch(Map<String, dynamic> participant) async {
+    final id = '${participant['id'] ?? participant['_docId'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    final previous = '${participant['matchStatus'] ?? 'unmatched'}';
+    await FirebaseFirestore.instance
+        .collection('giftCampaignParticipants')
+        .doc(id)
+        .set({
+      'matchStatus': 'rejected',
+      'suggestedParticipantId': FieldValue.delete(),
+      'suggestedMatchScore': FieldValue.delete(),
+      'suggestedMatchReason': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: 'campaign_match_rejected',
+      recordType: 'giftCampaignParticipants',
+      recordId: id,
+      oldValue: {'matchStatus': previous},
+      newValue: {'matchStatus': 'rejected'},
+      reason: 'Rejected from campaign matching review',
+    ));
     await _loadAdminData();
   }
 
@@ -11601,8 +11597,11 @@ class _AdminGiftsSection extends StatelessWidget {
   final List<Map<String, dynamic>> participants;
   final List<Map<String, dynamic>> brands;
   final List<Widget> Function(Map<String, dynamic>) requestRowBuilder;
-  final List<Widget> Function(Map<String, dynamic>) participantRowBuilder;
   final List<Widget> Function(Map<String, dynamic>) brandRowBuilder;
+  final Future<void> Function(Map<String, dynamic>) onSuggestCampaignMatch;
+  final Future<void> Function(Map<String, dynamic>) onApproveCampaignMatch;
+  final Future<void> Function(Map<String, dynamic>) onRejectCampaignMatch;
+  final Future<void> Function() onRefreshCampaignMatching;
   final VoidCallback onCreateBrand;
   final VoidCallback onSeedBirdBlend;
 
@@ -11612,8 +11611,11 @@ class _AdminGiftsSection extends StatelessWidget {
     required this.participants,
     required this.brands,
     required this.requestRowBuilder,
-    required this.participantRowBuilder,
     required this.brandRowBuilder,
+    required this.onSuggestCampaignMatch,
+    required this.onApproveCampaignMatch,
+    required this.onRejectCampaignMatch,
+    required this.onRefreshCampaignMatching,
     required this.onCreateBrand,
     required this.onSeedBirdBlend,
   });
@@ -11654,22 +11656,13 @@ class _AdminGiftsSection extends StatelessWidget {
                 rowBuilder: requestRowBuilder,
                 emptyText: 'No gift requests yet.',
               ),
-              _AdminDataSection(
+              _AdminCampaignMatchingWorkspace(
                 colors: colors,
-                title: 'Bringing London Closer',
-                subtitle:
-                    'Anonymous campaign matching. Direct contact details remain private.',
-                records: participants,
-                columns: const [
-                  'Participant',
-                  'Area',
-                  'Interests',
-                  'Status',
-                  'Match',
-                  'Actions'
-                ],
-                rowBuilder: participantRowBuilder,
-                emptyText: 'No campaign participants yet.',
+                participants: participants,
+                onSuggest: onSuggestCampaignMatch,
+                onApprove: onApproveCampaignMatch,
+                onReject: onRejectCampaignMatch,
+                onRefresh: onRefreshCampaignMatching,
               ),
               _AdminDataSection(
                 colors: colors,
@@ -11706,6 +11699,672 @@ class _AdminGiftsSection extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Presentation-only moderation workspace. Campaign participant documents and
+/// the canonical GiftsSocialPolicy matching flow remain unchanged.
+class _AdminCampaignMatchingWorkspace extends StatefulWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> participants;
+  final Future<void> Function(Map<String, dynamic>) onSuggest;
+  final Future<void> Function(Map<String, dynamic>) onApprove;
+  final Future<void> Function(Map<String, dynamic>) onReject;
+  final Future<void> Function() onRefresh;
+
+  const _AdminCampaignMatchingWorkspace({
+    required this.colors,
+    required this.participants,
+    required this.onSuggest,
+    required this.onApprove,
+    required this.onReject,
+    required this.onRefresh,
+  });
+
+  @override
+  State<_AdminCampaignMatchingWorkspace> createState() =>
+      _AdminCampaignMatchingWorkspaceState();
+}
+
+class _AdminCampaignMatchingWorkspaceState
+    extends State<_AdminCampaignMatchingWorkspace> {
+  final _search = TextEditingController();
+  final Set<String> _selected = <String>{};
+  String _filter = 'All';
+  bool _busy = false;
+
+  static const _filters = [
+    'All',
+    'Awaiting Pairing',
+    'High Confidence',
+    'Needs Review',
+    'Matched',
+    'Completed',
+  ];
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  String _id(Map<String, dynamic> item) =>
+      '${item['id'] ?? item['_docId'] ?? ''}'.trim();
+
+  String _status(Map<String, dynamic> item) =>
+      '${item['matchStatus'] ?? 'awaiting_admin_pairing'}'.trim().toLowerCase();
+
+  double? _confidence(Map<String, dynamic> item) {
+    final raw = item['irisMatchConfidence'] ??
+        item['matchScore'] ??
+        item['suggestedMatchScore'];
+    final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
+    if (value == null) return null;
+    return value <= 1 ? value * 100 : value;
+  }
+
+  List<Map<String, dynamic>> get _visible {
+    final query = _search.text.trim().toLowerCase();
+    return widget.participants.where((item) {
+      final confidence = _confidence(item);
+      final status = _status(item);
+      final matchesFilter = switch (_filter) {
+        'Awaiting Pairing' =>
+          status == 'awaiting_admin_pairing' || status == 'unmatched',
+        'High Confidence' => confidence != null && confidence >= 90,
+        'Needs Review' => confidence == null || confidence < 90,
+        'Matched' => status == 'matched' || status == 'pending_confirmation',
+        'Completed' => status == 'completed',
+        _ => true,
+      };
+      if (!matchesFilter) return false;
+      if (query.isEmpty) return true;
+      final values = [
+        item['displayName'],
+        item['firstName'],
+        item['boroughOrArea'],
+        item['area'],
+        item['campaignName'],
+        item['campaignId'],
+        item['matchStatus'],
+        ...(item['interests'] as List? ?? const []),
+      ].map((value) => '$value'.toLowerCase());
+      return values.any((value) => value.contains(query));
+    }).toList();
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool> _confirm(String title, String body, String confirm) async {
+    return await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+                  title: Text(title),
+                  content: Text(body),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(confirm)),
+                  ],
+                )) ??
+        false;
+  }
+
+  Future<void> _bulkApprove() async {
+    final items =
+        _visible.where((item) => _selected.contains(_id(item))).toList();
+    if (items.isEmpty ||
+        !await _confirm(
+            'Approve selected matches?',
+            'This will approve the selected reviewed pairings using the existing campaign workflow.',
+            'Approve')) {
+      return;
+    }
+    await _run(() async {
+      for (final item in items) {
+        if ('${item['suggestedParticipantId'] ?? ''}'.isNotEmpty) {
+          await widget.onApprove(item);
+        }
+      }
+      if (mounted) setState(_selected.clear);
+    });
+  }
+
+  Future<void> _bulkReject() async {
+    final items =
+        _visible.where((item) => _selected.contains(_id(item))).toList();
+    if (items.isEmpty ||
+        !await _confirm(
+            'Reject selected participants?',
+            'Rejected participants will leave the active pairing queue. Their records remain available to administrators.',
+            'Reject')) {
+      return;
+    }
+    await _run(() async {
+      for (final item in items) {
+        await widget.onReject(item);
+      }
+      if (mounted) setState(_selected.clear);
+    });
+  }
+
+  Future<void> _exportSelected() async {
+    final items =
+        _visible.where((item) => _selected.contains(_id(item))).toList();
+    if (items.isEmpty) return;
+    final buffer =
+        StringBuffer('participant,area,interest,status,confidence\n');
+    for (final item in items) {
+      buffer.writeln([
+        _campaignFirstName(item),
+        _area(item),
+        _primaryInterest(item),
+        _statusLabel(_status(item)),
+        _confidence(item)?.toStringAsFixed(0) ?? '',
+      ].map((value) => '"${value.replaceAll('"', '""')}"').join(','));
+    }
+    await Clipboard.setData(ClipboardData(text: buffer.toString()));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selected match review data copied.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = _visible;
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        _GlassPanel(
+          colors: widget.colors,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Campaign Matching',
+                style: TextStyle(
+                    color: widget.colors.text,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900)),
+            const SizedBox(height: 6),
+            Text(
+                'Review anonymous campaign pairings with only the context needed to make a confident decision.',
+                style: TextStyle(color: widget.colors.mutedText, height: 1.35)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search_rounded),
+                hintText:
+                    'Search participant, area, interest, campaign or status',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _filters
+                  .map((filter) => ChoiceChip(
+                        label: Text(filter),
+                        selected: _filter == filter,
+                        onSelected: (_) => setState(() => _filter = filter),
+                      ))
+                  .toList(),
+            ),
+            if (_selected.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                Text('${_selected.length} selected',
+                    style: TextStyle(
+                        color: widget.colors.text,
+                        fontWeight: FontWeight.w900)),
+                FilledButton.icon(
+                    onPressed: _busy ? null : _bulkApprove,
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('Approve')),
+                OutlinedButton.icon(
+                    onPressed: _busy ? null : _bulkReject,
+                    icon: const Icon(Icons.close_rounded),
+                    label: const Text('Reject')),
+                OutlinedButton.icon(
+                    onPressed: _exportSelected,
+                    icon: const Icon(Icons.ios_share_outlined),
+                    label: const Text('Export')),
+                TextButton(
+                    onPressed: () => setState(_selected.clear),
+                    child: const Text('Assign Later')),
+              ]),
+            ],
+          ]),
+        ),
+        const SizedBox(height: 14),
+        if (visible.isEmpty)
+          _GlassPanel(
+            colors: widget.colors,
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.auto_awesome_outlined,
+                  size: 34, color: widget.colors.adminAccent),
+              const SizedBox(height: 12),
+              Text('No automatic matches available.',
+                  style: TextStyle(
+                      color: widget.colors.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              Text(
+                  "IRIS couldn't confidently recommend a pairing yet. You can review participants manually or wait for additional campaign entries.",
+                  style:
+                      TextStyle(color: widget.colors.mutedText, height: 1.4)),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: _busy ? null : () => _run(widget.onRefresh),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh Analysis'),
+              ),
+            ]),
+          )
+        else
+          ...visible.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _CampaignMatchCard(
+                  colors: widget.colors,
+                  participant: item,
+                  selected: _selected.contains(_id(item)),
+                  onSelected: (value) => setState(() {
+                    if (value == true) {
+                      _selected.add(_id(item));
+                    } else {
+                      _selected.remove(_id(item));
+                    }
+                  }),
+                  onReview: () => _openReview(item),
+                ),
+              )),
+      ],
+    );
+  }
+
+  void _openReview(Map<String, dynamic> item) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _CampaignMatchReviewDrawer(
+        colors: widget.colors,
+        participant: item,
+        participants: widget.participants,
+        onApprove: () async {
+          Navigator.pop(context);
+          await _run(() => widget.onApprove(item));
+        },
+        onFindBetter: () async {
+          Navigator.pop(context);
+          await _run(() => widget.onSuggest(item));
+        },
+        onReject: () async {
+          Navigator.pop(context);
+          if (await _confirm(
+              'Reject match?',
+              'This participant will be removed from the active pairing queue.',
+              'Reject')) {
+            await _run(() => widget.onReject(item));
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _CampaignMatchCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> participant;
+  final bool selected;
+  final ValueChanged<bool?> onSelected;
+  final VoidCallback onReview;
+
+  const _CampaignMatchCard({
+    required this.colors,
+    required this.participant,
+    required this.selected,
+    required this.onSelected,
+    required this.onReview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final confidence = _campaignConfidence(participant);
+    return Semantics(
+      label:
+          '${_campaignFirstName(participant)}, ${_statusLabel(_campaignStatus(participant))}',
+      child: _GlassPanel(
+        colors: colors,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Checkbox(value: selected, onChanged: onSelected),
+          CircleAvatar(
+            radius: 23,
+            backgroundColor: colors.adminAccent.withValues(alpha: .2),
+            foregroundImage: _avatarUrl(participant).isEmpty
+                ? null
+                : NetworkImage(_avatarUrl(participant)),
+            child: Text(
+                _campaignFirstName(participant).substring(0, 1).toUpperCase()),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(_campaignFirstName(participant),
+                    style: TextStyle(
+                        color: colors.text,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                Text('Area · ${_area(participant)}',
+                    style: TextStyle(color: colors.mutedText)),
+                const SizedBox(height: 3),
+                Text(
+                    'Interest · ${_primaryInterest(participant)}  +${_interestCount(participant).clamp(0, 99) - 1} interests',
+                    style: TextStyle(color: colors.mutedText)),
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  _CampaignStatusBadge(
+                      colors: colors, status: _campaignStatus(participant)),
+                  _CampaignConfidenceChip(
+                      confidence: confidence,
+                      participant: participant,
+                      colors: colors),
+                ]),
+              ])),
+          const SizedBox(width: 10),
+          FilledButton(onPressed: onReview, child: const Text('Review Match')),
+        ]),
+      ),
+    );
+  }
+}
+
+class _CampaignMatchReviewDrawer extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> participant;
+  final List<Map<String, dynamic>> participants;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onFindBetter;
+  final Future<void> Function() onReject;
+
+  const _CampaignMatchReviewDrawer({
+    required this.colors,
+    required this.participant,
+    required this.participants,
+    required this.onApprove,
+    required this.onFindBetter,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final partnerId =
+        '${participant['suggestedParticipantId'] ?? participant['matchedParticipantId'] ?? ''}';
+    final partner = participants.cast<Map<String, dynamic>?>().firstWhere(
+        (item) => '${item?['id'] ?? item?['_docId'] ?? ''}' == partnerId,
+        orElse: () => null);
+    final confidence = _campaignConfidence(participant);
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Material(
+            color: colors.adminChrome,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: SingleChildScrollView(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text('Review Match',
+                        style: TextStyle(
+                            color: colors.text,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 16),
+                    _reviewPerson(colors, 'Participant A', participant),
+                    const SizedBox(height: 10),
+                    _reviewPerson(colors, 'Participant B', partner),
+                    const SizedBox(height: 18),
+                    _detail(
+                        colors,
+                        'IRIS Match Score',
+                        confidence == null
+                            ? 'Not yet analysed'
+                            : '${confidence.toStringAsFixed(0)}%'),
+                    _detail(colors, 'Shared interests',
+                        _sharedInterests(participant, partner)),
+                    _detail(
+                        colors,
+                        'Shared area',
+                        _area(participant) == _area(partner ?? const {})
+                            ? _area(participant)
+                            : 'Not confirmed'),
+                    _detail(colors, 'Campaign',
+                        '${participant['campaignName'] ?? participant['campaignId'] ?? 'Campaign'}'),
+                    _detail(colors, 'Status',
+                        _statusLabel(_campaignStatus(participant))),
+                    _detail(colors, 'Notes',
+                        '${participant['suggestedMatchReason'] ?? participant['matchReason'] ?? 'No review notes yet.'}'),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                        onPressed: onApprove,
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Text('Approve Match')),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                        onPressed: onFindBetter,
+                        icon: const Icon(Icons.auto_awesome_outlined),
+                        label: const Text('Find Better Match')),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                        onPressed: onReject,
+                        icon: const Icon(Icons.close_rounded),
+                        label: const Text('Reject Match')),
+                  ])),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _reviewPerson(
+          _CircumColors colors, String label, Map<String, dynamic>? item) =>
+      _detail(
+          colors,
+          label,
+          item == null
+              ? 'No pairing suggested yet'
+              : '${_campaignFirstName(item)} · ${_area(item)} · ${_primaryInterest(item)}');
+
+  Widget _detail(_CircumColors colors, String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(value,
+              style:
+                  TextStyle(color: colors.text, fontWeight: FontWeight.w700)),
+        ]),
+      );
+}
+
+class _CampaignStatusBadge extends StatelessWidget {
+  final _CircumColors colors;
+  final String status;
+  const _CampaignStatusBadge({required this.colors, required this.status});
+  @override
+  Widget build(BuildContext context) {
+    final label = _statusLabel(status);
+    final color = status == 'completed' || status == 'matched'
+        ? colors.success
+        : status == 'rejected' || status == 'cancelled'
+            ? const Color(0xffef4444)
+            : const Color(0xffeab308);
+    return Semantics(
+      label: 'Match status: $label',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+            color: color.withValues(alpha: .13),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withValues(alpha: .4))),
+        child: Text(label,
+            style: TextStyle(
+                color: color, fontWeight: FontWeight.w800, fontSize: 12)),
+      ),
+    );
+  }
+}
+
+class _CampaignConfidenceChip extends StatelessWidget {
+  final double? confidence;
+  final Map<String, dynamic> participant;
+  final _CircumColors colors;
+  const _CampaignConfidenceChip(
+      {required this.confidence,
+      required this.participant,
+      required this.colors});
+  @override
+  Widget build(BuildContext context) {
+    if (confidence == null) return const Text('Not yet analysed');
+    final color = confidence! >= 90
+        ? const Color(0xff22c55e)
+        : confidence! >= 80
+            ? const Color(0xffeab308)
+            : const Color(0xfff97316);
+    return Semantics(
+      button: true,
+      label:
+          'IRIS match confidence ${confidence!.toStringAsFixed(0)} percent. View analysis.',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('IRIS Match Analysis'),
+            content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _criteria(participant)
+                    .map((item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('✓ $item')))
+                    .toList()),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'))
+            ],
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+              color: color.withValues(alpha: .13),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: color.withValues(alpha: .4))),
+          child: Text('${confidence!.toStringAsFixed(0)}%',
+              style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+        ),
+      ),
+    );
+  }
+}
+
+String _campaignStatus(Map<String, dynamic> item) =>
+    '${item['matchStatus'] ?? 'awaiting_admin_pairing'}'.trim().toLowerCase();
+String _statusLabel(String raw) => switch (raw) {
+      'awaiting_admin_pairing' || 'unmatched' => 'Awaiting Pairing',
+      'matched' => 'Matched',
+      'pending_confirmation' => 'Pending Confirmation',
+      'completed' => 'Completed',
+      'cancelled' => 'Cancelled',
+      'rejected' => 'Rejected',
+      _ => raw
+          .replaceAll('_', ' ')
+          .split(' ')
+          .map((part) => part.isEmpty
+              ? part
+              : '${part[0].toUpperCase()}${part.substring(1)}')
+          .join(' '),
+    };
+double? _campaignConfidence(Map<String, dynamic> item) {
+  final raw = item['irisMatchConfidence'] ??
+      item['matchScore'] ??
+      item['suggestedMatchScore'];
+  final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
+  return value == null
+      ? null
+      : value <= 1
+          ? value * 100
+          : value;
+}
+
+String _campaignFirstName(Map<String, dynamic> item) {
+  final value =
+      '${item['firstName'] ?? item['displayName'] ?? 'Participant'}'.trim();
+  return value.isEmpty ? 'Participant' : value.split(RegExp(r'\s+')).first;
+}
+
+String _area(Map<String, dynamic> item) =>
+    '${item['boroughOrArea'] ?? item['area'] ?? 'Area not provided'}'.trim();
+List<String> _interests(Map<String, dynamic> item) =>
+    (item['interests'] as List? ?? const [])
+        .map((item) => '$item'.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+String _primaryInterest(Map<String, dynamic> item) =>
+    _interests(item).isEmpty ? 'Interest not provided' : _interests(item).first;
+int _interestCount(Map<String, dynamic> item) => _interests(item).length;
+String _avatarUrl(Map<String, dynamic> item) =>
+    '${item['photoUrl'] ?? item['photoURL'] ?? item['avatarUrl'] ?? ''}'.trim();
+String _sharedInterests(
+    Map<String, dynamic> first, Map<String, dynamic>? second) {
+  if (second == null) return 'Not yet available';
+  final shared =
+      _interests(first).toSet().intersection(_interests(second).toSet());
+  return shared.isEmpty ? 'No shared interests recorded' : shared.join(', ');
+}
+
+List<String> _criteria(Map<String, dynamic> item) {
+  final result = <String>[];
+  final reason = '${item['suggestedMatchReason'] ?? item['matchReason'] ?? ''}'
+      .toLowerCase();
+  if (item['sameArea'] == true || reason.contains('area'))
+    result.add('Same area');
+  if (item['sharedInterests'] is List || reason.contains('interest'))
+    result.add('Shared interests');
+  if (item['similarCampaignGoals'] == true || reason.contains('campaign'))
+    result.add('Similar campaign goals');
+  if (item['compatibleAvailability'] == true || reason.contains('availability'))
+    result.add('Compatible availability');
+  return result.isEmpty
+      ? ['Analysis is available without further criteria']
+      : result;
 }
 
 class _AdminBusinessControlTowerSection extends StatelessWidget {
