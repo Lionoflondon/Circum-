@@ -5,7 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../health_plus/view/health_plus.dart';
+import '../sender_mobile/gift_mode_view.dart';
+import '../sender_mobile/sender_booking_canvas.dart';
 import '../sender_mobile/sender_finance.dart';
+import 'business_journey_context.dart';
 import 'business_models.dart';
 import 'business_repository.dart';
 
@@ -355,19 +359,17 @@ class _BusinessViewState extends State<BusinessView> {
               icon: Icons.person_add_alt_1_rounded,
               title: 'Invite teammate',
               subtitle: 'Add booking or admin access',
-              onTap: () => _selectSection(BusinessSection.team)),
+              onTap: _inviteMember),
           _ActionTile(
               icon: Icons.health_and_safety_rounded,
               title: 'Health+ request',
               subtitle: 'Open your connected Health+ service',
-              onTap: widget.onOpenHealthPlus ??
-                  () => _selectSection(BusinessSection.healthPlus)),
+              onTap: _openHealthPlus),
           _ActionTile(
               icon: Icons.card_giftcard_rounded,
               title: 'Corporate gift',
               subtitle: 'Create a confidential gift request',
-              onTap: widget.onOpenGifts ??
-                  () => _selectSection(BusinessSection.gifts)),
+              onTap: _openGifts),
         ],
       ),
       const _SectionLabel('Recent activity'),
@@ -580,7 +582,7 @@ class _BusinessViewState extends State<BusinessView> {
       _PrimaryButton(
         label: isHealth ? 'New Health+ request' : 'Start a corporate gift',
         icon: Icons.add_rounded,
-        onTap: isHealth ? widget.onOpenHealthPlus : widget.onOpenGifts,
+        onTap: isHealth ? _openHealthPlus : _openGifts,
       ),
     ]);
   }
@@ -839,11 +841,55 @@ class _BusinessViewState extends State<BusinessView> {
       return;
     }
     final callback = widget.onBookDelivery;
-    if (callback == null) {
-      _showMessage('Booking uses the existing Circum Delivery Engine.');
-    } else {
+    if (callback != null) {
       callback();
+      return;
     }
+    _pushBusinessJourney(
+      type: BusinessJourneyType.delivery,
+      routeName: '/sender-mobile/business/delivery',
+      child: const SenderBookingCanvas(),
+    );
+  }
+
+  void _openHealthPlus() {
+    final callback = widget.onOpenHealthPlus;
+    if (callback != null) {
+      callback();
+      return;
+    }
+    _pushBusinessJourney(
+      type: BusinessJourneyType.healthPlus,
+      routeName: '/sender-mobile/business/health-plus',
+      child: const HealthPlusView(),
+    );
+  }
+
+  void _openGifts() {
+    final callback = widget.onOpenGifts;
+    if (callback != null) {
+      callback();
+      return;
+    }
+    _pushBusinessJourney(
+      type: BusinessJourneyType.gifts,
+      routeName: '/sender-mobile/business/gifts',
+      child: const GiftModeView(),
+    );
+  }
+
+  void _pushBusinessJourney({
+    required BusinessJourneyType type,
+    required String routeName,
+    required Widget child,
+  }) {
+    final journey = BusinessJourneyContext.forAccount(_account!, type);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: RouteSettings(name: routeName, arguments: journey.toMap()),
+        builder: (_) => BusinessJourneyScope(journey: journey, child: child),
+      ),
+    );
   }
 
   Future<void> _inviteMember() async {

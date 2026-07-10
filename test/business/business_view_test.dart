@@ -102,6 +102,51 @@ void main() {
     expect(find.text('API Access'), findsNothing);
     expect(find.text('Approval Workflows'), findsNothing);
   });
+
+  testWidgets('all four Quick Actions launch their canonical flows',
+      (tester) async {
+    var deliveries = 0;
+    var health = 0;
+    var gifts = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: BusinessView(
+        repository: _FakeBusinessRepository('approved'),
+        paymentProfileRepository: _FakePaymentRepository(),
+        onBookDelivery: () => deliveries += 1,
+        onOpenHealthPlus: () => health += 1,
+        onOpenGifts: () => gifts += 1,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    for (final label in const [
+      'Book a delivery',
+      'Health+ request',
+      'Corporate gift',
+    ]) {
+      await tester.ensureVisible(find.text(label));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label));
+    }
+    expect(deliveries, 1);
+    expect(health, 1);
+    expect(gifts, 1);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 500));
+    await tester.pumpAndSettle();
+    final inviteTile = find.ancestor(
+      of: find.text('Invite teammate'),
+      matching: find.byType(InkWell),
+    );
+    await tester.tap(inviteTile);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Send invite'), findsOneWidget);
+    expect(
+      find.text('Booking uses the existing Circum Delivery Engine.'),
+      findsNothing,
+    );
+  });
 }
 
 Widget _app({required String status}) {

@@ -1,3 +1,4 @@
+import 'package:circum/app/business/business_journey_context.dart';
 import 'package:circum/app/business/business_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -88,6 +89,25 @@ void main() {
       );
 
       expect(workspace.outstandingBalance, 80);
+    });
+
+    test('journey context preserves Business billing identity', () {
+      final account = BusinessAccount.fromMap('business-1', {
+        'businessName': 'Rothcross',
+        'status': 'approved',
+        'billingEmail': 'billing@example.com',
+      });
+      final context = BusinessJourneyContext.forAccount(
+        account,
+        BusinessJourneyType.delivery,
+      );
+
+      expect(context.businessId, 'business-1');
+      expect(context.businessName, 'Rothcross');
+      expect(context.billingEmail, 'billing@example.com');
+      expect(context.billingSource, 'business_finance');
+      expect(context.paymentProfileSource, 'shared_payment_profile');
+      expect(context.toMap()['businessMode'], isTrue);
     });
   });
 }
