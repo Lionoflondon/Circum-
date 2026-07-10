@@ -1,15 +1,14 @@
-# SwiftLogistics Prototype
+# Circum Sender / Public Application
 
-Flutter implementation of the AI Studio logistics iteration. The current app is
-a self-contained prototype with mock shipment data and three main views:
+This repository owns the Circum Sender/Public application, the public marketing
+website, and the Circum Admin Portal build. It also contains an embedded Rider
+web portal and explicit Rider preview routes, but it is **not** the canonical
+native Rider application.
 
-- Home landing page with tracking input
-- Customer Portal for booking shipments and viewing statuses
-- Driver Portal for accepting jobs and marking deliveries complete
-
-The original Circum Firebase, Stripe, map, and delivery modules are still in the
-repository for reference, but the active app entry point is the simplified
-prototype in `lib/main.dart` and `lib/app.dart`.
+Read [the Canonical Application Registry](docs/APPLICATION_REGISTRY.md) before
+running, routing, testing, or deploying any Circum application. It identifies
+the dedicated `Circum-Rider` repository, every Hosting target, and the preview
+routes that must not be used as production Rider entry points.
 
 ## Run Locally
 
@@ -24,8 +23,11 @@ flutter run
 flutter test
 ```
 
-## Production Notes
+## Application Identity
 
-Before re-enabling the original Firebase/Stripe backend flows, rotate any
-service account keys or webhook secrets that were previously committed, and keep
-server credentials out of the Flutter client.
+- **Circum Sender / Public App:** this repository's public Hosting targets.
+- **Circum Admin Portal:** this repository's dedicated admin Hosting target.
+- **Circum Rider App:** `github-sync/Circum-Rider`; use it for native Rider
+  development and Rider-specific releases.
+- **Rider Architecture Preview:** `/rider` and Rider query aliases in this
+  repository are presentation previews, not canonical Rider application URLs.

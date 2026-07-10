@@ -1,10 +1,16 @@
 # Admin Hosting
 
-Circum has two Firebase Hosting targets in this repository.
+> **Canonical naming:** consult [the Application Registry](APPLICATION_REGISTRY.md)
+> before deploying. This guide covers only the Admin Portal target.
+
+Circum has three Firebase Hosting targets in this repository: two public
+Sender/Public targets and one dedicated Admin Portal target.
 
 ## Hosting targets
 
-- `main`: customer-facing web app, intended for `circumuk.com`.
+- `public`: customer-facing web app on Firebase site `circum-2797c`, intended
+  for `circumuk.com`.
+- `app`: customer-facing web app on Firebase site `circum-app-2797c`.
 - `admin`: internal operations app, intended for `admin.circumuk.com`.
 
 The admin panel is not exposed through the public customer app. The public build ignores `?app=admin` and only the admin hosting build enables the operations panel through the compile-time flag `CIRCUM_ADMIN_HOSTING=true`.
@@ -13,7 +19,8 @@ The admin panel is not exposed through the public customer app. The public build
 
 `.firebaserc` maps:
 
-- `main` to Firebase Hosting site `circum-app-2797c`
+- `public` to Firebase Hosting site `circum-2797c`
+- `app` to Firebase Hosting site `circum-app-2797c`
 - `admin` to Firebase Hosting site `circum-admin-2797c`
 
 If the admin site does not exist yet, create it once:

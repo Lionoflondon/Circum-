@@ -1,5 +1,10 @@
 # Circum Project Memory
 
+> **Historical working notes.** For authoritative application identity, routes,
+> Firebase Hosting targets, and deployment ownership, use
+> [the Canonical Application Registry](APPLICATION_REGISTRY.md). This file may
+> retain superseded branch names and historical target terminology.
+
 Last updated: 2026-06-04  
 Current working branch: `main`  
 Firebase project: `circum-2797c`
