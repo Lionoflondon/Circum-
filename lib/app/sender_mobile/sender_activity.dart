@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
@@ -28,6 +29,14 @@ class SenderActivityItem {
   final String rothDirection;
   final DateTime? occurredAt;
   final bool active;
+  final String riderId;
+  final String riderPhotoUrl;
+  final String riderRank;
+  final double? riderRating;
+  final int trustPoints;
+  final bool vanguardProtected;
+  final bool irisVerified;
+  final bool repeatRider;
 
   const SenderActivityItem({
     required this.id,
@@ -43,7 +52,39 @@ class SenderActivityItem {
     this.rothDirection = '',
     this.occurredAt,
     this.active = false,
+    this.riderId = '',
+    this.riderPhotoUrl = '',
+    this.riderRank = '',
+    this.riderRating,
+    this.trustPoints = 0,
+    this.vanguardProtected = false,
+    this.irisVerified = false,
+    this.repeatRider = false,
   });
+
+  SenderActivityItem copyWith({bool? repeatRider}) => SenderActivityItem(
+        id: id,
+        type: type,
+        title: title,
+        status: status,
+        destination: destination,
+        pickup: pickup,
+        rider: rider,
+        eta: eta,
+        amount: amount,
+        rothAmount: rothAmount,
+        rothDirection: rothDirection,
+        occurredAt: occurredAt,
+        active: active,
+        riderId: riderId,
+        riderPhotoUrl: riderPhotoUrl,
+        riderRank: riderRank,
+        riderRating: riderRating,
+        trustPoints: trustPoints,
+        vanguardProtected: vanguardProtected,
+        irisVerified: irisVerified,
+        repeatRider: repeatRider ?? this.repeatRider,
+      );
 }
 
 class SenderActivityPage {
@@ -88,8 +129,8 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
           .map((doc) => _delivery(doc.id, doc.data()))
           .where((item) => item.active)
           .toList();
-      items.sort((a, b) => (a.occurredAt ?? DateTime(1970))
-          .compareTo(b.occurredAt ?? DateTime(1970)));
+      items.sort((a, b) => (b.occurredAt ?? DateTime(1970))
+          .compareTo(a.occurredAt ?? DateTime(1970)));
       return items;
     });
   }
@@ -120,8 +161,25 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final gifts = results[1] as QuerySnapshot<Map<String, dynamic>>;
     final health = results[2] as QuerySnapshot<Map<String, dynamic>>;
     final wallet = results[3] as SenderWalletPage;
+    final riderProfiles = await _riderProfiles(deliveries.docs);
+    final deliveryItems = deliveries.docs
+        .map((doc) => _delivery(
+              doc.id,
+              doc.data(),
+              riderProfile: riderProfiles[_riderId(doc.data())],
+            ))
+        .toList();
+    final riderCounts = <String, int>{};
+    for (final item in deliveryItems) {
+      if (item.riderId.isNotEmpty && _isCompletedStatus(item.status)) {
+        riderCounts.update(item.riderId, (currentCount) => currentCount + 1,
+            ifAbsent: () => 1);
+      }
+    }
     final merged = <SenderActivityItem>[
-      ...deliveries.docs.map((doc) => _delivery(doc.id, doc.data())),
+      ...deliveryItems.map((item) => item.copyWith(
+            repeatRider: (riderCounts[item.riderId] ?? 0) > 1,
+          )),
       ...gifts.docs.map((doc) => _gift(doc.id, doc.data())),
       ...health.docs.map((doc) => _health(doc.id, doc.data())),
       ...wallet.transactions.map(_roth),
@@ -140,21 +198,42 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     return SenderActivityPage(items, hasMore ? '${page + 1}' : null);
   }
 
-  SenderActivityItem _delivery(String id, Map<String, dynamic> data) {
+  Future<Map<String, Map<String, dynamic>>> _riderProfiles(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> deliveries,
+  ) async {
+    final ids = deliveries
+        .map((doc) => _riderId(doc.data()))
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .take(30)
+        .toList();
+    if (ids.isEmpty) return const {};
+    try {
+      final snapshot = await firestore
+          .collection('riderProfiles')
+          .where(FieldPath.documentId, whereIn: ids)
+          .get();
+      return {for (final doc in snapshot.docs) doc.id: doc.data()};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  SenderActivityItem _delivery(
+    String id,
+    Map<String, dynamic> data, {
+    Map<String, dynamic>? riderProfile,
+  }) {
     final pickup = _map(data['pickupDetails'] ?? data['pickup']);
     final dropoff = _map(data['dropoffDetails'] ?? data['dropoff']);
     final parcel = _map(data['parcel'] ?? data['package']);
+    final assignedRider = _map(data['assignedRider']);
+    final embeddedProfile = _map(data['riderProfile']);
+    final profile = riderProfile ?? embeddedProfile;
+    final vanguard = _map(data['vanguard']);
+    final iris = _map(data['iris'] ?? data['irisClassification']);
     final status = '${data['deliveryStatus'] ?? data['status'] ?? 'requested'}';
     final normalized = status.toLowerCase();
-    const terminal = {
-      'delivered',
-      'completed',
-      'cancelled',
-      'cancelled_admin',
-      'failed',
-      'archived_stale',
-      'admin_removed_stale',
-    };
     return SenderActivityItem(
       id: id,
       type: data['businessMode'] == true ||
@@ -170,13 +249,50 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         dropoff['address'],
         dropoff['locality'],
       ]),
-      rider:
-          _first([data['riderName'], data['driverName'], data['courierName']]),
+      rider: _riderFirstName(_first([
+        profile['firstName'],
+        profile['fullName'],
+        profile['name'],
+        assignedRider['firstName'],
+        assignedRider['name'],
+        data['riderName'],
+        data['driverName'],
+        data['courierName'],
+      ])),
       eta: _first([data['estimatedDeliveryTime'], data['eta']]),
       amount:
           _number(data['paidAmount'] ?? data['price'] ?? data['totalAmount']),
       occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
-      active: !terminal.contains(normalized),
+      active: senderActivityIsLiveDeliveryStatus(normalized),
+      riderId: _riderId(data),
+      riderPhotoUrl: _first([
+        profile['photoURL'],
+        profile['photoUrl'],
+        profile['profilePhotoUrl'],
+        assignedRider['photoURL'],
+        data['riderPhotoURL'],
+      ]),
+      riderRank: _riderRankLabel(
+        _first([profile['rank'], profile['riderRank'], data['riderRank']]),
+      ),
+      riderRating: _number(profile['averageRating'] ??
+          profile['rating'] ??
+          _map(profile['performance'])['averageRating'] ??
+          data['riderRating']),
+      trustPoints: (_number(data['trustPointsAwarded'] ??
+                  data['senderTrustPointsAwarded'] ??
+                  _map(data['trustAward'])['points']) ??
+              0)
+          .round(),
+      vanguardProtected: data['vanguardEnabled'] == true ||
+          data['vanguardProtected'] == true ||
+          vanguard['enabled'] == true ||
+          vanguard['protected'] == true,
+      irisVerified: data['irisVerified'] == true ||
+          data['irisClassified'] == true ||
+          iris.isNotEmpty ||
+          data['irisMatchedItemName'] != null ||
+          data['normalizedItemName'] != null,
     );
   }
 
@@ -245,16 +361,40 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   String? _error;
   bool _loading = true;
   bool _loadingMore = false;
+  bool _activeLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? FirebaseSenderActivityRepository();
-    _activeSubscription = _repository.watchActive().listen(
-          (items) => mounted ? setState(() => _active = items) : null,
-          onError: (_) {},
-        );
+    _activeSubscription = _repository.watchActive().listen((items) {
+      if (!mounted) return;
+      final previousIds = _active.map((item) => item.id).toSet();
+      final nextIds = items.map((item) => item.id).toSet();
+      final movedToHistory =
+          _activeLoaded && previousIds.any((id) => !nextIds.contains(id));
+      setState(() {
+        _active = items;
+        _activeLoaded = true;
+      });
+      if (movedToHistory) unawaited(_refreshHistory());
+    }, onError: (_) {});
     _load();
+  }
+
+  Future<void> _refreshHistory() async {
+    try {
+      final page = await _repository.history();
+      if (!mounted) return;
+      setState(() {
+        _history
+          ..clear()
+          ..addAll(page.items);
+        _nextPage = page.nextPageToken;
+      });
+    } catch (_) {
+      // The current history remains visible until the next successful refresh.
+    }
   }
 
   Future<void> _load() async {
@@ -329,32 +469,41 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
         children: [
-          const Text('Activity',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900)),
-          const SizedBox(height: 14),
+          Text(
+            'Activity',
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: 32,
+            ),
+          ),
+          const SizedBox(height: 22),
           if (_loading) const _ActivitySkeleton(),
           if (!_loading && _error != null) _ActivityError(onRetry: _load),
-          if (!_loading &&
-              _error == null &&
-              _active.isEmpty &&
-              _history.isEmpty)
-            _ActivityEmpty(
-                onSend: widget.onSendParcel, onGifts: widget.onExploreGifts),
-          if (!_loading &&
-              _error == null &&
-              (_active.isNotEmpty || _history.isNotEmpty)) ...[
-            if (_active.isNotEmpty) ...[
-              const _ActivityHeading('Live Activity'),
-              const SizedBox(height: 10),
+          if (!_loading && _error == null) ...[
+            const ActivitySectionHeader(
+              title: 'Live Activity',
+              subtitle: 'Deliveries moving right now',
+            ),
+            const SizedBox(height: 12),
+            if (_active.isEmpty)
+              ActivityEmptyState(
+                title: 'No live deliveries',
+                subtitle:
+                    "When you send a parcel, gift or Health+ request, you'll be able to track it here.",
+                primaryLabel: 'Send a Parcel',
+                onPrimary: widget.onSendParcel,
+              )
+            else
               ..._active.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _LiveActivityCard(item: item),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: ActivityCard.live(item: item),
                   )),
-              const SizedBox(height: 10),
-            ],
+            const SizedBox(height: 24),
+            const ActivitySectionHeader(
+              title: 'History',
+              subtitle: 'Everything across Circum',
+            ),
+            const SizedBox(height: 14),
             TextField(
               onChanged: (value) => setState(() => _query = value),
               decoration: const InputDecoration(
@@ -378,130 +527,772 @@ class _SenderActivityViewState extends State<SenderActivityView> {
             ),
             const SizedBox(height: 18),
             if (_visible.isEmpty)
-              const _ActivityGlass(
-                  child: Text('No matching activity.',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w800)))
+              const ActivityEmptyState(
+                title: 'No matching activity.',
+                subtitle: 'Try another search or filter.',
+              )
             else
-              ..._grouped(_visible).entries.expand((entry) => [
-                    _ActivityHeading(entry.key),
-                    const SizedBox(height: 8),
-                    ...entry.value.map((item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _ActivityCard(item: item),
-                        )),
-                    const SizedBox(height: 8),
-                  ]),
+              ActivityTimeline(groups: _grouped(_visible)),
             if (_nextPage != null)
-              TextButton(
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextButton(
                   onPressed: _loadingMore ? null : _loadMore,
-                  child:
-                      Text(_loadingMore ? 'Loading…' : 'Load more activity')),
+                  child: Text(
+                    _loadingMore ? 'Loading…' : 'Load more activity',
+                  ),
+                ),
+              ),
           ],
         ],
       );
 }
 
-class _LiveActivityCard extends StatelessWidget {
+class ActivityCard extends StatefulWidget {
   final SenderActivityItem item;
-  const _LiveActivityCard({required this.item});
+  final bool live;
+
+  const ActivityCard({super.key, required this.item}) : live = false;
+  const ActivityCard.live({super.key, required this.item}) : live = true;
 
   @override
-  Widget build(BuildContext context) => _ActivityGlass(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.delivery_dining_rounded,
-                color: _ActivityColors.blue),
-            const SizedBox(width: 10),
-            Expanded(
-                child: Text(
-                    item.rider.isEmpty ? 'Finding your rider' : item.rider,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w900))),
-            Text(item.eta.isEmpty ? item.status : item.eta,
-                style: const TextStyle(
-                    color: _ActivityColors.green, fontWeight: FontWeight.w900)),
-          ]),
-          const SizedBox(height: 14),
-          Text(item.status,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
+  State<ActivityCard> createState() => _ActivityCardState();
+}
+
+class _ActivityCardState extends State<ActivityCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: reduceMotion ? 1 : 0, end: 1),
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 10),
+          child: child,
+        ),
+      ),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedScale(
+          scale: _hovered && !reduceMotion ? 1.01 : 1,
+          duration: const Duration(milliseconds: 160),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: widget.live
+                ? () => _openTracking(context, item)
+                : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => _ActivityDetail(item: item),
+                      ),
+                    ),
+            child: _ActivityGlass(
+              child: widget.live
+                  ? _LiveCardContent(item: item)
+                  : _HistoryCardContent(item: item),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveCardContent extends StatelessWidget {
+  final SenderActivityItem item;
+  const _LiveCardContent({required this.item});
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ActivityIcon(
+                  type: item.type, status: item.status, tracking: true),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.rider.isEmpty ? 'Finding your rider' : item.rider,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    ActivityStatusBadge(status: item.status, type: item.type),
+                  ],
+                ),
+              ),
+              if (item.eta.isNotEmpty)
+                Text(
+                  item.eta,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
           _RouteLine(label: 'Pickup', value: item.pickup),
           _RouteLine(label: 'Drop-off', value: item.destination),
-          const SizedBox(height: 12),
-          LinearProgressIndicator(
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
               value: _progress(item.status),
-              minHeight: 5,
-              color: _ActivityColors.green,
-              backgroundColor: Colors.white10),
-          const SizedBox(height: 14),
-          Row(children: [
-            Expanded(
-                child: FilledButton(
-                    onPressed: () => _openTracking(context, item),
-                    child: const Text('Live Tracking'))),
-            const SizedBox(width: 10),
-            OutlinedButton(
+              minHeight: 4,
+              color: _statusColor(item.status, item.type),
+              backgroundColor: Colors.white.withValues(alpha: .08),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => _openTracking(context, item),
+                  icon: const Icon(Icons.navigation_rounded, size: 17),
+                  label: const Text('Live Tracking'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton(
                 onPressed: () => _openChat(context, item),
-                child: const Text('Chat')),
-          ]),
-        ]),
+                child: const Text('Chat'),
+              ),
+            ],
+          ),
+        ],
       );
 }
 
-class _ActivityCard extends StatelessWidget {
+class _HistoryCardContent extends StatelessWidget {
   final SenderActivityItem item;
-  const _ActivityCard({required this.item});
+  const _HistoryCardContent({required this.item});
 
   @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => _ActivityDetail(item: item))),
-        child: _ActivityGlass(
-          child: Row(children: [
-            Icon(_typeIcon(item.type), color: _ActivityColors.blue),
+  Widget build(BuildContext context) {
+    if (_isCompletedDelivery(item)) {
+      return _CompletedDeliverySummary(item: item);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ActivityIcon(type: item.type, status: item.status),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 6),
+              ActivityStatusBadge(status: item.status, type: item.type),
+              if (item.destination.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Text(
+                  item.destination,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: _ActivityColors.muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 7),
+              Text(
+                _activityDate(item.occurredAt),
+                style: GoogleFonts.inter(
+                  color: _ActivityColors.muted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (item.amount != null)
+              Text(
+                '£${item.amount!.toStringAsFixed(2)}',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            if (item.rothAmount != null && item.rothAmount! > 0) ...[
+              const SizedBox(height: 5),
+              Text(
+                '${item.rothDirection == 'credit' ? '+' : '-'}${item.rothAmount!.toStringAsFixed(2)} Roth',
+                style: GoogleFonts.inter(
+                  color: _statusColor(item.status, item.type),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CompletedDeliverySummary extends StatelessWidget {
+  final SenderActivityItem item;
+  const _CompletedDeliverySummary({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final riderName = item.rider.isEmpty ? 'Circum Rider' : item.rider;
+    final trustLabel = item.trustPoints == 1
+        ? '+1 Trust Point'
+        : '+${item.trustPoints} Trust Points';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.check_circle_rounded,
+              color: Color(0xFF31D17D),
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Delivered Successfully',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF31D17D),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            ActivityStatusBadge(status: item.status, type: item.type),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            _RiderAvatar(name: riderName, photoUrl: item.riderPhotoUrl),
             const SizedBox(width: 12),
             Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(item.title,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                      [item.status, item.destination]
-                          .where((value) => value.isNotEmpty)
-                          .join(' · '),
-                      style: const TextStyle(
-                          color: _ActivityColors.muted, fontSize: 12)),
-                  const SizedBox(height: 4),
-                  Text(
-                      item.occurredAt == null
-                          ? 'Date pending'
-                          : DateFormat('d MMM · HH:mm')
-                              .format(item.occurredAt!),
-                      style: const TextStyle(
-                          color: _ActivityColors.muted, fontSize: 11)),
-                ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (item.amount != null)
-                Text('£${item.amount!.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w900)),
-              if (item.rothAmount != null && item.rothAmount! > 0)
-                Text(
-                    '${item.rothDirection == 'credit' ? '+' : '-'}${item.rothAmount!.toStringAsFixed(2)} Roth',
-                    style: const TextStyle(
-                        color: _ActivityColors.green,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800)),
-            ]),
-          ]),
+                    item.repeatRider && item.rider.isNotEmpty
+                        ? 'Delivered by $riderName again'
+                        : item.rider.isEmpty
+                            ? 'Delivered by Circum Rider'
+                            : riderName,
+                    style: GoogleFonts.dmSerifDisplay(
+                      color: Colors.white,
+                      fontSize: 19,
+                    ),
+                  ),
+                  if (item.riderRank.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _RiderRankBadge(rank: item.riderRank),
+                  ],
+                ],
+              ),
+            ),
+            if (item.riderRating != null && item.riderRating! > 0)
+              _RiderRating(rating: item.riderRating!),
+          ],
         ),
+        if (item.trustPoints > 0) ...[
+          const SizedBox(height: 14),
+          _TrustFeature(
+            icon: Icons.add_circle_outline_rounded,
+            label: trustLabel,
+            color: const Color(0xFF31D17D),
+          ),
+        ],
+        const SizedBox(height: 14),
+        Text(
+          item.title,
+          style: GoogleFonts.dmSerifDisplay(
+            color: Colors.white,
+            fontSize: 17,
+          ),
+        ),
+        const SizedBox(height: 9),
+        _TrustFeature(
+          icon: item.type == SenderActivityType.business
+              ? Icons.apartment_rounded
+              : Icons.inventory_2_outlined,
+          label: item.type == SenderActivityType.business
+              ? 'Business Delivery'
+              : 'Parcel Delivery',
+          color: item.type == SenderActivityType.business
+              ? const Color(0xFF38BDF8)
+              : const Color(0xFF60A5FA),
+        ),
+        if (item.vanguardProtected) ...[
+          const SizedBox(height: 9),
+          const _TrustFeature(
+            icon: Icons.shield_outlined,
+            label: 'Vanguard Protected',
+            color: Color(0xFF60A5FA),
+          ),
+        ],
+        if (item.irisVerified) ...[
+          const SizedBox(height: 9),
+          const _TrustFeature(
+            icon: Icons.blur_circular_rounded,
+            label: 'IRIS Verified',
+            color: Color(0xFFA855F7),
+          ),
+        ],
+        const SizedBox(height: 16),
+        Divider(color: Colors.white.withValues(alpha: .08), height: 1),
+        const SizedBox(height: 14),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Delivered',
+                    style: GoogleFonts.inter(
+                      color: _ActivityColors.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _activityDate(item.occurredAt),
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (item.amount != null)
+              Text(
+                '£${item.amount!.toStringAsFixed(2)}',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ActivityReceiptView(item: item),
+              ),
+            ),
+            icon: const Icon(Icons.receipt_long_outlined, size: 17),
+            label: const Text('View Receipt'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RiderAvatar extends StatelessWidget {
+  final String name;
+  final String photoUrl;
+  const _RiderAvatar({required this.name, required this.photoUrl});
+
+  @override
+  Widget build(BuildContext context) => CircleAvatar(
+        radius: 24,
+        backgroundColor: const Color(0xFF13233F),
+        foregroundImage: photoUrl.isEmpty ? null : NetworkImage(photoUrl),
+        child: Text(
+          name.isEmpty ? 'C' : name.substring(0, 1).toUpperCase(),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+}
+
+class _RiderRankBadge extends StatelessWidget {
+  final String rank;
+  const _RiderRankBadge({required this.rank});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _rankColor(rank);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .09),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: color.withValues(alpha: .24)),
+      ),
+      child: Text(
+        rank,
+        style: GoogleFonts.inter(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderRating extends StatelessWidget {
+  final double rating;
+  const _RiderRating({required this.rating});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.star_rounded, color: Color(0xFFF5C451), size: 15),
+          const SizedBox(width: 4),
+          Text(
+            rating.toStringAsFixed(2),
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+}
+
+class _TrustFeature extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _TrustFeature({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Icon(icon, color: color, size: 15),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: const Color(0xFFD9E2F0),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+}
+
+class ActivityReceiptView extends StatelessWidget {
+  final SenderActivityItem item;
+  const ActivityReceiptView({super.key, required this.item});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: _ActivityColors.bg,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Delivery Receipt'),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _ActivityGlass(
+              child: Column(
+                children: [
+                  _Detail('Delivery', item.title),
+                  _Detail('Status', item.status),
+                  if (item.pickup.isNotEmpty) _Detail('Pickup', item.pickup),
+                  if (item.destination.isNotEmpty)
+                    _Detail('Drop-off', item.destination),
+                  _Detail(
+                    'Completed',
+                    item.occurredAt == null
+                        ? 'Pending timestamp'
+                        : DateFormat('d MMMM yyyy, HH:mm')
+                            .format(item.occurredAt!),
+                  ),
+                  if (item.amount != null)
+                    _Detail(
+                        'Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
+                  _Detail(
+                    'Rider',
+                    item.rider.isEmpty ? 'Circum Rider' : item.rider,
+                  ),
+                  if (item.vanguardProtected)
+                    const _Detail('Protection', 'Vanguard Protected'),
+                  if (item.irisVerified)
+                    const _Detail('Classification', 'IRIS Verified'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class ActivityStatusBadge extends StatelessWidget {
+  final String status;
+  final SenderActivityType type;
+  const ActivityStatusBadge({
+    super.key,
+    required this.status,
+    required this.type,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor(status, type);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .11),
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(color: color.withValues(alpha: .28)),
+        ),
+        child: Text(
+          status,
+          style: GoogleFonts.inter(
+            color: color,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ActivityIcon extends StatefulWidget {
+  final SenderActivityType type;
+  final String status;
+  final bool tracking;
+  const ActivityIcon({
+    super.key,
+    required this.type,
+    required this.status,
+    this.tracking = false,
+  });
+
+  @override
+  State<ActivityIcon> createState() => _ActivityIconState();
+}
+
+class _ActivityIconState extends State<ActivityIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final seconds = widget.type == SenderActivityType.gift
+        ? 12
+        : widget.type == SenderActivityType.health
+            ? 8
+            : 5;
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: seconds),
+    )..repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final completed = _isCompletedStatus(widget.status);
+          final pulse = widget.type == SenderActivityType.health
+              ? 1 + (.035 * (1 - ((_controller.value * 2) - 1).abs()))
+              : 1.0;
+          final glow = widget.type == SenderActivityType.roth
+              ? .10 + (_controller.value * .08)
+              : .06;
+          return Transform.scale(
+            scale: pulse,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: .05),
+                border: Border.all(color: Colors.white.withValues(alpha: .08)),
+                gradient: RadialGradient(
+                  center: const Alignment(-.35, -.45),
+                  colors: [
+                    Colors.white.withValues(alpha: .11),
+                    _statusColor(widget.status, widget.type)
+                        .withValues(alpha: glow),
+                    Colors.transparent,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _statusColor(widget.status, widget.type)
+                        .withValues(alpha: glow),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+              child: Icon(
+                _activityIcon(
+                  type: widget.type,
+                  status: widget.status,
+                  tracking: widget.tracking,
+                  completed: completed,
+                ),
+                size: 21,
+                color: _statusColor(widget.status, widget.type),
+              ),
+            ),
+          );
+        },
+      );
+}
+
+class ActivityTimeline extends StatelessWidget {
+  final Map<String, List<SenderActivityItem>> groups;
+  const ActivityTimeline({super.key, required this.groups});
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: groups.entries
+            .map(
+              (entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ActivitySectionHeader(title: entry.key),
+                    const SizedBox(height: 12),
+                    ...List.generate(entry.value.length, (index) {
+                      final item = entry.value[index];
+                      return IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              width: 18,
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color:
+                                          _statusColor(item.status, item.type),
+                                    ),
+                                  ),
+                                  if (index < entry.value.length - 1)
+                                    Expanded(
+                                      child: Container(
+                                        width: 1,
+                                        color:
+                                            Colors.white.withValues(alpha: .09),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: ActivityCard(item: item),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+      );
+}
+
+class ActivitySectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  const ActivitySectionHeader({super.key, required this.title, this.subtitle});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.dmSerifDisplay(
+                color: Colors.white,
+                fontSize: 20,
+              ),
+            ),
+          ),
+          if (subtitle != null)
+            Text(
+              subtitle!,
+              style: GoogleFonts.inter(
+                color: _ActivityColors.muted,
+                fontSize: 11,
+              ),
+            ),
+        ],
       );
 }
 
@@ -536,32 +1327,48 @@ class _ActivityDetail extends StatelessWidget {
       );
 }
 
-class _ActivityEmpty extends StatelessWidget {
-  final VoidCallback onSend;
-  final VoidCallback onGifts;
-  const _ActivityEmpty({required this.onSend, required this.onGifts});
+class ActivityEmptyState extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String? primaryLabel;
+  final VoidCallback? onPrimary;
+  const ActivityEmptyState({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.primaryLabel,
+    this.onPrimary,
+  });
+
   @override
   Widget build(BuildContext context) => _ActivityGlass(
           child: Column(children: [
         const SizedBox(height: 8),
         const _AnimatedActivityPath(),
         const SizedBox(height: 18),
-        const Text('No activity yet',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w900)),
+        Text(
+          title,
+          style: GoogleFonts.dmSerifDisplay(color: Colors.white, fontSize: 24),
+        ),
         const SizedBox(height: 8),
-        const Text(
-            'Your deliveries, gifts, Health+ requests and business activity will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _ActivityColors.muted, height: 1.45)),
-        const SizedBox(height: 20),
-        SizedBox(
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            color: _ActivityColors.muted,
+            height: 1.5,
+          ),
+        ),
+        if (primaryLabel != null && onPrimary != null) ...[
+          const SizedBox(height: 20),
+          SizedBox(
             width: double.infinity,
             child: FilledButton(
-                onPressed: onSend, child: const Text('Send a Parcel'))),
-        TextButton(onPressed: onGifts, child: const Text('Explore Gifts')),
+              onPressed: onPrimary,
+              child: Text(primaryLabel!),
+            ),
+          ),
+        ],
       ]));
 }
 
@@ -580,6 +1387,16 @@ class _AnimatedActivityPathState extends State<_AnimatedActivityPath>
     _controller =
         AnimationController(vsync: this, duration: const Duration(seconds: 3))
           ..repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -663,15 +1480,6 @@ class _ActivityError extends StatelessWidget {
       ]));
 }
 
-class _ActivityHeading extends StatelessWidget {
-  final String text;
-  const _ActivityHeading(this.text);
-  @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
-          color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900));
-}
-
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -728,16 +1536,23 @@ class _ActivityGlass extends StatelessWidget {
   const _ActivityGlass({required this.child});
   @override
   Widget build(BuildContext context) => ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .05),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(24),
                   border:
-                      Border.all(color: Colors.white.withValues(alpha: .12))),
+                      Border.all(color: Colors.white.withValues(alpha: .08)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .18),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]),
               child: child)));
 }
 
@@ -762,6 +1577,40 @@ String _first(List<Object?> values) {
   }
   return '';
 }
+
+String _riderId(Map<String, dynamic> data) {
+  final assigned = _map(data['assignedRider']);
+  return _first([
+    data['riderId'],
+    data['driverId'],
+    data['courierId'],
+    assigned['userId'],
+    assigned['uid'],
+    assigned['id'],
+  ]);
+}
+
+String _riderFirstName(String value) {
+  final text = value.trim();
+  if (text.isEmpty) return '';
+  return text.split(RegExp(r'\s+')).first;
+}
+
+String _riderRankLabel(String value) {
+  const ranks = {'agent', 'sentinel', 'warden', 'knight', 'veteran'};
+  final normalized = value.trim().toLowerCase();
+  if (!ranks.contains(normalized)) return '';
+  return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
+}
+
+Color _rankColor(String rank) => switch (rank.toLowerCase()) {
+      'agent' => const Color(0xFF94A3B8),
+      'sentinel' => const Color(0xFF60A5FA),
+      'warden' => const Color(0xFF10B981),
+      'knight' => const Color(0xFFA78BFA),
+      'veteran' => const Color(0xFFF5C451),
+      _ => const Color(0xFF94A3B8),
+    };
 
 double? _number(Object? value) =>
     value is num ? value.toDouble() : double.tryParse('$value');
@@ -791,11 +1640,11 @@ String _typeLabel(SenderActivityType type) => switch (type) {
     };
 String _filterLabel(SenderActivityType type) => _typeLabel(type);
 IconData _typeIcon(SenderActivityType type) => switch (type) {
-      SenderActivityType.parcel => Icons.local_shipping_outlined,
-      SenderActivityType.gift => Icons.card_giftcard_rounded,
-      SenderActivityType.health => Icons.health_and_safety_outlined,
-      SenderActivityType.business => Icons.business_center_outlined,
-      SenderActivityType.roth => Icons.auto_awesome_rounded
+      SenderActivityType.parcel => Icons.inventory_2_outlined,
+      SenderActivityType.gift => Icons.redeem_rounded,
+      SenderActivityType.health => Icons.health_and_safety_rounded,
+      SenderActivityType.business => Icons.apartment_rounded,
+      SenderActivityType.roth => Icons.blur_circular_rounded,
     };
 double _progress(String status) {
   final value = status.toLowerCase();
@@ -819,8 +1668,10 @@ Map<String, List<SenderActivityItem>> _grouped(List<SenderActivityItem> items) {
         : difference == 1
             ? 'Yesterday'
             : difference < 7
-                ? 'This Week'
-                : 'Earlier';
+                ? 'Earlier'
+                : date.year == now.year && date.month == now.month
+                    ? 'This Month'
+                    : 'Previous Months';
     result.putIfAbsent(key, () => []).add(item);
   }
   return result;
@@ -829,6 +1680,92 @@ Map<String, List<SenderActivityItem>> _grouped(List<SenderActivityItem> items) {
 class _ActivityColors {
   static const bg = Color(0xFF07090F);
   static const blue = Color(0xFF60A5FA);
-  static const green = Color(0xFF34D399);
+  static const green = Color(0xFF31D17D);
   static const muted = Color(0xFF9CA3AF);
+}
+
+bool senderActivityIsLiveDeliveryStatus(String value) {
+  const live = {
+    'requested',
+    'finding_rider',
+    'broadcasting',
+    'accepted',
+    'rider_assigned',
+    'rider_en_route',
+    'navigating_to_pickup',
+    'arriving_at_pickup',
+    'arrived_at_pickup',
+    'pickup_verified',
+    'picked_up',
+    'pickup_complete',
+    'collected',
+    'in_transit',
+    'navigating_to_dropoff',
+    'arriving_at_dropoff',
+    'arrived_at_dropoff',
+    'waiting_for_recipient',
+    'delivery_confirmation',
+  };
+  return live.contains(value.trim().toLowerCase());
+}
+
+IconData _activityIcon({
+  required SenderActivityType type,
+  required String status,
+  required bool tracking,
+  required bool completed,
+}) {
+  final value = status.toLowerCase();
+  if (completed) return Icons.check_circle_rounded;
+  if (value.contains('cancel') ||
+      value.contains('failed') ||
+      value.contains('reject')) {
+    return Icons.close_rounded;
+  }
+  if (value.contains('draft')) return Icons.description_outlined;
+  if (value.contains('review') || value.contains('approval')) {
+    return Icons.fact_check_outlined;
+  }
+  if (tracking) return Icons.navigation_rounded;
+  return _typeIcon(type);
+}
+
+bool _isCompletedStatus(String status) {
+  final value = status.toLowerCase();
+  return value.contains('delivered') || value.contains('completed');
+}
+
+bool _isCompletedDelivery(SenderActivityItem item) =>
+    (item.type == SenderActivityType.parcel ||
+        item.type == SenderActivityType.business) &&
+    _isCompletedStatus(item.status);
+
+Color _statusColor(String status, SenderActivityType type) {
+  final value = status.toLowerCase();
+  if (value.contains('cancel') ||
+      value.contains('failed') ||
+      value.contains('reject')) {
+    return const Color(0xFFEF4444);
+  }
+  if (value.contains('expired') || value.contains('archived')) {
+    return const Color(0xFF94A3B8);
+  }
+  if (value.contains('draft')) return const Color(0xFFF59E0B);
+  if (_isCompletedStatus(value)) return const Color(0xFF31D17D);
+  if (type == SenderActivityType.gift) return const Color(0xFFA855F7);
+  if (type == SenderActivityType.health) return const Color(0xFF10B981);
+  if (type == SenderActivityType.business) return const Color(0xFF38BDF8);
+  return const Color(0xFF60A5FA);
+}
+
+String _activityDate(DateTime? date) {
+  if (date == null) return 'Date pending';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(date.year, date.month, date.day);
+  final difference = today.difference(day).inDays;
+  final time = DateFormat('HH:mm').format(date);
+  if (difference == 0) return 'Today · $time';
+  if (difference == 1) return 'Yesterday · $time';
+  return '${DateFormat('d MMM yyyy').format(date)} · $time';
 }
