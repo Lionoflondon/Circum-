@@ -652,6 +652,11 @@ service cloud.firestore {
         (isAdmin() && !changesLegendFields()) ||
         (ownsSenderRecord(userId) && !changesLegendFields() && !changesSenderTrustFields());
       allow delete: if hasRole('super_admin');
+
+      match /savedAddresses/{addressId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create, update, delete: if false;
+      }
     }
 
     match /senderTrustEvents/{eventId} {

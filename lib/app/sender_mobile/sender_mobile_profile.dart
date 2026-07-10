@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../sender_profile/sender_profile.dart';
+import 'sender_saved_addresses.dart';
 
 class SenderTrustActivity {
   final int points;
@@ -433,6 +434,7 @@ class SenderMobileProfileView extends StatefulWidget {
   final SenderProfilePhotoPicker? photoPicker;
   final VoidCallback? onLoggedOut;
   final VoidCallback? onOpenWallet;
+  final SenderSavedAddressesRepository? savedAddressesRepository;
 
   const SenderMobileProfileView({
     super.key,
@@ -440,6 +442,7 @@ class SenderMobileProfileView extends StatefulWidget {
     this.photoPicker,
     this.onLoggedOut,
     this.onOpenWallet,
+    this.savedAddressesRepository,
   });
 
   @override
@@ -711,13 +714,11 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
           padding: EdgeInsets.zero,
           child: Column(
             children: [
-              _ProfileShortcut(
-                icon: Icons.location_on_outlined,
-                title: 'Saved addresses',
-                subtitle: 'Manage your saved pickup and delivery locations.',
-                onTap: () => _showLocalMessage(
-                  'Saved addresses will open here.',
-                ),
+              SenderSavedAddressesProfileShortcut(
+                repository: widget.savedAddressesRepository ??
+                    (widget.repository == null
+                        ? null
+                        : const EmptySenderSavedAddressesRepository()),
               ),
               _ProfileShortcut(
                 icon: Icons.account_balance_wallet_outlined,

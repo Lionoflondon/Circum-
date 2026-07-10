@@ -7,6 +7,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
 import 'sender_booking_state.dart';
+import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
 
 class SenderBookingCanvas extends StatefulWidget {
@@ -298,6 +299,7 @@ class _BookingPanel extends StatelessWidget {
     switch (draft.step) {
       case SenderBookingStep.pickup:
         return _AddressPanel(
+          savedForPickup: true,
           controller: pickup,
           hint: 'Pickup address, flat or postcode',
           helperText: 'Enter a postcode, business or address.',
@@ -327,6 +329,7 @@ class _BookingPanel extends StatelessWidget {
         );
       case SenderBookingStep.dropoff:
         return _AddressPanel(
+          savedForPickup: false,
           controller: dropoff,
           hint: 'Drop-off address, flat or postcode',
           helperText: 'Enter a postcode, business or address.',
@@ -439,6 +442,7 @@ class _BookingPanel extends StatelessWidget {
 }
 
 class _AddressPanel extends StatelessWidget {
+  final bool savedForPickup;
   final TextEditingController controller;
   final String hint;
   final String helperText;
@@ -452,6 +456,7 @@ class _AddressPanel extends StatelessWidget {
   final VoidCallback onContinue;
 
   const _AddressPanel({
+    required this.savedForPickup,
     required this.controller,
     required this.hint,
     required this.helperText,
@@ -477,6 +482,10 @@ class _AddressPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
+        SenderSavedAddressSuggestions(
+          forPickup: savedForPickup,
+          onSelected: (address) => onSuggestion(address.toSuggestion()),
+        ),
         _TextInput(controller: controller, hint: hint, onChanged: onChanged),
         const SizedBox(height: 10),
         if (isSearching)

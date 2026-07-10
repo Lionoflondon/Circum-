@@ -164,7 +164,7 @@ void main() {
     await tester.scrollUntilVisible(find.text('Saved addresses'), 250);
     expect(find.text('Saved addresses'), findsOneWidget);
     expect(
-      find.text('Manage your saved pickup and delivery locations.'),
+      find.text('No saved addresses yet.'),
       findsOneWidget,
     );
     expect(find.text('Wallet'), findsOneWidget);

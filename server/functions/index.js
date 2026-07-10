@@ -66,6 +66,7 @@ const deliveryPolicy = require("./delivery-policy");
 const riderPresence = require("./rider-presence");
 const freeAddressSearch = require("./free-address-search");
 const senderBooking = require("./sender-booking");
+const senderSavedAddresses = require("./sender-saved-addresses");
 const deliveryTracking = require("./delivery-tracking");
 const deliveryCleanup = require("./delivery-cleanup");
 const {calculateWalletCheckout} = require("./wallet-core");
@@ -164,6 +165,8 @@ exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
 exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
 exports.createSenderPaymentSession = senderBooking.createSenderPaymentSession(stripe);
 exports.createSenderPaidDelivery = senderBooking.createSenderPaidDelivery(stripe);
+exports.saveSenderSavedAddress = senderSavedAddresses.saveSenderSavedAddress;
+exports.deleteSenderSavedAddress = senderSavedAddresses.deleteSenderSavedAddress;
 exports.updateDeliveryTrackingStatus = deliveryTracking.updateDeliveryTrackingStatus;
 exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
 
