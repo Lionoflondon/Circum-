@@ -10,7 +10,7 @@ const terminalDeliveryStatuses = new Set([
 const allowedConversationTypes = new Set([
   "sender_rider", "admin_sender", "admin_rider",
 ]);
-const allowedMessageTypes = new Set(["text", "image", "location", "system"]);
+const allowedMessageTypes = new Set(["text", "system"]);
 const notificationCategories = new Set([
   "deliveries", "wallet", "health", "gifts", "business", "system",
 ]);
@@ -137,8 +137,7 @@ async function sendMessage(data, context) {
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
   const message = maskContactDetails(data.message || data.messageText);
   const messageType = clean(data.messageType || "text").toLowerCase();
-  const attachmentUrls = Array.isArray(data.attachmentUrls) ? data.attachmentUrls.slice(0, 4) : [];
-  if (!chatId || (!message && attachmentUrls.length === 0 && !data.location)) {
+  if (!chatId || !message) {
     throw new functions.https.HttpsError("invalid-argument", "A conversation and message are required.");
   }
   if (!allowedMessageTypes.has(messageType) || messageType === "system") {
@@ -170,8 +169,6 @@ async function sendMessage(data, context) {
       messageText: message,
       message,
       messageType,
-      attachmentUrls,
-      location: messageType === "location" ? data.location || null : null,
       readBy: [senderId],
       createdAt: FieldValue.serverTimestamp(),
       status: "sent",
