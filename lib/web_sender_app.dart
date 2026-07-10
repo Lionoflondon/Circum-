@@ -31401,6 +31401,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   void _listenToChat(String id) {
     _chatSub?.cancel();
+    _markChatRead(id);
     _chatSub = FirebaseFirestore.instance
         .collection('chats')
         .doc(id)
@@ -31470,6 +31471,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
   }
 
+  Future<void> _markChatRead(String chatId) async {
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('markConversationRead')
+          .call({'chatId': chatId});
+    } catch (_) {
+      // Reading a conversation remains available while offline.
+    }
+  }
+
   int _statusIndexFromFirebase(String status) {
     if (status.contains('delivered') || status.contains('complete')) return 3;
     if (status.contains('picked') || status.contains('collected')) return 2;
@@ -31530,51 +31541,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final text = _chatInput.text.trim();
     final requestId = _activeRequestDocId;
     if (text.isEmpty) return;
-    _chatInput.clear();
-    setState(() {
-      final target = _supportChat ? _supportMessages : _driverMessages;
-      target.add(_ChatMessage(fromMe: true, text: text, time: 'Now'));
-    });
-
     if (requestId == null) return;
     try {
       await _ensureFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final chatRef = db.collection('chats').doc(requestId);
-      await chatRef.collection('messages').add({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'senderId': _senderUser?.uid ?? 'web-sender',
-        'senderRole': 'sender',
-        'senderType': 'user',
-        'recipientId': _supportChat
-            ? 'circum-support'
-            : (_assignedDriverId ?? 'assigned-rider'),
-        'recipientType': _supportChat ? 'admin' : 'rider',
-        'messageText': text,
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': requestId,
         'message': text,
-        'status': 'sent',
-        'readBy': [_senderUser?.uid ?? 'web-sender'],
-        'createdAt': FieldValue.serverTimestamp(),
-        'timeStamp': DateTime.now().toIso8601String(),
+        'messageType': 'text',
       });
-      await chatRef.set({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'lastMessage': text,
-        'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        'participants': FieldValue.arrayUnion([
-          _senderUser?.uid ?? 'web-sender',
-          _supportChat
-              ? 'circum-support'
-              : (_assignedDriverId ?? 'assigned-rider'),
-        ]),
-        'unreadBy': FieldValue.arrayUnion([_supportChat ? 'admin' : 'rider']),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'circum-web',
-      }, SetOptions(merge: true));
+      if (mounted) _chatInput.clear();
     } catch (_) {
       if (!mounted) return;
       setState(
