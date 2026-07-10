@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'sender_booking_canvas.dart';
+import 'sender_accessibility.dart';
 import 'sender_wallet.dart';
 
 enum SenderActivityType { parcel, gift, health, business, roth }
@@ -1572,22 +1573,28 @@ class ActivityStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
     final color = _statusColor(status, type);
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: .11),
+          color: color.withValues(alpha: highContrast ? .22 : .11),
           borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: color.withValues(alpha: .28)),
+          border: Border.all(
+            color: color.withValues(alpha: highContrast ? .84 : .28),
+            width: highContrast ? 1.3 : 1,
+          ),
         ),
         child: Text(
           status,
           style: GoogleFonts.inter(
-            color: color,
+            color: highContrast ? Colors.white : color,
             fontSize: 10.5,
-            fontWeight: FontWeight.w500,
+            fontWeight: highContrast ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),
@@ -1645,56 +1652,66 @@ class _ActivityIconState extends State<ActivityIcon>
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final completed = _isCompletedStatus(widget.status);
-          final pulse = widget.type == SenderActivityType.health
-              ? 1 + (.035 * (1 - ((_controller.value * 2) - 1).abs()))
-              : 1.0;
-          final glow = widget.type == SenderActivityType.roth
-              ? .10 + (_controller.value * .08)
-              : .06;
-          return Transform.scale(
-            scale: pulse,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: .05),
-                border: Border.all(color: Colors.white.withValues(alpha: .08)),
-                gradient: RadialGradient(
-                  center: const Alignment(-.35, -.45),
-                  colors: [
-                    Colors.white.withValues(alpha: .11),
-                    _statusColor(widget.status, widget.type)
-                        .withValues(alpha: glow),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: _statusColor(widget.status, widget.type)
-                        .withValues(alpha: glow),
-                    blurRadius: 16,
-                  ),
+  Widget build(BuildContext context) {
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final completed = _isCompletedStatus(widget.status);
+        final pulse = widget.type == SenderActivityType.health
+            ? 1 + (.035 * (1 - ((_controller.value * 2) - 1).abs()))
+            : 1.0;
+        final glow = widget.type == SenderActivityType.roth
+            ? .10 + (_controller.value * .08)
+            : .06;
+        return Transform.scale(
+          scale: pulse,
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: highContrast ? .11 : .05),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: highContrast ? .22 : .08),
+                width: highContrast ? 1.3 : 1,
+              ),
+              gradient: RadialGradient(
+                center: const Alignment(-.35, -.45),
+                colors: [
+                  Colors.white.withValues(alpha: .11),
+                  _statusColor(widget.status, widget.type)
+                      .withValues(alpha: highContrast ? .32 : glow),
+                  Colors.transparent,
                 ],
               ),
-              child: Icon(
-                _activityIcon(
-                  type: widget.type,
-                  status: widget.status,
-                  tracking: widget.tracking,
-                  completed: completed,
+              boxShadow: [
+                BoxShadow(
+                  color: _statusColor(widget.status, widget.type)
+                      .withValues(alpha: highContrast ? .34 : glow),
+                  blurRadius: highContrast ? 20 : 16,
                 ),
-                size: 21,
-                color: _statusColor(widget.status, widget.type),
-              ),
+              ],
             ),
-          );
-        },
-      );
+            child: Icon(
+              _activityIcon(
+                type: widget.type,
+                status: widget.status,
+                tracking: widget.tracking,
+                completed: completed,
+              ),
+              size: highContrast ? 23 : 21,
+              color: highContrast
+                  ? Colors.white
+                  : _statusColor(widget.status, widget.type),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class ActivityTimeline extends StatelessWidget {
@@ -1702,63 +1719,68 @@ class ActivityTimeline extends StatelessWidget {
   const ActivityTimeline({super.key, required this.groups});
 
   @override
-  Widget build(BuildContext context) => Column(
-        children: groups.entries
-            .map(
-              (entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ActivitySectionHeader(title: entry.key),
-                    const SizedBox(height: 12),
-                    ...List.generate(entry.value.length, (index) {
-                      final item = entry.value[index];
-                      return IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(
-                              width: 18,
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color:
-                                          _statusColor(item.status, item.type),
-                                    ),
+  Widget build(BuildContext context) {
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
+    return Column(
+      children: groups.entries
+          .map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ActivitySectionHeader(title: entry.key),
+                  const SizedBox(height: 12),
+                  ...List.generate(entry.value.length, (index) {
+                    final item = entry.value[index];
+                    return IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: highContrast ? 9 : 7,
+                                  height: highContrast ? 9 : 7,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _statusColor(item.status, item.type),
                                   ),
-                                  if (index < entry.value.length - 1)
-                                    Expanded(
-                                      child: Container(
-                                        width: 1,
-                                        color:
-                                            Colors.white.withValues(alpha: .09),
+                                ),
+                                if (index < entry.value.length - 1)
+                                  Expanded(
+                                    child: Container(
+                                      width: highContrast ? 2 : 1,
+                                      color: Colors.white.withValues(
+                                        alpha: highContrast ? .28 : .09,
                                       ),
                                     ),
-                                ],
-                              ),
+                                  ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: ActivityCard(item: item),
-                              ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ActivityCard(item: item),
                             ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
               ),
-            )
-            .toList(),
-      );
+            ),
+          )
+          .toList(),
+    );
+  }
 }
 
 class ActivitySectionHeader extends StatelessWidget {
@@ -2030,25 +2052,38 @@ class _ActivityGlass extends StatelessWidget {
   final Widget child;
   const _ActivityGlass({required this.child});
   @override
-  Widget build(BuildContext context) => ClipRRect(
+  Widget build(BuildContext context) {
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
+    return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .05),
-                  borderRadius: BorderRadius.circular(24),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: .08)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .18),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                  ]),
-              child: child)));
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: highContrast
+                ? const Color(0xFA0C121C)
+                : Colors.white.withValues(alpha: .05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: highContrast ? .18 : .08),
+              width: highContrast ? 1.3 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: highContrast ? .48 : .18),
+                blurRadius: highContrast ? 30 : 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
 }
 
 void _openTracking(BuildContext context, SenderActivityItem item) {

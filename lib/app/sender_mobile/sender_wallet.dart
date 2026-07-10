@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'sender_accessibility.dart';
 import 'sender_finance.dart';
 
 class SenderWalletData {
@@ -1678,69 +1679,83 @@ class _AvailableRothCard extends StatelessWidget {
   const _AvailableRothCard({required this.wallet});
 
   @override
-  Widget build(BuildContext context) => _WalletGlass(
+  Widget build(BuildContext context) {
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
+    return _WalletGlass(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(
+      Row(
+        children: [
+          _RothEmblem(highContrast: highContrast),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Available Roth',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(
+                    wallet.updatedAt == null
+                        ? 'Ready'
+                        : 'Updated ${DateFormat('d MMM, HH:mm').format(wallet.updatedAt!)}',
+                    style: const TextStyle(
+                        color: _WalletColors.muted, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 18),
+      Semantics(
+          label: '${wallet.balance.toStringAsFixed(0)} Roth available',
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const _RothEmblem(),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Available Roth',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 3),
-                    Text(
-                        wallet.updatedAt == null
-                            ? 'Ready'
-                            : 'Updated ${DateFormat('d MMM, HH:mm').format(wallet.updatedAt!)}',
-                        style: const TextStyle(
-                            color: _WalletColors.muted, fontSize: 12)),
-                  ],
-                ),
+              Text(
+                  wallet.balance
+                      .toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 40,
+                      fontWeight:
+                          highContrast ? FontWeight.w900 : FontWeight.w900,
+                      shadows: highContrast
+                          ? const [
+                              Shadow(
+                                color: Color(0x99000000),
+                                blurRadius: 3,
+                              ),
+                            ]
+                          : null)),
+              const SizedBox(width: 8),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 7),
+                child: Text('ROTH',
+                    style: TextStyle(
+                        color: _WalletColors.lightBlue,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1)),
               ),
             ],
-          ),
-          const SizedBox(height: 18),
-          Semantics(
-              label: '${wallet.balance.toStringAsFixed(0)} Roth available',
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                      wallet.balance
-                          .toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 40,
-                          fontWeight: FontWeight.w900)),
-                  const SizedBox(width: 8),
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 7),
-                    child: Text('ROTH',
-                        style: TextStyle(
-                            color: _WalletColors.lightBlue,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.1)),
-                  ),
-                ],
-              )),
-          const SizedBox(height: 10),
-          const Text(
-            'Use Roth to reduce the cost of eligible Circum services.',
-            style: TextStyle(color: _WalletColors.muted, height: 1.45),
-          ),
-        ]),
-      );
+          )),
+      const SizedBox(height: 10),
+      const Text(
+        'Use Roth to reduce the cost of eligible Circum services.',
+        style: TextStyle(color: _WalletColors.muted, height: 1.45),
+      ),
+    ]));
+  }
 }
 
 class _RothEmblem extends StatelessWidget {
-  const _RothEmblem();
+  final bool highContrast;
+  const _RothEmblem({this.highContrast = false});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1753,8 +1768,10 @@ class _RothEmblem extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: _WalletColors.lightBlue.withValues(alpha: .24),
-              blurRadius: 20,
+              color: _WalletColors.lightBlue
+                  .withValues(alpha: highContrast ? .52 : .24),
+              blurRadius: highContrast ? 28 : 20,
+              spreadRadius: highContrast ? 2 : 0,
             ),
           ],
         ),
@@ -1899,17 +1916,39 @@ class _WalletGlass extends StatelessWidget {
   const _WalletGlass(
       {required this.child, this.padding = const EdgeInsets.all(16)});
   @override
-  Widget build(BuildContext context) => ClipRRect(
+  Widget build(BuildContext context) {
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
+    return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-              padding: padding,
-              decoration: BoxDecoration(
-                  color: _WalletColors.glass,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: _WalletColors.border)),
-              child: child)));
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: highContrast ? const Color(0xFA0C121C) : _WalletColors.glass,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color:
+                  highContrast ? const Color(0x2EFFFFFF) : _WalletColors.border,
+              width: highContrast ? 1.3 : 1,
+            ),
+            boxShadow: highContrast
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .58),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]
+                : null,
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
 }
 
 class _WalletColors {

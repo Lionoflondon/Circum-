@@ -2646,6 +2646,9 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     final distance = widget.distanceKm;
     final etaMinutes =
         distance == null ? null : math.max(6, distance * 4).round();
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
     return Stack(
       children: [
         AnimatedBuilder(
@@ -2655,6 +2658,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
               t: _controller.value,
               active: widget.active,
               showDestination: widget.showDestination,
+              highContrast: highContrast,
             ),
             child: const SizedBox.expand(),
           ),
@@ -2762,11 +2766,13 @@ class _MapPainter extends CustomPainter {
   final double t;
   final bool active;
   final bool showDestination;
+  final bool highContrast;
 
   const _MapPainter({
     required this.t,
     required this.active,
     required this.showDestination,
+    this.highContrast = false,
   });
 
   @override
@@ -2783,8 +2789,8 @@ class _MapPainter extends CustomPainter {
     );
     final drift = math.sin(t * math.pi * 2) * 8;
     final grid = Paint()
-      ..color = Colors.white.withValues(alpha: .025)
-      ..strokeWidth = 1;
+      ..color = Colors.white.withValues(alpha: highContrast ? .12 : .025)
+      ..strokeWidth = highContrast ? 1.35 : 1;
     for (var x = -70.0 + drift; x < size.width + 70; x += 50) {
       canvas.drawLine(Offset(x, 0), Offset(x + 28, size.height), grid);
     }
@@ -2808,9 +2814,11 @@ class _MapPainter extends CustomPainter {
         route,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 3
+          ..strokeWidth = highContrast ? 5 : 3
           ..strokeCap = StrokeCap.round
-          ..color = _Tokens.lightBlue.withValues(alpha: active ? .68 : .24),
+          ..color = _Tokens.lightBlue.withValues(
+            alpha: highContrast ? .96 : (active ? .68 : .24),
+          ),
       );
       final metrics = route.computeMetrics().toList();
       if (metrics.isNotEmpty) {
@@ -2821,7 +2829,7 @@ class _MapPainter extends CustomPainter {
           metric.extractPath(start, end),
           Paint()
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 5
+            ..strokeWidth = highContrast ? 7 : 5
             ..strokeCap = StrokeCap.round
             ..shader = LinearGradient(
               colors: [
@@ -2842,17 +2850,21 @@ class _MapPainter extends CustomPainter {
   void _pin(Canvas canvas, Offset point, Color color, double phase) {
     canvas.drawCircle(
       point,
-      8 + phase * 20,
-      Paint()..color = color.withValues(alpha: .15 * (1 - phase)),
+      (highContrast ? 11 : 8) + phase * (highContrast ? 24 : 20),
+      Paint()
+        ..color = color.withValues(
+          alpha: (highContrast ? .26 : .15) * (1 - phase),
+        ),
     );
-    canvas.drawCircle(point, 6, Paint()..color = color);
+    canvas.drawCircle(point, highContrast ? 8 : 6, Paint()..color = color);
   }
 
   @override
   bool shouldRepaint(covariant _MapPainter oldDelegate) =>
       oldDelegate.t != t ||
       oldDelegate.active != active ||
-      oldDelegate.showDestination != showDestination;
+      oldDelegate.showDestination != showDestination ||
+      oldDelegate.highContrast != highContrast;
 }
 
 class _Tokens {

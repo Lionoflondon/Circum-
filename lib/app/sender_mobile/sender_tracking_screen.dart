@@ -677,6 +677,9 @@ class SenderTrackingMapLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final highContrast =
+        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
+            false;
     return AnimatedBuilder(
       animation: Listenable.merge([mapDrift, pulse]),
       builder: (context, _) {
@@ -701,16 +704,19 @@ class SenderTrackingMapLayer extends StatelessWidget {
                 painter: _TrackingGridPainter(
                   shimmer: delivered ? .5 : mapDrift.value,
                   route: content.showRoute,
+                  highContrast: highContrast,
                 ),
               ),
             ),
-            if (content.showRoute) _RouteLine(completed: delivered),
+            if (content.showRoute)
+              _RouteLine(completed: delivered, highContrast: highContrast),
             if (content.showPickupPin)
               _MapPin(
                 alignment: const Alignment(-.62, -.38),
                 color: const Color(0xFF34D399),
                 pulse: markerPulse,
                 strongPulse: content.showAnonymousRiders,
+                highContrast: highContrast,
               ),
             if (content.showDropoffPin)
               delivered
@@ -722,6 +728,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
                       alignment: const Alignment(.48, .34),
                       color: const Color(0xFF3B82F6),
                       pulse: markerPulse,
+                      highContrast: highContrast,
                     ),
             if (content.showAnonymousRiders) ...const [
               _AnonymousRiderDot(alignment: Alignment(-.18, -.22), delay: 0),
@@ -736,11 +743,14 @@ class SenderTrackingMapLayer extends StatelessWidget {
                   riderPosition.dx * 2 - 1,
                   riderPosition.dy * 2 - 1,
                 ),
-                child: _VehicleMarker(
-                  kind: vehicleKind,
-                  pulse: markerPulse,
-                  settled: delivered,
-                  headingDegrees: headingDegrees,
+                child: Transform.scale(
+                  scale: highContrast ? 1.15 : 1,
+                  child: _VehicleMarker(
+                    kind: vehicleKind,
+                    pulse: markerPulse,
+                    settled: delivered,
+                    headingDegrees: headingDegrees,
+                  ),
                 ),
               ),
             AnimatedOpacity(
@@ -2039,12 +2049,14 @@ class _MapPin extends StatelessWidget {
   final Color color;
   final double pulse;
   final bool strongPulse;
+  final bool highContrast;
 
   const _MapPin({
     required this.alignment,
     required this.color,
     required this.pulse,
     this.strongPulse = false,
+    this.highContrast = false,
   });
 
   @override
@@ -2053,15 +2065,17 @@ class _MapPin extends StatelessWidget {
     return Align(
       alignment: alignment,
       child: Container(
-        width: 14,
-        height: 14,
+        width: highContrast ? 18 : 14,
+        height: highContrast ? 18 : 14,
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: color.withValues(alpha: strongPulse ? .32 : .18),
-              spreadRadius: ring,
+              color: color.withValues(
+                alpha: highContrast ? .48 : (strongPulse ? .32 : .18),
+              ),
+              spreadRadius: highContrast ? ring + 2 : ring,
               blurRadius: ring * 1.6,
             ),
           ],
@@ -2368,8 +2382,9 @@ class _VehicleIconPainter extends CustomPainter {
 
 class _RouteLine extends StatelessWidget {
   final bool completed;
+  final bool highContrast;
 
-  const _RouteLine({this.completed = false});
+  const _RouteLine({this.completed = false, this.highContrast = false});
 
   @override
   Widget build(BuildContext context) {
@@ -2380,7 +2395,11 @@ class _RouteLine extends StatelessWidget {
         curve: Curves.easeOut,
         builder: (context, value, _) {
           return CustomPaint(
-            painter: _RouteLinePainter(progress: value, completed: completed),
+            painter: _RouteLinePainter(
+              progress: value,
+              completed: completed,
+              highContrast: highContrast,
+            ),
           );
         },
       ),
@@ -2391,14 +2410,19 @@ class _RouteLine extends StatelessWidget {
 class _TrackingGridPainter extends CustomPainter {
   final double shimmer;
   final bool route;
+  final bool highContrast;
 
-  const _TrackingGridPainter({required this.shimmer, required this.route});
+  const _TrackingGridPainter({
+    required this.shimmer,
+    required this.route,
+    this.highContrast = false,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final grid = Paint()
-      ..color = Colors.white.withValues(alpha: .025)
-      ..strokeWidth = 1;
+      ..color = Colors.white.withValues(alpha: highContrast ? .12 : .025)
+      ..strokeWidth = highContrast ? 1.35 : 1;
     for (double x = -28; x < size.width + 28; x += 28) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
     }
@@ -2408,7 +2432,7 @@ class _TrackingGridPainter extends CustomPainter {
     final glow = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFF3B82F6).withValues(alpha: .10),
+          const Color(0xFF3B82F6).withValues(alpha: highContrast ? .22 : .10),
           Colors.transparent,
         ],
       ).createShader(
@@ -2422,14 +2446,21 @@ class _TrackingGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TrackingGridPainter oldDelegate) =>
-      oldDelegate.shimmer != shimmer || oldDelegate.route != route;
+      oldDelegate.shimmer != shimmer ||
+      oldDelegate.route != route ||
+      oldDelegate.highContrast != highContrast;
 }
 
 class _RouteLinePainter extends CustomPainter {
   final double progress;
   final bool completed;
+  final bool highContrast;
 
-  const _RouteLinePainter({required this.progress, required this.completed});
+  const _RouteLinePainter({
+    required this.progress,
+    required this.completed,
+    this.highContrast = false,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2451,17 +2482,29 @@ class _RouteLinePainter extends CustomPainter {
     }
     final paint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
+      ..strokeWidth = highContrast ? 5 : 3
       ..strokeCap = StrokeCap.round
-      ..shader = const LinearGradient(
-        colors: [Color(0x2234D399), Color(0xFF3B82F6), Color(0xFF34D399)],
+      ..shader = LinearGradient(
+        colors: highContrast
+            ? const [
+                Color(0xFF34D399),
+                Color(0xFF60A5FA),
+                Color(0xFF34D399),
+              ]
+            : const [
+                Color(0x2234D399),
+                Color(0xFF3B82F6),
+                Color(0xFF34D399),
+              ],
       ).createShader(Offset.zero & size);
     canvas.drawPath(visiblePath, paint);
   }
 
   @override
   bool shouldRepaint(covariant _RouteLinePainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.completed != completed;
+      oldDelegate.progress != progress ||
+      oldDelegate.completed != completed ||
+      oldDelegate.highContrast != highContrast;
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(

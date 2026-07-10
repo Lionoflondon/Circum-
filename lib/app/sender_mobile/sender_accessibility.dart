@@ -476,24 +476,138 @@ ThemeData _accessibleTheme(
   ThemeData base,
   SenderAccessibilitySettings settings,
 ) {
-  final scheme = settings.highContrast
-      ? base.colorScheme.copyWith(
-          primary: const Color(0xFF73B7FF),
-          onSurface: Colors.white,
-          outline: const Color(0xFFBBD9FF),
-        )
-      : base.colorScheme;
+  if (!settings.highContrast) {
+    return base.copyWith(
+      visualDensity: settings.largerTouchTargets
+          ? const VisualDensity(horizontal: 1, vertical: 1)
+          : base.visualDensity,
+      materialTapTargetSize: settings.largerTouchTargets
+          ? MaterialTapTargetSize.padded
+          : base.materialTapTargetSize,
+      pageTransitionsTheme: settings.reduceMotion
+          ? const PageTransitionsTheme(builders: {
+              TargetPlatform.android: _NoPageTransitionBuilder(),
+              TargetPlatform.iOS: _NoPageTransitionBuilder(),
+              TargetPlatform.macOS: _NoPageTransitionBuilder(),
+              TargetPlatform.windows: _NoPageTransitionBuilder(),
+              TargetPlatform.linux: _NoPageTransitionBuilder(),
+            })
+          : base.pageTransitionsTheme,
+    );
+  }
+
+  const primary = Color(0xFF168BFF);
+  const primaryText = Color(0xFFFFFFFF);
+  const secondaryText = Color(0xFFE5E7EB);
+  const disabledText = Color(0xFF9CA3AF);
+  const cardBackground = Color(0xFA0C121C);
+  const cardBorder = Color(0x2EFFFFFF);
+  final scheme = base.colorScheme.copyWith(
+    primary: primary,
+    onPrimary: primaryText,
+    surface: cardBackground,
+    onSurface: primaryText,
+    outline: const Color(0xFFBFD8FF),
+    outlineVariant: cardBorder,
+    secondary: const Color(0xFF60A5FA),
+    onSecondary: primaryText,
+  );
   return base.copyWith(
     colorScheme: scheme,
+    textTheme: _highContrastTextTheme(base.textTheme),
+    primaryTextTheme: _highContrastTextTheme(base.primaryTextTheme),
+    iconTheme: base.iconTheme.copyWith(color: primaryText, size: 25),
+    primaryIconTheme: base.primaryIconTheme.copyWith(color: primaryText),
+    disabledColor: disabledText,
+    focusColor: primary.withValues(alpha: .34),
+    hoverColor: primary.withValues(alpha: .18),
     visualDensity: settings.largerTouchTargets
         ? const VisualDensity(horizontal: 1, vertical: 1)
         : base.visualDensity,
-    materialTapTargetSize: settings.largerTouchTargets
-        ? MaterialTapTargetSize.padded
-        : base.materialTapTargetSize,
+    materialTapTargetSize: MaterialTapTargetSize.padded,
     dividerTheme: base.dividerTheme.copyWith(
-      color: settings.highContrast ? const Color(0xFFBBD9FF) : null,
-      thickness: settings.highContrast ? 1.4 : null,
+      color: const Color(0xFFBFD8FF),
+      thickness: 1.5,
+    ),
+    cardTheme: CardThemeData(
+      color: cardBackground,
+      shadowColor: Colors.black.withValues(alpha: .6),
+      elevation: 5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: cardBorder),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primary,
+        foregroundColor: primaryText,
+        disabledBackgroundColor: const Color(0xFF273243),
+        disabledForegroundColor: disabledText,
+        minimumSize: const Size(48, 48),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: primary,
+        foregroundColor: primaryText,
+        disabledBackgroundColor: const Color(0xFF273243),
+        disabledForegroundColor: disabledText,
+        minimumSize: const Size(48, 48),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: primaryText,
+        minimumSize: const Size(48, 48),
+        side: const BorderSide(color: Color(0xFFBFD8FF), width: 1.6),
+        textStyle: const TextStyle(
+          inherit: false,
+          fontWeight: FontWeight.w700,
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFFBFD8FF),
+        minimumSize: const Size(48, 48),
+        textStyle: const TextStyle(
+          inherit: false,
+          fontWeight: FontWeight.w700,
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? Colors.white
+            : const Color(0xFFF8FAFC),
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? primary
+            : const Color(0xFF374151),
+      ),
+      trackOutlineColor: const WidgetStatePropertyAll(Color(0xFFBFD8FF)),
+      trackOutlineWidth: const WidgetStatePropertyAll(1.4),
+    ),
+    inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      filled: true,
+      fillColor: cardBackground,
+      labelStyle: const TextStyle(color: secondaryText),
+      hintStyle: const TextStyle(color: disabledText),
+      enabledBorder: const OutlineInputBorder(
+        borderSide: BorderSide(color: cardBorder, width: 1.3),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderSide: BorderSide(color: primary, width: 2),
+      ),
     ),
     pageTransitionsTheme: settings.reduceMotion
         ? const PageTransitionsTheme(builders: {
@@ -505,6 +619,54 @@ ThemeData _accessibleTheme(
           })
         : base.pageTransitionsTheme,
   );
+}
+
+TextTheme _highContrastTextTheme(TextTheme theme) => theme.copyWith(
+      displayLarge: _highContrastTextStyle(theme.displayLarge, Colors.white),
+      displayMedium: _highContrastTextStyle(theme.displayMedium, Colors.white),
+      displaySmall: _highContrastTextStyle(theme.displaySmall, Colors.white),
+      headlineLarge: _highContrastTextStyle(theme.headlineLarge, Colors.white),
+      headlineMedium:
+          _highContrastTextStyle(theme.headlineMedium, Colors.white),
+      headlineSmall: _highContrastTextStyle(theme.headlineSmall, Colors.white),
+      titleLarge: _highContrastTextStyle(theme.titleLarge, Colors.white),
+      titleMedium: _highContrastTextStyle(theme.titleMedium, Colors.white),
+      titleSmall: _highContrastTextStyle(theme.titleSmall, Colors.white),
+      bodyLarge:
+          _highContrastTextStyle(theme.bodyLarge, const Color(0xFFE5E7EB)),
+      bodyMedium:
+          _highContrastTextStyle(theme.bodyMedium, const Color(0xFFE5E7EB)),
+      bodySmall:
+          _highContrastTextStyle(theme.bodySmall, const Color(0xFFE5E7EB)),
+      labelLarge:
+          _highContrastTextStyle(theme.labelLarge, const Color(0xFFE5E7EB)),
+      labelMedium:
+          _highContrastTextStyle(theme.labelMedium, const Color(0xFFE5E7EB)),
+      labelSmall:
+          _highContrastTextStyle(theme.labelSmall, const Color(0xFF9CA3AF)),
+    );
+
+TextStyle? _highContrastTextStyle(TextStyle? style, Color color) {
+  if (style == null) return null;
+  return style.copyWith(
+    color: color,
+    fontWeight: _nextFontWeight(style.fontWeight),
+    height: (style.height ?? 1.2) * 1.1,
+  );
+}
+
+FontWeight _nextFontWeight(FontWeight? weight) {
+  return switch (weight) {
+    FontWeight.w100 => FontWeight.w200,
+    FontWeight.w200 => FontWeight.w300,
+    FontWeight.w300 => FontWeight.w400,
+    FontWeight.w400 || null => FontWeight.w500,
+    FontWeight.w500 => FontWeight.w600,
+    FontWeight.w600 => FontWeight.w700,
+    FontWeight.w700 => FontWeight.w800,
+    FontWeight.w800 || FontWeight.w900 => FontWeight.w900,
+    _ => FontWeight.w500,
+  };
 }
 
 class _NoPageTransitionBuilder extends PageTransitionsBuilder {
@@ -522,30 +684,6 @@ class _NoPageTransitionBuilder extends PageTransitionsBuilder {
 }
 
 List<double>? _colourMatrix(SenderAccessibilitySettings settings) {
-  if (settings.highContrast) {
-    return const [
-      1.15,
-      0,
-      0,
-      0,
-      -12,
-      0,
-      1.15,
-      0,
-      0,
-      -12,
-      0,
-      0,
-      1.15,
-      0,
-      -12,
-      0,
-      0,
-      0,
-      1,
-      0
-    ];
-  }
   return switch (settings.colourVisionMode) {
     SenderColourVisionMode.off => null,
     SenderColourVisionMode.protanopia => const [

@@ -106,6 +106,41 @@ void main() {
     expect(find.text('13.0'), findsOneWidget);
   });
 
+  testWidgets('high contrast applies the dedicated Sender contrast theme',
+      (tester) async {
+    final repository = _MemoryAccessibilityRepository(
+      const SenderAccessibilitySettings(highContrast: true),
+    );
+    final controller = SenderAccessibilityController(repository: repository);
+    addTearDown(() async {
+      controller.dispose();
+      await repository.close();
+    });
+    ThemeData? theme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: SenderAccessibilityHost(
+          controller: controller,
+          child: Builder(
+            builder: (context) {
+              theme = Theme.of(context);
+              return const Card(child: Text('Contrast ready'));
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(theme!.colorScheme.primary, const Color(0xFF168BFF));
+    expect(theme!.colorScheme.onSurface, Colors.white);
+    expect(theme!.textTheme.bodyMedium!.color, const Color(0xFFE5E7EB));
+    expect(theme!.cardTheme.color, const Color(0xFA0C121C));
+    expect(theme!.cardTheme.shape, isA<RoundedRectangleBorder>());
+  });
+
   testWidgets('confirm-before-payment gates every payment method',
       (tester) async {
     final repository = _MemoryAccessibilityRepository(
