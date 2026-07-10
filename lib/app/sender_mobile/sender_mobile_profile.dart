@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../sender_profile/sender_profile.dart';
+import 'sender_accessibility.dart';
 import 'sender_saved_addresses.dart';
 
 class SenderTrustActivity {
@@ -776,8 +777,13 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                 icon: Icons.accessibility_new_rounded,
                 title: 'Accessibility',
                 subtitle: 'Adjust your Circum experience.',
-                onTap: () => _showLocalMessage(
-                  'Accessibility settings will open here.',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SenderAccessibilityView(),
+                    settings: const RouteSettings(
+                      name: '/sender-mobile/profile/accessibility',
+                    ),
+                  ),
                 ),
                 showDivider: false,
               ),

@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
+import 'sender_accessibility.dart';
 
 enum SenderTrackingState {
   noActiveDelivery,
@@ -482,6 +483,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     with TickerProviderStateMixin {
   late final AnimationController _mapDrift;
   late final AnimationController _pulse;
+  late SenderTrackingState _lastState;
+  bool _motionReduced = false;
 
   @override
   void initState() {
@@ -494,6 +497,68 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2600),
     )..repeat();
+    _lastState =
+        widget.stateOverride ?? senderTrackingStateForEngine(widget.engine);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduced =
+        SenderAccessibilityScope.maybeOf(context)?.settings.reduceMotion ==
+            true;
+    if (reduced == _motionReduced) return;
+    _motionReduced = reduced;
+    if (reduced) {
+      _mapDrift.stop();
+      _pulse.stop();
+    } else {
+      _mapDrift.repeat(reverse: true);
+      _pulse.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SenderMobileTrackingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next =
+        widget.stateOverride ?? senderTrackingStateForEngine(widget.engine);
+    if (next == _lastState) return;
+    _lastState = next;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _announceState(next));
+  }
+
+  Future<void> _announceState(SenderTrackingState state) async {
+    if (!mounted) return;
+    final controller = SenderAccessibilityScope.maybeOf(context);
+    switch (state) {
+      case SenderTrackingState.riderAssigned:
+        await controller?.haptic(SenderFeedbackEvent.riderAccepted);
+        await controller
+            ?.announceDelivery(SenderDeliveryAnnouncement.riderAccepted);
+      case SenderTrackingState.riderArrivedAtPickup:
+        await controller?.haptic(SenderFeedbackEvent.riderArrived);
+        await controller
+            ?.announceDelivery(SenderDeliveryAnnouncement.riderArrived);
+      case SenderTrackingState.pickupComplete:
+        await controller
+            ?.announceDelivery(SenderDeliveryAnnouncement.pickupComplete);
+      case SenderTrackingState.delivered:
+        await controller?.haptic(SenderFeedbackEvent.deliveryCompleted);
+        await controller
+            ?.announceDelivery(SenderDeliveryAnnouncement.deliveryCompleted);
+      case SenderTrackingState.error:
+      case SenderTrackingState.issue:
+        await controller?.haptic(SenderFeedbackEvent.error);
+      case SenderTrackingState.noActiveDelivery:
+      case SenderTrackingState.loading:
+      case SenderTrackingState.findingRider:
+      case SenderTrackingState.riderEnRouteToPickup:
+      case SenderTrackingState.inTransit:
+      case SenderTrackingState.riderArrivingAtDropoff:
+      case SenderTrackingState.cancelled:
+        break;
+    }
   }
 
   @override
@@ -1760,8 +1825,12 @@ class _RecenterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final leftHanded =
+        SenderAccessibilityScope.maybeOf(context)?.settings.leftHandedMode ==
+            true;
     return Positioned(
-      right: 16,
+      right: leftHanded ? null : 16,
+      left: leftHanded ? 16 : null,
       bottom: 226,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),

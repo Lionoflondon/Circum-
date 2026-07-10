@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../firebase_options.dart';
 import '../send_package/bloc/send_package_bloc.dart';
+import 'sender_accessibility.dart';
 import 'sender_mobile_home.dart';
 
 Future<void> main() async {
@@ -24,9 +25,12 @@ class SenderMobilePreviewApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => SendPackageBloc(),
-      child: const MaterialApp(
+      child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: SenderMobileHome(previewAuthEnabled: true),
+        builder: (context, child) => SenderAccessibilityHost(
+          child: child ?? const SizedBox.shrink(),
+        ),
+        home: const SenderMobileHome(previewAuthEnabled: true),
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../gifts/gift_system_policy.dart';
+import 'sender_accessibility.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_status_view.dart';
@@ -240,6 +241,16 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       });
       return;
     }
+    final confirmed = await confirmSenderPaymentIfRequired(
+      context,
+      paymentMethod: _verifiedPaymentMethod == 'roth'
+          ? 'Roth'
+          : _verifiedPaymentMethod == 'roth_card'
+              ? 'Roth and card'
+              : (_paymentMethod ?? 'card'),
+      amount: '£${widget.draft.budget.toStringAsFixed(2)}',
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _submitting = true;
       _message = null;

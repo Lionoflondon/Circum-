@@ -11,6 +11,7 @@ import '../../platform/address_engine.dart';
 import '../../send_package/models/suggestions.m.dart';
 import '../../send_package/repo/place_api.dart';
 import '../../sender_mobile/sender_finance.dart';
+import '../../sender_mobile/sender_accessibility.dart';
 import '../../sender_mobile/sender_wallet.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
@@ -292,6 +293,13 @@ class _HealthStatusViewState extends State<HealthStatusView> {
       });
       return;
     }
+
+    final confirmed = await confirmSenderPaymentIfRequired(
+      context,
+      paymentMethod: _paymentMethodLabel,
+      amount: HealthPlusPricing.formatGbp(_quote.total),
+    );
+    if (!confirmed || !mounted) return;
 
     final quote = _quote;
     final now = DateTime.now();

@@ -7,6 +7,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../business/business_journey_context.dart';
 import '../send_package/bloc/send_package_bloc.dart';
+import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
@@ -1645,12 +1646,23 @@ class _PaymentPanel extends StatelessWidget {
     }
   }
 
-  void _startPayment(
+  Future<void> _startPayment(
     BuildContext context,
     double? total,
     SenderPaymentSplit? split,
-  ) {
+  ) async {
     if (total == null || split == null || !split.canSubmit) return;
+    final method = split.fullyCoveredByRoth
+        ? 'Roth'
+        : draft.selectedPaymentMethodLabel.isNotEmpty
+            ? draft.selectedPaymentMethodLabel
+            : senderPaymentMethodLabel(split.fallbackMethod!);
+    final confirmed = await confirmSenderPaymentIfRequired(
+      context,
+      paymentMethod: method,
+      amount: '£${total.toStringAsFixed(2)}',
+    );
+    if (!confirmed || !context.mounted) return;
     onDraft(
       draft.copyWith(
         paymentStatus: SenderPaymentStatus.processing,
@@ -1700,6 +1712,8 @@ class _PaymentPanel extends StatelessWidget {
       }
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.paid));
       _createPaidDelivery(context, engine);
+      SenderAccessibilityScope.maybeOf(context)
+          ?.haptic(SenderFeedbackEvent.paymentCompleted);
     } on StripeException catch (error) {
       debugPrint('Sender mobile Stripe confirmation failed: $error');
       if (!context.mounted) return;

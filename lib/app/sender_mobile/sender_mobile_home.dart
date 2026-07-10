@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../business/business_view.dart';
 import '../health_plus/view/health_plus.dart';
 import 'gift_mode_view.dart';
+import 'sender_accessibility.dart';
 import 'sender_activity.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
@@ -68,7 +69,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final surface = Scaffold(
       backgroundColor: _SenderTokens.bg,
       body: Stack(
         children: [
@@ -84,6 +85,8 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
             )
           : null,
     );
+    if (SenderAccessibilityScope.maybeOf(context) != null) return surface;
+    return SenderAccessibilityHost(key: ValueKey(_entry), child: surface);
   }
 
   Widget _activeSurface() {
@@ -1676,6 +1679,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   String? _summaryError;
   String? _ordersError;
   String? _notificationsError;
+  Set<String>? _knownNotificationIds;
 
   @override
   void initState() {
@@ -1704,7 +1708,20 @@ class _SenderDashboardState extends State<_SenderDashboard> {
     _notificationsSubscription?.cancel();
     _notificationsSubscription =
         _repository.watchNotifications().listen((notifications) {
-      if (mounted) setState(() => _notifications = notifications);
+      if (!mounted) return;
+      final previous = _knownNotificationIds;
+      _knownNotificationIds = notifications.map((item) => item.id).toSet();
+      setState(() => _notifications = notifications);
+      if (previous != null) {
+        final fresh = notifications.where(
+          (item) => !item.read && !previous.contains(item.id),
+        );
+        if (fresh.isNotEmpty) {
+          final item = fresh.first;
+          SenderAccessibilityScope.maybeOf(context)
+              ?.announceNotification('${item.title}. ${item.body}');
+        }
+      }
     }, onError: (Object error) {
       if (mounted) setState(() => _notificationsError = '$error');
     });

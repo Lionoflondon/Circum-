@@ -55,6 +55,7 @@ dependencies:
   flutter_keyboard_visibility: ^6.0.0
   flutter_keyboard_size: ^1.0.1
   flutter_local_notifications: ^18.0.1
+  flutter_tts: ^4.2.3
   flutter_polyline_points: ^2.0.0
   flutter_rating_bar: ^4.0.1
   flutter_screenutil: ^5.7.0
