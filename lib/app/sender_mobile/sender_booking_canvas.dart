@@ -1409,23 +1409,31 @@ class _PaymentPanel extends StatelessWidget {
             style: const TextStyle(color: _Tokens.muted, height: 1.35),
           ),
           const SizedBox(height: 10),
-          _PaymentMethodTile(
-            title: 'Card',
-            subtitle: 'Pay securely by card.',
-            icon: Icons.credit_card_rounded,
-            selected:
-                draft.selectedPaymentMethod == SenderFallbackPaymentMethod.card,
-            onTap: total == null
-                ? null
-                : () => _selectMethod(
-                      total,
-                      availableRoth,
-                      SenderFallbackPaymentMethod.card,
-                    ),
+          FutureBuilder<SenderPaymentMethodsData>(
+            future: FirebaseSenderPaymentProfileRepository().paymentMethods(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const _InfoNote(text: 'Loading Pay With profile...');
+              }
+              final profile = snapshot.data ?? SenderPaymentProfile.empty();
+              final options = senderOrderedPaymentOptions(profile);
+              return Column(
+                children: options
+                    .map((option) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _checkoutOptionTile(
+                            option,
+                            total,
+                            availableRoth,
+                          ),
+                        ))
+                    .toList(growable: false),
+              );
+            },
           ),
           if (draft.selectedPaymentMethod == SenderFallbackPaymentMethod.card &&
               draft.selectedPaymentMethodId.isEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 2),
             CardField(
               decoration: InputDecoration(
                 filled: true,
@@ -1447,78 +1455,6 @@ class _PaymentPanel extends StatelessWidget {
               cursorColor: _Tokens.lightBlue,
             ),
           ],
-          const SizedBox(height: 8),
-          _PaymentMethodTile(
-            title: 'Apple Pay',
-            subtitle: 'Fast checkout on supported devices.',
-            icon: Icons.apple_rounded,
-            selected: draft.selectedPaymentMethod ==
-                SenderFallbackPaymentMethod.applePay,
-            onTap: total == null
-                ? null
-                : () => _selectMethod(
-                      total,
-                      availableRoth,
-                      SenderFallbackPaymentMethod.applePay,
-                    ),
-          ),
-          const SizedBox(height: 8),
-          _PaymentMethodTile(
-            title: 'Google Pay',
-            subtitle: 'Fast checkout on supported Android devices.',
-            icon: Icons.android_rounded,
-            selected: draft.selectedPaymentMethod ==
-                SenderFallbackPaymentMethod.googlePay,
-            onTap: total == null
-                ? null
-                : () => _selectMethod(
-                      total,
-                      availableRoth,
-                      SenderFallbackPaymentMethod.googlePay,
-                    ),
-          ),
-          const SizedBox(height: 8),
-          FutureBuilder<SenderPaymentMethodsData>(
-            future: FirebaseSenderPaymentProfileRepository().paymentMethods(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const _InfoNote(text: 'Loading saved cards...');
-              }
-              final methods = snapshot.data?.methods ?? const [];
-              if (methods.isEmpty) {
-                return const _InfoNote(
-                  text:
-                      'Saved cards from Wallet will appear here after you add one.',
-                );
-              }
-              return Column(
-                children: methods
-                    .map(
-                      (method) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _PaymentMethodTile(
-                          title: method.isDefault
-                              ? '${method.title} · Default'
-                              : method.title,
-                          subtitle: method.expiry,
-                          icon: Icons.credit_card_rounded,
-                          selected: draft.selectedPaymentMethodId == method.id,
-                          onTap: total == null
-                              ? null
-                              : () => _selectMethod(
-                                    total,
-                                    availableRoth,
-                                    SenderFallbackPaymentMethod.card,
-                                    paymentMethodId: method.id,
-                                    paymentMethodLabel: method.title,
-                                  ),
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-              );
-            },
-          ),
         ],
         const SizedBox(height: 14),
         _PaymentCard(
@@ -1625,6 +1561,79 @@ class _PaymentPanel extends StatelessWidget {
         cardConfirmationStarted: false,
       ),
     );
+  }
+
+  Widget _checkoutOptionTile(
+    SenderPaymentProfileOption option,
+    double? total,
+    double availableRoth,
+  ) {
+    switch (option.type) {
+      case SenderPaymentProfileOptionType.applePay:
+        return _PaymentMethodTile(
+          title: 'Apple Pay${option.isDefault ? ' · Default' : ''}',
+          subtitle: 'Fast checkout on supported iOS devices.',
+          icon: Icons.apple_rounded,
+          selected: draft.selectedPaymentMethod ==
+              SenderFallbackPaymentMethod.applePay,
+          onTap: total == null
+              ? null
+              : () => _selectMethod(
+                    total,
+                    availableRoth,
+                    SenderFallbackPaymentMethod.applePay,
+                  ),
+        );
+      case SenderPaymentProfileOptionType.googlePay:
+        return _PaymentMethodTile(
+          title: 'Google Pay${option.isDefault ? ' · Default' : ''}',
+          subtitle: 'Fast checkout on supported Android devices.',
+          icon: Icons.android_rounded,
+          selected: draft.selectedPaymentMethod ==
+              SenderFallbackPaymentMethod.googlePay,
+          onTap: total == null
+              ? null
+              : () => _selectMethod(
+                    total,
+                    availableRoth,
+                    SenderFallbackPaymentMethod.googlePay,
+                  ),
+        );
+      case SenderPaymentProfileOptionType.savedCard:
+        final method = option.method;
+        if (method == null) return const SizedBox.shrink();
+        return _PaymentMethodTile(
+          title: method.isDefault ? '${method.title} · Default' : method.title,
+          subtitle: method.expiry,
+          icon: Icons.credit_card_rounded,
+          selected: draft.selectedPaymentMethodId == method.id,
+          onTap: total == null
+              ? null
+              : () => _selectMethod(
+                    total,
+                    availableRoth,
+                    SenderFallbackPaymentMethod.card,
+                    paymentMethodId: method.id,
+                    paymentMethodLabel: method.title,
+                  ),
+        );
+      case SenderPaymentProfileOptionType.addPaymentMethod:
+        return _PaymentMethodTile(
+          title: '+ Add Payment Method',
+          subtitle: 'Add a card once and use it across Circum.',
+          icon: Icons.add_card_outlined,
+          selected:
+              draft.selectedPaymentMethod == SenderFallbackPaymentMethod.card &&
+                  draft.selectedPaymentMethodId.isEmpty,
+          onTap: total == null
+              ? null
+              : () => _selectMethod(
+                    total,
+                    availableRoth,
+                    SenderFallbackPaymentMethod.card,
+                  ),
+        );
+    }
   }
 
   void _startPayment(

@@ -126,7 +126,7 @@ void main() {
     await tester.tap(find.text('Continue to Wallet'));
     await tester.pumpAndSettle();
     expect(find.text('Wallet'), findsOneWidget);
-    expect(find.text('Payment methods'), findsOneWidget);
+    expect(find.text('Pay With'), findsOneWidget);
   });
 
   testWidgets('renders balance, ordered transactions and pagination',
@@ -165,11 +165,36 @@ void main() {
     await tester.scrollUntilVisible(find.text('Referral reward'), 120,
         scrollable: find.byType(Scrollable));
     expect(find.text('Referral reward'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('View all transactions'), 120,
+    await tester.scrollUntilVisible(find.text('View all activity'), 120,
         scrollable: find.byType(Scrollable));
-    await tester.tap(find.text('View all transactions'));
+    await tester.tap(find.text('View all activity'));
     await tester.pumpAndSettle();
     expect(find.text('Used on delivery'), findsOneWidget);
+  });
+
+  testWidgets('recent activity includes payment metadata', (tester) async {
+    final repository = FakeWalletRepository(
+      wallet: const SenderWalletData(
+          balance: 25, frozen: false, onboardingCompleted: true),
+      pages: const [
+        SenderWalletPage([
+          SenderWalletTransaction(
+              id: 'card_payment',
+              description: 'Parcel Delivery',
+              direction: 'debit',
+              status: 'completed',
+              type: 'checkout_spend',
+              paymentMethodLabel: 'Apple Pay',
+              amount: 16.49,
+              balanceAfter: 25),
+        ], null),
+      ],
+    );
+    await tester.pumpWidget(app(SenderWalletView(repository: repository)));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Parcel Delivery'), 120,
+        scrollable: find.byType(Scrollable));
+    expect(find.textContaining('Paid with Apple Pay'), findsOneWidget);
   });
 
   testWidgets('renders payment methods and checkout preferences',
@@ -194,7 +219,7 @@ void main() {
     );
     await tester.pumpWidget(app(SenderWalletView(repository: repository)));
     await tester.pumpAndSettle();
-    expect(find.text('Payment methods'), findsOneWidget);
+    expect(find.text('Pay With'), findsOneWidget);
     expect(find.text('Visa •••• 4242'), findsOneWidget);
     expect(find.text('Roth then card'), findsOneWidget);
     await tester.tap(find.text('Roth then card'));
@@ -244,5 +269,68 @@ void main() {
     expect(find.text('19 Roth'), findsOneWidget);
     await tester.tap(find.text('View Wallet'));
     expect(opened, isTrue);
+  });
+
+  test('payment profile ordering follows platform defaults', () {
+    const profile = SenderPaymentProfile(
+      preference: SenderCheckoutPreference.askEveryCheckout,
+      applePaySupported: true,
+      googlePaySupported: true,
+      defaultPaymentMethodId: 'pm_default',
+      methods: [
+        SenderPaymentMethod(
+          id: 'pm_other',
+          brand: 'mastercard',
+          last4: '9981',
+          expMonth: 8,
+          expYear: 2030,
+        ),
+        SenderPaymentMethod(
+          id: 'pm_default',
+          brand: 'visa',
+          last4: '4242',
+          expMonth: 12,
+          expYear: 2030,
+          isDefault: true,
+        ),
+      ],
+    );
+
+    expect(
+      senderOrderedPaymentOptions(profile, platform: TargetPlatform.iOS)
+          .map((option) => option.title)
+          .toList(),
+      [
+        'Apple Pay',
+        'Visa •••• 4242',
+        'Mastercard •••• 9981',
+        'Google Pay',
+        '+ Add Payment Method'
+      ],
+    );
+    expect(
+      senderOrderedPaymentOptions(profile, platform: TargetPlatform.android)
+          .map((option) => option.title)
+          .toList(),
+      [
+        'Google Pay',
+        'Visa •••• 4242',
+        'Mastercard •••• 9981',
+        'Apple Pay',
+        '+ Add Payment Method'
+      ],
+    );
+    expect(
+      senderOrderedPaymentOptions(profile, platform: TargetPlatform.macOS)
+          .map((option) => option.title)
+          .toList(),
+      [
+        'Visa •••• 4242',
+        'Mastercard •••• 9981',
+        'Apple Pay',
+        'Google Pay',
+        '+ Add Payment Method'
+      ],
+    );
   });
 }

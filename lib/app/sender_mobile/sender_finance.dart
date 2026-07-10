@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 enum SenderCheckoutPreference {
   applePayFirst,
@@ -134,6 +135,80 @@ class SenderPaymentProfile {
 }
 
 typedef SenderPaymentMethodsData = SenderPaymentProfile;
+
+enum SenderPaymentProfileOptionType {
+  applePay,
+  googlePay,
+  savedCard,
+  addPaymentMethod,
+}
+
+class SenderPaymentProfileOption {
+  final SenderPaymentProfileOptionType type;
+  final SenderPaymentMethod? method;
+
+  const SenderPaymentProfileOption(this.type, {this.method});
+
+  String get title {
+    switch (type) {
+      case SenderPaymentProfileOptionType.applePay:
+        return 'Apple Pay';
+      case SenderPaymentProfileOptionType.googlePay:
+        return 'Google Pay';
+      case SenderPaymentProfileOptionType.savedCard:
+        return method?.title ?? 'Saved card';
+      case SenderPaymentProfileOptionType.addPaymentMethod:
+        return '+ Add Payment Method';
+    }
+  }
+
+  bool get isDefault => method?.isDefault == true;
+}
+
+List<SenderPaymentProfileOption> senderOrderedPaymentOptions(
+  SenderPaymentProfile profile, {
+  TargetPlatform? platform,
+  bool includeAddMethod = true,
+}) {
+  final target = platform ?? defaultTargetPlatform;
+  final saved = profile.methods
+      .map((method) => SenderPaymentProfileOption(
+          SenderPaymentProfileOptionType.savedCard,
+          method: method))
+      .toList(growable: false);
+  final defaultCards = saved.where((item) => item.isDefault).toList();
+  final otherCards = saved.where((item) => !item.isDefault).toList();
+  final apple = profile.applePaySupported
+      ? const SenderPaymentProfileOption(
+          SenderPaymentProfileOptionType.applePay)
+      : null;
+  final google = profile.googlePaySupported
+      ? const SenderPaymentProfileOption(
+          SenderPaymentProfileOptionType.googlePay)
+      : null;
+  final ordered = <SenderPaymentProfileOption>[];
+  if (target == TargetPlatform.iOS) {
+    if (apple != null) ordered.add(apple);
+    ordered.addAll(defaultCards);
+    ordered.addAll(otherCards);
+    if (google != null) ordered.add(google);
+  } else if (target == TargetPlatform.android) {
+    if (google != null) ordered.add(google);
+    ordered.addAll(defaultCards);
+    ordered.addAll(otherCards);
+    if (apple != null) ordered.add(apple);
+  } else {
+    ordered.addAll(defaultCards);
+    ordered.addAll(otherCards);
+    if (apple != null) ordered.add(apple);
+    if (google != null) ordered.add(google);
+  }
+  if (includeAddMethod) {
+    ordered.add(const SenderPaymentProfileOption(
+        SenderPaymentProfileOptionType.addPaymentMethod));
+  }
+  return ordered;
+}
 
 class SenderSetupIntentData {
   final String customerId;

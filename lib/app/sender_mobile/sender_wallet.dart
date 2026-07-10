@@ -41,6 +41,7 @@ class SenderWalletTransaction {
   final String direction;
   final String status;
   final String type;
+  final String paymentMethodLabel;
   final double amount;
   final double balanceAfter;
   final DateTime? createdAt;
@@ -51,6 +52,7 @@ class SenderWalletTransaction {
     required this.direction,
     required this.status,
     required this.type,
+    this.paymentMethodLabel = '',
     required this.amount,
     required this.balanceAfter,
     this.createdAt,
@@ -58,12 +60,17 @@ class SenderWalletTransaction {
 
   factory SenderWalletTransaction.fromMap(Map<String, dynamic> map) {
     final rawDate = map['createdAt'];
+    final metadata = map['metadata'] is Map
+        ? Map<String, dynamic>.from(map['metadata'] as Map)
+        : const <String, dynamic>{};
     return SenderWalletTransaction(
       id: '${map['transactionId'] ?? ''}',
       description: '${map['description'] ?? 'Roth activity'}',
       direction: '${map['direction'] ?? 'credit'}',
       status: '${map['status'] ?? 'completed'}',
       type: '${map['type'] ?? 'adjustment'}',
+      paymentMethodLabel:
+          '${map['paymentMethodLabel'] ?? metadata['paymentMethodLabel'] ?? metadata['paidWith'] ?? ''}',
       amount: (map['amount'] as num?)?.toDouble() ?? 0,
       balanceAfter: (map['balanceAfter'] as num?)?.toDouble() ?? 0,
       createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
@@ -504,7 +511,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
           ])),
         ],
         const SizedBox(height: 18),
-        const _WalletSectionTitle('Recent transactions'),
+        const _WalletSectionTitle('Recent Activity'),
         const SizedBox(height: 10),
         _WalletGlass(
           padding: EdgeInsets.zero,
@@ -523,7 +530,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         if (_nextPage != null)
           TextButton(
               onPressed: _loadingMore ? null : _loadMore,
-              child: Text(_loadingMore ? 'Loading…' : 'View all transactions')),
+              child: Text(_loadingMore ? 'Loading…' : 'View all activity')),
         const SizedBox(height: 18),
         const _WalletSectionTitle('Rewards'),
         const SizedBox(height: 10),
@@ -721,7 +728,15 @@ class _TransactionRow extends StatelessWidget {
                             color: Colors.white, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
                     Text(
-                        '${transaction.createdAt == null ? 'Pending date' : DateFormat('d MMM · HH:mm').format(transaction.createdAt!)} · ${transaction.status}',
+                        [
+                          if (transaction.paymentMethodLabel.isNotEmpty)
+                            'Paid with ${transaction.paymentMethodLabel}',
+                          transaction.createdAt == null
+                              ? 'Pending date'
+                              : DateFormat('d MMM · HH:mm')
+                                  .format(transaction.createdAt!),
+                          transaction.status,
+                        ].join(' · '),
                         style: const TextStyle(
                             color: _WalletColors.muted, fontSize: 11))
                   ])),
@@ -752,62 +767,39 @@ class _PaymentMethodsSection extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _WalletSectionTitle('Payment methods'),
+          const _WalletSectionTitle('Pay With'),
           const SizedBox(height: 10),
           _WalletGlass(
             child: Column(
               children: [
-                _WalletLink(
-                  icon: Icons.add_card_outlined,
-                  title: busy ? 'Updating payment methods...' : 'Add card',
-                  detail: 'Saved securely with Stripe',
-                  onTap: busy ? () {} : onAdd,
-                ),
-                const Divider(color: _WalletColors.hairline),
-                _WalletLink(
-                  icon: Icons.apple_rounded,
-                  title: 'Apple Pay',
-                  detail: data.applePaySupported
-                      ? 'Available on supported iOS devices'
-                      : 'Unavailable on this device',
-                  onTap: () => _SenderWalletViewState._notice(
-                      context, 'Apple Pay appears during checkout.'),
-                ),
-                const Divider(color: _WalletColors.hairline),
-                _WalletLink(
-                  icon: Icons.android_rounded,
-                  title: 'Google Pay',
-                  detail: data.googlePaySupported
-                      ? 'Available on supported Android devices'
-                      : 'Unavailable on this device',
-                  onTap: () => _SenderWalletViewState._notice(
-                      context, 'Google Pay appears during checkout.'),
-                ),
-                if (data.methods.isEmpty) ...[
-                  const Divider(color: _WalletColors.hairline),
+                ...senderOrderedPaymentOptions(data)
+                    .asMap()
+                    .entries
+                    .map((entry) => Column(
+                          children: [
+                            if (entry.key > 0)
+                              const Divider(color: _WalletColors.hairline),
+                            _PaymentProfileOptionRow(
+                              option: entry.value,
+                              busy: busy,
+                              onAdd: onAdd,
+                              onSetDefault: onSetDefault,
+                              onRemove: onRemove,
+                            ),
+                          ],
+                        )),
+                if (data.methods.isEmpty)
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
+                      padding: EdgeInsets.only(top: 10),
                       child: Text(
-                        'No saved cards yet. Add a card to make future Sender payments faster.',
+                        'Add a card to make future Sender payments faster.',
                         style:
                             TextStyle(color: _WalletColors.muted, height: 1.4),
                       ),
                     ),
                   ),
-                ] else
-                  ...data.methods.map((method) => Column(
-                        children: [
-                          const Divider(color: _WalletColors.hairline),
-                          _SavedCardRow(
-                            method: method,
-                            busy: busy,
-                            onSetDefault: () => onSetDefault(method.id),
-                            onRemove: () => onRemove(method),
-                          ),
-                        ],
-                      )),
               ],
             ),
           ),
@@ -815,62 +807,93 @@ class _PaymentMethodsSection extends StatelessWidget {
       );
 }
 
-class _SavedCardRow extends StatelessWidget {
-  final SenderPaymentMethod method;
+class _PaymentProfileOptionRow extends StatelessWidget {
+  final SenderPaymentProfileOption option;
   final bool busy;
-  final VoidCallback onSetDefault;
-  final VoidCallback onRemove;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onSetDefault;
+  final ValueChanged<SenderPaymentMethod> onRemove;
 
-  const _SavedCardRow({
-    required this.method,
+  const _PaymentProfileOptionRow({
+    required this.option,
     required this.busy,
+    required this.onAdd,
     required this.onSetDefault,
     required this.onRemove,
   });
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 72),
-        child: Row(
-          children: [
-            const Icon(Icons.credit_card_rounded,
-                color: _WalletColors.lightBlue),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(method.title,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 3),
-                  Text(
-                    method.isDefault
-                        ? '${method.expiry} · Default'
-                        : method.expiry,
+  Widget build(BuildContext context) {
+    final method = option.method;
+    if (option.type == SenderPaymentProfileOptionType.addPaymentMethod) {
+      return _WalletLink(
+        icon: Icons.add_card_outlined,
+        title: busy ? 'Updating Pay With...' : '+ Add Payment Method',
+        detail: 'Manage securely',
+        onTap: busy ? () {} : onAdd,
+      );
+    }
+    if (option.type == SenderPaymentProfileOptionType.applePay) {
+      return _WalletLink(
+        icon: Icons.apple_rounded,
+        title: 'Apple Pay${option.isDefault ? ' (Default)' : ''}',
+        detail: 'Use on supported iOS devices',
+        onTap: () => _SenderWalletViewState._notice(
+            context, 'Apple Pay appears during checkout.'),
+      );
+    }
+    if (option.type == SenderPaymentProfileOptionType.googlePay) {
+      return _WalletLink(
+        icon: Icons.android_rounded,
+        title: 'Google Pay${option.isDefault ? ' (Default)' : ''}',
+        detail: 'Use on supported Android devices',
+        onTap: () => _SenderWalletViewState._notice(
+            context, 'Google Pay appears during checkout.'),
+      );
+    }
+    if (method == null) return const SizedBox.shrink();
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 72),
+      child: Row(
+        children: [
+          const Icon(Icons.credit_card_rounded, color: _WalletColors.lightBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(method.title,
                     style: const TextStyle(
-                        color: _WalletColors.muted, fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-            PopupMenuButton<String>(
-              enabled: !busy,
-              icon: const Icon(Icons.more_horiz, color: _WalletColors.muted),
-              onSelected: (value) {
-                if (value == 'default') onSetDefault();
-                if (value == 'remove') onRemove();
-              },
-              itemBuilder: (context) => [
-                if (!method.isDefault)
-                  const PopupMenuItem(
-                      value: 'default', child: Text('Set as default')),
-                const PopupMenuItem(value: 'remove', child: Text('Remove')),
+                        color: Colors.white, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 3),
+                Text(
+                  method.isDefault
+                      ? '${method.expiry} · Default'
+                      : method.expiry,
+                  style:
+                      const TextStyle(color: _WalletColors.muted, fontSize: 11),
+                ),
               ],
             ),
-          ],
-        ),
-      );
+          ),
+          PopupMenuButton<String>(
+            enabled: !busy,
+            icon: const Icon(Icons.more_horiz, color: _WalletColors.muted),
+            onSelected: (value) {
+              if (value == 'default') onSetDefault(method.id);
+              if (value == 'remove') onRemove(method);
+            },
+            itemBuilder: (context) => [
+              if (!method.isDefault)
+                const PopupMenuItem(
+                    value: 'default', child: Text('Set as default')),
+              const PopupMenuItem(value: 'remove', child: Text('Remove')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CheckoutPreferenceSection extends StatelessWidget {
