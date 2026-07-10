@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {riderMatchesIris} = require("./iris-core");
+const communicationEngine = require("./communication-engine");
 
 const text = (value) => `${value || ""}`.trim();
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -56,6 +57,16 @@ async function adminRecipients() {
 }
 
 async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, data = {}}) {
+  if (recipientRole !== "admin") {
+    return communicationEngine.emitNotification({
+      recipientId,
+      recipientRole: recipientRole === "shipper" ? "sender" : recipientRole,
+      type,
+      title,
+      body,
+      data: {...data, bookingId, ticketId},
+    });
+  }
   const db = getFirestore();
   const ref = db.collection("notifications").doc();
   await ref.set({
@@ -199,6 +210,24 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const status = text(after.status || after.deliveryStatus).toLowerCase();
   if (!status || status === oldStatus) return;
   const ids = deliveryIds({...after, id: change.after.id});
+  await communicationEngine.closeDeliveryConversation(
+      ids.bookingId, status);
+  const systemMessages = {
+    accepted: "Rider accepted the delivery.",
+    navigating_to_pickup: "Rider is heading to pickup.",
+    arrived: "Rider has arrived.",
+    arrived_at_pickup: "Rider has arrived.",
+    pickup_verified: "Pickup completed.",
+    collected: "Delivery started.",
+    picked_up: "Delivery started.",
+    navigating_to_dropoff: "Delivery is in progress.",
+    pin_required: "Recipient PIN verification is required.",
+    delivered: "Delivery completed.",
+    completed: "Delivery completed.",
+  };
+  if (systemMessages[status]) {
+    await communicationEngine.appendSystemMessage(ids.bookingId, systemMessages[status]);
+  }
   const senderMessages = {
     accepted: ["Rider accepted", "A rider has accepted your delivery."],
     navigating_to_pickup: ["Rider heading to pickup", "Your rider is on the way to the pickup."],

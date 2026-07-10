@@ -2055,8 +2055,8 @@ void _openTracking(BuildContext context, SenderActivityItem item) {
 
 void _openChat(BuildContext context, SenderActivityItem item) {
   context.read<SendPackageBloc>().add(WatchActiveDelivery(requestId: item.id));
-  Navigator.of(context)
-      .push(MaterialPageRoute<void>(builder: (_) => const RideChatPageView()));
+  Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => RideChatPageView(chatId: item.id)));
 }
 
 Map<String, dynamic> _map(Object? value) =>

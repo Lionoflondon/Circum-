@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../business/business_view.dart';
 import '../health_plus/view/health_plus.dart';
+import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'gift_mode_view.dart';
 import 'sender_accessibility.dart';
@@ -16,6 +17,7 @@ import 'sender_activity.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
 import 'sender_mobile_profile.dart';
+import 'sender_notifications.dart';
 import 'sender_wallet.dart';
 
 const senderMobileDashboardServiceNames = ['Health+', 'Business', 'Gifts'];
@@ -1754,64 +1756,45 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   int get _unreadCount =>
       _notifications?.where((item) => !item.read).length ?? 0;
 
-  Future<void> _openNotifications() async {
-    final notifications = _notifications;
-    if (notifications == null) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _SenderTokens.midnight,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: notifications.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.all(28),
-                child: Text(
-                  'No notifications yet.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: _SenderTokens.muted),
-                ),
-              )
-            : ListView.separated(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                itemCount: notifications.length,
-                separatorBuilder: (_, __) =>
-                    const Divider(color: _SenderTokens.border),
-                itemBuilder: (_, index) {
-                  final item = notifications[index];
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      item.read
-                          ? Icons.notifications_none_rounded
-                          : Icons.notifications_active_rounded,
-                      color: item.read
-                          ? _SenderTokens.muted
-                          : _SenderTokens.lightBlue,
-                    ),
-                    title: Text(item.title,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w800)),
-                    subtitle: item.body.isEmpty
-                        ? null
-                        : Text(item.body,
-                            style: const TextStyle(
-                                color: _SenderTokens.muted, height: 1.35)),
-                  );
-                },
-              ),
-      ),
-    );
-    final unreadIds = notifications
-        .where((item) => !item.read)
-        .map((item) => item.id)
-        .toList(growable: false);
-    if (unreadIds.isNotEmpty) {
-      try {
-        await _repository.markNotificationsRead(unreadIds);
-      } catch (_) {
-        // The live list remains available if marking read fails offline.
-      }
+  Future<void> _openNotifications() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SenderNotificationsView(
+            onOpenNotification: _openNotificationDestination,
+          ),
+        ),
+      );
+
+  void _openNotificationDestination(CircumNotification notification) {
+    final route = '${notification.destination['route'] ?? ''}'.trim();
+    switch (route) {
+      case 'wallet':
+        Navigator.of(context).pop();
+        widget.onOpenWallet();
+      case 'gift':
+        Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => const GiftModeView(),
+          settings: const RouteSettings(name: GiftModeView.routeName),
+        ));
+      case 'health':
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
+        );
+      case 'business':
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const BusinessView()),
+        );
+      case 'conversation':
+        final chatId = '${notification.destination['chatId'] ?? ''}'.trim();
+        Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) =>
+              RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
+        ));
+      case 'tracking':
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const SenderBookingCanvas()),
+        );
+      default:
+        break;
     }
   }
 

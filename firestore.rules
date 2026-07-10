@@ -316,11 +316,18 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.recipientId == request.auth.uid);
+      // Client-generated in-app notices remain restricted to the signed-in
+      // recipient. Canonical status notices are written by Cloud Functions.
       allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.recipientId is string);
-      allow delete: if hasRole('super_admin');
+        (signedIn() && request.resource.data.recipientId == request.auth.uid);
+      allow update: if isAdmin() ||
+        (signedIn() && resource.data.recipientId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'read', 'readAt', 'archived', 'archivedAt', 'deletedAt'
+          ]));
+      allow delete: if false;
     }
 
     match /giftsWaitlist/{entryId} {
@@ -617,17 +624,15 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read, update: if isAdmin() || isParticipant();
-      allow create: if isAdmin() || isCreatingAsParticipant();
-      allow delete: if hasRole('super_admin');
+      allow read: if isAdmin() || isParticipant();
+      // Conversation lifecycle, messages, read state and typing are enforced
+      // through trusted callables to keep delivery membership authoritative.
+      allow create, update, delete: if false;
 
       match /messages/{messageId} {
         allow read: if isAdmin() ||
           (signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
-        allow create: if isAdmin() ||
-          (signedIn() &&
-            request.resource.data.senderId == request.auth.uid &&
-            request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if false;
         allow update, delete: if false;
       }
     }

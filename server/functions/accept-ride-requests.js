@@ -159,17 +159,23 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
 
-    const chatRef = db.collection("chats").doc(found.data.requestId || found.id);
+    const chatId = found.data.requestId || found.id;
+    const senderId = cleanText(deliveryRequest.senderId || deliveryRequest.userId || deliveryRequest.customerId);
+    const participants = [senderId, riderId].filter(Boolean);
+    const participantRoles = {[riderId]: "rider"};
+    if (senderId) participantRoles[senderId] = "sender";
+    const chatRef = db.collection("chats").doc(chatId);
     transaction.set(chatRef, {
-      threadId: found.data.requestId || found.id,
-      bookingId: found.data.requestId || found.id,
-      requestId: found.data.requestId || found.id,
-      participants: FieldValue.arrayUnion(riderId, "circum-support"),
-      participantRoles: {
-        [riderId]: "rider",
-        "circum-support": "admin",
-      },
+      threadId: chatId,
+      bookingId: chatId,
+      requestId: chatId,
+      deliveryId: chatId,
+      conversationType: "sender_rider",
+      participants,
+      participantRoles,
       assignedRiderId: riderId,
+      readOnly: false,
+      chatEnabledAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       source: "acceptRideRequests",
     }, {merge: true});
