@@ -1404,14 +1404,18 @@ class SenderHomeOrder {
   final String title;
   final String route;
   final String status;
+  final String rawStatus;
   final DateTime? updatedAt;
+  final DateTime? scheduledAt;
 
   const SenderHomeOrder({
     required this.id,
     required this.title,
     required this.route,
     required this.status,
+    this.rawStatus = '',
     this.updatedAt,
+    this.scheduledAt,
   });
 
   factory SenderHomeOrder.fromFirestore(
@@ -1428,6 +1432,12 @@ class SenderHomeOrder {
       data['parcel'] as Map? ?? data['package'] as Map? ?? const {},
     );
     final rawDate = data['updatedAt'] ?? data['createdAt'];
+    final scheduleDate = data['scheduledAt'] ??
+        data['scheduledFor'] ??
+        data['deliveryDate'] ??
+        data['pickupDate'];
+    final rawStatus =
+        '${data['deliveryStatus'] ?? data['status'] ?? 'requested'}';
     final pickupLabel = _firstText([
       pickup['locality'],
       pickup['address'],
@@ -1450,10 +1460,10 @@ class SenderHomeOrder {
       route: [pickupLabel, dropoffLabel]
           .where((value) => value.isNotEmpty)
           .join(' → '),
-      status: _statusLabel(
-        '${data['deliveryStatus'] ?? data['status'] ?? 'requested'}',
-      ),
+      status: _statusLabel(rawStatus),
+      rawStatus: rawStatus.trim().toLowerCase(),
       updatedAt: rawDate is Timestamp ? rawDate.toDate() : null,
+      scheduledAt: scheduleDate is Timestamp ? scheduleDate.toDate() : null,
     );
   }
 
@@ -1500,12 +1510,16 @@ class SenderHomeNotification {
   final String body;
   final bool read;
   final DateTime? createdAt;
+  final String type;
+  final Map<String, dynamic> destination;
 
   const SenderHomeNotification({
     required this.id,
     required this.title,
     required this.body,
     required this.read,
+    this.type = '',
+    this.destination = const <String, dynamic>{},
     this.createdAt,
   });
 }
@@ -1621,11 +1635,19 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
       final items = snapshot.docs.map((doc) {
         final data = doc.data();
         final rawDate = data['createdAt'];
+        final nested = data['data'] is Map
+            ? Map<String, dynamic>.from(data['data'] as Map)
+            : const <String, dynamic>{};
+        final rawDestination = data['destination'] ?? nested['destination'];
         return SenderHomeNotification(
           id: doc.id,
           title: '${data['title'] ?? 'Circum update'}'.trim(),
           body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
           read: data['read'] == true,
+          type: '${data['type'] ?? ''}'.trim(),
+          destination: rawDestination is Map
+              ? Map<String, dynamic>.from(rawDestination)
+              : const <String, dynamic>{},
           createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
         );
       }).toList();
@@ -1756,6 +1778,107 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   int get _unreadCount =>
       _notifications?.where((item) => !item.read).length ?? 0;
 
+  List<SenderHomeOrder> get _dashboardOrders => (_orders ?? const [])
+      .where((order) => _isDashboardDeliveryStatus(order.rawStatus))
+      .toList(growable: false);
+
+  String get _heroContext {
+    final active = _dashboardOrders.where((order) {
+      return const {
+        'requested',
+        'broadcasting',
+        'finding_rider',
+        'accepted',
+        'rider_assigned',
+        'rider_en_route',
+        'navigating_to_pickup',
+        'arrived_at_pickup',
+        'pickup_verified',
+        'collected',
+        'in_transit',
+        'navigating_to_dropoff',
+        'arrived_at_dropoff',
+        'pin_required',
+      }.contains(order.rawStatus);
+    }).toList();
+    if (active.isNotEmpty) {
+      return '${active.length} active deliver${active.length == 1 ? 'y' : 'ies'}';
+    }
+    final scheduled = _dashboardOrders
+        .where((order) => order.rawStatus == 'scheduled')
+        .toList()
+      ..sort((a, b) => (a.scheduledAt ?? DateTime(9999))
+          .compareTo(b.scheduledAt ?? DateTime(9999)));
+    if (scheduled.isNotEmpty && scheduled.first.scheduledAt != null) {
+      final date = scheduled.first.scheduledAt!;
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      final time =
+          '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      if (date.year == tomorrow.year &&
+          date.month == tomorrow.month &&
+          date.day == tomorrow.day) {
+        return 'Next delivery tomorrow at $time';
+      }
+      return 'Next delivery ${date.day}/${date.month} at $time';
+    }
+    return 'Ready when you are.';
+  }
+
+  SenderHomeNotification? get _unreadChatNotification {
+    final activeIds = _dashboardOrders
+        .where((order) => const {
+              'requested',
+              'broadcasting',
+              'finding_rider',
+              'accepted',
+              'rider_assigned',
+              'rider_en_route',
+              'navigating_to_pickup',
+              'arrived_at_pickup',
+              'pickup_verified',
+              'collected',
+              'in_transit',
+              'navigating_to_dropoff',
+              'arrived_at_dropoff',
+              'pin_required',
+            }.contains(order.rawStatus))
+        .map((order) => order.id)
+        .toSet();
+    for (final notification in _notifications ?? const []) {
+      if (notification.read) continue;
+      final route = '${notification.destination['route'] ?? ''}'.trim();
+      final chatId = '${notification.destination['chatId'] ?? ''}'.trim();
+      if ((route == 'conversation' || notification.type == 'chat_message') &&
+          chatId.isNotEmpty &&
+          activeIds.contains(chatId)) {
+        return notification;
+      }
+    }
+    return null;
+  }
+
+  static bool _isDashboardDeliveryStatus(String status) {
+    return const {
+      'requested',
+      'broadcasting',
+      'finding_rider',
+      'scheduled',
+      'accepted',
+      'rider_assigned',
+      'rider_en_route',
+      'navigating_to_pickup',
+      'arrived_at_pickup',
+      'pickup_verified',
+      'collected',
+      'in_transit',
+      'navigating_to_dropoff',
+      'arrived_at_dropoff',
+      'pin_required',
+      'delivered',
+      'completed',
+    }.contains(status);
+  }
+
   Future<void> _openNotifications() => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => SenderNotificationsView(
@@ -1815,17 +1938,10 @@ class _SenderDashboardState extends State<_SenderDashboard> {
               ),
             ),
             const Spacer(),
-            Badge(
-              isLabelVisible: _unreadCount > 0 || _notificationsError != null,
-              label: Text(_notificationsError != null
-                  ? '!'
-                  : _unreadCount > 99
-                      ? '99+'
-                      : '$_unreadCount'),
-              child: _IconGlassButton(
-                icon: Icons.notifications_none_rounded,
-                onTap: _notifications == null ? null : _openNotifications,
-              ),
+            _HomeNotificationBell(
+              unreadCount: _unreadCount,
+              hasError: _notificationsError != null,
+              onTap: _notifications == null ? null : _openNotifications,
             ),
             const SizedBox(width: 10),
             const _SenderAvatar(initials: 'JA'),
@@ -1844,9 +1960,25 @@ class _SenderDashboardState extends State<_SenderDashboard> {
         const SizedBox(height: 18),
         _HeroSendCard(
           onTap: widget.onStartDelivery,
-          orderCount: _orders?.length,
+          orderCount: _dashboardOrders.length,
           hasError: _ordersError != null,
+          contextStatus: _heroContext,
         ),
+        if (_unreadChatNotification != null) ...[
+          const SizedBox(height: 12),
+          _ActiveConversationCard(
+            notification: _unreadChatNotification!,
+            onTap: () {
+              final chatId =
+                  '${_unreadChatNotification!.destination['chatId'] ?? ''}'
+                      .trim();
+              Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) =>
+                    RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
+              ));
+            },
+          ),
+        ],
         const SizedBox(height: 18),
         _YourCircumHub(
           onOpenGifts: widget.onOpenGifts,
@@ -1858,9 +1990,11 @@ class _SenderDashboardState extends State<_SenderDashboard> {
         const SizedBox(height: 16),
         _RecentOrdersCard(
           orders: _orders,
+          qualifyingOrders: _dashboardOrders,
           error: _ordersError,
           onRetry: _load,
           onOpenActivity: widget.onOpenActivity,
+          onStartDelivery: widget.onStartDelivery,
         ),
         const SizedBox(height: 16),
         SenderWalletHomeSummary(onOpenWallet: widget.onOpenWallet),
@@ -1869,15 +2003,160 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   }
 }
 
+class _HomeNotificationBell extends StatefulWidget {
+  final int unreadCount;
+  final bool hasError;
+  final VoidCallback? onTap;
+
+  const _HomeNotificationBell({
+    required this.unreadCount,
+    required this.hasError,
+    required this.onTap,
+  });
+
+  @override
+  State<_HomeNotificationBell> createState() => _HomeNotificationBellState();
+}
+
+class _HomeNotificationBellState extends State<_HomeNotificationBell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncMotion();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeNotificationBell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncMotion();
+  }
+
+  void _syncMotion() {
+    if (widget.unreadCount > 0) {
+      _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        SenderAccessibilityScope.maybeOf(context)?.settings.reduceMotion ??
+            false;
+    final showDot = widget.unreadCount > 0 && !widget.hasError;
+    final icon = _IconGlassButton(
+      icon: Icons.notifications_none_rounded,
+      onTap: widget.onTap,
+    );
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        if (widget.unreadCount > 9 || widget.hasError)
+          Badge(
+            isLabelVisible: true,
+            label: Text(widget.hasError ? '!' : '9+'),
+            child: icon,
+          )
+        else
+          icon,
+        if (showDot)
+          Positioned(
+            top: 1,
+            right: 1,
+            child: AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, child) => Transform.scale(
+                scale: reduceMotion ? 1 : 1 + (_pulse.value * .12),
+                child: child,
+              ),
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _SenderTokens.bg, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ActiveConversationCard extends StatelessWidget {
+  final SenderHomeNotification notification;
+  final VoidCallback onTap;
+
+  const _ActiveConversationCard({
+    required this.notification,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => _GlassCard(
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _SenderTokens.blue.withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.forum_outlined,
+                color: _SenderTokens.lightBlue),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Active conversation',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text(
+                notification.body.isEmpty
+                    ? 'You have an unread delivery message.'
+                    : notification.body,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(color: _SenderTokens.muted, fontSize: 12),
+              ),
+            ]),
+          ),
+          TextButton(onPressed: onTap, child: const Text('Open Chat')),
+        ]),
+      );
+}
+
 class _HeroSendCard extends StatelessWidget {
   final VoidCallback onTap;
   final int? orderCount;
   final bool hasError;
+  final String contextStatus;
 
   const _HeroSendCard({
     required this.onTap,
     required this.orderCount,
     required this.hasError,
+    required this.contextStatus,
   });
 
   @override
@@ -1985,6 +2264,15 @@ class _HeroSendCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      contextStatus,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -2072,10 +2360,8 @@ class _YourCircumHub extends StatelessWidget {
               child: _ServiceCard(
                 title: 'Health+',
                 subtitle: _detail(
-                  summary?.healthProfileExists == true
-                      ? 'Health+ profile ready'
-                      : '',
-                  'Trusted medical deliveries',
+                  summary?.healthProfileExists == true ? 'Profile ready' : '',
+                  'No upcoming deliveries',
                 ),
                 icon: Icons.health_and_safety_rounded,
                 accent: _SenderTokens.health,
@@ -2088,9 +2374,9 @@ class _YourCircumHub extends StatelessWidget {
                 title: 'Business',
                 subtitle: _detail(
                   (summary?.businessAccountCount ?? 0) > 0
-                      ? '${summary!.businessAccountCount} account${summary!.businessAccountCount == 1 ? '' : 's'}'
+                      ? '${summary!.businessAccountCount} active account${summary!.businessAccountCount == 1 ? '' : 's'}'
                       : '',
-                  'Business deliveries',
+                  'No active account',
                 ),
                 icon: Icons.business_center_rounded,
                 accent: _SenderTokens.business,
@@ -2103,9 +2389,9 @@ class _YourCircumHub extends StatelessWidget {
                 title: 'Gifts',
                 subtitle: _detail(
                   (summary?.giftCount ?? 0) > 0
-                      ? '${summary!.giftCount} gift${summary!.giftCount == 1 ? '' : 's'}'
+                      ? '${summary!.giftCount} active gift${summary!.giftCount == 1 ? '' : 's'}'
                       : '',
-                  'Thoughtful gifts, delivered.',
+                  'No active gifts',
                 ),
                 icon: Icons.card_giftcard_rounded,
                 accent: _SenderTokens.gifts,
@@ -2301,15 +2587,19 @@ class _HeroRoutePainter extends CustomPainter {
 
 class _RecentOrdersCard extends StatelessWidget {
   final List<SenderHomeOrder>? orders;
+  final List<SenderHomeOrder> qualifyingOrders;
   final String? error;
   final VoidCallback onRetry;
   final VoidCallback onOpenActivity;
+  final VoidCallback onStartDelivery;
 
   const _RecentOrdersCard({
     required this.orders,
+    required this.qualifyingOrders,
     required this.error,
     required this.onRetry,
     required this.onOpenActivity,
+    required this.onStartDelivery,
   });
 
   @override
@@ -2356,12 +2646,14 @@ class _RecentOrdersCard extends StatelessWidget {
             )
           else if (orders == null)
             const _HomeInlineState(message: 'Loading recent orders…')
-          else if (orders!.isEmpty)
-            const _HomeInlineState(
-              message: 'No deliveries yet. Your first order will appear here.',
+          else if (qualifyingOrders.isEmpty)
+            _HomeInlineState(
+              message: 'No recent deliveries.',
+              action: onStartDelivery,
+              actionLabel: 'Send a Parcel',
             )
           else
-            ...orders!.map(
+            ...qualifyingOrders.map(
               (order) => _OrderLine(
                 title: order.title,
                 subtitle: order.route.isEmpty ? 'Circum delivery' : order.route,
@@ -2384,8 +2676,13 @@ class _RecentOrdersCard extends StatelessWidget {
 class _HomeInlineState extends StatelessWidget {
   final String message;
   final VoidCallback? action;
+  final String actionLabel;
 
-  const _HomeInlineState({required this.message, this.action});
+  const _HomeInlineState({
+    required this.message,
+    this.action,
+    this.actionLabel = 'Retry',
+  });
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -2402,7 +2699,7 @@ class _HomeInlineState extends StatelessWidget {
               ),
             ),
             if (action != null)
-              TextButton(onPressed: action, child: const Text('Retry')),
+              TextButton(onPressed: action, child: Text(actionLabel)),
           ],
         ),
       );

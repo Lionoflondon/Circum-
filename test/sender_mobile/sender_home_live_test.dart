@@ -18,6 +18,7 @@ void main() {
     expect(order.title, 'Apple iPhone');
     expect(order.route, 'Heathrow → Westminster');
     expect(order.status, 'At pickup');
+    expect(order.rawStatus, 'arrived_at_pickup');
   });
 
   test('missing delivery values never render literal null', () {
@@ -47,7 +48,11 @@ void main() {
     expect(source, contains("collection('giftRequests')"));
     expect(source, contains('SenderWalletHomeSummary'));
     expect(source, contains('Loading recent orders…'));
-    expect(source, contains('No deliveries yet.'));
+    expect(source, contains('No recent deliveries.'));
+    expect(source, contains("'archived_expired'"));
+    expect(source, contains("'cancelled'"));
+    expect(source, contains('Active conversation'));
+    expect(source, contains('Ready when you are.'));
     expect(source, contains('Recent orders could not load.'));
     expect(source, contains('Recent orders are unavailable offline.'));
     expect(source, isNot(contains("title: 'Passport'")));
