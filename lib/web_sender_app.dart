@@ -236,13 +236,11 @@ CircumRouteDecision resolveCircumRoute(
       useSenderPreview: true,
     );
   }
-  // This direct URL is deliberately a presentation preview. The canonical
-  // native Rider application lives in the dedicated Circum-Rider repository;
-  // use the public-home Rider role action for the embedded web portal.
+  // The canonical Rider web application is the authenticated Rider portal.
+  // Keep this direct route aligned with the Rider action on the public home.
   if (path == '/rider') {
     return const CircumRouteDecision(
       surface: CircumAppSurface.riderApp,
-      useRiderPreview: true,
     );
   }
 
@@ -299,15 +297,13 @@ CircumRouteDecision resolveCircumRoute(
         senderEntry: CircumSenderEntry.account,
         routeDeliveryId: routeDeliveryId,
       ),
-    // Legacy query aliases remain preview-only for compatibility. They must
-    // never be presented as links to the canonical Rider application.
+    // Legacy Rider aliases resolve to the same canonical Rider portal.
     'rider' ||
     'driver' ||
     'earn' ||
     'circum-order' =>
       const CircumRouteDecision(
         surface: CircumAppSurface.riderApp,
-        useRiderPreview: true,
       ),
     'gifts' => const CircumRouteDecision(
         surface: CircumAppSurface.publicWebsite,
