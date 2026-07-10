@@ -1,10 +1,24 @@
 import '../../pricing/delivery_pricing.dart';
 
 class HealthPlusPricing {
-  static const List<String> supportedSubscriptionPlans = [
-    'basic',
-    'priority',
-    'family',
+  static const List<HealthPlusPlanDefinition> availablePlans = [
+    HealthPlusPlanDefinition(
+      value: 'basic',
+      label: 'Basic',
+      description: 'Standard prescription delivery',
+    ),
+    HealthPlusPlanDefinition(
+      value: 'priority',
+      label: 'Priority',
+      description: 'Faster rider assignment',
+      priorityFee: priorityFeeGbp,
+    ),
+    HealthPlusPlanDefinition(
+      value: 'family',
+      label: 'Family support',
+      description: 'Manage pickups for a household member',
+      familySupportFee: familySupportFeeGbp,
+    ),
   ];
   static const double serviceFeeGbp = 1.2;
   static const double priorityFeeGbp = 2.99;
@@ -13,6 +27,68 @@ class HealthPlusPricing {
   static const double minimumStartingPriceGbp = 11;
   static const double defaultMedicationWeightKg = 0.5;
   static const double defaultDistanceMiles = 4.8;
+
+  static List<String> get supportedSubscriptionPlans =>
+      availablePlans.map((plan) => plan.value).toList(growable: false);
+
+  static HealthPlusPlanDefinition planFor(
+    String value, {
+    List<HealthPlusPlanDefinition> plans = availablePlans,
+  }) {
+    final normalized = value.toLowerCase().trim();
+    return plans.firstWhere(
+      (plan) => plan.value == normalized,
+      orElse: () => plans.first,
+    );
+  }
+
+  static List<HealthPlusPlanQuote> planQuotes({
+    List<HealthPlusPlanDefinition> plans = availablePlans,
+    double distanceMiles = defaultDistanceMiles,
+    double medicationWeightKg = defaultMedicationWeightKg,
+    bool recurring = false,
+    int remainingIncludedDeliveries = 0,
+    double promotionalDiscountGbp = 0,
+    DeliveryPricingBreakdown? deliveryQuote,
+  }) {
+    final delivery = deliveryQuote ??
+        HealthPlusPricing.deliveryQuote(
+          distanceMiles: distanceMiles,
+          medicationWeightKg: medicationWeightKg,
+        );
+    final base = calculate(
+      distanceMiles: distanceMiles,
+      medicationWeightKg: medicationWeightKg,
+      recurring: recurring,
+      subscriptionPlan: plans.first.value,
+      plans: plans,
+      remainingIncludedDeliveries: remainingIncludedDeliveries,
+      promotionalDiscountGbp: promotionalDiscountGbp,
+      deliveryQuote: delivery,
+    );
+
+    return plans.map((plan) {
+      final quote = calculate(
+        distanceMiles: distanceMiles,
+        medicationWeightKg: medicationWeightKg,
+        recurring: recurring,
+        subscriptionPlan: plan.value,
+        plans: plans,
+        remainingIncludedDeliveries: remainingIncludedDeliveries,
+        promotionalDiscountGbp: promotionalDiscountGbp,
+        deliveryQuote: delivery,
+      );
+      final delta = double.parse((quote.total - base.total).toStringAsFixed(2));
+      return HealthPlusPlanQuote(
+        plan: plan,
+        breakdown: quote,
+        deltaFromBase: delta,
+        displayPrice: delta <= 0 ? 'Included' : '+${formatGbp(delta)}',
+      );
+    }).toList(growable: false);
+  }
+
+  static String formatGbp(double amount) => '£${amount.toStringAsFixed(2)}';
 
   static DeliveryPricingBreakdown deliveryQuote({
     double distanceMiles = defaultDistanceMiles,
@@ -32,6 +108,7 @@ class HealthPlusPricing {
     double medicationWeightKg = defaultMedicationWeightKg,
     bool recurring = false,
     String subscriptionPlan = 'basic',
+    List<HealthPlusPlanDefinition> plans = availablePlans,
     int remainingIncludedDeliveries = 0,
     double promotionalDiscountGbp = 0,
     DeliveryPricingBreakdown? deliveryQuote,
@@ -41,11 +118,9 @@ class HealthPlusPricing {
           distanceMiles: distanceMiles,
           medicationWeightKg: medicationWeightKg,
         );
-    final normalizedPlan = subscriptionPlan.toLowerCase().trim();
-    final priorityFee =
-        normalizedPlan == 'priority' ? priorityFeeGbp : 0.toDouble();
-    final familyFee =
-        normalizedPlan == 'family' ? familySupportFeeGbp : 0.toDouble();
+    final plan = planFor(subscriptionPlan, plans: plans);
+    final priorityFee = plan.priorityFee;
+    final familyFee = plan.familySupportFee;
     final recurringDiscount = recurring ? recurringDiscountGbp : 0.toDouble();
     final includedDeliveryCredit =
         remainingIncludedDeliveries > 0 ? delivery.total : 0.toDouble();
@@ -75,10 +150,47 @@ class HealthPlusPricing {
           double.parse((total - policyAdjustedSubtotal).toStringAsFixed(2)),
       total: total,
       recurring: recurring,
-      subscriptionPlan: normalizedPlan.isEmpty ? 'basic' : normalizedPlan,
+      subscriptionPlan: plan.value,
       vanguardIncluded: true,
     );
   }
+}
+
+class HealthPlusPlanDefinition {
+  final String value;
+  final String label;
+  final String description;
+  final double priorityFee;
+  final double familySupportFee;
+
+  const HealthPlusPlanDefinition({
+    required this.value,
+    required this.label,
+    required this.description,
+    this.priorityFee = 0,
+    this.familySupportFee = 0,
+  });
+}
+
+class HealthPlusPlanQuote {
+  final HealthPlusPlanDefinition plan;
+  final HealthPlusPriceBreakdown breakdown;
+  final double deltaFromBase;
+  final String displayPrice;
+
+  const HealthPlusPlanQuote({
+    required this.plan,
+    required this.breakdown,
+    required this.deltaFromBase,
+    required this.displayPrice,
+  });
+}
+
+class HealthPlusPriceLine {
+  final String label;
+  final String value;
+
+  const HealthPlusPriceLine(this.label, this.value);
 }
 
 class HealthPlusPriceBreakdown {
@@ -111,6 +223,29 @@ class HealthPlusPriceBreakdown {
   });
 
   int get amountPence => (total * 100).round();
+
+  List<HealthPlusPriceLine> reviewLines({required String planLabel}) => [
+        HealthPlusPriceLine('Plan', planLabel),
+        HealthPlusPriceLine(
+          'Delivery + service fee',
+          HealthPlusPricing.formatGbp(delivery.total + serviceFee),
+        ),
+        if (priorityFee > 0)
+          HealthPlusPriceLine(
+            'Priority fee',
+            HealthPlusPricing.formatGbp(priorityFee),
+          ),
+        if (familySupportFee > 0)
+          HealthPlusPriceLine(
+            'Family support fee',
+            HealthPlusPricing.formatGbp(familySupportFee),
+          ),
+        if (recurringDiscount > 0)
+          HealthPlusPriceLine(
+            'Recurring discount',
+            '-${HealthPlusPricing.formatGbp(recurringDiscount)}',
+          ),
+      ];
 
   Map<String, dynamic> toJson() => {
         'baseFare': delivery.baseFare,

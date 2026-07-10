@@ -144,6 +144,113 @@ void main() {
       expect(quote.total, HealthPlusPricing.minimumStartingPriceGbp);
     });
 
+    test('plan quotes come from Health+ pricing definitions', () {
+      final planQuotes = HealthPlusPricing.planQuotes();
+
+      expect(
+        planQuotes.map((quote) => quote.plan.label),
+        HealthPlusPricing.availablePlans.map((plan) => plan.label),
+      );
+      for (final planQuote in planQuotes) {
+        final directQuote = HealthPlusPricing.calculate(
+          subscriptionPlan: planQuote.plan.value,
+        );
+        expect(planQuote.breakdown.total, directQuote.total);
+      }
+    });
+
+    test('future pricing plan can quote without UI changes', () {
+      const futurePlans = [
+        ...HealthPlusPricing.availablePlans,
+        HealthPlusPlanDefinition(
+          value: 'corporate',
+          label: 'Corporate',
+          description: 'Configured plan from Health+ pricing',
+          priorityFee: 4.5,
+        ),
+      ];
+
+      final planQuotes = HealthPlusPricing.planQuotes(plans: futurePlans);
+
+      expect(
+          planQuotes.map((quote) => quote.plan.value), contains('corporate'));
+      expect(
+        planQuotes.last.displayPrice,
+        '+${HealthPlusPricing.formatGbp(planQuotes.last.deltaFromBase)}',
+      );
+    });
+
+    test('Health+ view renders plan quotes without hardcoded plan pricing', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('HealthPlusPricing.planQuotes'));
+      expect(source, contains('HealthPlusPricing.formatGbp(total)'));
+      expect(source, isNot(contains('static const _plans')));
+      expect(source, isNot(contains('_HealthPlanOption')));
+      expect(source, isNot(contains("subscriptionPlan: 'basic'")));
+      expect(source, isNot(contains("'+£")));
+      expect(source, isNot(contains("'Included'")));
+      expect(source, isNot(contains('toStringAsFixed(2)')));
+    });
+
+    test('Health+ checkout consumes shared Sender finance surfaces', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('SenderPaymentProfile'));
+      expect(source, contains('SenderWalletData'));
+      expect(source, contains('FirebaseSenderWalletRepository'));
+      expect(source, contains('senderOrderedPaymentOptions'));
+      expect(source, contains('SenderWalletView'));
+      expect(source, contains('Pay With'));
+      expect(source, contains('SenderPaymentProfileOptionType.applePay'));
+      expect(source, contains('SenderPaymentProfileOptionType.googlePay'));
+      expect(source, contains('Apply Roth'));
+      expect(source, contains('Manage Payment Methods'));
+      expect(
+          source, contains("'paymentProfileSource': 'sender_payment_profile'"));
+      expect(source, contains("'applyRoth': _applyRoth"));
+      expect(source, isNot(contains('Health payment methods')));
+      expect(source, isNot(contains('Save payment method for Health+')));
+    });
+
+    test('Health+ persists favourites and schedule preferences', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('recentPharmacies'));
+      expect(source, contains('preferredDeliveryAddresses'));
+      expect(source, contains('preferredSchedule'));
+      expect(source, contains('Recent Pharmacy'));
+      expect(source, contains('Use Again'));
+      expect(source, contains('Home'));
+      expect(source, contains('Work'));
+      expect(source, contains('Parents'));
+      expect(source, contains('Care Home'));
+      expect(source, contains('Preferred Pickup Day'));
+      expect(source, contains('Preferred Pickup Time'));
+    });
+
+    test('Health+ confirmation and timeline use final customer copy', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('Your Health+ pickup has been scheduled.'));
+      expect(
+        source,
+        contains(
+          "We'll collect your prescription and keep you updated every step of the way.",
+        ),
+      );
+      expect(source, contains('💊 Prescription Ready'));
+      expect(source, contains('🚴 Rider Assigned'));
+      expect(source, contains('📦 Collected'));
+      expect(source, contains('🚚 On The Way'));
+      expect(source, contains('✅ Delivered'));
+      expect(source, contains('PickupStatusValue.fromValue'));
+    });
+
     test('cancelling or pausing uses explicit status fields', () {
       expect(PickupStatusValue.fromValue('cancelled'), PickupStatus.cancelled);
       expect(PickupStatus.failed.value, 'failed');

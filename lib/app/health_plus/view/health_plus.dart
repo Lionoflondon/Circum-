@@ -9,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../platform/address_engine.dart';
 import '../../send_package/models/suggestions.m.dart';
 import '../../send_package/repo/place_api.dart';
+import '../../sender_mobile/sender_finance.dart';
+import '../../sender_mobile/sender_wallet.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
 import '../models/recurring_pickup_schedule.dart';
@@ -37,18 +39,6 @@ enum _HealthStep {
   confirmed,
 }
 
-class _HealthPlanOption {
-  final String value;
-  final String title;
-  final String subtitle;
-
-  const _HealthPlanOption({
-    required this.value,
-    required this.title,
-    required this.subtitle,
-  });
-}
-
 class _HealthStatusViewState extends State<HealthStatusView> {
   final _fullName = TextEditingController();
   final _careName = TextEditingController();
@@ -59,7 +49,8 @@ class _HealthStatusViewState extends State<HealthStatusView> {
   final _pharmacyAddress = TextEditingController();
   final _deliveryAddress = TextEditingController();
   final _notes = TextEditingController();
-  final _preferredTime = TextEditingController(text: 'Tuesday, 10:00 AM');
+  final _preferredDay = TextEditingController(text: 'Tuesday');
+  final _preferredTime = TextEditingController(text: '10:00 AM');
   final _customSchedule = TextEditingController();
   final _pharmacySearch = TextEditingController();
   final _deliverySearch = TextEditingController();
@@ -71,38 +62,26 @@ class _HealthStatusViewState extends State<HealthStatusView> {
   var _frequency = HealthPlusFrequency.monthly;
   var _subscriptionPlan = HealthPlusPricing.supportedSubscriptionPlans.first;
   var _consent = false;
-  var _savePaymentMethod = true;
+  var _applyRoth = false;
   var _submitting = false;
+  var _financeLoading = false;
   var _searchingPharmacy = false;
   var _searchingDelivery = false;
   String? _profileId;
   String? _scheduleId;
   String? _message;
+  String? _financeMessage;
   String? _checkoutUrl;
   String? _pharmacySearchError;
   String? _deliverySearchError;
   Map<String, dynamic>? _latestPickup;
+  SenderPaymentProfile _paymentProfile = SenderPaymentProfile.empty();
+  SenderWalletData? _wallet;
+  SenderPaymentProfileOption? _selectedPaymentOption;
   List<Suggestion> _pharmacySuggestions = const [];
   List<Suggestion> _deliverySuggestions = const [];
   final List<Map<String, dynamic>> _payments = [];
-
-  static const _plans = <_HealthPlanOption>[
-    _HealthPlanOption(
-      value: 'basic',
-      title: 'Basic',
-      subtitle: 'Standard prescription delivery',
-    ),
-    _HealthPlanOption(
-      value: 'priority',
-      title: 'Priority',
-      subtitle: 'Faster rider assignment',
-    ),
-    _HealthPlanOption(
-      value: 'family',
-      title: 'Family support',
-      subtitle: 'Manage pickups for a household member',
-    ),
-  ];
+  late final SenderWalletRepository _walletRepository;
 
   HealthPlusPriceBreakdown get _quote {
     return HealthPlusPricing.calculate(
@@ -110,6 +89,31 @@ class _HealthStatusViewState extends State<HealthStatusView> {
       subscriptionPlan: _subscriptionPlan,
     );
   }
+
+  String get _paymentMethodLabel {
+    if (_applyRoth && _wallet != null && _wallet!.balance > 0) {
+      final selected = _selectedPaymentOption?.title;
+      if (selected == null || selected == 'Roth') return 'Roth';
+      return 'Roth + $selected';
+    }
+    return _selectedPaymentOption?.title ?? 'Default payment method';
+  }
+
+  String get _deliveryLabel {
+    final text = _deliveryAddress.text.toLowerCase();
+    if (text.contains('care home')) return 'Care Home';
+    if (text.contains('parent')) return 'Parents';
+    if (text.contains('work') || text.contains('office')) return 'Work';
+    if (text.contains('home')) return 'Home';
+    return 'Recent';
+  }
+
+  Map<String, dynamic> get _schedulePreference => {
+        'frequency': _frequency.value,
+        'preferredPickupDay': _preferredDay.text.trim(),
+        'preferredPickupTime': _preferredTime.text.trim(),
+        'customSchedule': _customSchedule.text.trim(),
+      };
 
   @override
   void initState() {
@@ -120,6 +124,8 @@ class _HealthStatusViewState extends State<HealthStatusView> {
     _phone.text = user?.phoneNumber ?? '';
     _pharmacyLookup = PlaceApiProvider(Object());
     _deliveryLookup = PlaceApiProvider(Object());
+    _walletRepository = FirebaseSenderWalletRepository();
+    _loadFinance();
   }
 
   @override
@@ -133,11 +139,47 @@ class _HealthStatusViewState extends State<HealthStatusView> {
     _pharmacyAddress.dispose();
     _deliveryAddress.dispose();
     _notes.dispose();
+    _preferredDay.dispose();
     _preferredTime.dispose();
     _customSchedule.dispose();
     _pharmacySearch.dispose();
     _deliverySearch.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadFinance() async {
+    final platform = Theme.of(context).platform;
+    setState(() {
+      _financeLoading = true;
+      _financeMessage = null;
+    });
+    try {
+      final results = await Future.wait([
+        _walletRepository.initialise(),
+        _walletRepository.paymentMethods(),
+      ]);
+      if (!mounted) return;
+      final wallet = results[0] as SenderWalletData;
+      final profile = results[1] as SenderPaymentProfile;
+      final options = senderOrderedPaymentOptions(
+        profile,
+        platform: platform,
+        includeAddMethod: false,
+      );
+      setState(() {
+        _wallet = wallet;
+        _paymentProfile = profile;
+        _selectedPaymentOption = options.isEmpty ? null : options.first;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _financeMessage =
+            'Pay With could not load. You can still prepare secure checkout.';
+      });
+    } finally {
+      if (mounted) setState(() => _financeLoading = false);
+    }
   }
 
   void _goTo(_HealthStep step) {
@@ -282,6 +324,8 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         deliveryAddress,
         fallback: _deliveryAddress.text.trim(),
       );
+      final paymentMethod = _paymentMethodLabel;
+      final schedulePreference = _schedulePreference;
 
       final profile = {
         'id': id,
@@ -297,6 +341,21 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'deliveryAddress': deliveryDisplay,
         'pharmacyAddressData': pharmacyAddress,
         'deliveryAddressData': deliveryAddress,
+        'recentPharmacies': FieldValue.arrayUnion([
+          {
+            'label': pharmacyDisplay,
+            'address': pharmacyAddress,
+            'lastUsedAt': DateTime.now().toUtc().toIso8601String(),
+          }
+        ]),
+        'preferredDeliveryAddresses': FieldValue.arrayUnion([
+          {
+            'label': _deliveryLabel,
+            'address': deliveryAddress,
+            'lastUsedAt': DateTime.now().toUtc().toIso8601String(),
+          }
+        ]),
+        'preferredSchedule': schedulePreference,
         'notes': _notes.text.trim(),
         'consentConfirmed': _consent,
         'source': 'circum-mobile',
@@ -320,13 +379,18 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'pharmacyAddressData': pharmacyAddress,
         'deliveryAddressData': deliveryAddress,
         'notes': _notes.text.trim(),
+        'preferredPickupDay': _preferredDay.text.trim(),
         'preferredPickupTime': _preferredTime.text.trim(),
+        'preferredSchedule': schedulePreference,
         'frequency': _frequency.value,
         'subscriptionPlan': _subscriptionPlan,
         'status': PickupStatus.scheduled.value,
         'price': quote.total,
         'currency': 'GBP',
         'pricingBreakdown': quote.toJson(),
+        'paymentMethodLabel': paymentMethod,
+        'applyRoth': _applyRoth,
+        'rothBalanceAvailable': _wallet?.balance,
         'type': 'health_plus_prescription_pickup',
         'source': 'circum-mobile',
         'createdAt': FieldValue.serverTimestamp(),
@@ -343,7 +407,10 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           'id': scheduleId,
           'profileId': id,
           'frequency': _frequency.value,
-          'preferredDayTime': _preferredTime.text.trim(),
+          'preferredDay': _preferredDay.text.trim(),
+          'preferredTime': _preferredTime.text.trim(),
+          'preferredDayTime':
+              '${_preferredDay.text.trim()} ${_preferredTime.text.trim()}',
           'customSchedule': _customSchedule.text.trim(),
           'paused': false,
           'nextPickupAt': _preferredTime.text.trim(),
@@ -359,7 +426,10 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'amount': quote.total,
         'currency': 'GBP',
         'status': 'pending_secure_checkout',
-        'savedPaymentMethod': _savePaymentMethod,
+        'paymentMethodLabel': paymentMethod,
+        'paymentProfileSource': 'sender_payment_profile',
+        'applyRoth': _applyRoth,
+        'rothBalanceAvailable': _wallet?.balance,
         'createdAt': FieldValue.serverTimestamp(),
       });
       batch.set(db.collection('healthPlusNotifications').doc(), {
@@ -401,8 +471,8 @@ class _HealthStatusViewState extends State<HealthStatusView> {
               : 'checkout_created',
         });
         _message = checkoutUrl == null
-            ? 'Health+ pickup saved. Secure checkout needs configuration.'
-            : 'Health+ pickup saved. Secure checkout is ready.';
+            ? 'Your Health+ pickup has been scheduled. Secure checkout needs configuration.'
+            : 'Your Health+ pickup has been scheduled.';
         _step = _HealthStep.confirmed;
       });
 
@@ -446,6 +516,11 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           'profileId': profileId,
           'email': _email.text.trim(),
           'frequency': _frequency.value,
+          'preferredSchedule': _schedulePreference,
+          'paymentMethodLabel': _paymentMethodLabel,
+          'paymentProfileSource': 'sender_payment_profile',
+          'applyRoth': _applyRoth,
+          'rothBalanceAvailable': _wallet?.balance,
           'successUrl':
               'https://circum-app-2797c.web.app/?app=health&health=success',
           'cancelUrl':
@@ -512,6 +587,30 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'status': PickupStatus.cancelled.value
       };
       _message = 'Next Health+ pickup cancelled.';
+    });
+  }
+
+  void _useRecentPharmacy() {
+    final recent = '${_latestPickup?['pharmacyAddress'] ?? ''}'.trim();
+    if (recent.isEmpty) return;
+    setState(() {
+      _pharmacyAddress.text = recent;
+      _pharmacySearch.text = recent;
+    });
+  }
+
+  void _selectDeliveryLabel(String label) {
+    final recent = '${_latestPickup?['deliveryAddress'] ?? ''}'.trim();
+    if (label == 'Recent' && recent.isNotEmpty) {
+      setState(() {
+        _deliveryAddress.text = recent;
+        _deliverySearch.text = recent;
+      });
+      return;
+    }
+    setState(() {
+      _deliverySearch.text = label;
+      _deliveryAddress.text = label;
     });
   }
 
@@ -701,6 +800,14 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           },
         ),
         if (error != null) _HealthNote(error, warning: true),
+        if (pharmacy && '${_latestPickup?['pharmacyAddress'] ?? ''}'.isNotEmpty)
+          _RecentPharmacyCard(
+            label: '${_latestPickup?['pharmacyAddress']}',
+            onUseAgain: _useRecentPharmacy,
+          ),
+        if (!pharmacy) const _DeliveryAddressChoices(),
+        if (!pharmacy)
+          _DeliveryAddressChoiceRow(onSelected: _selectDeliveryLabel),
         ...suggestions.map(
           (item) => _SuggestionRow(
             item: item,
@@ -743,10 +850,20 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           }).toList(),
         ),
         const SizedBox(height: 12),
-        _HealthInput(
-          controller: _preferredTime,
-          label: 'Preferred pickup day/time',
-        ),
+        if (_frequency != HealthPlusFrequency.oneOff) ...[
+          _HealthInput(
+            controller: _preferredDay,
+            label: 'Preferred Pickup Day',
+          ),
+          _HealthInput(
+            controller: _preferredTime,
+            label: 'Preferred Pickup Time',
+          ),
+        ] else
+          _HealthInput(
+            controller: _preferredTime,
+            label: 'Preferred pickup time',
+          ),
         if (_frequency == HealthPlusFrequency.custom)
           _HealthInput(
             controller: _customSchedule,
@@ -762,25 +879,19 @@ class _HealthStatusViewState extends State<HealthStatusView> {
   }
 
   Widget _planStep() {
-    final base = HealthPlusPricing.calculate(subscriptionPlan: 'basic');
-    final plans = _plans.where(
-      (plan) =>
-          HealthPlusPricing.supportedSubscriptionPlans.contains(plan.value),
+    final planQuotes = HealthPlusPricing.planQuotes(
+      recurring: _frequency != HealthPlusFrequency.oneOff,
     );
     return Column(
       children: [
-        ...plans.map((plan) {
-          final quote = HealthPlusPricing.calculate(
-            subscriptionPlan: plan.value,
-            recurring: _frequency != HealthPlusFrequency.oneOff,
-          );
-          final delta = quote.total - base.total;
+        ...planQuotes.map((planQuote) {
           return _PlanCard(
-            selected: _subscriptionPlan == plan.value,
-            title: plan.title,
-            subtitle: plan.subtitle,
-            price: delta <= 0 ? 'Included' : '+£${delta.toStringAsFixed(2)}',
-            onTap: () => setState(() => _subscriptionPlan = plan.value),
+            selected: _subscriptionPlan == planQuote.plan.value,
+            title: planQuote.plan.label,
+            subtitle: planQuote.plan.description,
+            price: planQuote.displayPrice,
+            onTap: () =>
+                setState(() => _subscriptionPlan = planQuote.plan.value),
           );
         }),
         const SizedBox(height: 18),
@@ -824,23 +935,10 @@ class _HealthStatusViewState extends State<HealthStatusView> {
             ('Pharmacy', _pharmacyAddress.text.trim()),
             ('Delivery', _deliveryAddress.text.trim()),
             ('Frequency', _frequency.label),
-            ('Plan', _planTitle(_subscriptionPlan)),
-            (
-              'Delivery + service fee',
-              '£${(quote.delivery.total + quote.serviceFee).toStringAsFixed(2)}'
-            ),
-            if (quote.priorityFee > 0)
-              ('Priority fee', '£${quote.priorityFee.toStringAsFixed(2)}'),
-            if (quote.familySupportFee > 0)
-              (
-                'Family support fee',
-                '£${quote.familySupportFee.toStringAsFixed(2)}'
-              ),
-            if (quote.recurringDiscount > 0)
-              (
-                'Recurring discount',
-                '-£${quote.recurringDiscount.toStringAsFixed(2)}'
-              ),
+            ...quote
+                .reviewLines(planLabel: _planTitle(_subscriptionPlan))
+                .map((line) => (line.label, line.value)),
+            ('Payment Method', _paymentMethodLabel),
           ],
           total: quote.total,
         ),
@@ -856,17 +954,22 @@ class _HealthStatusViewState extends State<HealthStatusView> {
   Widget _checkoutStep() {
     return Column(
       children: [
-        const _CheckoutNote(),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          activeThumbColor: _HealthTokens.health,
-          value: _savePaymentMethod,
-          onChanged: (value) => setState(() => _savePaymentMethod = value),
-          title: const Text(
-            'Save payment method for Health+',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        _PayWithPanel(
+          profile: _paymentProfile,
+          wallet: _wallet,
+          selected: _selectedPaymentOption,
+          applyRoth: _applyRoth,
+          loading: _financeLoading,
+          financeMessage: _financeMessage,
+          onSelect: (option) => setState(() => _selectedPaymentOption = option),
+          onApplyRoth: (value) => setState(() => _applyRoth = value),
+          onManage: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const SenderWalletView()),
           ),
+          onRetry: _loadFinance,
         ),
+        const SizedBox(height: 12),
+        const _CheckoutNote(),
         if (_message != null) _HealthNote(_message!),
         const SizedBox(height: 18),
         _PrimaryHealthButton(
@@ -891,6 +994,9 @@ class _HealthStatusViewState extends State<HealthStatusView> {
     return Column(
       children: [
         const _HealthTimeline(),
+        const _HealthNote(
+          "We'll collect your prescription and keep you updated every step of the way.",
+        ),
         if (_message != null) _HealthNote(_message!),
         const SizedBox(height: 18),
         _SecondaryHealthButton(
@@ -915,12 +1021,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
   }
 
   String _planTitle(String value) {
-    return _plans
-        .firstWhere(
-          (plan) => plan.value == value,
-          orElse: () => _plans.first,
-        )
-        .title;
+    return HealthPlusPricing.planFor(value).label;
   }
 }
 
@@ -1323,6 +1424,107 @@ class _SuggestionRow extends StatelessWidget {
   }
 }
 
+class _RecentPharmacyCard extends StatelessWidget {
+  final String label;
+  final VoidCallback onUseAgain;
+
+  const _RecentPharmacyCard({
+    required this.label,
+    required this.onUseAgain,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      child: Row(
+        children: [
+          const Icon(Icons.local_pharmacy_outlined,
+              color: _HealthTokens.health),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Recent Pharmacy',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: _HealthTokens.muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onUseAgain,
+            child: const Text('Use Again'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryAddressChoices extends StatelessWidget {
+  const _DeliveryAddressChoices();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(top: 12, bottom: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Favourite delivery address',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryAddressChoiceRow extends StatelessWidget {
+  final ValueChanged<String> onSelected;
+
+  const _DeliveryAddressChoiceRow({required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Home', 'Work', 'Parents', 'Care Home', 'Recent'];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: labels
+            .map(
+              (label) => ActionChip(
+                label: Text(label),
+                onPressed: () => onSelected(label),
+                backgroundColor: _HealthTokens.health.withValues(alpha: .12),
+                labelStyle: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+                side: const BorderSide(color: _HealthTokens.border),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+
 class _FrequencyCard extends StatelessWidget {
   final bool selected;
   final String title;
@@ -1524,7 +1726,7 @@ class _ReviewPanel extends StatelessWidget {
                 ),
               ),
               Text(
-                '£${total.toStringAsFixed(2)}',
+                HealthPlusPricing.formatGbp(total),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 20,
@@ -1552,7 +1754,7 @@ class _CheckoutNote extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              "You'll be taken to a secure Stripe checkout page to complete payment, then brought straight back here.",
+              "We'll use your Circum Pay With profile for secure checkout.",
               style: TextStyle(
                 color: Color(0xFFC9D2D7),
                 height: 1.5,
@@ -1566,17 +1768,186 @@ class _CheckoutNote extends StatelessWidget {
   }
 }
 
+class _PayWithPanel extends StatelessWidget {
+  final SenderPaymentProfile profile;
+  final SenderWalletData? wallet;
+  final SenderPaymentProfileOption? selected;
+  final bool applyRoth;
+  final bool loading;
+  final String? financeMessage;
+  final ValueChanged<SenderPaymentProfileOption> onSelect;
+  final ValueChanged<bool> onApplyRoth;
+  final VoidCallback onManage;
+  final VoidCallback onRetry;
+
+  const _PayWithPanel({
+    required this.profile,
+    required this.wallet,
+    required this.selected,
+    required this.applyRoth,
+    required this.loading,
+    required this.financeMessage,
+    required this.onSelect,
+    required this.onApplyRoth,
+    required this.onManage,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = senderOrderedPaymentOptions(
+      profile,
+      platform: Theme.of(context).platform,
+      includeAddMethod: false,
+    );
+    final balance = wallet?.balance ?? 0;
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Pay With',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            selected == null
+                ? 'Default payment method'
+                : 'Default payment method · ${selected!.title}',
+            style: const TextStyle(color: _HealthTokens.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          if (loading)
+            const _HealthNote('Loading Pay With profile...')
+          else if (options.isEmpty)
+            _HealthNote(
+              financeMessage ??
+                  'No saved payment methods yet. Manage Payment Methods in Wallet.',
+              warning: true,
+            )
+          else
+            ...options.map(
+              (option) => _PayWithOptionRow(
+                option: option,
+                selected: selected?.title == option.title,
+                onTap: () => onSelect(option),
+              ),
+            ),
+          const Divider(color: _HealthTokens.border),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            activeThumbColor: _HealthTokens.health,
+            value: applyRoth,
+            onChanged: balance > 0 ? onApplyRoth : null,
+            title: const Text(
+              'Apply Roth',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              'Available Roth · ${balance.toStringAsFixed(balance % 1 == 0 ? 0 : 2)} Roth',
+              style: const TextStyle(color: _HealthTokens.muted),
+            ),
+          ),
+          if (financeMessage != null && !loading) ...[
+            const SizedBox(height: 8),
+            _HealthNote(financeMessage!, warning: true),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _SecondaryHealthButton(
+                  label: 'Manage Payment Methods',
+                  icon: Icons.account_balance_wallet_outlined,
+                  onTap: onManage,
+                ),
+              ),
+              const SizedBox(width: 10),
+              _IconGlassButton(icon: Icons.refresh_rounded, onTap: onRetry),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PayWithOptionRow extends StatelessWidget {
+  final SenderPaymentProfileOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PayWithOptionRow({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (option.type) {
+      SenderPaymentProfileOptionType.applePay => Icons.apple_rounded,
+      SenderPaymentProfileOptionType.googlePay => Icons.android_rounded,
+      SenderPaymentProfileOptionType.savedCard => Icons.credit_card_rounded,
+      SenderPaymentProfileOptionType.addPaymentMethod => Icons.add_card_rounded,
+    };
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: _HealthTokens.health),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                option.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (option.isDefault)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Text(
+                  '✓ Default',
+                  style: TextStyle(
+                    color: _HealthTokens.health,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? _HealthTokens.health : _HealthTokens.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HealthTimeline extends StatelessWidget {
   const _HealthTimeline();
 
   @override
   Widget build(BuildContext context) {
     const labels = [
-      'Prescription ready',
-      'Rider assigned',
-      'Collected',
-      'On the way',
-      'Delivered',
+      '💊 Prescription Ready',
+      '🚴 Rider Assigned',
+      '📦 Collected',
+      '🚚 On The Way',
+      '✅ Delivered',
     ];
     return _GlassCard(
       child: Column(
@@ -1697,6 +2068,26 @@ class _StatusCard extends StatelessWidget {
             style: const TextStyle(color: _HealthTokens.muted),
           ),
           const SizedBox(height: 12),
+          _CareSummaryLine(
+            label: 'Recent Pharmacy',
+            value: '${pickup!['pharmacyAddress'] ?? 'Not selected'}',
+          ),
+          _CareSummaryLine(
+            label: 'Preferred Schedule',
+            value:
+                '${pickup!['preferredPickupDay'] ?? pickup!['frequency'] ?? 'Scheduled'} ${pickup!['preferredPickupTime'] ?? ''}'
+                    .trim(),
+          ),
+          _CareSummaryLine(
+            label: 'Next Pickup',
+            value: '${pickup!['preferredPickupTime'] ?? 'Scheduled'}',
+          ),
+          _CareSummaryLine(
+            label: 'Current Status',
+            value: _pickupStatusLabel(
+                '${pickup!['status'] ?? PickupStatus.scheduled.value}'),
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1723,6 +2114,42 @@ class _StatusCard extends StatelessWidget {
       PickupStatus.failed => 'Delivery update',
       PickupStatus.cancelled => 'Delivery update',
     };
+  }
+}
+
+class _CareSummaryLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _CareSummaryLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: _HealthTokens.muted, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              value.isEmpty ? 'Scheduled' : value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
