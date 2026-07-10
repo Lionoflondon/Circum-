@@ -166,6 +166,7 @@ void main() {
           value: 'corporate',
           label: 'Corporate',
           description: 'Configured plan from Health+ pricing',
+          monthlyPrice: 75,
           priorityFee: 4.5,
         ),
       ];
@@ -176,8 +177,33 @@ void main() {
           planQuotes.map((quote) => quote.plan.value), contains('corporate'));
       expect(
         planQuotes.last.displayPrice,
-        '+${HealthPlusPricing.formatGbp(planQuotes.last.deltaFromBase)}',
+        '£75 / month',
       );
+    });
+
+    test('mobile and web share the canonical Health+ website plans', () {
+      expect(
+        HealthPlusPricing.availablePlans.map((plan) => plan.value).toList(),
+        ['core', 'priority', 'family', 'custom'],
+      );
+      expect(
+        HealthPlusPricing.availablePlans.map((plan) => plan.label).toList(),
+        [
+          'Health+ Core',
+          'Health+ Priority',
+          'Health+ Family',
+          'Health+ Custom'
+        ],
+      );
+      expect(
+        HealthPlusPricing.availablePlans
+            .map((plan) => plan.monthlyPriceLabel)
+            .toList(),
+        ['£15 / month', '£25 / month', '£40 / month', 'From £60 / month'],
+      );
+      final web = File('lib/web_sender_app.dart').readAsStringSync();
+      expect(web, contains('HealthPlusPricing.availablePlans'));
+      expect(web, isNot(contains("title: 'Health+ Core'")));
     });
 
     test('Health+ view renders plan quotes without hardcoded plan pricing', () {
@@ -324,6 +350,7 @@ void main() {
       expect(source, contains("collection('recurringPickupSchedules')"));
       expect(source, contains("collection('healthPlusPayments')"));
       expect(source, contains('pricingBreakdown'));
+      expect(source, contains("'subscriptionPlan': _subscriptionPlan"));
       expect(source, contains('Admin status overrides belong in Admin.'));
       expect(source, isNot(contains('class _AdminPanel')));
       expect(source, isNot(contains('Admin operations')));

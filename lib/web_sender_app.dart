@@ -28901,12 +28901,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final batch = db.batch();
       final profileRef = db.collection('healthPlusProfiles').doc(id);
       final pickupRef = db.collection('prescriptionPickups').doc(pickupId);
-      final planDefinition = switch (_healthSubscriptionPlan) {
-        'priority' => (25.0, 4, 6.25),
-        'family' => (40.0, null, null),
-        'custom' => (60.0, 0, null),
-        _ => (15.0, 2, 7.5),
-      };
+      final planDefinition = HealthPlusPricing.planFor(_healthSubscriptionPlan);
 
       final profile = {
         'id': id,
@@ -28924,17 +28919,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'subscriptionPlan': _healthSubscriptionPlan,
         'healthPlusPlan': _healthSubscriptionPlan,
         'planType': _healthSubscriptionPlan,
-        'monthlyPrice': planDefinition.$1,
-        'includedDeliveries': planDefinition.$2,
+        'monthlyPrice': planDefinition.monthlyPrice,
+        'includedDeliveries': planDefinition.includedDeliveries,
         'usedDeliveriesThisCycle': 0,
-        'remainingDeliveriesThisCycle': planDefinition.$2,
+        'remainingDeliveriesThisCycle': planDefinition.includedDeliveries,
         'subscriptionStatus': scheduleId == null ? 'one_off' : 'active',
         'preferredRiderId': null,
         'preferredRiderName': null,
         'customIncludedDeliveries':
             _healthSubscriptionPlan == 'custom' ? 0 : null,
         'customOverageRate': null,
-        'overageRate': planDefinition.$3,
+        'overageRate': planDefinition.overageRate,
         'isVanguard': true,
         'trustPoints': 6,
         'preferredDay': _healthPreferredDay.text.trim(),
@@ -29011,14 +29006,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'subscriptionPlan': _healthSubscriptionPlan,
           'healthPlusPlan': _healthSubscriptionPlan,
           'planType': _healthSubscriptionPlan,
-          'monthlyPrice': planDefinition.$1,
-          'includedDeliveries': planDefinition.$2,
+          'monthlyPrice': planDefinition.monthlyPrice,
+          'includedDeliveries': planDefinition.includedDeliveries,
           'usedDeliveriesThisCycle': 0,
-          'remainingDeliveriesThisCycle': planDefinition.$2,
+          'remainingDeliveriesThisCycle': planDefinition.includedDeliveries,
           'subscriptionStatus': 'active',
           'preferredRiderId': null,
           'preferredRiderName': null,
-          'overageRate': planDefinition.$3,
+          'overageRate': planDefinition.overageRate,
           'isVanguard': true,
           'trustPoints': 6,
           'preferredDay': _healthPreferredDay.text.trim(),
@@ -40330,48 +40325,16 @@ class _HealthPlanGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const plans = [
-      _HealthPlanCopy(
-        id: 'core',
-        title: 'Health+ Core',
-        price: '£15 / month',
-        benefits: [
-          '2 included Health+ deliveries',
-          '£7.50 baseline additional journey',
-          'Vanguard handling and reminders',
-        ],
-      ),
-      _HealthPlanCopy(
-        id: 'priority',
-        title: 'Health+ Priority',
-        price: '£25 / month',
-        benefits: [
-          '4 included Health+ deliveries',
-          '£6.25 baseline additional journey',
-          'Preferred rider offered first',
-        ],
-      ),
-      _HealthPlanCopy(
-        id: 'family',
-        title: 'Health+ Family',
-        price: '£40 / month',
-        benefits: [
-          'Unlimited deliveries subject to fair use',
-          'Family scheduling support',
-          'Vanguard custody archive',
-        ],
-      ),
-      _HealthPlanCopy(
-        id: 'custom',
-        title: 'Health+ Custom',
-        price: 'From £60 / month',
-        benefits: [
-          'Admin-configured allowance',
-          'Custom overage rate',
-          'Tailored collection schedule',
-        ],
-      ),
-    ];
+    final plans = HealthPlusPricing.availablePlans
+        .map(
+          (plan) => _HealthPlanCopy(
+            id: plan.value,
+            title: plan.label,
+            price: plan.monthlyPriceLabel,
+            benefits: plan.benefits,
+          ),
+        )
+        .toList(growable: false);
 
     return LayoutBuilder(
       builder: (context, constraints) {

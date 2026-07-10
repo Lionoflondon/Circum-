@@ -3,21 +3,55 @@ import '../../pricing/delivery_pricing.dart';
 class HealthPlusPricing {
   static const List<HealthPlusPlanDefinition> availablePlans = [
     HealthPlusPlanDefinition(
-      value: 'basic',
-      label: 'Basic',
-      description: 'Standard prescription delivery',
+      value: 'core',
+      label: 'Health+ Core',
+      description: '2 included Health+ deliveries',
+      monthlyPrice: 15,
+      includedDeliveries: 2,
+      overageRate: 7.5,
+      benefits: [
+        '2 included Health+ deliveries',
+        '£7.50 baseline additional journey',
+        'Vanguard handling and reminders',
+      ],
     ),
     HealthPlusPlanDefinition(
       value: 'priority',
-      label: 'Priority',
-      description: 'Faster rider assignment',
+      label: 'Health+ Priority',
+      description: '4 included Health+ deliveries',
+      monthlyPrice: 25,
+      includedDeliveries: 4,
+      overageRate: 6.25,
       priorityFee: priorityFeeGbp,
+      benefits: [
+        '4 included Health+ deliveries',
+        '£6.25 baseline additional journey',
+        'Preferred rider offered first',
+      ],
     ),
     HealthPlusPlanDefinition(
       value: 'family',
-      label: 'Family support',
-      description: 'Manage pickups for a household member',
+      label: 'Health+ Family',
+      description: 'Unlimited deliveries subject to fair use',
+      monthlyPrice: 40,
       familySupportFee: familySupportFeeGbp,
+      benefits: [
+        'Unlimited deliveries subject to fair use',
+        'Family scheduling support',
+        'Vanguard custody archive',
+      ],
+    ),
+    HealthPlusPlanDefinition(
+      value: 'custom',
+      label: 'Health+ Custom',
+      description: 'Admin-configured allowance',
+      monthlyPrice: 60,
+      includedDeliveries: 0,
+      benefits: [
+        'Admin-configured allowance',
+        'Custom overage rate',
+        'Tailored collection schedule',
+      ],
     ),
   ];
   static const double serviceFeeGbp = 1.2;
@@ -83,7 +117,7 @@ class HealthPlusPricing {
         plan: plan,
         breakdown: quote,
         deltaFromBase: delta,
-        displayPrice: delta <= 0 ? 'Included' : '+${formatGbp(delta)}',
+        displayPrice: plan.monthlyPriceLabel,
       );
     }).toList(growable: false);
   }
@@ -107,7 +141,7 @@ class HealthPlusPricing {
     double distanceMiles = defaultDistanceMiles,
     double medicationWeightKg = defaultMedicationWeightKg,
     bool recurring = false,
-    String subscriptionPlan = 'basic',
+    String subscriptionPlan = 'core',
     List<HealthPlusPlanDefinition> plans = availablePlans,
     int remainingIncludedDeliveries = 0,
     double promotionalDiscountGbp = 0,
@@ -162,6 +196,10 @@ class HealthPlusPlanDefinition {
   final String description;
   final double priorityFee;
   final double familySupportFee;
+  final double monthlyPrice;
+  final int? includedDeliveries;
+  final double? overageRate;
+  final List<String> benefits;
 
   const HealthPlusPlanDefinition({
     required this.value,
@@ -169,7 +207,15 @@ class HealthPlusPlanDefinition {
     required this.description,
     this.priorityFee = 0,
     this.familySupportFee = 0,
+    required this.monthlyPrice,
+    this.includedDeliveries,
+    this.overageRate,
+    this.benefits = const [],
   });
+
+  String get monthlyPriceLabel => value == 'custom'
+      ? 'From £${monthlyPrice.toStringAsFixed(0)} / month'
+      : '£${monthlyPrice.toStringAsFixed(0)} / month';
 }
 
 class HealthPlusPlanQuote {

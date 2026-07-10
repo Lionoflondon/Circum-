@@ -327,6 +327,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
       );
       final paymentMethod = _paymentMethodLabel;
       final schedulePreference = _schedulePreference;
+      final planDefinition = HealthPlusPricing.planFor(_subscriptionPlan);
       final business = BusinessJourneyScope.maybeOf(context);
       final businessFields = business?.toMap() ?? const <String, dynamic>{};
 
@@ -360,6 +361,12 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           }
         ]),
         'preferredSchedule': schedulePreference,
+        'subscriptionPlan': _subscriptionPlan,
+        'healthPlusPlan': _subscriptionPlan,
+        'planType': _subscriptionPlan,
+        'monthlyPrice': planDefinition.monthlyPrice,
+        'includedDeliveries': planDefinition.includedDeliveries,
+        'overageRate': planDefinition.overageRate,
         'notes': _notes.text.trim(),
         'consentConfirmed': _consent,
         'source': 'circum-mobile',
@@ -389,6 +396,11 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'preferredSchedule': schedulePreference,
         'frequency': _frequency.value,
         'subscriptionPlan': _subscriptionPlan,
+        'healthPlusPlan': _subscriptionPlan,
+        'planType': _subscriptionPlan,
+        'monthlyPrice': planDefinition.monthlyPrice,
+        'includedDeliveries': planDefinition.includedDeliveries,
+        'overageRate': planDefinition.overageRate,
         'status': PickupStatus.scheduled.value,
         'price': quote.total,
         'currency': 'GBP',
@@ -413,6 +425,12 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           'id': scheduleId,
           'profileId': id,
           'frequency': _frequency.value,
+          'subscriptionPlan': _subscriptionPlan,
+          'healthPlusPlan': _subscriptionPlan,
+          'planType': _subscriptionPlan,
+          'monthlyPrice': planDefinition.monthlyPrice,
+          'includedDeliveries': planDefinition.includedDeliveries,
+          'overageRate': planDefinition.overageRate,
           'preferredDay': _preferredDay.text.trim(),
           'preferredTime': _preferredTime.text.trim(),
           'preferredDayTime':
@@ -430,6 +448,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
         'id': pickupId,
         'profileId': id,
         'pickupId': pickupId,
+        'subscriptionPlan': _subscriptionPlan,
         'amount': quote.total,
         'currency': 'GBP',
         'status': 'pending_secure_checkout',
@@ -524,6 +543,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           'profileId': profileId,
           'email': _email.text.trim(),
           'frequency': _frequency.value,
+          'subscriptionPlan': _subscriptionPlan,
           'preferredSchedule': _schedulePreference,
           'paymentMethodLabel': _paymentMethodLabel,
           'paymentProfileSource': 'sender_payment_profile',
@@ -896,7 +916,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
           return _PlanCard(
             selected: _subscriptionPlan == planQuote.plan.value,
             title: planQuote.plan.label,
-            subtitle: planQuote.plan.description,
+            subtitle: planQuote.plan.benefits.join(' · '),
             price: planQuote.displayPrice,
             onTap: () =>
                 setState(() => _subscriptionPlan = planQuote.plan.value),
