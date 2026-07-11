@@ -27,6 +27,7 @@ import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/rider_profiles/uk_phone_number.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/app/sender_mobile/gift_mode_view.dart';
+import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
 import 'package:circum/app/send_package/view/ride_chats.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/pricing/special_handling_engine.dart';
@@ -677,11 +678,7 @@ class CircumSenderAppRoot extends StatelessWidget {
           : openGifts
               ? const GiftModeView()
               : usePreview
-                  ? _SenderArchitecturePreviewApp(
-                      colors: colors,
-                      onOpenBooking: onOpenBooking,
-                      onOpenGifts: onOpenGifts,
-                    )
+                  ? const SenderMobileHome(previewAuthEnabled: true)
                   : _CustomerPortal(
                       darkMode: darkMode,
                       colors: colors,
