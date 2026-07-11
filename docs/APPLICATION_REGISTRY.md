@@ -10,8 +10,8 @@ in this repository.
 
 | You need | Canonical application | Repository | Do not use |
 | --- | --- | --- | --- |
-| Sender, Gifts, Health+, Business, public Rider enrolment, or public web | **Circum Sender / Public App** | `github-sync/Circum-` | `Circum-Rider` for sender work |
-| Current Rider web product | **Circum Rider Web App (Canonical)** | `github-sync/Circum-` | `Circum-Rider`, the legacy client |
+| Sender, Gifts, Health+, Business, or public web | **Circum Sender / Public App** | `github-sync/Circum-` | `Circum-Rider` for sender work |
+| Current Rider product | **Circum Rider App (Canonical)** | `github-sync/Circum-Rider` | the public redirect host as a Rider portal |
 | Internal operations | **Circum Admin Portal** | `github-sync/Circum-` | public Hosting targets |
 | Marketing/public entry | **Circum Marketing Website** | `github-sync/Circum-` | Admin Hosting |
 
@@ -21,7 +21,7 @@ in this repository.
 
 | Field | Value |
 | --- | --- |
-| Purpose | Sender product plus public marketing, Gifts, Health+, Business entry points, and the canonical Rider web application. |
+| Purpose | Sender product plus public marketing, Gifts, and Health+ and Business entry points. Rider URLs redirect to the dedicated Rider app. |
 | Repository / directory | `github-sync/Circum-` |
 | Entry point | `lib/main.dart` — web runs `WebSenderApp`; native runs `App`. |
 | Web router | `lib/web_sender_app.dart`, `resolveCircumRoute(Uri.base)`. |
@@ -54,28 +54,28 @@ dedicated Rider app entry point.
 | `/story/**` | Cloud Function `giftStoryLanding` | **Secure Gift Story landing route** |
 | `/rider/jobs` (native named route only) | `RiderHomeScreen` | **Shared compatibility route; not the dedicated Rider App entry point** |
 
-### Circum Rider Web App (Canonical)
+### Circum Rider App (Canonical)
 
 | Field | Value |
 | --- | --- |
-| Purpose | Rider enrolment, sign-in, account setup, jobs, earnings, chat, and Rider operations. |
-| Repository / directory | `github-sync/Circum-` |
-| Entry point | `lib/main.dart` web -> `WebSenderApp`; Rider root -> `CircumRiderAppRoot`. |
-| Router | `lib/web_sender_app.dart`, `resolveCircumRoute(Uri.base)`. |
-| Direct routes | `/rider`; `?app=rider`; `?app=driver`; `?app=earn`; `?app=circum-order`. |
-| Portal renderer | `_RiderEnrollmentPortal`. |
-| Platforms | Web. |
+| Purpose | Rider enrolment, sign-in, resumable onboarding, jobs, earnings, chat, and Rider operations. |
+| Repository / directory | `github-sync/Circum-Rider` |
+| Entry point | `lib/main.dart` -> `CircumRider` -> `App` session gate. |
+| Router | `lib/app.dart` session gate; `AppNavView` after approved authentication. |
+| Public entry | `/rider`; `?app=rider`; `?app=driver`; `?app=earn`; `?app=circum-order` redirect here from the Sender/Public host. |
+| Portal renderer | `CircumRider`; no main-repository Rider portal is production-routed. |
+| Platforms | Web, iOS, Android, macOS, Linux, Windows. |
 | Firebase project | `circum-2797c`. |
-| Hosting configuration | Public Sender/Public sites `circum-2797c` and `circum-app-2797c`, built from `build/web_main`. |
-| Build / deploy | `scripts/deploy_main_web.sh`. |
-| Repository deployment status | Active: deployed with the public Sender/Public build. |
+| Hosting configuration | Firebase site `circum-rider-2797c`, built from `build/web`. |
+| Build / deploy | `flutter build web --release --no-wasm-dry-run` then `firebase deploy --only hosting`. |
+| Repository deployment status | Active: dedicated Rider Hosting deployment. |
 
 #### Why this is the canonical Rider application
 
-The current Rider product is implemented in the active `Circum-` repository as
-`_RiderEnrollmentPortal`, shares the current authentication and operations
-backend, and is deployed through the active public Hosting pipeline. Direct
-Rider URLs now resolve to this portal rather than a preview.
+The current Rider product is implemented in `Circum-Rider`, which uses the
+shared Firebase project, Rider documents, delivery engine, earnings, payouts,
+notifications, and communications backend. The public Sender/Public host only
+redirects Rider URLs to this application and never renders a Rider portal.
 
 ### Rider Architecture Preview (Unrouted Internal Development Surface)
 
@@ -86,21 +86,9 @@ Rider URLs now resolve to this portal rather than a preview.
 | Evidence | `CircumRiderAppRoot` retains `_RiderArchitecturePreviewApp` only behind `useRiderPreview`; production route resolution no longer sets that flag for any Rider URL. |
 | Classification | **Unrouted internal development surface. Not a Rider application or production URL.** |
 
-**Conclusion for `https://circum-app-2797c.web.app/rider`:** it is the
-**canonical Circum Rider Web App**. `resolveCircumRoute` selects the Rider
-surface without `useRiderPreview`, so `CircumRiderAppRoot` renders the
-authenticated `_RiderEnrollmentPortal`.
-
-### Legacy Rider Client (Not Canonical)
-
-| Field | Value |
-| --- | --- |
-| Repository / directory | `github-sync/Circum-Rider` |
-| Entry point | `lib/main.dart` -> `CircumRider`. |
-| Platforms | Web, iOS, Android, macOS, Linux, Windows. |
-| Hosting configuration | Firebase site `circum-rider-2797c`, built from `build/web`. |
-| Classification | **Legacy Rider client. Not the current Rider product or deployment path.** |
-| Deployment | No checked-in script. The active `Circum-` public deployment scripts do not deploy its Hosting site. |
+**Conclusion for `https://circum-app-2797c.web.app/rider`:** it is a
+**canonical public entry redirect**, not a Rider portal. It redirects to
+`https://circum-rider-2797c.web.app`, the canonical Circum Rider App.
 
 ### Circum Admin Portal (Canonical)
 
@@ -142,7 +130,7 @@ authenticated `_RiderEnrollmentPortal`.
 | `hosting:public` | `circum-2797c` | `build/web_main` | Circum Sender/Public + Marketing | `scripts/deploy_main_web.sh` |
 | `hosting:app` | `circum-app-2797c` | `build/web_main` | Circum Sender/Public + Marketing | `scripts/deploy_main_web.sh` |
 | `hosting:admin` | `circum-admin-2797c` | `build/web_admin` | Circum Admin Portal | `scripts/deploy_admin_web.sh` |
-| Rider legacy site | `circum-rider-2797c` | `build/web` | Legacy Rider Client (`Circum-Rider`) | No checked-in script; not in the current Rider deployment path. |
+| Rider Hosting | `circum-rider-2797c` | `build/web` | Circum Rider App (`Circum-Rider`) | `flutter build web --release --no-wasm-dry-run` then `firebase deploy --only hosting` |
 
 `scripts/deploy_all_web.sh` is the only checked-in script that deploys all
 three main-repository Hosting targets. The canonical Rider web route is part of
@@ -160,18 +148,18 @@ the public build; it does not deploy the legacy Rider Hosting site.
 ## Permanent Naming Rules
 
 1. Refer to `github-sync/Circum-` web public targets as **Circum Sender / Public App**, never simply “the app”.
-2. Refer to `github-sync/Circum-` `/rider` as **Circum Rider Web App (Canonical)**.
-3. Refer to `github-sync/Circum-Rider` as **Legacy Rider Client** unless an explicit migration changes that status.
-4. Refer to `_RiderArchitecturePreviewApp` as an **unrouted internal development surface**. Do not create a public route to it.
+2. Refer to `github-sync/Circum-Rider` as **Circum Rider App (Canonical)**.
+3. Refer to `/rider` on the Sender/Public host as a **canonical Rider entry redirect**, never a Rider portal.
+4. Refer to `_RiderArchitecturePreviewApp` and `_RiderEnrollmentPortal` as non-production legacy implementation surfaces. Do not create a public route to either.
 5. Refer to `hosting:admin` as **Circum Admin Portal** only.
 6. Refer to Business as a **Sender module**, never a standalone deployment target.
 7. Before adding an application route or deploy script, update this registry in the same change.
 
 ## Current Corrections Recommended
 
-1. **Use `circum-app-2797c.web.app/rider` for the current Rider web product.** It now renders the authenticated Rider portal.
-2. **Do not use `github-sync/Circum-Rider` for current Rider product work** without a separately approved migration plan.
-3. Keep `_RiderArchitecturePreviewApp` unrouted or remove it only in a dedicated cleanup task.
+1. **Use `circum-rider-2797c.web.app` for the current Rider web product.** Public Rider URLs redirect there.
+2. **Use `github-sync/Circum-Rider` for current Rider product work.**
+3. Keep `_RiderArchitecturePreviewApp` and `_RiderEnrollmentPortal` unrouted or remove them only in a dedicated cleanup task.
 4. Update legacy deployment prose that still calls the public target `main`; the checked-in Firebase configuration uses `public` and `app`.
 
 ## Preserved Architecture
