@@ -34,7 +34,6 @@ const CONFIGS = Object.freeze({
       'CIRCUM_BUILD_ID=admin',
       'CIRCUM_ADMIN_PORTAL_CANONICAL_V1',
       'Employee access only. Sign in with an account that has a Circum admin role.',
-      'Admin operations',
       'admin-root',
     ],
   }),

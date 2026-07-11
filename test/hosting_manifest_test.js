@@ -50,8 +50,15 @@ test('Admin build rejects public homepage copy', () => {
 
 test('public build rejects Admin authentication markers', () => {
   assert.throws(
-    () => validateBundle(CONFIGS.public, 'Send anything across town Admin operations'),
+    () => validateBundle(CONFIGS.public, 'Send anything across town Employee access only. Sign in with an account that has a Circum admin role.'),
     /forbidden marker/,
+  );
+});
+
+test('non-exclusive operations copy does not block a public build', () => {
+  assert.equal(
+    validateBundle(CONFIGS.public, 'Send anything across town Admin operations'),
+    true,
   );
 });
 
