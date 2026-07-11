@@ -45,11 +45,8 @@ Deploy admin app only:
 scripts/deploy_admin_web.sh
 ```
 
-Deploy both:
-
-```bash
-scripts/deploy_all_web.sh
-```
+There is deliberately no combined or untargeted Hosting deployment command.
+Run the protected Admin and public scripts separately.
 
 ## Admin access
 

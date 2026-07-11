@@ -132,9 +132,10 @@ redirects Rider URLs to this application and never renders a Rider portal.
 | `hosting:admin` | `circum-admin-2797c` | `build/web_admin` | Circum Admin Portal | `scripts/deploy_admin_web.sh` |
 | Rider Hosting | `circum-rider-2797c` | `build/web` | Circum Rider App (`Circum-Rider`) | `flutter build web --release --no-wasm-dry-run` then `firebase deploy --only hosting` |
 
-`scripts/deploy_all_web.sh` is the only checked-in script that deploys all
-three main-repository Hosting targets. The canonical Rider web route is part of
-the public build; it does not deploy the legacy Rider Hosting site.
+There is no combined main-repository Hosting deployment script. Admin and
+public releases must use their separate protected commands. The canonical
+Rider web route is part of the public build; it does not deploy the legacy
+Rider Hosting site.
 
 ## Workspace Copies And Non-Product Artifacts
 

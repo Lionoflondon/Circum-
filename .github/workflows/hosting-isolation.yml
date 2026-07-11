@@ -1,0 +1,39 @@
+name: Hosting isolation
+
+on:
+  pull_request:
+    paths:
+      - '.firebaserc'
+      - 'firebase.json'
+      - 'lib/main.dart'
+      - 'lib/main_admin.dart'
+      - 'lib/web_sender_app.dart'
+      - 'scripts/deploy_admin_web.sh'
+      - 'scripts/deploy_main_web.sh'
+      - 'scripts/hosting_manifest.js'
+      - 'scripts/verify_hosting_build.sh'
+      - 'test/hosting_isolation_test.dart'
+      - 'test/hosting_manifest_test.js'
+  push:
+    branches: [main, glassmorphism-safe-pass]
+    paths:
+      - '.firebaserc'
+      - 'firebase.json'
+      - 'lib/main.dart'
+      - 'lib/main_admin.dart'
+      - 'lib/web_sender_app.dart'
+      - 'scripts/**'
+      - 'test/hosting_*'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/hosting_isolation_test.dart
+      - run: node --test test/hosting_manifest_test.js
