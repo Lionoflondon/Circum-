@@ -162,23 +162,39 @@ function evidenceRequirements(delivery, action, evidence = {}) {
 }
 
 function settlementValues(delivery = {}) {
-  const amount = Number(
+  const base = Number(
       delivery.riderEarning ||
       delivery.estimatedEarnings ||
       delivery.riderShare ||
       delivery.riderPayout ||
       0,
   );
-  const trustPoints = Number(
-      delivery.trustPoints ||
-      delivery.trustPointsAvailable ||
-      delivery.riderTrustPoints ||
-      0,
-  );
+  const breakdown = delivery.riderEarningBreakdown || {};
+  const tip = Number(breakdown.tip || delivery.riderTip || delivery.tipAmount || 0);
+  const waiting = Number(breakdown.waiting || delivery.riderWaitingEarning || delivery.noShowEarning || 0);
+  const adjustment = Number(breakdown.adjustment || delivery.riderAdjustment || 0);
+  const amount = Number.isFinite(base) ? base : 0;
   return {
     amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
-    trustPoints: Number.isFinite(trustPoints) && trustPoints > 0 ? Math.floor(trustPoints) : 0,
+    deliveryAmount: Math.max(0, Math.round((amount - tip - waiting - adjustment) * 100) / 100),
+    tip: Number.isFinite(tip) ? Math.round(tip * 100) / 100 : 0,
+    waiting: Number.isFinite(waiting) ? Math.round(waiting * 100) / 100 : 0,
+    adjustment: Number.isFinite(adjustment) ? Math.round(adjustment * 100) / 100 : 0,
+    trustPoints: highestTrustAward(delivery),
   };
+}
+
+function highestTrustAward(delivery = {}) {
+  const text = `${delivery.category || delivery.deliveryType || delivery.serviceType || ""}`.toLowerCase();
+  const enabled = (key) => delivery[key] === true;
+  if (enabled("isHealthPlus") || enabled("healthPlus") || text.includes("health")) return 6;
+  if (enabled("isGift") || enabled("gift") || text.includes("gift")) return 5;
+  if (enabled("isScheduled") || enabled("scheduled") || delivery.scheduledAt || text.includes("scheduled")) return 5;
+  if (enabled("requiresVanguard") || enabled("vanguard") || text.includes("vanguard")) return 4;
+  if (enabled("isHeavyDuty") || enabled("heavyDuty") || text.includes("heavy")) return 4;
+  if (enabled("isBusiness") || enabled("business") || text.includes("business")) return 3;
+  if (enabled("isMarketplace") || enabled("marketplace") || text.includes("marketplace")) return 2;
+  return 1;
 }
 
 function patchForTransition({action, nextStatus, riderId}) {
@@ -344,6 +360,10 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         });
         transaction.set(db.collection("riderEarnings").doc(riderId), {
           availableBalance: FieldValue.increment(settlement.amount),
+          deliveryEarningsTotal: FieldValue.increment(settlement.deliveryAmount),
+          tipsTotal: FieldValue.increment(settlement.tip),
+          waitingNoShowTotal: FieldValue.increment(settlement.waiting),
+          adjustmentsTotal: FieldValue.increment(settlement.adjustment),
           lifetimeEarnings: FieldValue.increment(settlement.amount),
           totalAmountEarned: FieldValue.increment(settlement.amount),
           completedDeliveries: FieldValue.increment(1),
@@ -359,6 +379,11 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         patch.settlementCompletedAt = FieldValue.serverTimestamp();
         patch.trustPointsAwarded = settlement.trustPoints;
         transaction.set(found.ref, patch, {merge: true});
+        transaction.set(db.collection("chats").doc(delivery.requestId || found.id), {
+          readOnly: true,
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
       }
     }
     if (activeRef && shouldWriteLocation) {
@@ -401,4 +426,5 @@ exports._private = {
   assertRiderOperational,
   evidenceRequirements,
   settlementValues,
+  highestTrustAward,
 };
