@@ -40,6 +40,21 @@ void main() {
       expect(approved.statusLabel, 'Verified Business');
     });
 
+    test('Patron recognition is separate from approval state', () {
+      final account = BusinessAccount.fromMap('patron', {
+        'businessName': 'Northstar Ltd',
+        'status': 'approved',
+        'recognitions': {
+          'patron': {'awarded': true, 'number': 3},
+        },
+      });
+
+      expect(account.isApproved, isTrue);
+      expect(account.statusLabel, 'Verified Business');
+      expect(account.isPatron, isTrue);
+      expect(account.patronNumber, 3);
+    });
+
     test('delivery segments preserve canonical delivery states', () {
       final active = BusinessDelivery.fromMap('a', {
         'deliveryStatus': 'in_transit',

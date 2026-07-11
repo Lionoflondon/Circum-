@@ -46,6 +46,10 @@ class SenderProfile {
   });
 
   factory SenderProfile.fromMap(String id, Map<String, dynamic> data) {
+    final recognitions =
+        Map<String, dynamic>.from(data['recognitions'] as Map? ?? {});
+    final legend =
+        Map<String, dynamic>.from(recognitions['legend'] as Map? ?? {});
     return SenderProfile(
       id: id,
       fullName: '${data['fullName'] ?? data['fullname'] ?? data['name'] ?? ''}',
@@ -70,9 +74,11 @@ class SenderProfile {
           ? null
           : SenderProfileService.sanitizedPaymentReference(
               '${data['customerId']}'),
-      isLegend: data['isLegend'] == true,
-      legendNumber: (data['legendNumber'] as num?)?.toInt(),
-      legendAwardedAt: parseDate(data['legendAwardedAt']),
+      isLegend: legend['awarded'] == true || data['isLegend'] == true,
+      legendNumber: (legend['number'] as num?)?.toInt() ??
+          (data['legendNumber'] as num?)?.toInt(),
+      legendAwardedAt:
+          parseDate(legend['awardedAt'] ?? data['legendAwardedAt']),
       legendCelebrationSeenAt: parseDate(data['legendCelebrationSeenAt']),
       trustPoints: (data['senderTrustPoints'] as num?)?.toInt() ??
           (data['trustPoints'] as num?)?.toInt() ??
