@@ -26070,10 +26070,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       onChangePassword: _changeSenderPassword,
       onChangeEmail: _changeSenderEmail,
       onSignOut: _signOutSender,
-      onRequestDeletion: () => setState(() {
-        _supportChat = true;
-        _chatOpen = true;
-      }),
+      onRequestDeletion: _startSenderAccountClosure,
       onUploadProfilePhoto: _uploadSenderProfilePhoto,
       onSaveProfile: _saveSenderProfile,
       onAddAddress: _addSenderAddress,
@@ -27402,6 +27399,163 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _step = _SenderStep.dashboard;
       _senderProfileMessage = 'Signed out.';
     });
+  }
+
+  Future<void> _startSenderAccountClosure() async {
+    if (_senderSecurityBusy) return;
+    final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final continueClosure = await _showAccountClosureIntro();
+    if (continueClosure != true || !mounted) return;
+
+    try {
+      setState(() {
+        _senderSecurityBusy = true;
+        _senderProfileMessage = 'Confirming your sign-in...';
+      });
+      await _reauthenticateForAccountClosure(user);
+      if (!mounted) return;
+      final confirmed = await _showDeleteConfirmationDialog();
+      if (confirmed != true || !mounted) return;
+
+      setState(() => _senderProfileMessage = 'Closing your account...');
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('closeCircumAccount')
+          .call({'accountType': 'sender'});
+      await _signOutSender();
+      if (!mounted) return;
+      setState(() => _senderProfileMessage = 'Your Circum account was closed.');
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _senderProfileMessage = error.message ??
+          'Your account could not be closed. Please try again.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _senderProfileMessage =
+          'Your account could not be closed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _senderSecurityBusy = false);
+    }
+  }
+
+  Future<bool?> _showAccountClosureIntro() {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Close your Circum account?'),
+        content: const Text(
+          'Closing your account will:\n\n'
+          '• permanently remove your Circum account\n'
+          '• sign you out on all devices\n'
+          '• delete your profile information\n'
+          '• remove your saved preferences\n'
+          '• cancel future scheduled deliveries or rider availability where applicable\n'
+          '• retain records only where required by law (for example completed financial records)\n\n'
+          'This action cannot be undone once deletion is complete.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _reauthenticateForAccountClosure(User user) async {
+    final providers = user.providerData.map((info) => info.providerId).toSet();
+    if (providers.contains('password')) {
+      final password = await _showPasswordReauthDialog();
+      if (password == null || password.isEmpty) {
+        throw FirebaseAuthException(code: 'requires-recent-login');
+      }
+      await _reauthenticateSender(password);
+      return;
+    }
+    if (providers.contains('google.com')) {
+      await user.reauthenticateWithPopup(GoogleAuthProvider());
+      return;
+    }
+    if (providers.contains('apple.com')) {
+      final provider = OAuthProvider('apple.com')
+        ..addScope('email')
+        ..addScope('name');
+      await user.reauthenticateWithPopup(provider);
+      return;
+    }
+    throw FirebaseAuthException(
+      code: 'requires-recent-login',
+      message: 'Sign in again with your existing provider before closing.',
+    );
+  }
+
+  Future<String?> _showPasswordReauthDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm your password'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          autofillHints: const [AutofillHints.password],
+          decoration: const InputDecoration(labelText: 'Password'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<bool?> _showDeleteConfirmationDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Type DELETE to confirm.'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Confirmation'),
+            onChanged: (_) => setDialogState(() {}),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: controller.text == 'DELETE'
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              child: const Text('Delete my account'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   Future<void> _saveSenderProfile() async {
@@ -37913,19 +38067,21 @@ class _SenderProfileStep extends StatelessWidget {
           icon: Icons.warning_amber_rounded,
           danger: true,
           children: [
-            Text(
-              'Account deletion is protected. Circum Support handles requests while secure deletion is being finalised.',
-              style: TextStyle(
-                color: colors.mutedText,
-                height: 1.4,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => _showDeleteAccountRequest(context),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Delete Account'),
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Close Account'),
+                  SizedBox(height: 2),
+                  Text(
+                    'Permanently delete your Circum account and personal data.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xffef4444),
                 side: BorderSide(
@@ -37959,49 +38115,7 @@ class _SenderProfileStep extends StatelessWidget {
   }
 
   Future<void> _showDeleteAccountRequest(BuildContext context) async {
-    final confirm = TextEditingController();
-    final requested = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Delete account request'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'This may permanently remove your account profile, saved addresses, wallet access and account data. Some records may be retained where required for legal, payment, fraud prevention or operational reasons.',
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: confirm,
-                decoration: const InputDecoration(
-                  labelText: 'Type DELETE to continue',
-                ),
-                onChanged: (_) => setDialogState(() {}),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Account deletion requests are handled by Circum Support while secure deletion is being finalised.',
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: confirm.text.trim() == 'DELETE'
-                  ? () => Navigator.pop(context, true)
-                  : null,
-              child: const Text('Request account deletion'),
-            ),
-          ],
-        ),
-      ),
-    );
-    confirm.dispose();
-    if (requested == true) onRequestDeletion();
+    onRequestDeletion();
   }
 
   Widget _empty(String title, String body) {
