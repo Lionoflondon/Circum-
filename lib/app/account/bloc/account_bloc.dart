@@ -67,8 +67,6 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           phone: user.phoneNumber,
           saveCard: event.saveCard);
 
-      print(paymentIntentResult);
-
       if (paymentIntentResult['error'] != null) {
         // Error creating or confirming the payment intent.
         // print(paymentIntentResult['error']);
@@ -133,8 +131,6 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
   void _updatePaymentStatus(
       UpdatePaymentStatus event, Emitter<AccountState> emit) {
-    print('Confirmation from backend');
-    print(event.data);
     if (event.data['success'] == true) {
       emit(state.copyWith(status: PaymentStatus.success));
     }

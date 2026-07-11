@@ -1905,8 +1905,8 @@ void main() {
       final backendSource = File('server/functions/iris.js').readAsStringSync();
 
       expect(blocSource, contains("httpsCallable('analyseIris')"));
-      expect(blocSource, contains('analyseIris request payload'));
-      expect(blocSource, contains('analyseIris response payload'));
+      expect(blocSource, isNot(contains('analyseIris request payload')));
+      expect(blocSource, isNot(contains('analyseIris response payload')));
       expect(blocSource, contains('FirebaseFunctionsException'));
       expect(blocSource, contains('code=\${error.code}'));
       expect(blocSource, contains('message=\${error.message}'));

@@ -132,8 +132,6 @@ class ButtSheetState extends State<ButtSheet> {
           initialCountryCode: _initialCountryCode,
           // controller: phoneCo,
           onCountryChanged: (country) {
-            print(country.name);
-            print('Phone Number: ${_phoneNumberController.text}');
             _country = country;
             if (_phoneNumberController.text.isNotEmpty) {
               if (_phoneNumberController.text.length -
