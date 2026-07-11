@@ -226,7 +226,21 @@ class _BusinessViewState extends State<BusinessView> {
           ),
         ]),
         const SizedBox(height: 12),
-        _StatusPill(approved: account.isApproved, label: account.statusLabel),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _StatusPill(
+                approved: account.isApproved, label: account.statusLabel),
+            if (account.isPatron)
+              _Pill(
+                icon: Icons.workspace_premium_rounded,
+                label: account.patronNumber == null
+                    ? 'Patron'
+                    : 'Patron #${account.patronNumber.toString().padLeft(3, '0')}',
+              ),
+          ],
+        ),
         if (!account.isApproved) ...[
           const SizedBox(height: 12),
           _VerificationJourney(status: account.status),

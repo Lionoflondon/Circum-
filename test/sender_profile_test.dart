@@ -16,6 +16,25 @@ void main() {
       expect(profile.legendAwardedAt, DateTime(2026, 6, 14));
     });
 
+    test('prefers canonical nested Legend recognition fields', () {
+      final profile = SenderProfile.fromMap('legend-2', {
+        'fullName': 'Ayo Jason',
+        'isLegend': false,
+        'legendNumber': 99,
+        'recognitions': {
+          'legend': {
+            'awarded': true,
+            'number': 7,
+            'awardedAt': DateTime(2026, 7, 11),
+          },
+        },
+      });
+
+      expect(profile.isLegend, isTrue);
+      expect(profile.legendNumber, 7);
+      expect(profile.legendAwardedAt, DateTime(2026, 7, 11));
+    });
+
     test('parses the shared mobile users document shape', () {
       final profile = SenderProfile.fromMap('sender-1', {
         'fullname': 'Jane Smith',

@@ -33,6 +33,8 @@ class BusinessAccount {
   final Map<String, dynamic> notificationPreferences;
   final Map<String, dynamic> paymentPreferences;
   final List<Map<String, dynamic>> irisMoments;
+  final bool isPatron;
+  final int? patronNumber;
 
   const BusinessAccount({
     required this.id,
@@ -50,9 +52,15 @@ class BusinessAccount {
     required this.notificationPreferences,
     required this.paymentPreferences,
     this.irisMoments = const [],
+    this.isPatron = false,
+    this.patronNumber,
   });
 
   factory BusinessAccount.fromMap(String id, Map<String, dynamic> data) {
+    final recognitions =
+        Map<String, dynamic>.from(data['recognitions'] as Map? ?? {});
+    final patron =
+        Map<String, dynamic>.from(recognitions['patron'] as Map? ?? {});
     final pickups = (data['defaultPickupAddresses'] as List? ?? const [])
         .map((item) => '$item'.trim())
         .where((item) => item.isNotEmpty)
@@ -89,6 +97,9 @@ class BusinessAccount {
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList(growable: false),
+      isPatron: patron['awarded'] == true || data['isPatron'] == true,
+      patronNumber: (patron['number'] as num?)?.toInt() ??
+          (data['patronNumber'] as num?)?.toInt(),
     );
   }
 
