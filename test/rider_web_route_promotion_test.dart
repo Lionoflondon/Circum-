@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -46,10 +47,20 @@ void main() {
     });
 
     test('public hosting redirects the exact Rider entry before app boot', () {
-      expect(firebase, contains('"source": "/rider"'));
-      expect(firebase,
-          contains('"destination": "https://circum-rider-2797c.web.app"'));
-      expect(firebase, contains('"type": 302'));
+      final config = jsonDecode(firebase) as Map<String, dynamic>;
+      final hosting = (config['hosting'] as List).cast<Map<String, dynamic>>();
+      for (final target in const ['public', 'app']) {
+        final site = hosting.singleWhere((item) => item['target'] == target);
+        final redirects =
+            (site['redirects'] as List).cast<Map<String, dynamic>>();
+        expect(
+          redirects.any((redirect) =>
+              redirect['source'] == '/rider' &&
+              redirect['destination'] == 'https://circum-rider-2797c.web.app' &&
+              redirect['type'] == 302),
+          isTrue,
+        );
+      }
     });
   });
 }
