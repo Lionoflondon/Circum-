@@ -49,7 +49,7 @@ dedicated Rider app entry point.
 | --- | --- | --- |
 | `/` | `CircumPublicAppRoot` | **Canonical public and marketing entry** |
 | `/gifts`, `/terms`, `/privacy`, `/vanguard`, `/business` | `CircumPublicAppRoot` public route variants | **Canonical public routes** |
-| `https://circum-app-2797c.web.app/` | `CircumSenderAppRoot` | **Canonical hosted Sender app entry** |
+| `https://circum-app-2797c.web.app/` | `CircumSenderAppRoot` with `useSenderPreview: true` | **Canonical hosted Sender mobile app entry** |
 | `?app=sender` | `CircumSenderAppRoot` with `useSenderPreview: routeDeliveryId == null` | **Sender browser compatibility entry; preview when no delivery id is supplied** |
 | `?app=health`, `?app=business`, `?app=profile` | `CircumSenderAppRoot` | **Sender product entry points** |
 | `/story/**` | Cloud Function `giftStoryLanding` | **Secure Gift Story landing route** |

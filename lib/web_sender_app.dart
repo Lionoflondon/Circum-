@@ -231,6 +231,7 @@ CircumRouteDecision resolveCircumRoute(
     return const CircumRouteDecision(
       surface: CircumAppSurface.senderApp,
       senderEntry: CircumSenderEntry.dashboard,
+      useSenderPreview: true,
     );
   }
 
