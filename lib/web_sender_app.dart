@@ -163,7 +163,7 @@ class CircumRouteDecision {
   final CircumSenderEntry senderEntry;
   final CircumRiderStripeRoute? riderStripeRoute;
   final bool openSenderGifts;
-  final bool useSenderPreview;
+  final bool useSenderMobileApp;
   final bool useRiderPreview;
   final String? routeDeliveryId;
 
@@ -173,7 +173,7 @@ class CircumRouteDecision {
     this.senderEntry = CircumSenderEntry.dashboard,
     this.riderStripeRoute,
     this.openSenderGifts = false,
-    this.useSenderPreview = false,
+    this.useSenderMobileApp = false,
     this.useRiderPreview = false,
     this.routeDeliveryId,
   });
@@ -232,7 +232,7 @@ CircumRouteDecision resolveCircumRoute(
     return const CircumRouteDecision(
       surface: CircumAppSurface.senderApp,
       senderEntry: CircumSenderEntry.dashboard,
-      useSenderPreview: true,
+      useSenderMobileApp: true,
     );
   }
 
@@ -242,7 +242,7 @@ CircumRouteDecision resolveCircumRoute(
     return const CircumRouteDecision(
       surface: CircumAppSurface.senderApp,
       senderEntry: CircumSenderEntry.dashboard,
-      useSenderPreview: true,
+      useSenderMobileApp: true,
     );
   }
   // The canonical Rider web application is the authenticated Rider portal.
@@ -290,7 +290,7 @@ CircumRouteDecision resolveCircumRoute(
         senderEntry: CircumSenderEntry.dashboard,
         openSenderGifts: senderMobileGifts,
         routeDeliveryId: routeDeliveryId,
-        useSenderPreview: routeDeliveryId == null,
+        useSenderMobileApp: routeDeliveryId == null,
       ),
     'health' => const CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
@@ -419,7 +419,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     colors: colors,
                     darkMode: _darkMode,
                     initialStep: _senderInitialStep,
-                    usePreview: _route.useSenderPreview,
+                    useSenderMobileApp: _route.useSenderMobileApp,
                     openGifts: _route.openSenderGifts,
                     routeDeliveryId: _route.routeDeliveryId,
                     onBack: _openPublicHome,
@@ -642,7 +642,7 @@ class CircumSenderAppRoot extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
   final _SenderStep initialStep;
-  final bool usePreview;
+  final bool useSenderMobileApp;
   final bool openGifts;
   final String? routeDeliveryId;
   final VoidCallback onBack;
@@ -656,7 +656,7 @@ class CircumSenderAppRoot extends StatelessWidget {
     required this.colors,
     required this.darkMode,
     required this.initialStep,
-    required this.usePreview,
+    required this.useSenderMobileApp,
     required this.openGifts,
     this.routeDeliveryId,
     required this.onBack,
@@ -677,7 +677,7 @@ class CircumSenderAppRoot extends StatelessWidget {
             )
           : openGifts
               ? const GiftModeView()
-              : usePreview
+              : useSenderMobileApp
                   ? const SenderMobileHome(previewAuthEnabled: true)
                   : _CustomerPortal(
                       darkMode: darkMode,
@@ -33502,141 +33502,6 @@ class _SenderLineGlyph extends StatelessWidget {
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
       theme: const SvgTheme(currentColor: Colors.white),
     );
-  }
-}
-
-class _SenderArchitecturePreviewApp extends StatefulWidget {
-  final _CircumColors colors;
-  final VoidCallback onOpenBooking;
-  final VoidCallback onOpenGifts;
-
-  const _SenderArchitecturePreviewApp({
-    required this.colors,
-    required this.onOpenBooking,
-    required this.onOpenGifts,
-  });
-
-  @override
-  State<_SenderArchitecturePreviewApp> createState() =>
-      _SenderArchitecturePreviewAppState();
-}
-
-class _SenderArchitecturePreviewAppState
-    extends State<_SenderArchitecturePreviewApp> {
-  _SenderStep _selected = _SenderStep.dashboard;
-  bool _showNotifications = false;
-  bool _showRc1Gallery = _isLocalSenderRc1GalleryRequested();
-  bool _forceLiveTrackingPreview = false;
-
-  void _showStub(String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$label will be connected in the next UI milestone.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = widget.colors;
-    final showLiveTrackingPreview = _forceLiveTrackingPreview ||
-        Uri.base.queryParameters['tracking_preview'] == 'live';
-    final activePreviewDelivery =
-        showLiveTrackingPreview ? _senderLiveTrackingPreviewDelivery() : null;
-
-    return Stack(
-      children: [
-        Column(
-          children: [
-            _SenderPreviewTopBar(
-              colors: colors,
-              hasUnread: true,
-              onNotifications: () => setState(() => _showNotifications = true),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.zero,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: _showRc1Gallery
-                      ? _SenderRc1PreviewGallery(
-                          key: const ValueKey('sender-rc1-preview-gallery'),
-                          colors: colors,
-                          onOpen: _openGalleryTarget,
-                        )
-                      : _showNotifications
-                          ? _SenderPreviewNotifications(
-                              key: const ValueKey(
-                                  'sender-preview-notifications'),
-                              colors: colors,
-                              onBack: () =>
-                                  setState(() => _showNotifications = false),
-                            )
-                          : _selected == _SenderStep.dashboard
-                              ? _SenderPreviewHome(
-                                  key: const ValueKey('sender-preview-home'),
-                                  colors: colors,
-                                  activeDelivery: activePreviewDelivery,
-                                  onSendParcel: widget.onOpenBooking,
-                                  onMessageRider: () =>
-                                      _showStub('Message rider'),
-                                  onContactSupport: () => _showStub('Support'),
-                                  onGifts: widget.onOpenGifts,
-                                  onHealthPlus: () => _showStub('Health+'),
-                                  onBusiness: () => _showStub('Business'),
-                                )
-                              : _SenderPreviewMilestonePanel(
-                                  key: ValueKey(_selected.name),
-                                  colors: colors,
-                                  step: _selected,
-                                  onHome: () => setState(
-                                      () => _selected = _SenderStep.dashboard),
-                                  onGifts: widget.onOpenGifts,
-                                  onHealthPlus: () => _showStub('Health+'),
-                                  onBusiness: () => _showStub('Business'),
-                                ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _openGalleryTarget(_SenderRc1PreviewTarget target) {
-    setState(() {
-      _showRc1Gallery = false;
-      _showNotifications = false;
-      _forceLiveTrackingPreview = false;
-      switch (target) {
-        case _SenderRc1PreviewTarget.home:
-          _selected = _SenderStep.dashboard;
-        case _SenderRc1PreviewTarget.tracking:
-        case _SenderRc1PreviewTarget.receiverPin:
-          _selected = _SenderStep.dashboard;
-          _forceLiveTrackingPreview = true;
-        case _SenderRc1PreviewTarget.gifts:
-          widget.onOpenGifts();
-        case _SenderRc1PreviewTarget.health:
-          _showStub('Health+');
-        case _SenderRc1PreviewTarget.business:
-          _showStub('Business');
-        case _SenderRc1PreviewTarget.profile:
-          _selected = _SenderStep.account;
-        case _SenderRc1PreviewTarget.wallet:
-          _selected = _SenderStep.roth;
-        case _SenderRc1PreviewTarget.history:
-          _selected = _SenderStep.history;
-        case _SenderRc1PreviewTarget.notifications:
-          _showNotifications = true;
-        case _SenderRc1PreviewTarget.booking:
-        case _SenderRc1PreviewTarget.iris:
-        case _SenderRc1PreviewTarget.price:
-          widget.onOpenBooking();
-      }
-    });
   }
 }
 
