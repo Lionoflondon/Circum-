@@ -130,6 +130,7 @@ exports.createStripeOnboardingLink = riderConnect.createStripeOnboardingLink(str
 exports.refreshStripeOnboardingLink = riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
 exports.syncStripeConnectStatus = riderConnect.syncStripeConnectStatus(stripeConnectClient);
 exports.createRiderTransferOrPayout = riderConnect.createRiderTransferOrPayout(stripeConnectClient);
+exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
 exports.resetRiderTestStripeAccount = riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(stripeConnectClient);
 exports.scheduledRiderStripeStatusSync = riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);
