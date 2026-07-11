@@ -34,6 +34,7 @@ void main() {
     expect(senderHostRoute, contains('surface: CircumAppSurface.senderApp'));
     expect(
         senderHostRoute, contains('senderEntry: CircumSenderEntry.dashboard'));
+    expect(senderHostRoute, contains('useSenderPreview: true'));
   });
 
   test('hosting aliases and build outputs are permanently isolated', () {
