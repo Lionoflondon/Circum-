@@ -34,10 +34,26 @@ void main() {
     expect(firebase, contains('"public": "build/web_admin"'));
     expect(firebase, contains('"target": "public"'));
     expect(firebase, contains('"public": "build/web_main"'));
+    expect(
+      firebase,
+      contains('node scripts/hosting_manifest.js verify admin'),
+    );
+    expect(
+      firebase,
+      contains('node scripts/hosting_manifest.js verify public'),
+    );
     expect(adminDeploy, contains('--target lib/main_admin.dart'));
+    expect(adminDeploy, contains('hosting_manifest.js prepare admin'));
     expect(adminDeploy, contains('scripts/verify_hosting_build.sh admin'));
     expect(adminDeploy, contains('--only hosting:admin'));
+    expect(publicDeploy, contains('hosting_manifest.js prepare public'));
     expect(publicDeploy, contains('scripts/verify_hosting_build.sh public'));
     expect(publicDeploy, contains('--only hosting:public,hosting:app'));
+  });
+
+  test('generic Hosting deployment entry points are absent', () {
+    expect(File('scripts/deploy_all_web.sh').existsSync(), isFalse);
+    final guard = File('scripts/hosting_manifest.js').readAsStringSync();
+    expect(guard, contains('forbidden untargeted Hosting deployment'));
   });
 }

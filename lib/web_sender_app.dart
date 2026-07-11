@@ -433,13 +433,16 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     route: _route.riderStripeRoute ??
                         CircumRiderStripeRoute.returnSetup,
                   ),
-                CircumAppSurface.adminApp => CircumAdminAppRoot(
-                    key: const ValueKey('admin-root'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onBack: _adminHostingTarget ? () {} : _openPublicHome,
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
+                CircumAppSurface.adminApp => _adminHostingTarget
+                    ? CircumAdminAppRoot(
+                        key: const ValueKey('admin-root'),
+                        colors: colors,
+                        darkMode: _darkMode,
+                        onBack: () {},
+                        onToggleTheme: () =>
+                            setState(() => _darkMode = !_darkMode),
+                      )
+                    : const SizedBox.shrink(),
               },
             ),
             _PlatformNotificationCenter(

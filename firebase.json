@@ -9,6 +9,9 @@
     {
       "target": "public",
       "public": "build/web_main",
+      "predeploy": [
+        "node scripts/hosting_manifest.js verify public"
+      ],
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -73,6 +76,9 @@
     {
       "target": "app",
       "public": "build/web_main",
+      "predeploy": [
+        "node scripts/hosting_manifest.js verify public"
+      ],
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -137,6 +143,9 @@
     {
       "target": "admin",
       "public": "build/web_admin",
+      "predeploy": [
+        "node scripts/hosting_manifest.js verify admin"
+      ],
       "ignore": [
         "firebase.json",
         "**/.*",
