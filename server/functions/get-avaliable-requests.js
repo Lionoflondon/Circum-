@@ -34,13 +34,16 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     if (!presenceCore.canReceiveDispatch({profile: riderData, presence})) {
       throw new functions.https.HttpsError("failed-precondition", "Go online and remain available before requesting deliveries.");
     }
-    if (!riderData.position.geopoint.latitude || !riderData.position.geopoint.longitude) {
-      throw new functions.https.HttpsError("failed-precondition", "Rider position not available");
+    const liveLocation = presence.currentLocation || {};
+    const riderLatitude = Number(liveLocation.latitude);
+    const riderLongitude = Number(liveLocation.longitude);
+    if (!Number.isFinite(riderLatitude) || !Number.isFinite(riderLongitude)) {
+      throw new functions.https.HttpsError("failed-precondition", "Recent Rider location not available");
     }
 
     const riderPosition = {
-      latitude: riderData.position.geopoint.latitude,
-      longitude: riderData.position.geopoint.longitude,
+      latitude: riderLatitude,
+      longitude: riderLongitude,
     };
 
     // Get all available delivery requests

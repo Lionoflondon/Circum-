@@ -103,8 +103,11 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
   if (!rider) {
     throw new functions.https.HttpsError("not-found", "Rider profile not found.");
   }
-  if (!founder) await riderPresence.requireDispatchablePresence(riderId, rider);
-  if (founder && !["online", "available"].includes(cleanText(rider.status || rider.availabilityStatus).toLowerCase())) throw new functions.https.HttpsError("failed-precondition", "Go online before accepting a delivery.");
+  if (founder) {
+    await riderPresence.requireOnlinePresence(riderId);
+  } else {
+    await riderPresence.requireDispatchablePresence(riderId, rider);
+  }
 
   const accepted = await db.runTransaction(async (transaction) => {
     const activeJobs = await transaction.get(db.collection("deliveryRequests")

@@ -57,6 +57,7 @@ function presencePatch({riderId, status, busy = false, location = null}) {
     isOnline: status !== "offline",
     availabilityStatus: status,
     busy,
+    connectionStatus: status === "offline" ? "offline" : "connected",
     updatedAt: FieldValue.serverTimestamp(),
     lastHeartbeatAt: Date.now(),
   };
@@ -69,6 +70,7 @@ function presencePatch({riderId, status, busy = false, location = null}) {
       accuracyMeters: Number(location.accuracyMeters || location.accuracy || 0),
       updatedAt: Date.now(),
     };
+    patch.lastLocationAt = patch.currentLocation.updatedAt;
   }
   return patch;
 }
@@ -85,6 +87,7 @@ exports.goOnline = functions.https.onCall(async (data, context) => {
   const patch = presencePatch({riderId, status: "available", busy: false, location: data && data.location});
   await db.collection("riderPresence").doc(riderId).set({
     ...patch,
+    offlineReason: FieldValue.delete(),
     source: "goOnline",
   }, {merge: true});
   return {success: true, presence: {...patch, serverTimestampPending: true}};
@@ -108,6 +111,7 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
   const patch = presencePatch({riderId, status: "offline", busy: false, location: data && data.location});
   await db.collection("riderPresence").doc(riderId).set({
     ...patch,
+    offlineReason: text(data && data.reason) || "rider",
     source: "goOffline",
   }, {merge: true});
   return {success: true, presence: {...patch, serverTimestampPending: true}};
@@ -144,12 +148,43 @@ exports.onDeliveryPresenceWrite = functions.firestore
         isOnline: true,
         busy,
         availabilityStatus: next,
+        connectionStatus: "connected",
         activeDeliveryId: busy ? context.params.deliveryId : null,
         updatedAt: FieldValue.serverTimestamp(),
         source: "deliveryWrite",
       }, {merge: true});
       return null;
     });
+
+async function forceOfflineWhenBlocked(change, context) {
+  if (!change.after.exists) return null;
+  const riderId = context.params.riderId;
+  const db = getFirestore();
+  const profile = await riderProfile(db, riderId);
+  const reason = core.blockedReason(profile);
+  if (!reason) return null;
+  await db.collection("riderPresence").doc(riderId).set({
+    riderId,
+    isOnline: false,
+    busy: false,
+    availabilityStatus: "offline",
+    connectionStatus: "offline",
+    offlineReason: "admin_restriction",
+    offlineDetail: reason,
+    lastOfflineAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    source: "adminRestriction",
+  }, {merge: true});
+  return null;
+}
+
+exports.onRiderRecordAvailabilityWrite = functions.firestore
+    .document("riders/{riderId}")
+    .onWrite(forceOfflineWhenBlocked);
+
+exports.onRiderProfileAvailabilityWrite = functions.firestore
+    .document("riderProfiles/{riderId}")
+    .onWrite(forceOfflineWhenBlocked);
 
 exports.markStaleRiderPresenceOffline = functions.pubsub
     .schedule("every 2 minutes")
@@ -164,16 +199,14 @@ exports.markStaleRiderPresenceOffline = functions.pubsub
       const batch = db.batch();
       snapshot.docs.forEach((doc) => {
         batch.set(doc.ref, {
-          isOnline: false,
-          busy: false,
-          availabilityStatus: "offline",
-          staleAt: FieldValue.serverTimestamp(),
+          connectionStatus: "lost",
+          connectionLostAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           source: "staleHeartbeat",
         }, {merge: true});
       });
       await batch.commit();
-      return {markedOffline: snapshot.size};
+      return {markedConnectionLost: snapshot.size};
     });
 
 exports.requireDispatchablePresence = async function(riderId, riderProfileData = {}) {
@@ -181,6 +214,15 @@ exports.requireDispatchablePresence = async function(riderId, riderProfileData =
   const presence = presenceDoc.exists ? presenceDoc.data() : {};
   if (!core.canReceiveDispatch({profile: riderProfileData, presence})) {
     throw new functions.https.HttpsError("failed-precondition", "Go online and remain available before accepting deliveries.");
+  }
+  return presence;
+};
+
+exports.requireOnlinePresence = async function(riderId) {
+  const presenceDoc = await getFirestore().collection("riderPresence").doc(riderId).get();
+  const presence = presenceDoc.exists ? presenceDoc.data() : {};
+  if (presence.isOnline !== true || text(presence.availabilityStatus).toLowerCase() === "offline") {
+    throw new functions.https.HttpsError("failed-precondition", "Go online before accepting a delivery.");
   }
   return presence;
 };

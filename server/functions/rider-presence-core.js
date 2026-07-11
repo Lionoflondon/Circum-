@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const STALE_HEARTBEAT_MS = 2 * 60 * 1000;
+const STALE_LOCATION_MS = 5 * 60 * 1000;
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -48,9 +49,22 @@ function canReceiveDispatch({profile = {}, presence = {}, now = Date.now()}) {
   if (presence.isOnline !== true) return false;
   if (presence.availabilityStatus !== "available") return false;
   if (presence.busy === true) return false;
+  if (lower(presence.connectionStatus) === "lost") return false;
   const heartbeat = Number(presence.lastHeartbeatAt || 0);
   if (!heartbeat) return false;
-  return now - heartbeat <= STALE_HEARTBEAT_MS;
+  if (now - heartbeat > STALE_HEARTBEAT_MS) return false;
+  const location = presence.currentLocation || {};
+  const locationUpdatedAt = Number(location.updatedAt || presence.lastLocationAt || 0);
+  if (!locationUpdatedAt || now - locationUpdatedAt > STALE_LOCATION_MS) return false;
+  if (!Number.isFinite(Number(location.latitude)) || !Number.isFinite(Number(location.longitude))) return false;
+  return true;
+}
+
+function connectionStatusForPresence({presence = {}, now = Date.now()}) {
+  if (presence.isOnline !== true || presence.availabilityStatus === "offline") return "offline";
+  const heartbeat = Number(presence.lastHeartbeatAt || 0);
+  if (!heartbeat || now - heartbeat > STALE_HEARTBEAT_MS) return "lost";
+  return "connected";
 }
 
 function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
@@ -74,9 +88,11 @@ function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
 
 module.exports = {
   STALE_HEARTBEAT_MS,
+  STALE_LOCATION_MS,
   blockedReason,
   canGoOnline,
   canReceiveDispatch,
+  connectionStatusForPresence,
   nextPresenceOnDelivery,
   riderApproved,
   vehicleVerified,
