@@ -61,6 +61,7 @@ test("rider actions resolve to canonical backend statuses", () => {
   assert.equal(tracking.statusForRiderAction("start_heading_to_pickup"), "navigating_to_pickup");
   assert.equal(tracking.statusForRiderAction("arrived_at_pickup"), "arrived_at_pickup");
   assert.equal(tracking.statusForRiderAction("verify_collection_pin"), "pickup_verified");
+  assert.equal(tracking.statusForRiderAction("confirm_collected"), "collected");
   assert.equal(tracking.statusForRiderAction("start_delivery"), "navigating_to_dropoff");
   assert.equal(tracking.statusForRiderAction("near_dropoff"), "arrived_at_dropoff");
   assert.equal(tracking.statusForRiderAction("verify_receiver_pin"), "delivered");

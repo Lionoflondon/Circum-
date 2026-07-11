@@ -138,6 +138,18 @@ exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
   return db.runTransaction(async (transaction) => {
     const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
     assertAssignedRider(uid, delivery);
+    const existingArrival = phase === "dropoff" ?
+      delivery.dropoffArrivedAt : delivery.pickupArrivedAt;
+    if (existingArrival && delivery.waiting && delivery.waiting.phase === phase) {
+      return {
+        success: true,
+        duplicate: true,
+        decision: {
+          state: phase === "dropoff" ? "arrived_at_dropoff" : "arrived_at_pickup",
+          waiting: delivery.waiting,
+        },
+      };
+    }
     const now = Date.now();
     const decision = core.validateArrival({
       deliveryId,
@@ -156,6 +168,9 @@ exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
       event,
       evidenceId: delivery.policyEvidenceId || null,
       extra: {
+        status: decision.state,
+        deliveryStatus: decision.state,
+        deliveryStage: decision.state,
         arrivedAt: FieldValue.serverTimestamp(),
         [field]: FieldValue.serverTimestamp(),
         arrivalLocation: decision.arrivalLocation || null,

@@ -132,6 +132,55 @@ function pinAttemptField(action) {
     "deliveryPinAttemptCount" : "collectionPinAttemptCount";
 }
 
+function evidenceRequirements(delivery, action, evidence = {}) {
+  const pickup = action === "verify_collection_pin";
+  const handover = action === "verify_receiver_pin";
+  if (!pickup && !handover) return {valid: true};
+  const required = pickup ?
+    delivery.verificationRequired === true ||
+      delivery.requiresVerification === true ||
+      delivery.requiresVanguard === true :
+    delivery.deliveryPhotoRequired === true ||
+      delivery.requiresVanguard === true ||
+      delivery.secureHandoverRequired === true;
+  if (!required) return {valid: true};
+  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
+  if (pickup && evidence.conditionConfirmed !== true) {
+    return {valid: false, reason: "Parcel condition must be confirmed."};
+  }
+  if (pickup && evidence.riderDeclarationAccepted !== true) {
+    return {valid: false, reason: "Rider declaration is required."};
+  }
+  if (pickup && delivery.weightVerificationRequired === true &&
+      !(Number(evidence.actualWeightKg) > 0)) {
+    return {valid: false, reason: "Actual parcel weight is required."};
+  }
+  if (handover && !text(evidence.recipientName) && evidence.recipientConfirmed !== true) {
+    return {valid: false, reason: "Recipient confirmation is required."};
+  }
+  return {valid: true};
+}
+
+function settlementValues(delivery = {}) {
+  const amount = Number(
+      delivery.riderEarning ||
+      delivery.estimatedEarnings ||
+      delivery.riderShare ||
+      delivery.riderPayout ||
+      0,
+  );
+  const trustPoints = Number(
+      delivery.trustPoints ||
+      delivery.trustPointsAvailable ||
+      delivery.riderTrustPoints ||
+      0,
+  );
+  return {
+    amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
+    trustPoints: Number.isFinite(trustPoints) && trustPoints > 0 ? Math.floor(trustPoints) : 0,
+  };
+}
+
 function patchForTransition({action, nextStatus, riderId}) {
   const now = FieldValue.serverTimestamp();
   const patch = {
@@ -150,6 +199,7 @@ function patchForTransition({action, nextStatus, riderId}) {
     patch.collectionPinVerifiedAt = now;
     patch.collectionPinVerifiedBy = riderId;
   }
+  if (nextStatus === "collected") patch.collectedAt = now;
   if (nextStatus === "navigating_to_dropoff") {
     patch.collectedAt = now;
     patch.inTransitAt = now;
@@ -216,6 +266,12 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       throw new functions.https.HttpsError("failed-precondition", `Cannot move delivery from ${currentStatus} to ${nextStatus}.`);
     }
 
+    const evidence = data && data.evidence && typeof data.evidence === "object" ? data.evidence : {};
+    const evidenceDecision = evidenceRequirements(delivery, action, evidence);
+    if (!evidenceDecision.valid) {
+      throw new functions.https.HttpsError("failed-precondition", evidenceDecision.reason);
+    }
+
 
     const requiredPin = expectedPin(delivery, action);
     if (requiredPin) {
@@ -243,6 +299,24 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       nextStatus,
       riderId,
     });
+    if (Object.keys(evidence).length > 0) {
+      patch[ action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
+        ...evidence,
+        recordedAt: FieldValue.serverTimestamp(),
+        recordedBy: riderId,
+      };
+    }
+    if (action === "report_issue") {
+      const issue = data && data.issue && typeof data.issue === "object" ? data.issue : {};
+      patch.deliveryIssue = {
+        category: text(issue.category || "other"),
+        notes: text(issue.notes),
+        evidenceUrls: Array.isArray(issue.evidenceUrls) ? issue.evidenceUrls : [],
+        reportedBy: riderId,
+        reportedAt: FieldValue.serverTimestamp(),
+      };
+      patch.requiresAdminReview = true;
+    }
     const liveLocation = liveLocationPatch(data && data.location);
     let activeRef = null;
     let shouldWriteLocation = false;
@@ -251,7 +325,42 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       const activeSnapshot = await transaction.get(activeRef);
       shouldWriteLocation = shouldWriteLiveLocation(activeSnapshot.data(), liveLocation);
     }
+    const earningRef = nextStatus === "delivered" ?
+      db.collection("riderEarningTransactions").doc(found.id) : null;
+    const existingEarning = earningRef ? await transaction.get(earningRef) : null;
     transaction.set(found.ref, patch, {merge: true});
+    if (nextStatus === "delivered") {
+      const settlement = settlementValues(delivery);
+      if (earningRef && existingEarning && !existingEarning.exists) {
+        transaction.set(earningRef, {
+          transactionId: found.id,
+          deliveryId: found.id,
+          riderId,
+          type: "delivery_earning",
+          amount: settlement.amount,
+          trustPoints: settlement.trustPoints,
+          status: "completed",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(db.collection("riderEarnings").doc(riderId), {
+          availableBalance: FieldValue.increment(settlement.amount),
+          lifetimeEarnings: FieldValue.increment(settlement.amount),
+          totalAmountEarned: FieldValue.increment(settlement.amount),
+          completedDeliveries: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        if (settlement.trustPoints > 0) {
+          transaction.set(db.collection("riderProfiles").doc(riderId), {
+            trustPoints: FieldValue.increment(settlement.trustPoints),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
+        patch.settlementId = earningRef.id;
+        patch.settlementCompletedAt = FieldValue.serverTimestamp();
+        patch.trustPointsAwarded = settlement.trustPoints;
+        transaction.set(found.ref, patch, {merge: true});
+      }
+    }
     if (activeRef && shouldWriteLocation) {
       transaction.set(
           activeRef,
@@ -288,5 +397,8 @@ exports._private = {
   distanceMeters,
   patchForTransition,
   expectedPin,
+  assertRiderOwnsDelivery,
   assertRiderOperational,
+  evidenceRequirements,
+  settlementValues,
 };

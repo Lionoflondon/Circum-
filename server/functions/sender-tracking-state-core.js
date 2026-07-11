@@ -75,6 +75,7 @@ const RIDER_ACTION_TO_STATUS = Object.freeze({
   start_heading_to_pickup: "navigating_to_pickup",
   arrived_at_pickup: "arrived_at_pickup",
   verify_collection_pin: "pickup_verified",
+  confirm_collected: "collected",
   start_delivery: "navigating_to_dropoff",
   near_dropoff: "arrived_at_dropoff",
   arrived_at_dropoff: "arrived_at_dropoff",

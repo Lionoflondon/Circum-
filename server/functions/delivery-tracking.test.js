@@ -102,3 +102,44 @@ test("blocked rider account states cannot transition deliveries", () => {
       () => deliveryTracking.assertRiderOperational({accountState: "approved"}),
   );
 });
+
+test("a rider cannot update another rider's delivery", () => {
+  assert.throws(
+      () => deliveryTracking.assertRiderOwnsDelivery(
+          {riderId: "assigned-rider"},
+          "different-rider",
+      ),
+      /Only the assigned rider/,
+  );
+  assert.doesNotThrow(
+      () => deliveryTracking.assertRiderOwnsDelivery(
+          {riderId: "assigned-rider"},
+          "assigned-rider",
+      ),
+  );
+});
+
+test("required pickup evidence blocks incomplete verification", () => {
+  assert.equal(deliveryTracking.evidenceRequirements(
+      {verificationRequired: true},
+      "verify_collection_pin",
+      {photoUrl: "secure-ref", conditionConfirmed: true},
+  ).valid, false);
+  assert.equal(deliveryTracking.evidenceRequirements(
+      {verificationRequired: true},
+      "verify_collection_pin",
+      {
+        photoUrl: "secure-ref",
+        conditionConfirmed: true,
+        riderDeclarationAccepted: true,
+      },
+  ).valid, true);
+});
+
+test("settlement values reuse canonical earnings and trust fields", () => {
+  assert.deepEqual(deliveryTracking.settlementValues({
+    riderEarning: 12.345,
+    trustPointsAvailable: 6.9,
+  }), {amount: 12.35, trustPoints: 6});
+  assert.deepEqual(deliveryTracking.settlementValues({}), {amount: 0, trustPoints: 0});
+});
