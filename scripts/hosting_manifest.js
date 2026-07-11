@@ -37,6 +37,22 @@ const CONFIGS = Object.freeze({
       'admin-root',
     ],
   }),
+  sender: Object.freeze({
+    product: 'Circum Sender App',
+    buildIdentity: 'CIRCUM_BUILD_ID=sender-app',
+    targetAlias: 'sender',
+    siteId: 'circum-app-2797c',
+    outputDirectory: 'build/web_sender',
+    requiredBundleMarkers: [
+      'sender-root',
+    ],
+    forbiddenBundleMarkers: [
+      'CIRCUM_BUILD_ID=admin',
+      'CIRCUM_ADMIN_PORTAL_CANONICAL_V1',
+      'Employee access only. Sign in with an account that has a Circum admin role.',
+      'admin-root',
+    ],
+  }),
 });
 
 function fail(message) {
@@ -75,11 +91,22 @@ function validateFirebaseConfiguration(root = process.cwd()) {
       fail(`hosting:${config.targetAlias} must map only to ${config.siteId}`);
     }
   }
-  if (CONFIGS.admin.siteId === CONFIGS.public.siteId) {
-    fail('Admin and public site IDs must differ');
+  const values = Object.values(CONFIGS);
+  const adminConfig = CONFIGS.admin;
+  for (const config of values) {
+    if (config !== adminConfig && adminConfig.siteId === config.siteId) {
+      fail('Admin and customer-facing site IDs must differ');
+    }
+    if (config !== adminConfig &&
+        adminConfig.outputDirectory === config.outputDirectory) {
+      fail('Admin and customer-facing output directories must differ');
+    }
   }
-  if (CONFIGS.admin.outputDirectory === CONFIGS.public.outputDirectory) {
-    fail('Admin and public output directories must differ');
+  if (CONFIGS.public.siteId === CONFIGS.sender.siteId) {
+    fail('Public and Sender app site IDs must differ');
+  }
+  if (CONFIGS.public.outputDirectory === CONFIGS.sender.outputDirectory) {
+    fail('Public and Sender app output directories must differ');
   }
 
   const hosting = firebase.hosting;
@@ -219,7 +246,7 @@ if (require.main === module) {
       ? prepare(mode)
       : command === 'verify'
         ? verify(mode)
-        : fail('use prepare|verify admin|public');
+        : fail('use prepare|verify admin|public|sender');
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

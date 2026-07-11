@@ -227,6 +227,13 @@ CircumRouteDecision resolveCircumRoute(
     );
   }
 
+  if (_isSenderAppHostingHostFor(uri) && (path.isEmpty || path == '/')) {
+    return const CircumRouteDecision(
+      surface: CircumAppSurface.senderApp,
+      senderEntry: CircumSenderEntry.dashboard,
+    );
+  }
+
   // Temporary architecture-preview routes are deliberately isolated inside
   // Sender/Rider roots. They must not be mounted on the public homepage.
   if (path == '/sender') {
@@ -319,6 +326,10 @@ bool _isPublicHostingHostFor(Uri uri) {
       host == 'www.circumuk.com' ||
       host == 'circum-2797c.web.app' ||
       host == 'circum-app-2797c.web.app';
+}
+
+bool _isSenderAppHostingHostFor(Uri uri) {
+  return uri.host.toLowerCase() == 'circum-app-2797c.web.app';
 }
 
 Future<void> _ensureCircumFirebaseReady() async {

@@ -21,6 +21,7 @@ function fixture() {
         hosting: {
           admin: ['circum-admin-2797c'],
           public: ['circum-2797c'],
+          sender: ['circum-app-2797c'],
         },
       },
     },
@@ -29,6 +30,7 @@ function fixture() {
     hosting: [
       { target: 'admin', public: 'build/web_admin' },
       { target: 'public', public: 'build/web_main' },
+      { target: 'sender', public: 'build/web_sender' },
     ],
   }));
   return root;
@@ -38,6 +40,9 @@ test('Admin and public targets, sites and outputs are distinct', () => {
   assert.notEqual(CONFIGS.admin.targetAlias, CONFIGS.public.targetAlias);
   assert.notEqual(CONFIGS.admin.siteId, CONFIGS.public.siteId);
   assert.notEqual(CONFIGS.admin.outputDirectory, CONFIGS.public.outputDirectory);
+  assert.notEqual(CONFIGS.public.targetAlias, CONFIGS.sender.targetAlias);
+  assert.notEqual(CONFIGS.public.siteId, CONFIGS.sender.siteId);
+  assert.notEqual(CONFIGS.public.outputDirectory, CONFIGS.sender.outputDirectory);
   assert.equal(validateFirebaseConfiguration(fixture()), true);
 });
 
@@ -51,6 +56,13 @@ test('Admin build rejects public homepage copy', () => {
 test('public build rejects Admin authentication markers', () => {
   assert.throws(
     () => validateBundle(CONFIGS.public, 'Send anything across town Employee access only. Sign in with an account that has a Circum admin role.'),
+    /forbidden marker/,
+  );
+});
+
+test('Sender app build rejects Admin hosting markers', () => {
+  assert.throws(
+    () => validateBundle(CONFIGS.sender, 'sender-root CIRCUM_ADMIN_PORTAL_CANONICAL_V1'),
     /forbidden marker/,
   );
 });

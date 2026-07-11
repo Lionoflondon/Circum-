@@ -3,14 +3,15 @@
 > **Canonical naming:** consult [the Application Registry](APPLICATION_REGISTRY.md)
 > before deploying. This guide covers only the Admin Portal target.
 
-Circum has three Firebase Hosting targets in this repository: two public
-Sender/Public targets and one dedicated Admin Portal target.
+Circum has three Firebase Hosting targets in this repository: one public
+website target, one dedicated Sender app target, and one dedicated Admin Portal
+target.
 
 ## Hosting targets
 
 - `public`: customer-facing web app on Firebase site `circum-2797c`, intended
   for `circumuk.com`.
-- `app`: customer-facing web app on Firebase site `circum-app-2797c`.
+- `sender`: Sender app on Firebase site `circum-app-2797c`.
 - `admin`: internal operations app, intended for `admin.circumuk.com`.
 
 The admin panel is not exposed through the public customer app. The public build ignores `?app=admin` and only the admin hosting build enables the operations panel through the compile-time flag `CIRCUM_ADMIN_HOSTING=true`.
@@ -20,7 +21,7 @@ The admin panel is not exposed through the public customer app. The public build
 `.firebaserc` maps:
 
 - `public` to Firebase Hosting site `circum-2797c`
-- `app` to Firebase Hosting site `circum-app-2797c`
+- `sender` to Firebase Hosting site `circum-app-2797c`
 - `admin` to Firebase Hosting site `circum-admin-2797c`
 
 If the admin site does not exist yet, create it once:
@@ -33,10 +34,16 @@ Then connect `admin.circumuk.com` to the `circum-admin-2797c` site in Firebase H
 
 ## Deploy commands
 
-Deploy customer app only:
+Deploy public website only:
 
 ```bash
 scripts/deploy_main_web.sh
+```
+
+Deploy Sender app only:
+
+```bash
+scripts/deploy_sender_app.sh
 ```
 
 Deploy admin app only:

@@ -74,10 +74,10 @@
       ]
     },
     {
-      "target": "app",
-      "public": "build/web_main",
+      "target": "sender",
+      "public": "build/web_sender",
       "predeploy": [
-        "node scripts/hosting_manifest.js verify public"
+        "node scripts/hosting_manifest.js verify sender"
       ],
       "ignore": [
         "firebase.json",
