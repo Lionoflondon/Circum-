@@ -35,6 +35,12 @@ void main() {
     expect(
         senderHostRoute, contains('senderEntry: CircumSenderEntry.dashboard'));
     expect(senderHostRoute, contains('useSenderPreview: true'));
+    expect(
+        source,
+        contains(
+            "import 'package:circum/app/sender_mobile/sender_mobile_home.dart';"));
+    expect(
+        source, contains('const SenderMobileHome(previewAuthEnabled: true)'));
   });
 
   test('hosting aliases and build outputs are permanently isolated', () {
