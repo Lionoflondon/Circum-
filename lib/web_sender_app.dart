@@ -210,8 +210,7 @@ CircumRouteDecision resolveCircumRoute(
   final senderMobileGifts = uri.queryParameters['sender_mobile_gifts'] == '1';
   final routeDeliveryId = senderDeliveryRouteIdFromUri(uri);
 
-  if ((adminHostingTarget && !_isPublicHostingHostFor(uri)) ||
-      path == '/admin') {
+  if (adminHostingTarget && !_isPublicHostingHostFor(uri)) {
     return const CircumRouteDecision(surface: CircumAppSurface.adminApp);
   }
 
@@ -924,6 +923,41 @@ class CircumAdminAppRoot extends StatelessWidget {
       darkMode: darkMode,
       onBack: onBack,
       onToggleTheme: onToggleTheme,
+    );
+  }
+}
+
+class CircumAdminHostingApp extends StatefulWidget {
+  const CircumAdminHostingApp({super.key});
+
+  @override
+  State<CircumAdminHostingApp> createState() => _CircumAdminHostingAppState();
+}
+
+class _CircumAdminHostingAppState extends State<CircumAdminHostingApp> {
+  static const _buildMarker = 'CIRCUM_ADMIN_PORTAL_CANONICAL_V1';
+  bool _darkMode = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _CircumColors(_darkMode);
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Circum Admin Portal | $_buildMarker',
+      theme: ThemeData(
+        useMaterial3: true,
+        fontFamily: 'Helvetica',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xff2563eb),
+          brightness: _darkMode ? Brightness.dark : Brightness.light,
+        ),
+      ),
+      home: CircumAdminAppRoot(
+        colors: colors,
+        darkMode: _darkMode,
+        onBack: () {},
+        onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+      ),
     );
   }
 }

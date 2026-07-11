@@ -10,9 +10,6 @@ rm -rf build/web build/web_main
 mv build/web build/web_main
 printf "sender\n" > build/web_main/circum-build-target.txt
 
-if [ "$(cat build/web_main/circum-build-target.txt)" != "sender" ]; then
-  echo "Refusing to deploy: build/web_main is not marked as sender." >&2
-  exit 1
-fi
+scripts/verify_hosting_build.sh public
 
 "$FIREBASE_BIN" deploy --only hosting:public,hosting:app --project circum-2797c
