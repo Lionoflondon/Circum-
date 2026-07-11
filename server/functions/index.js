@@ -73,6 +73,7 @@ const senderFinance = require("./sender-finance");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const deliveryTracking = require("./delivery-tracking");
 const deliveryCleanup = require("./delivery-cleanup");
+const accountClosure = require("./account-closure");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -132,6 +133,7 @@ exports.getSenderWalletTransactions = rothLedger.getSenderWalletTransactions;
 exports.completeSenderWalletOnboarding = rothLedger.completeSenderWalletOnboarding;
 exports.requestSenderWalletDebit = rothLedger.requestSenderWalletDebit;
 exports.requestSenderWalletRefund = rothLedger.requestSenderWalletRefund;
+exports.closeCircumAccount = accountClosure.closeAccount;
 exports.createBusinessRothCheckout = businessPayments.createBusinessRothCheckout(stripe);
 exports.createBusinessInvoiceCheckout = businessPayments.createBusinessInvoiceCheckout(stripe);
 exports.createStripeConnectAccountForRider = riderConnect.createStripeConnectAccountForRider(stripeConnectClient);
