@@ -136,10 +136,13 @@ test("required pickup evidence blocks incomplete verification", () => {
   ).valid, true);
 });
 
-test("settlement values reuse canonical earnings and trust fields", () => {
+test("settlement values reuse canonical earnings and highest trust category", () => {
   assert.deepEqual(deliveryTracking.settlementValues({
     riderEarning: 12.345,
-    trustPointsAvailable: 6.9,
-  }), {amount: 12.35, trustPoints: 6});
-  assert.deepEqual(deliveryTracking.settlementValues({}), {amount: 0, trustPoints: 0});
+    isScheduled: true,
+    requiresVanguard: true,
+  }), {amount: 12.35, deliveryAmount: 12.35, tip: 0, waiting: 0, adjustment: 0, trustPoints: 5});
+  assert.equal(deliveryTracking.highestTrustAward({isHealthPlus: true, requiresVanguard: true}), 6);
+  assert.equal(deliveryTracking.highestTrustAward({isGift: true, isBusiness: true}), 5);
+  assert.equal(deliveryTracking.highestTrustAward({}), 1);
 });

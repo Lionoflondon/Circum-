@@ -105,12 +105,23 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
   await riderPresence.requireDispatchablePresence(riderId, rider);
 
   const accepted = await db.runTransaction(async (transaction) => {
+    const activeJobs = await transaction.get(db.collection("deliveryRequests")
+        .where("riderId", "==", riderId).limit(20));
     const found = await findDeliveryRequest(db, transaction, requestId);
     if (!found) {
       throw new functions.https.HttpsError("not-found", "Delivery request not found.");
     }
 
     const deliveryRequest = found.data;
+    const activeStatuses = new Set(["accepted", "navigating_to_pickup", "arrived_at_pickup", "waiting", "pickup_verification", "pickup_verified", "collected", "navigating_to_dropoff", "arrived_at_dropoff", "pin_required"]);
+    const conflictingJob = activeJobs.docs.find((doc) => doc.id !== found.id && activeStatuses.has(cleanText(doc.data().status).toLowerCase()));
+    if (conflictingJob) {
+      throw new functions.https.HttpsError("failed-precondition", "Complete your active delivery before accepting another job.");
+    }
+    const expiresAt = deliveryRequest.expiresAt && typeof deliveryRequest.expiresAt.toMillis === "function" ? deliveryRequest.expiresAt.toMillis() : Number(deliveryRequest.expiresAt || 0);
+    if (expiresAt > 0 && expiresAt <= Date.now()) {
+      throw new functions.https.HttpsError("failed-precondition", "This delivery offer has expired.");
+    }
     const privateDoc = await transaction.get(db.collection("irisPrivate").doc(deliveryRequest.requestId || found.id));
     if (privateDoc.exists) {
       deliveryRequest.irisPrivate = privateDoc.data();
