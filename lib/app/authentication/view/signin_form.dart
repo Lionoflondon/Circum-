@@ -1,14 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
 import 'forgot_password.dart';
-import 'signup.dart';
 
 class SigninForm extends StatefulWidget {
   const SigninForm({Key? key}) : super(key: key);
@@ -21,6 +19,13 @@ class SigninFormState extends State<SigninForm> {
   static final _formKey = GlobalKey<FormState>();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -156,9 +161,7 @@ class SigninFormState extends State<SigninForm> {
               maxLines: 1,
               minLines: 1,
               controller: passwordController,
-              onChanged: (value) => context
-                  .read<AuthBloc>()
-                  .add(SignupPasswordChanged(password: value)),
+              onChanged: (_) => setState(() {}),
               surfix: Container(
                   padding: const EdgeInsets.only(right: 10),
                   width: 80,
@@ -240,8 +243,7 @@ class SigninFormState extends State<SigninForm> {
           width: MediaQuery.of(context).size.width,
           child: AppButton.button(
               backgroundColor: state.isEmailValid == true &&
-                      state.password != null &&
-                      state.password!.length >= 8
+                      passwordController.text.length >= 8
                   ? null
                   : Colors.white.withOpacity(0.3),
               onPressed: () async {
@@ -259,9 +261,10 @@ class SigninFormState extends State<SigninForm> {
                       errorMessage: 'Invalid email address'));
                   return;
                 }
-                if (state.password != null && state.password!.length >= 8) {
-                  context.read<AuthBloc>().add(SignInWithEmail(
-                      email: state.email!, password: state.password!));
+                final password = passwordController.text;
+                if (password.length >= 8) {
+                  context.read<AuthBloc>().add(
+                      SignInWithEmail(email: state.email!, password: password));
                 }
               },
               widget: AppText.text('Sign In',

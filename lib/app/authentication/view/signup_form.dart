@@ -1,13 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:intl_phone_field/countries.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
-import '../../../extension/email_validation.dart';
 import '../bloc/auth_bloc.dart';
 import 'signin.dart';
 
@@ -23,6 +21,13 @@ class SignupFormState extends State<SignupForm> {
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   // final BuildContext authBlocContext;
 
@@ -193,9 +198,7 @@ class SignupFormState extends State<SignupForm> {
               maxLines: 1,
               minLines: 1,
               controller: passwordController,
-              onChanged: (value) => context
-                  .read<AuthBloc>()
-                  .add(SignupPasswordChanged(password: value)),
+              onChanged: (_) => setState(() {}),
               surfix: Container(
                   padding: const EdgeInsets.only(right: 10),
                   width: 80,
@@ -233,8 +236,7 @@ class SignupFormState extends State<SignupForm> {
           width: MediaQuery.of(context).size.width,
           child: AppButton.button(
             backgroundColor: state.isEmailValid == true &&
-                    state.password != null &&
-                    state.password!.length >= 8
+                    passwordController.text.length >= 8
                 ? null
                 : Colors.white.withOpacity(0.3),
             onPressed: () {
@@ -248,9 +250,10 @@ class SignupFormState extends State<SignupForm> {
                     errorMessage: 'Invalid email address'));
                 return;
               }
-              if (state.password != null && state.password!.length >= 8) {
-                context.read<AuthBloc>().add(SignUpWithEmail(
-                    email: state.email!, password: state.password!));
+              final password = passwordController.text;
+              if (password.length >= 8) {
+                context.read<AuthBloc>().add(
+                    SignUpWithEmail(email: state.email!, password: password));
               }
             },
             widget: AppText.text('Create Account',

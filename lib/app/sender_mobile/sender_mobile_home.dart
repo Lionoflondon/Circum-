@@ -45,7 +45,6 @@ const senderMobileAuthFinePrint =
     "By continuing, you agree to Circum's Terms and Privacy Policy.";
 const senderMobilePreviewAuthEnabledContract =
     'Sender Mobile preview uses real Firebase Auth before booking.';
-const _senderMobilePreviewPassword = 'CircumPreview!2026';
 
 enum _SenderEntryScreen { landing, auth, app }
 
@@ -360,19 +359,17 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               errorText: identityError,
               onChanged: (_) => setState(() {}),
             ),
-            if (_isSignIn) ...[
-              const SizedBox(height: 14),
-              _AuthField(
-                controller: _password,
-                label: 'PASSWORD',
-                hint: 'Password',
-                obscureText: true,
-                errorText: _showErrors && _password.text.isEmpty
-                    ? 'Password is required'
-                    : null,
-                onChanged: (_) => setState(() {}),
-              ),
-            ],
+            const SizedBox(height: 14),
+            _AuthField(
+              controller: _password,
+              label: 'PASSWORD',
+              hint: _isSignIn ? 'Password' : 'Create a password',
+              obscureText: true,
+              errorText: _showErrors && _password.text.isEmpty
+                  ? 'Password is required'
+                  : null,
+              onChanged: (_) => setState(() {}),
+            ),
             const SizedBox(height: 14),
             _SenderPrimaryAction(
               label: _busy
@@ -448,7 +445,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     try {
       await _authenticatePreviewSender(
         email: _identity.text.trim().toLowerCase(),
-        password: _isSignIn ? _password.text : _senderMobilePreviewPassword,
+        password: _password.text,
         createAccount: !_isSignIn,
       );
       widget.onAuthenticated();

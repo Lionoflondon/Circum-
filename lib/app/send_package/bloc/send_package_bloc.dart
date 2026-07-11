@@ -149,7 +149,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final fcmToken = await firebaseMessaging.getToken();
     if (fcmToken != null) {
       try {
-        print('saved token');
         await storage.write(key: "pushToken", value: fcmToken);
         final User? user = auth.currentUser;
 
@@ -158,18 +157,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         // Get the document snapshot
         final documentSnapshot = await documentReference.get();
         if (documentSnapshot.exists) {
-          print('FCMToken: $fcmToken');
           await db
               .collection("users")
               .doc(user?.uid)
               .update({'fcmToken': fcmToken}).then(
-            (value) => print("DocumentSnapshot successfully updated!"),
-            onError: (e) => print("Error updating document $e"),
+            (value) {},
+            onError: (e) {},
           );
         }
       } catch (e) {
-        print('Push Token update error');
-        print(e);
+        debugPrint('Push token update failed');
       }
     }
   }
@@ -547,11 +544,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (state.distance != null)
           'distanceMiles': DeliveryPricing.kilometresToMiles(state.distance!),
       };
-      debugPrint('analyseIris request payload: $payload');
       final result = await FirebaseFunctions.instance
           .httpsCallable('analyseIris')
           .call(payload);
-      debugPrint('analyseIris response payload: ${result.data}');
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
@@ -871,8 +866,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final User? user = auth.currentUser;
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final HttpsCallable callable = functions.httpsCallable('sendPackage');
-      final apnsToken = await firebaseMessaging.getAPNSToken();
-      // print('apnsToken: $apnsToken');
+      await firebaseMessaging.getAPNSToken();
       final fcmToken = await firebaseMessaging.getToken();
       final vanguardFields = VanguardProtection.initialFields(
         description:
@@ -955,7 +949,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'requestId': uuidStrong,
       });
 
-      print('Function response: ${response.data}');
+      if (response.data == null) {
+        debugPrint('Request creation returned no payload');
+      }
 
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('activeRequest', uuidStrong);
