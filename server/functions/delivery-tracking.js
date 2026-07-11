@@ -104,10 +104,40 @@ function assertRiderOwnsDelivery(delivery, riderId) {
   }
 }
 
+function assertRiderOperational(rider = {}) {
+  const state = normalized(
+      rider.accountState || rider.accountStatus || rider.status || rider.approvalStatus,
+  );
+  if (["suspended", "frozen", "closed", "rejected"].includes(state)) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "This rider account cannot perform delivery actions.",
+    );
+  }
+}
+
+function expectedPin(delivery, action) {
+  const protection = delivery.vanguardProtection || {};
+  if (action === "verify_collection_pin") {
+    return text(delivery.collectionPin || delivery.pickupPin || protection.collectionPin);
+  }
+  if (action === "verify_receiver_pin") {
+    return text(delivery.deliveryPin || delivery.receiverPin || delivery.dropoffPin || protection.deliveryPin);
+  }
+  return "";
+}
+
+function pinAttemptField(action) {
+  return action === "verify_receiver_pin" ?
+    "deliveryPinAttemptCount" : "collectionPinAttemptCount";
+}
+
 function patchForTransition({action, nextStatus, riderId}) {
   const now = FieldValue.serverTimestamp();
   const patch = {
     status: nextStatus,
+    deliveryStatus: nextStatus,
+    deliveryStage: nextStatus,
     updatedAt: now,
     lastRiderAction: action,
     lastRiderActionAt: now,
@@ -167,9 +197,45 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const delivery = found.data || {};
     assertRiderOwnsDelivery(delivery, riderId);
 
+    const riderRef = db.collection("riders").doc(riderId);
+    const riderSnapshot = await transaction.get(riderRef);
+    assertRiderOperational(riderSnapshot.data());
+
     const currentStatus = normalized(delivery.status || delivery.deliveryStatus || "requested");
+    if (currentStatus === nextStatus ||
+        (nextStatus === "delivered" && currentStatus === "completed")) {
+      return {
+        deliveryId: found.id,
+        requestId: delivery.requestId || found.id,
+        status: currentStatus,
+        senderTrackingState: tracking.senderTrackingStateForBackendStatus(currentStatus),
+        idempotent: true,
+      };
+    }
     if (!tracking.canTransitionDeliveryStatus(currentStatus, nextStatus)) {
       throw new functions.https.HttpsError("failed-precondition", `Cannot move delivery from ${currentStatus} to ${nextStatus}.`);
+    }
+
+
+    const requiredPin = expectedPin(delivery, action);
+    if (requiredPin) {
+      const suppliedPin = text(data && data.pin);
+      const attemptField = pinAttemptField(action);
+      const attempts = Number(delivery[attemptField] || 0);
+      if (attempts >= 5) {
+        throw new functions.https.HttpsError(
+            "resource-exhausted",
+            "Too many incorrect PIN attempts. Contact Circum Support.",
+        );
+      }
+      if (!/^\d{6}$/.test(suppliedPin) || suppliedPin !== requiredPin) {
+        transaction.set(found.ref, {
+          [attemptField]: attempts + 1,
+          lastPinAttemptAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        return {verificationFailed: true, attemptsRemaining: 4 - attempts};
+      }
     }
 
     const patch = patchForTransition({
@@ -207,6 +273,12 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       senderTrackingState: tracking.senderTrackingStateForBackendStatus(nextStatus),
     };
   });
+  if (result.verificationFailed) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Incorrect PIN. ${Math.max(0, result.attemptsRemaining)} attempts remaining.`,
+    );
+  }
   return result;
 });
 
@@ -215,4 +287,6 @@ exports._private = {
   shouldWriteLiveLocation,
   distanceMeters,
   patchForTransition,
+  expectedPin,
+  assertRiderOperational,
 };

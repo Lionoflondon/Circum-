@@ -85,3 +85,20 @@ test("rider live location writes are throttled for low Firestore cost", () => {
       true,
   );
 });
+
+test("PIN lookup reuses canonical and Vanguard fields", () => {
+  assert.equal(deliveryTracking.expectedPin({pickupPin: "123456"}, "verify_collection_pin"), "123456");
+  assert.equal(deliveryTracking.expectedPin({
+    vanguardProtection: {deliveryPin: "654321"},
+  }, "verify_receiver_pin"), "654321");
+});
+
+test("blocked rider account states cannot transition deliveries", () => {
+  assert.throws(
+      () => deliveryTracking.assertRiderOperational({accountState: "frozen"}),
+      /cannot perform delivery actions/,
+  );
+  assert.doesNotThrow(
+      () => deliveryTracking.assertRiderOperational({accountState: "approved"}),
+  );
+});
