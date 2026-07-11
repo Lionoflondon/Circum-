@@ -96,13 +96,15 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
   }
 
   const riderId = context.auth.uid;
+  const founder = context.auth.token && context.auth.token.founderRider === true;
   const db = getFirestore();
   const rider = await getRiderProfile(db, riderId);
 
   if (!rider) {
     throw new functions.https.HttpsError("not-found", "Rider profile not found.");
   }
-  await riderPresence.requireDispatchablePresence(riderId, rider);
+  if (!founder) await riderPresence.requireDispatchablePresence(riderId, rider);
+  if (founder && !["online", "available"].includes(cleanText(rider.status || rider.availabilityStatus).toLowerCase())) throw new functions.https.HttpsError("failed-precondition", "Go online before accepting a delivery.");
 
   const accepted = await db.runTransaction(async (transaction) => {
     const activeJobs = await transaction.get(db.collection("deliveryRequests")
@@ -130,16 +132,16 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError("failed-precondition", "Delivery request is not dispatchable by Iris.");
     }
 
-    if (!riderCanViewDispatch(rider, deliveryRequest)) {
+    if (!founder && !riderCanViewDispatch(rider, deliveryRequest)) {
       throw new functions.https.HttpsError("permission-denied", "This delivery is not available to the rider's current rank.");
     }
 
-    if (!riderVehicleMatchesRequest(rider, deliveryRequest) &&
+    if (!founder && !riderVehicleMatchesRequest(rider, deliveryRequest) &&
         !canOverrideVehicleMismatch(context, data)) {
       throw new functions.https.HttpsError("failed-precondition", "Your registered vehicle is not suitable for this delivery.");
     }
 
-    if (!riderMatchesIris(rider, deliveryRequest)) {
+    if (!founder && !riderMatchesIris(rider, deliveryRequest)) {
       throw new functions.https.HttpsError("failed-precondition", "Rider does not match this delivery requirement.");
     }
 

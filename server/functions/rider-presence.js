@@ -77,7 +77,8 @@ exports.goOnline = functions.https.onCall(async (data, context) => {
   const riderId = requireAuth(context);
   const db = getFirestore();
   const profile = await riderProfile(db, riderId);
-  const reason = core.blockedReason(profile);
+  const founder = context.auth.token && context.auth.token.founderRider === true;
+  const reason = founder ? null : core.blockedReason(profile);
   if (reason) {
     throw new functions.https.HttpsError("failed-precondition", reason);
   }
