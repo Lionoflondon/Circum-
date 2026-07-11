@@ -28,9 +28,9 @@ in this repository.
 | Native router | `lib/app.dart`, `MaterialApp` with the session gate as `home`; named routes are `/sender/mobile` and `/rider/jobs`. |
 | Platforms | Web, iOS, Android, macOS, Linux, Windows. |
 | Firebase project | `circum-2797c`. |
-| Hosting targets | `hosting:public` -> `circum-2797c`; `hosting:app` -> `circum-app-2797c`. |
-| Build / deploy | `scripts/deploy_main_web.sh` builds `build/web_main` and deploys `hosting:public,hosting:app`. |
-| Repository deployment status | Active: these targets are the only public-app targets in the checked-in deployment scripts. |
+| Hosting targets | `hosting:public` -> `circum-2797c`; `hosting:sender` -> `circum-app-2797c`. |
+| Build / deploy | Public: `scripts/deploy_main_web.sh` builds `build/web_main` and deploys `hosting:public`. Sender app: `scripts/deploy_sender_app.sh` builds `build/web_sender` and deploys `hosting:sender`. |
+| Repository deployment status | Active: these targets are isolated in checked-in deployment scripts. |
 
 Public URLs represented by Hosting configuration:
 
@@ -49,7 +49,8 @@ dedicated Rider app entry point.
 | --- | --- | --- |
 | `/` | `CircumPublicAppRoot` | **Canonical public and marketing entry** |
 | `/gifts`, `/terms`, `/privacy`, `/vanguard`, `/business` | `CircumPublicAppRoot` public route variants | **Canonical public routes** |
-| `?app=sender` | `CircumSenderAppRoot` with `useSenderPreview: routeDeliveryId == null` | **Sender browser entry; preview when no delivery id is supplied** |
+| `https://circum-app-2797c.web.app/` | `CircumSenderAppRoot` | **Canonical hosted Sender app entry** |
+| `?app=sender` | `CircumSenderAppRoot` with `useSenderPreview: routeDeliveryId == null` | **Sender browser compatibility entry; preview when no delivery id is supplied** |
 | `?app=health`, `?app=business`, `?app=profile` | `CircumSenderAppRoot` | **Sender product entry points** |
 | `/story/**` | Cloud Function `giftStoryLanding` | **Secure Gift Story landing route** |
 | `/rider/jobs` (native named route only) | `RiderHomeScreen` | **Shared compatibility route; not the dedicated Rider App entry point** |
@@ -128,7 +129,7 @@ redirects Rider URLs to this application and never renders a Rider portal.
 | Target | Site | Build directory | Canonical owner | Checked-in deploy command |
 | --- | --- | --- | --- | --- |
 | `hosting:public` | `circum-2797c` | `build/web_main` | Circum Sender/Public + Marketing | `scripts/deploy_main_web.sh` |
-| `hosting:app` | `circum-app-2797c` | `build/web_main` | Circum Sender/Public + Marketing | `scripts/deploy_main_web.sh` |
+| `hosting:sender` | `circum-app-2797c` | `build/web_sender` | Circum Sender App | `scripts/deploy_sender_app.sh` |
 | `hosting:admin` | `circum-admin-2797c` | `build/web_admin` | Circum Admin Portal | `scripts/deploy_admin_web.sh` |
 | Rider Hosting | `circum-rider-2797c` | `build/web` | Circum Rider App (`Circum-Rider`) | `flutter build web --release --no-wasm-dry-run` then `firebase deploy --only hosting` |
 
