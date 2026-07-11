@@ -6,7 +6,7 @@ void main() {
   group('canonical Rider web route', () {
     final source = File('lib/web_sender_app.dart').readAsStringSync();
 
-    test('direct Rider route selects the authenticated Rider portal', () {
+    test('direct Rider route selects the dedicated Rider application', () {
       final riderRoute = source.substring(
         source.indexOf("if (path == '/rider')"),
         source.indexOf("if (path == '/gifts')"),
@@ -24,6 +24,24 @@ void main() {
 
       expect(riderAliases, contains('surface: CircumAppSurface.riderApp'));
       expect(riderAliases, isNot(contains('useRiderPreview: true')));
+    });
+
+    test('main hosting redirects Rider surfaces to the canonical Rider site',
+        () {
+      expect(
+        source,
+        contains(
+            "const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app'"),
+      );
+      final riderRoot = source.substring(
+        source.indexOf('class CircumRiderAppRoot'),
+        source.indexOf('class CircumRiderStripeConnectRoute'),
+      );
+
+      expect(riderRoot,
+          contains('html.window.location.replace(_canonicalRiderAppUrl)'));
+      expect(riderRoot, isNot(contains('_RiderEnrollmentPortal(')));
+      expect(riderRoot, isNot(contains('_RiderArchitecturePreviewApp(')));
     });
   });
 }

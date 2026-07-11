@@ -54,6 +54,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'firebase_options.dart';
 
 const _companyName = 'Circum';
+const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _vanguardAddonPriceGbp = 1.99;
@@ -680,7 +681,12 @@ class CircumSenderAppRoot extends StatelessWidget {
   }
 }
 
-class CircumRiderAppRoot extends StatelessWidget {
+/// Public Rider entry points belong to the dedicated Circum-Rider application.
+///
+/// The main hosting surface intentionally performs no Rider authentication or
+/// portal rendering. Keeping this boundary explicit prevents the Sender web
+/// bundle from becoming a second Rider application.
+class CircumRiderAppRoot extends StatefulWidget {
   final _CircumColors colors;
   final bool darkMode;
   final bool usePreview;
@@ -699,18 +705,25 @@ class CircumRiderAppRoot extends StatelessWidget {
   });
 
   @override
+  State<CircumRiderAppRoot> createState() => _CircumRiderAppRootState();
+}
+
+class _CircumRiderAppRootState extends State<CircumRiderAppRoot> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      html.window.location.replace(_canonicalRiderAppUrl);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _PhoneStage(
-      colors: colors,
-      child: usePreview
-          ? _RiderArchitecturePreviewApp(colors: colors)
-          : _RiderEnrollmentPortal(
-              darkMode: darkMode,
-              colors: colors,
-              onBack: onBack,
-              onRoleSelected: onRoleSelected,
-              onToggleTheme: onToggleTheme,
-            ),
+      colors: widget.colors,
+      child: const Center(
+        child: CircularProgressIndicator(),
+      ),
     );
   }
 }
