@@ -24510,6 +24510,63 @@ class _PickupWaitingPanel extends StatefulWidget {
   State<_PickupWaitingPanel> createState() => _PickupWaitingPanelState();
 }
 
+class _SenderWaitingSnapshot {
+  final DateTime? noShowAvailableAt;
+  final double? customerCharge;
+  final String currency;
+  final bool customerResponded;
+  final bool noShowRecorded;
+
+  const _SenderWaitingSnapshot({
+    required this.noShowAvailableAt,
+    required this.customerCharge,
+    required this.currency,
+    required this.customerResponded,
+    required this.noShowRecorded,
+  });
+
+  factory _SenderWaitingSnapshot.fromDelivery(Map<String, dynamic> delivery) {
+    final waiting =
+        (delivery['waiting'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final noShowFinancial =
+        (delivery['noShowFinancial'] as Map?)?.cast<String, dynamic>() ??
+            const {};
+    return _SenderWaitingSnapshot(
+      noShowAvailableAt: _senderWaitingDate(
+        waiting['noShowAvailableAt'] ?? delivery['pickupWaitDeadlineAt'],
+      ),
+      customerCharge: _senderWaitingMoney(
+        noShowFinancial['amount'] ??
+            waiting['noShowFeeAmount'] ??
+            delivery['waitingCharge'] ??
+            delivery['waitingChargeAmount'] ??
+            delivery['waitingSurchargeTotalGbp'] ??
+            delivery['pickupNoShowSurchargeGbp'],
+      ),
+      currency:
+          '${noShowFinancial['currency'] ?? waiting['currency'] ?? delivery['currency'] ?? 'GBP'}',
+      customerResponded: delivery['customerWaitExtensions'] != null ||
+          '${delivery['waitingContextState'] ?? ''}' == 'customer_responded' ||
+          delivery['senderContactEstablished'] == true,
+      noShowRecorded: '${delivery['status'] ?? ''}' == 'sender_no_show_pickup',
+    );
+  }
+}
+
+DateTime? _senderWaitingDate(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+double? _senderWaitingMoney(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
+}
+
 class _PickupWaitingPanelState extends State<_PickupWaitingPanel> {
   late Timer _timer;
   bool _responding = false;
@@ -24532,28 +24589,18 @@ class _PickupWaitingPanelState extends State<_PickupWaitingPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
-    final waiting =
-        (widget.job['waiting'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final noShowFinancial =
-        (widget.job['noShowFinancial'] as Map?)?.cast<String, dynamic>() ??
-            const {};
-    final deadline = _date(
-        waiting['noShowAvailableAt'] ?? widget.job['pickupWaitDeadlineAt']);
+    final waiting = _SenderWaitingSnapshot.fromDelivery(widget.job);
+    final deadline = waiting.noShowAvailableAt;
     final remaining =
         deadline == null ? Duration.zero : deadline.difference(DateTime.now());
     final remainingSeconds = remaining.inSeconds.clamp(0, 9999);
     final minutes = (remainingSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (remainingSeconds % 60).toString().padLeft(2, '0');
-    final noShow = '${widget.job['status'] ?? ''}' == 'sender_no_show_pickup';
+    final noShow = waiting.noShowRecorded;
     final waitingExpired = !noShow && remainingSeconds == 0;
-    final customerResponded = widget.job['customerWaitExtensions'] != null ||
-        '${widget.job['waitingContextState'] ?? ''}' == 'customer_responded' ||
-        widget.job['senderContactEstablished'] == true;
-    final waitingCharge = _moneyValue(noShowFinancial['amount'] ??
-        waiting['noShowFeeAmount'] ??
-        widget.job['pickupNoShowSurchargeGbp']);
-    final currency =
-        '${noShowFinancial['currency'] ?? waiting['currency'] ?? widget.job['currency'] ?? 'GBP'}';
+    final customerResponded = waiting.customerResponded;
+    final waitingCharge = waiting.customerCharge;
+    final currency = waiting.currency;
     final riderPhone = _riderPhone(widget.job);
 
     return Container(
@@ -24705,20 +24752,6 @@ class _PickupWaitingPanelState extends State<_PickupWaitingPanel> {
     } finally {
       if (mounted) setState(() => _responding = false);
     }
-  }
-
-  DateTime? _date(dynamic value) {
-    if (value is Timestamp) return value.toDate();
-    if (value is DateTime) return value;
-    if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
-    if (value is String) return DateTime.tryParse(value);
-    return null;
-  }
-
-  double? _moneyValue(Object? value) {
-    if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value);
-    return null;
   }
 
   String _money(double value, String currency) {
@@ -43761,8 +43794,18 @@ class _SenderTrackingSurface extends StatelessWidget {
               ? (delivery['waiting'] as Map)['startedAt']
               : null),
     );
+    final waiting =
+        (delivery['waiting'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final noShowFinancial =
+        (delivery['noShowFinancial'] as Map?)?.cast<String, dynamic>() ??
+            const {};
+    final waitNoShowAt = _senderTrackingDateTime(
+      waiting['noShowAvailableAt'] ?? delivery['pickupWaitDeadlineAt'],
+    );
     final waitingCharge = _moneyFromAny(
-      delivery['waitingCharge'] ??
+      noShowFinancial['amount'] ??
+          waiting['noShowFeeAmount'] ??
+          delivery['waitingCharge'] ??
           delivery['waitingChargeAmount'] ??
           delivery['waitingSurchargeTotalGbp'],
     );
@@ -43836,9 +43879,12 @@ class _SenderTrackingSurface extends StatelessWidget {
                         const SizedBox(height: 8),
                         _WaitingTimerCard(
                           colors: colors,
+                          delivery: delivery,
                           status: status,
                           waitStartedAt: waitStartedAt,
+                          noShowAvailableAt: waitNoShowAt,
                           waitingCharge: waitingCharge,
+                          onMessageRider: onMessageRider,
                         ),
                       ],
                       if (!SenderTrackingPolicy.isFindingRider(status)) ...[
@@ -44715,79 +44761,191 @@ class _PinStatusPill extends StatelessWidget {
 
 class _WaitingTimerCard extends StatelessWidget {
   final _CircumColors colors;
+  final Map<String, dynamic> delivery;
   final String status;
   final DateTime? waitStartedAt;
+  final DateTime? noShowAvailableAt;
   final double? waitingCharge;
+  final VoidCallback? onMessageRider;
 
   const _WaitingTimerCard({
     required this.colors,
+    required this.delivery,
     required this.status,
     required this.waitStartedAt,
+    required this.noShowAvailableAt,
     required this.waitingCharge,
+    required this.onMessageRider,
   });
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final elapsed = waitStartedAt == null
+    final freeLeft = noShowAvailableAt == null
         ? Duration.zero
-        : now.difference(waitStartedAt!).isNegative
+        : noShowAvailableAt!.difference(now).isNegative
             ? Duration.zero
-            : now.difference(waitStartedAt!);
-    final freeLeft = const Duration(minutes: 3) - elapsed;
+            : noShowAvailableAt!.difference(now);
+    final freeExpired =
+        noShowAvailableAt != null && !now.isBefore(noShowAvailableAt!);
     final isPickup = status == 'arrived_at_pickup' || status == 'waiting';
+    final customerResponded = delivery['customerWaitExtensions'] != null ||
+        '${delivery['waitingContextState'] ?? ''}' == 'customer_responded' ||
+        delivery['senderContactEstablished'] == true;
+    final noShow = '${delivery['status'] ?? ''}' == 'sender_no_show_pickup';
     return _SenderTrackingGlass(
       glow: const Color(0xFFFCA5A5),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.timer_outlined, color: colors.text, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isPickup ? 'Pickup wait' : 'Drop-off wait',
+          Row(
+            children: [
+              Icon(Icons.timer_outlined, color: colors.text, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isPickup ? 'Waiting at Pickup' : 'Waiting at Drop-off',
                   style: TextStyle(
                     color: colors.text,
                     fontWeight: FontWeight.w900,
                     fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  freeLeft.isNegative
-                      ? 'Waiting charges may apply after the free waiting period.'
-                      : '3 min free wait included · Free wait ends in ${freeLeft.inSeconds}s',
-                  style: TextStyle(
-                    color: freeLeft.isNegative
-                        ? const Color(0xFFFCA5A5)
-                        : colors.mutedText,
-                    height: 1.25,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
+              ),
+              Text(
+                noShow ? 'Recorded' : _durationClock(freeLeft),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'monospace',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
                 ),
-                if (waitingCharge != null) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    'Waiting charge: £${waitingCharge!.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: Color(0xFFFCA5A5),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            customerResponded
+                ? 'Customer response received. Waiting continues under the current policy.'
+                : freeExpired
+                    ? 'Your rider has completed the required waiting period. If you still require this delivery, contact your rider immediately.'
+                    : 'Your rider has arrived. Free waiting remains active until the backend waiting period expires.',
+            style: TextStyle(
+              color: freeExpired ? const Color(0xFFFCA5A5) : colors.mutedText,
+              height: 1.25,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _SenderTrackingMetricLine(
+            label:
+                freeExpired ? 'Free waiting expired' : 'Free waiting remaining',
+            value: freeExpired ? '00:00' : _durationClock(freeLeft),
+            color: freeExpired ? const Color(0xFFFCA5A5) : colors.text,
+          ),
+          if (waitingCharge != null)
+            _SenderTrackingMetricLine(
+              label: noShow
+                  ? 'Additional waiting charge recorded'
+                  : 'Additional waiting charge',
+              value: '£${waitingCharge!.toStringAsFixed(2)}',
+              color:
+                  freeExpired || noShow ? const Color(0xFFFCA5A5) : colors.text,
+            ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: customerResponded ? null : _respondToRider,
+                icon: const Icon(Icons.directions_walk_rounded),
+                label: const Text('I’m on my way'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onMessageRider,
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Message Rider'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _riderPhone == null
+                    ? null
+                    : () => html.window.open('tel:$_riderPhone', '_self'),
+                icon: const Icon(Icons.phone_outlined),
+                label: const Text('Call Rider'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String? get _riderPhone {
+    for (final key in const [
+      'riderPhone',
+      'driverPhone',
+      'courierPhone',
+      'assignedRiderPhone',
+    ]) {
+      final phone = '${delivery[key] ?? ''}'.trim();
+      if (phone.isNotEmpty) return phone;
+    }
+    final rider = delivery['rider'] is Map
+        ? Map<String, dynamic>.from(delivery['rider'] as Map)
+        : delivery['driver'] is Map
+            ? Map<String, dynamic>.from(delivery['driver'] as Map)
+            : const <String, dynamic>{};
+    final nested = '${rider['phone'] ?? rider['phoneNumber'] ?? ''}'.trim();
+    return nested.isEmpty ? null : nested;
+  }
+
+  Future<void> _respondToRider() async {
+    final deliveryId =
+        '${delivery['requestId'] ?? delivery['id'] ?? ''}'.trim();
+    if (deliveryId.isEmpty) return;
+    await FirebaseFunctions.instance
+        .httpsCallable('recordCustomerArrivalResponse')
+        .call({
+      'deliveryId': deliveryId,
+      'response': 'on_my_way',
+    });
+  }
+}
+
+class _SenderTrackingMetricLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _SenderTrackingMetricLine({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .58),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           Text(
-            _durationClock(elapsed),
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'monospace',
-              fontSize: 18,
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
               fontWeight: FontWeight.w900,
             ),
           ),
