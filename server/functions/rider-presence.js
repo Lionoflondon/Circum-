@@ -78,15 +78,16 @@ exports.goOnline = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const profile = await riderProfile(db, riderId);
   const founder = context.auth.token && context.auth.token.founderRider === true;
-  const reason = founder ? null : core.blockedReason(profile);
+  const reason = core.blockedReasonForAccess(profile, founder);
   if (reason) {
     throw new functions.https.HttpsError("failed-precondition", reason);
   }
   const patch = presencePatch({riderId, status: "available", busy: false, location: data && data.location});
-  await db.collection("riderPresence").doc(riderId).set({
-    ...patch,
-    source: "goOnline",
-  }, {merge: true});
+  const batch = db.batch();
+  batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOnline"}, {merge: true});
+  batch.set(db.collection("riders").doc(riderId), {status: "online", availabilityStatus: "available", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_online", founderOverride: founder, actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
+  await batch.commit();
   return {success: true, presence: {...patch, serverTimestampPending: true}};
 });
 
@@ -106,10 +107,11 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
     );
   }
   const patch = presencePatch({riderId, status: "offline", busy: false, location: data && data.location});
-  await db.collection("riderPresence").doc(riderId).set({
-    ...patch,
-    source: "goOffline",
-  }, {merge: true});
+  const batch = db.batch();
+  batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOffline"}, {merge: true});
+  batch.set(db.collection("riders").doc(riderId), {status: "offline", availabilityStatus: "offline", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_offline", actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
+  await batch.commit();
   return {success: true, presence: {...patch, serverTimestampPending: true}};
 });
 

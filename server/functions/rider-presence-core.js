@@ -43,6 +43,10 @@ function canGoOnline(profile = {}) {
   return blockedReason(profile) === "";
 }
 
+function blockedReasonForAccess(profile = {}, founder = false) {
+  return founder ? "" : blockedReason(profile);
+}
+
 function canReceiveDispatch({profile = {}, presence = {}, now = Date.now()}) {
   if (!canGoOnline(profile)) return false;
   if (presence.isOnline !== true) return false;
@@ -75,6 +79,7 @@ function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
 module.exports = {
   STALE_HEARTBEAT_MS,
   blockedReason,
+  blockedReasonForAccess,
   canGoOnline,
   canReceiveDispatch,
   nextPresenceOnDelivery,

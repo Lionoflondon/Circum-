@@ -32,6 +32,12 @@ test("unverified vehicle blocks online and dispatch", () => {
   assert.equal(core.canReceiveDispatch({profile, presence}), false);
 });
 
+test("founder claim bypasses readiness while normal rider remains blocked", () => {
+  const incomplete = {onboardingStatus: "in_progress", vehicleStatus: "pending"};
+  assert.equal(core.blockedReasonForAccess(incomplete, true), "");
+  assert.equal(core.blockedReasonForAccess(incomplete, false), "Rider approval required.");
+});
+
 test("stale heartbeat blocks dispatch", () => {
   const profile = {
     onboardingStatus: "approved",
