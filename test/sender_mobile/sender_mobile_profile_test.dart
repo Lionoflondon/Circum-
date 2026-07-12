@@ -191,6 +191,55 @@ void main() {
     expect(find.textContaining('Rider'), findsNothing);
   });
 
+  testWidgets('opens functional Sender settings screens', (tester) async {
+    await tester.pumpWidget(
+      _app(_FakeProfileRepository(profile: completeProfile)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Security'), 300);
+    await tester.tap(find.text('Security'));
+    await tester.pumpAndSettle();
+    expect(find.text('Change password'), findsOneWidget);
+    expect(find.text('Two-Factor Authentication'), findsOneWidget);
+    expect(find.text('Biometrics'), findsOneWidget);
+    expect(find.text('Active Devices'), findsOneWidget);
+    expect(find.text('Change email'), findsOneWidget);
+    expect(find.text('Change phone number'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Language'), 300);
+    await tester.tap(find.text('Language'));
+    await tester.pumpAndSettle();
+    expect(find.text('App Language'), findsOneWidget);
+    expect(find.text('Device Default'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('Region'), findsWidgets);
+    expect(find.text('Uses device region by default'), findsOneWidget);
+    expect(find.text('Date & Time Format'), findsOneWidget);
+    expect(find.text('Automatic'), findsOneWidget);
+    expect(find.text('12-hour'), findsOneWidget);
+    expect(find.text('24-hour'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Accessibility'), 300);
+    await tester.tap(find.text('Accessibility'));
+    await tester.pumpAndSettle();
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Follow System'), findsOneWidget);
+    expect(find.text('Dark'), findsOneWidget);
+    expect(find.text('Light'), findsOneWidget);
+    expect(find.text('Text Size'), findsOneWidget);
+    expect(find.text('Small'), findsOneWidget);
+    expect(find.text('Default'), findsOneWidget);
+    expect(find.text('Large'), findsOneWidget);
+    expect(find.text('High Contrast'), findsOneWidget);
+    expect(find.text('Reduce Motion'), findsOneWidget);
+    expect(find.text('Screen Reader Optimisations'), findsOneWidget);
+  });
+
   testWidgets('shows missing fields without asking for known email',
       (tester) async {
     final repository = _FakeProfileRepository(

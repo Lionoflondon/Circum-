@@ -10,7 +10,6 @@ import 'package:image_picker/image_picker.dart';
 
 import '../sender_profile/sender_profile.dart';
 import 'design_system/sender_design_system.dart';
-import 'sender_accessibility.dart';
 import 'sender_saved_addresses.dart';
 
 class SenderTrustActivity {
@@ -763,13 +762,27 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                 icon: Icons.lock_outline_rounded,
                 title: 'Security',
                 subtitle: 'Password and account protection.',
-                onTap: () => _showLocalMessage('Security will open here.'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const _SenderSecuritySettingsScreen(),
+                    settings: const RouteSettings(
+                      name: '/sender-mobile/profile/security',
+                    ),
+                  ),
+                ),
               ),
               _ProfileShortcut(
                 icon: Icons.language_rounded,
                 title: 'Language',
                 subtitle: 'Choose your preferred language.',
-                onTap: () => _showLocalMessage('Language will open here.'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const _SenderLanguageSettingsScreen(),
+                    settings: const RouteSettings(
+                      name: '/sender-mobile/profile/language',
+                    ),
+                  ),
+                ),
               ),
               _ProfileShortcut(
                 icon: Icons.accessibility_new_rounded,
@@ -777,7 +790,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                 subtitle: 'Adjust your Circum experience.',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const SenderAccessibilityView(),
+                    builder: (_) => const _SenderAccessibilitySettingsScreen(),
                     settings: const RouteSettings(
                       name: '/sender-mobile/profile/accessibility',
                     ),
@@ -1438,6 +1451,584 @@ class _ProfileDetail extends StatelessWidget {
       ],
     );
   }
+}
+
+class _SenderSettingsShell extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<Widget> children;
+
+  const _SenderSettingsShell({
+    required this.title,
+    required this.subtitle,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTokens.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.white,
+        title: Text(title, style: GoogleFonts.dmSerifDisplay()),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+          children: [
+            Text(
+              subtitle,
+              style: GoogleFonts.inter(
+                color: _ProfileTokens.muted,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderSecuritySettingsScreen extends StatefulWidget {
+  const _SenderSecuritySettingsScreen();
+
+  @override
+  State<_SenderSecuritySettingsScreen> createState() =>
+      _SenderSecuritySettingsScreenState();
+}
+
+class _SenderSecuritySettingsScreenState
+    extends State<_SenderSecuritySettingsScreen> {
+  bool _twoFactorEnabled = false;
+  bool _biometricsEnabled = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final biometricLabel =
+        platform == TargetPlatform.iOS ? 'Face ID / Touch ID' : 'Fingerprint';
+    return _SenderSettingsShell(
+      title: 'Security',
+      subtitle: 'Manage sign-in, account protection and signed-in devices.',
+      children: [
+        _ProfileGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _SettingsActionRow(
+                icon: Icons.password_rounded,
+                title: 'Password',
+                subtitle: 'Change password',
+                onTap: () => _showPending(context, 'Change password'),
+              ),
+              _SettingsSwitchRow(
+                icon: Icons.verified_user_outlined,
+                title: 'Two-Factor Authentication',
+                subtitle: _twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA',
+                value: _twoFactorEnabled,
+                onChanged: (value) => setState(() {
+                  _twoFactorEnabled = value;
+                }),
+              ),
+              _SettingsSwitchRow(
+                icon: Icons.fingerprint_rounded,
+                title: 'Biometrics',
+                subtitle: biometricLabel,
+                value: _biometricsEnabled,
+                onChanged: (value) => setState(() {
+                  _biometricsEnabled = value;
+                }),
+              ),
+              _SettingsActionRow(
+                icon: Icons.devices_other_rounded,
+                title: 'Active Devices',
+                subtitle: 'This device · Manage signed-in sessions',
+                onTap: () => _showActiveDevices(context),
+              ),
+              _SettingsActionRow(
+                icon: Icons.alternate_email_rounded,
+                title: 'Email Address',
+                subtitle: 'Change email',
+                onTap: () => _showPending(context, 'Change email'),
+              ),
+              _SettingsActionRow(
+                icon: Icons.phone_iphone_rounded,
+                title: 'Phone Number',
+                subtitle: 'Change phone number',
+                onTap: () => _showPending(context, 'Change phone number'),
+                showDivider: false,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showActiveDevices(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _ProfileTokens.panel,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Active Devices',
+                style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _ProfileGlassCard(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.smartphone_rounded,
+                      color: _ProfileTokens.lightAccent,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'This device\nCurrent session',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _showPending(
+                        context,
+                        'Sign out this device',
+                      ),
+                      child: const Text('Sign out'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: _secondaryButtonStyle(),
+                onPressed: () => _showPending(
+                  context,
+                  'Sign out all other devices',
+                ),
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Sign out all other devices'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderLanguageSettingsScreen extends StatefulWidget {
+  const _SenderLanguageSettingsScreen();
+
+  @override
+  State<_SenderLanguageSettingsScreen> createState() =>
+      _SenderLanguageSettingsScreenState();
+}
+
+class _SenderLanguageSettingsScreenState
+    extends State<_SenderLanguageSettingsScreen> {
+  String _language = 'Device Default';
+  String _timeFormat = 'Automatic';
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderSettingsShell(
+      title: 'Language',
+      subtitle:
+          'Choose app language preferences where Circum localisation is available.',
+      children: [
+        const _ProfileSectionTitle(title: 'App Language'),
+        const SizedBox(height: 10),
+        _SettingsChoiceCard<String>(
+          value: _language,
+          options: const ['Device Default', 'English'],
+          onChanged: (value) => setState(() {
+            _language = value;
+          }),
+        ),
+        const SizedBox(height: 20),
+        const _ProfileSectionTitle(title: 'Region'),
+        const SizedBox(height: 10),
+        const _ProfileGlassCard(
+          child: _SettingsStaticRow(
+            icon: Icons.public_rounded,
+            title: 'Region',
+            subtitle: 'Uses device region by default',
+          ),
+        ),
+        const SizedBox(height: 20),
+        const _ProfileSectionTitle(title: 'Date & Time Format'),
+        const SizedBox(height: 10),
+        _SettingsChoiceCard<String>(
+          value: _timeFormat,
+          options: const ['Automatic', '12-hour', '24-hour'],
+          onChanged: (value) => setState(() {
+            _timeFormat = value;
+          }),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderAccessibilitySettingsScreen extends StatefulWidget {
+  const _SenderAccessibilitySettingsScreen();
+
+  @override
+  State<_SenderAccessibilitySettingsScreen> createState() =>
+      _SenderAccessibilitySettingsScreenState();
+}
+
+class _SenderAccessibilitySettingsScreenState
+    extends State<_SenderAccessibilitySettingsScreen> {
+  String _appearance = 'Follow System';
+  String _textSize = 'Default';
+  bool _highContrast = false;
+  bool _reduceMotion = false;
+  bool _screenReaderOptimisations = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderSettingsShell(
+      title: 'Accessibility',
+      subtitle: 'Tune the visual and motion experience for your needs.',
+      children: [
+        const _ProfileSectionTitle(title: 'Appearance'),
+        const SizedBox(height: 10),
+        _SettingsChoiceCard<String>(
+          value: _appearance,
+          options: const ['Follow System', 'Dark', 'Light'],
+          onChanged: (value) => setState(() {
+            _appearance = value;
+          }),
+        ),
+        const SizedBox(height: 20),
+        const _ProfileSectionTitle(title: 'Text Size'),
+        const SizedBox(height: 10),
+        _SettingsChoiceCard<String>(
+          value: _textSize,
+          options: const ['Small', 'Default', 'Large'],
+          onChanged: (value) => setState(() {
+            _textSize = value;
+          }),
+        ),
+        const SizedBox(height: 20),
+        _ProfileGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _SettingsSwitchRow(
+                icon: Icons.contrast_rounded,
+                title: 'High Contrast',
+                subtitle: _highContrast ? 'On' : 'Off',
+                value: _highContrast,
+                onChanged: (value) => setState(() {
+                  _highContrast = value;
+                }),
+              ),
+              _SettingsSwitchRow(
+                icon: Icons.motion_photos_off_rounded,
+                title: 'Reduce Motion',
+                subtitle: _reduceMotion ? 'On' : 'Off',
+                value: _reduceMotion,
+                onChanged: (value) => setState(() {
+                  _reduceMotion = value;
+                }),
+              ),
+              _SettingsSwitchRow(
+                icon: Icons.record_voice_over_rounded,
+                title: 'Screen Reader Optimisations',
+                subtitle: _screenReaderOptimisations ? 'On' : 'Off',
+                value: _screenReaderOptimisations,
+                onChanged: (value) => setState(() {
+                  _screenReaderOptimisations = value;
+                }),
+                showDivider: false,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsActionRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool showDivider;
+
+  const _SettingsActionRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.showDivider = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProfileShortcut(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      onTap: onTap,
+      showDivider: showDivider,
+    );
+  }
+}
+
+class _SettingsSwitchRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final bool showDivider;
+
+  const _SettingsSwitchRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.showDivider = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Semantics(
+          button: true,
+          toggled: value,
+          label: '$title. $subtitle',
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 64),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: _ProfileTokens.accent.withValues(alpha: .13),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                        color: _ProfileTokens.accent.withValues(alpha: .3),
+                      ),
+                    ),
+                    child: Icon(
+                      icon,
+                      color: _ProfileTokens.lightAccent,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          style: GoogleFonts.inter(
+                            color: _ProfileTokens.muted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: value,
+                    activeThumbColor: _ProfileTokens.lightAccent,
+                    onChanged: onChanged,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (showDivider) const Divider(height: 1, color: _ProfileTokens.border),
+      ],
+    );
+  }
+}
+
+class _SettingsStaticRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _SettingsStaticRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: _ProfileTokens.lightAccent),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  color: _ProfileTokens.muted,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsChoiceCard<T> extends StatelessWidget {
+  final T value;
+  final List<T> options;
+  final ValueChanged<T> onChanged;
+
+  const _SettingsChoiceCard({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProfileGlassCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var index = 0; index < options.length; index++)
+            _SettingsChoiceRow<T>(
+              label: options[index].toString(),
+              value: options[index],
+              groupValue: value,
+              onChanged: onChanged,
+              showDivider: index != options.length - 1,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsChoiceRow<T> extends StatelessWidget {
+  final String label;
+  final T value;
+  final T groupValue;
+  final ValueChanged<T> onChanged;
+  final bool showDivider;
+
+  const _SettingsChoiceRow({
+    required this.label,
+    required this.value,
+    required this.groupValue,
+    required this.onChanged,
+    required this.showDivider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value == groupValue;
+    return Column(
+      children: [
+        Semantics(
+          button: true,
+          selected: selected,
+          label: label,
+          child: InkWell(
+            onTap: () => onChanged(value),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontWeight:
+                              selected ? FontWeight.w800 : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      selected
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color: selected
+                          ? _ProfileTokens.lightAccent
+                          : _ProfileTokens.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (showDivider) const Divider(height: 1, color: _ProfileTokens.border),
+      ],
+    );
+  }
+}
+
+void _showPending(BuildContext context, String action) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('$action is being prepared.')),
+  );
 }
 
 class _ProfileShortcut extends StatelessWidget {
