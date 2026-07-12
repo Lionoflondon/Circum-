@@ -193,7 +193,12 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     final chatId = _chatId;
     return Scaffold(
       backgroundColor: AppTokens.background,
-      appBar: AppBar(title: Text(widget.title)),
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor: AppTokens.background,
+        foregroundColor: AppTokens.text,
+        elevation: 0,
+      ),
       body: _supportError != null
           ? AppEmptyState(
               icon: Icons.support_agent_outlined,
@@ -203,7 +208,10 @@ class _RideChatPageViewState extends State<RideChatPageView> {
               onAction: () => Navigator.of(context).pop(),
             )
           : chatId == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const _ChatLoadingState(
+                  title: 'Opening conversation',
+                  body: 'Preparing your secure Circum chat.',
+                )
               : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
                       .collection('chats')
@@ -215,7 +223,10 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                           onBack: () => Navigator.of(context).pop());
                     }
                     if (!chatSnapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const _ChatLoadingState(
+                        title: 'Loading messages',
+                        body: 'Keeping the conversation in sync.',
+                      );
                     }
                     if (!chatSnapshot.data!.exists) {
                       return _UnavailableChat(
@@ -293,10 +304,17 @@ class _MessageStream extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return const Center(child: Text('Messages are unavailable.'));
+            return const AppEmptyState(
+              icon: Icons.cloud_off_outlined,
+              title: 'Messages are unavailable',
+              body: 'Check your connection and try again.',
+            );
           }
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const _ChatLoadingState(
+              title: 'Loading messages',
+              body: 'Your chat history will appear here.',
+            );
           }
           final messages = snapshot.data!.docs;
           if (messages.isEmpty) {
@@ -325,6 +343,52 @@ class _MessageStream extends StatelessWidget {
           );
         },
       );
+}
+
+class _ChatLoadingState extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _ChatLoadingState({required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AppGlassContainer(
+        constraints: const BoxConstraints(maxWidth: 320),
+        accent: AppTokens.primary,
+        surfaceColor: AppTokens.midnight.withValues(alpha: .84),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            ),
+            const SizedBox(height: AppTokens.space16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppTokens.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: AppTokens.space8),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTokens.mutedText,
+                    height: 1.35,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MessageBubble extends StatelessWidget {
