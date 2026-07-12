@@ -29,6 +29,54 @@ void main() {
     expect(find.text('£412.60'), findsNothing);
   });
 
+  testWidgets('overview renders compact production KPI sections',
+      (tester) async {
+    await tester.pumpWidget(_app(status: 'approved'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Active Deliveries'), findsOneWidget);
+    expect(find.text('Scheduled Deliveries'), findsOneWidget);
+    expect(find.text('Deliveries This Month'), findsOneWidget);
+    expect(find.text('Vanguard Deliveries'), findsOneWidget);
+    expect(find.text('Health+ Requests'), findsOneWidget);
+    expect(find.text('Gifts Sent'), findsOneWidget);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+    expect(find.text('RECENT DELIVERIES'), findsOneWidget);
+    expect(find.text('RECENT INVOICES'), findsOneWidget);
+    expect(find.text('TEAM ACTIVITY'), findsOneWidget);
+    expect(find.text('BUSINESS NOTIFICATIONS'), findsOneWidget);
+  });
+
+  testWidgets('business tabs expose completed production controls',
+      (tester) async {
+    await tester.pumpWidget(_app(status: 'approved'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Deliveries'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('Delivery Details'), findsOneWidget);
+    expect(find.text('Export CSV'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Invoices'));
+    await tester.pumpAndSettle();
+    expect(find.text('Paid'), findsOneWidget);
+    expect(find.text('Due'), findsOneWidget);
+    expect(find.text('Overdue'), findsOneWidget);
+    expect(find.text('Download PDF'), findsOneWidget);
+    expect(find.text('VAT Invoices'), findsOneWidget);
+    expect(find.text('Roth Offset Used'), findsOneWidget);
+    expect(find.text('Payment Method'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Team'));
+    await tester.pumpAndSettle();
+    expect(find.text('Roles and permissions'), findsOneWidget);
+    expect(find.text('Permissions'), findsOneWidget);
+    expect(find.text('Activity Log'), findsOneWidget);
+    expect(find.text('Resend Invitation'), findsOneWidget);
+  });
+
   testWidgets('pending account shows complete verification journey',
       (tester) async {
     await tester.pumpWidget(_app(status: 'pending'));

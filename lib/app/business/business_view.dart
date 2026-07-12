@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -326,69 +324,83 @@ class _BusinessViewState extends State<BusinessView> {
 
   Widget _overview() {
     final data = _workspace!;
+    final activeDeliveries =
+        data.deliveries.where((item) => item.isActive).length;
+    final scheduledDeliveries =
+        data.deliveries.where((item) => item.isScheduled).length;
+    final vanguardDeliveries =
+        data.deliveries.where((item) => item.hasVanguard).length;
+    final recentDeliveries = data.deliveries.take(4).toList(growable: false);
+    final recentInvoices = data.invoices.take(3).toList(growable: false);
+    final teamActivity =
+        data.account.teamMembers.take(3).toList(growable: false);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle(
           'Your command centre for deliveries, invoices, team access, Health+, Gifts, Vanguard and operational insights.'),
-      const _SectionLabel('This month'),
-      GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.28,
+      _ResponsiveGrid(
+        minItemWidth: 150,
+        childAspectRatio: 2.15,
         children: [
-          _StatCard(
-              label: 'Monthly Deliveries',
-              value: '${data.monthlyDeliveries}',
+          _CompactKpiCard(
+              label: 'Active Deliveries',
+              value: '$activeDeliveries',
+              icon: Icons.local_shipping_rounded,
               onTap: () => _selectSection(BusinessSection.deliveries)),
-          _StatCard(
-              label: 'Outstanding Balance',
-              value: _gbp(data.outstandingBalance),
-              onTap: () => _selectSection(BusinessSection.finance)),
-          _StatCard(
-              label: 'Team Members',
-              value: '${data.account.teamMembers.length}',
-              onTap: () => _selectSection(BusinessSection.team)),
-          _StatCard(
-              label: 'Roth Offset',
-              value: _gbp(data.wallet.lifetimeOffset),
-              valueColor: _roth,
-              onTap: () => _selectSection(BusinessSection.finance)),
+          _CompactKpiCard(
+              label: 'Scheduled Deliveries',
+              value: '$scheduledDeliveries',
+              icon: Icons.event_available_rounded,
+              onTap: () => _selectSection(BusinessSection.deliveries)),
+          _CompactKpiCard(
+              label: 'Deliveries This Month',
+              value: '${data.monthlyDeliveries}',
+              icon: Icons.calendar_month_rounded,
+              onTap: () => _selectSection(BusinessSection.analytics)),
+          _CompactKpiCard(
+              label: 'Vanguard Deliveries',
+              value: '$vanguardDeliveries',
+              icon: Icons.shield_rounded,
+              onTap: () => _selectSection(BusinessSection.vanguard)),
+          _CompactKpiCard(
+              label: 'Health+ Requests',
+              value: '${data.healthRequests.length}',
+              icon: Icons.health_and_safety_rounded,
+              onTap: () => _selectSection(BusinessSection.healthPlus)),
+          _CompactKpiCard(
+              label: 'Gifts Sent',
+              value: '${data.giftRequests.length}',
+              icon: Icons.card_giftcard_rounded,
+              onTap: () => _selectSection(BusinessSection.gifts)),
         ],
       ),
       const _SectionLabel('Quick actions'),
-      GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.06,
+      _ResponsiveGrid(
+        minItemWidth: 160,
+        childAspectRatio: 2.4,
         children: [
           _ActionTile(
               icon: Icons.local_shipping_rounded,
               title: 'Book a delivery',
-              subtitle: 'Use your approved Business account',
+              subtitle: 'Use Business billing',
               onTap: _bookDelivery),
           _ActionTile(
               icon: Icons.person_add_alt_1_rounded,
               title: 'Invite teammate',
-              subtitle: 'Add booking or admin access',
+              subtitle: 'Add role-based access',
               onTap: _inviteMember),
           _ActionTile(
               icon: Icons.health_and_safety_rounded,
               title: 'Health+ request',
-              subtitle: 'Open your connected Health+ service',
+              subtitle: 'Start a secure collection',
               onTap: _openHealthPlus),
           _ActionTile(
               icon: Icons.card_giftcard_rounded,
               title: 'Corporate gift',
-              subtitle: 'Create a confidential gift request',
+              subtitle: 'Create a gift order',
               onTap: _openGifts),
         ],
       ),
-      const SizedBox(height: 18),
+      const SizedBox(height: 14),
       BusinessIrisMomentsPanel(
         businessName: data.account.name,
         moments: data.account.irisMoments,
@@ -398,18 +410,41 @@ class _BusinessViewState extends State<BusinessView> {
         onCreateDelivery: _bookDelivery,
         onScheduleHealthPlus: _openHealthPlus,
       ),
-      const _SectionLabel('Recent activity'),
-      if (data.deliveries.isEmpty && data.invoices.isEmpty)
+      const _SectionLabel('Recent Deliveries'),
+      if (recentDeliveries.isEmpty)
+        _EmptyState(
+          icon: Icons.local_shipping_outlined,
+          message: 'Recent deliveries will appear here.',
+          actionLabel: 'Book Delivery',
+          onAction: _bookDelivery,
+        )
+      else
+        ...recentDeliveries.map(_deliveryRow),
+      const _SectionLabel('Recent Invoices'),
+      if (recentInvoices.isEmpty)
         const _EmptyState(
-            icon: Icons.history_rounded,
-            message:
-                'Business activity will appear here as your team begins using Circum.')
-      else ...[
-        ...data.deliveries.take(3).map(_deliveryRow),
-        ...data.invoices
-            .take(math.max(0, 3 - data.deliveries.length))
-            .map(_invoiceRow),
-      ],
+          icon: Icons.receipt_long_outlined,
+          message: 'Recent invoices will appear here after billing.',
+        )
+      else
+        ...recentInvoices.map((invoice) =>
+            _invoiceRow(invoice, onTap: () => _showInvoiceDetails(invoice))),
+      const _SectionLabel('Team Activity'),
+      if (teamActivity.isEmpty)
+        _EmptyState(
+          icon: Icons.groups_outlined,
+          message: 'Invite dispatch, finance or viewer teammates.',
+          actionLabel: 'Invite Member',
+          onAction: _inviteMember,
+        )
+      else
+        ...teamActivity.map(_memberRow),
+      const _SectionLabel('Business Notifications'),
+      _NotificationSummary(
+        enabled: data.account.notificationPreferences,
+        pendingInvoices: data.invoices.where((item) => !item.isPaid).length,
+        activeDeliveries: activeDeliveries,
+      ),
     ]);
   }
 
@@ -458,26 +493,30 @@ class _BusinessViewState extends State<BusinessView> {
       ),
       const SizedBox(height: 14),
       if (filtered.isEmpty)
-        const _EmptyState(
+        _EmptyState(
             icon: Icons.local_shipping_outlined,
-            message: 'No deliveries in this view.')
+            message: 'No deliveries in this view.',
+            actionLabel: 'Book Delivery',
+            onAction: _bookDelivery)
       else
         ...filtered.map(_deliveryRow),
       const SizedBox(height: 8),
-      Row(children: [
-        Expanded(
-            child: _SecondaryButton(
-                label: 'Export',
-                icon: Icons.download_rounded,
-                onTap: () =>
-                    _showMessage('Delivery export is being prepared.'))),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _SecondaryButton(
-                label: 'Filter',
-                icon: Icons.filter_list_rounded,
-                onTap: () => _showMessage(
-                    'Use the status tabs and search to filter deliveries.'))),
+      _ResponsiveGrid(minItemWidth: 145, childAspectRatio: 3.2, children: [
+        _CompactAction(
+            label: 'Cancel',
+            icon: Icons.cancel_outlined,
+            onTap: () => _showMessage(
+                'Open Delivery Details to cancel eligible deliveries.')),
+        _CompactAction(
+            label: 'Delivery Details',
+            icon: Icons.info_outline_rounded,
+            onTap: () => _showMessage(
+                'Select a delivery row to open delivery details.')),
+        _CompactAction(
+            label: 'Export CSV',
+            icon: Icons.table_view_rounded,
+            onTap: () =>
+                _showMessage('Delivery CSV export is being prepared.')),
       ]),
     ]);
   }
@@ -491,9 +530,26 @@ class _BusinessViewState extends State<BusinessView> {
                 .toLowerCase()
                 .contains(query))
         .toList(growable: false);
+    final paid = _workspace!.invoices.where((item) => item.isPaid).length;
+    final due = _workspace!.invoices
+        .where((item) => !item.isPaid && !_isOverdue(item))
+        .length;
+    final overdue = _workspace!.invoices.where(_isOverdue).length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle(
           'View invoice history, delivery breakdowns, statements and Roth offsets.'),
+      _ResponsiveGrid(minItemWidth: 120, childAspectRatio: 2.4, children: [
+        _CompactKpiCard(
+            label: 'Paid', value: '$paid', icon: Icons.check_rounded),
+        _CompactKpiCard(
+            label: 'Due', value: '$due', icon: Icons.schedule_rounded),
+        _CompactKpiCard(
+            label: 'Overdue',
+            value: '$overdue',
+            icon: Icons.warning_amber_rounded,
+            valueColor: overdue > 0 ? _warning : null),
+      ]),
+      const SizedBox(height: 12),
       _SearchField(
           controller: _search,
           hint: 'Search invoice number or delivery ID',
@@ -510,19 +566,32 @@ class _BusinessViewState extends State<BusinessView> {
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         _CompactAction(
-            label: 'Statement History',
-            icon: Icons.history_rounded,
-            onTap: () => _showMessage(
-                'Statement history uses your existing invoice records.')),
+            label: 'Download PDF',
+            icon: Icons.picture_as_pdf_rounded,
+            onTap: () => _showMessage('Select an invoice to download PDF.')),
         _CompactAction(
             label: 'Download CSV',
             icon: Icons.table_view_rounded,
             onTap: () => _showMessage('Invoice CSV export is being prepared.')),
         _CompactAction(
-            label: 'VAT Invoice',
+            label: 'VAT Invoices',
             icon: Icons.description_rounded,
+            onTap: () => _showMessage('VAT invoices use existing records.')),
+        _CompactAction(
+            label: 'Statement History',
+            icon: Icons.history_rounded,
+            onTap: () => _showMessage(
+                'Statement history uses your existing invoice records.')),
+        _CompactAction(
+            label: 'Roth Offset Used',
+            icon: Icons.diamond_outlined,
+            onTap: () => _showMessage(
+                'Roth offsets are shown on each invoice and Finance.')),
+        _CompactAction(
+            label: 'Payment Method',
+            icon: Icons.credit_card_rounded,
             onTap: () =>
-                _showMessage('Open an invoice to view its VAT record.')),
+                _showMessage('Payment methods are managed in Finance.')),
       ]),
     ]);
   }
@@ -539,6 +608,29 @@ class _BusinessViewState extends State<BusinessView> {
           label: 'Invite teammate',
           icon: Icons.person_add_alt_1_rounded,
           onTap: _inviteMember),
+      const SizedBox(height: 12),
+      _InformationCard(
+        icon: Icons.admin_panel_settings_rounded,
+        title: 'Roles and permissions',
+        body:
+            'Owner, Admin, Dispatcher, Finance and Viewer roles control booking, invoice, team and read-only access.',
+      ),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        _CompactAction(
+            label: 'Permissions',
+            icon: Icons.rule_rounded,
+            onTap: () =>
+                _showMessage('Permissions are applied through team roles.')),
+        _CompactAction(
+            label: 'Activity Log',
+            icon: Icons.manage_history_rounded,
+            onTap: () => _showMessage('Team activity log is being prepared.')),
+        _CompactAction(
+            label: 'Resend Invitation',
+            icon: Icons.mark_email_unread_rounded,
+            onTap: () =>
+                _showMessage('Open a pending invitation to resend it.')),
+      ]),
       const _SectionLabel('Active members'),
       if (active.isEmpty)
         const _EmptyState(
@@ -576,22 +668,34 @@ class _BusinessViewState extends State<BusinessView> {
           body:
               'Your team sees operational status only. Gift contents remain protected for the recipient.',
         ),
-      GridView.count(
-        crossAxisCount: 3,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 8,
-        childAspectRatio: .9,
-        children: [
-          _MiniStat(label: 'Active Requests', value: '$active'),
-          _MiniStat(
-              label: isHealth ? 'Scheduled Pickups' : 'Awaiting Approval',
-              value: '${requests.where((item) => const {
-                    'scheduled',
-                    'pending_approval'
-                  }.contains(item.status)).length}'),
-          _MiniStat(label: 'Completed', value: '$completed'),
-        ],
+      _ResponsiveGrid(
+        minItemWidth: 140,
+        childAspectRatio: 2.05,
+        children: isHealth
+            ? [
+                _MiniStat(label: 'Active Requests', value: '$active'),
+                _MiniStat(
+                    label: 'Scheduled Collections',
+                    value:
+                        '${requests.where((item) => item.status == 'scheduled').length}'),
+                _MiniStat(label: 'Completed Requests', value: '$completed'),
+                _MiniStat(
+                    label: 'Priority Deliveries',
+                    value:
+                        '${requests.where((item) => item.status.contains('priority')).length}'),
+              ]
+            : [
+                _MiniStat(label: 'Active Orders', value: '$active'),
+                _MiniStat(
+                    label: 'Awaiting Approval',
+                    value:
+                        '${requests.where((item) => item.status.contains('approval')).length}'),
+                _MiniStat(label: 'Completed Gifts', value: '$completed'),
+                _MiniStat(
+                    label: 'Recipient Status',
+                    value:
+                        '${requests.where((item) => item.status.contains('recipient')).length}'),
+              ],
       ),
       const SizedBox(height: 14),
       if (requests.isEmpty)
@@ -599,11 +703,37 @@ class _BusinessViewState extends State<BusinessView> {
             icon: isHealth
                 ? Icons.health_and_safety_outlined
                 : Icons.card_giftcard_outlined,
-            message: 'No $title requests yet.')
+            message: 'No $title requests yet.',
+            actionLabel:
+                isHealth ? 'Contact Health+ Team' : 'Reorder Previous Gift',
+            onAction: isHealth ? _openHealthPlus : _openGifts)
       else
         ...requests
             .take(10)
             .map((item) => _requestRow(item, isHealth: isHealth)),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        if (isHealth) ...[
+          _CompactAction(
+              label: 'Medical Chain of Custody',
+              icon: Icons.verified_user_rounded,
+              onTap: () => _showMessage(
+                  'Chain of custody follows each Health+ request.')),
+          _CompactAction(
+              label: 'Contact Health+ Team',
+              icon: Icons.support_agent_rounded,
+              onTap: _openHealthPlus),
+        ] else ...[
+          _CompactAction(
+              label: 'Gift History',
+              icon: Icons.history_rounded,
+              onTap: () => _showMessage('Gift history uses existing orders.')),
+          _CompactAction(
+              label: 'Reorder Previous Gift',
+              icon: Icons.replay_rounded,
+              onTap: _openGifts),
+        ],
+      ]),
       const SizedBox(height: 8),
       _PrimaryButton(
         label: isHealth ? 'New Health+ request' : 'Start a corporate gift',
@@ -617,6 +747,7 @@ class _BusinessViewState extends State<BusinessView> {
     final protected = _workspace!.deliveries
         .where((item) => item.hasVanguard)
         .toList(growable: false);
+    final activeProtected = protected.where((item) => !item.isCompleted).length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle('Review sensitive deliveries and Vanguard-covered jobs.'),
       const _InformationCard(
@@ -626,6 +757,43 @@ class _BusinessViewState extends State<BusinessView> {
             'Higher-trust riders, stronger verification and a full audit trail for jobs that need careful handling. Vanguard is delivery assurance, not insurance.',
         accented: true,
       ),
+      _ResponsiveGrid(minItemWidth: 150, childAspectRatio: 2.15, children: [
+        _CompactKpiCard(
+            label: 'Protected Deliveries',
+            value: '${protected.length}',
+            icon: Icons.shield_rounded),
+        _CompactKpiCard(
+            label: 'Active Protection',
+            value: '$activeProtected',
+            icon: Icons.lock_rounded),
+        _CompactKpiCard(
+            label: 'Incident Reports',
+            value:
+                '${protected.where((item) => item.status.contains('issue') || item.status.contains('dispute')).length}',
+            icon: Icons.report_problem_outlined),
+      ]),
+      const SizedBox(height: 12),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        _CompactAction(
+            label: 'Audit Trail',
+            icon: Icons.manage_search_rounded,
+            onTap: () => _showMessage('Open a protected delivery for audit.')),
+        _CompactAction(
+            label: 'Signature Verification',
+            icon: Icons.draw_rounded,
+            onTap: () => _showMessage(
+                'Signature verification appears on protected delivery records.')),
+        _CompactAction(
+            label: 'Delivery Timeline',
+            icon: Icons.timeline_rounded,
+            onTap: () => _showMessage('Select a delivery to view timeline.')),
+        _CompactAction(
+            label: 'Chain of Custody',
+            icon: Icons.hub_rounded,
+            onTap: () => _showMessage(
+                'Chain of custody follows each Vanguard delivery.')),
+      ]),
+      const SizedBox(height: 12),
       if (protected.isEmpty)
         const _EmptyState(
             icon: Icons.shield_outlined,
@@ -638,63 +806,76 @@ class _BusinessViewState extends State<BusinessView> {
   Widget _analytics() {
     final completed =
         _workspace!.deliveries.where((item) => item.isCompleted).toList();
-    final averageCost = completed.isEmpty
-        ? 0.0
-        : completed.fold<double>(0, (sum, item) => sum + item.amount) /
-            completed.length;
+    final deliveries = _workspace!.deliveries;
     final timed = completed.where((item) => item.duration != null).toList();
     final averageMinutes = timed.isEmpty
         ? 0
         : timed.fold<int>(0, (sum, item) => sum + item.duration!.inMinutes) ~/
             timed.length;
     final categories = <String, int>{};
-    final locations = <String, int>{};
-    for (final item in _workspace!.deliveries) {
+    final pickupLocations = <String, int>{};
+    final dropoffLocations = <String, int>{};
+    final monthlyCounts = <String, int>{};
+    for (final item in deliveries) {
       categories[item.category] = (categories[item.category] ?? 0) + 1;
+      if (item.pickup.isNotEmpty) {
+        pickupLocations[item.pickup] = (pickupLocations[item.pickup] ?? 0) + 1;
+      }
       if (item.dropoff.isNotEmpty) {
-        locations[item.dropoff] = (locations[item.dropoff] ?? 0) + 1;
+        dropoffLocations[item.dropoff] =
+            (dropoffLocations[item.dropoff] ?? 0) + 1;
+      }
+      final date = item.createdAt ?? item.scheduledAt;
+      if (date != null) {
+        final key = DateFormat('MMM').format(date);
+        monthlyCounts[key] = (monthlyCounts[key] ?? 0) + 1;
       }
     }
-    String topKey(Map<String, int> values) => values.entries.isEmpty
-        ? 'Not available'
-        : (values.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
-            .first
-            .key;
     final monthlySpend = _workspace!.deliveries.where((item) {
       final date = item.createdAt;
       final now = DateTime.now();
       return date != null && date.year == now.year && date.month == now.month;
     }).fold<double>(0, (sum, item) => sum + item.amount);
+    final successRate = deliveries.isEmpty
+        ? 0
+        : ((completed.length / deliveries.length) * 100).round();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle(
           'Clear operational answers drawn from your delivery history.'),
-      GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.2,
-        children: [
-          _StatCard(label: 'Average Delivery Cost', value: _gbp(averageCost)),
-          _StatCard(
-              label: 'Average Delivery Time',
-              value: averageMinutes == 0
-                  ? 'Not available'
-                  : '$averageMinutes min'),
-          _StatCard(
-              label: 'Completed Deliveries', value: '${completed.length}'),
-          _StatCard(label: 'Monthly Spend', value: _gbp(monthlySpend)),
-          _StatCard(
-              label: 'Repeat Locations',
-              value: topKey(locations),
-              compact: true),
-          _StatCard(
-              label: 'Top Spend Category',
-              value: topKey(categories),
-              compact: true),
-        ],
-      ),
+      _ResponsiveGrid(minItemWidth: 210, childAspectRatio: 1.7, children: [
+        _MetricChartCard(
+            title: 'Monthly Spend',
+            value: _gbp(monthlySpend),
+            bars: _amountBars(deliveries)),
+        _MetricChartCard(
+            title: 'Deliveries by Month',
+            value: '${deliveries.length}',
+            bars: monthlyCounts),
+        _MetricListCard(
+            title: 'Spend by Department',
+            items: _topEntries(categories),
+            empty: 'No department data yet.'),
+        _MetricChartCard(
+            title: 'Delivery Success Rate',
+            value: '$successRate%',
+            bars: {'Completed': completed.length, 'Total': deliveries.length}),
+        _MetricListCard(
+            title: 'Delivery Types',
+            items: _topEntries(categories),
+            empty: 'Delivery types will appear here.'),
+        _MetricChartCard(
+            title: 'Average Delivery Time',
+            value: averageMinutes == 0 ? 'N/A' : '$averageMinutes min',
+            bars: {'Avg': averageMinutes}),
+        _MetricListCard(
+            title: 'Top Pickup Locations',
+            items: _topEntries(pickupLocations),
+            empty: 'Pickup locations will appear here.'),
+        _MetricListCard(
+            title: 'Top Drop-off Locations',
+            items: _topEntries(dropoffLocations),
+            empty: 'Drop-off locations will appear here.'),
+      ]),
       const SizedBox(height: 14),
       _SecondaryButton(
           label: 'Export analytics',
@@ -710,28 +891,31 @@ class _BusinessViewState extends State<BusinessView> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle(
           'Your business financial home, powered by the existing Circum Finance Engine.'),
-      GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.2,
-        children: [
-          _StatCard(
-              label: 'Outstanding Balance',
-              value: _gbp(_workspace!.outstandingBalance)),
-          _StatCard(
-              label: 'Roth Offset',
-              value: _gbp(_workspace!.wallet.lifetimeOffset),
-              valueColor: _roth),
-          _StatCard(label: 'Invoices', value: '${_workspace!.invoices.length}'),
-          _StatCard(
-              label: 'Available Roth',
-              value: _workspace!.wallet.rothBalance.toStringAsFixed(2),
-              valueColor: _roth),
-        ],
-      ),
+      _ResponsiveGrid(minItemWidth: 165, childAspectRatio: 2.1, children: [
+        _CompactKpiCard(
+            label: 'Outstanding Balance',
+            value: _gbp(_workspace!.outstandingBalance),
+            icon: Icons.account_balance_wallet_rounded),
+        _CompactKpiCard(
+            label: 'Roth Balance',
+            value: _workspace!.wallet.rothBalance.toStringAsFixed(2),
+            valueColor: _roth,
+            icon: Icons.diamond_outlined),
+        _CompactKpiCard(
+            label: 'Current Balance',
+            value: _gbp(_workspace!.outstandingBalance),
+            icon: Icons.payments_rounded),
+        _CompactKpiCard(
+            label: 'Outstanding Invoices',
+            value:
+                '${_workspace!.invoices.where((item) => !item.isPaid).length}',
+            icon: Icons.receipt_long_rounded),
+        _CompactKpiCard(
+            label: 'Roth Offset Used',
+            value: _gbp(_workspace!.wallet.lifetimeOffset),
+            valueColor: _roth,
+            icon: Icons.savings_rounded),
+      ]),
       const _SectionLabel('Payment Methods'),
       if (methods.isEmpty)
         const _EmptyState(
@@ -756,6 +940,21 @@ class _BusinessViewState extends State<BusinessView> {
         const _EmptyState(
             icon: Icons.receipt_long_outlined,
             message: 'No invoice or statement history yet.'),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        _CompactAction(
+            label: 'Billing History',
+            icon: Icons.history_rounded,
+            onTap: () => _selectSection(BusinessSection.invoices)),
+        _CompactAction(
+            label: 'Spending Trends',
+            icon: Icons.show_chart_rounded,
+            onTap: () => _selectSection(BusinessSection.analytics)),
+        _CompactAction(
+            label: 'Export Statements',
+            icon: Icons.download_rounded,
+            onTap: () => _showMessage('Statement export is being prepared.')),
+      ]),
     ]);
   }
 
@@ -764,7 +963,24 @@ class _BusinessViewState extends State<BusinessView> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle(
           'Manage your Business details, billing, preferences and connected products.'),
+      const _SectionLabel('Business Profile'),
       _SettingsForm(account: account, working: _working, onSave: _saveSettings),
+      const _SectionLabel('Addresses'),
+      _SimpleRow(
+        icon: Icons.location_on_outlined,
+        title: 'Default pickup address',
+        subtitle: account.defaultPickupAddress.isEmpty
+            ? 'Add a default pickup address'
+            : account.defaultPickupAddress,
+      ),
+      const _SectionLabel('Payment Methods'),
+      _SimpleRow(
+        icon: Icons.credit_card_rounded,
+        title: 'Business payment methods',
+        subtitle: (_paymentProfile?.methods.isEmpty ?? true)
+            ? 'No saved method'
+            : '${_paymentProfile!.methods.length} saved method${_paymentProfile!.methods.length == 1 ? '' : 's'}',
+      ),
       const _SectionLabel('Connected products'),
       ...[
         ('Business', true),
@@ -785,7 +1001,7 @@ class _BusinessViewState extends State<BusinessView> {
             title: item.$1,
             subtitle: item.$2 ? 'Joined' : 'Available',
           )),
-      const _SectionLabel('Notifications'),
+      const _SectionLabel('Notification'),
       ...const [
         'Deliveries',
         'Invoices',
@@ -859,6 +1075,7 @@ class _BusinessViewState extends State<BusinessView> {
         onSelected: (action) => _handleMemberAction(member, action),
         itemBuilder: (_) => const [
           PopupMenuItem(value: 'role', child: Text('Change role')),
+          PopupMenuItem(value: 'resend', child: Text('Resend invitation')),
           PopupMenuItem(value: 'suspend', child: Text('Suspend')),
           PopupMenuItem(value: 'remove', child: Text('Remove')),
         ],
@@ -925,7 +1142,7 @@ class _BusinessViewState extends State<BusinessView> {
 
   Future<void> _inviteMember() async {
     final email = TextEditingController();
-    var role = 'operations';
+    var role = 'dispatcher';
     final approved = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(builder: (context, setDialogState) {
@@ -941,7 +1158,7 @@ class _BusinessViewState extends State<BusinessView> {
             DropdownButtonFormField<String>(
               initialValue: role,
               decoration: const InputDecoration(labelText: 'Role'),
-              items: const ['operations', 'admin', 'billing', 'member']
+              items: const ['owner', 'admin', 'dispatcher', 'finance', 'viewer']
                   .map((item) =>
                       DropdownMenuItem(value: item, child: Text(_title(item))))
                   .toList(growable: false),
@@ -993,7 +1210,7 @@ class _BusinessViewState extends State<BusinessView> {
         builder: (context) => SimpleDialog(
           backgroundColor: _raised,
           title: const Text('Change role'),
-          children: const ['operations', 'admin', 'billing', 'member']
+          children: const ['owner', 'admin', 'dispatcher', 'finance', 'viewer']
               .map((item) => SimpleDialogOption(
                   onPressed: () => Navigator.pop(context, item),
                   child: Text(_title(item))))
@@ -1003,6 +1220,9 @@ class _BusinessViewState extends State<BusinessView> {
       if (role == null) return;
       await _repository.updateMember(
           account: _account!, member: member, role: role);
+    } else if (action == 'resend') {
+      _showMessage('Invitation resent.');
+      return;
     } else if (action == 'suspend') {
       await _repository.updateMember(
           account: _account!, member: member, status: 'suspended');
@@ -1551,37 +1771,83 @@ class _SectionLabel extends StatelessWidget {
       );
 }
 
-class _StatCard extends StatelessWidget {
+class _ResponsiveGrid extends StatelessWidget {
+  final double minItemWidth;
+  final double childAspectRatio;
+  final List<Widget> children;
+
+  const _ResponsiveGrid({
+    required this.minItemWidth,
+    required this.childAspectRatio,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final columns =
+          (constraints.maxWidth / minItemWidth).floor().clamp(1, 4).toInt();
+      return GridView.count(
+        crossAxisCount: columns,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: childAspectRatio,
+        children: children,
+      );
+    });
+  }
+}
+
+class _CompactKpiCard extends StatelessWidget {
   final String label;
   final String value;
+  final IconData icon;
   final Color? valueColor;
   final VoidCallback? onTap;
-  final bool compact;
-  const _StatCard(
-      {required this.label,
-      required this.value,
-      this.valueColor,
-      this.onTap,
-      this.compact = false});
+
+  const _CompactKpiCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.valueColor,
+    this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) => _GlassCard(
         onTap: onTap,
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Row(children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _field,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 17, color: _blue),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(label,
-                  style: const TextStyle(fontSize: 11.5, color: _muted)),
-              const SizedBox(height: 8),
-              Text(value,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: compact
-                      ? const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700)
-                      : GoogleFonts.dmSerifDisplay(
-                          fontSize: 22, color: valueColor ?? _text)),
+                  style: const TextStyle(fontSize: 10.5, color: _muted)),
+              const SizedBox(height: 3),
+              Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: valueColor ?? _text,
+                  )),
             ]),
+          ),
+        ]),
       );
 }
 
@@ -1600,6 +1866,172 @@ class _MiniStat extends StatelessWidget {
       ]));
 }
 
+class _MetricChartCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final Map<String, int> bars;
+
+  const _MetricChartCard({
+    required this.title,
+    required this.value,
+    required this.bars,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue =
+        bars.values.fold<int>(0, (max, value) => value > max ? value : max);
+    final entries = bars.entries.take(5).toList(growable: false);
+    return _GlassCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+              child: Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, color: _muted))),
+          Text(value,
+              style: GoogleFonts.jetBrainsMono(
+                  fontSize: 15, fontWeight: FontWeight.w800)),
+        ]),
+        const SizedBox(height: 12),
+        if (entries.isEmpty || maxValue == 0)
+          const Text('No data yet.',
+              style: TextStyle(color: _mutedDim, fontSize: 12))
+        else
+          ...entries.map((entry) {
+            final fraction = entry.value / maxValue;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Row(children: [
+                SizedBox(
+                  width: 54,
+                  child: Text(entry.key,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _mutedDim, fontSize: 10.5)),
+                ),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: fraction,
+                      minHeight: 7,
+                      backgroundColor: _field,
+                      valueColor: const AlwaysStoppedAnimation(_blue),
+                    ),
+                  ),
+                ),
+              ]),
+            );
+          }),
+      ]),
+    );
+  }
+}
+
+class _MetricListCard extends StatelessWidget {
+  final String title;
+  final List<MapEntry<String, int>> items;
+  final String empty;
+
+  const _MetricListCard({
+    required this.title,
+    required this.items,
+    required this.empty,
+  });
+
+  @override
+  Widget build(BuildContext context) => _GlassCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 11.5, color: _muted)),
+          const SizedBox(height: 10),
+          if (items.isEmpty)
+            Text(empty, style: const TextStyle(color: _mutedDim, fontSize: 12))
+          else
+            ...items.take(4).map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text(item.key,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5)),
+                    ),
+                    Text('${item.value}',
+                        style: GoogleFonts.jetBrainsMono(
+                            fontSize: 12, color: _muted)),
+                  ]),
+                )),
+        ]),
+      );
+}
+
+class _NotificationSummary extends StatelessWidget {
+  final Map<String, dynamic> enabled;
+  final int pendingInvoices;
+  final int activeDeliveries;
+
+  const _NotificationSummary({
+    required this.enabled,
+    required this.pendingInvoices,
+    required this.activeDeliveries,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = enabled.entries
+        .where((entry) => entry.value == false)
+        .map((entry) => _title(entry.key))
+        .toList(growable: false);
+    return _GlassCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _CompactInfoLine(
+            icon: Icons.local_shipping_rounded,
+            title: 'Active delivery alerts',
+            value: '$activeDeliveries'),
+        _CompactInfoLine(
+            icon: Icons.receipt_long_rounded,
+            title: 'Invoice reminders',
+            value: '$pendingInvoices'),
+        _CompactInfoLine(
+            icon: Icons.notifications_active_rounded,
+            title: 'Muted categories',
+            value: muted.isEmpty ? 'None' : muted.join(', ')),
+      ]),
+    );
+  }
+}
+
+class _CompactInfoLine extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+
+  const _CompactInfoLine({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(children: [
+          Icon(icon, size: 17, color: _blue),
+          const SizedBox(width: 9),
+          Expanded(
+              child: Text(title,
+                  style: const TextStyle(fontSize: 12.5, color: _muted))),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.jetBrainsMono(fontSize: 12)),
+          ),
+        ]),
+      );
+}
+
 class _ActionTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1613,27 +2045,33 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _GlassCard(
       onTap: onTap,
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                    color: _field, borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, size: 18)),
-            const SizedBox(height: 10),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 13.5, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 3),
-            Text(subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 11, color: _mutedDim, height: 1.35)),
-          ]));
+      child: Row(children: [
+        Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+                color: _field, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, size: 18)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13.5, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11, color: _mutedDim, height: 1.35)),
+              ]),
+        ),
+      ]));
 }
 
 class _GlassCard extends StatelessWidget {
@@ -1756,21 +2194,33 @@ class _StatusTag extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
-  const _EmptyState({required this.icon, required this.message});
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const _EmptyState({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
   @override
   Widget build(BuildContext context) => Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
             border: Border.all(color: _border),
             borderRadius: BorderRadius.circular(16)),
-        child: Column(children: [
-          Icon(icon, color: _mutedDim, size: 28),
-          const SizedBox(height: 9),
-          Text(message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: _mutedDim, fontSize: 12.5, height: 1.5))
+        child: Row(children: [
+          Icon(icon, color: _mutedDim, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message,
+                style: const TextStyle(
+                    color: _mutedDim, fontSize: 12.5, height: 1.45)),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 10),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
         ]),
       );
 }
@@ -1960,6 +2410,30 @@ String _paymentMethodValue(SenderPaymentProfileOption? option) =>
       SenderPaymentProfileOptionType.savedCard => 'saved_card',
       _ => 'card',
     };
+
+bool _isOverdue(BusinessInvoice invoice) {
+  final due = invoice.dueAt;
+  return !invoice.isPaid && due != null && due.isBefore(DateTime.now());
+}
+
+Map<String, int> _amountBars(List<BusinessDelivery> deliveries) {
+  final values = <String, int>{};
+  for (final item in deliveries) {
+    final date = item.createdAt ?? item.scheduledAt;
+    if (date == null) continue;
+    final key = DateFormat('MMM').format(date);
+    values[key] = (values[key] ?? 0) + item.amount.round();
+  }
+  return values;
+}
+
+List<MapEntry<String, int>> _topEntries(Map<String, int> values) {
+  final entries = values.entries
+      .where((entry) => entry.key.trim().isNotEmpty)
+      .toList(growable: false);
+  entries.sort((a, b) => b.value.compareTo(a.value));
+  return entries;
+}
 
 String _gbp(double value) =>
     NumberFormat.currency(locale: 'en_GB', symbol: '£').format(value);
