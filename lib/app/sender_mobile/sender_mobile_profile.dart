@@ -709,8 +709,6 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               _showLocalMessage('Full trust history will open here.'),
         ),
         const SizedBox(height: 16),
-        _ProfileTrustBenefits(profile: profile),
-        const SizedBox(height: 16),
         _ProfileGlassCard(
           padding: EdgeInsets.zero,
           child: Column(
@@ -1217,57 +1215,6 @@ class _ProfileTrustCard extends StatelessWidget {
   }
 }
 
-class _ProfileTrustBenefits extends StatelessWidget {
-  final SenderMobileProfileData profile;
-
-  const _ProfileTrustBenefits({required this.profile});
-
-  @override
-  Widget build(BuildContext context) {
-    return _ProfileGlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${profile.trustTierLabel} Sender Benefits',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Maintaining trust strengthens your standing across Circum.',
-            style: GoogleFonts.inter(
-              color: _ProfileTokens.muted,
-              fontSize: 11.5,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 14),
-          const _TrustBenefitLine(
-            icon: Icons.bolt_outlined,
-            text: 'Eligibility for earlier rider acceptance',
-          ),
-          const _TrustBenefitLine(
-            icon: Icons.redeem_outlined,
-            text: 'Future rewards as they become available',
-          ),
-          const _TrustBenefitLine(
-            icon: Icons.support_agent_rounded,
-            text: 'Priority support at eligible tiers',
-          ),
-          const _TrustBenefitLine(
-            icon: Icons.workspace_premium_outlined,
-            text: 'Stronger marketplace reputation (future)',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TrustMetric extends StatelessWidget {
   final String label;
   final String value;
@@ -1437,37 +1384,6 @@ class _TrustTextAction extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TrustBenefitLine extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _TrustBenefitLine({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: _ProfileTokens.lightAccent, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 12.5,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

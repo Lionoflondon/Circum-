@@ -156,11 +156,10 @@ void main() {
     expect(find.text('Customer Cancellation'), findsNothing);
     expect(find.text('View Full History'), findsOneWidget);
     expect(find.text('View Trust Details →'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Priority Sender Benefits'),
-      250,
-    );
-    expect(find.text('Priority Sender Benefits'), findsOneWidget);
+    expect(find.text('Priority Sender Benefits'), findsNothing);
+    expect(find.text('Regular Sender Benefits'), findsNothing);
+    expect(find.text('Regular Sender benefit'), findsNothing);
+    expect(find.text('Eligibility for earlier rider acceptance'), findsNothing);
     await tester.scrollUntilVisible(find.text('Saved addresses'), 250);
     expect(find.text('Saved addresses'), findsOneWidget);
     expect(
