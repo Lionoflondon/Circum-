@@ -109,9 +109,6 @@ const sendPackage = functions.https.onCall(async (data, context) => {
             }),
     );
 
-
-    console.log(ridersWithDistances);
-
     // Filter out null values and sort
     const closestRiders = ridersWithDistances
         .filter((rider) => rider !== null)
@@ -121,8 +118,6 @@ const sendPackage = functions.https.onCall(async (data, context) => {
         .slice(0, 5);
 
     closestRiders.forEach(async (rider) => {
-      console.log(rider);
-      console.log(rider.fcmToken);
       const message = {
         apns: {
           payload: {
@@ -145,7 +140,7 @@ const sendPackage = functions.https.onCall(async (data, context) => {
 
       await getMessaging().send(message).then(
           (response)=> {
-            console.log(`Successfully sent message: ${response}`);
+            console.log("Successfully sent rider broadcast notification.");
             // console.log(`token: ${metadata.pushToken}`);
           },
       ).catch((err)=>{

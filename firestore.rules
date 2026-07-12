@@ -107,6 +107,198 @@ service cloud.firestore {
       ]);
     }
 
+    function riderOperationalProtectedFieldsAbsent(data) {
+      return !data.keys().hasAny([
+        'approvalStatus',
+        'verificationStatus',
+        'riderStatus',
+        'driverStatus',
+        'status',
+        'isSuspended',
+        'suspended',
+        'isFrozen',
+        'frozen',
+        'isClosed',
+        'closed',
+        'adminNotes',
+        'reviewNotes',
+        'approvedAt',
+        'approvedBy',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'trustPoints',
+        'trustTotal',
+        'riderTrustTotal',
+        'completedDeliveries',
+        'earnings',
+        'availableBalance',
+        'pendingBalance',
+        'cashBalance'
+      ]);
+    }
+
+    function riderCreateOperationalFieldsAreSafe(data) {
+      return
+        (!('approvalStatus' in data) || data.approvalStatus in ['pending', 'incomplete', 'submitted']) &&
+        (!('verificationStatus' in data) || data.verificationStatus in ['verification_pending', 'pending', 'incomplete']) &&
+        (!('riderStatus' in data) || data.riderStatus in ['pending', 'offline', 'incomplete']) &&
+        (!('driverStatus' in data) || data.driverStatus in ['pending', 'offline', 'incomplete']) &&
+        (!('status' in data) || data.status in ['offline', 'pending']) &&
+        (!('isSuspended' in data) || data.isSuspended == false) &&
+        (!('suspended' in data) || data.suspended == false) &&
+        (!('isFrozen' in data) || data.isFrozen == false) &&
+        (!('frozen' in data) || data.frozen == false) &&
+        (!('isClosed' in data) || data.isClosed == false) &&
+        (!('closed' in data) || data.closed == false) &&
+        (!('trustPoints' in data) || data.trustPoints == 0) &&
+        (!('trustTotal' in data) || data.trustTotal == 0) &&
+        (!('riderTrustTotal' in data) || data.riderTrustTotal == 0) &&
+        (!('completedDeliveries' in data) || data.completedDeliveries == 0) &&
+        !data.keys().hasAny([
+          'adminNotes',
+          'reviewNotes',
+          'approvedAt',
+          'approvedBy',
+          'rejectedAt',
+          'rejectedBy',
+          'rejectionReason',
+          'earnings',
+          'availableBalance',
+          'pendingBalance',
+          'cashBalance'
+        ]);
+    }
+
+    function riderOperationalProtectedFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'approvalStatus',
+        'verificationStatus',
+        'riderStatus',
+        'driverStatus',
+        'status',
+        'isSuspended',
+        'suspended',
+        'isFrozen',
+        'frozen',
+        'isClosed',
+        'closed',
+        'adminNotes',
+        'reviewNotes',
+        'approvedAt',
+        'approvedBy',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'trustPoints',
+        'trustTotal',
+        'riderTrustTotal',
+        'completedDeliveries',
+        'earnings',
+        'availableBalance',
+        'pendingBalance',
+        'cashBalance'
+      ]);
+    }
+
+    function riderApplicationReviewFieldsAbsent(data) {
+      return !data.keys().hasAny([
+        'approved',
+        'approvedAt',
+        'approvedBy',
+        'rejected',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'reviewStatus',
+        'adminNotes',
+        'sectionApprovals',
+        'sectionRejections',
+        'reviewedAt',
+        'reviewedBy'
+      ]);
+    }
+
+    function riderApplicationReviewFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'approved',
+        'approvedAt',
+        'approvedBy',
+        'rejected',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'reviewStatus',
+        'adminNotes',
+        'sectionApprovals',
+        'sectionRejections',
+        'reviewedAt',
+        'reviewedBy'
+      ]);
+    }
+
+    function riderDocumentReviewFieldsAbsent(data) {
+      return !data.keys().hasAny([
+        'approved',
+        'approvedAt',
+        'approvedBy',
+        'rejected',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'reviewStatus',
+        'adminNotes',
+        'reviewedAt',
+        'reviewedBy'
+      ]);
+    }
+
+    function riderDocumentReviewFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'approved',
+        'approvedAt',
+        'approvedBy',
+        'rejected',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'reviewStatus',
+        'adminNotes',
+        'reviewedAt',
+        'reviewedBy'
+      ]);
+    }
+
+    function deliveryOperationalFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'status',
+        'state',
+        'deliveryStage',
+        'dispatchStatus',
+        'matchingStatus',
+        'riderId',
+        'driverId',
+        'assignedDriverId',
+        'assignedRiderId',
+        'acceptedAt',
+        'arrivedAt',
+        'pickupArrivedAt',
+        'dropoffArrivedAt',
+        'collectedAt',
+        'completedAt',
+        'deliveredAt',
+        'cancelledAt',
+        'cancelledBy',
+        'earnings',
+        'riderEarnings',
+        'trustPoints',
+        'pinVerified',
+        'senderPinVerified',
+        'receiverPinVerified',
+        'completionResult'
+      ]);
+    }
+
     function ownsSenderRecord(userId) {
       return signedIn() && request.auth.uid == userId;
     }
@@ -175,12 +367,14 @@ service cloud.firestore {
 
     function isOwnDeliveryUpdate() {
       return isOwnDelivery('') &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']) &&
+        deliveryOperationalFieldsUnchanged();
     }
 
     function isAssignedRiderUpdate() {
       return isAssignedRider() &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']) &&
+        deliveryOperationalFieldsUnchanged();
     }
 
     function deliveryFor(deliveryId) {
@@ -530,11 +724,13 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
       allow create: if isDriverManager() ||
         (signedIn() && request.auth.uid == driverId &&
+          riderCreateOperationalFieldsAreSafe(request.resource.data) &&
           riderPayoutProtectedFieldsAbsent(request.resource.data) &&
           (!('rank' in request.resource.data) || request.resource.data.rank == 'agent') &&
           (!('riderRank' in request.resource.data) || request.resource.data.riderRank == 'agent'));
       allow update: if isDriverManager() ||
         (signedIn() && request.auth.uid == driverId &&
+          riderOperationalProtectedFieldsUnchanged() &&
           riderPayoutProtectedFieldsUnchanged() &&
           !request.resource.data.diff(resource.data).changedKeys().hasAny([
             'rank',
@@ -553,10 +749,12 @@ service cloud.firestore {
           (
             (
               !exists(/databases/$(database)/documents/riders/$(driverId)) &&
+              riderCreateOperationalFieldsAreSafe(request.resource.data) &&
               riderPayoutProtectedFieldsAbsent(request.resource.data)
             ) ||
             (
               exists(/databases/$(database)/documents/riders/$(driverId)) &&
+              riderOperationalProtectedFieldsUnchanged() &&
               riderPayoutProtectedFieldsUnchanged()
             )
           ));
@@ -765,10 +963,16 @@ service cloud.firestore {
     }
 
     match /riderApplications/{applicationId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
+      allow update: if isAdmin() ||
+        (signedIn() &&
+          resource.data.riderId == request.auth.uid &&
+          riderApplicationReviewFieldsUnchanged());
       allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.riderId == request.auth.uid);
+        (signedIn() &&
+          request.resource.data.riderId == request.auth.uid &&
+          riderApplicationReviewFieldsAbsent(request.resource.data));
       allow delete: if hasRole('super_admin');
     }
 
@@ -780,15 +984,14 @@ service cloud.firestore {
 
     match /riderEarnings/{riderId} {
       allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
-      allow create, update: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /riderWalletTransactions/{transactionId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
@@ -812,10 +1015,16 @@ service cloud.firestore {
     }
 
     match /riderDocuments/{documentId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
+      allow update: if isAdmin() ||
+        (signedIn() &&
+          resource.data.riderId == request.auth.uid &&
+          riderDocumentReviewFieldsUnchanged());
       allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.riderId == request.auth.uid);
+        (signedIn() &&
+          request.resource.data.riderId == request.auth.uid &&
+          riderDocumentReviewFieldsAbsent(request.resource.data));
       allow delete: if hasRole('super_admin');
     }
 

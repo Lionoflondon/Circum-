@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn() && (
+        request.auth.token.adminRole == role ||
+        request.auth.token.role == role ||
+        (request.auth.token.roles is list && role in request.auth.token.roles)
+      );
+    }
+
+    function isAdmin() {
+      return hasRole('super_admin') ||
+        hasRole('operations_admin') ||
+        hasRole('support_agent') ||
+        hasRole('finance_admin') ||
+        hasRole('driver_manager') ||
+        hasRole('gifts_admin');
+    }
+
+    function isSuperAdmin() {
+      return hasRole('super_admin');
+    }
+
+    function isSafeUpload() {
+      return request.resource != null &&
+        request.resource.size <= 15 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
+    match /riderDocuments/{riderId}/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /riders/{riderId}/documents/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /vehicleDocuments/{riderId}/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /profilePhotos/{userId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == userId)) &&
+        request.resource != null &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/.*');
+      allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == userId);
+    }
+
+    match /businessUploads/{businessId}/{allPaths=**} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /giftAssets/{giftId}/{allPaths=**} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /giftStories/{giftId}/{allPaths=**} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
