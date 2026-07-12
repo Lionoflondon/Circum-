@@ -274,6 +274,10 @@ function waitingState({deliveryId, riderId, phase, now, config}) {
     freeWaitEndsAt: now + minutesToMs(config.freeWaitMinutes),
     maximumWaitEndsAt: now + minutesToMs(config.maximumOperationalWaitMinutes),
     noShowAvailableAt: now + minutesToMs(config.freeWaitMinutes),
+    noShowFeeAmount: config.lateNoShowFee,
+    noShowRiderCompensation: config.lateNoShowRiderCompensation,
+    noShowPlatformRetainedAmount: config.lateNoShowPlatformRetained,
+    currency: "GBP",
     billablePausedMs: 0,
   };
 }

@@ -75,6 +75,9 @@ test("40m configurable arrival radius accepts valid arrival and starts backend w
   assert.equal(decision.state, "arrived_at_pickup");
   assert.equal(decision.waiting.freeWaitMinutes, 3);
   assert.equal(decision.waiting.freeWaitEndsAt, now + 180000);
+  assert.equal(decision.waiting.noShowFeeAmount, 7);
+  assert.equal(decision.waiting.noShowRiderCompensation, 4);
+  assert.equal(decision.waiting.currency, "GBP");
 });
 
 test("rider cannot arrive outside permitted radius or as unassigned rider", () => {
