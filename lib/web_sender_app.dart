@@ -37440,11 +37440,10 @@ class _SenderProfileStep extends StatelessWidget {
             const SizedBox(height: 10),
             _InputBox(colors: colors, controller: email, hint: 'Email address'),
             const SizedBox(height: 10),
-            _InputBox(
+            _PasswordInputBox(
               colors: colors,
               controller: password,
               hint: 'Password',
-              obscureText: true,
             ),
             Align(
               alignment: Alignment.centerRight,
@@ -40236,8 +40235,10 @@ Future<double> _fetchRothBalanceForUser(User? user) async {
 String _rothTransactionLabel(Map<String, dynamic> tx) {
   final type = '${tx['type'] ?? ''}';
   return switch (type) {
-    'admin_credit' => 'Roth issued',
-    'admin_debit' => 'Roth debited',
+    'admin_credit' => 'Issued by Circum',
+    'admin_debit' => 'Issued by Circum',
+    'admin_adjustment' => 'Issued by Circum',
+    'manual_credit' => 'Issued by Circum',
     'USER_TOP_UP' => 'Roth top-up',
     'delivery_payment' => 'Roth used for delivery',
     'gift_payment' => 'Roth used for Gifts',
@@ -48046,6 +48047,45 @@ class _InputBox extends StatelessWidget {
   }
 }
 
+class _PasswordInputBox extends StatefulWidget {
+  final _CircumColors colors;
+  final TextEditingController controller;
+  final String hint;
+
+  const _PasswordInputBox({
+    required this.colors,
+    required this.controller,
+    required this.hint,
+  });
+
+  @override
+  State<_PasswordInputBox> createState() => _PasswordInputBoxState();
+}
+
+class _PasswordInputBoxState extends State<_PasswordInputBox> {
+  var _visible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InputBox(
+      colors: widget.colors,
+      controller: widget.controller,
+      hint: widget.hint,
+      obscureText: !_visible,
+      autofillHints: const [AutofillHints.password],
+      semanticLabel: widget.hint,
+      suffixIcon: IconButton(
+        tooltip: _visible ? 'Hide password' : 'Show password',
+        onPressed: () => setState(() => _visible = !_visible),
+        icon: Icon(
+          _visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+          color: widget.colors.mutedText,
+        ),
+      ),
+    );
+  }
+}
+
 class _PhonePickerBox extends StatelessWidget {
   final _CircumColors colors;
   final TextEditingController controller;
@@ -55322,8 +55362,10 @@ String _businessRothActivityLabel(Map<String, dynamic> item) {
         ? 'Part payment made'
         : 'Invoice paid using Roth';
   }
-  if (raw.contains('admin_credit')) return 'Roth added by your administrator';
-  if (raw.contains('admin_debit')) return 'Roth adjusted by your administrator';
+  if (raw.contains('admin_credit')) return 'Issued by Circum';
+  if (raw.contains('admin_debit')) return 'Issued by Circum';
+  if (raw.contains('admin_adjustment')) return 'Issued by Circum';
+  if (raw.contains('manual_credit')) return 'Issued by Circum';
   if (raw.contains('roth_purchase') || raw == 'paid') {
     return 'Roth top-up completed';
   }

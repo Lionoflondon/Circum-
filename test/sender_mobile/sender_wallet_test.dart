@@ -247,24 +247,28 @@ void main() {
     );
     await tester.pumpWidget(app(SenderWalletView(repository: repository)));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('nrt'), 120,
+    await tester.scrollUntilVisible(find.text('Issued by Circum').first, 120,
         scrollable: find.byType(Scrollable));
 
-    expect(find.text('nrt'), findsOneWidget);
-    expect(find.text('Admin Credit'), findsOneWidget);
+    expect(find.text('Issued by Circum'), findsWidgets);
+    expect(find.text('nrt'), findsNothing);
     expect(find.textContaining('Completed • Today'), findsOneWidget);
     expect(find.text('Pending • Estimated completion'), findsOneWidget);
     expect(find.textContaining('Pending date'), findsNothing);
-    expect(find.byIcon(Icons.admin_panel_settings_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
     expect(find.byIcon(Icons.local_shipping_outlined), findsOneWidget);
 
-    await tester.tap(find.text('nrt'));
+    await tester.tap(find.text('Issued by Circum').first);
     await tester.pumpAndSettle();
     expect(find.text('Activity Details'), findsOneWidget);
     expect(find.text('Reference ID'), findsOneWidget);
     expect(find.text('campaign-1'), findsOneWidget);
     expect(find.text('Created by'), findsOneWidget);
-    expect(find.text('Admin'), findsOneWidget);
+    expect(find.text('Circum'), findsOneWidget);
+    expect(
+      find.text('This Roth has been added to your account by the Circum team.'),
+      findsOneWidget,
+    );
     expect(find.text('Current balance'), findsOneWidget);
   });
 

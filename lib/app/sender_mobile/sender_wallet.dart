@@ -1232,50 +1232,52 @@ class _TransactionDetailsScreen extends StatelessWidget {
   const _TransactionDetailsScreen({required this.transaction});
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: const Color(0xFF07090F),
-        appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            title: const Text('Activity Details')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _WalletGlass(
-              child: Column(
-                children: [
-                  Text(
-                    transaction.description,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                    ),
+  Widget build(BuildContext context) {
+    final title = _walletTransactionDisplayTitle(transaction);
+    final description = _walletTransactionDisplayDescription(transaction);
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090F),
+      appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Activity Details')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _WalletGlass(
+            child: Column(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
                   ),
-                  const SizedBox(height: 14),
-                  _DetailRow('Amount',
-                      '${transaction.amount.toStringAsFixed(2)} Roth'),
-                  _DetailRow('Status', _walletStatusLabel(transaction.status)),
-                  _DetailRow(
-                      'Completed date',
-                      _walletTransactionDate(transaction,
-                          includeStatus: false)),
-                  _DetailRow(
-                      'Reference ID',
-                      transaction.referenceId.isEmpty
-                          ? transaction.id
-                          : transaction.referenceId),
-                  _DetailRow('Created by', _walletCreatedBy(transaction)),
-                  _DetailRow('Description', transaction.description),
-                  _DetailRow(
-                      'Transaction type', _walletCategory(transaction.type)),
-                  _DetailRow('Current balance',
-                      '${transaction.balanceAfter.toStringAsFixed(2)} Roth'),
-                ],
-              ),
+                ),
+                const SizedBox(height: 14),
+                _DetailRow(
+                    'Amount', '${transaction.amount.toStringAsFixed(2)} Roth'),
+                _DetailRow('Status', _walletStatusLabel(transaction.status)),
+                _DetailRow('Completed date',
+                    _walletTransactionDate(transaction, includeStatus: false)),
+                _DetailRow(
+                    'Reference ID',
+                    transaction.referenceId.isEmpty
+                        ? transaction.id
+                        : transaction.referenceId),
+                _DetailRow('Created by', _walletCreatedBy(transaction)),
+                _DetailRow('Description', description),
+                _DetailRow(
+                    'Transaction type', _walletCategory(transaction.type)),
+                _DetailRow('Current balance',
+                    '${transaction.balanceAfter.toStringAsFixed(2)} Roth'),
+              ],
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DetailRow extends StatelessWidget {
@@ -1423,9 +1425,10 @@ class _TransactionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final credit = transaction.direction == 'credit';
+    final title = _walletTransactionDisplayTitle(transaction);
     return Semantics(
         label:
-            '${credit ? 'Credit' : 'Debit'} ${transaction.amount} Roth. ${transaction.description}. ${transaction.status}',
+            '${credit ? 'Credit' : 'Debit'} ${transaction.amount} Roth. $title. ${transaction.status}',
         child: Container(
             constraints: const BoxConstraints(minHeight: 66),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -1442,7 +1445,7 @@ class _TransactionRow extends StatelessWidget {
                       children: [
                     Row(children: [
                       Expanded(
-                        child: Text(transaction.description,
+                        child: Text(title,
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700)),
@@ -2416,7 +2419,7 @@ IconData _walletTransactionIcon(String value) {
   if (type.contains('business')) return Icons.business_center_outlined;
   if (type.contains('referral')) return Icons.group_add_outlined;
   if (type.contains('refund')) return Icons.undo_rounded;
-  if (type.contains('admin')) return Icons.admin_panel_settings_outlined;
+  if (type.contains('admin')) return Icons.auto_awesome_rounded;
   if (type.contains('adjust') || type.contains('reversal')) {
     return Icons.tune_rounded;
   }
@@ -2428,8 +2431,32 @@ IconData _walletTransactionIcon(String value) {
   return Icons.receipt_long_outlined;
 }
 
+bool _walletTransactionIssuedByCircum(String value) {
+  final type = value.toLowerCase();
+  return type == 'admin_credit' ||
+      type == 'admin_issue' ||
+      type == 'admin_adjustment' ||
+      type == 'manual_credit' ||
+      type.contains('admin_credit') ||
+      type.contains('manual_credit');
+}
+
+String _walletTransactionDisplayTitle(SenderWalletTransaction transaction) {
+  return _walletTransactionIssuedByCircum(transaction.type)
+      ? 'Issued by Circum'
+      : transaction.description;
+}
+
+String _walletTransactionDisplayDescription(
+    SenderWalletTransaction transaction) {
+  return _walletTransactionIssuedByCircum(transaction.type)
+      ? 'This Roth has been added to your account by the Circum team.'
+      : transaction.description;
+}
+
 String _walletCategory(String value) {
   final type = value.toLowerCase();
+  if (_walletTransactionIssuedByCircum(value)) return 'Issued by Circum';
   if (type.contains('gift_card') || type.contains('roth_card')) {
     return 'Gift card redemption';
   }
@@ -2438,7 +2465,6 @@ String _walletCategory(String value) {
   if (type.contains('business')) return 'Business';
   if (type.contains('referral')) return 'Referral reward';
   if (type.contains('refund')) return 'Refund';
-  if (type.contains('admin')) return 'Admin credit';
   if (type.contains('adjust') || type.contains('reversal')) return 'Adjustment';
   if (type.contains('delivery') ||
       type.contains('checkout') ||
@@ -2450,15 +2476,14 @@ String _walletCategory(String value) {
 
 String? _walletCategoryBadge(String type) {
   final value = type.toLowerCase();
-  return value == 'admin_credit' || value == 'admin_issue'
-      ? 'Admin Credit'
-      : null;
+  return _walletTransactionIssuedByCircum(value) ? 'Issued by Circum' : null;
 }
 
 String _walletCreatedBy(SenderWalletTransaction transaction) {
   final creator = transaction.createdBy.trim().toLowerCase();
   final type = transaction.type.toLowerCase();
   if (type.contains('referral')) return 'Referral Engine';
+  if (_walletTransactionIssuedByCircum(type)) return 'Circum';
   if (creator == 'system' || creator.isEmpty) return 'System';
   final source = transaction.source.toLowerCase();
   if (creator == 'user' ||
