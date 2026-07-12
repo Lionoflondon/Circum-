@@ -626,6 +626,59 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /businessCompanyCodes/{companyCode} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /businessJoinRequests/{requestId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid) ||
+        (signedIn() && exists(/databases/$(database)/documents/businessAccounts/$(resource.data.businessId)) && (
+          get(/databases/$(database)/documents/businessAccounts/$(resource.data.businessId)).data.createdByUserId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(resource.data.businessId)).data.managerIds ||
+          normalizedAuthEmail() in get(/databases/$(database)/documents/businessAccounts/$(resource.data.businessId)).data.managerIds
+        ));
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /businessMemberships/{membershipId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /businessWorkspaces/{businessId} {
+      allow read: if isAdmin() ||
+        (signedIn() && exists(/databases/$(database)/documents/businessAccounts/$(businessId)) && (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
+          normalizedAuthEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds
+        ));
+      allow write: if isAdmin();
+    }
+
+    match /businessAnalytics/{businessId} {
+      allow read: if isAdmin() ||
+        (signedIn() && exists(/databases/$(database)/documents/businessAccounts/$(businessId)) && (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
+          normalizedAuthEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds
+        ));
+      allow write: if isAdmin();
+    }
+
+    match /businessSettings/{businessId} {
+      allow read: if isAdmin() ||
+        (signedIn() && exists(/databases/$(database)/documents/businessAccounts/$(businessId)) && (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
+          normalizedAuthEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds
+        ));
+      allow write: if isAdmin();
+    }
+
     match /irisLearningOutliers/{outlierId} {
       allow create: if signedIn() &&
         request.resource.data.senderId == request.auth.uid &&

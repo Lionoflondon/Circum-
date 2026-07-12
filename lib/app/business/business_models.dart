@@ -108,6 +108,109 @@ class BusinessAccount {
       isApproved ? 'Verified Business' : 'Pending Approval';
 }
 
+class BusinessCreateDraft {
+  final String companyName;
+  final String businessType;
+  final String businessEmail;
+  final String businessPhone;
+  final String businessAddress;
+  final String vatNumber;
+  final String businessSize;
+  final bool acceptTerms;
+
+  const BusinessCreateDraft({
+    required this.companyName,
+    required this.businessType,
+    required this.businessEmail,
+    required this.businessPhone,
+    required this.businessAddress,
+    required this.vatNumber,
+    required this.businessSize,
+    required this.acceptTerms,
+  });
+}
+
+class BusinessCreatedResult {
+  final String businessId;
+  final String companyName;
+  final String companyCode;
+
+  const BusinessCreatedResult({
+    required this.businessId,
+    required this.companyName,
+    required this.companyCode,
+  });
+
+  factory BusinessCreatedResult.fromMap(Map<String, dynamic> data) =>
+      BusinessCreatedResult(
+        businessId: '${data['businessId'] ?? ''}',
+        companyName: '${data['companyName'] ?? 'Business'}',
+        companyCode: '${data['companyCode'] ?? ''}',
+      );
+}
+
+class BusinessCodeLookupResult {
+  final String businessId;
+  final String companyName;
+  final String businessLogo;
+  final String businessAddress;
+  final String businessStatus;
+  final String joinPolicy;
+  final String roleRequested;
+
+  const BusinessCodeLookupResult({
+    required this.businessId,
+    required this.companyName,
+    required this.businessLogo,
+    required this.businessAddress,
+    required this.businessStatus,
+    required this.joinPolicy,
+    required this.roleRequested,
+  });
+
+  factory BusinessCodeLookupResult.fromMap(Map<String, dynamic> data) =>
+      BusinessCodeLookupResult(
+        businessId: '${data['businessId'] ?? ''}',
+        companyName: '${data['companyName'] ?? 'Business'}',
+        businessLogo: '${data['businessLogo'] ?? ''}',
+        businessAddress: '${data['businessAddress'] ?? ''}',
+        businessStatus: '${data['businessStatus'] ?? 'pending'}',
+        joinPolicy: '${data['joinPolicy'] ?? 'approval_required'}',
+        roleRequested: '${data['roleRequested'] ?? 'member'}',
+      );
+}
+
+class BusinessAccessRequest {
+  final String id;
+  final String businessId;
+  final String name;
+  final String email;
+  final String roleRequested;
+  final String status;
+  final DateTime? createdAt;
+
+  const BusinessAccessRequest({
+    required this.id,
+    required this.businessId,
+    required this.name,
+    required this.email,
+    required this.roleRequested,
+    required this.status,
+    this.createdAt,
+  });
+
+  factory BusinessAccessRequest.fromMap(String id, Map<String, dynamic> data) =>
+      BusinessAccessRequest(
+        id: id,
+        businessId: '${data['businessId'] ?? ''}',
+        name: '${data['name'] ?? 'Applicant'}',
+        email: '${data['email'] ?? ''}',
+        roleRequested: '${data['roleRequested'] ?? 'member'}',
+        status: '${data['status'] ?? 'pending'}'.toLowerCase(),
+        createdAt: _date(data['createdAt']),
+      );
+}
+
 class BusinessDelivery {
   final String id;
   final String pickup;

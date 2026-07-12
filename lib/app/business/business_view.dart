@@ -57,6 +57,7 @@ class _BusinessViewState extends State<BusinessView> {
   BusinessAccount? _account;
   BusinessWorkspaceData? _workspace;
   SenderPaymentProfile? _paymentProfile;
+  List<BusinessAccessRequest> _accessRequests = const [];
   bool _loading = true;
   bool _working = false;
   String? _error;
@@ -101,6 +102,9 @@ class _BusinessViewState extends State<BusinessView> {
         _paymentRepository.paymentMethods().catchError(
               (_) => SenderPaymentProfile.empty(),
             ),
+        _repository.loadPendingAccessRequests(selected).catchError(
+              (_) => <BusinessAccessRequest>[],
+            ),
       ]);
       if (!mounted) return;
       setState(() {
@@ -108,6 +112,7 @@ class _BusinessViewState extends State<BusinessView> {
         _account = selected;
         _workspace = results[0] as BusinessWorkspaceData;
         _paymentProfile = results[1] as SenderPaymentProfile;
+        _accessRequests = results[2] as List<BusinessAccessRequest>;
       });
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
@@ -645,6 +650,13 @@ class _BusinessViewState extends State<BusinessView> {
             message: 'No pending invitations.')
       else
         ...pending.map(_memberRow),
+      const _SectionLabel('Pending access requests'),
+      if (_accessRequests.isEmpty)
+        const _EmptyState(
+            icon: Icons.person_add_alt_1_outlined,
+            message: 'No pending Business access requests.')
+      else
+        ..._accessRequests.map(_accessRequestRow),
     ]);
   }
 
@@ -1083,6 +1095,26 @@ class _BusinessViewState extends State<BusinessView> {
     );
   }
 
+  Widget _accessRequestRow(BusinessAccessRequest request) => _OperationalRow(
+        icon: Icons.person_add_alt_1_rounded,
+        title: request.name.trim().isEmpty ? request.email : request.name,
+        subtitle:
+            '${request.email} · Requested ${_title(request.roleRequested)}',
+        status: _title(request.status),
+        trailing: Wrap(spacing: 6, children: [
+          IconButton(
+            tooltip: 'Approve request',
+            onPressed: () => _handleAccessRequest(request, true),
+            icon: const Icon(Icons.check_circle_rounded, color: _success),
+          ),
+          IconButton(
+            tooltip: 'Reject request',
+            onPressed: () => _handleAccessRequest(request, false),
+            icon: const Icon(Icons.cancel_rounded, color: _danger),
+          ),
+        ]),
+      );
+
   void _bookDelivery() {
     if (!_account!.isApproved) {
       _showMessage('Business verification must be complete before booking.');
@@ -1235,6 +1267,22 @@ class _BusinessViewState extends State<BusinessView> {
     }
     await _load(accountId: _account!.id);
     _showMessage('Team access updated.');
+  }
+
+  Future<void> _handleAccessRequest(
+      BusinessAccessRequest request, bool approved) async {
+    try {
+      await _repository.reviewAccessRequest(
+        account: _account!,
+        request: request,
+        approved: approved,
+      );
+      await _load(accountId: _account!.id);
+      _showMessage(
+          approved ? 'Business access approved.' : 'Request rejected.');
+    } catch (error) {
+      _showMessage('Access request could not be updated: $error');
+    }
   }
 
   Future<void> _showInvoiceDetails(BusinessInvoice invoice) async {

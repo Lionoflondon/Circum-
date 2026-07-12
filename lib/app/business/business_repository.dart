@@ -7,6 +7,19 @@ import 'business_models.dart';
 abstract class BusinessRepository {
   Future<List<BusinessAccount>> loadAccounts();
   Future<BusinessWorkspaceData> loadWorkspace(BusinessAccount account);
+  Future<BusinessCreatedResult> createBusinessAccount(
+      BusinessCreateDraft draft);
+  Future<BusinessCodeLookupResult> lookupCompanyCode(String companyCode);
+  Future<String> requestBusinessAccess({
+    required BusinessCodeLookupResult business,
+  });
+  Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
+      BusinessAccount account);
+  Future<void> reviewAccessRequest({
+    required BusinessAccount account,
+    required BusinessAccessRequest request,
+    required bool approved,
+  });
   Future<void> saveAccount(BusinessAccount account);
   Future<void> inviteMember({
     required BusinessAccount account,
@@ -153,6 +166,76 @@ class FirebaseBusinessRepository implements BusinessRepository {
             )
           : BusinessWalletSummary.empty,
     );
+  }
+
+  @override
+  Future<BusinessCreatedResult> createBusinessAccount(
+      BusinessCreateDraft draft) async {
+    final result = await functions.httpsCallable('createBusinessAccount').call({
+      'companyName': draft.companyName,
+      'businessType': draft.businessType,
+      'businessEmail': draft.businessEmail,
+      'businessPhone': draft.businessPhone,
+      'businessAddress': draft.businessAddress,
+      'vatNumber': draft.vatNumber,
+      'businessSize': draft.businessSize,
+      'acceptTerms': draft.acceptTerms,
+    });
+    return BusinessCreatedResult.fromMap(
+      Map<String, dynamic>.from(result.data as Map),
+    );
+  }
+
+  @override
+  Future<BusinessCodeLookupResult> lookupCompanyCode(String companyCode) async {
+    final result =
+        await functions.httpsCallable('lookupBusinessByCompanyCode').call({
+      'companyCode': companyCode,
+    });
+    return BusinessCodeLookupResult.fromMap(
+      Map<String, dynamic>.from(result.data as Map),
+    );
+  }
+
+  @override
+  Future<String> requestBusinessAccess({
+    required BusinessCodeLookupResult business,
+  }) async {
+    final result = await functions.httpsCallable('requestBusinessAccess').call({
+      'businessId': business.businessId,
+      'role': business.roleRequested,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return '${data['status'] ?? 'pending'}';
+  }
+
+  @override
+  Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
+      BusinessAccount account) async {
+    final snapshot = await firestore
+        .collection('businessJoinRequests')
+        .where('businessId', isEqualTo: account.id)
+        .where('status', isEqualTo: 'pending')
+        .limit(50)
+        .get();
+    return snapshot.docs
+        .map((doc) => BusinessAccessRequest.fromMap(doc.id, doc.data()))
+        .toList(growable: false)
+      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
+          .compareTo(a.createdAt ?? DateTime(1970)));
+  }
+
+  @override
+  Future<void> reviewAccessRequest({
+    required BusinessAccount account,
+    required BusinessAccessRequest request,
+    required bool approved,
+  }) async {
+    await functions.httpsCallable('reviewBusinessAccessRequest').call({
+      'requestId': request.id,
+      'businessId': account.id,
+      'approved': approved,
+    });
   }
 
   @override

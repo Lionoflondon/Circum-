@@ -248,6 +248,45 @@ class _FakeBusinessRepository implements BusinessRepository {
   Future<List<BusinessAccount>> loadAccounts() async => [account];
 
   @override
+  Future<BusinessCreatedResult> createBusinessAccount(
+          BusinessCreateDraft draft) async =>
+      const BusinessCreatedResult(
+          businessId: 'business-1',
+          companyName: 'Lumen Studios Ltd',
+          companyCode: '483917265');
+
+  @override
+  Future<BusinessCodeLookupResult> lookupCompanyCode(
+          String companyCode) async =>
+      const BusinessCodeLookupResult(
+        businessId: 'business-1',
+        companyName: 'Lumen Studios Ltd',
+        businessLogo: '',
+        businessAddress: '1 Studio Way',
+        businessStatus: 'approved',
+        joinPolicy: 'approval_required',
+        roleRequested: 'member',
+      );
+
+  @override
+  Future<String> requestBusinessAccess({
+    required BusinessCodeLookupResult business,
+  }) async =>
+      'pending';
+
+  @override
+  Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
+          BusinessAccount account) async =>
+      const [];
+
+  @override
+  Future<void> reviewAccessRequest({
+    required BusinessAccount account,
+    required BusinessAccessRequest request,
+    required bool approved,
+  }) async {}
+
+  @override
   Future<void> addIrisMoment({
     required BusinessAccount account,
     required Map<String, dynamic> moment,

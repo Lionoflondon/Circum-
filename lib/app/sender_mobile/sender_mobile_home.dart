@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../business/business_view.dart';
+import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -126,7 +126,8 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
                 MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
               ),
               onOpenBusiness: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const BusinessView()),
+                MaterialPageRoute<void>(
+                    builder: (_) => const BusinessAccessView()),
               ),
               onOpenGifts: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -1901,7 +1902,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
         );
       case 'business':
         Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const BusinessView()),
+          MaterialPageRoute<void>(builder: (_) => const BusinessAccessView()),
         );
       case 'conversation':
         final chatId = '${notification.destination['chatId'] ?? ''}'.trim();
