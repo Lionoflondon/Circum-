@@ -51,6 +51,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'firebase_options.dart';
 
@@ -991,6 +992,19 @@ class _PlatformNotificationCenterState
   StreamSubscription<User?>? _authSubscription;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _items = const [];
   bool _open = false;
+  bool _refreshing = false;
+  String _category = 'All';
+  final _search = TextEditingController();
+
+  static const _categories = [
+    'All',
+    'Deliveries',
+    'Payments',
+    'Wallet',
+    'Referrals',
+    'Support',
+    'Promotions',
+  ];
 
   @override
   void initState() {
@@ -1012,6 +1026,7 @@ class _PlatformNotificationCenterState
   void dispose() {
     _subscription?.cancel();
     _authSubscription?.cancel();
+    _search.dispose();
     super.dispose();
   }
 
@@ -1091,6 +1106,147 @@ class _PlatformNotificationCenterState
     await batch.commit();
   }
 
+  Future<void> _archive(
+    QueryDocumentSnapshot<Map<String, dynamic>> item,
+  ) async {
+    await item.reference.set({
+      'archived': true,
+      'archivedAt': FieldValue.serverTimestamp(),
+      'read': true,
+      'readAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _delete(
+    QueryDocumentSnapshot<Map<String, dynamic>> item,
+  ) async {
+    await item.reference.set({
+      'deleted': true,
+      'deletedAt': FieldValue.serverTimestamp(),
+      'read': true,
+      'readAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _refreshing = true);
+    await _listen();
+    if (mounted) setState(() => _refreshing = false);
+  }
+
+  DateTime? _notificationDate(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    return null;
+  }
+
+  String _categoryFor(Map<String, dynamic> data) {
+    final raw =
+        '${data['category'] ?? data['type'] ?? data['topic'] ?? data['event'] ?? ''}'
+            .toLowerCase();
+    if (raw.contains('payment') ||
+        raw.contains('refund') ||
+        raw.contains('invoice') ||
+        raw.contains('apple_pay') ||
+        raw.contains('google_pay')) {
+      return 'Payments';
+    }
+    if (raw.contains('wallet') ||
+        raw.contains('roth') ||
+        raw.contains('card') ||
+        raw.contains('adjustment')) {
+      return 'Wallet';
+    }
+    if (raw.contains('referral')) return 'Referrals';
+    if (raw.contains('support') ||
+        raw.contains('admin') ||
+        raw.contains('dispute') ||
+        raw.contains('issue')) {
+      return 'Support';
+    }
+    if (raw.contains('promo') || raw.contains('offer')) return 'Promotions';
+    return 'Deliveries';
+  }
+
+  IconData _iconFor(String category) => switch (category) {
+        'Payments' => Icons.payments_outlined,
+        'Wallet' => Icons.account_balance_wallet_outlined,
+        'Referrals' => Icons.group_add_outlined,
+        'Support' => Icons.support_agent_outlined,
+        'Promotions' => Icons.local_offer_outlined,
+        _ => Icons.local_shipping_outlined,
+      };
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> get _visibleItems {
+    final query = _search.text.trim().toLowerCase();
+    return _items.where((item) {
+      final data = item.data();
+      if (data['deleted'] == true || data['archived'] == true) return false;
+      final category = _categoryFor(data);
+      if (_category != 'All' && category != _category) return false;
+      if (query.isEmpty) return true;
+      return '${data['title'] ?? ''} ${data['message'] ?? data['body'] ?? ''} $category'
+          .toLowerCase()
+          .contains(query);
+    }).toList(growable: false);
+  }
+
+  Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> _dateGroups(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> items) {
+    final now = DateTime.now();
+    final groups =
+        <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
+    for (final item in items) {
+      final date = _notificationDate(item.data()['createdAt']);
+      final label = date == null
+          ? 'Earlier'
+          : DateUtils.isSameDay(date, now)
+              ? 'Today'
+              : DateUtils.isSameDay(
+                  date,
+                  now.subtract(const Duration(days: 1)),
+                )
+                  ? 'Yesterday'
+                  : '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+      groups.putIfAbsent(label, () => []).add(item);
+    }
+    return groups;
+  }
+
+  Future<void> _openNotification(
+    QueryDocumentSnapshot<Map<String, dynamic>> item,
+  ) async {
+    await _markRead(item);
+    final data = item.data();
+    final url = '${data['url'] ?? data['deepLinkUrl'] ?? ''}'.trim();
+    if (url.startsWith('http')) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      return;
+    }
+    final route = '${data['route'] ?? data['deepLink'] ?? data['screen'] ?? ''}'
+        .toLowerCase();
+    final category = _categoryFor(data);
+    if (route.contains('wallet') ||
+        category == 'Wallet' ||
+        category == 'Referrals') {
+      html.window.location.hash = '#/sender/wallet';
+    } else if (route.contains('payment') || category == 'Payments') {
+      html.window.location.hash = '#/sender/payment';
+    } else if (route.contains('support') || category == 'Support') {
+      html.window.location.hash = '#/sender/support';
+    } else {
+      final deliveryId =
+          '${data['deliveryId'] ?? data['requestId'] ?? data['jobId'] ?? ''}'
+              .trim();
+      html.window.location.hash = deliveryId.isEmpty
+          ? '#/sender/history'
+          : '#/sender/tracking/$deliveryId';
+    }
+    if (mounted) setState(() => _open = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final unread = _items.where((item) => item.data()['read'] != true).length;
@@ -1125,6 +1281,8 @@ class _PlatformNotificationCenterState
 
   Widget _panel(BuildContext context, int unread) {
     final desktop = MediaQuery.sizeOf(context).width >= 720;
+    final visible = _visibleItems;
+    final groups = _dateGroups(visible);
     return Positioned.fill(
       child: Material(
         color: Colors.black.withValues(alpha: 0.46),
@@ -1174,95 +1332,231 @@ class _PlatformNotificationCenterState
                       ],
                     ),
                   ),
-                  Divider(color: widget.colors.border, height: 1),
-                  Expanded(
-                    child: _items.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No notifications yet.',
-                              style: TextStyle(color: widget.colors.mutedText),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _search,
+                          onChanged: (_) => setState(() {}),
+                          decoration: InputDecoration(
+                            hintText: 'Search notifications',
+                            prefixIcon: const Icon(Icons.search),
+                            filled: true,
+                            fillColor: widget.colors.field,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide:
+                                  BorderSide(color: widget.colors.border),
                             ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.all(14),
-                            itemCount: _items.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final item = _items[index];
-                              final data = item.data();
-                              final isUnread = data['read'] != true;
-                              return InkWell(
-                                onTap: () => _markRead(item),
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                  padding: const EdgeInsets.all(13),
-                                  decoration: BoxDecoration(
-                                    color: isUnread
-                                        ? widget.colors.field
-                                        : widget.colors.panel,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: isUnread
-                                          ? widget.colors.adminAccent
-                                              .withValues(alpha: 0.45)
-                                          : widget.colors.border,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Icon(
-                                        isUnread
-                                            ? Icons.notifications_active
-                                            : Icons.notifications_none,
-                                        color: isUnread
-                                            ? widget.colors.adminAccent
-                                            : widget.colors.mutedText,
-                                      ),
-                                      const SizedBox(width: 11),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '${data['title'] ?? 'Circum update'}',
-                                              style: TextStyle(
-                                                color: widget.colors.text,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 3),
-                                            Text(
-                                              '${data['message'] ?? ''}',
-                                              style: TextStyle(
-                                                color: widget.colors.mutedText,
-                                                height: 1.3,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 5),
-                                            Text(
-                                              _adminDateText(data['createdAt']),
-                                              style: TextStyle(
-                                                color: widget.colors.mutedText,
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: _categories.map((category) {
+                              final selected = _category == category;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(category),
+                                  selected: selected,
+                                  onSelected: (_) =>
+                                      setState(() => _category = category),
+                                  backgroundColor: widget.colors.panel,
+                                  selectedColor: widget.colors.adminAccent
+                                      .withValues(alpha: 0.24),
+                                  labelStyle: TextStyle(
+                                    color: selected
+                                        ? widget.colors.text
+                                        : widget.colors.mutedText,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               );
-                            },
+                            }).toList(growable: false),
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(color: widget.colors.border, height: 1),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _refresh,
+                      child: visible.isEmpty
+                          ? ListView(
+                              padding: const EdgeInsets.all(24),
+                              children: [
+                                const SizedBox(height: 120),
+                                Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: widget.colors.mutedText,
+                                  size: 34,
+                                ),
+                                const SizedBox(height: 12),
+                                Center(
+                                  child: Text(
+                                    _refreshing
+                                        ? 'Refreshing notifications...'
+                                        : 'No notifications here.',
+                                    style: TextStyle(
+                                      color: widget.colors.mutedText,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ListView(
+                              padding: const EdgeInsets.all(14),
+                              children: [
+                                for (final entry in groups.entries) ...[
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(4, 10, 4, 8),
+                                    child: Text(
+                                      entry.key,
+                                      style: TextStyle(
+                                        color: widget.colors.mutedText,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                  for (final item in entry.value) ...[
+                                    _notificationTile(item),
+                                    const SizedBox(height: 8),
+                                  ],
+                                ],
+                              ],
+                            ),
+                    ),
                   ),
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _notificationTile(
+    QueryDocumentSnapshot<Map<String, dynamic>> item,
+  ) {
+    final data = item.data();
+    final isUnread = data['read'] != true;
+    final category = _categoryFor(data);
+    return Dismissible(
+      key: ValueKey(item.id),
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          color: widget.colors.adminAccent.withValues(alpha: 0.24),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: const Text('Read'),
+      ),
+      secondaryBackground: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          color: const Color(0xffef4444).withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: const Text('Archive'),
+      ),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          await _markRead(item);
+        } else {
+          await _archive(item);
+        }
+        return false;
+      },
+      child: InkWell(
+        onTap: () => _openNotification(item),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: isUnread ? widget.colors.field : widget.colors.panel,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isUnread
+                  ? widget.colors.adminAccent.withValues(alpha: 0.45)
+                  : widget.colors.border,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                _iconFor(category),
+                color: isUnread
+                    ? widget.colors.adminAccent
+                    : widget.colors.mutedText,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category,
+                      style: TextStyle(
+                        color: widget.colors.adminAccent,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${data['title'] ?? 'Circum update'}',
+                      style: TextStyle(
+                        color: widget.colors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${data['message'] ?? data['body'] ?? ''}',
+                      style: TextStyle(
+                        color: widget.colors.mutedText,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _adminDateText(data['createdAt']),
+                      style: TextStyle(
+                        color: widget.colors.mutedText,
+                        fontSize: 11,
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 4,
+                      children: [
+                        TextButton(
+                          onPressed: () => _markRead(item),
+                          child: Text(isUnread ? 'Mark read' : 'Read'),
+                        ),
+                        TextButton(
+                          onPressed: () => _archive(item),
+                          child: const Text('Archive'),
+                        ),
+                        TextButton(
+                          onPressed: () => _delete(item),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -39352,6 +39646,7 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
   bool _redeeming = false;
   bool _toppingUp = false;
   bool _referralBusy = false;
+  String _transactionFilter = 'All';
   String? _message;
 
   String get _walletId {
@@ -39443,8 +39738,17 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
     setState(() => _message = 'Referral link copied.');
   }
 
-  Future<void> _shareReferral(Uri uri) async {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  Future<void> _shareReferral([Uri? fallbackUri]) async {
+    try {
+      await Share.share(_shareMessage, subject: 'Join Circum');
+    } catch (_) {
+      if (fallbackUri != null) {
+        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+      await Clipboard.setData(ClipboardData(text: _shareMessage));
+      if (mounted) setState(() => _message = 'Referral message copied.');
+    }
   }
 
   Future<void> _attachManualReferralCode() async {
@@ -39584,8 +39888,8 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
             _referralStat(colors, 'Pending referrals', '$pending'),
             _referralStat(colors, 'Activated referrals', '$activated'),
             _referralStat(colors, 'People introduced', '${_referrals.length}'),
-            _referralStat(
-                colors, 'Total Roth earned', '£${earned.toStringAsFixed(2)}'),
+            _referralStat(colors, 'Total Roth earned',
+                '${earned.toStringAsFixed(2)} Roth'),
           ]),
           const SizedBox(height: 12),
           SelectableText(link,
@@ -39599,12 +39903,9 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
               label: const Text('Copy Link'),
             ),
             OutlinedButton.icon(
-              onPressed: _referralLink == null
-                  ? null
-                  : () => _shareReferral(Uri.parse(
-                      'mailto:?subject=${Uri.encodeComponent('Join Circum')}&body=${Uri.encodeComponent(_shareMessage)}')),
+              onPressed: _referralLink == null ? null : _shareReferral,
               icon: const Icon(Icons.ios_share),
-              label: const Text('Share Link'),
+              label: const Text('Share'),
             ),
             OutlinedButton.icon(
               onPressed: _referralLink == null
@@ -39673,12 +39974,84 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
     );
   }
 
+  double _transactionAmountWhere(bool Function(Map<String, dynamic>) test) {
+    return _transactions.where(test).fold<double>(
+          0,
+          (sum, tx) => sum + ((tx['amount'] as num?)?.toDouble() ?? 0),
+        );
+  }
+
+  List<Map<String, dynamic>> get _filteredTransactions {
+    if (_transactionFilter == 'All') return _transactions;
+    return _transactions.where((tx) {
+      final category = _walletCategory(tx);
+      return category == _transactionFilter;
+    }).toList(growable: false);
+  }
+
+  String _walletCategory(Map<String, dynamic> tx) {
+    final type = '${tx['category'] ?? tx['type'] ?? ''}'.toLowerCase();
+    if (type.contains('delivery') ||
+        type.contains('health') ||
+        type.contains('gift_payment')) {
+      return 'Delivery';
+    }
+    if (type.contains('referral')) return 'Referral';
+    if (type.contains('gift_card') || type.contains('card_redeem')) {
+      return 'Roth Card';
+    }
+    if (type.contains('refund')) return 'Refund';
+    if (type.contains('promo')) return 'Promotion';
+    if (type.contains('adjust') || type.contains('admin')) return 'Adjustment';
+    return 'Adjustment';
+  }
+
+  Future<void> _downloadStatement() async {
+    final month = DateTime.now();
+    final rows = [
+      ['Date', 'Amount', 'Category', 'Reference', 'Status', 'Description'],
+      ..._filteredTransactions.map((tx) => [
+            _adminDateText(tx['createdAt'] ?? tx['timestamp']),
+            '${(tx['amount'] as num?)?.toDouble() ?? 0}',
+            _walletCategory(tx),
+            '${tx['referenceId'] ?? tx['id'] ?? ''}',
+            '${tx['status'] ?? 'recorded'}',
+            '${tx['description'] ?? tx['notes'] ?? _rothTransactionLabel(tx)}',
+          ]),
+    ];
+    final csv = rows
+        .map((row) =>
+            row.map((cell) => '"${cell.replaceAll('"', '""')}"').join(','))
+        .join('\n');
+    final blob = html.Blob([csv], 'text/csv');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..download =
+          'circum-wallet-${month.year}-${month.month.toString().padLeft(2, '0')}.csv'
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
     final balance =
         ((_wallet?['balance'] ?? _wallet?['rothCredit']) as num?)?.toDouble() ??
             0;
+    final lifetimeEarned =
+        ((_wallet?['lifetimeEarned'] ?? _wallet?['lifetimeIssuedRoth']) as num?)
+                ?.toDouble() ??
+            _transactionAmountWhere(
+                (tx) => ((tx['amount'] as num?)?.toDouble() ?? 0) > 0);
+    final lifetimeSpent =
+        ((_wallet?['lifetimeSpent'] ?? _wallet?['lifetimeSpentRoth']) as num?)
+                ?.toDouble() ??
+            _transactionAmountWhere(
+                (tx) => ((tx['amount'] as num?)?.toDouble() ?? 0) < 0).abs();
+    final pendingRewards =
+        _referrals.where((item) => '${item['status']}' == 'pending').length *
+            5.0;
+    final filtered = _filteredTransactions;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -39704,7 +40077,7 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
                       color: colors.mutedText, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
               Text(
-                '£${balance.toStringAsFixed(2)}',
+                '${balance.toStringAsFixed(2)} Roth',
                 style: TextStyle(
                   color: colors.text,
                   fontSize: 34,
@@ -39713,8 +40086,23 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Roth is held in GBP, is non-withdrawable, and can be used toward eligible Circum services before card payment.',
+                'Roth is non-withdrawable internal Circum credit and can be used toward eligible Circum services before card payment.',
                 style: TextStyle(color: colors.mutedText, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _referralStat(colors, 'Available balance',
+                      '${balance.toStringAsFixed(2)} Roth'),
+                  _referralStat(colors, 'Lifetime earned',
+                      '${lifetimeEarned.toStringAsFixed(2)} Roth'),
+                  _referralStat(colors, 'Lifetime spent',
+                      '${lifetimeSpent.toStringAsFixed(2)} Roth'),
+                  _referralStat(colors, 'Pending rewards',
+                      '${pendingRewards.toStringAsFixed(2)} Roth'),
+                ],
               ),
             ],
           ),
@@ -39780,11 +40168,39 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
         const SizedBox(height: 16),
         _SectionTitle(colors: colors, title: 'Roth transaction history'),
         const SizedBox(height: 8),
-        if (_transactions.isEmpty)
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final category in const [
+              'All',
+              'Delivery',
+              'Referral',
+              'Roth Card',
+              'Refund',
+              'Promotion',
+              'Adjustment',
+            ])
+              ChoiceChip(
+                label: Text(category),
+                selected: _transactionFilter == category,
+                onSelected: (_) =>
+                    setState(() => _transactionFilter = category),
+              ),
+            OutlinedButton.icon(
+              onPressed: filtered.isEmpty ? null : _downloadStatement,
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Download statement'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (filtered.isEmpty)
           Text('No Roth transactions yet.',
               style: TextStyle(color: colors.mutedText))
         else
-          ..._transactions.take(8).map((tx) {
+          ...filtered.take(20).map((tx) {
             final amount = (tx['amount'] as num?)?.toDouble() ?? 0;
             return ListTile(
               contentPadding: EdgeInsets.zero,
@@ -39792,10 +40208,10 @@ class _SenderWalletPanelState extends State<_SenderWalletPanel> {
                   style: TextStyle(
                       color: colors.text, fontWeight: FontWeight.w900)),
               subtitle: Text(
-                  '${tx['progressionLabel'] ?? tx['notes'] ?? tx['referenceId'] ?? ''}',
+                  '${_walletCategory(tx)} · ${tx['status'] ?? 'recorded'} · ${tx['referenceId'] ?? tx['id'] ?? ''}',
                   style: TextStyle(color: colors.mutedText)),
               trailing: Text(
-                '${amount < 0 ? '-' : '+'}£${amount.abs().toStringAsFixed(2)}',
+                '${amount < 0 ? '-' : '+'}${amount.abs().toStringAsFixed(2)} Roth',
                 style:
                     TextStyle(color: colors.text, fontWeight: FontWeight.w900),
               ),
@@ -40874,6 +41290,7 @@ class _HealthPlusStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nextPickup = pickups.isEmpty ? null : pickups.first;
+    final paymentProfile = _PlatformPaymentProfile.detect();
     final cardRemaining =
         math.max(0, quote.total - math.min(quote.total, rothAvailable));
     return Container(
@@ -41261,7 +41678,7 @@ class _HealthPlusStep extends StatelessWidget {
                       ? 'Setting up Health+...'
                       : cardRemaining <= 0
                           ? 'Pay with Roth'
-                          : 'Continue to Card Payment',
+                          : 'Continue with ${paymentProfile.primaryLabel}',
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.transparent,
@@ -43060,6 +43477,7 @@ class _PaymentStep extends StatelessWidget {
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
     final processingPayment = checkoutState == _CheckoutState.processingPayment;
+    final paymentProfile = _PlatformPaymentProfile.detect();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -43325,7 +43743,7 @@ class _PaymentStep extends StatelessWidget {
                         : weightConfirmed
                             ? total <= rothAvailable && total > 0
                                 ? 'Pay with Roth & Broadcast'
-                                : 'Continue to Card Payment'
+                                : 'Continue with ${paymentProfile.primaryLabel}'
                             : 'Confirm parcel weight before payment',
               ),
               style: FilledButton.styleFrom(
@@ -48480,6 +48898,148 @@ class _PriceLine extends StatelessWidget {
   }
 }
 
+enum _PlatformPaymentKind { applePay, googlePay, savedCards, addCard, card }
+
+class _PlatformPaymentOption {
+  final _PlatformPaymentKind kind;
+  final String label;
+  final IconData icon;
+
+  const _PlatformPaymentOption(this.kind, this.label, this.icon);
+}
+
+class _PlatformPaymentProfile {
+  final List<_PlatformPaymentOption> options;
+  final String primaryLabel;
+
+  const _PlatformPaymentProfile({
+    required this.options,
+    required this.primaryLabel,
+  });
+
+  factory _PlatformPaymentProfile.detect() {
+    final userAgent = html.window.navigator.userAgent.toLowerCase();
+    final isApple = userAgent.contains('iphone') ||
+        userAgent.contains('ipad') ||
+        userAgent.contains('ipod') ||
+        (userAgent.contains('macintosh') && userAgent.contains('mobile'));
+    final isAndroid = userAgent.contains('android');
+    final applePayAvailable = isApple;
+    final googlePayAvailable = isAndroid &&
+        (userAgent.contains('chrome') ||
+            userAgent.contains('crios') ||
+            userAgent.contains('wv'));
+
+    if (isApple) {
+      return _PlatformPaymentProfile(
+        primaryLabel: applePayAvailable ? 'Apple Pay' : 'Saved cards',
+        options: [
+          if (applePayAvailable)
+            const _PlatformPaymentOption(
+              _PlatformPaymentKind.applePay,
+              'Apple Pay',
+              Icons.apple,
+            ),
+          const _PlatformPaymentOption(
+            _PlatformPaymentKind.savedCards,
+            'Saved cards',
+            Icons.credit_card,
+          ),
+          const _PlatformPaymentOption(
+            _PlatformPaymentKind.addCard,
+            'Add card',
+            Icons.add_card_outlined,
+          ),
+        ],
+      );
+    }
+    if (isAndroid) {
+      return _PlatformPaymentProfile(
+        primaryLabel: googlePayAvailable ? 'Google Pay' : 'Saved cards',
+        options: [
+          if (googlePayAvailable)
+            const _PlatformPaymentOption(
+              _PlatformPaymentKind.googlePay,
+              'Google Pay',
+              Icons.g_mobiledata,
+            ),
+          const _PlatformPaymentOption(
+            _PlatformPaymentKind.savedCards,
+            'Saved cards',
+            Icons.credit_card,
+          ),
+          const _PlatformPaymentOption(
+            _PlatformPaymentKind.addCard,
+            'Add card',
+            Icons.add_card_outlined,
+          ),
+        ],
+      );
+    }
+    return const _PlatformPaymentProfile(
+      primaryLabel: 'Card payment',
+      options: [
+        _PlatformPaymentOption(
+          _PlatformPaymentKind.savedCards,
+          'Saved cards',
+          Icons.credit_card,
+        ),
+        _PlatformPaymentOption(
+          _PlatformPaymentKind.card,
+          'Card payment',
+          Icons.payment_outlined,
+        ),
+      ],
+    );
+  }
+}
+
+class _PlatformPaymentMethods extends StatelessWidget {
+  final _CircumColors colors;
+  final _PlatformPaymentProfile profile;
+
+  const _PlatformPaymentMethods({
+    required this.colors,
+    required this.profile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: profile.options
+          .map(
+            (option) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white.withValues(alpha: 0.07),
+                border: Border.all(
+                  color: colors.adminAccent.withValues(alpha: 0.20),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(option.icon, color: colors.text, size: 18),
+                  const SizedBox(width: 7),
+                  Text(
+                    option.label,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
 class _CircumPaymentSummary extends StatelessWidget {
   final _CircumColors colors;
   final String serviceName;
@@ -48502,6 +49062,7 @@ class _CircumPaymentSummary extends StatelessWidget {
     final available = math.max(0, rothAvailable);
     final applied = math.min(total, available);
     final remaining = math.max(0, total - applied);
+    final paymentProfile = _PlatformPaymentProfile.detect();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -48617,14 +49178,21 @@ class _CircumPaymentSummary extends StatelessWidget {
             remaining <= 0
                 ? 'Payment method: Roth only. No card payment required.'
                 : applied > 0
-                    ? 'Payment method: Roth first, then card for the remaining balance.'
-                    : 'Payment method: Card payment.',
+                    ? 'Payment method: Roth first, then ${paymentProfile.primaryLabel} for the remaining balance.'
+                    : 'Payment method: ${paymentProfile.primaryLabel}.',
             style: TextStyle(
               color: colors.mutedText,
               fontWeight: FontWeight.w700,
               height: 1.35,
             ),
           ),
+          if (remaining > 0) ...[
+            const SizedBox(height: 10),
+            _PlatformPaymentMethods(
+              colors: colors,
+              profile: paymentProfile,
+            ),
+          ],
           if (ctaLabel != null) ...[
             const SizedBox(height: 8),
             Text(

@@ -179,9 +179,26 @@ function deliveryIds(data) {
   };
 }
 
+function moneyText(value, currency = "GBP") {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  const prefix = text(currency).toUpperCase() === "GBP" ? "£" : `${text(currency).toUpperCase()} `;
+  return `${prefix}${amount.toFixed(2)}`;
+}
+
+function customerWaitingCharge(data) {
+  const waiting = data.waiting || {};
+  const financial = data.noShowFinancial || {};
+  return {
+    amount: financial.amount || waiting.noShowFeeAmount || data.waitingCharge || data.waitingChargeAmount || data.pickupNoShowSurchargeGbp,
+    currency: financial.currency || waiting.currency || data.currency || "GBP",
+  };
+}
+
 exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deliveryId}").onCreate(async (snapshot) => {
   const delivery = snapshot.data();
   const ids = deliveryIds({...delivery, id: snapshot.id});
+  if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
   const riders = await getFirestore().collection("riderProfiles").get();
   const eligible = riders.docs.filter((doc) => {
     const rider = doc.data();
@@ -208,9 +225,17 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const after = change.after.data();
   const oldStatus = text(before.status || before.deliveryStatus).toLowerCase();
   const status = text(after.status || after.deliveryStatus).toLowerCase();
-  if (!status || status === oldStatus) return;
+  const statusChanged = status && status !== oldStatus;
   const ids = deliveryIds({...after, id: change.after.id});
-  await communicationEngine.closeDeliveryConversation(
+  const oldPayment = text(before.paymentStatus || before.paymentState).toLowerCase();
+  const payment = text(after.paymentStatus || after.paymentState).toLowerCase();
+  const oldWaitingContext = text(before.waitingContextState).toLowerCase();
+  const waitingContext = text(after.waitingContextState).toLowerCase();
+  const oldWaitingCharge = Number(customerWaitingCharge(before).amount || 0);
+  const waitingCharge = customerWaitingCharge(after);
+  const waitingChargeAmount = Number(waitingCharge.amount || 0);
+  if (!statusChanged && oldPayment === payment && oldWaitingContext === waitingContext && oldWaitingCharge === waitingChargeAmount) return;
+  if (statusChanged) await communicationEngine.closeDeliveryConversation(
       ids.bookingId, status);
   const systemMessages = {
     accepted: "Rider accepted the delivery.",
@@ -225,30 +250,38 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     delivered: "Delivery completed.",
     completed: "Delivery completed.",
   };
-  if (systemMessages[status]) {
+  if (statusChanged && systemMessages[status]) {
     await communicationEngine.appendSystemMessage(ids.bookingId, systemMessages[status]);
   }
+  const chargeText = moneyText(waitingCharge.amount, waitingCharge.currency);
   const senderMessages = {
-    accepted: ["Rider accepted", "A rider has accepted your delivery."],
-    navigating_to_pickup: ["Rider heading to pickup", "Your rider is on the way to the pickup."],
-    arrived: ["Rider arrived", "Your rider has arrived at the pickup."],
-    arrived_at_pickup: ["Rider arrived", "Your rider has arrived at the pickup."],
-    rider_arrived_pickup: ["Rider arrived", "Your Circum rider has arrived at the pickup address."],
-    sender_no_show_pickup: ["Pickup no-show", "Pickup was marked as no-show after the waiting period. A £5.00 waiting/no-show surcharge has been applied because the rider could not make contact."],
-    pickup_verified: ["Pickup verified", "Your rider has verified pickup."],
-    collected: ["Parcel collected", "Your parcel has been collected."],
-    picked_up: ["Parcel collected", "Your parcel has been collected."],
-    navigating_to_dropoff: ["Parcel in transit", "Your parcel is on the way to drop-off."],
-    arrived_at_dropoff: ["Rider arriving", "Your rider is arriving at the drop-off."],
-    pin_required: ["Receiver PIN needed", "The receiver PIN is needed to complete handover."],
-    delivered: ["Parcel delivered", "Your parcel has been delivered."],
-    completed: ["Parcel delivered", "Your delivery is complete."],
-    issue_reported: ["Delivery issue reported", "Your rider reported an issue. Circum support can review it."],
-    refunded: ["Refund updated", "Your delivery refund has been updated."],
+    accepted: ["Rider accepted", "A rider has accepted your delivery.", "Deliveries"],
+    finding_rider: ["Searching for rider", "Circum is searching for an eligible rider.", "Deliveries"],
+    awaiting_rider: ["Searching for rider", "Circum is searching for an eligible rider.", "Deliveries"],
+    navigating_to_pickup: ["Rider en route", "Your rider is on the way to the pickup.", "Deliveries"],
+    arrived: ["Rider arrived", "Your rider has arrived at the pickup.", "Deliveries"],
+    arrived_at_pickup: ["Rider waiting", "Your rider has arrived. Free waiting has started.", "Deliveries"],
+    rider_arrived_pickup: ["Waiting timer started", "Your Circum rider has arrived at the pickup address.", "Deliveries"],
+    sender_no_show_pickup: ["No-show", `Pickup was marked as no-show after the waiting period.${chargeText ? ` Additional waiting charge: ${chargeText}.` : ""}`, "Deliveries"],
+    pickup_verified: ["Pickup confirmed", "Your rider has verified pickup.", "Deliveries"],
+    collected: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],
+    picked_up: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],
+    navigating_to_dropoff: ["Delivery in progress", "Your parcel is on the way to drop-off.", "Deliveries"],
+    arrived_at_dropoff: ["Near destination", "Your rider is arriving at the drop-off.", "Deliveries"],
+    pin_required: ["Receiver PIN needed", "The receiver PIN is needed to complete handover.", "Deliveries"],
+    delivered: ["Delivered", "Your parcel has been delivered.", "Deliveries"],
+    completed: ["Delivered", "Your delivery is complete.", "Deliveries"],
+    cancelled: ["Delivery cancelled", "Your delivery has been cancelled.", "Deliveries"],
+    issue_reported: ["Delivery issue reported", "Your rider reported an issue. Circum support can review it.", "Support"],
+    refunded: ["Refund issued", "Your delivery refund has been updated.", "Payments"],
   };
-  const senderMessage = senderMessages[status];
-  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId});
-  if (ids.riderId && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
+  const senderMessage = statusChanged ? senderMessages[status] : null;
+  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId, data: {category: senderMessage[2]}});
+  if (ids.senderId && oldPayment !== payment && ["paid", "succeeded", "success"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_successful", title: "Payment successful", body: "Your delivery payment was successful.", bookingId: ids.bookingId, data: {category: "Payments"}});
+  if (ids.senderId && oldPayment !== payment && ["failed", "declined"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_failed", title: "Payment failed", body: "Your delivery payment was not completed.", bookingId: ids.bookingId, data: {category: "Payments"}});
+  if (ids.senderId && oldWaitingContext !== waitingContext && waitingContext === "customer_responded") await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "customer_responded", title: "Customer response received", body: "Waiting continues under the current policy.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
+  if (ids.senderId && oldWaitingCharge !== waitingChargeAmount && waitingChargeAmount > 0) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "waiting_charge_updated", title: "Waiting charge updated", body: `Additional waiting charge: ${moneyText(waitingCharge.amount, waitingCharge.currency)}.`, bookingId: ids.bookingId, data: {category: "Payments"}});
+  if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
 });
 
 exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/messages/{messageId}").onCreate(async (snapshot, context) => {
