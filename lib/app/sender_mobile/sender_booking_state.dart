@@ -39,6 +39,8 @@ String senderPaymentMethodLabel(SenderFallbackPaymentMethod method) {
   }
 }
 
+String senderFallbackPaymentMethodPrompt() => 'Saved card';
+
 bool isSenderScheduledDateValid(String value, {DateTime? now}) {
   final parsed = DateTime.tryParse(value.trim());
   if (parsed == null) return false;
@@ -139,7 +141,7 @@ class SenderPaymentSplit {
   String get splitSummary {
     if (!rothEnabled || rothAppliedAmount <= 0) {
       final method = fallbackMethod == null
-          ? 'Card / Apple Pay'
+          ? senderFallbackPaymentMethodPrompt()
           : senderPaymentMethodLabel(fallbackMethod!);
       return '$method (${formatSenderCurrency(remainingAmount)})';
     }
@@ -147,7 +149,7 @@ class SenderPaymentSplit {
         '${formatSenderRothCredits(rothAppliedCredits)} Roth (${formatSenderCurrency(rothAppliedAmount)})';
     if (remainingAmount <= 0) return rothPart;
     final method = fallbackMethod == null
-        ? 'Card / Apple Pay'
+        ? senderFallbackPaymentMethodPrompt()
         : senderPaymentMethodLabel(fallbackMethod!);
     return '$rothPart + $method (${formatSenderCurrency(remainingAmount)})';
   }

@@ -109,9 +109,10 @@ class FakeWalletRepository implements SenderWalletRepository {
       required String idempotencyKey}) async {}
 }
 
-Widget app(Widget child) => MaterialApp(
-    theme: ThemeData.dark(),
-    home: Scaffold(backgroundColor: const Color(0xFF07090F), body: child));
+Widget app(Widget child, {TargetPlatform platform = TargetPlatform.iOS}) =>
+    MaterialApp(
+        theme: ThemeData.dark().copyWith(platform: platform),
+        home: Scaffold(backgroundColor: const Color(0xFF07090F), body: child));
 
 void main() {
   testWidgets('first open creates once and completes onboarding',
@@ -119,7 +120,10 @@ void main() {
     final repository = FakeWalletRepository(
         wallet: const SenderWalletData(
             balance: 0, frozen: false, onboardingCompleted: false));
-    await tester.pumpWidget(app(SenderWalletView(repository: repository)));
+    await tester.pumpWidget(app(
+      SenderWalletView(repository: repository),
+      platform: TargetPlatform.iOS,
+    ));
     await tester.pumpAndSettle();
     expect(find.text('Meet Roth'), findsOneWidget);
     expect(repository.initialiseCalls, 1);
@@ -205,6 +209,11 @@ void main() {
 
   testWidgets('ledger rows preserve admin copy and render audited status dates',
       (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final now = DateTime.now();
     final repository = FakeWalletRepository(
       wallet: const SenderWalletData(
@@ -392,11 +401,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Google Pay'));
-    await tester.pumpAndSettle();
-    expect(find.text('Google Pay'), findsWidgets);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+    expect(find.text('Google Pay'), findsNothing);
 
     await tester.tap(find.text('Roth').first);
     await tester.pumpAndSettle();
@@ -518,7 +523,6 @@ void main() {
         'Apple Pay',
         'Visa •••• 4242',
         'Mastercard •••• 9981',
-        'Google Pay',
         '+ Add Payment Method'
       ],
     );
@@ -530,7 +534,6 @@ void main() {
         'Google Pay',
         'Visa •••• 4242',
         'Mastercard •••• 9981',
-        'Apple Pay',
         '+ Add Payment Method'
       ],
     );
@@ -538,13 +541,7 @@ void main() {
       senderOrderedPaymentOptions(profile, platform: TargetPlatform.macOS)
           .map((option) => option.title)
           .toList(),
-      [
-        'Visa •••• 4242',
-        'Mastercard •••• 9981',
-        'Apple Pay',
-        'Google Pay',
-        '+ Add Payment Method'
-      ],
+      ['Visa •••• 4242', 'Mastercard •••• 9981', '+ Add Payment Method'],
     );
   });
 }

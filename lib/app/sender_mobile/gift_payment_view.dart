@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -44,6 +45,17 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     }
     if (_rothApplied > 0) return 'roth_card';
     return 'card';
+  }
+
+  List<String> get _availablePaymentMethods {
+    final methods = <String>[];
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      methods.add('Apple Pay');
+    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      methods.add('Google Pay');
+    }
+    methods.add('Card');
+    return methods;
   }
 
   @override
@@ -147,22 +159,15 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           ),
         ),
         const SizedBox(height: 12),
-        _PaymentMethodTile(
-          label: 'Card',
-          selected: _paymentMethod == 'Card',
-          onTap: () => _selectPaymentMethod('Card'),
-        ),
-        const SizedBox(height: 10),
-        _PaymentMethodTile(
-          label: 'Apple Pay',
-          selected: _paymentMethod == 'Apple Pay',
-          onTap: () => _selectPaymentMethod('Apple Pay'),
-        ),
-        const SizedBox(height: 10),
-        _PaymentMethodTile(
-          label: 'Google Pay',
-          selected: _paymentMethod == 'Google Pay',
-          onTap: () => _selectPaymentMethod('Google Pay'),
+        ..._availablePaymentMethods.expand(
+          (method) => [
+            _PaymentMethodTile(
+              label: method,
+              selected: _paymentMethod == method,
+              onTap: () => _selectPaymentMethod(method),
+            ),
+            const SizedBox(height: 10),
+          ],
         ),
         if (_rothCanFullyCover) ...[
           const SizedBox(height: 10),

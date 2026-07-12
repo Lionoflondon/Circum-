@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/intl.dart';
@@ -331,11 +332,15 @@ class _SenderWalletViewState extends State<SenderWalletView> {
           customerId: setup.customerId,
           customerEphemeralKeySecret: setup.ephemeralKeySecret,
           setupIntentClientSecret: setup.setupIntentClientSecret,
-          applePay: const PaymentSheetApplePay(merchantCountryCode: 'GB'),
-          googlePay: const PaymentSheetGooglePay(
-            merchantCountryCode: 'GB',
-            currencyCode: 'GBP',
-          ),
+          applePay: senderPlatformSupportsApplePay(defaultTargetPlatform)
+              ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
+              : null,
+          googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
+              ? const PaymentSheetGooglePay(
+                  merchantCountryCode: 'GB',
+                  currencyCode: 'GBP',
+                )
+              : null,
           style: ThemeMode.dark,
         ),
       );
@@ -741,11 +746,15 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
           customerId: setup.customerId,
           customerEphemeralKeySecret: setup.ephemeralKeySecret,
           setupIntentClientSecret: setup.setupIntentClientSecret,
-          applePay: const PaymentSheetApplePay(merchantCountryCode: 'GB'),
-          googlePay: const PaymentSheetGooglePay(
-            merchantCountryCode: 'GB',
-            currencyCode: 'GBP',
-          ),
+          applePay: senderPlatformSupportsApplePay(defaultTargetPlatform)
+              ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
+              : null,
+          googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
+              ? const PaymentSheetGooglePay(
+                  merchantCountryCode: 'GB',
+                  currencyCode: 'GBP',
+                )
+              : null,
           style: ThemeMode.dark,
         ),
       );
@@ -1504,7 +1513,10 @@ class _PaymentMethodsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final options = senderOrderedPaymentOptions(data)
+    final options = senderOrderedPaymentOptions(
+      data,
+      platform: Theme.of(context).platform,
+    )
         .where((option) =>
             option.type != SenderPaymentProfileOptionType.addPaymentMethod)
         .toList(growable: false);
@@ -1947,37 +1959,51 @@ class _CheckoutPreferenceSection extends StatelessWidget {
     required this.onChanged,
   });
 
-  List<SenderCheckoutPreference> get _availablePreferences => [
-        SenderCheckoutPreference.askEveryCheckout,
-        SenderCheckoutPreference.rothFirst,
-        SenderCheckoutPreference.rothThenCard,
-        if (profile.applePaySupported) SenderCheckoutPreference.applePayFirst,
-        if (profile.googlePaySupported) SenderCheckoutPreference.googlePayFirst,
-        if (profile.methods.isNotEmpty) SenderCheckoutPreference.defaultCard,
-      ];
-
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _WalletSectionTitle('Preferred Checkout Behaviour'),
-          const SizedBox(height: 10),
-          _WalletGlass(
-            child: Column(
-              children: _availablePreferences
-                  .map(
-                    (item) => _PaymentPriorityOption(
-                      preference: item,
-                      selected: item == preference,
-                      enabled: !busy,
-                      onChanged: () => onChanged(item),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
+  Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final availablePreferences = [
+      SenderCheckoutPreference.askEveryCheckout,
+      SenderCheckoutPreference.rothFirst,
+      SenderCheckoutPreference.rothThenCard,
+      if (senderCheckoutPreferenceSupportedOnPlatform(
+        SenderCheckoutPreference.applePayFirst,
+        profile,
+        platform,
+      ))
+        SenderCheckoutPreference.applePayFirst,
+      if (senderCheckoutPreferenceSupportedOnPlatform(
+        SenderCheckoutPreference.googlePayFirst,
+        profile,
+        platform,
+      ))
+        SenderCheckoutPreference.googlePayFirst,
+      if (profile.methods.isNotEmpty) SenderCheckoutPreference.defaultCard,
+    ];
+    final effectivePreference =
+        senderEffectiveCheckoutPreference(preference, profile, platform);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _WalletSectionTitle('Preferred Checkout Behaviour'),
+        const SizedBox(height: 10),
+        _WalletGlass(
+          child: Column(
+            children: availablePreferences
+                .map(
+                  (item) => _PaymentPriorityOption(
+                    preference: item,
+                    selected: item == effectivePreference,
+                    enabled: !busy,
+                    onChanged: () => onChanged(item),
+                  ),
+                )
+                .toList(growable: false),
           ),
-        ],
-      );
+        ),
+      ],
+    );
+  }
 }
 
 class _PaymentPriorityOption extends StatelessWidget {
@@ -2084,15 +2110,20 @@ class _SplitPaymentPreview extends StatelessWidget {
     required this.wallet,
   });
 
-  String get _paymentLabel => switch (preference) {
-        SenderCheckoutPreference.applePayFirst => 'Apple Pay',
-        SenderCheckoutPreference.googlePayFirst => 'Google Pay',
-        SenderCheckoutPreference.defaultCard => 'Saved Card',
-        SenderCheckoutPreference.askEveryCheckout => 'Choose at checkout',
-        _ when profile.applePaySupported => 'Apple Pay',
-        _ when profile.googlePaySupported => 'Google Pay',
-        _ => profile.methods.isNotEmpty ? 'Saved Card' : 'Payment Method',
-      };
+  String _paymentLabel(BuildContext context) {
+    final effectivePreference = senderEffectiveCheckoutPreference(
+      preference,
+      profile,
+      Theme.of(context).platform,
+    );
+    return switch (effectivePreference) {
+      SenderCheckoutPreference.applePayFirst => 'Apple Pay',
+      SenderCheckoutPreference.googlePayFirst => 'Google Pay',
+      SenderCheckoutPreference.defaultCard => 'Saved Card',
+      SenderCheckoutPreference.askEveryCheckout => 'Choose at checkout',
+      _ => profile.methods.isNotEmpty ? 'Saved Card' : 'Payment Method',
+    };
+  }
 
   bool get _usesRoth =>
       preference == SenderCheckoutPreference.rothFirst ||
@@ -2101,12 +2132,13 @@ class _SplitPaymentPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const total = 58.50;
+    final paymentLabel = _paymentLabel(context);
     final rothAmount = _usesRoth ? wallet.balance.clamp(0, 40.0) : 0.0;
     final remaining = (total - rothAmount).clamp(0, total);
     return _WalletGlass(
       child: Semantics(
         label:
-            'Split payment visual example. Delivery total £58.50. ${_usesRoth ? 'Roth ${rothAmount.toStringAsFixed(2)}. $_paymentLabel £${remaining.toStringAsFixed(2)}.' : '$_paymentLabel £58.50.'}',
+            'Split payment visual example. Delivery total £58.50. ${_usesRoth ? 'Roth ${rothAmount.toStringAsFixed(2)}. $paymentLabel £${remaining.toStringAsFixed(2)}.' : '$paymentLabel £58.50.'}',
         child: Column(
           children: [
             _PaymentBreakdownRow(label: 'Delivery Total', value: '£58.50'),
@@ -2120,7 +2152,7 @@ class _SplitPaymentPreview extends StatelessWidget {
               const _PaymentBreakdownArrow(),
             ],
             _PaymentBreakdownRow(
-              label: _paymentLabel,
+              label: paymentLabel,
               value: '£${remaining.toStringAsFixed(2)}',
             ),
             const SizedBox(height: 12),

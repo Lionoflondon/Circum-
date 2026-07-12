@@ -61,6 +61,61 @@ String senderCheckoutPreferenceLabel(SenderCheckoutPreference value) {
   }
 }
 
+bool senderPlatformSupportsApplePay(TargetPlatform platform) =>
+    !kIsWeb && platform == TargetPlatform.iOS;
+
+bool senderPlatformSupportsGooglePay(TargetPlatform platform) =>
+    !kIsWeb && platform == TargetPlatform.android;
+
+bool senderPaymentOptionSupportedOnPlatform(
+  SenderPaymentProfileOptionType type,
+  TargetPlatform platform,
+) {
+  switch (type) {
+    case SenderPaymentProfileOptionType.applePay:
+      return senderPlatformSupportsApplePay(platform);
+    case SenderPaymentProfileOptionType.googlePay:
+      return senderPlatformSupportsGooglePay(platform);
+    case SenderPaymentProfileOptionType.savedCard:
+    case SenderPaymentProfileOptionType.addPaymentMethod:
+      return true;
+  }
+}
+
+bool senderCheckoutPreferenceSupportedOnPlatform(
+  SenderCheckoutPreference preference,
+  SenderPaymentProfile profile,
+  TargetPlatform platform,
+) {
+  switch (preference) {
+    case SenderCheckoutPreference.applePayFirst:
+      return profile.applePaySupported &&
+          senderPlatformSupportsApplePay(platform);
+    case SenderCheckoutPreference.googlePayFirst:
+      return profile.googlePaySupported &&
+          senderPlatformSupportsGooglePay(platform);
+    case SenderCheckoutPreference.defaultCard:
+      return profile.methods.isNotEmpty;
+    case SenderCheckoutPreference.rothFirst:
+    case SenderCheckoutPreference.rothThenCard:
+    case SenderCheckoutPreference.askEveryCheckout:
+      return true;
+  }
+}
+
+SenderCheckoutPreference senderEffectiveCheckoutPreference(
+  SenderCheckoutPreference preference,
+  SenderPaymentProfile profile,
+  TargetPlatform platform,
+) {
+  if (senderCheckoutPreferenceSupportedOnPlatform(
+      preference, profile, platform)) {
+    return preference;
+  }
+  if (profile.methods.isNotEmpty) return SenderCheckoutPreference.defaultCard;
+  return SenderCheckoutPreference.askEveryCheckout;
+}
+
 class SenderPaymentMethod {
   final String id;
   final String brand;
@@ -178,30 +233,28 @@ List<SenderPaymentProfileOption> senderOrderedPaymentOptions(
       .toList(growable: false);
   final defaultCards = saved.where((item) => item.isDefault).toList();
   final otherCards = saved.where((item) => !item.isDefault).toList();
-  final apple = profile.applePaySupported
-      ? const SenderPaymentProfileOption(
-          SenderPaymentProfileOptionType.applePay)
-      : null;
-  final google = profile.googlePaySupported
-      ? const SenderPaymentProfileOption(
-          SenderPaymentProfileOptionType.googlePay)
-      : null;
+  final apple =
+      profile.applePaySupported && senderPlatformSupportsApplePay(target)
+          ? const SenderPaymentProfileOption(
+              SenderPaymentProfileOptionType.applePay)
+          : null;
+  final google =
+      profile.googlePaySupported && senderPlatformSupportsGooglePay(target)
+          ? const SenderPaymentProfileOption(
+              SenderPaymentProfileOptionType.googlePay)
+          : null;
   final ordered = <SenderPaymentProfileOption>[];
   if (target == TargetPlatform.iOS) {
     if (apple != null) ordered.add(apple);
     ordered.addAll(defaultCards);
     ordered.addAll(otherCards);
-    if (google != null) ordered.add(google);
   } else if (target == TargetPlatform.android) {
     if (google != null) ordered.add(google);
     ordered.addAll(defaultCards);
     ordered.addAll(otherCards);
-    if (apple != null) ordered.add(apple);
   } else {
     ordered.addAll(defaultCards);
     ordered.addAll(otherCards);
-    if (apple != null) ordered.add(apple);
-    if (google != null) ordered.add(google);
   }
   if (includeAddMethod) {
     ordered.add(const SenderPaymentProfileOption(

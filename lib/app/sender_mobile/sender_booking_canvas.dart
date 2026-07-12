@@ -1426,7 +1426,10 @@ class _PaymentPanel extends StatelessWidget {
                 return const _InfoNote(text: 'Loading Pay With profile...');
               }
               final profile = snapshot.data ?? SenderPaymentProfile.empty();
-              final options = senderOrderedPaymentOptions(profile);
+              final options = senderOrderedPaymentOptions(
+                profile,
+                platform: Theme.of(context).platform,
+              );
               return Column(
                 children: options
                     .map((option) => Padding(
