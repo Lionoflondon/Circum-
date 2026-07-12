@@ -7,9 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../business/business_view.dart';
+import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 import 'sender_finance.dart';
@@ -1128,14 +1128,19 @@ class _WalletSupportScreen extends StatelessWidget {
           children: [
             _WalletGlass(
               child: _WalletLink(
-                icon: Icons.mail_outline,
+                icon: Icons.forum_outlined,
                 title: 'Contact Circum Support',
-                detail: 'Get help with payments, cards or Roth',
-                onTap: () => launchUrl(
-                  Uri(
-                    scheme: 'mailto',
-                    path: 'support@circumuk.com',
-                    queryParameters: {'subject': 'Wallet support'},
+                detail: 'Open an in-app conversation about payments or Roth',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const RideChatPageView(
+                      title: 'Circum Support',
+                      supportConversation: true,
+                      initialMessage: 'Hi, I need help with my wallet.',
+                    ),
+                    settings: RouteSettings(
+                      name: '/sender-mobile/support/wallet',
+                    ),
                   ),
                 ),
               ),

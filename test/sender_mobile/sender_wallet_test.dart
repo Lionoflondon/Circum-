@@ -443,6 +443,12 @@ void main() {
     await tester.tap(find.text('Support'));
     await tester.pumpAndSettle();
     expect(find.text('Wallet Support'), findsOneWidget);
+    await tester.tap(find.text('Contact Circum Support'));
+    await tester.pumpAndSettle();
+    expect(find.text('Circum Support'), findsOneWidget);
+    expect(find.text('Support is unavailable'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
 

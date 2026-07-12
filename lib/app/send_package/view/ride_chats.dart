@@ -12,8 +12,17 @@ import '../../sender_mobile/design_system/sender_design_system.dart';
 /// communication callable and remain visible after the delivery closes.
 class RideChatPageView extends StatefulWidget {
   final String? chatId;
+  final String title;
+  final String? initialMessage;
+  final bool supportConversation;
 
-  const RideChatPageView({super.key, this.chatId});
+  const RideChatPageView({
+    super.key,
+    this.chatId,
+    this.title = 'Delivery chat',
+    this.initialMessage,
+    this.supportConversation = false,
+  });
 
   @override
   State<RideChatPageView> createState() => _RideChatPageViewState();
@@ -24,23 +33,105 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   final _scroll = ScrollController();
   String? _chatId;
   String? _markedReadChatId;
+  String? _supportError;
   bool _sending = false;
   Timer? _typingDebounce;
 
   @override
   void initState() {
     super.initState();
+    final initialMessage = widget.initialMessage?.trim();
+    if (initialMessage != null && initialMessage.isNotEmpty) {
+      _input.text = initialMessage;
+      _input.selection = TextSelection.collapsed(offset: initialMessage.length);
+    }
     _resolveChatId();
   }
 
   Future<void> _resolveChatId() async {
+    if (widget.supportConversation) {
+      await _resolveSupportChatId();
+      return;
+    }
     if (widget.chatId?.trim().isNotEmpty == true) {
       setState(() => _chatId = widget.chatId!.trim());
       return;
     }
     final preferences = await SharedPreferences.getInstance();
-    if (mounted)
+    if (mounted) {
       setState(() => _chatId = preferences.getString('activeRequest'));
+    }
+  }
+
+  Future<void> _resolveSupportChatId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          setState(() => _supportError = 'Sign in to contact Circum Support.');
+        }
+        return;
+      }
+      final db = FirebaseFirestore.instance;
+      final existing = await db
+          .collection('supportTickets')
+          .where('userId', isEqualTo: user.uid)
+          .limit(20)
+          .get();
+      for (final doc in existing.docs) {
+        final data = doc.data();
+        final status = '${data['status'] ?? 'open'}'.toLowerCase();
+        final chatId = '${data['chatId'] ?? ''}'.trim();
+        if (chatId.isNotEmpty && status != 'resolved' && status != 'closed') {
+          if (mounted) setState(() => _chatId = chatId);
+          return;
+        }
+      }
+
+      final ticketRef = db.collection('supportTickets').doc();
+      final chatId = 'support_${ticketRef.id}';
+      final batch = db.batch();
+      batch.set(ticketRef, {
+        'channel': 'sender_in_app_chat',
+        'status': 'open',
+        'priority': 'normal',
+        'type': 'wallet_support',
+        'topic': 'wallet',
+        'title': 'Circum Support',
+        'message': 'Wallet support conversation opened.',
+        'lastMessage': '',
+        'adminUnreadCount': 0,
+        'chatId': chatId,
+        'userId': user.uid,
+        'senderId': user.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      batch.set(db.collection('chats').doc(chatId), {
+        'threadId': chatId,
+        'type': 'support',
+        'ticketId': ticketRef.id,
+        'participants': [user.uid, 'circum-support'],
+        'participantRoles': {
+          user.uid: 'shipper',
+          'circum-support': 'admin',
+        },
+        'title': 'Circum Support',
+        'status': 'open',
+        'source': 'sender_wallet',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastMessage': '',
+      });
+      await batch.commit();
+      if (mounted) setState(() => _chatId = chatId);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _supportError = 'Circum Support is unavailable. Please try again.';
+        });
+      }
+    }
   }
 
   @override
@@ -102,69 +193,84 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     final chatId = _chatId;
     return Scaffold(
       backgroundColor: AppTokens.background,
-      appBar: AppBar(title: const Text('Delivery chat')),
-      body: chatId == null
-          ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('chats')
-                  .doc(chatId)
-                  .snapshots(),
-              builder: (context, chatSnapshot) {
-                if (chatSnapshot.hasError)
-                  return _UnavailableChat(
-                      onBack: () => Navigator.of(context).pop());
-                if (!chatSnapshot.hasData)
-                  return const Center(child: CircularProgressIndicator());
-                if (!chatSnapshot.data!.exists)
-                  return _UnavailableChat(
-                      onBack: () => Navigator.of(context).pop());
-                final chat = chatSnapshot.data!.data()!;
-                if (_markedReadChatId != chatId) {
-                  _markedReadChatId = chatId;
-                  unawaited(_markConversationRead(chatId));
-                }
-                final readOnly = chat['readOnly'] == true;
-                final typing = Map<String, dynamic>.from(
-                    chat['typing'] as Map? ?? const {});
-                final currentId = FirebaseAuth.instance.currentUser?.uid;
-                final typingOther = typing.entries.any((entry) =>
-                    entry.key != currentId &&
-                    entry.value is num &&
-                    (entry.value as num).toInt() >
-                        DateTime.now().millisecondsSinceEpoch);
-                return Column(
-                  children: [
-                    if (readOnly)
-                      const _ChatNotice(
-                          'Delivery completed. This conversation is now read-only.'),
-                    if (typingOther) const _ChatNotice('Rider is typing...'),
-                    Expanded(
-                        child: _MessageStream(
-                            chatId: chatId, scrollController: _scroll)),
-                    _Composer(
-                      controller: _input,
-                      readOnly: readOnly,
-                      sending: _sending,
-                      role:
-                          '${Map<String, dynamic>.from(chat['participantRoles'] as Map? ?? const {})[currentId] ?? 'sender'}',
-                      onChanged: (_) {
-                        _setTyping(true);
-                        _typingDebounce?.cancel();
-                        _typingDebounce = Timer(const Duration(seconds: 4),
-                            () => _setTyping(false));
-                      },
-                      onQuickReply: (reply) {
-                        _input.text = reply;
-                        _input.selection =
-                            TextSelection.collapsed(offset: reply.length);
-                      },
-                      onSend: () => _send(readOnly),
-                    ),
-                  ],
-                );
-              },
-            ),
+      appBar: AppBar(title: Text(widget.title)),
+      body: _supportError != null
+          ? AppEmptyState(
+              icon: Icons.support_agent_outlined,
+              title: 'Support is unavailable',
+              body: _supportError!,
+              actionLabel: 'Back',
+              onAction: () => Navigator.of(context).pop(),
+            )
+          : chatId == null
+              ? const Center(child: CircularProgressIndicator())
+              : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('chats')
+                      .doc(chatId)
+                      .snapshots(),
+                  builder: (context, chatSnapshot) {
+                    if (chatSnapshot.hasError) {
+                      return _UnavailableChat(
+                          onBack: () => Navigator.of(context).pop());
+                    }
+                    if (!chatSnapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (!chatSnapshot.data!.exists) {
+                      return _UnavailableChat(
+                          onBack: () => Navigator.of(context).pop());
+                    }
+                    final chat = chatSnapshot.data!.data()!;
+                    if (_markedReadChatId != chatId) {
+                      _markedReadChatId = chatId;
+                      unawaited(_markConversationRead(chatId));
+                    }
+                    final readOnly = chat['readOnly'] == true;
+                    final typing = Map<String, dynamic>.from(
+                        chat['typing'] as Map? ?? const {});
+                    final currentId = FirebaseAuth.instance.currentUser?.uid;
+                    final typingOther = typing.entries.any((entry) =>
+                        entry.key != currentId &&
+                        entry.value is num &&
+                        (entry.value as num).toInt() >
+                            DateTime.now().millisecondsSinceEpoch);
+                    return Column(
+                      children: [
+                        if (readOnly)
+                          const _ChatNotice(
+                              'Delivery completed. This conversation is now read-only.'),
+                        if (typingOther)
+                          const _ChatNotice('Rider is typing...'),
+                        Expanded(
+                            child: _MessageStream(
+                                chatId: chatId, scrollController: _scroll)),
+                        _Composer(
+                          controller: _input,
+                          hintText: widget.supportConversation
+                              ? 'Message Circum Support'
+                              : 'Message your rider',
+                          readOnly: readOnly,
+                          sending: _sending,
+                          role:
+                              '${Map<String, dynamic>.from(chat['participantRoles'] as Map? ?? const {})[currentId] ?? 'sender'}',
+                          onChanged: (_) {
+                            _setTyping(true);
+                            _typingDebounce?.cancel();
+                            _typingDebounce = Timer(const Duration(seconds: 4),
+                                () => _setTyping(false));
+                          },
+                          onQuickReply: (reply) {
+                            _input.text = reply;
+                            _input.selection =
+                                TextSelection.collapsed(offset: reply.length);
+                          },
+                          onSend: () => _send(readOnly),
+                        ),
+                      ],
+                    );
+                  },
+                ),
     );
   }
 }
@@ -186,10 +292,12 @@ class _MessageStream extends StatelessWidget {
             .limitToLast(100)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return const Center(child: Text('Messages are unavailable.'));
-          if (!snapshot.hasData)
+          }
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
           final messages = snapshot.data!.docs;
           if (messages.isEmpty) {
             return const AppEmptyState(
@@ -268,6 +376,7 @@ class _MessageBubble extends StatelessWidget {
 
 class _Composer extends StatelessWidget {
   final TextEditingController controller;
+  final String hintText;
   final bool readOnly;
   final bool sending;
   final String role;
@@ -277,6 +386,7 @@ class _Composer extends StatelessWidget {
 
   const _Composer(
       {required this.controller,
+      required this.hintText,
       required this.readOnly,
       required this.sending,
       required this.role,
@@ -313,9 +423,8 @@ class _Composer extends StatelessWidget {
                   maxLines: 4,
                   onChanged: onChanged,
                   decoration: InputDecoration(
-                    hintText: readOnly
-                        ? 'This conversation is closed'
-                        : 'Message your rider',
+                    hintText:
+                        readOnly ? 'This conversation is closed' : hintText,
                     filled: true,
                     fillColor: AppTokens.raisedPanel,
                     border: OutlineInputBorder(
