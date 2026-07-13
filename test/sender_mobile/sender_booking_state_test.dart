@@ -575,6 +575,12 @@ void main() {
       expect(voiceSource, contains('FirebaseStorage.instance.ref'));
       expect(voiceSource, contains('gift_requests/'));
       expect(voiceSource, contains('voice/original.webm'));
+      expect(voiceSource, contains("'audio/webm'"));
+      expect(voiceSource, contains("'audio/mpeg'"));
+      expect(voiceSource, contains("'audio/mp4'"));
+      expect(voiceSource, contains("'audio/aac'"));
+      expect(voiceSource, contains("'audio/ogg'"));
+      expect(voiceSource, contains('_maxUploadBytes = 60 * 1024 * 1024'));
       expect(voiceSource, contains('_maxDurationSeconds = 60'));
       expect(
         voiceSource,
@@ -925,6 +931,7 @@ void main() {
           localPath: 'local://sender-mobile/gifts/voice-note/test.m4a',
           storagePath: 'gift_requests/sender-1_123/voice/original.webm',
           downloadUrl: 'https://storage.example/voice.webm',
+          mimeType: 'audio/webm',
           createdAt: DateTime.utc(2026),
         ),
         preferredStyles: const ['Minimal', 'Elegant'],
@@ -975,6 +982,14 @@ void main() {
       expect(
         payload['voiceNote'],
         containsPair('downloadUrl', 'https://storage.example/voice.webm'),
+      );
+      expect(
+        payload['voiceNote'],
+        containsPair('mimeType', 'audio/webm'),
+      );
+      expect(
+        payload['voiceNote'],
+        containsPair('createdAt', DateTime.utc(2026).toIso8601String()),
       );
       expect(payload['preferredStyles'], ['Minimal', 'Elegant']);
       expect(

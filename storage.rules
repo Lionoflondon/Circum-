@@ -34,6 +34,17 @@ service firebase.storage {
         request.resource.contentType.matches('image/.*|application/pdf');
     }
 
+    function isGiftVoiceNoteOwner(requestId) {
+      return signedIn() && requestId.matches('^' + request.auth.uid + '_[0-9]+$');
+    }
+
+    function isSafeGiftVoiceNoteUpload() {
+      return request.resource != null &&
+        request.resource.size <= 60 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('audio/webm|audio/mpeg|audio/mp4|audio/aac|audio/ogg');
+    }
+
     match /riderDocuments/{riderId}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
       allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
@@ -74,6 +85,12 @@ service firebase.storage {
 
     match /giftStories/{giftId}/{allPaths=**} {
       allow read, create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /gift_requests/{requestId}/voice/{fileName} {
+      allow read: if isAdmin() || isGiftVoiceNoteOwner(requestId);
+      allow create, update: if isGiftVoiceNoteOwner(requestId) && isSafeGiftVoiceNoteUpload();
       allow delete: if isSuperAdmin();
     }
 

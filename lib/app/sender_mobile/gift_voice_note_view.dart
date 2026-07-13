@@ -32,6 +32,14 @@ class GiftVoiceNoteView extends StatefulWidget {
 
 class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
   static const _maxDurationSeconds = 60;
+  static const _maxUploadBytes = 60 * 1024 * 1024;
+  static const _allowedMimeTypes = {
+    'audio/webm',
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/aac',
+    'audio/ogg',
+  };
 
   Timer? _timer;
   Timer? _playbackTimer;
@@ -166,6 +174,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
     try {
       final audio = await _recorder.stop();
       final uploaded = await _uploadRecording(audio);
+      final uploadedAt = DateTime.now();
       setState(() {
         _state = GiftVoiceNoteState.recorded;
         _statusMessage = null;
@@ -176,7 +185,8 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
           localUrl: audio.localUrl,
           storagePath: uploaded.storagePath,
           downloadUrl: uploaded.downloadUrl,
-          createdAt: DateTime.now(),
+          mimeType: uploaded.mimeType,
+          createdAt: uploadedAt,
           transcript: null,
           language: null,
         );
@@ -198,12 +208,19 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       throw StateError('Sign in before saving a voice note.');
     }
     final now = DateTime.now().millisecondsSinceEpoch;
+    final mimeType = audio.mimeType ?? 'audio/webm';
+    if (!_allowedMimeTypes.contains(mimeType)) {
+      throw StateError('Unsupported voice note format.');
+    }
+    if (audio.bytes.lengthInBytes > _maxUploadBytes) {
+      throw StateError('Voice note is too large.');
+    }
     final path = 'gift_requests/${user.uid}_$now/voice/original.webm';
     final ref = FirebaseStorage.instance.ref(path);
     await ref.putData(
       audio.bytes,
       SettableMetadata(
-        contentType: audio.mimeType ?? 'audio/webm',
+        contentType: mimeType,
         customMetadata: {
           'purpose': 'sender_mobile_gift_voice_note',
           'uploadedBy': user.uid,
@@ -213,6 +230,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
     return _UploadedVoiceNote(
       storagePath: path,
       downloadUrl: await ref.getDownloadURL(),
+      mimeType: mimeType,
     );
   }
 
@@ -289,10 +307,12 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
 class _UploadedVoiceNote {
   final String storagePath;
   final String downloadUrl;
+  final String mimeType;
 
   const _UploadedVoiceNote({
     required this.storagePath,
     required this.downloadUrl,
+    required this.mimeType,
   });
 }
 

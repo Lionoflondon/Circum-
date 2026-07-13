@@ -6772,38 +6772,29 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                   ? 'Duration unavailable'
                   : '${voice['durationSeconds']} seconds'),
           _adminGiftDetailLine(
+              'Uploaded at',
+              _adminDateText(voice['uploadedAt'] ??
+                  voice['createdAt'] ??
+                  item['createdAt'])),
+          _adminGiftDetailLine(
+              'Format', '${voice['mimeType'] ?? 'Audio format unavailable'}'),
+          _adminGiftDetailLine(
               'Transcript', '${voice['transcript'] ?? 'Not available'}'),
           _adminGiftDetailLine(
               'AI summary', '${voice['irisSummary'] ?? 'Not available'}'),
           const SizedBox(height: 8),
-          Slider(value: 0, onChanged: null),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            OutlinedButton.icon(
-              onPressed: () => launchUrl(Uri.parse(url)),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Play'),
-            ),
-            OutlinedButton.icon(
-              onPressed: null,
-              icon: const Icon(Icons.pause),
-              label: const Text('Pause'),
-            ),
-            OutlinedButton.icon(
-              onPressed: null,
-              icon: const Icon(Icons.stop),
-              label: const Text('Stop'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => launchUrl(Uri.parse(url)),
-              icon: const Icon(Icons.download_outlined),
-              label: const Text('Download'),
-            ),
-            for (final speed in const ['1x', '1.5x', '2x'])
-              ChoiceChip(label: Text(speed), selected: speed == '1x'),
-          ]),
+          _CircumVoiceAudioPlayer(
+            url: url,
+            durationSeconds: _adminIntFromDynamic(voice['durationSeconds']),
+          ),
         ],
       ],
     );
+  }
+
+  int? _adminIntFromDynamic(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse('$value');
   }
 
   Widget _adminGiftCustomInterestPanel(List<String> customInterests) {
@@ -62021,6 +62012,14 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
     final senderMessage =
         '${gift['senderMessageText'] ?? gift['personalMessage'] ?? ''}'.trim();
     final circumMessage = '${gift['giftStoryCircumMessage'] ?? ''}'.trim();
+    final voice = gift['voiceNote'] is Map
+        ? Map<String, dynamic>.from(gift['voiceNote'] as Map)
+        : const <String, dynamic>{};
+    final senderVoiceNoteUrl =
+        '${gift['giftStorySenderVoiceNoteUrl'] ?? voice['downloadUrl'] ?? voice['url'] ?? gift['voiceNoteUrl'] ?? ''}'
+            .trim();
+    final senderVoiceDuration =
+        _giftStoryIntFromDynamic(voice['durationSeconds']);
     final chapters = [
       _GiftStoryChapter(
         icon: Icons.card_giftcard,
@@ -62037,6 +62036,15 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
             : senderMessage,
         chips: const ['FROM SOMEONE WHO THOUGHT OF YOU'],
       ),
+      if (senderVoiceNoteUrl.isNotEmpty)
+        _GiftStoryChapter(
+          icon: Icons.record_voice_over_outlined,
+          title: 'A voice note was left for you',
+          body: 'Listen to the sender’s original message.',
+          chips: const ['Sender voice note'],
+          audioUrl: senderVoiceNoteUrl,
+          audioDurationSeconds: senderVoiceDuration,
+        ),
       _GiftStoryChapter(
         icon: Icons.celebration,
         title: '${gift['occasion'] ?? 'A special moment'}',
@@ -63036,6 +63044,13 @@ class _GiftStoryViewerState extends State<_GiftStoryViewer> {
                     .toList(),
               ),
             ],
+            if (chapter.audioUrl != null && chapter.audioUrl!.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              _CircumVoiceAudioPlayer(
+                url: chapter.audioUrl!,
+                durationSeconds: chapter.audioDurationSeconds,
+              ),
+            ],
             if (chapter.finalChapter) ...[
               const SizedBox(height: 24),
               _storyFinalActions(),
@@ -63342,6 +63357,8 @@ class _GiftStoryChapter {
   final List<String> chips;
   final bool finalChapter;
   final String? photoUrl;
+  final String? audioUrl;
+  final int? audioDurationSeconds;
 
   const _GiftStoryChapter({
     required this.icon,
@@ -63350,7 +63367,152 @@ class _GiftStoryChapter {
     this.chips = const [],
     this.finalChapter = false,
     this.photoUrl,
+    this.audioUrl,
+    this.audioDurationSeconds,
   });
+}
+
+int? _giftStoryIntFromDynamic(Object? value) {
+  if (value is num) return value.toInt();
+  return int.tryParse('$value');
+}
+
+class _CircumVoiceAudioPlayer extends StatefulWidget {
+  final String url;
+  final int? durationSeconds;
+
+  const _CircumVoiceAudioPlayer({
+    required this.url,
+    this.durationSeconds,
+  });
+
+  @override
+  State<_CircumVoiceAudioPlayer> createState() =>
+      _CircumVoiceAudioPlayerState();
+}
+
+class _CircumVoiceAudioPlayerState extends State<_CircumVoiceAudioPlayer> {
+  html.AudioElement? _audio;
+  StreamSubscription? _timeSub;
+  StreamSubscription? _endedSub;
+  bool _playing = false;
+  double _position = 0;
+  double _duration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _duration = (widget.durationSeconds ?? 0).toDouble();
+    _audio = html.AudioElement(widget.url)..preload = 'metadata';
+    _audio!.onLoadedMetadata.listen((_) {
+      if (!mounted) return;
+      final duration = _audio!.duration;
+      if (duration.isFinite && duration > 0) {
+        setState(() => _duration = duration.toDouble());
+      }
+    });
+    _timeSub = _audio!.onTimeUpdate.listen((_) {
+      if (!mounted) return;
+      setState(() => _position = _audio!.currentTime.toDouble());
+    });
+    _endedSub = _audio!.onEnded.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _playing = false;
+        _position = 0;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timeSub?.cancel();
+    _endedSub?.cancel();
+    _audio?.pause();
+    _audio = null;
+    super.dispose();
+  }
+
+  Future<void> _play() async {
+    final audio = _audio;
+    if (audio == null) return;
+    await audio.play();
+    if (mounted) setState(() => _playing = true);
+  }
+
+  void _pause() {
+    _audio?.pause();
+    if (mounted) setState(() => _playing = false);
+  }
+
+  void _stop() {
+    final audio = _audio;
+    if (audio == null) return;
+    audio
+      ..pause()
+      ..currentTime = 0;
+    if (mounted) {
+      setState(() {
+        _playing = false;
+        _position = 0;
+      });
+    }
+  }
+
+  String _format(double seconds) {
+    final safe = seconds.isFinite ? seconds.round().clamp(0, 3599) : 0;
+    final minutes = safe ~/ 60;
+    final remainder = safe % 60;
+    return '$minutes:${remainder.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final max =
+        (_duration > 0 ? _duration : math.max(_position, 1.0)).toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Slider(
+          value: _position.clamp(0, max).toDouble(),
+          max: max,
+          onChanged: (value) {
+            final audio = _audio;
+            if (audio == null) return;
+            audio.currentTime = value;
+            setState(() => _position = value);
+          },
+        ),
+        Text(
+          '${_format(_position)} / ${_format(max)}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          OutlinedButton.icon(
+            onPressed: _playing ? null : _play,
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Play'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _playing ? _pause : null,
+            icon: const Icon(Icons.pause),
+            label: const Text('Pause'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _position > 0 || _playing ? _stop : null,
+            icon: const Icon(Icons.stop),
+            label: const Text('Stop'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(Uri.parse(widget.url)),
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('Download'),
+          ),
+        ]),
+      ],
+    );
+  }
 }
 
 class _GiftsComingSoonPage extends StatefulWidget {

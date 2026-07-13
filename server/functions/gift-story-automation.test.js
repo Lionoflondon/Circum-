@@ -40,6 +40,31 @@ test("safe story payload excludes private operational fields", () => {
   assert.equal(Object.hasOwn(safe, "procurementActualCost"), false);
 });
 
+test("safe story payload includes sender voice-note playback metadata", () => {
+  const safe = story.safeStory("gift-voice", {
+    voiceNote: {
+      hasVoiceNote: true,
+      downloadUrl: "https://storage.example/voice.webm",
+      durationSeconds: 12,
+      mimeType: "audio/webm",
+      createdAt: "2026-07-13T09:00:00.000Z",
+      storagePath: "gift_requests/sender_123/voice/original.webm",
+    },
+  });
+  assert.deepEqual(safe.voiceNote, {
+    hasVoiceNote: true,
+    downloadUrl: "https://storage.example/voice.webm",
+    durationSeconds: 12,
+    mimeType: "audio/webm",
+    createdAt: "2026-07-13T09:00:00.000Z",
+  });
+  assert.equal(
+    safe.giftStorySenderVoiceNoteUrl,
+    "https://storage.example/voice.webm",
+  );
+  assert.equal(Object.hasOwn(safe.voiceNote, "storagePath"), false);
+});
+
 const consentedA = {
   userId: "user-a",
   displayName: "Alex",
@@ -241,4 +266,23 @@ test("recipient web story renders final app CTA and avoids private fields", () =
   assert.doesNotMatch(html, /1500/);
   assert.doesNotMatch(html, /Secret/);
   assert.doesNotMatch(html, /Private Sender/);
+});
+
+test("recipient web story renders sender voice note as playable audio", () => {
+  const html = story.renderGiftStoryHtml({
+    token: "secure-token",
+    giftId: "gift-1",
+    role: "recipient",
+    gift: {
+      recipientName: "Ada",
+      voiceNote: {
+        downloadUrl: "https://storage.example/voice.webm",
+        durationSeconds: 9,
+        mimeType: "audio/webm",
+      },
+    },
+  });
+  assert.match(html, /type":"voice_note"/);
+  assert.match(html, /<audio class="voice" controls preload="metadata"/);
+  assert.match(html, /https:\/\/storage\.example\/voice\.webm/);
 });

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../gifts/gift_story_studio_policy.dart';
 import 'gift_journey_draft.dart';
+import 'gift_voice_recorder.dart';
 import 'gift_relationship_view.dart';
 
 class GiftStoryView extends StatefulWidget {
@@ -363,9 +364,10 @@ class _StorySlideView extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (slide.type) {
       GiftStorySlideType.arrival => _ArrivalSlide(slide: slide),
-      GiftStorySlideType.note || GiftStorySlideType.voiceNote => _NoteSlide(
+      GiftStorySlideType.note => _NoteSlide(
           slide: slide,
         ),
+      GiftStorySlideType.voiceNote => _VoiceNoteSlide(slide: slide),
       GiftStorySlideType.giftReveal => _RevealSlide(slide: slide),
       GiftStorySlideType.whyChosen => _TextSlide(slide: slide),
       GiftStorySlideType.finale => _FinaleSlide(onReplay: onReplay),
@@ -390,6 +392,130 @@ class _ArrivalSlide extends StatelessWidget {
             _SlideHeadline(slide.headline, centered: true),
             _SlideBody(slide.body, centered: true),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VoiceNoteSlide extends StatefulWidget {
+  final GiftStorySlide slide;
+  const _VoiceNoteSlide({required this.slide});
+
+  @override
+  State<_VoiceNoteSlide> createState() => _VoiceNoteSlideState();
+}
+
+class _VoiceNoteSlideState extends State<_VoiceNoteSlide> {
+  late final SenderGiftVoicePlayback _playback;
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _playback = SenderGiftVoicePlayback();
+  }
+
+  @override
+  void dispose() {
+    _playback.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    final url = widget.slide.mediaUrl?.trim();
+    if (url == null || url.isEmpty) return;
+    if (_playing) {
+      _playback.pause();
+      setState(() => _playing = false);
+      return;
+    }
+    await _playback.play(url);
+    if (mounted) setState(() => _playing = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAudio = widget.slide.mediaUrl?.trim().isNotEmpty == true;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(26),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 28, 22, 24),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .05),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.white.withValues(alpha: .14)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.slide.headline,
+                style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontStyle: FontStyle.italic,
+                  fontSize: 18,
+                  height: 1.55,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.slide.body,
+                style: GoogleFonts.jetBrainsMono(
+                  color: Colors.white.withValues(alpha: .58),
+                  fontSize: 10.5,
+                  letterSpacing: .4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Semantics(
+                button: true,
+                label: _playing
+                    ? 'Pause sender voice note'
+                    : 'Play sender voice note',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: hasAudio ? _toggle : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC9B8FF).withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFFC9B8FF).withValues(alpha: .28),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _playing
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          hasAudio
+                              ? (_playing
+                                  ? 'Pause voice note'
+                                  : 'Play voice note')
+                              : 'Voice note unavailable',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

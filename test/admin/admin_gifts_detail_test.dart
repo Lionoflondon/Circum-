@@ -25,6 +25,12 @@ void main() {
     expect(source, contains('No voice note was provided.'));
     expect(source, contains('Transcript'));
     expect(source, contains('AI summary'));
+    expect(source, contains('Uploaded at'));
+    expect(source, contains('Format'));
+    expect(source, contains('class _CircumVoiceAudioPlayer'));
+    expect(source, contains('html.AudioElement(widget.url)'));
+    expect(source, contains('onTimeUpdate'));
+    expect(source, contains('currentTime = value'));
     expect(source, contains('Bulk accept'));
     expect(source, contains('Bulk reject'));
     expect(source, contains('Add New Interest'));

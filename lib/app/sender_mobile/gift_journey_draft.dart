@@ -124,6 +124,7 @@ class SenderGiftVoiceNote {
   final String? localPath;
   final String? storagePath;
   final String? downloadUrl;
+  final String? mimeType;
   final DateTime createdAt;
   final String? transcript;
   final String? language;
@@ -135,6 +136,7 @@ class SenderGiftVoiceNote {
     this.localPath,
     this.storagePath,
     this.downloadUrl,
+    this.mimeType,
     required this.createdAt,
     this.transcript,
     this.language,
@@ -147,6 +149,7 @@ class SenderGiftVoiceNote {
         'localPath': localPath ?? localUrl,
         'storagePath': storagePath,
         'downloadUrl': downloadUrl,
+        'mimeType': mimeType,
         'createdAt': createdAt.toIso8601String(),
         'transcript': transcript,
         'language': language,
