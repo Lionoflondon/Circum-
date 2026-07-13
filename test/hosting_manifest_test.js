@@ -108,7 +108,7 @@ test('mismatched Hosting site blocks deployment', () => {
 
 test('mismatched build identity blocks deployment', () => {
   assert.throws(
-    () => validateIdentity(CONFIGS.admin, 'CIRCUM_BUILD_ID=public-sender'),
+    () => validateIdentity(CONFIGS.admin, 'CIRCUM_BUILD_ID=circum-web'),
     /build identity/,
   );
 });

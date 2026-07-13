@@ -46,9 +46,9 @@ fetch "Circum Web www manifest" https://www.circumuk.com/deployment-manifest.jso
 fetch "Sender app manifest" https://circum-app-2797c.web.app/deployment-manifest.json "$TMP_DIR/sender-manifest.json"
 fetch "Rider app manifest" https://circum-rider-2797c.web.app/deployment-manifest.json "$TMP_DIR/rider-manifest.json"
 
-assert_manifest "Circum Web canonical site" "$TMP_DIR/public-direct-manifest.json" "Circum Public Sender Website" "circum-2797c" "public"
-assert_manifest "Circum Web custom domain" "$TMP_DIR/public-custom-manifest.json" "Circum Public Sender Website" "circum-2797c" "public"
-assert_manifest "Circum Web www custom domain" "$TMP_DIR/public-www-manifest.json" "Circum Public Sender Website" "circum-2797c" "public"
+assert_manifest "Circum Web canonical site" "$TMP_DIR/public-direct-manifest.json" "Circum Web" "circum-2797c" "public"
+assert_manifest "Circum Web custom domain" "$TMP_DIR/public-custom-manifest.json" "Circum Web" "circum-2797c" "public"
+assert_manifest "Circum Web www custom domain" "$TMP_DIR/public-www-manifest.json" "Circum Web" "circum-2797c" "public"
 assert_manifest "Sender app canonical site" "$TMP_DIR/sender-manifest.json" "Circum Sender App" "circum-app-2797c" "sender"
 assert_manifest "Rider app canonical site" "$TMP_DIR/rider-manifest.json" "Circum Rider Web" "circum-rider-2797c" "rider"
 

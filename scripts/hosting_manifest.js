@@ -18,14 +18,14 @@ const CONFIGS = Object.freeze({
       'Employee access only. Sign in with an account that has a Circum admin role.',
     ],
     forbiddenBundleMarkers: [
-      'CIRCUM_BUILD_ID=public-sender',
+      'CIRCUM_BUILD_ID=circum-web',
       'Send anything across town',
       'sender-root',
     ],
   }),
   public: Object.freeze({
-    product: 'Circum Public Sender Website',
-    buildIdentity: 'CIRCUM_BUILD_ID=public-sender',
+    product: 'Circum Web',
+    buildIdentity: 'CIRCUM_BUILD_ID=circum-web',
     targetAlias: 'public',
     siteId: 'circum-2797c',
     outputDirectory: 'build/web_main',
