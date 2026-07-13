@@ -56,7 +56,6 @@ import 'package:share_plus/share_plus.dart';
 import 'firebase_options.dart';
 
 const _companyName = 'Circum';
-const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _vanguardAddonPriceGbp = 1.99;
@@ -119,7 +118,6 @@ Future<void> _activateReferralSafely({
 enum _WebAppMode {
   landing,
   sender,
-  rider,
   gifts,
   admin,
   terms,
@@ -131,8 +129,6 @@ enum _WebAppMode {
 enum CircumAppSurface {
   publicWebsite,
   senderApp,
-  riderApp,
-  riderStripeConnect,
   adminApp,
 }
 
@@ -155,11 +151,6 @@ enum CircumSenderEntry {
   account,
 }
 
-enum CircumRiderStripeRoute {
-  returnSetup,
-  refreshSetup,
-}
-
 enum _PublicAuthMode { login, signup }
 
 @visibleForTesting
@@ -167,7 +158,6 @@ class CircumRouteDecision {
   final CircumAppSurface surface;
   final CircumPublicRoute publicRoute;
   final CircumSenderEntry senderEntry;
-  final CircumRiderStripeRoute? riderStripeRoute;
   final bool openSenderGifts;
   final bool useSenderMobileApp;
   final bool useRiderPreview;
@@ -177,7 +167,6 @@ class CircumRouteDecision {
     required this.surface,
     this.publicRoute = CircumPublicRoute.landing,
     this.senderEntry = CircumSenderEntry.dashboard,
-    this.riderStripeRoute,
     this.openSenderGifts = false,
     this.useSenderMobileApp = false,
     this.useRiderPreview = false,
@@ -196,8 +185,6 @@ class CircumRouteDecision {
 
   _WebAppMode get _legacyMode => switch (surface) {
         CircumAppSurface.senderApp => _WebAppMode.sender,
-        CircumAppSurface.riderApp => _WebAppMode.rider,
-        CircumAppSurface.riderStripeConnect => _WebAppMode.rider,
         CircumAppSurface.adminApp => _WebAppMode.admin,
         CircumAppSurface.publicWebsite => switch (publicRoute) {
             CircumPublicRoute.gifts => _WebAppMode.gifts,
@@ -225,19 +212,6 @@ CircumRouteDecision resolveCircumRoute(
     return const CircumRouteDecision(surface: CircumAppSurface.adminApp);
   }
 
-  if (path == '/rider/stripe/return') {
-    return const CircumRouteDecision(
-      surface: CircumAppSurface.riderStripeConnect,
-      riderStripeRoute: CircumRiderStripeRoute.returnSetup,
-    );
-  }
-  if (path == '/rider/stripe/refresh') {
-    return const CircumRouteDecision(
-      surface: CircumAppSurface.riderStripeConnect,
-      riderStripeRoute: CircumRiderStripeRoute.refreshSetup,
-    );
-  }
-
   if (_isSenderAppHostingHostFor(uri) && (path.isEmpty || path == '/')) {
     return CircumRouteDecision(
       surface: CircumAppSurface.senderApp,
@@ -255,11 +229,9 @@ CircumRouteDecision resolveCircumRoute(
       useSenderMobileApp: true,
     );
   }
-  // The canonical Rider web application is the authenticated Rider portal.
-  // Keep this direct route aligned with the Rider action on the public home.
   if (path == '/rider') {
     return const CircumRouteDecision(
-      surface: CircumAppSurface.riderApp,
+      surface: CircumAppSurface.publicWebsite,
     );
   }
 
@@ -316,13 +288,13 @@ CircumRouteDecision resolveCircumRoute(
         senderEntry: CircumSenderEntry.account,
         routeDeliveryId: routeDeliveryId,
       ),
-    // Legacy Rider aliases resolve to the same canonical Rider portal.
+    // Rider app entry points are isolated from this Sender/Public bundle.
     'rider' ||
     'driver' ||
     'earn' ||
     'circum-order' =>
       const CircumRouteDecision(
-        surface: CircumAppSurface.riderApp,
+        surface: CircumAppSurface.publicWebsite,
       ),
     'gifts' => const CircumRouteDecision(
         surface: CircumAppSurface.publicWebsite,
@@ -464,24 +436,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     onOpenGifts: _openSenderMobileGifts,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
-                CircumAppSurface.riderApp => CircumRiderAppRoot(
-                    key: const ValueKey('rider-root'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    usePreview: _route.useRiderPreview,
-                    onBack: _openPublicHome,
-                    onRoleSelected: _openRole,
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
-                CircumAppSurface.riderStripeConnect =>
-                  CircumRiderStripeConnectRoute(
-                    key: ValueKey(
-                      'rider-stripe-${_route.riderStripeRoute?.name}',
-                    ),
-                    colors: colors,
-                    route: _route.riderStripeRoute ??
-                        CircumRiderStripeRoute.returnSetup,
-                  ),
                 CircumAppSurface.adminApp => _adminHostingTarget
                     ? CircumAdminAppRoot(
                         key: const ValueKey('admin-root'),
@@ -511,7 +465,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
             surface: CircumAppSurface.senderApp,
           ),
         CircumRole.rider => const CircumRouteDecision(
-            surface: CircumAppSurface.riderApp,
+            surface: CircumAppSurface.publicWebsite,
           ),
         CircumRole.admin => const CircumRouteDecision(
             surface: CircumAppSurface.adminApp,
@@ -609,7 +563,8 @@ class _WebSenderAppState extends State<WebSenderApp> {
   void _openRider() {
     setState(() {
       _publicAuthOpen = false;
-      _route = const CircumRouteDecision(surface: CircumAppSurface.riderApp);
+      _route =
+          const CircumRouteDecision(surface: CircumAppSurface.publicWebsite);
       _senderInitialStep = _route._senderInitialStep;
     });
   }
@@ -790,228 +745,6 @@ class CircumSenderAppRoot extends StatelessWidget {
   }
 }
 
-/// Public Rider entry points belong to the dedicated Circum-Rider application.
-///
-/// The main hosting surface intentionally performs no Rider authentication or
-/// portal rendering. Keeping this boundary explicit prevents the Sender web
-/// bundle from becoming a second Rider application.
-class CircumRiderAppRoot extends StatefulWidget {
-  final _CircumColors colors;
-  final bool darkMode;
-  final bool usePreview;
-  final VoidCallback onBack;
-  final ValueChanged<CircumRole> onRoleSelected;
-  final VoidCallback onToggleTheme;
-
-  const CircumRiderAppRoot({
-    super.key,
-    required this.colors,
-    required this.darkMode,
-    required this.usePreview,
-    required this.onBack,
-    required this.onRoleSelected,
-    required this.onToggleTheme,
-  });
-
-  @override
-  State<CircumRiderAppRoot> createState() => _CircumRiderAppRootState();
-}
-
-class _CircumRiderAppRootState extends State<CircumRiderAppRoot> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      html.window.location.replace(_canonicalRiderAppUrl);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _PhoneStage(
-      colors: widget.colors,
-      child: const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-  }
-}
-
-class CircumRiderStripeConnectRoute extends StatefulWidget {
-  final _CircumColors colors;
-  final CircumRiderStripeRoute route;
-
-  const CircumRiderStripeConnectRoute({
-    super.key,
-    required this.colors,
-    required this.route,
-  });
-
-  @override
-  State<CircumRiderStripeConnectRoute> createState() =>
-      _CircumRiderStripeConnectRouteState();
-}
-
-class _CircumRiderStripeConnectRouteState
-    extends State<CircumRiderStripeConnectRoute> {
-  bool _loading = true;
-  String _title = 'Stripe setup complete. Returning to Circum...';
-  String _message = 'We are checking your payout status now.';
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _title = widget.route == CircumRiderStripeRoute.refreshSetup
-        ? 'Stripe setup needs to continue.'
-        : 'Stripe setup complete. Returning to Circum...';
-    _message = widget.route == CircumRiderStripeRoute.refreshSetup
-        ? 'We are reopening Stripe so you can finish payout setup.'
-        : 'We are checking your payout status now.';
-    unawaited(_handleStripeRoute());
-  }
-
-  Future<void> _handleStripeRoute() async {
-    try {
-      await _ensureCircumFirebaseReady();
-      final user = FirebaseAuth.instance.currentUser;
-      final riderId = (Uri.base.queryParameters['riderId'] ??
-              Uri.base.queryParameters['uid'] ??
-              Uri.base.queryParameters['account'] ??
-              user?.uid ??
-              '')
-          .trim();
-      if (riderId.isEmpty || user == null) {
-        _showError(
-          'We could not confirm your rider session. Please return to the rider app and try again.',
-        );
-        return;
-      }
-
-      final functions = FirebaseFunctions.instance;
-      if (widget.route == CircumRiderStripeRoute.refreshSetup) {
-        final response = await functions
-            .httpsCallable('refreshStripeOnboardingLink')
-            .call({'riderId': riderId});
-        final data = Map<String, dynamic>.from(response.data as Map);
-        final url = '${data['url'] ?? ''}'.trim();
-        if (url.isEmpty) {
-          _showError('Stripe setup could not be reopened. Please try again.');
-          return;
-        }
-        html.window.location.assign(url);
-        return;
-      }
-
-      await functions
-          .httpsCallable('syncStripeConnectStatus')
-          .call({'riderId': riderId});
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _message = 'Your payout status has been refreshed.';
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      if (mounted) _openRiderEarnings();
-    } catch (error) {
-      debugPrint('Stripe Connect route failed: $error');
-      _showError(
-        widget.route == CircumRiderStripeRoute.refreshSetup
-            ? 'Stripe setup could not be reopened. Please try again.'
-            : 'Stripe status could not be refreshed. Please return to the rider app.',
-      );
-    }
-  }
-
-  void _showError(String message) {
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _error = message;
-      _message = message;
-    });
-  }
-
-  void _openRiderEarnings() {
-    html.window.location.assign(Uri.base.resolve('/?app=earn').toString());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: double.infinity),
-      color: widget.colors.background,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(24),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 460),
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withOpacity(0.14)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xff2563eb).withOpacity(0.24),
-              blurRadius: 38,
-              offset: const Offset(0, 18),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_loading)
-              const SizedBox(
-                width: 34,
-                height: 34,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              )
-            else
-              Icon(
-                _error == null ? Icons.check_circle : Icons.error_outline,
-                color: _error == null
-                    ? const Color(0xff22c55e)
-                    : const Color(0xffff6b6b),
-                size: 36,
-              ),
-            const SizedBox(height: 22),
-            Text(
-              _title,
-              style: GoogleFonts.dmSerifDisplay(
-                color: widget.colors.text,
-                fontSize: 30,
-                height: 1.04,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _message,
-              style: GoogleFonts.inter(
-                color: widget.colors.mutedText,
-                fontSize: 15,
-                height: 1.5,
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _openRiderEarnings,
-                  child: const Text('Back to rider app'),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class CircumAdminAppRoot extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
@@ -1162,7 +895,6 @@ class _PlatformNotificationCenterState
       if (token == null) return;
       final collection = switch (widget.mode) {
         _WebAppMode.admin => 'adminUsers',
-        _WebAppMode.rider => 'riderProfiles',
         _ => 'users',
       };
       await FirebaseFirestore.instance

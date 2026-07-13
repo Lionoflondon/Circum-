@@ -58,13 +58,6 @@
           ]
         }
       ],
-      "redirects": [
-        {
-          "source": "/rider",
-          "destination": "https://circum-rider-2797c.web.app",
-          "type": 302
-        }
-      ],
       "rewrites": [
         {
           "source": "/story/**",
@@ -123,13 +116,6 @@
               "value": "no-cache, no-store, must-revalidate"
             }
           ]
-        }
-      ],
-      "redirects": [
-        {
-          "source": "/rider",
-          "destination": "https://circum-rider-2797c.web.app",
-          "type": 302
         }
       ],
       "rewrites": [
