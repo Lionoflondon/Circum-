@@ -34,12 +34,31 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   final _description = TextEditingController();
   final _weight = TextEditingController(text: '0.5');
   var _searchingPickup = true;
+  String? _initializationError;
 
   @override
   void initState() {
     super.initState();
-    context.read<SendPackageBloc>().add(CheckForPushToken());
-    context.read<SendPackageBloc>().add(CheckForActiveRequest());
+    _initializeSendRoute();
+  }
+
+  void _initializeSendRoute() {
+    try {
+      final bloc = context.read<SendPackageBloc>();
+      bloc.add(CheckForPushToken());
+      bloc.add(CheckForActiveRequest());
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('initialising SenderBookingCanvas'),
+        ),
+      );
+      _initializationError =
+          'Send could not start because its booking engine was unavailable.';
+    }
   }
 
   @override
@@ -111,6 +130,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   @override
   Widget build(BuildContext context) {
+    if (_initializationError != null) {
+      return _SendRouteStateScaffold(
+        title: 'Send unavailable',
+        body: _initializationError!,
+        actionLabel: 'Retry',
+        onAction: () {
+          setState(() => _initializationError = null);
+          _initializeSendRoute();
+        },
+      );
+    }
     return BlocBuilder<SendPackageBloc, SendPackageState>(
       builder: (context, engine) {
         final operationalStep = _stepForEngine(engine);
@@ -187,6 +217,81 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       case DeliveryStatus.addressesSelected:
         return null;
     }
+  }
+}
+
+class _SendRouteStateScaffold extends StatelessWidget {
+  final String title;
+  final String body;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  const _SendRouteStateScaffold({
+    required this.title,
+    required this.body,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _Tokens.bg,
+      body: Stack(
+        children: [
+          const _SenderMobileMap(active: false),
+          SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: _Glass(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            color: _Tokens.lightBlue,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        body,
+                        style: const TextStyle(
+                          color: _Tokens.muted,
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _PrimaryButton(
+                        label: actionLabel,
+                        enabled: true,
+                        onTap: onAction,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

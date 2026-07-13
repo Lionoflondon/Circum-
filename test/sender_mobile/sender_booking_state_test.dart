@@ -1823,6 +1823,25 @@ void main() {
       },
     );
 
+    test('sender Send route has standalone bloc and dark failure fallback', () {
+      final homeSource = File(
+        'lib/app/sender_mobile/sender_mobile_home.dart',
+      ).readAsStringSync();
+      final canvasSource = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(homeSource, contains('late final SendPackageBloc'));
+      expect(homeSource, contains('BlocProvider<SendPackageBloc>.value'));
+      expect(homeSource, contains('_standaloneSendPackageBloc.close()'));
+      expect(canvasSource, contains('_initializeSendRoute'));
+      expect(canvasSource, contains('FlutterError.reportError'));
+      expect(canvasSource, contains('Send unavailable'));
+      expect(canvasSource, contains('Send could not start'));
+      expect(canvasSource, contains('backgroundColor: _Tokens.bg'));
+      expect(canvasSource, isNot(contains('Container(color: Colors.white)')));
+    });
+
     test('sender mobile pre-auth visual refinements are present', () {
       final source = File(
         'lib/app/sender_mobile/sender_mobile_home.dart',

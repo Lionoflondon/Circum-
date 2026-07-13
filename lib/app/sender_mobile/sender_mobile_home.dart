@@ -5,10 +5,12 @@ import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
+import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'gift_mode_view.dart';
@@ -68,6 +70,19 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   var _index = 0;
   var _entry = _SenderEntryScreen.landing;
   var _authMode = _SenderAuthMode.createAccount;
+  late final SendPackageBloc _standaloneSendPackageBloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _standaloneSendPackageBloc = SendPackageBloc();
+  }
+
+  @override
+  void dispose() {
+    _standaloneSendPackageBloc.close();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,8 +102,17 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
             )
           : null,
     );
-    if (SenderAccessibilityScope.maybeOf(context) != null) return surface;
-    return SenderAccessibilityHost(key: ValueKey(_entry), child: surface);
+    final providedSurface = BlocProvider<SendPackageBloc>.value(
+      value: _standaloneSendPackageBloc,
+      child: surface,
+    );
+    if (SenderAccessibilityScope.maybeOf(context) != null) {
+      return providedSurface;
+    }
+    return SenderAccessibilityHost(
+      key: ValueKey(_entry),
+      child: providedSurface,
+    );
   }
 
   Widget _activeSurface() {
