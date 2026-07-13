@@ -57,12 +57,15 @@ void main() {
     expect(firebaserc, contains('"admin": [\n          "circum-admin-2797c"'));
     expect(firebaserc, contains('"public": [\n          "circum-2797c"'));
     expect(firebaserc, contains('"sender": [\n          "circum-app-2797c"'));
+    expect(firebaserc, contains('"rider": [\n          "circum-rider-2797c"'));
     expect(firebase, contains('"target": "admin"'));
     expect(firebase, contains('"public": "build/web_admin"'));
     expect(firebase, contains('"target": "public"'));
     expect(firebase, contains('"public": "build/web_main"'));
     expect(firebase, contains('"target": "sender"'));
     expect(firebase, contains('"public": "build/web_sender"'));
+    expect(firebase, contains('"target": "rider"'));
+    expect(firebase, contains('"public": "build/web_rider"'));
     expect(
       firebase,
       contains('node scripts/hosting_manifest.js verify admin'),
@@ -74,6 +77,10 @@ void main() {
     expect(
       firebase,
       contains('node scripts/hosting_manifest.js verify sender'),
+    );
+    expect(
+      firebase,
+      contains('node scripts/hosting_manifest.js verify rider'),
     );
     expect(adminDeploy, contains('--target lib/main_admin.dart'));
     expect(adminDeploy, contains('hosting_manifest.js prepare admin'));

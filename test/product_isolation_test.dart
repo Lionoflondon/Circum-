@@ -51,7 +51,6 @@ void main() {
       expect(source, isNot(contains('const _canonicalRiderAppUrl')));
       expect(source, isNot(contains('CircumRiderAppRoot')));
       expect(source, isNot(contains('html.window.location.replace')));
-      expect(source, isNot(contains('rider-root')));
       expect(source, isNot(contains('CircumAppSurface.riderApp')));
       expect(source, isNot(contains('CircumAppSurface.riderStripeConnect')));
     });

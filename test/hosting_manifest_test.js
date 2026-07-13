@@ -22,6 +22,7 @@ function fixture() {
           admin: ['circum-admin-2797c'],
           public: ['circum-2797c'],
           sender: ['circum-app-2797c'],
+          rider: ['circum-rider-2797c'],
         },
       },
     },
@@ -31,6 +32,7 @@ function fixture() {
       { target: 'admin', public: 'build/web_admin' },
       { target: 'public', public: 'build/web_main' },
       { target: 'sender', public: 'build/web_sender' },
+      { target: 'rider', public: 'build/web_rider' },
     ],
   }));
   return root;
@@ -43,6 +45,9 @@ test('Admin and public targets, sites and outputs are distinct', () => {
   assert.notEqual(CONFIGS.public.targetAlias, CONFIGS.sender.targetAlias);
   assert.notEqual(CONFIGS.public.siteId, CONFIGS.sender.siteId);
   assert.notEqual(CONFIGS.public.outputDirectory, CONFIGS.sender.outputDirectory);
+  assert.notEqual(CONFIGS.rider.targetAlias, CONFIGS.sender.targetAlias);
+  assert.notEqual(CONFIGS.rider.siteId, CONFIGS.sender.siteId);
+  assert.notEqual(CONFIGS.rider.outputDirectory, CONFIGS.sender.outputDirectory);
   assert.equal(validateFirebaseConfiguration(fixture()), true);
 });
 
@@ -64,6 +69,17 @@ test('Sender app build rejects Admin hosting markers', () => {
   assert.throws(
     () => validateBundle(CONFIGS.sender, 'sender-root CIRCUM_ADMIN_PORTAL_CANONICAL_V1'),
     /forbidden marker/,
+  );
+});
+
+test('Rider Web build rejects Admin markers and allows shared dormant Sender code', () => {
+  assert.throws(
+    () => validateBundle(CONFIGS.rider, 'rider-web-root Earn as a Rider Rider details CIRCUM_ADMIN_PORTAL_CANONICAL_V1'),
+    /forbidden marker/,
+  );
+  assert.equal(
+    validateBundle(CONFIGS.rider, 'rider-web-root Earn as a Rider Rider details sender-root'),
+    true,
   );
 });
 

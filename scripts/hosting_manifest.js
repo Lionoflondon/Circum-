@@ -53,6 +53,24 @@ const CONFIGS = Object.freeze({
       'admin-root',
     ],
   }),
+  rider: Object.freeze({
+    product: 'Circum Rider Web',
+    buildIdentity: 'CIRCUM_BUILD_ID=rider-web',
+    targetAlias: 'rider',
+    siteId: 'circum-rider-2797c',
+    outputDirectory: 'build/web_rider',
+    requiredBundleMarkers: [
+      'rider-web-root',
+      'Earn as a Rider',
+      'Rider details',
+    ],
+    forbiddenBundleMarkers: [
+      'CIRCUM_BUILD_ID=admin',
+      'CIRCUM_ADMIN_PORTAL_CANONICAL_V1',
+      'Employee access only. Sign in with an account that has a Circum admin role.',
+      'admin-root',
+    ],
+  }),
 });
 
 function fail(message) {
@@ -107,6 +125,16 @@ function validateFirebaseConfiguration(root = process.cwd()) {
   }
   if (CONFIGS.public.outputDirectory === CONFIGS.sender.outputDirectory) {
     fail('Public and Sender app output directories must differ');
+  }
+  if (CONFIGS.rider.siteId === CONFIGS.sender.siteId ||
+      CONFIGS.rider.siteId === CONFIGS.public.siteId ||
+      CONFIGS.rider.siteId === CONFIGS.admin.siteId) {
+    fail('Rider Web site ID must be isolated');
+  }
+  if (CONFIGS.rider.outputDirectory === CONFIGS.sender.outputDirectory ||
+      CONFIGS.rider.outputDirectory === CONFIGS.public.outputDirectory ||
+      CONFIGS.rider.outputDirectory === CONFIGS.admin.outputDirectory) {
+    fail('Rider Web output directory must be isolated');
   }
 
   const hosting = firebase.hosting;
@@ -246,7 +274,7 @@ if (require.main === module) {
       ? prepare(mode)
       : command === 'verify'
         ? verify(mode)
-        : fail('use prepare|verify admin|public|sender');
+        : fail('use prepare|verify admin|public|sender|rider');
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

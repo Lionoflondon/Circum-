@@ -60,6 +60,7 @@ const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _vanguardAddonPriceGbp = 1.99;
 const _adminHostingTarget = bool.fromEnvironment('CIRCUM_ADMIN_HOSTING');
+const _riderHostingTarget = bool.fromEnvironment('CIRCUM_RIDER_HOSTING');
 const _googlePlacesApiKey = String.fromEnvironment(
   'GOOGLE_PLACES_API_KEY',
   defaultValue: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
@@ -129,6 +130,7 @@ enum _WebAppMode {
 enum CircumAppSurface {
   publicWebsite,
   senderApp,
+  riderWeb,
   adminApp,
 }
 
@@ -186,6 +188,7 @@ class CircumRouteDecision {
   _WebAppMode get _legacyMode => switch (surface) {
         CircumAppSurface.senderApp => _WebAppMode.sender,
         CircumAppSurface.adminApp => _WebAppMode.admin,
+        CircumAppSurface.riderWeb => _WebAppMode.sender,
         CircumAppSurface.publicWebsite => switch (publicRoute) {
             CircumPublicRoute.gifts => _WebAppMode.gifts,
             CircumPublicRoute.terms => _WebAppMode.terms,
@@ -210,6 +213,10 @@ CircumRouteDecision resolveCircumRoute(
 
   if (adminHostingTarget && !_isPublicHostingHostFor(uri)) {
     return const CircumRouteDecision(surface: CircumAppSurface.adminApp);
+  }
+
+  if (_riderHostingTarget || _isRiderWebHostingHostFor(uri)) {
+    return const CircumRouteDecision(surface: CircumAppSurface.riderWeb);
   }
 
   if (_isSenderAppHostingHostFor(uri) && (path.isEmpty || path == '/')) {
@@ -326,6 +333,10 @@ bool _isSenderAppHostingHostFor(Uri uri) {
   return uri.host.toLowerCase() == 'circum-app-2797c.web.app';
 }
 
+bool _isRiderWebHostingHostFor(Uri uri) {
+  return uri.host.toLowerCase() == 'circum-rider-2797c.web.app';
+}
+
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
@@ -434,6 +445,14 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     onRoleSelected: _openRole,
                     onOpenBooking: _openSenderBooking,
                     onOpenGifts: _openSenderMobileGifts,
+                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+                  ),
+                CircumAppSurface.riderWeb => _RiderEnrollmentPortal(
+                    key: const ValueKey('rider-web-root'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    onBack: () {},
+                    onRoleSelected: _openRole,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
                 CircumAppSurface.adminApp => _adminHostingTarget
@@ -20190,6 +20209,7 @@ class _RiderEnrollmentPortal extends StatefulWidget {
   final VoidCallback onToggleTheme;
 
   const _RiderEnrollmentPortal({
+    super.key,
     required this.darkMode,
     required this.colors,
     required this.onBack,
