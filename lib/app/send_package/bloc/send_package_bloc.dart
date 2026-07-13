@@ -759,6 +759,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               '${data['paymentStatus'] ?? data['status'] ?? ''}',
           senderPaymentClientSecret:
               data['clientSecret'] == null ? null : '${data['clientSecret']}',
+          senderPaymentIntentId: data['stripePaymentIntentId'] == null
+              ? null
+              : '${data['stripePaymentIntentId']}',
+          senderPaymentCustomerId:
+              data['customerId'] == null ? null : '${data['customerId']}',
+          senderPaymentEphemeralKeySecret: data['ephemeralKeySecret'] == null
+              ? null
+              : '${data['ephemeralKeySecret']}',
         ),
       );
     } on FirebaseFunctionsException catch (error) {

@@ -85,6 +85,9 @@ class SendPackageState {
   final String? senderPaymentSessionId;
   final String? senderPaymentStatus;
   final String? senderPaymentClientSecret;
+  final String? senderPaymentIntentId;
+  final String? senderPaymentCustomerId;
+  final String? senderPaymentEphemeralKeySecret;
   final bool isSenderDeliveryCreating;
   final String senderDeliveryError;
   final String? senderCreatedRequestId;
@@ -147,6 +150,9 @@ class SendPackageState {
     this.senderPaymentSessionId,
     this.senderPaymentStatus,
     this.senderPaymentClientSecret,
+    this.senderPaymentIntentId,
+    this.senderPaymentCustomerId,
+    this.senderPaymentEphemeralKeySecret,
     this.isSenderDeliveryCreating = false,
     this.senderDeliveryError = '',
     this.senderCreatedRequestId,
@@ -211,6 +217,9 @@ class SendPackageState {
     String? senderPaymentSessionId,
     String? senderPaymentStatus,
     String? senderPaymentClientSecret,
+    String? senderPaymentIntentId,
+    String? senderPaymentCustomerId,
+    String? senderPaymentEphemeralKeySecret,
     bool? isSenderDeliveryCreating,
     String? senderDeliveryError,
     String? senderCreatedRequestId,
@@ -284,6 +293,12 @@ class SendPackageState {
       senderPaymentStatus: senderPaymentStatus ?? this.senderPaymentStatus,
       senderPaymentClientSecret:
           senderPaymentClientSecret ?? this.senderPaymentClientSecret,
+      senderPaymentIntentId:
+          senderPaymentIntentId ?? this.senderPaymentIntentId,
+      senderPaymentCustomerId:
+          senderPaymentCustomerId ?? this.senderPaymentCustomerId,
+      senderPaymentEphemeralKeySecret: senderPaymentEphemeralKeySecret ??
+          this.senderPaymentEphemeralKeySecret,
       isSenderDeliveryCreating:
           isSenderDeliveryCreating ?? this.isSenderDeliveryCreating,
       senderDeliveryError: senderDeliveryError ?? this.senderDeliveryError,

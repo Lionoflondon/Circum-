@@ -1,6 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const {initializeApp} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {getAuth} = require("firebase-admin/auth");
 const functions = require("firebase-functions/v1");
@@ -247,8 +247,7 @@ const createPaymentIntentHandler = async (req, res) => {
     referenceId,
   } = req.body;
 
-  //   const orderAmount = calculateOrderAmount(items);
-  const orderTotalGbp = Number(amount || 0) / 100;
+  let orderTotalGbp = Number(amount || 0) / 100;
 
   try {
     let customerId;
@@ -258,6 +257,22 @@ const createPaymentIntentHandler = async (req, res) => {
     if (userRef.exists) {
       const userData = userRef.data();
       customerId = userData.customerId || undefined;
+    }
+    if (referenceId && userId) {
+      const deliverySnap = await getFirestore().collection("deliveryRequests").doc(referenceId).get();
+      if (deliverySnap.exists) {
+        const delivery = deliverySnap.data() || {};
+        if (delivery.senderId !== userId && delivery.userId !== userId) {
+          return res.status(403).send({error: "This delivery does not belong to the signed-in Sender."});
+        }
+        orderTotalGbp = Number(
+            delivery.paidAmount ||
+            delivery.price ||
+            delivery.quoteTotal ||
+            delivery.pricingBreakdown && (delivery.pricingBreakdown.total || delivery.pricingBreakdown.finalAmount) ||
+            orderTotalGbp,
+        );
+      }
     }
     let split = calculateWalletCheckout({
       orderTotalGbp,
@@ -363,12 +378,13 @@ const createPaymentIntentHandler = async (req, res) => {
 
     const response = generateResponse(intent);
     response.customerId = customerId;
-    response.ephemeralKey = ephemeralKey.secret,
-
-    console.log(`Intent: ${intent}`);
+    response.ephemeralKey = ephemeralKey.secret;
+    response.paymentIntentId = intent.id;
+    response.orderTotalGbp = split.orderTotalGbp;
+    response.walletContributionGbp = split.walletContributionGbp;
+    response.remainingStripeAmountGbp = split.remainingGbp;
     return res.send(response);
   } catch (e) {
-    console.log(e);
     // Handle "hard declines" e.g. insufficient funds, expired card, etc
     // See https://stripe.com/docs/declines/codes for more.
     return res.send({error: e.message});
@@ -430,6 +446,10 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     }
     if (metadata && (metadata.type === "business_roth_purchase" || metadata.type === "business_invoice_payment")) {
       await businessPayments.handleBusinessCheckoutSession(sessionData, event.id);
+    }
+    if (metadata && metadata.paymentType === "delivery" && metadata.paymentSessionId && sessionData.payment_intent) {
+      const intent = await stripe.paymentIntents.retrieve(sessionData.payment_intent);
+      await senderBooking.updateSenderPaymentIntentStatus(stripe, intent, event.id);
     }
     if (metadata && metadata.walletApplied === "true" && metadata.walletContributionGbp) {
       const service = metadata.paymentType === "gifts" ? "gifts" :
@@ -559,6 +579,32 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
         ledgerOnly: true,
         metadata: {stripeEventId: event.id, service: metadata.type || "circum"},
       });
+    }
+  }
+
+  if ([
+    "payment_intent.succeeded",
+    "payment_intent.payment_failed",
+    "payment_intent.processing",
+    "payment_intent.canceled",
+  ].includes(event.type)) {
+    const intent = event.data.object;
+    const metadata = intent.metadata || {};
+    if (metadata.paymentType === "delivery" && metadata.paymentSessionId) {
+      await senderBooking.updateSenderPaymentIntentStatus(stripe, intent, event.id);
+    }
+  }
+
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object;
+    const intentId = `${charge.payment_intent || ""}`;
+    if (intentId) {
+      await getFirestore().collection("senderPaymentRecords").doc(intentId).set({
+        refundStatus: "refunded",
+        refundedAmount: Number(charge.amount_refunded || 0) / 100,
+        lastStripeEventId: event.id,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
     }
   }
 

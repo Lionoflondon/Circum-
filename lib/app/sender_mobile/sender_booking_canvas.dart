@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -2964,24 +2965,26 @@ class _PaymentPanel extends StatelessWidget {
     SendPackageState engine,
   ) async {
     try {
-      final params = draft.selectedPaymentMethodId.isEmpty
-          ? const PaymentMethodParams.card(
-              paymentMethodData: PaymentMethodData(),
-            )
-          : PaymentMethodParams.cardFromMethodId(
-              paymentMethodData: PaymentMethodDataCardFromMethod(
-                paymentMethodId: draft.selectedPaymentMethodId,
-              ),
-            );
-      final intent = await Stripe.instance.confirmPayment(
-        paymentIntentClientSecret: clientSecret,
-        data: params,
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: clientSecret,
+          merchantDisplayName: 'Circum',
+          customerId: engine.senderPaymentCustomerId,
+          customerEphemeralKeySecret: engine.senderPaymentEphemeralKeySecret,
+          applePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+              ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
+              : null,
+          googlePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+              ? const PaymentSheetGooglePay(
+                  merchantCountryCode: 'GB',
+                  currencyCode: 'GBP',
+                )
+              : null,
+          style: ThemeMode.dark,
+        ),
       );
+      await Stripe.instance.presentPaymentSheet();
       if (!context.mounted) return;
-      if (intent.status != PaymentIntentsStatus.Succeeded) {
-        onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
-        return;
-      }
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.paid));
       _createPaidDelivery(context, engine);
       SenderAccessibilityScope.maybeOf(context)

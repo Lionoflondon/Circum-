@@ -1,4 +1,4 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 "use strict";
 
 const functions = require("firebase-functions/v1");
@@ -132,12 +132,25 @@ async function walletBalanceForSender(sender) {
   return money(wallet.balance == null ? wallet.rothCredit : wallet.balance);
 }
 
-async function stripeCustomerForSender(sender) {
+async function ensureStripeCustomerForSender(stripe, sender) {
   const db = getFirestore();
   const userRef = db.collection("users").doc(sender.uid);
   const userSnap = await userRef.get();
   const user = userSnap.exists ? userSnap.data() : {};
-  return user.stripeCustomerId || user.customerId || null;
+  if (user.stripeCustomerId || user.customerId) {
+    return user.stripeCustomerId || user.customerId;
+  }
+  const customer = await stripe.customers.create({
+    email: sender.email || undefined,
+    name: sender.name || undefined,
+    metadata: {userId: sender.uid, source: "sender_booking"},
+  });
+  await userRef.set({
+    stripeCustomerId: customer.id,
+    customerId: customer.id,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return customer.id;
 }
 
 exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
@@ -233,7 +246,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       paymentMethod: "roth",
     };
   }
-  const customerId = savedPaymentMethodId ? await stripeCustomerForSender(sender) : null;
+  const customerId = await ensureStripeCustomerForSender(stripe, sender);
   if (savedPaymentMethodId && !customerId) {
     throw new functions.https.HttpsError("failed-precondition", "Saved payment method is unavailable.");
   }
@@ -243,11 +256,16 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       throw new functions.https.HttpsError("permission-denied", "Saved payment method does not belong to this Sender.");
     }
   }
+  const ephemeralKey = await stripe.ephemeralKeys.create(
+      {customer: customerId},
+      {apiVersion: "2020-08-27"},
+  );
+  const idempotencyKey = `sender_booking_${quoteId}_${sessionRef.id}`;
   const intent = await stripe.paymentIntents.create({
     amount: minorUnits(split.customerPaymentAmount, "gbp"),
     currency: "gbp",
-    payment_method_types: ["card"],
-    customer: customerId || undefined,
+    automatic_payment_methods: {enabled: true},
+    customer: customerId,
     payment_method: savedPaymentMethodId || undefined,
     setup_future_usage: savedPaymentMethodId ? undefined : "off_session",
     metadata: {
@@ -258,18 +276,22 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       paymentSessionId: sessionRef.id,
       rothAppliedAmount: `${split.walletContributionGbp}`,
       remainingAmount: `${split.remainingGbp}`,
+      orderTotalGbp: `${split.orderTotalGbp}`,
       fallbackMethod: requestedFallback,
       savedPaymentMethodId,
+      billingSource: quote.businessMode === true ? "business_finance" : "sender_finance",
     },
-  });
+  }, {idempotencyKey});
   await sessionRef.set({
     ...sessionBase,
     status: intent.status,
     paymentStatus: intent.status,
     paymentMethod: requestedFallback,
     savedPaymentMethodId: savedPaymentMethodId || null,
+    stripeCustomerId: customerId,
     stripePaymentIntentId: intent.id,
     clientSecret: intent.client_secret,
+    idempotencyKey,
   });
   return {
     ...sessionBase,
@@ -277,10 +299,96 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     paymentStatus: intent.status,
     paymentMethod: requestedFallback,
     savedPaymentMethodId: savedPaymentMethodId || null,
+    stripeCustomerId: customerId,
+    customerId,
+    ephemeralKeySecret: ephemeralKey.secret,
     stripePaymentIntentId: intent.id,
     clientSecret: intent.client_secret,
   };
 });
+
+async function updateSenderPaymentIntentStatus(stripe, intent, eventId = "") {
+  const metadata = intent.metadata || {};
+  const sessionId = text(metadata.paymentSessionId);
+  if (!sessionId) return {updated: false, reason: "missing_session"};
+  const db = getFirestore();
+  const sessionRef = db.collection("senderPaymentSessions").doc(sessionId);
+  const status = text(intent.status);
+  const succeeded = status === "succeeded";
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(sessionRef);
+    if (!snap.exists) return;
+    const current = snap.data() || {};
+    const alreadyFinal = current.paymentStatus === "succeeded";
+    const patch = {
+      status,
+      paymentStatus: status,
+      stripePaymentIntentId: intent.id,
+      stripeAmount: Number(intent.amount || 0) / 100,
+      stripeCurrency: `${intent.currency || "gbp"}`.toUpperCase(),
+      stripeLatestChargeId: typeof intent.latest_charge === "string" ? intent.latest_charge : null,
+      lastStripeEventId: eventId || current.lastStripeEventId || null,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (succeeded) {
+      patch.confirmedAt = current.confirmedAt || FieldValue.serverTimestamp();
+    }
+    transaction.set(sessionRef, patch, {merge: true});
+    const paymentRecordRef = db.collection("senderPaymentRecords").doc(intent.id);
+    transaction.set(paymentRecordRef, {
+      paymentIntentId: intent.id,
+      paymentSessionId: sessionId,
+      quoteId: metadata.quoteId || current.quoteId || null,
+      userId: metadata.userId || current.userId || null,
+      userEmail: metadata.userEmail || current.userEmail || null,
+      customerId: intent.customer || current.stripeCustomerId || null,
+      amount: Number(intent.amount || 0) / 100,
+      currency: `${intent.currency || "gbp"}`.toUpperCase(),
+      walletAmount: Number(metadata.rothAppliedAmount || current.rothAppliedAmount || 0),
+      rothAmount: Number(metadata.rothAppliedAmount || current.rothAppliedAmount || 0),
+      stripeAmount: Number(metadata.remainingAmount || current.remainingAmount || 0),
+      paymentMethod: metadata.fallbackMethod || current.paymentMethod || "card",
+      status,
+      paymentStatus: status,
+      latestChargeId: typeof intent.latest_charge === "string" ? intent.latest_charge : null,
+      provider: "stripe",
+      lastStripeEventId: eventId || null,
+      createdAt: current.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    if (succeeded && !alreadyFinal && Number(metadata.rothAppliedAmount || current.rothAppliedAmount || 0) > 0) {
+      const walletTxRef = db.collection("senderPaymentWalletDebits").doc(sessionId);
+      transaction.set(walletTxRef, {
+        paymentSessionId: sessionId,
+        paymentIntentId: intent.id,
+        userId: metadata.userId || current.userId || null,
+        userEmail: metadata.userEmail || current.userEmail || null,
+        amount: Number(metadata.rothAppliedAmount || current.rothAppliedAmount || 0),
+        status: "pending_wallet_debit",
+        createdAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+  });
+  const amount = Number(metadata.rothAppliedAmount || 0);
+  if (succeeded && amount > 0) {
+    await rothLedger.applyWalletDebit({
+      userId: metadata.userId,
+      userEmail: metadata.userEmail,
+      amount,
+      type: "delivery_payment",
+      referenceId: sessionId,
+      notes: "Roth applied to Circum delivery payment.",
+      transactionId: `wallet_delivery_${sessionId}`,
+      metadata: {
+        quoteId: metadata.quoteId || null,
+        service: "delivery",
+        stripePaymentIntentId: intent.id,
+        stripeEventId: eventId || null,
+      },
+    });
+  }
+  return {updated: true, status};
+}
 
 function geoData(point = {}) {
   const lat = Number(point.lat || point.latitude || 0);
@@ -390,6 +498,9 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     paidAmount: quote.total,
     paymentStatus: "paid",
     paymentMethod: payment.paymentMethod,
+    stripePaymentIntentId: payment.stripePaymentIntentId || null,
+    stripeCustomerId: payment.stripeCustomerId || null,
+    stripeLatestChargeId: payment.stripeLatestChargeId || null,
     rothAppliedAmount: payment.rothAppliedAmount || 0,
     remainingAmount: payment.remainingAmount || 0,
     pricingBreakdown: quote,
@@ -404,3 +515,5 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
   });
   return {requestId, deliveryId: deliveryRef.id};
 });
+
+exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;

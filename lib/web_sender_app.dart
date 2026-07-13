@@ -31394,89 +31394,74 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   ) async {
     final user = _senderUser ?? FirebaseAuth.instance.currentUser;
     if (user == null) throw StateError('Sign in to pay for this delivery.');
-    final rothApplied = math.min(math.max(0, _senderRothBalance), total);
-    final cardRemaining = double.parse(
-      math.max(0, total - rothApplied).toStringAsFixed(2),
-    );
-    if (rothApplied >= total && total > 0) {
-      await FirebaseFunctions.instance.httpsCallable('applyCheckoutRoth').call({
-        'amount': rothApplied,
-        'referenceId': requestId,
-        'service': 'delivery',
-      });
-      return {
-        'paymentStatus': 'paid',
-        'paidByRoth': true,
-        'rothApplied': rothApplied,
-        'walletContributionGbp': rothApplied,
-        'cardRemaining': 0,
-        'stripeAmount': 0,
-      };
-    }
-    var cardPaymentCompleted = false;
-    var rothDebited = false;
     var paymentIntentId = '';
     var clientSecret = '';
-    if (cardRemaining > 0) {
-      try {
-        Stripe.publishableKey = Env.publishableLiveKey;
-        await Stripe.instance.applySettings();
-        final response = await http.post(
-          Uri.parse(
-            'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
-          ),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'currency': 'gbp',
-            'amount': (cardRemaining * 100).round(),
-            'pushToken': '',
-            'email': user.email,
-            'name': _senderName.text.trim(),
-            'userId': user.uid,
-            'saveCard': false,
-            'useWallet': false,
-            'referenceId': requestId,
-          }),
-        );
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        clientSecret = '${data['clientSecret'] ?? ''}';
-        paymentIntentId = '${data['paymentIntentId'] ?? data['id'] ?? ''}';
-        if (clientSecret.isEmpty || data['error'] != null) {
-          throw StateError(
-              '${data['error'] ?? 'Could not start card payment.'}');
-        }
-        await Stripe.instance.initPaymentSheet(
-          paymentSheetParameters: SetupPaymentSheetParameters(
-            paymentIntentClientSecret: clientSecret,
-            merchantDisplayName: 'Circum',
-            style: ThemeMode.dark,
-          ),
-        );
-        await Stripe.instance.presentPaymentSheet();
-        cardPaymentCompleted = true;
-        if (rothApplied > 0) {
-          await FirebaseFunctions.instance
-              .httpsCallable('applyCheckoutRoth')
-              .call({
-            'amount': rothApplied,
-            'referenceId': requestId,
-            'service': 'delivery',
-          });
-          rothDebited = true;
-        }
-      } catch (error) {
-        debugPrint('Delivery card payment setup failed: $error');
-        throw StateError(
-            'We could not start card payment just now. Please try again.');
+    Map<String, dynamic> data;
+    try {
+      Stripe.publishableKey = Env.publishableLiveKey;
+      await Stripe.instance.applySettings();
+      final response = await http.post(
+        Uri.parse(
+          'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
+        ),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'currency': 'gbp',
+          'amount': (total * 100).round(),
+          'pushToken': '',
+          'email': user.email,
+          'name': _senderName.text.trim(),
+          'userId': user.uid,
+          'saveCard': true,
+          'useWallet': _senderRothBalance > 0,
+          'referenceId': requestId,
+        }),
+      );
+      data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['walletPaidInFull'] == true) {
+        return {
+          'paymentStatus': 'paid',
+          'paidByRoth': true,
+          'rothApplied': data['walletContributionGbp'] ?? total,
+          'walletContributionGbp': data['walletContributionGbp'] ?? total,
+          'cardRemaining': 0,
+          'stripeAmount': 0,
+        };
       }
+      clientSecret = '${data['clientSecret'] ?? ''}';
+      paymentIntentId = '${data['paymentIntentId'] ?? data['id'] ?? ''}';
+      if (clientSecret.isEmpty || data['error'] != null) {
+        throw StateError('${data['error'] ?? 'Could not start card payment.'}');
+      }
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: clientSecret,
+          merchantDisplayName: 'Circum',
+          customerId: '${data['customerId'] ?? ''}'.isEmpty
+              ? null
+              : '${data['customerId']}',
+          customerEphemeralKeySecret: '${data['ephemeralKey'] ?? ''}'.isEmpty
+              ? null
+              : '${data['ephemeralKey']}',
+          style: ThemeMode.dark,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+    } catch (error) {
+      debugPrint('Delivery card payment setup failed: $error');
+      throw StateError(
+          'We could not start card payment just now. Please try again.');
     }
+    final rothApplied =
+        (data['walletContributionGbp'] as num?)?.toDouble() ?? 0;
+    final cardRemaining =
+        (data['remainingStripeAmountGbp'] as num?)?.toDouble() ??
+            math.max(0, total - rothApplied);
     return {
-      'paymentStatus': cardRemaining <= 0 || cardPaymentCompleted
-          ? 'paid'
-          : 'payment_pending',
+      'paymentStatus': 'paid',
       'paidByRoth': cardRemaining <= 0,
-      'rothApplied': rothDebited ? rothApplied : 0,
-      'walletContributionGbp': rothDebited ? rothApplied : 0,
+      'rothApplied': rothApplied,
+      'walletContributionGbp': rothApplied,
       'cardRemaining': cardRemaining,
       'stripeAmount': cardRemaining,
       'paymentReferenceId': requestId,
