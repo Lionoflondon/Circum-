@@ -421,12 +421,7 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
   if (`${payment.paymentStatus || payment.status}` !== "succeeded" && payment.stripePaymentIntentId) {
     const intent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
     if (intent.status === "succeeded") {
-      await paymentSnap.ref.update({
-        status: "succeeded",
-        paymentStatus: "succeeded",
-        confirmedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      await updateSenderPaymentIntentStatus(stripe, intent, `callable_${paymentSessionId}`);
       payment = {...payment, status: "succeeded", paymentStatus: "succeeded"};
     }
   }

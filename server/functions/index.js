@@ -417,6 +417,36 @@ const confirmPaymentIntentHandler = async (req, res) => {
 exports.StripePayEndpointIntentId = functions.https.onRequest(confirmPaymentIntentHandler);
 exports.confirmPaymentIntent = functions.https.onRequest(confirmPaymentIntentHandler);
 
+async function recordSenderStripeIntent(intent, eventId = "") {
+  const metadata = intent.metadata || {};
+  if (metadata.paymentType !== "delivery") return;
+  const intentId = intent.id || `${intent.payment_intent || ""}`;
+  if (!intentId) return;
+  await getFirestore().collection("senderPaymentRecords").doc(intentId).set({
+    paymentIntentId: intentId,
+    paymentSessionId: metadata.paymentSessionId || null,
+    quoteId: metadata.quoteId || null,
+    deliveryId: metadata.requestId || metadata.bookingId || null,
+    requestId: metadata.requestId || metadata.bookingId || null,
+    userId: metadata.userId || metadata.senderId || null,
+    userEmail: metadata.userEmail || metadata.senderEmail || metadata.email || null,
+    customerId: intent.customer || null,
+    amount: Number(intent.amount || intent.amount_captured || 0) / 100,
+    currency: `${intent.currency || "gbp"}`.toUpperCase(),
+    walletAmount: Number(metadata.walletContributionGbp || metadata.rothAppliedAmount || 0),
+    rothAmount: Number(metadata.walletContributionGbp || metadata.rothAppliedAmount || 0),
+    stripeAmount: Number(metadata.remainingGbp || metadata.remainingAmount || 0),
+    paymentMethod: metadata.fallbackMethod || "card",
+    status: intent.status || (intent.paid === true ? "succeeded" : "unknown"),
+    paymentStatus: intent.status || (intent.paid === true ? "succeeded" : "unknown"),
+    latestChargeId: intent.object === "charge" ? intent.id : typeof intent.latest_charge === "string" ? intent.latest_charge : null,
+    provider: "stripe",
+    lastStripeEventId: eventId || null,
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+}
+
 exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];
   // console.log(sig);
@@ -450,6 +480,9 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     if (metadata && metadata.paymentType === "delivery" && metadata.paymentSessionId && sessionData.payment_intent) {
       const intent = await stripe.paymentIntents.retrieve(sessionData.payment_intent);
       await senderBooking.updateSenderPaymentIntentStatus(stripe, intent, event.id);
+    }
+    if (metadata && metadata.paymentType === "delivery") {
+      await recordSenderStripeIntent(sessionData, event.id);
     }
     if (metadata && metadata.walletApplied === "true" && metadata.walletContributionGbp) {
       const service = metadata.paymentType === "gifts" ? "gifts" :
@@ -592,6 +625,9 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     const metadata = intent.metadata || {};
     if (metadata.paymentType === "delivery" && metadata.paymentSessionId) {
       await senderBooking.updateSenderPaymentIntentStatus(stripe, intent, event.id);
+    }
+    if (metadata.paymentType === "delivery") {
+      await recordSenderStripeIntent(intent, event.id);
     }
   }
 

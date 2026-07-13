@@ -2052,6 +2052,41 @@ void main() {
       expect(paidButNotConfirmed.exposesPaymentSuccess, isFalse);
     });
 
+    test('Sender booking payments use server-owned PaymentSheet sessions', () {
+      final source =
+          File('server/functions/sender-booking.js').readAsStringSync();
+      expect(source, contains('exports.createSenderPaymentSession'));
+      expect(source, contains('stripe.ephemeralKeys.create'));
+      expect(source, contains('automatic_payment_methods: {enabled: true}'));
+      expect(source, contains('const idempotencyKey = `sender_booking_'));
+      expect(source, contains('stripe.paymentIntents.create'));
+    });
+
+    test(
+        'Stripe verification applies mixed Roth and card payments idempotently',
+        () {
+      final source =
+          File('server/functions/sender-booking.js').readAsStringSync();
+      expect(
+          source, contains('async function updateSenderPaymentIntentStatus'));
+      expect(source, contains('transaction.set(paymentRecordRef'));
+      expect(
+          source, contains(r'transactionId: `wallet_delivery_${sessionId}`'));
+      expect(source,
+          contains('await updateSenderPaymentIntentStatus(stripe, intent'));
+    });
+
+    test('Stripe webhook persists Sender delivery receipt records', () {
+      final source = File('server/functions/index.js').readAsStringSync();
+      expect(source, contains('async function recordSenderStripeIntent'));
+      expect(source, contains('senderPaymentRecords'));
+      expect(source, contains('payment_intent.succeeded'));
+      expect(source, contains('payment_intent.payment_failed'));
+      expect(source, contains('payment_intent.processing'));
+      expect(source, contains('payment_intent.canceled'));
+      expect(source, contains('charge.refunded'));
+    });
+
     test('Roth payment split is user controlled at one to one value', () {
       expect(senderRothPoundValue, 1.0);
       final off = SenderPaymentSplit.calculate(
