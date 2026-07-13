@@ -338,8 +338,12 @@ bool _isRiderWebHostingHostFor(Uri uri) {
 }
 
 Future<void> _ensureCircumFirebaseReady() async {
-  if (Firebase.apps.isEmpty) {
+  try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+  } on FirebaseException catch (error) {
+    if (error.code != 'duplicate-app') {
+      rethrow;
+    }
   }
 }
 

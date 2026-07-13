@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'app.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
+import 'firebase_options.dart';
 import 'helper/chats_help.dart';
 import 'helper/notifications_helper.dart';
 import 'web_sender_app.dart';
@@ -25,6 +26,11 @@ final NotificationService _notificationService = NotificationService();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
+    try {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    } on FirebaseException catch (error) {
+      if (error.code != 'duplicate-app') rethrow;
+    }
     if (const bool.fromEnvironment('CIRCUM_RIDER_HOSTING')) {
       runApp(const CircumRiderWebApp());
     } else {
