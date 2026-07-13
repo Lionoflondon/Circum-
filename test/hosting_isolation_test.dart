@@ -99,4 +99,23 @@ void main() {
     final guard = File('scripts/hosting_manifest.js').readAsStringSync();
     expect(guard, contains('forbidden untargeted Hosting deployment'));
   });
+
+  test('domain guard verifies each product manifest explicitly', () {
+    final guard = File('scripts/verify_hosting_domains.sh').readAsStringSync();
+    expect(guard, contains('https://circumuk.com/deployment-manifest.json'));
+    expect(
+        guard, contains('https://www.circumuk.com/deployment-manifest.json'));
+    expect(guard,
+        contains('https://circum-app-2797c.web.app/deployment-manifest.json'));
+    expect(
+        guard,
+        contains(
+            'https://circum-rider-2797c.web.app/deployment-manifest.json'));
+    expect(guard, contains('"Circum Public Sender Website"'));
+    expect(guard, contains('"circum-2797c" "public"'));
+    expect(guard, contains('"Circum Sender App"'));
+    expect(guard, contains('"circum-app-2797c" "sender"'));
+    expect(guard, contains('"Circum Rider Web"'));
+    expect(guard, contains('"circum-rider-2797c" "rider"'));
+  });
 }
