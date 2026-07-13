@@ -147,6 +147,9 @@ enum CircumPublicRoute {
 
 enum CircumSenderEntry {
   dashboard,
+  send,
+  activity,
+  wallet,
   healthPlus,
   business,
   account,
@@ -183,6 +186,9 @@ class CircumRouteDecision {
 
   _SenderStep get _senderInitialStep => switch (senderEntry) {
         CircumSenderEntry.dashboard => _SenderStep.dashboard,
+        CircumSenderEntry.send => _SenderStep.details,
+        CircumSenderEntry.activity => _SenderStep.dashboard,
+        CircumSenderEntry.wallet => _SenderStep.dashboard,
         CircumSenderEntry.healthPlus => _SenderStep.healthPlus,
         CircumSenderEntry.business => _SenderStep.business,
         CircumSenderEntry.account => _SenderStep.account,
@@ -211,6 +217,7 @@ CircumRouteDecision resolveCircumRoute(
 }) {
   final path = uri.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
   final app = uri.queryParameters['app'];
+  final senderTab = uri.queryParameters['tab']?.toLowerCase();
   final senderMobileGifts = uri.queryParameters['sender_mobile_gifts'] == '1';
   final routeDeliveryId = senderDeliveryRouteIdFromUri(uri);
 
@@ -232,9 +239,9 @@ CircumRouteDecision resolveCircumRoute(
   }
 
   if (_isSenderAppHostingHostFor(uri) && (path.isEmpty || path == '/')) {
-    return const CircumRouteDecision(
+    return CircumRouteDecision(
       surface: CircumAppSurface.senderApp,
-      senderEntry: CircumSenderEntry.dashboard,
+      senderEntry: _senderEntryFromTab(senderTab),
       useSenderMobileApp: true,
     );
   }
@@ -242,9 +249,9 @@ CircumRouteDecision resolveCircumRoute(
   // Temporary architecture-preview routes are deliberately isolated inside
   // Sender/Rider roots. They must not be mounted on the public homepage.
   if (path == '/sender') {
-    return const CircumRouteDecision(
+    return CircumRouteDecision(
       surface: CircumAppSurface.senderApp,
-      senderEntry: CircumSenderEntry.dashboard,
+      senderEntry: _senderEntryFromTab(senderTab),
       useSenderMobileApp: true,
     );
   }
@@ -290,7 +297,7 @@ CircumRouteDecision resolveCircumRoute(
   return switch (app) {
     'sender' => CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
-        senderEntry: CircumSenderEntry.dashboard,
+        senderEntry: _senderEntryFromTab(senderTab),
         openSenderGifts: senderMobileGifts,
         routeDeliveryId: routeDeliveryId,
         useSenderMobileApp: routeDeliveryId == null,
@@ -322,6 +329,16 @@ CircumRouteDecision resolveCircumRoute(
         publicRoute: CircumPublicRoute.gifts,
       ),
     _ => const CircumRouteDecision(surface: CircumAppSurface.publicWebsite),
+  };
+}
+
+CircumSenderEntry _senderEntryFromTab(String? tab) {
+  return switch (tab) {
+    'send' || 'booking' || 'book' => CircumSenderEntry.send,
+    'activity' || 'history' => CircumSenderEntry.activity,
+    'wallet' => CircumSenderEntry.wallet,
+    'profile' || 'account' => CircumSenderEntry.account,
+    _ => CircumSenderEntry.dashboard,
   };
 }
 
@@ -437,6 +454,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     colors: colors,
                     darkMode: _darkMode,
                     initialStep: _senderInitialStep,
+                    senderEntry: _route.senderEntry,
                     useSenderMobileApp: _route.useSenderMobileApp,
                     openGifts: _route.openSenderGifts,
                     routeDeliveryId: _route.routeDeliveryId,
@@ -683,6 +701,7 @@ class CircumSenderAppRoot extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
   final _SenderStep initialStep;
+  final CircumSenderEntry senderEntry;
   final bool useSenderMobileApp;
   final bool openGifts;
   final String? routeDeliveryId;
@@ -697,6 +716,7 @@ class CircumSenderAppRoot extends StatelessWidget {
     required this.colors,
     required this.darkMode,
     required this.initialStep,
+    required this.senderEntry,
     required this.useSenderMobileApp,
     required this.openGifts,
     this.routeDeliveryId,
@@ -719,7 +739,11 @@ class CircumSenderAppRoot extends StatelessWidget {
           : openGifts
               ? const GiftModeView()
               : useSenderMobileApp
-                  ? const SenderMobileHome(previewAuthEnabled: true)
+                  ? SenderMobileHome(
+                      previewAuthEnabled: true,
+                      initialIndex: _senderMobileIndexForEntry(senderEntry),
+                      onTabChanged: _replaceSenderMobileTabRoute,
+                    )
                   : _CustomerPortal(
                       darkMode: darkMode,
                       colors: colors,
@@ -730,6 +754,39 @@ class CircumSenderAppRoot extends StatelessWidget {
                       onToggleTheme: onToggleTheme,
                     ),
     );
+  }
+
+  int _senderMobileIndexForEntry(CircumSenderEntry entry) {
+    return switch (entry) {
+      CircumSenderEntry.send => 1,
+      CircumSenderEntry.activity => 2,
+      CircumSenderEntry.wallet => 3,
+      CircumSenderEntry.account => 4,
+      _ => 0,
+    };
+  }
+
+  void _replaceSenderMobileTabRoute(int index) {
+    final tab = switch (index) {
+      1 => 'send',
+      2 => 'activity',
+      3 => 'wallet',
+      4 => 'profile',
+      _ => 'home',
+    };
+    final query = Map<String, String>.from(Uri.base.queryParameters);
+    if (!_isSenderAppHostingHostFor(Uri.base)) {
+      query['app'] = 'sender';
+    }
+    if (tab == 'home') {
+      query.remove('tab');
+    } else {
+      query['tab'] = tab;
+    }
+    final uri = Uri.base.replace(
+      queryParameters: query.isEmpty ? null : query,
+    );
+    html.window.history.replaceState(null, '', uri.toString());
   }
 }
 

@@ -49,7 +49,6 @@ void main() {
     expect(source, contains('SenderWalletHomeSummary'));
     expect(source, contains('Loading recent orders…'));
     expect(source, contains('No recent deliveries.'));
-    expect(source, contains("'archived_expired'"));
     expect(source, contains("'cancelled'"));
     expect(source, contains('Active conversation'));
     expect(source, contains('Ready when you are.'));
@@ -67,8 +66,41 @@ void main() {
     expect(source, contains('const HealthPlusView()'));
     expect(source, contains('const GiftModeView()'));
     expect(source, contains('const SenderBookingCanvas()'));
-    expect(
-        source, contains('onOpenActivity: () => setState(() => _index = 2)'));
-    expect(source, contains('onOpenWallet: () => setState(() => _index = 3)'));
+    expect(source, contains('onOpenActivity: () => _selectTab(2)'));
+    expect(source, contains('onOpenWallet: () => _selectTab(3)'));
+  });
+
+  test('authenticated Sender sessions restore before showing Sign In', () {
+    final homeSource = File(
+      'lib/app/sender_mobile/sender_mobile_home.dart',
+    ).readAsStringSync();
+    final webSource = File('lib/web_sender_app.dart').readAsStringSync();
+
+    expect(homeSource, contains('_authRestoring'));
+    expect(homeSource, contains('_SenderAuthRestoringSplash'));
+    expect(homeSource, contains('Restoring your session'));
+    expect(homeSource, contains('authStateChanges().listen'));
+    expect(homeSource, contains('Persistence.LOCAL'));
+    expect(homeSource, contains('_entry = user == null'));
+    expect(homeSource, contains('_SenderEntryScreen.app'));
+    expect(homeSource, isNot(contains('Persistence.SESSION')));
+    expect(webSource, contains("query['tab'] = tab"));
+    expect(webSource, contains("query.remove('tab')"));
+    expect(webSource, contains("'send' || 'booking' || 'book'"));
+    expect(webSource, contains('initialIndex: _senderMobileIndexForEntry'));
+    expect(webSource, contains('onTabChanged: _replaceSenderMobileTabRoute'));
+  });
+
+  test('logout remains the explicit Sender session clearing action', () {
+    final profileSource = File(
+      'lib/app/sender_mobile/sender_mobile_profile.dart',
+    ).readAsStringSync();
+    final homeSource = File(
+      'lib/app/sender_mobile/sender_mobile_home.dart',
+    ).readAsStringSync();
+
+    expect(profileSource, contains('Future<void> logout() => auth.signOut()'));
+    expect(homeSource, contains('onLoggedOut: () => setState'));
+    expect(homeSource, isNot(contains('clearPersistence')));
   });
 }

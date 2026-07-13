@@ -32,15 +32,16 @@ void main() {
       source.indexOf('// Temporary architecture-preview routes'),
     );
     expect(senderHostRoute, contains('surface: CircumAppSurface.senderApp'));
-    expect(
-        senderHostRoute, contains('senderEntry: CircumSenderEntry.dashboard'));
+    expect(senderHostRoute, contains('senderEntry: _senderEntryFromTab'));
     expect(senderHostRoute, contains('useSenderMobileApp: true'));
+    expect(source, contains("'send' || 'booking' || 'book'"));
+    expect(source, contains('initialIndex: _senderMobileIndexForEntry'));
     expect(
         source,
         contains(
             "import 'package:circum/app/sender_mobile/sender_mobile_home.dart';"));
-    expect(
-        source, contains('const SenderMobileHome(previewAuthEnabled: true)'));
+    expect(source, contains('SenderMobileHome('));
+    expect(source, contains('previewAuthEnabled: true'));
     expect(source, isNot(contains('useSenderPreview')));
     expect(source, isNot(contains('_SenderArchitecturePreviewApp(')));
   });

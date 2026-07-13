@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -54,11 +55,15 @@ enum _SenderAuthMode { signIn, createAccount }
 
 class SenderMobileHome extends StatefulWidget {
   final bool previewAuthEnabled;
+  final int initialIndex;
+  final ValueChanged<int>? onTabChanged;
   final SenderHomeRepository? homeRepository;
 
   const SenderMobileHome({
     super.key,
     this.previewAuthEnabled = false,
+    this.initialIndex = 0,
+    this.onTabChanged,
     this.homeRepository,
   });
 
@@ -70,16 +75,22 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   var _index = 0;
   var _entry = _SenderEntryScreen.landing;
   var _authMode = _SenderAuthMode.createAccount;
+  var _authRestoring = false;
   late final SendPackageBloc _standaloneSendPackageBloc;
+  StreamSubscription<User?>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
+    _index = widget.initialIndex
+        .clamp(0, senderMobileBottomNavigationLabels.length - 1);
     _standaloneSendPackageBloc = SendPackageBloc();
+    _restoreAuthenticatedSenderSession();
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _standaloneSendPackageBloc.close();
     super.dispose();
   }
@@ -92,13 +103,17 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         children: [
           if (_entry == _SenderEntryScreen.app)
             const _SenderMapBackdrop(active: false),
-          SafeArea(child: _activeSurface()),
+          SafeArea(
+            child: _authRestoring
+                ? const _SenderAuthRestoringSplash()
+                : _activeSurface(),
+          ),
         ],
       ),
-      bottomNavigationBar: _entry == _SenderEntryScreen.app
+      bottomNavigationBar: !_authRestoring && _entry == _SenderEntryScreen.app
           ? _SenderBottomNav(
               index: _index,
-              onChanged: (next) => setState(() => _index = next),
+              onChanged: _selectTab,
             )
           : null,
     );
@@ -143,9 +158,9 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           children: [
             _SenderDashboard(
               repository: widget.homeRepository,
-              onStartDelivery: () => setState(() => _index = 1),
-              onOpenActivity: () => setState(() => _index = 2),
-              onOpenWallet: () => setState(() => _index = 3),
+              onStartDelivery: () => _selectTab(1),
+              onOpenActivity: () => _selectTab(2),
+              onOpenWallet: () => _selectTab(3),
               onOpenHealth: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
               ),
@@ -162,7 +177,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
             ),
             const SenderBookingCanvas(),
             SenderActivityView(
-              onSendParcel: () => setState(() => _index = 1),
+              onSendParcel: () => _selectTab(1),
               onExploreGifts: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const GiftModeView(),
@@ -172,7 +187,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
             ),
             const SenderWalletView(),
             SenderMobileProfileView(
-              onOpenWallet: () => setState(() => _index = 3),
+              onOpenWallet: () => _selectTab(3),
               onLoggedOut: () => setState(() {
                 _index = 0;
                 _entry = _SenderEntryScreen.landing;
@@ -181,6 +196,115 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           ],
         );
     }
+  }
+
+  void _selectTab(int next) {
+    final index = next.clamp(0, senderMobileBottomNavigationLabels.length - 1);
+    setState(() => _index = index);
+    widget.onTabChanged?.call(index);
+  }
+
+  Future<void> _restoreAuthenticatedSenderSession() async {
+    if (!widget.previewAuthEnabled) return;
+    setState(() => _authRestoring = true);
+    try {
+      if (kIsWeb) {
+        await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+      }
+      _authSubscription =
+          FirebaseAuth.instance.authStateChanges().listen((user) {
+        if (!mounted) return;
+        setState(() {
+          _authRestoring = false;
+          _entry = user == null
+              ? _SenderEntryScreen.landing
+              : _SenderEntryScreen.app;
+        });
+      }, onError: (Object error, StackTrace stackTrace) {
+        FlutterError.reportError(FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender auth',
+          context: ErrorDescription('restoring Sender Firebase Auth session'),
+        ));
+        if (!mounted) return;
+        setState(() {
+          _authRestoring = false;
+          _entry = _SenderEntryScreen.landing;
+        });
+      });
+    } catch (error, stackTrace) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'sender auth',
+        context: ErrorDescription('configuring Sender Firebase Auth session'),
+      ));
+      if (!mounted) return;
+      setState(() {
+        _authRestoring = false;
+        _entry = _SenderEntryScreen.landing;
+      });
+    }
+  }
+}
+
+class _SenderAuthRestoringSplash extends StatelessWidget {
+  const _SenderAuthRestoringSplash();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        const _AmbientOrbs(count: 2),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: _GlassCard(
+              padding: const EdgeInsets.all(22),
+              child: Semantics(
+                label: 'Restoring your Circum Sender session',
+                liveRegion: true,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: _SenderTokens.blue,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Restoring your session',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.dmSerifDisplay(
+                        color: Colors.white,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Checking your secure Circum sign-in before loading the app.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: _SenderTokens.softText,
+                        fontSize: 13.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -494,6 +618,9 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     required bool createAccount,
   }) async {
     final auth = FirebaseAuth.instance;
+    if (kIsWeb) {
+      await auth.setPersistence(Persistence.LOCAL);
+    }
     UserCredential credential;
     if (createAccount) {
       try {
