@@ -2285,6 +2285,27 @@ void main() {
       expect(source, contains('state == SenderTrackingState.findingRider'));
     });
 
+    test('sender tracking actions are wired to chat support and cancellation',
+        () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('onOpenMessage'));
+      expect(source, contains('onOpenSupport'));
+      expect(source, contains('onCancelDelivery'));
+      expect(source, contains('RideChatPageView('));
+      expect(source, contains('supportConversation: true'));
+      expect(source, contains('senderCanCancelBeforeCollection'));
+      expect(source, contains('getSenderCancellationQuote'));
+      expect(source, contains('previewSenderCancellation'));
+      expect(source, contains('cancelSenderDelivery'));
+      expect(source, contains('requestSenderCancellation'));
+      expect(source, contains('Cancellation fee'));
+      expect(source, contains('Backend reason'));
+      expect(source, contains('Amount to be charged/refunded'));
+    });
+
     test('collection PIN appears before collection and receiver PIN waits', () {
       const collectionPinStates = [
         SenderTrackingState.riderAssigned,

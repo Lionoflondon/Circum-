@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
+import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 
@@ -558,6 +560,51 @@ String _moneyText(double amount, String currency) {
   return '${currency.trim().toUpperCase()} ${amount.toStringAsFixed(2)}';
 }
 
+String senderActiveDeliveryIdFor(SendPackageState engine) {
+  final data = engine.activeDeliveryData;
+  return '${data['requestId'] ?? data['deliveryId'] ?? data['id'] ?? data['_docId'] ?? ''}'
+      .trim();
+}
+
+bool senderCanCancelBeforeCollection(SenderTrackingState state) {
+  return switch (state) {
+    SenderTrackingState.findingRider ||
+    SenderTrackingState.riderAssigned ||
+    SenderTrackingState.riderEnRouteToPickup ||
+    SenderTrackingState.riderArrivedAtPickup =>
+      true,
+    _ => false,
+  };
+}
+
+String _firebaseFunctionMessage(Object error, String fallback) {
+  if (error is FirebaseFunctionsException) {
+    return error.message ?? fallback;
+  }
+  return fallback;
+}
+
+Future<Map<String, dynamic>> _callFirstAvailableFunction(
+  List<String> names,
+  Map<String, dynamic> payload,
+) async {
+  Object? lastError;
+  for (final name in names) {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable(name)
+          .call<Map<String, dynamic>>(payload);
+      return Map<String, dynamic>.from(result.data);
+    } on FirebaseFunctionsException catch (error) {
+      lastError = error;
+      if (error.code != 'not-found' && error.code != 'unimplemented') {
+        rethrow;
+      }
+    }
+  }
+  throw lastError ?? StateError('No backend callable is available.');
+}
+
 String senderVehicleMarkerKindFor(String? vehicle) {
   final normalized = (vehicle ?? '').trim().toLowerCase();
   if (normalized.contains('bike') ||
@@ -764,9 +811,97 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
             content: visibleContent,
             engine: widget.engine,
             mapMode: mapMode,
+            onOpenMessage: _openDeliveryChat,
+            onOpenSupport: _openSupportChat,
+            onCancelDelivery: () => _confirmCancelDelivery(state),
           ),
         ),
       ],
+    );
+  }
+
+  void _openDeliveryChat() {
+    final chatId = senderActiveDeliveryIdFor(widget.engine);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RideChatPageView(
+          chatId: chatId.isEmpty ? null : chatId,
+          title: 'Delivery chat',
+        ),
+      ),
+    );
+  }
+
+  void _openSupportChat() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const RideChatPageView(
+          title: 'Circum Support',
+          supportConversation: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmCancelDelivery(SenderTrackingState state) async {
+    if (!senderCanCancelBeforeCollection(state)) {
+      _showActionMessage('This delivery can no longer be cancelled here.');
+      return;
+    }
+    final deliveryId = senderActiveDeliveryIdFor(widget.engine);
+    if (deliveryId.isEmpty) {
+      _showActionMessage('Unable to identify the active delivery.');
+      return;
+    }
+    Map<String, dynamic> quote;
+    try {
+      quote = await _callFirstAvailableFunction(
+        const [
+          'getSenderCancellationQuote',
+          'previewSenderCancellation',
+          'getDeliveryCancellationQuote',
+        ],
+        {'deliveryId': deliveryId, 'requestId': deliveryId},
+      );
+    } catch (error) {
+      _showActionMessage(
+        _firebaseFunctionMessage(
+          error,
+          'Unable to retrieve the backend cancellation fee.',
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CancelDeliverySheet(quote: quote),
+    );
+    if (confirmed != true) return;
+    try {
+      await _callFirstAvailableFunction(
+        const [
+          'cancelSenderDelivery',
+          'requestSenderCancellation',
+          'cancelDeliveryRequest',
+        ],
+        {'deliveryId': deliveryId, 'requestId': deliveryId},
+      );
+      if (!mounted) return;
+      _showActionMessage('Delivery cancellation sent.');
+    } catch (error) {
+      if (!mounted) return;
+      _showActionMessage(
+        _firebaseFunctionMessage(error, 'Cancellation could not be completed.'),
+      );
+    }
+  }
+
+  void _showActionMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 }
@@ -977,12 +1112,18 @@ class _TrackingPanelContent extends StatelessWidget {
   final SenderTrackingContent content;
   final SendPackageState engine;
   final SenderDeliveryMapMode mapMode;
+  final VoidCallback onOpenMessage;
+  final VoidCallback onOpenSupport;
+  final VoidCallback onCancelDelivery;
 
   const _TrackingPanelContent({
     required this.state,
     required this.content,
     required this.engine,
     required this.mapMode,
+    required this.onOpenMessage,
+    required this.onOpenSupport,
+    required this.onCancelDelivery,
   });
 
   @override
@@ -1101,7 +1242,12 @@ class _TrackingPanelContent extends StatelessWidget {
           const _DeliveredChipSequence(),
         ],
         const SizedBox(height: 16),
-        _TrackingActions(state: state),
+        _TrackingActions(
+          state: state,
+          onOpenMessage: onOpenMessage,
+          onOpenSupport: onOpenSupport,
+          onCancelDelivery: onCancelDelivery,
+        ),
       ],
     );
   }
@@ -1448,6 +1594,143 @@ class SenderWaitingCard extends StatelessWidget {
                   _WaitingChargeRow(label: waiting.chargeLabel!),
                 ],
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CancelDeliverySheet extends StatelessWidget {
+  final Map<String, dynamic> quote;
+
+  const _CancelDeliverySheet({required this.quote});
+
+  @override
+  Widget build(BuildContext context) {
+    final fee = _numberFrom(
+      quote['cancellationFee'] ??
+          quote['fee'] ??
+          quote['amountToCharge'] ??
+          quote['chargeAmount'],
+    );
+    final refund = _numberFrom(
+      quote['amountToRefund'] ?? quote['refundAmount'] ?? quote['refund'],
+    );
+    final currency = '${quote['currency'] ?? 'GBP'}';
+    final reason =
+        '${quote['reason'] ?? quote['backendReason'] ?? 'Backend policy applies.'}';
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: AppGlassContainer(
+          radius: 24,
+          padding: const EdgeInsets.all(18),
+          accent: const Color(0xFFF87171),
+          surfaceColor: const Color(0xFF07090F).withValues(alpha: .88),
+          borderColor: const Color(0xFFF87171).withValues(alpha: .26),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Cancel this delivery?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'DM Serif Display',
+                  fontSize: 23,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Cancellation is handled by Circum’s backend policy. The rider will be updated immediately if you confirm.',
+                style: TextStyle(
+                  color: _TrackingTokens.muted,
+                  height: 1.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _CancellationQuoteLine(
+                label: 'Cancellation fee',
+                value: fee == null
+                    ? 'Backend provided'
+                    : _moneyText(fee, currency),
+              ),
+              _CancellationQuoteLine(label: 'Backend reason', value: reason),
+              _CancellationQuoteLine(
+                label: 'Amount to be charged/refunded',
+                value: refund == null
+                    ? '${quote['amountSummary'] ?? 'Backend will finalise'}'
+                    : _moneyText(refund, currency),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Keep delivery'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFF87171),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Confirm cancel'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CancellationQuoteLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _CancellationQuoteLine({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: _TrackingTokens.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
@@ -2500,8 +2783,16 @@ class ETABadge extends StatelessWidget {
 
 class _TrackingActions extends StatelessWidget {
   final SenderTrackingState state;
+  final VoidCallback onOpenMessage;
+  final VoidCallback onOpenSupport;
+  final VoidCallback onCancelDelivery;
 
-  const _TrackingActions({required this.state});
+  const _TrackingActions({
+    required this.state,
+    required this.onOpenMessage,
+    required this.onOpenSupport,
+    required this.onCancelDelivery,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2520,6 +2811,11 @@ class _TrackingActions extends StatelessWidget {
                         ? 'View receipt'
                         : 'Message',
             primary: empty,
+            onTap: finding
+                ? onOpenSupport
+                : empty || delivered
+                    ? null
+                    : onOpenMessage,
           ),
         ),
         const SizedBox(width: 8),
@@ -2532,6 +2828,11 @@ class _TrackingActions extends StatelessWidget {
                     : 'Support',
             primary: delivered || state == SenderTrackingState.issue,
             success: delivered,
+            onTap: finding
+                ? onCancelDelivery
+                : delivered
+                    ? null
+                    : onOpenSupport,
           ),
         ),
       ],
@@ -2543,75 +2844,86 @@ class _TrackingButton extends StatelessWidget {
   final String label;
   final bool primary;
   final bool success;
+  final VoidCallback? onTap;
 
   const _TrackingButton({
     required this.label,
     this.primary = false,
     this.success = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Stack(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            decoration: BoxDecoration(
-              color: primary && !success
-                  ? const Color(0xFF3B82F6)
-                  : Colors.white.withValues(alpha: .06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: success
-                    ? const Color(0xFF34D399).withValues(alpha: .36)
-                    : Colors.white.withValues(alpha: .08),
-              ),
-              boxShadow: success
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF34D399).withValues(alpha: .20),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                  : null,
-            ),
-          ),
-          if (success)
-            Positioned.fill(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: 1),
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.easeOut,
-                builder: (context, value, _) {
-                  return FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: value,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF34D399)
-                            .withValues(alpha: .92 + value * .08),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          Positioned.fill(
-            child: Center(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: primary ? Colors.white : const Color(0xFFF2F4F8),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  color: primary && !success
+                      ? const Color(0xFF3B82F6)
+                      : Colors.white.withValues(alpha: .06),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: success
+                        ? const Color(0xFF34D399).withValues(alpha: .36)
+                        : Colors.white.withValues(alpha: .08),
+                  ),
+                  boxShadow: success
+                      ? [
+                          BoxShadow(
+                            color:
+                                const Color(0xFF34D399).withValues(alpha: .20),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ]
+                      : null,
                 ),
               ),
-            ),
+              if (success)
+                Positioned.fill(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeOut,
+                    builder: (context, value, _) {
+                      return FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: value,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF34D399)
+                                .withValues(alpha: .92 + value * .08),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              Positioned.fill(
+                child: Center(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: primary ? Colors.white : const Color(0xFFF2F4F8),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

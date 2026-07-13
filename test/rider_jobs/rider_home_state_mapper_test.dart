@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/rider_jobs/rider_home_state_mapper.dart';
 import 'package:circum/app/rider_jobs/rider_job_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -87,6 +89,21 @@ void main() {
         ),
         RiderJobUiState.accepted,
       );
+    });
+
+    test('rider waiting actions use backend callables and delivery chat', () {
+      final source =
+          File('lib/app/rider_jobs/rider_home_screen.dart').readAsStringSync();
+
+      expect(source, contains('Customer Responded'));
+      expect(source, contains('Mark No-show'));
+      expect(source, contains('markCustomerResponded'));
+      expect(source, contains('recordCustomerResponded'));
+      expect(source, contains('markSenderNoShow'));
+      expect(source, contains('declareSenderNoShow'));
+      expect(source, contains('sendRiderUpdate'));
+      expect(source, contains('RideChatPageView(chatId: chatId)'));
+      expect(source, contains('No-show unlocks only when the backend says'));
     });
   });
 }

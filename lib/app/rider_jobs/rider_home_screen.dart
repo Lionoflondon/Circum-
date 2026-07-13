@@ -242,6 +242,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                                                                     _toggleAvailability,
                                                                 onOpenTab:
                                                                     _openTab,
+                                                                onCustomerResponded:
+                                                                    _markCustomerResponded,
+                                                                onMarkNoShow:
+                                                                    _markNoShow,
                                                                 onOpenNotifications: () =>
                                                                     _openNotifications(
                                                                         context),
@@ -436,6 +440,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                                 'Preview only. Use the app to change live presence.',
                           ),
                           onOpenTab: _openTab,
+                          onCustomerResponded: (_) => setState(() => _message =
+                              'Preview only. Backend updates run in production.'),
+                          onMarkNoShow: (_) => setState(() => _message =
+                              'Preview only. Backend updates run in production.'),
                           onOpenNotifications: () => setState(() => _message =
                               'Notifications are available in the authenticated Rider app.'),
                         ),
@@ -537,6 +545,102 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         },
       ),
     ));
+  }
+
+  Future<void> _markCustomerResponded(Map<String, dynamic> delivery) async {
+    final deliveryId = _activeDeliveryId(delivery);
+    if (deliveryId.isEmpty) {
+      setState(() => _message = 'Active delivery could not be identified.');
+      return;
+    }
+    try {
+      await _callFirstAvailableRiderFunction(
+        const [
+          'markCustomerResponded',
+          'recordCustomerResponded',
+          'sendRiderUpdate',
+        ],
+        {
+          'deliveryId': deliveryId,
+          'requestId': deliveryId,
+          'action': 'customer_responded',
+          'status': 'customer_responded',
+        },
+      );
+      if (mounted) {
+        setState(() => _message =
+            'Customer response sent. Backend waiting policy will update.');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _message = _riderFunctionMessage(
+            error, 'Customer response was not accepted.'));
+      }
+    }
+  }
+
+  Future<void> _markNoShow(Map<String, dynamic> delivery) async {
+    final deliveryId = _activeDeliveryId(delivery);
+    if (deliveryId.isEmpty) {
+      setState(() => _message = 'Active delivery could not be identified.');
+      return;
+    }
+    try {
+      await _callFirstAvailableRiderFunction(
+        const [
+          'markSenderNoShow',
+          'declareSenderNoShow',
+          'sendRiderUpdate',
+        ],
+        {
+          'deliveryId': deliveryId,
+          'requestId': deliveryId,
+          'action': 'mark_no_show',
+          'status': 'sender_no_show_pickup',
+        },
+      );
+      if (mounted) {
+        setState(() => _message =
+            'No-show submitted. Backend eligibility and compensation will apply.');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _message =
+            _riderFunctionMessage(error, 'No-show is not available.'));
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _callFirstAvailableRiderFunction(
+    List<String> names,
+    Map<String, dynamic> payload,
+  ) async {
+    Object? lastError;
+    for (final name in names) {
+      try {
+        final result =
+            await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+        final data = result.data;
+        if (data is Map<String, dynamic>) return data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+        return const {};
+      } on FirebaseFunctionsException catch (error) {
+        lastError = error;
+        if (error.code != 'not-found' && error.code != 'unimplemented') {
+          rethrow;
+        }
+      }
+    }
+    throw lastError ?? StateError('No backend callable is available.');
+  }
+
+  String _activeDeliveryId(Map<String, dynamic> delivery) =>
+      '${delivery['requestId'] ?? delivery['deliveryId'] ?? delivery['id'] ?? delivery['_docId'] ?? ''}'
+          .trim();
+
+  String _riderFunctionMessage(Object error, String fallback) {
+    if (error is FirebaseFunctionsException) return error.message ?? fallback;
+    return fallback;
   }
 
   Future<void> _toggleAvailability() async {
@@ -725,6 +829,8 @@ class _DashboardPane extends StatelessWidget {
   final bool available;
   final VoidCallback onToggleAvailability;
   final ValueChanged<int> onOpenTab;
+  final ValueChanged<Map<String, dynamic>> onCustomerResponded;
+  final ValueChanged<Map<String, dynamic>> onMarkNoShow;
   final VoidCallback onOpenNotifications;
 
   const _DashboardPane({
@@ -747,6 +853,8 @@ class _DashboardPane extends StatelessWidget {
     required this.available,
     required this.onToggleAvailability,
     required this.onOpenTab,
+    required this.onCustomerResponded,
+    required this.onMarkNoShow,
     required this.onOpenNotifications,
   });
 
@@ -784,6 +892,14 @@ class _DashboardPane extends StatelessWidget {
           const SizedBox(height: 14),
           _RiderDeliveryChatShortcut(chatId: _deliveryChatId),
         ],
+        if (_showWaitingActions) ...[
+          const SizedBox(height: 14),
+          _RiderWaitingActionCard(
+            delivery: activeDelivery!,
+            onCustomerResponded: () => onCustomerResponded(activeDelivery!),
+            onMarkNoShow: () => onMarkNoShow(activeDelivery!),
+          ),
+        ],
         const SizedBox(height: 14),
         _PriorityOpportunities(offers: offers),
         const SizedBox(height: 14),
@@ -809,6 +925,20 @@ class _DashboardPane extends StatelessWidget {
   String get _deliveryChatId =>
       '${activeDelivery?['requestId'] ?? activeDelivery?['id'] ?? activeDelivery?['_docId'] ?? ''}'
           .trim();
+
+  bool get _showWaitingActions {
+    final status = '${activeDelivery?['status'] ?? ''}'
+        .trim()
+        .toLowerCase()
+        .replaceAll('-', '_')
+        .replaceAll(' ', '_');
+    return status == 'arrived_at_pickup' ||
+        status == 'waiting' ||
+        status == 'waiting_for_collection' ||
+        status == 'waiting_charge_active' ||
+        status == 'waiting_charges_active' ||
+        status == 'no_show_review';
+  }
 }
 
 class _OffersPane extends StatelessWidget {
@@ -1685,6 +1815,151 @@ class _RiderDeliveryChatShortcut extends StatelessWidget {
           ),
         ]),
       );
+}
+
+class _RiderWaitingActionCard extends StatelessWidget {
+  final Map<String, dynamic> delivery;
+  final VoidCallback onCustomerResponded;
+  final VoidCallback onMarkNoShow;
+
+  const _RiderWaitingActionCard({
+    required this.delivery,
+    required this.onCustomerResponded,
+    required this.onMarkNoShow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final waiting =
+        (delivery['waiting'] as Map?)?.cast<String, dynamic>() ?? {};
+    final noShowAvailable = delivery['noShowAvailable'] == true ||
+        waiting['noShowAvailable'] == true ||
+        '${delivery['status'] ?? ''}' == 'no_show_review';
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              _CircleIcon(icon: Icons.timer_outlined),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Pickup waiting controls',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Use backend-authorised actions only. Circum decides whether waiting continues, charges apply, or no-show is available.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .58),
+              fontSize: 12,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _RiderInlineAction(
+                  label: 'Customer Responded',
+                  icon: Icons.record_voice_over_outlined,
+                  onTap: onCustomerResponded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _RiderInlineAction(
+                  label: 'Mark No-show',
+                  icon: Icons.person_off_outlined,
+                  danger: true,
+                  enabled: noShowAvailable,
+                  onTap: onMarkNoShow,
+                ),
+              ),
+            ],
+          ),
+          if (!noShowAvailable) ...[
+            const SizedBox(height: 8),
+            Text(
+              'No-show unlocks only when the backend says it is eligible.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .48),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RiderInlineAction extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool danger;
+  final bool enabled;
+
+  const _RiderInlineAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.danger = false,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? const Color(0xFFF87171) : const Color(0xFF3B82F6);
+    return Semantics(
+      button: true,
+      label: label,
+      enabled: enabled,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: enabled ? .13 : .05),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: color.withValues(alpha: enabled ? .26 : .10),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: enabled ? color : Colors.white38, size: 17),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: enabled ? Colors.white : Colors.white38,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _OnlineStatusCard extends StatelessWidget {
