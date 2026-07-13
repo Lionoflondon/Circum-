@@ -9639,195 +9639,49 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   Future<void> _createBusinessInvoice() async {
     if (!_can(AdminPermission.viewFinance) || _businessAccounts.isEmpty) return;
-    var selectedBusinessId = _businessAccountId(_businessAccounts.first);
-    final description =
-        TextEditingController(text: 'Business delivery services');
-    final quantity = TextEditingController(text: '1');
-    final unitPrice = TextEditingController();
-    final discount = TextEditingController(text: '0');
-    final vat = TextEditingController(text: '0');
-    final notes = TextEditingController();
-    final dueDate = DateTime.now().add(const Duration(days: 14));
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Generate Business invoice'),
-          content: SizedBox(
-            width: 620,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedBusinessId,
-                    decoration: const InputDecoration(
-                      labelText: 'Business account',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _businessAccounts
-                        .map((account) => DropdownMenuItem(
-                              value: _businessAccountId(account),
-                              child: Text(
-                                  '${account['businessName'] ?? 'Business'}'),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() => selectedBusinessId = value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: description,
-                    decoration: const InputDecoration(
-                      labelText: 'Line item description',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: quantity,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Quantity',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: unitPrice,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Unit price',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: discount,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Discount',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: vat,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'VAT amount',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: notes,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final qty = double.tryParse(quantity.text.trim()) ?? 0;
-                final price = double.tryParse(unitPrice.text.trim()) ?? 0;
-                if (selectedBusinessId.isEmpty ||
-                    description.text.trim().isEmpty ||
-                    qty <= 0 ||
-                    price < 0) {
-                  return;
-                }
-                Navigator.of(dialogContext).pop({
-                  'businessId': selectedBusinessId,
-                  'description': description.text.trim(),
-                  'quantity': qty,
-                  'unitPrice': price,
-                  'discount': double.tryParse(discount.text.trim()) ?? 0,
-                  'vat': double.tryParse(vat.text.trim()) ?? 0,
-                  'notes': notes.text.trim(),
-                  'dueDate': dueDate,
-                });
-              },
-              child: const Text('Create draft'),
-            ),
-          ],
+    final invoiceNumber =
+        'CIR-BIZ-${DateTime.now().year}-${(_businessInvoices.length + 1).toString().padLeft(6, '0')}';
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => _BusinessInvoiceEditorPage(
+          accounts: _businessAccounts,
+          initialBusinessId: _businessAccountId(_businessAccounts.first),
+          initialInvoiceNumber: invoiceNumber,
         ),
       ),
     );
-    description.dispose();
-    quantity.dispose();
-    unitPrice.dispose();
-    discount.dispose();
-    vat.dispose();
-    notes.dispose();
     if (result == null) return;
     final businessId = '${result['businessId']}';
     final account = _businessAccountFor(businessId);
     final invoiceRef =
         FirebaseFirestore.instance.collection('businessInvoices').doc();
-    final invoiceNumber =
-        'CIR-BIZ-${DateTime.now().year}-${(_businessInvoices.length + 1).toString().padLeft(6, '0')}';
-    final qty = result['quantity'] as double;
-    final price = result['unitPrice'] as double;
-    final subtotal = qty * price;
+    final subtotal = result['subtotal'] as double;
     final discountValue = result['discount'] as double;
     final vatValue = result['vat'] as double;
-    final total = math.max(0, subtotal - discountValue + vatValue);
-    final lineItem = {
-      'description': result['description'],
-      'quantity': qty,
-      'unitPrice': price,
-      'total': subtotal,
-      'serviceType': 'manual',
-    };
+    final total = result['total'] as double;
+    final status = '${result['status'] ?? 'draft'}';
+    final issueDate = result['issueDate'] as DateTime;
+    final dueDate = result['dueDate'] as DateTime;
     final db = FirebaseFirestore.instance;
     final batch = db.batch();
     batch.set(invoiceRef, {
       'invoiceId': invoiceRef.id,
-      'invoiceNumber': invoiceNumber,
+      'invoiceNumber': result['invoiceNumber'],
       'businessId': businessId,
       'businessName': account['businessName'] ?? 'Business',
       'billingEmail': account['billingEmail'] ?? account['contactEmail'],
-      'billingPeriodStart': Timestamp.fromDate(DateTime.now()),
-      'billingPeriodEnd': Timestamp.fromDate(DateTime.now()),
-      'issueDate': null,
-      'dueDate': Timestamp.fromDate(result['dueDate'] as DateTime),
-      'status': 'draft',
-      'lineItems': [lineItem],
+      'customerName': result['customerName'],
+      'billingPeriodStart': Timestamp.fromDate(issueDate),
+      'billingPeriodEnd': Timestamp.fromDate(issueDate),
+      'issueDate': status == 'issued' ? Timestamp.fromDate(issueDate) : null,
+      'dueDate': Timestamp.fromDate(dueDate),
+      'currency': result['currency'],
+      'vatScheme': result['vatScheme'],
+      'paymentTerms': result['paymentTerms'],
+      'reference': result['reference'],
+      'status': status,
+      'lineItems': result['lineItems'],
+      'attachments': result['attachments'],
       'subtotal': subtotal,
       'discount': discountValue,
       'vatAmount': vatValue,
@@ -9846,18 +9700,18 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           'recentBusinessInvoices': FieldValue.arrayUnion([
             {
               'invoiceId': invoiceRef.id,
-              'invoiceNumber': invoiceNumber,
-              'status': 'draft',
+              'invoiceNumber': result['invoiceNumber'],
+              'status': status,
               'total': total,
-              'dueDate': Timestamp.fromDate(result['dueDate'] as DateTime),
+              'dueDate': Timestamp.fromDate(dueDate),
             }
           ]),
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true));
     batch.set(db.collection('adminAuditLogs').doc(), {
-      'action': 'invoice_created',
-      'actionType': 'invoice_created',
+      'action': status == 'issued' ? 'invoice_issued' : 'invoice_created',
+      'actionType': status == 'issued' ? 'invoice_issued' : 'invoice_created',
       'businessId': businessId,
       'invoiceId': invoiceRef.id,
       'recordType': 'businessInvoice',
@@ -53881,6 +53735,830 @@ class _BusinessOverviewInvoicesTable extends StatelessWidget {
       ]),
     );
   }
+}
+
+class _BusinessInvoiceLineDraft {
+  final TextEditingController description;
+  final TextEditingController quantity;
+  final TextEditingController unitPrice;
+  final TextEditingController vatPercent;
+  final TextEditingController discount;
+  final bool credit;
+
+  _BusinessInvoiceLineDraft({
+    String description = '',
+    String quantity = '1',
+    String unitPrice = '',
+    String vatPercent = '20',
+    String discount = '0',
+    this.credit = false,
+  })  : description = TextEditingController(text: description),
+        quantity = TextEditingController(text: quantity),
+        unitPrice = TextEditingController(text: unitPrice),
+        vatPercent = TextEditingController(text: vatPercent),
+        discount = TextEditingController(text: discount);
+
+  _BusinessInvoiceLineDraft copy() => _BusinessInvoiceLineDraft(
+        description: description.text,
+        quantity: quantity.text,
+        unitPrice: unitPrice.text,
+        vatPercent: vatPercent.text,
+        discount: discount.text,
+        credit: credit,
+      );
+
+  double get qty => math.max(0, _num(quantity.text));
+  double get price => _num(unitPrice.text);
+  double get vatRate => math.max(0, _num(vatPercent.text));
+  double get discountValue => math.max(0, _num(discount.text));
+  double get gross => credit ? -(qty * price).abs() : qty * price;
+  double get net {
+    final adjusted = gross - discountValue;
+    return credit ? adjusted : math.max(0, adjusted);
+  }
+
+  double get vatAmount => net * (vatRate / 100);
+  double get lineTotal => net + vatAmount;
+
+  Map<String, dynamic> toPayload(int index) => {
+        'position': index + 1,
+        'description': description.text.trim(),
+        'quantity': qty,
+        'unitPrice': price,
+        'vatPercent': vatRate,
+        'vatAmount': vatAmount,
+        'discount': discountValue,
+        'subtotal': gross,
+        'total': lineTotal,
+        'lineTotal': lineTotal,
+        'type': credit ? 'credit' : 'manual',
+        'serviceType': credit ? 'credit' : 'manual',
+      };
+
+  void dispose() {
+    description.dispose();
+    quantity.dispose();
+    unitPrice.dispose();
+    vatPercent.dispose();
+    discount.dispose();
+  }
+}
+
+class _BusinessInvoiceEditorPage extends StatefulWidget {
+  final List<Map<String, dynamic>> accounts;
+  final String initialBusinessId;
+  final String initialInvoiceNumber;
+
+  const _BusinessInvoiceEditorPage({
+    required this.accounts,
+    required this.initialBusinessId,
+    required this.initialInvoiceNumber,
+  });
+
+  @override
+  State<_BusinessInvoiceEditorPage> createState() =>
+      _BusinessInvoiceEditorPageState();
+}
+
+class _BusinessInvoiceEditorPageState
+    extends State<_BusinessInvoiceEditorPage> {
+  late String _businessId;
+  late final TextEditingController _invoiceNumber;
+  late final TextEditingController _issueDate;
+  late final TextEditingController _dueDate;
+  late final TextEditingController _currency;
+  late final TextEditingController _customer;
+  late final TextEditingController _vatScheme;
+  late final TextEditingController _paymentTerms;
+  late final TextEditingController _reference;
+  late final TextEditingController _invoiceDiscount;
+  late final TextEditingController _notes;
+  final _lines = <_BusinessInvoiceLineDraft>[];
+  final _attachments = <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _businessId = widget.initialBusinessId;
+    _invoiceNumber = TextEditingController(text: widget.initialInvoiceNumber);
+    _issueDate = TextEditingController(text: _dateInput(now));
+    _dueDate = TextEditingController(
+        text: _dateInput(now.add(const Duration(days: 14))));
+    _currency = TextEditingController(text: 'GBP');
+    _customer = TextEditingController(text: _selectedAccountName);
+    _vatScheme = TextEditingController(text: 'Standard VAT');
+    _paymentTerms = TextEditingController(text: '14 days');
+    _reference = TextEditingController();
+    _invoiceDiscount = TextEditingController(text: '0');
+    _notes = TextEditingController();
+    _addLine(description: 'Business delivery services');
+  }
+
+  @override
+  void dispose() {
+    _invoiceNumber.dispose();
+    _issueDate.dispose();
+    _dueDate.dispose();
+    _currency.dispose();
+    _customer.dispose();
+    _vatScheme.dispose();
+    _paymentTerms.dispose();
+    _reference.dispose();
+    _invoiceDiscount.dispose();
+    _notes.dispose();
+    for (final line in _lines) {
+      line.dispose();
+    }
+    super.dispose();
+  }
+
+  String get _selectedAccountName {
+    final account = widget.accounts.firstWhere(
+      (item) => _businessAccountIdentifier(item) == _businessId,
+      orElse: () => widget.accounts.isEmpty
+          ? const <String, dynamic>{}
+          : widget.accounts.first,
+    );
+    return '${account['businessName'] ?? 'Business'}';
+  }
+
+  double get _subtotal =>
+      _lines.fold<double>(0, (total, line) => total + line.gross);
+  double get _lineDiscount =>
+      _lines.fold<double>(0, (total, line) => total + line.discountValue);
+  double get _invoiceDiscountValue => math.max(0, _num(_invoiceDiscount.text));
+  double get _vatTotal =>
+      _lines.fold<double>(0, (total, line) => total + line.vatAmount);
+  double get _grandTotal => math.max(
+      0, _subtotal + _vatTotal - _lineDiscount - _invoiceDiscountValue);
+
+  void _addLine({
+    String description = '',
+    bool credit = false,
+  }) {
+    setState(() {
+      _lines.add(_BusinessInvoiceLineDraft(
+        description: description,
+        unitPrice: credit ? '-0.00' : '',
+        vatPercent: '20',
+        credit: credit,
+      ));
+    });
+  }
+
+  void _duplicateLine(int index) {
+    setState(() => _lines.insert(index + 1, _lines[index].copy()));
+  }
+
+  void _deleteLine(int index) {
+    if (_lines.length == 1) return;
+    final removed = _lines.removeAt(index);
+    removed.dispose();
+    setState(() {});
+  }
+
+  void _reorderLine(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final item = _lines.removeAt(oldIndex);
+      _lines.insert(newIndex, item);
+    });
+  }
+
+  void _pickAttachments() {
+    final input = html.FileUploadInputElement()
+      ..multiple = true
+      ..accept = '.pdf,image/*,.doc,.docx,.xls,.xlsx';
+    input.click();
+    input.onChange.first.then((_) {
+      final names = input.files
+              ?.map((file) => file.name)
+              .where((name) => name.trim().isNotEmpty)
+              .toList(growable: false) ??
+          const <String>[];
+      if (names.isEmpty || !mounted) return;
+      setState(() => _attachments.addAll(names));
+    });
+  }
+
+  void _previewPdf() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: _BusinessGlass(
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text('Invoice preview',
+                          style: GoogleFonts.dmSerifDisplay(
+                              color: Colors.white, fontSize: 34)),
+                    ),
+                    IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Text(_invoiceNumber.text,
+                      style: GoogleFonts.jetBrainsMono(
+                          color: Colors.white.withValues(alpha: 0.72),
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 16),
+                  ..._lines.asMap().entries.map((entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(children: [
+                          Expanded(
+                              child: Text(
+                                  '${entry.key + 1}. ${entry.value.description.text}',
+                                  style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800))),
+                          Text(_businessMoney(entry.value.lineTotal),
+                              style: GoogleFonts.jetBrainsMono(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900)),
+                        ]),
+                      )),
+                  const Divider(color: Colors.white24),
+                  _BusinessInvoiceSummaryLine('Subtotal', _subtotal),
+                  _BusinessInvoiceSummaryLine('VAT', _vatTotal),
+                  _BusinessInvoiceSummaryLine(
+                      'Discount', -_invoiceDiscountValue),
+                  _BusinessInvoiceSummaryLine('Grand total', _grandTotal,
+                      prominent: true),
+                  const SizedBox(height: 12),
+                  Text('Preview only. No draft has been sent.',
+                      style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.62),
+                          fontWeight: FontWeight.w700)),
+                ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submit(String status) {
+    final validLines = _lines
+        .where((line) =>
+            line.description.text.trim().isNotEmpty &&
+            line.qty > 0 &&
+            line.price.isFinite)
+        .toList(growable: false);
+    if (_businessId.isEmpty ||
+        _invoiceNumber.text.trim().isEmpty ||
+        validLines.isEmpty) {
+      return;
+    }
+    Navigator.of(context).pop({
+      'businessId': _businessId,
+      'invoiceNumber': _invoiceNumber.text.trim(),
+      'customerName': _customer.text.trim().isEmpty
+          ? _selectedAccountName
+          : _customer.text.trim(),
+      'issueDate': _parseDate(_issueDate.text) ?? DateTime.now(),
+      'dueDate': _parseDate(_dueDate.text) ??
+          DateTime.now().add(const Duration(days: 14)),
+      'currency': _currency.text.trim().isEmpty ? 'GBP' : _currency.text.trim(),
+      'vatScheme': _vatScheme.text.trim(),
+      'paymentTerms': _paymentTerms.text.trim(),
+      'reference': _reference.text.trim(),
+      'lineItems': validLines
+          .asMap()
+          .entries
+          .map((entry) => entry.value.toPayload(entry.key))
+          .toList(growable: false),
+      'attachments': _attachments
+          .map((name) => {
+                'name': name,
+                'status': 'attached',
+                'addedAt': Timestamp.now(),
+              })
+          .toList(growable: false),
+      'subtotal': _subtotal,
+      'discount': _invoiceDiscountValue + _lineDiscount,
+      'vat': _vatTotal,
+      'total': _grandTotal,
+      'notes': _notes.text.trim(),
+      'status': status,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final desktop = width >= 1040;
+    final tablet = width >= 760 && width < 1040;
+    return Scaffold(
+      backgroundColor: const Color(0xff07090f),
+      body: _VanguardPageBackground(
+        child: SafeArea(
+          child: Column(children: [
+            _editorHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                    width < 640 ? 16 : 26, 10, width < 640 ? 16 : 26, 32),
+                child: desktop
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _editorBody(tablet: tablet)),
+                          const SizedBox(width: 18),
+                          SizedBox(width: 340, child: _summary(sticky: true)),
+                        ],
+                      )
+                    : Column(children: [
+                        _editorBody(tablet: tablet),
+                        const SizedBox(height: 16),
+                        _summary(sticky: false),
+                      ]),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _editorHeader() => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+        child: Row(children: [
+          IconButton.filledTonal(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: 'Back',
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Create Invoice',
+                  style: GoogleFonts.dmSerifDisplay(
+                      color: Colors.white, fontSize: 36, height: 1.02)),
+              const SizedBox(height: 4),
+              Text('Create a new invoice for your customer.',
+                  style: GoogleFonts.inter(
+                      color: Colors.white.withValues(alpha: 0.64),
+                      fontWeight: FontWeight.w700)),
+            ]),
+          ),
+          Wrap(spacing: 10, runSpacing: 10, children: [
+            OutlinedButton.icon(
+                onPressed: () => _submit('draft'),
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Save Draft')),
+            OutlinedButton.icon(
+                onPressed: _previewPdf,
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Preview PDF')),
+            FilledButton.icon(
+                onPressed: () => _submit('issued'),
+                icon: const Icon(Icons.send_rounded),
+                label: const Text('Send Invoice')),
+          ]),
+        ]),
+      );
+
+  Widget _editorBody({required bool tablet}) => Column(
+        children: [
+          _BusinessGlass(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const _BusinessPanelHeader(
+                  title: 'Invoice Details',
+                  subtitle:
+                      'Customer, terms and invoice metadata for this bill.'),
+              const SizedBox(height: 16),
+              LayoutBuilder(builder: (context, constraints) {
+                final columns = constraints.maxWidth < 620
+                    ? 1
+                    : constraints.maxWidth < 980
+                        ? 2
+                        : 3;
+                return GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: columns,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: columns == 1 ? 4.4 : 3.7,
+                  children: [
+                    _accountField(),
+                    _invoiceField(_invoiceNumber, 'Invoice Number'),
+                    _invoiceField(_issueDate, 'Issue Date'),
+                    _invoiceField(_dueDate, 'Due Date'),
+                    _invoiceField(_currency, 'Currency'),
+                    _invoiceField(_customer, 'Customer'),
+                    _invoiceField(_vatScheme, 'VAT Scheme'),
+                    _invoiceField(_paymentTerms, 'Payment Terms'),
+                    _invoiceField(_reference, 'Reference (optional)'),
+                  ],
+                );
+              }),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          _BusinessGlass(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Expanded(
+                  child: _BusinessPanelHeader(
+                    title: 'Line Items',
+                    subtitle:
+                        'Add services, credits, discounts and adjustments.',
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: () => _addLine(),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add Line Item'),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _lines.length,
+                onReorder: _reorderLine,
+                proxyDecorator: (child, index, animation) => Material(
+                  color: Colors.transparent,
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                itemBuilder: (context, index) => _BusinessInvoiceLineEditor(
+                  key: ValueKey(_lines[index]),
+                  index: index,
+                  line: _lines[index],
+                  onChanged: () => setState(() {}),
+                  onDuplicate: () => _duplicateLine(index),
+                  onDelete: () => _deleteLine(index),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                FilledButton.icon(
+                    onPressed: () => _addLine(),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add Line Item')),
+                OutlinedButton.icon(
+                    onPressed: () => _addLine(
+                        description: 'Credit adjustment', credit: true),
+                    icon: const Icon(Icons.remove_circle_outline_rounded),
+                    label: const Text('Add Credit / Negative Adjustment')),
+              ]),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          _BusinessGlass(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const _BusinessPanelHeader(
+                  title: 'Discounts, Notes and Attachments',
+                  subtitle: 'Keep supporting details with the invoice draft.'),
+              const SizedBox(height: 16),
+              _invoiceField(_invoiceDiscount, 'Invoice-wide discount'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _notes,
+                minLines: 5,
+                maxLines: 8,
+                maxLength: 1200,
+                onChanged: (_) => setState(() {}),
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700),
+                decoration: _invoiceDecoration('Notes'),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: _pickAttachments,
+                borderRadius: BorderRadius.circular(22),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.045),
+                    borderRadius: BorderRadius.circular(22),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.cloud_upload_outlined,
+                            color: Color(0xff3b82f6)),
+                        const SizedBox(width: 10),
+                        Text('Drag files here or upload',
+                            style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900)),
+                      ]),
+                      const SizedBox(height: 6),
+                      Text('PDF, images and supporting documents.',
+                          style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.62),
+                              fontWeight: FontWeight.w700)),
+                      if (_attachments.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _attachments
+                              .map((name) => _BusinessBadge(name))
+                              .toList(growable: false),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ],
+      );
+
+  Widget _accountField() => DropdownButtonFormField<String>(
+        initialValue: _businessId,
+        dropdownColor: const Color(0xff0d111c),
+        decoration: _invoiceDecoration('Business Account'),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+        items: widget.accounts
+            .map((account) => DropdownMenuItem(
+                  value: _businessAccountIdentifier(account),
+                  child: Text('${account['businessName'] ?? 'Business'}'),
+                ))
+            .toList(growable: false),
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() {
+            _businessId = value;
+            _customer.text = _selectedAccountName;
+          });
+        },
+      );
+
+  Widget _invoiceField(TextEditingController controller, String label) =>
+      TextField(
+        controller: controller,
+        onChanged: (_) => setState(() {}),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        decoration: _invoiceDecoration(label),
+      );
+
+  InputDecoration _invoiceDecoration(String label) => InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.58)),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.055),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+      );
+
+  Widget _summary({required bool sticky}) => _BusinessGlass(
+        borderColor: const Color(0xff3b82f6).withValues(alpha: 0.26),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.verified_user_outlined, color: Color(0xff3b82f6)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Invoice Summary',
+                  style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900)),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          _BusinessInvoiceSummaryLine('Subtotal', _subtotal),
+          _BusinessInvoiceSummaryLine('VAT', _vatTotal),
+          _BusinessInvoiceSummaryLine('Discount', -_invoiceDiscountValue),
+          const Divider(color: Colors.white24, height: 28),
+          _BusinessInvoiceSummaryLine('Grand Total', _grandTotal,
+              prominent: true),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xff3b82f6).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                  color: const Color(0xff3b82f6).withValues(alpha: 0.24)),
+            ),
+            child: Text('Secure • Encrypted • Compliant',
+                style: GoogleFonts.jetBrainsMono(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+              onPressed: () => _submit('issued'),
+              icon: const Icon(Icons.send_rounded),
+              label: const Text('Send Invoice')),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+              onPressed: () => _submit('draft'),
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Draft')),
+        ]),
+      );
+}
+
+class _BusinessInvoiceLineEditor extends StatelessWidget {
+  final int index;
+  final _BusinessInvoiceLineDraft line;
+  final VoidCallback onChanged;
+  final VoidCallback onDuplicate;
+  final VoidCallback onDelete;
+
+  const _BusinessInvoiceLineEditor({
+    super.key,
+    required this.index,
+    required this.line,
+    required this.onChanged,
+    required this.onDuplicate,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.045),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        ),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 900;
+          final fields = [
+            SizedBox(
+              width: compact ? double.infinity : 56,
+              child: _cellText('#${index + 1}'),
+            ),
+            SizedBox(
+              width: compact ? double.infinity : 280,
+              child: _lineField(line.description, 'Description'),
+            ),
+            SizedBox(
+              width: compact ? 130 : 108,
+              child: _lineField(line.quantity, 'Quantity'),
+            ),
+            SizedBox(
+              width: compact ? 150 : 128,
+              child: _lineField(line.unitPrice, 'Unit Price'),
+            ),
+            SizedBox(
+              width: compact ? 110 : 92,
+              child: _lineField(line.vatPercent, 'VAT %'),
+            ),
+            SizedBox(
+              width: compact ? 140 : 120,
+              child: _cellText(_businessMoney(line.vatAmount),
+                  label: 'VAT Amount'),
+            ),
+            SizedBox(
+              width: compact ? 150 : 130,
+              child: _cellText(_businessMoney(line.lineTotal),
+                  label: 'Line Total'),
+            ),
+            Wrap(spacing: 6, children: [
+              IconButton(
+                  tooltip: 'Drag to reorder',
+                  onPressed: null,
+                  icon: ReorderableDragStartListener(
+                      index: index,
+                      child: const Icon(Icons.drag_indicator_rounded,
+                          color: Colors.white70))),
+              IconButton(
+                  tooltip: 'Duplicate row',
+                  onPressed: onDuplicate,
+                  icon: const Icon(Icons.copy_rounded, color: Colors.white70)),
+              IconButton(
+                  tooltip: 'Delete row',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded,
+                      color: Colors.redAccent)),
+            ]),
+          ];
+          return compact
+              ? Wrap(spacing: 10, runSpacing: 10, children: fields)
+              : Row(children: [
+                  for (final field in fields) ...[
+                    Expanded(child: field),
+                    const SizedBox(width: 8),
+                  ]
+                ]);
+        }),
+      );
+
+  Widget _lineField(TextEditingController controller, String label) =>
+      TextField(
+        controller: controller,
+        onChanged: (_) => onChanged(),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.54)),
+          filled: true,
+          fillColor: Colors.black.withValues(alpha: 0.16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+        ),
+      );
+
+  Widget _cellText(String value, {String? label}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (label != null)
+            Text(label,
+                style: GoogleFonts.jetBrainsMono(
+                    color: Colors.white.withValues(alpha: 0.46),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800)),
+          Text(value,
+              style: GoogleFonts.jetBrainsMono(
+                  color: Colors.white, fontWeight: FontWeight.w900)),
+        ],
+      );
+}
+
+class _BusinessInvoiceSummaryLine extends StatelessWidget {
+  final String label;
+  final double amount;
+  final bool prominent;
+
+  const _BusinessInvoiceSummaryLine(this.label, this.amount,
+      {this.prominent = false});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: Row(children: [
+          Expanded(
+            child: Text(label,
+                style: GoogleFonts.inter(
+                    color:
+                        Colors.white.withValues(alpha: prominent ? 0.92 : 0.62),
+                    fontWeight: prominent ? FontWeight.w900 : FontWeight.w700)),
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            child: Text(
+              _businessMoney(amount),
+              key: ValueKey('$label-$amount'),
+              style: GoogleFonts.jetBrainsMono(
+                  color: Colors.white,
+                  fontSize: prominent ? 22 : 14,
+                  fontWeight: FontWeight.w900),
+            ),
+          ),
+        ]),
+      );
+}
+
+String _businessMoney(double value) {
+  final sign = value < 0 ? '-' : '';
+  return '$sign£${value.abs().toStringAsFixed(2)}';
+}
+
+String _businessAccountIdentifier(Map<String, dynamic> item) =>
+    '${item['businessId'] ?? item['businessAccountId'] ?? item['companyId'] ?? item['id'] ?? ''}';
+
+String _dateInput(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+DateTime? _parseDate(String value) {
+  final parts = value.split('-').map(int.tryParse).toList(growable: false);
+  if (parts.length != 3 || parts.any((part) => part == null)) return null;
+  return DateTime(parts[0]!, parts[1]!, parts[2]!);
 }
 
 class _BusinessAuthGate extends StatelessWidget {
