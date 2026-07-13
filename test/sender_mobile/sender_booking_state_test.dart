@@ -2175,12 +2175,12 @@ void main() {
       }
     });
 
-    test('finding rider remains anonymous and calm', () {
+    test('finding rider shows active anonymous search only', () {
       final content =
           senderTrackingContentFor(SenderTrackingState.findingRider);
 
       expect(content.showPickupPin, isTrue);
-      expect(content.showAnonymousRiders, isFalse);
+      expect(content.showAnonymousRiders, isTrue);
       expect(content.showRiderCard, isFalse);
       expect(content.showCollectionPin, isFalse);
       expect(content.showReceiverPin, isFalse);
@@ -2226,7 +2226,9 @@ void main() {
       expect(source, isNot(contains('_AnonymousRiderDot(')));
     });
 
-    test('live delivery map never fabricates riders before backend unlock', () {
+    test(
+        'live delivery map never fabricates assigned riders before backend unlock',
+        () {
       final source = File(
         'lib/app/sender_mobile/sender_tracking_screen.dart',
       ).readAsStringSync();
@@ -2243,8 +2245,44 @@ void main() {
       expect(
         senderTrackingContentFor(SenderTrackingState.findingRider)
             .showAnonymousRiders,
+        isTrue,
+      );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.findingRider)
+            .showRiderCard,
         isFalse,
       );
+      expect(
+        senderTrackingContentFor(SenderTrackingState.findingRider).showRider,
+        isFalse,
+      );
+    });
+
+    test('matching screen uses active search UI and delays rider messaging',
+        () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('class MatchingSearchCard'));
+      expect(source, contains('class MatchingStatusRotator'));
+      expect(source, contains('class ProgressiveMatchChecklist'));
+      expect(source, contains('class _SearchRingsPainter'));
+      expect(source, contains('Searching nearby riders...'));
+      expect(source, contains('Checking rider availability...'));
+      expect(source, contains('Finding the fastest rider...'));
+      expect(source, contains('Searching within your area'));
+      expect(source, contains('Matching based on distance'));
+      expect(source, contains('Matching based on vehicle suitability'));
+      expect(source, contains('Matching based on trust'));
+      expect(source, contains('Matching based on availability'));
+      expect(source, contains('Your parcel is secured.'));
+      expect(source, contains('IRIS estimate confirmed.'));
+      expect(source, contains('Vehicle recommendation ready.'));
+      expect(source, contains('Vanguard protection active.'));
+      expect(source, contains('Message Support'));
+      expect(source, contains('Cancel Delivery'));
+      expect(source, contains('state == SenderTrackingState.findingRider'));
     });
 
     test('collection PIN appears before collection and receiver PIN waits', () {

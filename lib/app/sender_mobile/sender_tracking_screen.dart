@@ -251,11 +251,12 @@ SenderTrackingContent senderTrackingContentFor(
     case SenderTrackingState.findingRider:
       return const SenderTrackingContent(
         title: 'Finding your rider',
-        body: 'Matching you with a nearby Circum rider.',
-        pill: 'Matching',
+        body: 'Searching verified riders near your pickup.',
+        pill: 'Searching',
         progress: 0,
-        dimMap: true,
+        dimMap: false,
         showPickupPin: true,
+        showAnonymousRiders: true,
         showVanguard: true,
         riderPosition: Offset(.34, .44),
         eta: 'Usually under 6 min',
@@ -702,11 +703,16 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     );
     final visibleContent = mapMode == SenderDeliveryMapMode.liveTracking
         ? content.copyWith(showAnonymousRiders: false)
-        : content.copyWith(
-            showRider: false,
-            showAnonymousRiders: false,
-            showRiderCard: false,
-          );
+        : state == SenderTrackingState.findingRider
+            ? content.copyWith(
+                showRider: false,
+                showRiderCard: false,
+              )
+            : content.copyWith(
+                showRider: false,
+                showAnonymousRiders: false,
+                showRiderCard: false,
+              );
     final riderPosition = _riderPositionForEngine(widget.engine, content);
     final staleLabel = visibleContent.showRider
         ? senderLiveLocationStaleLabel(widget.engine.riderLiveLocationUpdatedAt)
@@ -838,19 +844,37 @@ class SenderTrackingMapLayer extends StatelessWidget {
                 painter: _TrackingGridPainter(
                   shimmer: delivered ? .5 : mapDrift.value,
                   route: content.showRoute,
+                  searching: content.showAnonymousRiders,
                   highContrast: highContrast,
                 ),
               ),
             ),
+            if (content.showAnonymousRiders)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _SearchRingsPainter(
+                    progress: markerPulse,
+                    highContrast: highContrast,
+                  ),
+                ),
+              ),
             if (content.showRoute)
               _RouteLine(completed: delivered, highContrast: highContrast),
             if (content.showPickupPin)
-              _MapPin(
-                alignment: const Alignment(-.62, -.38),
-                color: const Color(0xFF34D399),
-                pulse: markerPulse,
-                strongPulse: content.showAnonymousRiders,
-                highContrast: highContrast,
+              Stack(
+                children: [
+                  _MapPin(
+                    alignment: const Alignment(-.62, -.38),
+                    color: const Color(0xFF34D399),
+                    pulse: markerPulse,
+                    strongPulse: content.showAnonymousRiders,
+                    highContrast: highContrast,
+                  ),
+                  if (content.showAnonymousRiders && content.showVanguard)
+                    const _PickupVanguardShield(
+                      alignment: Alignment(-.50, -.46),
+                    ),
+                ],
               ),
             if (content.showDropoffPin)
               delivered
@@ -865,9 +889,10 @@ class SenderTrackingMapLayer extends StatelessWidget {
                       highContrast: highContrast,
                     ),
             if (content.showAnonymousRiders) ...const [
-              _AnonymousRiderDot(alignment: Alignment(-.18, -.22), delay: 0),
-              _AnonymousRiderDot(alignment: Alignment(.18, -.12), delay: 420),
-              _AnonymousRiderDot(alignment: Alignment(.02, .14), delay: 840),
+              _AnonymousRiderDot(alignment: Alignment(-.32, -.12), delay: 0),
+              _AnonymousRiderDot(alignment: Alignment(.08, -.30), delay: 360),
+              _AnonymousRiderDot(alignment: Alignment(.32, -.02), delay: 720),
+              _AnonymousRiderDot(alignment: Alignment(-.02, .18), delay: 1080),
             ],
             if (content.showRider)
               AnimatedAlign(
@@ -996,14 +1021,16 @@ class _TrackingPanelContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        ProgressStepper(
-          progress: content.progress,
+        LiveDeliveryTimeline(
+          state: state,
           issue: content.issueVanguard,
           completed: state == SenderTrackingState.delivered,
         ),
         if (state == SenderTrackingState.findingRider) ...[
-          const SizedBox(height: 8),
-          const _FindingPulse(),
+          const SizedBox(height: 12),
+          MatchingSearchCard(
+            vanguardEnabled: content.showVanguard,
+          ),
         ],
         if (mapMode == SenderDeliveryMapMode.bookingPlanning &&
             senderRiderAcceptedForLiveMap(state)) ...[
@@ -1998,6 +2025,453 @@ class ProgressStepper extends StatelessWidget {
   }
 }
 
+class LiveDeliveryTimeline extends StatelessWidget {
+  final SenderTrackingState state;
+  final bool issue;
+  final bool completed;
+
+  const LiveDeliveryTimeline({
+    super.key,
+    required this.state,
+    this.issue = false,
+    this.completed = false,
+  });
+
+  static const _labels = [
+    'Searching',
+    'Matching',
+    'Rider accepting',
+    'Assigned',
+    'Travelling to pickup',
+    'Collected',
+    'In transit',
+    'Delivered',
+  ];
+
+  int get _activeIndex {
+    return switch (state) {
+      SenderTrackingState.findingRider => 1,
+      SenderTrackingState.riderAssigned => 3,
+      SenderTrackingState.riderEnRouteToPickup ||
+      SenderTrackingState.riderArrivedAtPickup =>
+        4,
+      SenderTrackingState.pickupComplete => 5,
+      SenderTrackingState.inTransit ||
+      SenderTrackingState.riderArrivingAtDropoff ||
+      SenderTrackingState.issue =>
+        6,
+      SenderTrackingState.delivered => 7,
+      SenderTrackingState.cancelled => 2,
+      _ => 0,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeIndex = _activeIndex;
+    final activeColor = issue
+        ? const Color(0xFFF5A623)
+        : completed
+            ? const Color(0xFF34D399)
+            : const Color(0xFF3B82F6);
+    return Semantics(
+      label: 'Delivery timeline, current step ${_labels[activeIndex]}',
+      child: AppGlassContainer(
+        radius: 17,
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+        accent: activeColor,
+        surfaceColor: Colors.white.withValues(alpha: .035),
+        borderColor: Colors.white.withValues(alpha: .075),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: List.generate(_labels.length, (index) {
+                final active = index == activeIndex;
+                final done = index < activeIndex || completed;
+                final color = active || done
+                    ? activeColor
+                    : Colors.white.withValues(alpha: .14);
+                return Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                    height: active ? 4 : 3,
+                    margin: EdgeInsets.only(
+                      right: index == _labels.length - 1 ? 0 : 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(99),
+                      boxShadow: active
+                          ? [
+                              BoxShadow(
+                                color: activeColor.withValues(alpha: .30),
+                                blurRadius: 12,
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _labels[activeIndex].toUpperCase(),
+              style: TextStyle(
+                color: activeColor,
+                fontFamily: 'JetBrains Mono',
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: _labels.map((label) {
+                final index = _labels.indexOf(label);
+                final isCurrent = index == activeIndex;
+                return Text(
+                  label,
+                  style: TextStyle(
+                    color: isCurrent
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: .42),
+                    fontSize: 10.5,
+                    fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class MatchingSearchCard extends StatelessWidget {
+  final bool vanguardEnabled;
+
+  const MatchingSearchCard({
+    super.key,
+    required this.vanguardEnabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGlassContainer(
+      radius: 20,
+      padding: const EdgeInsets.all(15),
+      accent: const Color(0xFF3B82F6),
+      surfaceColor: Colors.white.withValues(alpha: .055),
+      borderColor: const Color(0xFF3B82F6).withValues(alpha: .22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const MatchingStatusRotator(),
+          const SizedBox(height: 14),
+          const Text(
+            'Searching within your area',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Circum is checking nearby verified riders and preserving your booking state until a rider accepts.',
+            style: TextStyle(
+              color: _TrackingTokens.muted,
+              fontSize: 11.5,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 13),
+          const ProgressiveMatchChecklist(),
+          const SizedBox(height: 13),
+          _MatchAssuranceGrid(vanguardEnabled: vanguardEnabled),
+        ],
+      ),
+    );
+  }
+}
+
+class MatchingStatusRotator extends StatefulWidget {
+  const MatchingStatusRotator({super.key});
+
+  @override
+  State<MatchingStatusRotator> createState() => _MatchingStatusRotatorState();
+}
+
+class _MatchingStatusRotatorState extends State<MatchingStatusRotator> {
+  static const _messages = [
+    'Searching nearby riders...',
+    'Checking rider availability...',
+    'Finding the fastest rider...',
+    'Sending request...',
+  ];
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleNext();
+  }
+
+  void _scheduleNext() {
+    _timer?.cancel();
+    _timer = Timer(const Duration(milliseconds: 1800), () {
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % _messages.length);
+      _scheduleNext();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const _SearchingOrb(),
+        const SizedBox(width: 11),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeOut,
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: Text(
+              _messages[_index],
+              key: ValueKey(_messages[_index]),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SearchingOrb extends StatefulWidget {
+  const _SearchingOrb();
+
+  @override
+  State<_SearchingOrb> createState() => _SearchingOrbState();
+}
+
+class _SearchingOrbState extends State<_SearchingOrb>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final pulse = math.sin(_controller.value * math.pi);
+        return Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF3B82F6).withValues(alpha: .13),
+            border: Border.all(
+              color:
+                  const Color(0xFF3B82F6).withValues(alpha: .25 + pulse * .20),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF3B82F6)
+                    .withValues(alpha: .14 + pulse * .12),
+                blurRadius: 16 + pulse * 10,
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.radar_rounded,
+            color: Color(0xFF60A5FA),
+            size: 18,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class ProgressiveMatchChecklist extends StatefulWidget {
+  const ProgressiveMatchChecklist({super.key});
+
+  @override
+  State<ProgressiveMatchChecklist> createState() =>
+      _ProgressiveMatchChecklistState();
+}
+
+class _ProgressiveMatchChecklistState extends State<ProgressiveMatchChecklist> {
+  static const _items = [
+    'Searching nearby riders',
+    'Searching verified riders',
+    'Matching based on distance',
+    'Matching based on vehicle suitability',
+    'Matching based on trust',
+    'Matching based on availability',
+  ];
+  int _visibleCount = 1;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleNext();
+  }
+
+  void _scheduleNext() {
+    _timer?.cancel();
+    _timer = Timer(const Duration(milliseconds: 750), () {
+      if (!mounted) return;
+      setState(() {
+        _visibleCount =
+            _visibleCount >= _items.length ? _items.length : _visibleCount + 1;
+      });
+      if (_visibleCount < _items.length) _scheduleNext();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(_visibleCount, (index) {
+        return AnimatedOpacity(
+          duration: const Duration(milliseconds: 250),
+          opacity: 1,
+          child: Padding(
+            padding:
+                EdgeInsets.only(bottom: index == _visibleCount - 1 ? 0 : 8),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: Color(0xFF34D399),
+                  size: 16,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    _items[index],
+                    style: const TextStyle(
+                      color: _TrackingTokens.mid,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _MatchAssuranceGrid extends StatelessWidget {
+  final bool vanguardEnabled;
+
+  const _MatchAssuranceGrid({required this.vanguardEnabled});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      (
+        'Your parcel is secured.',
+        Icons.lock_outline_rounded,
+        const Color(0xFF60A5FA)
+      ),
+      (
+        'IRIS estimate confirmed.',
+        Icons.auto_awesome_rounded,
+        const Color(0xFF3B82F6)
+      ),
+      (
+        'Vehicle recommendation ready.',
+        Icons.pedal_bike_rounded,
+        const Color(0xFF34D399)
+      ),
+      if (vanguardEnabled)
+        (
+          'Vanguard protection active.',
+          Icons.shield_outlined,
+          const Color(0xFF34D399)
+        ),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: items.map((item) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: item.$3.withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: item.$3.withValues(alpha: .18)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(item.$2, color: item.$3, size: 14),
+              const SizedBox(width: 7),
+              Text(
+                item.$1,
+                style: const TextStyle(
+                  color: _TrackingTokens.mid,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
 class ETABadge extends StatelessWidget {
   final String value;
 
@@ -2033,22 +2507,29 @@ class _TrackingActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final delivered = state == SenderTrackingState.delivered;
     final empty = state == SenderTrackingState.noActiveDelivery;
+    final finding = state == SenderTrackingState.findingRider;
     return Row(
       children: [
         Expanded(
           child: _TrackingButton(
             label: empty
                 ? 'Send a parcel'
-                : delivered
-                    ? 'View receipt'
-                    : 'Message',
+                : finding
+                    ? 'Message Support'
+                    : delivered
+                        ? 'View receipt'
+                        : 'Message',
             primary: empty,
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _TrackingButton(
-            label: delivered ? 'Done' : 'Support',
+            label: finding
+                ? 'Cancel Delivery'
+                : delivered
+                    ? 'Done'
+                    : 'Support',
             primary: delivered || state == SenderTrackingState.issue,
             success: delivered,
           ),
@@ -2478,52 +2959,6 @@ class _SkeletonState extends State<_Skeleton>
   }
 }
 
-class _FindingPulse extends StatelessWidget {
-  const _FindingPulse();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 70,
-      child: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: const Duration(milliseconds: 2400),
-          curve: Curves.easeOut,
-          builder: (context, value, child) {
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 22 + value * 88,
-                  height: 22 + value * 88,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF3B82F6)
-                          .withValues(alpha: (1 - value) * .45),
-                    ),
-                  ),
-                ),
-                child!,
-              ],
-            );
-          },
-          onEnd: () {},
-          child: Container(
-            width: 14,
-            height: 14,
-            decoration: const BoxDecoration(
-              color: Color(0xFF3B82F6),
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _LiveMapPendingPaymentNote extends StatelessWidget {
   const _LiveMapPendingPaymentNote();
 
@@ -2598,6 +3033,41 @@ class _MapPin extends StatelessWidget {
   }
 }
 
+class _PickupVanguardShield extends StatelessWidget {
+  final Alignment alignment;
+
+  const _PickupVanguardShield({required this.alignment});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignment,
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: const Color(0xFF07090F).withValues(alpha: .78),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: const Color(0xFF34D399).withValues(alpha: .35),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF34D399).withValues(alpha: .18),
+              blurRadius: 12,
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.shield_outlined,
+          color: Color(0xFF34D399),
+          size: 14,
+        ),
+      ),
+    );
+  }
+}
+
 class _AnonymousRiderDot extends StatefulWidget {
   final Alignment alignment;
   final int delay;
@@ -2642,12 +3112,12 @@ class _AnonymousRiderDotState extends State<_AnonymousRiderDot>
           width: 8,
           height: 8,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .82),
+            color: const Color(0xFF60A5FA).withValues(alpha: .90),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF3B82F6).withValues(alpha: .26),
-                blurRadius: 14,
+                color: const Color(0xFF3B82F6).withValues(alpha: .36),
+                blurRadius: 16,
               ),
             ],
           ),
@@ -2923,11 +3393,13 @@ class _RouteLine extends StatelessWidget {
 class _TrackingGridPainter extends CustomPainter {
   final double shimmer;
   final bool route;
+  final bool searching;
   final bool highContrast;
 
   const _TrackingGridPainter({
     required this.shimmer,
     required this.route,
+    this.searching = false,
     this.highContrast = false,
   });
 
@@ -2945,7 +3417,11 @@ class _TrackingGridPainter extends CustomPainter {
     final glow = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFF3B82F6).withValues(alpha: highContrast ? .22 : .10),
+          const Color(0xFF3B82F6).withValues(
+            alpha: searching
+                ? (highContrast ? .30 : .16)
+                : (highContrast ? .22 : .10),
+          ),
           Colors.transparent,
         ],
       ).createShader(
@@ -2961,6 +3437,57 @@ class _TrackingGridPainter extends CustomPainter {
   bool shouldRepaint(covariant _TrackingGridPainter oldDelegate) =>
       oldDelegate.shimmer != shimmer ||
       oldDelegate.route != route ||
+      oldDelegate.searching != searching ||
+      oldDelegate.highContrast != highContrast;
+}
+
+class _SearchRingsPainter extends CustomPainter {
+  final double progress;
+  final bool highContrast;
+
+  const _SearchRingsPainter({
+    required this.progress,
+    this.highContrast = false,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width * .19, size.height * .31);
+    for (var i = 0; i < 3; i += 1) {
+      final phase = (progress + i / 3) % 1;
+      final radius = size.shortestSide * (.10 + phase * .44);
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = highContrast ? 1.6 : 1.1
+        ..color = const Color(0xFF3B82F6).withValues(
+          alpha: (1 - phase) * (highContrast ? .34 : .20),
+        );
+      canvas.drawCircle(center, radius, paint);
+    }
+
+    final sweep = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = highContrast ? 2.2 : 1.5
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFF60A5FA).withValues(
+        alpha: highContrast ? .46 : .28,
+      );
+    final rect = Rect.fromCircle(
+      center: center,
+      radius: size.shortestSide * .32,
+    );
+    canvas.drawArc(
+      rect,
+      -math.pi / 2 + progress * math.pi * 2,
+      math.pi * .42,
+      false,
+      sweep,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SearchRingsPainter oldDelegate) =>
+      oldDelegate.progress != progress ||
       oldDelegate.highContrast != highContrast;
 }
 
