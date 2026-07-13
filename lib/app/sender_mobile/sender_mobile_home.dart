@@ -50,8 +50,6 @@ enum _SenderEntryScreen { landing, auth, app }
 
 enum _SenderAuthMode { signIn, createAccount }
 
-enum _SenderAuthProvider { google, apple }
-
 class SenderMobileHome extends StatefulWidget {
   final bool previewAuthEnabled;
   final SenderHomeRepository? homeRepository;
@@ -179,10 +177,7 @@ class _SenderPreAuthLanding extends StatelessWidget {
         ListView(
           padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
           children: [
-            _CircumWordmarkRow(
-              onLogin: onSignIn,
-              onSignup: onCreateAccount,
-            ),
+            const _CircumWordmarkRow(),
             const SizedBox(height: 46),
             RichText(
               text: TextSpan(
@@ -282,67 +277,30 @@ class _SenderAuthEntry extends StatefulWidget {
 }
 
 class _SenderAuthEntryState extends State<_SenderAuthEntry> {
-  final _firstName = TextEditingController();
-  final _lastName = TextEditingController();
-  final _email = TextEditingController();
-  final _phone = TextEditingController();
+  final _identity = TextEditingController();
   final _password = TextEditingController();
-  final _confirmPassword = TextEditingController();
   var _showErrors = false;
   var _busy = false;
-  var _rememberMe = true;
-  var _acceptTerms = false;
-  var _showPassword = false;
-  var _showConfirmPassword = false;
   String? _authMessage;
 
   bool get _isSignIn => widget.mode == _SenderAuthMode.signIn;
 
   @override
   void dispose() {
-    _firstName.dispose();
-    _lastName.dispose();
-    _email.dispose();
-    _phone.dispose();
+    _identity.dispose();
     _password.dispose();
-    _confirmPassword.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final emailText = _email.text.trim();
-    final emailError = !_showErrors
+    final identityText = _identity.text.trim();
+    final identityError = !_showErrors
         ? null
-        : emailText.isEmpty
-            ? 'Email is required'
-            : !_looksLikeEmail(emailText)
-                ? 'Enter a valid email address'
-                : null;
-    final firstNameError =
-        _showErrors && !_isSignIn && _firstName.text.trim().isEmpty
-            ? 'First name is required'
-            : null;
-    final lastNameError =
-        _showErrors && !_isSignIn && _lastName.text.trim().isEmpty
-            ? 'Last name is required'
-            : null;
-    final phoneError = _showErrors && !_isSignIn && _phone.text.trim().isEmpty
-        ? 'Phone number is required'
-        : null;
-    final passwordError = !_showErrors
-        ? null
-        : _password.text.isEmpty
-            ? 'Password is required'
-            : !_isSignIn && _password.text.length < 6
-                ? 'Use at least 6 characters'
-                : null;
-    final confirmError = !_showErrors || _isSignIn
-        ? null
-        : _confirmPassword.text.isEmpty
-            ? 'Confirm your password'
-            : _confirmPassword.text != _password.text
-                ? 'Passwords do not match'
+        : identityText.isEmpty
+            ? 'Email or phone is required'
+            : widget.previewAuthEnabled && !identityText.contains('@')
+                ? 'Use an email address for preview auth'
                 : null;
     return Stack(
       children: [
@@ -361,29 +319,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                 const _CircumMarkChip(),
               ],
             ),
-            const SizedBox(height: 34),
-            Text(
-              'Welcome to Circum',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.dmSerifDisplay(
-                color: Colors.white,
-                fontSize: 38,
-                fontWeight: FontWeight.w700,
-                height: 1.04,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Sign in to continue or create a new account.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: _SenderTokens.muted,
-                fontSize: 14,
-                height: 1.45,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 36),
             _AuthSegmentedControl(
               mode: widget.mode,
               onChanged: (mode) {
@@ -392,30 +328,48 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               },
             ),
             const SizedBox(height: 26),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 240),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.04, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
+            Text(
+              _isSignIn
+                  ? senderMobileAuthSignInHeadline
+                  : senderMobileAuthCreateHeadline,
+              style: GoogleFonts.dmSerifDisplay(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.w700,
+                height: 1.05,
               ),
-              child: _isSignIn
-                  ? _buildSignInForm(emailError, passwordError)
-                  : _buildCreateAccountForm(
-                      firstNameError,
-                      lastNameError,
-                      emailError,
-                      phoneError,
-                      passwordError,
-                      confirmError,
-                    ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _isSignIn
+                  ? 'Sign in to track deliveries and manage your account.'
+                  : 'Create an account to start sending with confidence.',
+              style: GoogleFonts.inter(
+                color: _SenderTokens.muted,
+                fontSize: 13.5,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 26),
+            _AuthField(
+              controller: _identity,
+              label: 'EMAIL OR PHONE',
+              hint: 'you@email.com',
+              keyboardType: TextInputType.emailAddress,
+              errorText: identityError,
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 14),
+            _AuthField(
+              controller: _password,
+              label: 'PASSWORD',
+              hint: _isSignIn ? 'Password' : 'Create a password',
+              obscureText: true,
+              errorText: _showErrors && _password.text.isEmpty
+                  ? 'Password is required'
+                  : null,
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 14),
             _SenderPrimaryAction(
@@ -442,20 +396,14 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
             const SizedBox(height: 26),
             const _LabelledDivider(),
             const SizedBox(height: 22),
-            _SocialAuthButton(
+            const _SocialAuthButton(
               icon: Icons.apple_rounded,
-              label: _isSignIn ? 'Apple' : 'Continue with Apple',
-              onPressed: _busy
-                  ? null
-                  : () => _authenticateWithProvider(_SenderAuthProvider.apple),
+              label: 'Continue with Apple',
             ),
             const SizedBox(height: 10),
-            _SocialAuthButton(
+            const _SocialAuthButton(
               icon: Icons.g_mobiledata,
-              label: _isSignIn ? 'Google' : 'Continue with Google',
-              onPressed: _busy
-                  ? null
-                  : () => _authenticateWithProvider(_SenderAuthProvider.google),
+              label: 'Continue with Google',
             ),
             const SizedBox(height: 28),
             _AuthSwitchLine(
@@ -477,192 +425,16 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     );
   }
 
-  Widget _buildSignInForm(String? emailError, String? passwordError) {
-    return Column(
-      key: const ValueKey('sender-login-form'),
-      children: [
-        _AuthField(
-          controller: _email,
-          label: 'Email',
-          hint: 'you@email.com',
-          keyboardType: TextInputType.emailAddress,
-          errorText: emailError,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _AuthField(
-          controller: _password,
-          label: 'Password',
-          hint: 'Password',
-          obscureText: !_showPassword,
-          errorText: passwordError,
-          onChanged: (_) => setState(() {}),
-          suffixIcon: IconButton(
-            tooltip: _showPassword ? 'Hide password' : 'Show password',
-            onPressed: () => setState(() => _showPassword = !_showPassword),
-            icon: Icon(
-              _showPassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              color: _SenderTokens.muted,
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            _AuthCheckRow(
-              label: 'Remember me',
-              value: _rememberMe,
-              onChanged: (value) => setState(() => _rememberMe = value),
-            ),
-            const Spacer(),
-            TextButton(
-              onPressed: _busy ? null : _sendPasswordReset,
-              child: Text(
-                'Forgot password?',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCreateAccountForm(
-    String? firstNameError,
-    String? lastNameError,
-    String? emailError,
-    String? phoneError,
-    String? passwordError,
-    String? confirmError,
-  ) {
-    return Column(
-      key: const ValueKey('sender-create-account-form'),
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _AuthField(
-                controller: _firstName,
-                label: 'First name',
-                hint: 'First name',
-                errorText: firstNameError,
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _AuthField(
-                controller: _lastName,
-                label: 'Last name',
-                hint: 'Last name',
-                errorText: lastNameError,
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        _AuthField(
-          controller: _email,
-          label: 'Email',
-          hint: 'you@email.com',
-          keyboardType: TextInputType.emailAddress,
-          errorText: emailError,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _AuthField(
-          controller: _phone,
-          label: 'Phone number',
-          hint: '+44 7000 000000',
-          keyboardType: TextInputType.phone,
-          errorText: phoneError,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _AuthField(
-          controller: _password,
-          label: 'Password',
-          hint: 'Create a password',
-          obscureText: !_showPassword,
-          errorText: passwordError,
-          onChanged: (_) => setState(() {}),
-          suffixIcon: IconButton(
-            tooltip: _showPassword ? 'Hide password' : 'Show password',
-            onPressed: () => setState(() => _showPassword = !_showPassword),
-            icon: Icon(
-              _showPassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              color: _SenderTokens.muted,
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        _AuthField(
-          controller: _confirmPassword,
-          label: 'Confirm password',
-          hint: 'Confirm password',
-          obscureText: !_showConfirmPassword,
-          errorText: confirmError,
-          onChanged: (_) => setState(() {}),
-          suffixIcon: IconButton(
-            tooltip: _showConfirmPassword ? 'Hide password' : 'Show password',
-            onPressed: () =>
-                setState(() => _showConfirmPassword = !_showConfirmPassword),
-            icon: Icon(
-              _showConfirmPassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              color: _SenderTokens.muted,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: _AuthCheckRow(
-            label: 'Accept Terms',
-            value: _acceptTerms,
-            onChanged: (value) => setState(() => _acceptTerms = value),
-          ),
-        ),
-        if (_showErrors && !_acceptTerms) ...[
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Accept Terms to create your account.',
-              style: GoogleFonts.inter(
-                color: const Color(0xFFFCA5A5),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
   Future<void> _submit() async {
-    final validEmail = _looksLikeEmail(_email.text.trim());
-    final validPassword =
-        _password.text.isNotEmpty && (_isSignIn || _password.text.length >= 6);
-    final createFieldsReady = _isSignIn ||
-        (_firstName.text.trim().isNotEmpty &&
-            _lastName.text.trim().isNotEmpty &&
-            _phone.text.trim().isNotEmpty &&
-            _confirmPassword.text == _password.text &&
-            _acceptTerms);
+    final validIdentity = _identity.text.trim().isNotEmpty;
+    final validPassword = !_isSignIn || _password.text.isNotEmpty;
+    final validPreviewEmail =
+        !widget.previewAuthEnabled || _identity.text.trim().contains('@');
     setState(() {
       _showErrors = true;
       _authMessage = null;
     });
-    if (!validEmail || !validPassword || !createFieldsReady) return;
+    if (!validIdentity || !validPassword || !validPreviewEmail) return;
     if (!widget.previewAuthEnabled) {
       setState(() {
         _authMessage =
@@ -672,16 +444,10 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     }
     setState(() => _busy = true);
     try {
-      if (_isSignIn) {
-        await _setRememberedLogin(_email.text.trim().toLowerCase());
-      }
       await _authenticatePreviewSender(
-        email: _email.text.trim().toLowerCase(),
+        email: _identity.text.trim().toLowerCase(),
         password: _password.text,
         createAccount: !_isSignIn,
-        firstName: _firstName.text.trim(),
-        lastName: _lastName.text.trim(),
-        phone: _phone.text.trim(),
       );
       widget.onAuthenticated();
     } on FirebaseAuthException catch (error) {
@@ -702,9 +468,6 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     required String email,
     required String password,
     required bool createAccount,
-    String? firstName,
-    String? lastName,
-    String? phone,
   }) async {
     final auth = FirebaseAuth.instance;
     UserCredential credential;
@@ -733,95 +496,15 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     }
     await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
       'email': user.email,
-      if ((firstName ?? '').isNotEmpty) 'firstName': firstName,
-      if ((lastName ?? '').isNotEmpty) 'lastName': lastName,
-      if ([firstName, lastName].any((value) => (value ?? '').isNotEmpty))
-        'fullName': [firstName, lastName]
-            .where((value) => (value ?? '').trim().isNotEmpty)
-            .join(' '),
-      if ((phone ?? '').isNotEmpty) 'phone': phone,
       'role': 'user',
       'roles': ['sender'],
       'userType': 'sender',
       'status': 'active',
       'source': 'sender_mobile_preview',
-      if (createAccount) 'termsAcceptedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     await user.getIdToken(true);
   }
-
-  Future<void> _authenticateWithProvider(_SenderAuthProvider provider) async {
-    setState(() {
-      _busy = true;
-      _authMessage = null;
-    });
-    try {
-      final authProvider = switch (provider) {
-        _SenderAuthProvider.google => GoogleAuthProvider()
-          ..setCustomParameters({'prompt': 'select_account'}),
-        _SenderAuthProvider.apple => OAuthProvider('apple.com')
-          ..setCustomParameters({'locale': 'en'}),
-      };
-      final credential =
-          await FirebaseAuth.instance.signInWithPopup(authProvider);
-      final user = credential.user;
-      if (user == null) {
-        throw FirebaseAuthException(code: 'sender-provider-no-user');
-      }
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'email': user.email,
-        'displayName': user.displayName,
-        'role': 'user',
-        'roles': ['sender'],
-        'userType': 'sender',
-        'status': 'active',
-        'source': 'sender_mobile_provider_auth',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      await user.getIdToken(true);
-      widget.onAuthenticated();
-    } on FirebaseAuthException catch (error) {
-      if (!mounted) return;
-      setState(() => _authMessage = _previewAuthMessage(error));
-    } catch (_) {
-      if (!mounted) return;
-      setState(
-        () => _authMessage =
-            'This sign-in option is not available on this device yet.',
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _sendPasswordReset() async {
-    final email = _email.text.trim().toLowerCase();
-    setState(() {
-      _showErrors = true;
-      _authMessage = null;
-    });
-    if (!_looksLikeEmail(email)) return;
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      if (!mounted) return;
-      setState(() => _authMessage = 'Password reset email sent.');
-    } on FirebaseAuthException catch (error) {
-      if (!mounted) return;
-      setState(() => _authMessage = _previewAuthMessage(error));
-    }
-  }
-
-  Future<void> _setRememberedLogin(String email) async {
-    if (_rememberMe) {
-      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-      return;
-    }
-    await FirebaseAuth.instance.setPersistence(Persistence.SESSION);
-  }
-
-  bool _looksLikeEmail(String value) =>
-      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
 
   String _previewAuthMessage(FirebaseAuthException error) {
     switch (error.code) {
@@ -925,10 +608,7 @@ class _Orb extends StatelessWidget {
 }
 
 class _CircumWordmarkRow extends StatelessWidget {
-  final VoidCallback? onLogin;
-  final VoidCallback? onSignup;
-
-  const _CircumWordmarkRow({this.onLogin, this.onSignup});
+  const _CircumWordmarkRow();
 
   @override
   Widget build(BuildContext context) {
@@ -945,41 +625,6 @@ class _CircumWordmarkRow extends StatelessWidget {
             fit: BoxFit.contain,
             filterQuality: FilterQuality.high,
           ),
-          const Spacer(),
-          if (onLogin != null)
-            TextButton(
-              onPressed: onLogin,
-              child: Text(
-                'Log in',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          if (onSignup != null) ...[
-            const SizedBox(width: 4),
-            OutlinedButton(
-              onPressed: onSignup,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: _SenderTokens.glassBorder),
-                backgroundColor: _SenderTokens.glass,
-                minimumSize: const Size(76, 38),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              child: Text(
-                'Sign up',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1535,7 +1180,6 @@ class _AuthField extends StatelessWidget {
   final bool obscureText;
   final String? errorText;
   final ValueChanged<String> onChanged;
-  final Widget? suffixIcon;
 
   const _AuthField({
     required this.controller,
@@ -1545,7 +1189,6 @@ class _AuthField extends StatelessWidget {
     this.obscureText = false,
     this.errorText,
     required this.onChanged,
-    this.suffixIcon,
   });
 
   @override
@@ -1604,7 +1247,6 @@ class _AuthField extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: Color(0xFFFCA5A5)),
               ),
-              suffixIcon: suffixIcon,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 15,
@@ -1612,69 +1254,6 @@ class _AuthField extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AuthCheckRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _AuthCheckRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      checked: value,
-      label: label,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => onChanged(!value),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: value ? _SenderTokens.blue : _SenderTokens.glass,
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(
-                    color: value
-                        ? _SenderTokens.lightBlue
-                        : _SenderTokens.glassBorder,
-                  ),
-                ),
-                child: value
-                    ? const Icon(
-                        Icons.check_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 9),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1708,13 +1287,8 @@ class _LabelledDivider extends StatelessWidget {
 class _SocialAuthButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback? onPressed;
 
-  const _SocialAuthButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
+  const _SocialAuthButton({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1722,7 +1296,9 @@ class _SocialAuthButton extends StatelessWidget {
       button: true,
       label: label,
       child: OutlinedButton.icon(
-        onPressed: onPressed,
+        onPressed: () {
+          // TODO(sender-mobile-auth): Wire social provider handlers when enabled.
+        },
         icon: Icon(icon, color: Colors.white, size: 21),
         label: Text(
           label,
@@ -1755,7 +1331,7 @@ class _AuthSwitchLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: isSignIn ? 'Create account' : 'Log in',
+      label: isSignIn ? 'Create account' : 'Sign in',
       child: GestureDetector(
         onTap: onTap,
         child: Text.rich(
@@ -1768,7 +1344,7 @@ class _AuthSwitchLine extends StatelessWidget {
             ),
             children: [
               TextSpan(
-                text: isSignIn ? 'Create account' : 'Log in',
+                text: isSignIn ? 'Create account' : 'Sign in',
                 style: GoogleFonts.inter(
                   color: _SenderTokens.blue,
                   fontSize: 13,

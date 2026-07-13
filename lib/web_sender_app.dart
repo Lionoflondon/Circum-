@@ -157,6 +157,8 @@ enum CircumRiderStripeRoute {
   refreshSetup,
 }
 
+enum _PublicAuthMode { login, signup }
+
 @visibleForTesting
 class CircumRouteDecision {
   final CircumAppSurface surface;
@@ -352,6 +354,8 @@ class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
   late CircumRouteDecision _route = resolveCircumRoute(Uri.base);
   late _SenderStep _senderInitialStep = _route._senderInitialStep;
+  bool _publicAuthOpen = false;
+  _PublicAuthMode _publicAuthMode = _PublicAuthMode.login;
 
   @override
   void initState() {
@@ -401,20 +405,33 @@ class _WebSenderAppState extends State<WebSenderApp> {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
               child: switch (_route.surface) {
-                CircumAppSurface.publicWebsite => CircumPublicAppRoot(
-                    key: ValueKey('public-${_route.publicRoute.name}'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    route: _route.publicRoute,
-                    onStart: _openSenderDashboard,
-                    onRider: _openRider,
-                    onHealthPlus: _openSenderHealthPlus,
-                    onGifts: _openGifts,
-                    onBusiness: _openBusinessPublic,
-                    onBusinessAccess: _openSenderBusiness,
-                    onHome: _openPublicHome,
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
+                CircumAppSurface.publicWebsite => _publicAuthOpen
+                    ? _PublicAuthEntry(
+                        key: ValueKey('public-auth-${_publicAuthMode.name}'),
+                        colors: colors,
+                        mode: _publicAuthMode,
+                        onModeChanged: (mode) =>
+                            setState(() => _publicAuthMode = mode),
+                        onClose: () => setState(() => _publicAuthOpen = false),
+                        onAuthenticated: _openSenderDashboard,
+                      )
+                    : CircumPublicAppRoot(
+                        key: ValueKey('public-${_route.publicRoute.name}'),
+                        colors: colors,
+                        darkMode: _darkMode,
+                        route: _route.publicRoute,
+                        onStart: _openSenderDashboard,
+                        onLogin: () => _openPublicAuth(_PublicAuthMode.login),
+                        onSignup: () => _openPublicAuth(_PublicAuthMode.signup),
+                        onRider: _openRider,
+                        onHealthPlus: _openSenderHealthPlus,
+                        onGifts: _openGifts,
+                        onBusiness: _openBusinessPublic,
+                        onBusinessAccess: _openSenderBusiness,
+                        onHome: _openPublicHome,
+                        onToggleTheme: () =>
+                            setState(() => _darkMode = !_darkMode),
+                      ),
                 CircumAppSurface.senderApp => CircumSenderAppRoot(
                     key: const ValueKey('sender-root'),
                     colors: colors,
@@ -470,6 +487,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openRole(CircumRole role) {
     setState(() {
+      _publicAuthOpen = false;
       _route = switch (role) {
         CircumRole.sender => const CircumRouteDecision(
             surface: CircumAppSurface.senderApp,
@@ -490,14 +508,25 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openPublicHome() {
     setState(() {
+      _publicAuthOpen = false;
       _route =
           const CircumRouteDecision(surface: CircumAppSurface.publicWebsite);
       _senderInitialStep = _route._senderInitialStep;
     });
   }
 
+  void _openPublicAuth(_PublicAuthMode mode) {
+    setState(() {
+      _route =
+          const CircumRouteDecision(surface: CircumAppSurface.publicWebsite);
+      _publicAuthMode = mode;
+      _publicAuthOpen = true;
+    });
+  }
+
   void _openGifts() {
     setState(() {
+      _publicAuthOpen = false;
       _route = const CircumRouteDecision(
         surface: CircumAppSurface.publicWebsite,
         publicRoute: CircumPublicRoute.gifts,
@@ -523,6 +552,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openSenderDashboard() {
     setState(() {
+      _publicAuthOpen = false;
       _route = const CircumRouteDecision(surface: CircumAppSurface.senderApp);
       _senderInitialStep = _SenderStep.dashboard;
     });
@@ -530,6 +560,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openSenderBooking() {
     setState(() {
+      _publicAuthOpen = false;
       _route = const CircumRouteDecision(surface: CircumAppSurface.senderApp);
       _senderInitialStep = _SenderStep.details;
     });
@@ -537,6 +568,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openSenderHealthPlus() {
     setState(() {
+      _publicAuthOpen = false;
       _route = const CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
         senderEntry: CircumSenderEntry.healthPlus,
@@ -547,6 +579,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openSenderBusiness() {
     setState(() {
+      _publicAuthOpen = false;
       _route = const CircumRouteDecision(
         surface: CircumAppSurface.senderApp,
         senderEntry: CircumSenderEntry.business,
@@ -557,6 +590,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
 
   void _openRider() {
     setState(() {
+      _publicAuthOpen = false;
       _route = const CircumRouteDecision(surface: CircumAppSurface.riderApp);
       _senderInitialStep = _route._senderInitialStep;
     });
@@ -568,6 +602,8 @@ class CircumPublicAppRoot extends StatelessWidget {
   final bool darkMode;
   final CircumPublicRoute route;
   final VoidCallback onStart;
+  final VoidCallback onLogin;
+  final VoidCallback onSignup;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
   final VoidCallback onGifts;
@@ -582,6 +618,8 @@ class CircumPublicAppRoot extends StatelessWidget {
     required this.darkMode,
     required this.route,
     required this.onStart,
+    required this.onLogin,
+    required this.onSignup,
     required this.onRider,
     required this.onHealthPlus,
     required this.onGifts,
@@ -628,6 +666,8 @@ class CircumPublicAppRoot extends StatelessWidget {
           colors: colors,
           darkMode: darkMode,
           onStart: onStart,
+          onLogin: onLogin,
+          onSignup: onSignup,
           onRider: onRider,
           onHealthPlus: onHealthPlus,
           onGifts: onGifts,
@@ -1564,10 +1604,877 @@ class _PlatformNotificationCenterState
   }
 }
 
+class _PublicAuthEntry extends StatefulWidget {
+  final _CircumColors colors;
+  final _PublicAuthMode mode;
+  final ValueChanged<_PublicAuthMode> onModeChanged;
+  final VoidCallback onClose;
+  final VoidCallback onAuthenticated;
+
+  const _PublicAuthEntry({
+    super.key,
+    required this.colors,
+    required this.mode,
+    required this.onModeChanged,
+    required this.onClose,
+    required this.onAuthenticated,
+  });
+
+  @override
+  State<_PublicAuthEntry> createState() => _PublicAuthEntryState();
+}
+
+class _PublicAuthEntryState extends State<_PublicAuthEntry> {
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
+  final _email = TextEditingController();
+  final _phone = TextEditingController();
+  final _password = TextEditingController();
+  final _confirmPassword = TextEditingController();
+  bool _rememberMe = true;
+  bool _acceptTerms = false;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
+  bool _showErrors = false;
+  bool _busy = false;
+  String? _message;
+
+  bool get _isLogin => widget.mode == _PublicAuthMode.login;
+
+  @override
+  void dispose() {
+    _firstName.dispose();
+    _lastName.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _password.dispose();
+    _confirmPassword.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final narrow = MediaQuery.sizeOf(context).width < 680;
+    final emailError = !_showErrors
+        ? null
+        : !_looksLikeEmail(_email.text.trim())
+            ? 'Enter a valid email address'
+            : null;
+    final passwordError = !_showErrors
+        ? null
+        : _password.text.isEmpty
+            ? 'Password is required'
+            : !_isLogin && _password.text.length < 6
+                ? 'Use at least 6 characters'
+                : null;
+    final confirmError = !_showErrors || _isLogin
+        ? null
+        : _confirmPassword.text != _password.text
+            ? 'Passwords do not match'
+            : null;
+
+    return Container(
+      color: colors.appBackground,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(-0.8, -0.75),
+                  radius: 1.1,
+                  colors: [
+                    const Color(0xff3b82f6).withValues(alpha: 0.22),
+                    const Color(0xff0b1020).withValues(alpha: 0.9),
+                    colors.appBackground,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                narrow ? 18 : 28,
+                18,
+                narrow ? 18 : 28,
+                38,
+              ),
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1180),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Back',
+                        onPressed: widget.onClose,
+                        icon: Icon(Icons.arrow_back, color: colors.text),
+                      ),
+                      const SizedBox(width: 8),
+                      Image.asset(
+                        'assets/images/circum_wordmark.png',
+                        width: 136,
+                        height: 32,
+                        fit: BoxFit.contain,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: narrow ? 28 : 52),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 620),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(30),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                        child: Container(
+                          padding: EdgeInsets.all(narrow ? 22 : 34),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.065),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.14),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xff3b82f6)
+                                    .withValues(alpha: 0.16),
+                                blurRadius: 50,
+                                offset: const Offset(0, 26),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Welcome to Circum',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.dmSerifDisplay(
+                                  color: colors.text,
+                                  fontSize: narrow ? 38 : 48,
+                                  height: 1.02,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Sign in to continue or create a new account.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  color: colors.mutedText,
+                                  fontSize: 15,
+                                  height: 1.45,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              _PublicAuthModeSelector(
+                                colors: colors,
+                                mode: widget.mode,
+                                onChanged: (mode) {
+                                  setState(() {
+                                    _showErrors = false;
+                                    _message = null;
+                                  });
+                                  widget.onModeChanged(mode);
+                                },
+                              ),
+                              const SizedBox(height: 24),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 240),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, animation) =>
+                                    FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(0.04, 0),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                ),
+                                child: _isLogin
+                                    ? _buildLoginForm(
+                                        colors,
+                                        emailError,
+                                        passwordError,
+                                      )
+                                    : _buildSignupForm(
+                                        colors,
+                                        emailError,
+                                        passwordError,
+                                        confirmError,
+                                      ),
+                              ),
+                              const SizedBox(height: 18),
+                              FilledButton(
+                                onPressed: _busy ? null : _submit,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xff3b82f6),
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 18),
+                                ),
+                                child: Text(
+                                  _busy
+                                      ? 'Please wait...'
+                                      : _isLogin
+                                          ? 'Log in'
+                                          : 'Create account',
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => widget.onModeChanged(
+                                          _isLogin
+                                              ? _PublicAuthMode.signup
+                                              : _PublicAuthMode.login,
+                                        ),
+                                child: Text(
+                                  _isLogin
+                                      ? 'Create account'
+                                      : 'Already have an account? Log in',
+                                ),
+                              ),
+                              if (_message != null) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  _message!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: colors.text,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 18),
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: Divider(color: colors.border)),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    child: Text(
+                                      'or',
+                                      style: TextStyle(
+                                        color: colors.mutedText,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                      child: Divider(color: colors.border)),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  _PublicAuthSocialButton(
+                                    colors: colors,
+                                    icon: Icons.g_mobiledata,
+                                    label: _isLogin
+                                        ? 'Google'
+                                        : 'Continue with Google',
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _providerSignIn('google'),
+                                  ),
+                                  _PublicAuthSocialButton(
+                                    colors: colors,
+                                    icon: Icons.apple,
+                                    label: _isLogin
+                                        ? 'Apple'
+                                        : 'Continue with Apple',
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _providerSignIn('apple'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginForm(
+    _CircumColors colors,
+    String? emailError,
+    String? passwordError,
+  ) {
+    return Column(
+      key: const ValueKey('public-login'),
+      children: [
+        _PublicAuthField(
+          colors: colors,
+          controller: _email,
+          label: 'Email',
+          hint: 'you@email.com',
+          keyboardType: TextInputType.emailAddress,
+          errorText: emailError,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        _PublicAuthField(
+          colors: colors,
+          controller: _password,
+          label: 'Password',
+          hint: 'Password',
+          obscureText: !_showPassword,
+          errorText: passwordError,
+          onChanged: (_) => setState(() {}),
+          suffixIcon: IconButton(
+            tooltip: _showPassword ? 'Hide password' : 'Show password',
+            onPressed: () => setState(() => _showPassword = !_showPassword),
+            icon: Icon(
+              _showPassword
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: colors.mutedText,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _PublicCheckRow(
+              colors: colors,
+              label: 'Remember me',
+              value: _rememberMe,
+              onChanged: (value) => setState(() => _rememberMe = value),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: _busy ? null : _resetPassword,
+              child: const Text('Forgot password?'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSignupForm(
+    _CircumColors colors,
+    String? emailError,
+    String? passwordError,
+    String? confirmError,
+  ) {
+    final firstNameError =
+        _showErrors && _firstName.text.trim().isEmpty ? 'Required' : null;
+    final lastNameError =
+        _showErrors && _lastName.text.trim().isEmpty ? 'Required' : null;
+    final phoneError =
+        _showErrors && _phone.text.trim().isEmpty ? 'Phone is required' : null;
+    return Column(
+      key: const ValueKey('public-signup'),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _PublicAuthField(
+                colors: colors,
+                controller: _firstName,
+                label: 'First name',
+                hint: 'First name',
+                errorText: firstNameError,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _PublicAuthField(
+                colors: colors,
+                controller: _lastName,
+                label: 'Last name',
+                hint: 'Last name',
+                errorText: lastNameError,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _PublicAuthField(
+          colors: colors,
+          controller: _email,
+          label: 'Email',
+          hint: 'you@email.com',
+          keyboardType: TextInputType.emailAddress,
+          errorText: emailError,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        _PublicAuthField(
+          colors: colors,
+          controller: _phone,
+          label: 'Phone number',
+          hint: '+44 7000 000000',
+          keyboardType: TextInputType.phone,
+          errorText: phoneError,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        _PublicAuthField(
+          colors: colors,
+          controller: _password,
+          label: 'Password',
+          hint: 'Create a password',
+          obscureText: !_showPassword,
+          errorText: passwordError,
+          onChanged: (_) => setState(() {}),
+          suffixIcon: IconButton(
+            tooltip: _showPassword ? 'Hide password' : 'Show password',
+            onPressed: () => setState(() => _showPassword = !_showPassword),
+            icon: Icon(
+              _showPassword
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: colors.mutedText,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _PublicAuthField(
+          colors: colors,
+          controller: _confirmPassword,
+          label: 'Confirm password',
+          hint: 'Confirm password',
+          obscureText: !_showConfirmPassword,
+          errorText: confirmError,
+          onChanged: (_) => setState(() {}),
+          suffixIcon: IconButton(
+            tooltip: _showConfirmPassword ? 'Hide password' : 'Show password',
+            onPressed: () =>
+                setState(() => _showConfirmPassword = !_showConfirmPassword),
+            icon: Icon(
+              _showConfirmPassword
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: colors.mutedText,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _PublicCheckRow(
+            colors: colors,
+            label: 'Accept Terms',
+            value: _acceptTerms,
+            onChanged: (value) => setState(() => _acceptTerms = value),
+          ),
+        ),
+        if (_showErrors && !_acceptTerms) ...[
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Accept Terms to create your account.',
+              style: GoogleFonts.inter(
+                color: const Color(0xfff87171),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _showErrors = true;
+      _message = null;
+    });
+    final email = _email.text.trim().toLowerCase();
+    final valid = _looksLikeEmail(email) &&
+        _password.text.isNotEmpty &&
+        (_isLogin ||
+            (_firstName.text.trim().isNotEmpty &&
+                _lastName.text.trim().isNotEmpty &&
+                _phone.text.trim().isNotEmpty &&
+                _password.text.length >= 6 &&
+                _password.text == _confirmPassword.text &&
+                _acceptTerms));
+    if (!valid) return;
+    setState(() => _busy = true);
+    try {
+      await FirebaseAuth.instance.setPersistence(
+        _rememberMe ? Persistence.LOCAL : Persistence.SESSION,
+      );
+      final auth = FirebaseAuth.instance;
+      final credential = _isLogin
+          ? await auth.signInWithEmailAndPassword(
+              email: email,
+              password: _password.text,
+            )
+          : await auth.createUserWithEmailAndPassword(
+              email: email,
+              password: _password.text,
+            );
+      await _upsertSenderUser(credential.user, created: !_isLogin);
+      widget.onAuthenticated();
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = _authMessageFor(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _providerSignIn(String providerName) async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      final provider = providerName == 'apple'
+          ? (OAuthProvider('apple.com')..setCustomParameters({'locale': 'en'}))
+          : (GoogleAuthProvider()
+            ..setCustomParameters({'prompt': 'select_account'}));
+      final credential = await FirebaseAuth.instance.signInWithPopup(provider);
+      await _upsertSenderUser(credential.user);
+      widget.onAuthenticated();
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = _authMessageFor(error));
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _message = 'This sign-in option is not available here yet.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    final email = _email.text.trim().toLowerCase();
+    setState(() {
+      _showErrors = true;
+      _message = null;
+    });
+    if (!_looksLikeEmail(email)) return;
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      setState(() => _message = 'Password reset email sent.');
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = _authMessageFor(error));
+    }
+  }
+
+  Future<void> _upsertSenderUser(User? user, {bool created = false}) async {
+    if (user == null) {
+      throw FirebaseAuthException(code: 'sender-auth-no-user');
+    }
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'email': user.email,
+      'displayName': user.displayName,
+      if (_firstName.text.trim().isNotEmpty)
+        'firstName': _firstName.text.trim(),
+      if (_lastName.text.trim().isNotEmpty) 'lastName': _lastName.text.trim(),
+      if (_firstName.text.trim().isNotEmpty || _lastName.text.trim().isNotEmpty)
+        'fullName': [_firstName.text.trim(), _lastName.text.trim()]
+            .where((value) => value.isNotEmpty)
+            .join(' '),
+      if (_phone.text.trim().isNotEmpty) 'phone': _phone.text.trim(),
+      'role': 'user',
+      'roles': ['sender'],
+      'userType': 'sender',
+      'status': 'active',
+      'source': 'public_sender_web',
+      if (created) 'termsAcceptedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await user.getIdToken(true);
+  }
+
+  String _authMessageFor(FirebaseAuthException error) {
+    return switch (error.code) {
+      'invalid-email' => 'Enter a valid email address.',
+      'weak-password' => 'Use a stronger password.',
+      'email-already-in-use' => 'That email already has a Circum account.',
+      'invalid-credential' ||
+      'wrong-password' ||
+      'user-not-found' =>
+        'Log in failed. Check the email and password.',
+      'popup-closed-by-user' => 'Sign-in was cancelled.',
+      _ => 'Authentication failed (${error.code}).',
+    };
+  }
+
+  bool _looksLikeEmail(String value) =>
+      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
+}
+
+class _PublicAuthModeSelector extends StatelessWidget {
+  final _CircumColors colors;
+  final _PublicAuthMode mode;
+  final ValueChanged<_PublicAuthMode> onChanged;
+
+  const _PublicAuthModeSelector({
+    required this.colors,
+    required this.mode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          _PublicAuthTab(
+            colors: colors,
+            label: 'Log in',
+            active: mode == _PublicAuthMode.login,
+            onTap: () => onChanged(_PublicAuthMode.login),
+          ),
+          _PublicAuthTab(
+            colors: colors,
+            label: 'Create account',
+            active: mode == _PublicAuthMode.signup,
+            onTap: () => onChanged(_PublicAuthMode.signup),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicAuthTab extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _PublicAuthTab({
+    required this.colors,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: BoxDecoration(
+              color: active ? const Color(0xff3b82f6) : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: active ? Colors.white : colors.mutedText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicAuthField extends StatelessWidget {
+  final _CircumColors colors;
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+  final String? errorText;
+  final ValueChanged<String> onChanged;
+  final Widget? suffixIcon;
+
+  const _PublicAuthField({
+    required this.colors,
+    required this.controller,
+    required this.label,
+    required this.hint,
+    this.keyboardType,
+    this.obscureText = false,
+    this.errorText,
+    required this.onChanged,
+    this.suffixIcon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      textField: true,
+      label: label,
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        onChanged: onChanged,
+        style: GoogleFonts.inter(
+          color: colors.text,
+          fontWeight: FontWeight.w700,
+        ),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          errorText: errorText,
+          suffixIcon: suffixIcon,
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: 0.07),
+          labelStyle: TextStyle(color: colors.mutedText),
+          hintStyle: TextStyle(color: colors.mutedText.withValues(alpha: 0.7)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: colors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xff3b82f6)),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xfff87171)),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xfff87171)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicCheckRow extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _PublicCheckRow({
+    required this.colors,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      checked: value,
+      label: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: value ? const Color(0xff3b82f6) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: colors.border),
+                ),
+                child: value
+                    ? const Icon(Icons.check, color: Colors.white, size: 16)
+                    : null,
+              ),
+              const SizedBox(width: 9),
+              Text(
+                label,
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicAuthSocialButton extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  const _PublicAuthSocialButton({
+    required this.colors,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 260,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colors.text,
+          side: BorderSide(color: colors.border),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+      ),
+    );
+  }
+}
+
 class _LandingPage extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
   final VoidCallback onStart;
+  final VoidCallback onLogin;
+  final VoidCallback onSignup;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
   final VoidCallback? onGifts;
@@ -1580,6 +2487,8 @@ class _LandingPage extends StatelessWidget {
     required this.colors,
     required this.darkMode,
     required this.onStart,
+    required this.onLogin,
+    required this.onSignup,
     required this.onRider,
     required this.onHealthPlus,
     this.onGifts,
@@ -1597,6 +2506,8 @@ class _LandingPage extends StatelessWidget {
             colors: colors,
             darkMode: darkMode,
             onStart: onStart,
+            onLogin: onLogin,
+            onSignup: onSignup,
             onRider: onRider,
             onHealthPlus: onHealthPlus,
             onGifts: onGifts,
@@ -17392,6 +18303,8 @@ class _LandingNav extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
   final VoidCallback onStart;
+  final VoidCallback onLogin;
+  final VoidCallback onSignup;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
   final VoidCallback? onGifts;
@@ -17402,6 +18315,8 @@ class _LandingNav extends StatelessWidget {
     required this.colors,
     required this.darkMode,
     required this.onStart,
+    required this.onLogin,
+    required this.onSignup,
     required this.onRider,
     required this.onHealthPlus,
     this.onGifts,
@@ -17501,6 +18416,31 @@ class _LandingNav extends StatelessWidget {
                   onPressed: onGifts,
                   icon: Icon(Icons.card_giftcard, color: colors.text),
                 ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: onLogin,
+                child: Text(
+                  'Log in',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              OutlinedButton(
+                onPressed: onSignup,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colors.text,
+                  side: BorderSide(color: colors.border),
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 13,
+                  ),
+                ),
+                child: const Text('Sign up'),
+              ),
               const SizedBox(width: 8),
               if (width < 520)
                 IconButton.filled(

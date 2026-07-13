@@ -1780,41 +1780,23 @@ void main() {
           ),
         );
         expect(source, contains('Create account'));
-        expect(source, contains('Welcome to Circum'));
-        expect(
-          source,
-          contains('Sign in to continue or create a new account.'),
-        );
-        expect(source, contains('Log in'));
-        expect(source, contains('Sign up'));
+        expect(source, contains('Sign in'));
         expect(source, contains('_SenderAuthMode.signIn'));
         expect(source, contains('_SenderAuthMode.createAccount'));
-        expect(source, contains('First name'));
-        expect(source, contains('Last name'));
-        expect(source, contains('Phone number'));
-        expect(source, contains('Confirm password'));
-        expect(source, contains('Accept Terms'));
-        expect(source, contains('Remember me'));
-        expect(source, contains('Forgot password?'));
-        expect(source, contains("label: 'Email'"));
-        expect(source, contains("label: 'Password'"));
+        expect(source, contains('EMAIL OR PHONE'));
+        expect(source, contains('PASSWORD'));
         expect(source, contains('Continue with Apple'));
         expect(source, contains('Continue with Google'));
-        expect(source, contains("label: _isSignIn ? 'Apple'"));
-        expect(source, contains("label: _isSignIn ? 'Google'"));
         expect(source, contains('Terms'));
         expect(source, contains('Privacy Policy'));
         expect(source, contains('After you join'));
         expect(source, contains('OR CONTINUE WITH'));
         expect(source, contains('Trusted Riders'));
-        expect(source, contains('if (_isSignIn)'));
-        expect(source, contains('AnimatedSwitcher'));
+        expect(source, contains('bool get _isSignIn'));
         expect(source, contains('previewAuthEnabled'));
         expect(source, contains('FirebaseAuth.instance'));
         expect(source, contains('createUserWithEmailAndPassword'));
         expect(source, contains('signInWithEmailAndPassword'));
-        expect(source, contains('signInWithPopup'));
-        expect(source, contains('sendPasswordResetEmail'));
         expect(source, contains('user.getIdToken(true)'));
         expect(
           source,
