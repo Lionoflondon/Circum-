@@ -27,7 +27,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
-    runApp(const WebSenderApp());
+    if (const bool.fromEnvironment('CIRCUM_RIDER_HOSTING')) {
+      runApp(const CircumRiderWebApp());
+    } else {
+      runApp(const WebSenderApp());
+    }
     return;
   }
 

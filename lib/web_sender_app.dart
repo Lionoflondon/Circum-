@@ -350,6 +350,51 @@ class WebSenderApp extends StatefulWidget {
   State<WebSenderApp> createState() => _WebSenderAppState();
 }
 
+class CircumRiderWebApp extends StatefulWidget {
+  const CircumRiderWebApp({super.key});
+
+  @override
+  State<CircumRiderWebApp> createState() => _CircumRiderWebAppState();
+}
+
+class _CircumRiderWebAppState extends State<CircumRiderWebApp> {
+  bool _darkMode = true;
+
+  void _handleRoleSelected(CircumRole role) {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const colors = _CircumColors(true);
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Circum Rider',
+      theme: ThemeData(
+        useMaterial3: true,
+        fontFamily: 'Helvetica',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xff2563eb),
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: colors.background,
+      ),
+      home: Scaffold(
+        backgroundColor: colors.background,
+        body: _RiderEnrollmentPortal(
+          key: const ValueKey('rider-web-root'),
+          colors: colors,
+          darkMode: _darkMode,
+          onBack: () {},
+          onRoleSelected: _handleRoleSelected,
+          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+        ),
+      ),
+    );
+  }
+}
+
 class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
   late CircumRouteDecision _route = resolveCircumRoute(Uri.base);
