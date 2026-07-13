@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../rider_marketplace/rider_onboarding_policy.dart';
 import '../send_package/view/ride_chats.dart';
@@ -50,11 +52,13 @@ class RiderHomeScreen extends StatefulWidget {
 
 class _RiderHomeScreenState extends State<RiderHomeScreen> {
   static const _heartbeatInterval = Duration(seconds: 60);
+  static const _activeDeliveryCacheKey = 'rider.activeDelivery.uiCache.v1';
 
   int _tab = 0;
   bool _updatingAvailability = false;
   bool _accepting = false;
   String? _message;
+  Map<String, dynamic>? _cachedActiveDelivery;
   Timer? _heartbeatTimer;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -65,6 +69,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   void initState() {
     super.initState();
     _tab = widget.initialTab;
+    unawaited(_restoreActiveDeliveryCache());
   }
 
   @override
@@ -113,8 +118,17 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: _activeDeliveryStream(user?.uid),
                       builder: (context, activeSnapshot) {
-                        final activeDelivery =
+                        final backendActiveDelivery =
                             _firstJobFromSnapshot(activeSnapshot);
+                        _syncActiveDeliveryCache(
+                          backendActiveDelivery,
+                          activeSnapshot.connectionState,
+                        );
+                        final activeDelivery = backendActiveDelivery ??
+                            (activeSnapshot.connectionState ==
+                                    ConnectionState.waiting
+                                ? _cachedActiveDelivery
+                                : null);
                         return StreamBuilder<
                             QuerySnapshot<Map<String, dynamic>>>(
                           stream: _offersStream(
@@ -181,75 +195,93 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                                                   child: AnimatedSwitcher(
                                                     duration: const Duration(
                                                         milliseconds: 240),
-                                                    child: _tab == 1
-                                                        ? _OffersPane(
+                                                    child: activeDelivery !=
+                                                            null
+                                                        ? _ActiveDeliveryPane(
                                                             key: const ValueKey(
-                                                                'offers'),
-                                                            offers: offers,
-                                                            accepting:
-                                                                _accepting,
-                                                            onAccept: (offer) =>
-                                                                _acceptOffer(
-                                                              offer,
-                                                              user: user,
-                                                              riderProfile:
-                                                                  profile,
-                                                            ),
+                                                                'active-delivery'),
+                                                            state: state,
+                                                            delivery:
+                                                                activeDelivery,
+                                                            message: _message,
+                                                            onCustomerResponded:
+                                                                _markCustomerResponded,
+                                                            onMarkNoShow:
+                                                                _markNoShow,
                                                           )
-                                                        : _tab == 3
-                                                            ? _FinanceHubPane(
+                                                        : _tab == 1
+                                                            ? _OffersPane(
                                                                 key: const ValueKey(
-                                                                    'finance'),
-                                                                user: user,
-                                                                profile:
-                                                                    profile,
-                                                                earnings:
-                                                                    earnings,
-                                                                firestore:
-                                                                    _firestore,
-                                                                onOpenTab:
-                                                                    _openTab,
-                                                              )
-                                                            : _DashboardPane(
-                                                                key: const ValueKey(
-                                                                    'dashboard'),
-                                                                user: user,
-                                                                state: state,
-                                                                activeDelivery:
-                                                                    activeDelivery,
-                                                                profile:
-                                                                    profile,
-                                                                presence:
-                                                                    presence,
-                                                                earnings:
-                                                                    earnings,
+                                                                    'offers'),
                                                                 offers: offers,
-                                                                scheduled:
-                                                                    scheduled,
-                                                                recent: recent,
-                                                                unreadNotifications:
-                                                                    unread,
-                                                                message:
-                                                                    _message,
-                                                                loading:
-                                                                    loading,
-                                                                updating:
-                                                                    _updatingAvailability,
-                                                                online: online,
-                                                                available:
-                                                                    available,
-                                                                onToggleAvailability:
-                                                                    _toggleAvailability,
-                                                                onOpenTab:
-                                                                    _openTab,
-                                                                onCustomerResponded:
-                                                                    _markCustomerResponded,
-                                                                onMarkNoShow:
-                                                                    _markNoShow,
-                                                                onOpenNotifications: () =>
-                                                                    _openNotifications(
-                                                                        context),
-                                                              ),
+                                                                accepting:
+                                                                    _accepting,
+                                                                onAccept: (offer) =>
+                                                                    _acceptOffer(
+                                                                  offer,
+                                                                  user: user,
+                                                                  riderProfile:
+                                                                      profile,
+                                                                ),
+                                                              )
+                                                            : _tab == 3
+                                                                ? _FinanceHubPane(
+                                                                    key: const ValueKey(
+                                                                        'finance'),
+                                                                    user: user,
+                                                                    profile:
+                                                                        profile,
+                                                                    earnings:
+                                                                        earnings,
+                                                                    firestore:
+                                                                        _firestore,
+                                                                    onOpenTab:
+                                                                        _openTab,
+                                                                  )
+                                                                : _DashboardPane(
+                                                                    key: const ValueKey(
+                                                                        'dashboard'),
+                                                                    user: user,
+                                                                    state:
+                                                                        state,
+                                                                    activeDelivery:
+                                                                        activeDelivery,
+                                                                    profile:
+                                                                        profile,
+                                                                    presence:
+                                                                        presence,
+                                                                    earnings:
+                                                                        earnings,
+                                                                    offers:
+                                                                        offers,
+                                                                    scheduled:
+                                                                        scheduled,
+                                                                    recent:
+                                                                        recent,
+                                                                    unreadNotifications:
+                                                                        unread,
+                                                                    message:
+                                                                        _message,
+                                                                    loading:
+                                                                        loading,
+                                                                    updating:
+                                                                        _updatingAvailability,
+                                                                    online:
+                                                                        online,
+                                                                    available:
+                                                                        available,
+                                                                    onToggleAvailability:
+                                                                        _toggleAvailability,
+                                                                    onOpenTab:
+                                                                        _openTab,
+                                                                    onCustomerResponded:
+                                                                        _markCustomerResponded,
+                                                                    onMarkNoShow:
+                                                                        _markNoShow,
+                                                                    onOpenNotifications: () =>
+                                                                        _openNotifications(
+                                                                            context),
+                                                                  ),
                                                   ),
                                                 ),
                                                 _RiderBottomNav(
@@ -441,9 +473,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                           ),
                           onOpenTab: _openTab,
                           onCustomerResponded: (_) => setState(() => _message =
-                              'Preview only. Backend updates run in production.'),
+                              'Preview only. Live delivery updates run in the app.'),
                           onMarkNoShow: (_) => setState(() => _message =
-                              'Preview only. Backend updates run in production.'),
+                              'Preview only. Live delivery updates run in the app.'),
                           onOpenNotifications: () => setState(() => _message =
                               'Notifications are available in the authenticated Rider app.'),
                         ),
@@ -568,8 +600,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         },
       );
       if (mounted) {
-        setState(() => _message =
-            'Customer response sent. Backend waiting policy will update.');
+        setState(() =>
+            _message = 'Customer response sent. Collection time will update.');
       }
     } catch (error) {
       if (mounted) {
@@ -601,7 +633,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       );
       if (mounted) {
         setState(() => _message =
-            'No-show submitted. Backend eligibility and compensation will apply.');
+            'Missed collection submitted. Waiting payment will update.');
       }
     } catch (error) {
       if (mounted) {
@@ -632,6 +664,82 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       }
     }
     throw lastError ?? StateError('No backend callable is available.');
+  }
+
+  Future<void> _restoreActiveDeliveryCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_activeDeliveryCacheKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      if (!mounted) return;
+      setState(() {
+        _cachedActiveDelivery = {
+          ...Map<String, dynamic>.from(decoded),
+          '_cachedRestore': true,
+        };
+      });
+    } catch (_) {
+      // Restoration cache is a UI convenience only. Firestore remains final.
+    }
+  }
+
+  void _syncActiveDeliveryCache(
+    Map<String, dynamic>? delivery,
+    ConnectionState connectionState,
+  ) {
+    if (connectionState == ConnectionState.waiting) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (delivery == null) {
+        unawaited(_clearActiveDeliveryCache());
+      } else {
+        unawaited(_cacheActiveDelivery(delivery));
+      }
+    });
+  }
+
+  Future<void> _cacheActiveDelivery(Map<String, dynamic> delivery) async {
+    final safe = _jsonSafeMap(delivery);
+    final encoded = jsonEncode(safe);
+    if (jsonEncode(_cachedActiveDelivery ?? const {}) == encoded) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_activeDeliveryCacheKey, encoded);
+    if (mounted) {
+      setState(() => _cachedActiveDelivery = safe);
+    }
+  }
+
+  Future<void> _clearActiveDeliveryCache() async {
+    if (_cachedActiveDelivery == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_activeDeliveryCacheKey);
+    if (mounted) {
+      setState(() => _cachedActiveDelivery = null);
+    }
+  }
+
+  Map<String, dynamic> _jsonSafeMap(Map<String, dynamic> source) {
+    return source.map((key, value) => MapEntry(key, _jsonSafeValue(value)));
+  }
+
+  Object? _jsonSafeValue(Object? value) {
+    if (value == null || value is String || value is num || value is bool) {
+      return value;
+    }
+    if (value is Timestamp) return value.toDate().toIso8601String();
+    if (value is DateTime) return value.toIso8601String();
+    if (value is GeoPoint) {
+      return {'latitude': value.latitude, 'longitude': value.longitude};
+    }
+    if (value is Iterable) return value.map(_jsonSafeValue).toList();
+    if (value is Map) {
+      return value.map(
+        (key, mapValue) => MapEntry('$key', _jsonSafeValue(mapValue)),
+      );
+    }
+    return '$value';
   }
 
   String _activeDeliveryId(Map<String, dynamic> delivery) =>
@@ -938,6 +1046,265 @@ class _DashboardPane extends StatelessWidget {
         status == 'waiting_charge_active' ||
         status == 'waiting_charges_active' ||
         status == 'no_show_review';
+  }
+}
+
+class _ActiveDeliveryPane extends StatelessWidget {
+  final RiderJobUiState state;
+  final Map<String, dynamic> delivery;
+  final String? message;
+  final ValueChanged<Map<String, dynamic>> onCustomerResponded;
+  final ValueChanged<Map<String, dynamic>> onMarkNoShow;
+
+  const _ActiveDeliveryPane({
+    super.key,
+    required this.state,
+    required this.delivery,
+    required this.message,
+    required this.onCustomerResponded,
+    required this.onMarkNoShow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stageTitle = RiderHomeStateMapper.titleFor(state);
+    final stageCopy = RiderHomeStateMapper.copyFor(state);
+    final pickup = _deliveryText(
+      delivery['pickupAddress'] ??
+          delivery['pickupSummary'] ??
+          delivery['pickupName'] ??
+          delivery['pickupPostcode'],
+      fallback: 'Pickup details restoring',
+    );
+    final dropoff = _deliveryText(
+      delivery['dropoffAddress'] ??
+          delivery['destinationAddress'] ??
+          delivery['dropoffSummary'] ??
+          delivery['dropoffPostcode'],
+      fallback: 'Drop-off details restoring',
+    );
+    final eta = _deliveryText(
+      delivery['etaLabel'] ??
+          delivery['eta'] ??
+          delivery['estimatedArrival'] ??
+          delivery['remainingTime'],
+      fallback: 'Calculating arrival time',
+    );
+    final distance = _deliveryText(
+      delivery['distanceLabel'] ??
+          delivery['remainingDistance'] ??
+          delivery['distance'],
+      fallback: 'Calculating route',
+    );
+    final chatId =
+        '${delivery['requestId'] ?? delivery['id'] ?? delivery['_docId'] ?? ''}'
+            .trim();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+      children: [
+        _SectionHeader(
+          title: 'Active Delivery',
+          subtitle: 'Restored from your current assignment.',
+          trailing: delivery['_cachedRestore'] == true ? 'Restoring' : 'Live',
+        ),
+        const SizedBox(height: 14),
+        _GlassPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _CircleIcon(icon: Icons.navigation_rounded),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          stageTitle,
+                          style: GoogleFonts.dmSerifDisplay(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          stageCopy,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: .62),
+                            height: 1.35,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (message != null) ...[
+                const SizedBox(height: 12),
+                _InfoStrip(message: message!),
+              ],
+              const SizedBox(height: 16),
+              _ActiveDeliveryRouteLine(
+                icon: Icons.my_location_rounded,
+                label: 'Pickup',
+                value: pickup,
+              ),
+              _ActiveDeliveryRouteLine(
+                icon: Icons.flag_rounded,
+                label: 'Drop-off',
+                value: dropoff,
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ActiveDeliveryMetric(
+                      label: 'ETA',
+                      value: eta,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ActiveDeliveryMetric(
+                      label: 'Distance',
+                      value: distance,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        if (chatId.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _RiderDeliveryChatShortcut(chatId: chatId),
+        ],
+        if (_showWaitingActions) ...[
+          const SizedBox(height: 14),
+          _RiderWaitingActionCard(
+            delivery: delivery,
+            onCustomerResponded: () => onCustomerResponded(delivery),
+            onMarkNoShow: () => onMarkNoShow(delivery),
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool get _showWaitingActions {
+    final status = '${delivery['status'] ?? ''}'
+        .trim()
+        .toLowerCase()
+        .replaceAll('-', '_')
+        .replaceAll(' ', '_');
+    return status == 'arrived_at_pickup' ||
+        status == 'waiting' ||
+        status == 'waiting_for_collection' ||
+        status == 'waiting_charge_active' ||
+        status == 'waiting_charges_active' ||
+        status == 'no_show_review';
+  }
+
+  static String _deliveryText(Object? value, {required String fallback}) {
+    final text = '${value ?? ''}'.trim();
+    return text.isEmpty ? fallback : text;
+  }
+}
+
+class _ActiveDeliveryRouteLine extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ActiveDeliveryRouteLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          _CircleIcon(icon: icon),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: GoogleFonts.jetBrainsMono(
+                    color: Colors.white.withValues(alpha: .42),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveDeliveryMetric extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ActiveDeliveryMetric({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.jetBrainsMono(
+              color: Colors.white.withValues(alpha: .42),
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.jetBrainsMono(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1856,7 +2223,7 @@ class _RiderWaitingActionCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Use backend-authorised actions only. Circum decides whether waiting continues, charges apply, or no-show is available.',
+            'Circum will confirm whether collection time continues, charges apply, or missed collection is available.',
             style: TextStyle(
               color: Colors.white.withValues(alpha: .58),
               fontSize: 12,
@@ -1889,7 +2256,7 @@ class _RiderWaitingActionCard extends StatelessWidget {
           if (!noShowAvailable) ...[
             const SizedBox(height: 8),
             Text(
-              'No-show unlocks only when the backend says it is eligible.',
+              'Missed collection unlocks when the waiting period is complete.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: .48),
                 fontSize: 11,

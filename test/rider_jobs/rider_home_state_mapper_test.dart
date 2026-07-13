@@ -103,7 +103,31 @@ void main() {
       expect(source, contains('declareSenderNoShow'));
       expect(source, contains('sendRiderUpdate'));
       expect(source, contains('RideChatPageView(chatId: chatId)'));
-      expect(source, contains('No-show unlocks only when the backend says'));
+      expect(source,
+          contains('Missed collection unlocks when the waiting period'));
+    });
+
+    test('active delivery restores before dashboard after refresh', () {
+      final source =
+          File('lib/app/rider_jobs/rider_home_screen.dart').readAsStringSync();
+
+      expect(source, contains('_activeDeliveryCacheKey'));
+      expect(source, contains('_restoreActiveDeliveryCache'));
+      expect(source, contains('_cacheActiveDelivery'));
+      expect(source, contains('_clearActiveDeliveryCache'));
+      expect(source, contains('backendActiveDelivery ??'));
+      expect(source, contains('_cachedActiveDelivery'));
+      expect(source, contains('class _ActiveDeliveryPane'));
+      final activeBranch = source.substring(
+        source.indexOf('child: activeDelivery !='),
+        source.indexOf('class _DashboardPane'),
+      );
+      expect(
+        activeBranch.indexOf('_ActiveDeliveryPane'),
+        lessThan(activeBranch.indexOf('_OffersPane')),
+      );
+      expect(source, contains('Restored from your current assignment.'));
+      expect(source, isNot(contains('Backend updates run in production')));
     });
   });
 }

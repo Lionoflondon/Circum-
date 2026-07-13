@@ -85,12 +85,12 @@ class RiderHomeStateMapper {
       RiderJobUiState.onlineWaiting =>
         'Stay nearby. We will surface eligible jobs here.',
       RiderJobUiState.offerAvailable =>
-        'Swipe to compare offers. Accept only writes when tapped.',
+        'Swipe to compare offers. Accept when you are ready.',
       RiderJobUiState.accepted => 'Head to pickup.',
       RiderJobUiState.navigatingToPickup =>
         'Follow the route and confirm when you arrive.',
       RiderJobUiState.arrivedWaiting =>
-        'The sender has been notified. Waiting time follows backend policy.',
+        'The sender has been notified. Collection time has started.',
       RiderJobUiState.verification =>
         'IRIS is checking the parcel against the booking.',
       RiderJobUiState.inTransit =>

@@ -733,7 +733,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     if (state.senderQuoteId == null || state.senderQuoteId!.isEmpty) {
       emit(
         state.copyWith(
-          senderPaymentError: 'Load a backend quote before payment.',
+          senderPaymentError: 'Load your delivery estimate before payment.',
         ),
       );
       return;

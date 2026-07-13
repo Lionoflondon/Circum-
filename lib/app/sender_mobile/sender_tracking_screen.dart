@@ -867,7 +867,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       _showActionMessage(
         _firebaseFunctionMessage(
           error,
-          'Unable to retrieve the backend cancellation fee.',
+          'Unable to retrieve the cancellation fee.',
         ),
       );
       return;
@@ -1502,7 +1502,7 @@ class SenderWaitingSnapshot {
     final countdown = noShowAvailable
         ? 'No-show eligible'
         : remainingSeconds == null
-            ? 'Server countdown active'
+            ? 'Live countdown active'
             : _durationLabel(remainingSeconds);
     return SenderWaitingSnapshot(
       visible: true,
@@ -1513,10 +1513,10 @@ class SenderWaitingSnapshot {
       noShowAvailable: noShowAvailable,
       customerResponded: customerResponded,
       message: customerResponded
-          ? 'Customer response received. Waiting continues under the current policy.'
+          ? 'Customer response received. Collection time continues.'
           : noShowAvailable
               ? 'Your rider has completed the required waiting period. Contact your rider immediately if you still require this delivery.'
-              : 'Sender notified on arrival. Waiting timer is server-authoritative.',
+              : 'Sender notified on arrival. Collection countdown is live.',
     );
   }
 }
@@ -1620,7 +1620,7 @@ class _CancelDeliverySheet extends StatelessWidget {
     );
     final currency = '${quote['currency'] ?? 'GBP'}';
     final reason =
-        '${quote['reason'] ?? quote['backendReason'] ?? 'Backend policy applies.'}';
+        '${quote['reason'] ?? quote['backendReason'] ?? 'Cancellation terms apply.'}';
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1645,7 +1645,7 @@ class _CancelDeliverySheet extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Cancellation is handled by Circum’s backend policy. The rider will be updated immediately if you confirm.',
+                'The rider will be updated immediately if you confirm.',
                 style: TextStyle(
                   color: _TrackingTokens.muted,
                   height: 1.4,
@@ -1656,14 +1656,14 @@ class _CancelDeliverySheet extends StatelessWidget {
               _CancellationQuoteLine(
                 label: 'Cancellation fee',
                 value: fee == null
-                    ? 'Backend provided'
+                    ? 'Provided by Circum'
                     : _moneyText(fee, currency),
               ),
-              _CancellationQuoteLine(label: 'Backend reason', value: reason),
+              _CancellationQuoteLine(label: 'Reason', value: reason),
               _CancellationQuoteLine(
                 label: 'Amount to be charged/refunded',
                 value: refund == null
-                    ? '${quote['amountSummary'] ?? 'Backend will finalise'}'
+                    ? '${quote['amountSummary'] ?? 'Circum will finalise'}'
                     : _moneyText(refund, currency),
               ),
               const SizedBox(height: 16),

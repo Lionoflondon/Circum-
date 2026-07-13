@@ -225,7 +225,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                     if (!chatSnapshot.hasData) {
                       return const _ChatLoadingState(
                         title: 'Loading messages',
-                        body: 'Keeping the conversation in sync.',
+                        body: 'Keeping the conversation up to date.',
                       );
                     }
                     if (!chatSnapshot.data!.exists) {

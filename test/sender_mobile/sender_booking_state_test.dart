@@ -2085,7 +2085,7 @@ void main() {
       expect(source, contains('Apply Roth to this payment'));
       expect(
         source,
-        contains('Roth balance could not be loaded from the backend'),
+        contains('Roth balance could not be loaded'),
       );
       expect(source, contains("Payment couldn't be started"));
       expect(source, isNot(contains('42 Roth available')));
@@ -2302,7 +2302,7 @@ void main() {
       expect(source, contains('cancelSenderDelivery'));
       expect(source, contains('requestSenderCancellation'));
       expect(source, contains('Cancellation fee'));
-      expect(source, contains('Backend reason'));
+      expect(source, contains('Reason'));
       expect(source, contains('Amount to be charged/refunded'));
     });
 
@@ -2496,7 +2496,7 @@ void main() {
       expect(source, contains("data['waitingContextState']"));
       expect(source, contains("data['noShowFinancial']"));
       expect(source, contains('Additional waiting charge'));
-      expect(source, contains('Waiting timer is server-authoritative.'));
+      expect(source, contains('Collection countdown is live.'));
       expect(source, contains('No-show review'));
       expect(source, isNot(contains('Timer.periodic')));
     });

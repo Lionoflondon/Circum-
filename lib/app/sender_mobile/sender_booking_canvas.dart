@@ -2648,7 +2648,7 @@ class _PaymentPanel extends StatelessWidget {
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Roth balance could not be loaded from the backend, so Roth cannot be applied right now.',
+                    'Roth balance could not be loaded, so Roth cannot be applied right now.',
                     style: TextStyle(color: _Tokens.muted, height: 1.35),
                   ),
                 ),
@@ -2658,7 +2658,7 @@ class _PaymentPanel extends StatelessWidget {
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Loading backend Roth balance...',
+                    'Loading Roth balance...',
                     style: TextStyle(color: _Tokens.muted, height: 1.35),
                   ),
                 ),

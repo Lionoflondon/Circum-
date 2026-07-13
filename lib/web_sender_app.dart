@@ -25942,10 +25942,10 @@ class _PickupWaitingPanelState extends State<_PickupWaitingPanel> {
           const SizedBox(height: 8),
           Text(
             customerResponded
-                ? 'Customer response received. Waiting continues under the current policy.'
+                ? 'Customer response received. Collection time continues.'
                 : waitingExpired
                     ? 'Your rider has completed the required waiting period. If you still require this delivery, contact your rider immediately.'
-                    : 'Your rider has arrived. Free waiting remains active until the backend waiting period expires.',
+                    : 'Your rider has arrived. Free waiting remains active until the collection countdown expires.',
             style: TextStyle(
               color: colors.mutedText,
               fontWeight: FontWeight.w700,
@@ -25971,8 +25971,8 @@ class _PickupWaitingPanelState extends State<_PickupWaitingPanel> {
             ),
           Text(
             waitingCharge == null
-                ? 'If free waiting expires, additional waiting charges may apply under the backend policy.'
-                : 'If free waiting expires, this backend waiting charge may apply.',
+                ? 'If free waiting expires, additional waiting charges may apply.'
+                : 'If free waiting expires, this waiting charge may apply.',
             style: TextStyle(
               color: colors.mutedText,
               fontSize: 12,
@@ -32629,7 +32629,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _checkoutState = _CheckoutState.failed;
           _broadcasting = false;
           _firebaseOnline = false;
-          _firebaseError = 'Could not listen to this delivery in Firestore.';
+          _firebaseError = 'We are having trouble updating this delivery.';
         });
       },
     );
@@ -36261,7 +36261,7 @@ class _SenderPreviewRoth extends StatelessWidget {
           colors: colors,
           title: 'Roth Wallet',
           subtitle:
-              'Internal Circum credit for eligible services. Roth is not withdrawable.',
+              'Circum credit for eligible services. Roth is not withdrawable.',
         ),
         const SizedBox(height: 16),
         Container(
@@ -46242,10 +46242,10 @@ class _WaitingTimerCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             customerResponded
-                ? 'Customer response received. Waiting continues under the current policy.'
+                ? 'Customer response received. Collection time continues.'
                 : freeExpired
                     ? 'Your rider has completed the required waiting period. If you still require this delivery, contact your rider immediately.'
-                    : 'Your rider has arrived. Free waiting remains active until the backend waiting period expires.',
+                    : 'Your rider has arrived. Free waiting remains active until the collection countdown expires.',
             style: TextStyle(
               color: freeExpired ? const Color(0xFFFCA5A5) : colors.mutedText,
               height: 1.25,
@@ -50904,7 +50904,7 @@ class _IrisDeliveryAnalysisCard extends StatelessWidget {
           ),
           _AnalysisLine(
             colors: colors,
-            label: 'Repository match',
+            label: 'Matched to your parcel',
             value: repositoryMatched ? 'Yes' : 'No',
           ),
           if (confidenceText != null && confidenceText.isNotEmpty)

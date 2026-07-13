@@ -536,7 +536,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_tea_gift_cubes',
     name: 'Bird & Blend Tea Gift Cubes',
     description:
-        'Internal curated tea cube option for comfort, warmth, appreciation and thoughtful low-cost/high-perceived-value gift builds.',
+        'Curated tea cube option for comfort, warmth, appreciation and thoughtful low-cost/high-perceived-value gift builds.',
     wholesalePrice: '£6.75',
     estimatedRrp: '£11.00',
     marginProfile: 'high',
@@ -561,7 +561,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_moment_of_calm_cube',
     name: 'Bird & Blend Moment of Calm Cube',
     description:
-        'Internal calm and self-care option for stress, recovery, sympathy, burnout and mindful gifting.',
+        'Calm and self-care option for stress, recovery, sympathy, burnout and mindful gifting.',
     wholesalePrice: '£6.75',
     estimatedRrp: '£11.00',
     marginProfile: 'high',
@@ -585,7 +585,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_luxury_chocolate_cube',
     name: 'Bird & Blend Luxury Chocolate Gift Cube',
     description:
-        'Internal celebratory tea-and-treat option for romance, birthdays, congratulations and indulgent thank-you gifts.',
+        'Celebratory tea-and-treat option for romance, birthdays, congratulations and indulgent thank-you gifts.',
     wholesalePrice: '£6.75',
     estimatedRrp: '£11.00',
     marginProfile: 'high',
@@ -614,7 +614,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_tea_biscuits_cube',
     name: 'Bird & Blend Tea & Biscuits Cube',
     description:
-        'Internal cosy evening and home-comfort option for housewarming, family, retirement and grandparent gift builds.',
+        'Cosy evening and home-comfort option for housewarming, family, retirement and grandparent gift builds.',
     wholesalePrice: '£6.75',
     estimatedRrp: '£11.00',
     marginProfile: 'high',
@@ -638,7 +638,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_15_tea_bag_gift_packs',
     name: 'Bird & Blend 15 Tea Bag Gift Packs',
     description:
-        'Internal everyday luxury option with excellent low wholesale / high perceived value fit.',
+        'Everyday luxury option with excellent low wholesale / high perceived value fit.',
     wholesalePrice: '£2.83-£4.65',
     estimatedRrp: '£5.50-£9.45',
     marginProfile: 'excellent',
@@ -664,7 +664,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_sticky_chai_collection',
     name: 'Bird & Blend Sticky Chai Collection',
     description:
-        'Internal seasonal cosy and indulgent option for winter, Christmas, romance and comfort-led experiences.',
+        'Seasonal cosy and indulgent option for winter, Christmas, romance and comfort-led experiences.',
     wholesalePrice: '£7.80',
     estimatedRrp: '£15.00',
     marginProfile: 'excellent',
@@ -688,7 +688,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_matcha_collection',
     name: 'Bird & Blend Matcha Collection',
     description:
-        'Internal premium wellness and productivity option for matcha lovers, fitness, new jobs, students and entrepreneurs.',
+        'Premium wellness and productivity option for matcha lovers, fitness, new jobs, students and entrepreneurs.',
     wholesalePrice: '£14.00-£35.00',
     estimatedRrp: '£22.00-£58.00',
     marginProfile: 'premium',
@@ -714,7 +714,7 @@ final List<GiftRepositoryItem> _birdBlendRepositoryItems = [
     id: 'bird_blend_tea_tools',
     name: 'Bird & Blend Tea Tools',
     description:
-        'Internal premium upgrade option for tea ritual, slow mornings, new home and wellness-focused gift builds.',
+        'Premium upgrade option for tea ritual, slow mornings, new home and wellness-focused gift builds.',
     wholesalePrice: 'varies',
     estimatedRrp: 'varies',
     marginProfile: 'premium upgrade',
@@ -838,7 +838,7 @@ List<GiftRepositoryItem> _buildRepository() {
       category: seed.category,
       subcategory: seed.name,
       description:
-          'Internal ${seed.name.toLowerCase()} option for $occasion gifting with a $priceBand budget.',
+          '${seed.name} option for $occasion gifting with a $priceBand budget.',
       estimatedPriceMin: min,
       estimatedPriceMax: max,
       priceBand: priceBand,

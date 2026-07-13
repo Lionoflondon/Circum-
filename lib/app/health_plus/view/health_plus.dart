@@ -520,7 +520,7 @@ class _HealthStatusViewState extends State<HealthStatusView> {
       if (!mounted) return;
       setState(() {
         _message =
-            'Health+ could not be saved. Check Firestore rules and payment config.';
+            'Health+ could not be saved. Check your payment setup and try again.';
       });
     } finally {
       if (mounted) setState(() => _submitting = false);
