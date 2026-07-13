@@ -3251,8 +3251,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         completer.complete(null);
         return;
       }
-      debugPrint(
-          'Gift Story admin audio selected: name=${file.name}, type=${file.type}, size=${file.size}');
       final reader = html.FileReader();
       reader.onLoadEnd.first.then((_) {
         final bytes = _bytesFromFileReaderResult(reader.result);
@@ -3261,8 +3259,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               'Corrupted file: the browser could not read this audio file.'));
           return;
         }
-        debugPrint(
-            'Gift Story admin audio read: name=${file.name}, bytes=${bytes.length}, type=${file.type}');
         completer.complete(XFile.fromData(
           bytes,
           name: file.name,
@@ -3286,8 +3282,6 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final extension = _giftStoryAudioExtension(file.name, file.mimeType);
     if (extension == null) throw StateError(_unsupportedGiftStoryAudioMessage);
     final bytes = await file.readAsBytes();
-    debugPrint(
-        'Gift Story admin audio upload starting: name=${file.name}, mime=${file.mimeType}, ext=$extension, size=${bytes.length}');
     if (bytes.length > 20 * 1024 * 1024) {
       throw StateError('${file.name} is larger than 20 MB.');
     }
@@ -3310,7 +3304,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       final metadata = await storageRef.getMetadata();
       final url = await storageRef.getDownloadURL();
       debugPrint(
-          'Gift Story admin audio uploaded: path=${metadata.fullPath}, size=${metadata.size}, contentType=${metadata.contentType}, url=$url');
+          'Gift Story admin audio uploaded: path=${metadata.fullPath}, size=${metadata.size}, contentType=${metadata.contentType}');
       await _probeGiftStoryAudioUrl(url);
       return url;
     } on FirebaseException catch (error) {
@@ -3357,11 +3351,25 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     required _CircumColors colors,
     required String? customAudioUrl,
     required XFile? pendingAudio,
+    required String? senderVoiceNoteUrl,
+    required bool includeSenderVoiceNote,
+    required String musicSource,
+    required String voicePlacement,
+    required String duckingLevel,
+    required double voiceVolume,
     required String? audioError,
     required VoidCallback onPickAudio,
     required VoidCallback onRemoveAudio,
     required VoidCallback onPreviewAudio,
+    required ValueChanged<bool> onIncludeSenderVoiceNoteChanged,
+    required ValueChanged<String> onMusicSourceChanged,
+    required ValueChanged<String> onVoicePlacementChanged,
+    required ValueChanged<String> onDuckingLevelChanged,
+    required ValueChanged<double> onVoiceVolumeChanged,
+    required VoidCallback onPreviewMixedAudio,
   }) {
+    final hasSenderVoice =
+        senderVoiceNoteUrl != null && senderVoiceNoteUrl.trim().isNotEmpty;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -3384,7 +3392,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Optional. Upload only audio Circum has permission to use. If no audio is uploaded, the Gift Story will be silent.',
+              'Choose music, narration and voice-note mixing for the final Gift Story. Original audio files stay unchanged.',
               style: TextStyle(
                 color: colors.mutedText,
                 fontWeight: FontWeight.w800,
@@ -3392,6 +3400,21 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               ),
             ),
             const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: musicSource,
+              decoration: const InputDecoration(labelText: 'Music'),
+              items: const [
+                DropdownMenuItem(value: 'none', child: Text('None')),
+                DropdownMenuItem(
+                    value: 'circum_soundtrack',
+                    child: Text('Circum Soundtrack')),
+                DropdownMenuItem(
+                    value: 'uploaded_soundtrack',
+                    child: Text('Uploaded soundtrack')),
+              ],
+              onChanged: (value) => onMusicSourceChanged(value ?? musicSource),
+            ),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -3421,7 +3444,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             if (pendingAudio != null) ...[
               const SizedBox(height: 8),
               Text(
-                'New audio: ${pendingAudio.name}',
+                'Uploaded soundtrack or narration is ready.',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ] else if (customAudioUrl != null && customAudioUrl.isNotEmpty) ...[
@@ -3447,10 +3470,183 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
               Text('Story will be silent.',
                   style: TextStyle(color: colors.mutedText)),
             ],
+            const SizedBox(height: 14),
+            SwitchListTile(
+              value: includeSenderVoiceNote && hasSenderVoice,
+              onChanged:
+                  hasSenderVoice ? onIncludeSenderVoiceNoteChanged : null,
+              title: const Text('Include sender voice note'),
+              subtitle: Text(hasSenderVoice
+                  ? 'Music ducks while the sender voice note plays, then smoothly returns.'
+                  : 'No sender voice note available.'),
+            ),
+            if (hasSenderVoice) ...[
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                OutlinedButton.icon(
+                  onPressed: () => launchUrl(Uri.parse(senderVoiceNoteUrl)),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Preview sender voice note'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onPreviewMixedAudio,
+                  icon: const Icon(Icons.graphic_eq_rounded),
+                  label: const Text('Preview mixed story audio'),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: voicePlacement,
+                decoration: const InputDecoration(labelText: 'Voice placement'),
+                items: const [
+                  DropdownMenuItem(
+                      value: 'beginning', child: Text('Beginning')),
+                  DropdownMenuItem(
+                      value: 'after_intro', child: Text('After intro')),
+                  DropdownMenuItem(value: 'middle', child: Text('Middle')),
+                  DropdownMenuItem(
+                      value: 'before_ending', child: Text('Before ending')),
+                  DropdownMenuItem(
+                      value: 'custom', child: Text('Custom timestamp')),
+                ],
+                onChanged: (value) =>
+                    onVoicePlacementChanged(value ?? voicePlacement),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: duckingLevel,
+                decoration:
+                    const InputDecoration(labelText: 'Music ducking level'),
+                items: const [
+                  DropdownMenuItem(value: '25', child: Text('25%')),
+                  DropdownMenuItem(value: '35', child: Text('35%')),
+                  DropdownMenuItem(value: '50', child: Text('50%')),
+                  DropdownMenuItem(value: '75', child: Text('75%')),
+                ],
+                onChanged: (value) =>
+                    onDuckingLevelChanged(value ?? duckingLevel),
+              ),
+              const SizedBox(height: 10),
+              Text('Voice volume ${(voiceVolume * 100).round()}%',
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              Slider(
+                value: voiceVolume.clamp(0.2, 1.0),
+                min: 0.2,
+                max: 1,
+                divisions: 8,
+                label: '${(voiceVolume * 100).round()}%',
+                onChanged: onVoiceVolumeChanged,
+              ),
+              const SizedBox(height: 8),
+              _adminGiftAudioTimeline(
+                colors: colors,
+                includeVoice: includeSenderVoiceNote,
+                musicSource: musicSource,
+                placement: voicePlacement,
+                duckingLevel: duckingLevel,
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Widget _adminGiftAudioTimeline({
+    required _CircumColors colors,
+    required bool includeVoice,
+    required String musicSource,
+    required String placement,
+    required String duckingLevel,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border.withValues(alpha: 0.65)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Playback timeline',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          _adminGiftTimelineTrack(
+            colors: colors,
+            label: 'Music track',
+            active: musicSource != 'none',
+            fill: musicSource == 'uploaded_soundtrack'
+                ? 'Uploaded soundtrack'
+                : musicSource == 'circum_soundtrack'
+                    ? 'Circum Soundtrack'
+                    : 'None',
+          ),
+          const SizedBox(height: 8),
+          _adminGiftTimelineTrack(
+            colors: colors,
+            label: 'Voice note',
+            active: includeVoice,
+            fill: includeVoice
+                ? '${_displayStatusLabel(placement)} · duck to $duckingLevel%'
+                : 'Not included',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            includeVoice
+                ? 'Crossfade points: music lowers over 300–500 ms and restores over 500–800 ms.'
+                : 'No voice crossfade configured.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            'Estimated duration follows the selected media during Gift Story generation.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _adminGiftTimelineTrack({
+    required _CircumColors colors,
+    required String label,
+    required bool active,
+    required String fill,
+  }) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 4),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          height: 24,
+          width: double.infinity,
+          color: colors.field.withValues(alpha: 0.82),
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: active ? 0.82 : 0.28,
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: (active ? colors.adminAccent : colors.mutedText)
+                    .withValues(alpha: active ? 0.38 : 0.18),
+              ),
+              child: Text(fill,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ),
+      ),
+    ]);
   }
 
   Future<void> _updateRecordStatus(
@@ -5393,6 +5589,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           onSuggestCampaignMatch: _suggestCampaignMatch,
           onApproveCampaignMatch: _approveCampaignMatch,
           onRejectCampaignMatch: _rejectCampaignMatch,
+          onAssignCampaignMatchLater: _assignCampaignMatchLater,
           onRefreshCampaignMatching: _loadAdminData,
           brandRowBuilder: _giftBrandRow,
           onCreateBrand: () => _openGiftBrandPartner(),
@@ -6524,60 +6721,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ],
         ),
         const SizedBox(height: 12),
-        _adminGiftDetailPanel(
-          icon: Icons.mic_none,
-          title: 'Voice Note',
-          children: [
-            _adminGiftDetailLine('Processing status',
-                '${item['voiceProcessingStatus'] ?? voice['processingStatus'] ?? 'Not provided'}'),
-            _adminGiftDetailLine(
-                'Duration',
-                voice['durationSeconds'] == null
-                    ? 'Not provided'
-                    : '${voice['durationSeconds']} seconds'),
-            _adminGiftDetailLine(
-                'Transcript', '${voice['transcript'] ?? 'Not available'}'),
-            _adminGiftDetailLine(
-                'Language', '${voice['language'] ?? 'Not provided'}'),
-            _adminGiftDetailLine(
-                'Sentiment', '${voice['sentiment'] ?? 'Not available'}'),
-            _adminGiftDetailLine(
-                'Key phrases', _giftBriefList(voice['keyPhrases'])),
-            _adminGiftDetailLine(
-                'IRIS summary', '${voice['irisSummary'] ?? 'Not available'}'),
-            if ('${voice['downloadUrl'] ?? ''}'.trim().isNotEmpty)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: () =>
-                      launchUrl(Uri.parse('${voice['downloadUrl']}')),
-                  icon: const Icon(Icons.play_circle_outline),
-                  label: const Text('Play voice note'),
-                ),
-              ),
-          ],
-        ),
+        _adminGiftVoiceNotePanel(item: item, voice: voice),
         const SizedBox(height: 12),
-        _adminGiftDetailPanel(
-          icon: Icons.hub_outlined,
-          title: 'Custom Interests Review',
-          children: [
-            if (customInterests.isEmpty)
-              const Text('No pending custom interests for this request.')
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: customInterests
-                    .map((interest) => Chip(label: Text(interest)))
-                    .toList(),
-              ),
-            const SizedBox(height: 8),
-            const Text(
-              'Approve, reject, or merge these through the existing IRIS/Admin review process. Nothing is promoted automatically.',
-            ),
-          ],
-        ),
+        _adminGiftCustomInterestPanel(customInterests),
         const SizedBox(height: 12),
         _adminGiftDetailPanel(
           icon: Icons.receipt_long_outlined,
@@ -6599,6 +6745,121 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 'Paid at', _adminDateText(payment['paidAt'] ?? item['paidAt'])),
           ],
         ),
+      ],
+    );
+  }
+
+  Widget _adminGiftVoiceNotePanel({
+    required Map<String, dynamic> item,
+    required Map<String, dynamic> voice,
+  }) {
+    final url =
+        '${voice['downloadUrl'] ?? voice['url'] ?? item['voiceNoteUrl'] ?? ''}'
+            .trim();
+    final hasVoice = url.isNotEmpty;
+    return _adminGiftDetailPanel(
+      icon: Icons.mic_none,
+      title: 'Voice Note',
+      children: [
+        if (!hasVoice)
+          const Text('No voice note was provided.')
+        else ...[
+          _adminGiftDetailLine('Processing status',
+              '${item['voiceProcessingStatus'] ?? voice['processingStatus'] ?? 'Available'}'),
+          _adminGiftDetailLine(
+              'Duration',
+              voice['durationSeconds'] == null
+                  ? 'Duration unavailable'
+                  : '${voice['durationSeconds']} seconds'),
+          _adminGiftDetailLine(
+              'Transcript', '${voice['transcript'] ?? 'Not available'}'),
+          _adminGiftDetailLine(
+              'AI summary', '${voice['irisSummary'] ?? 'Not available'}'),
+          const SizedBox(height: 8),
+          Slider(value: 0, onChanged: null),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(
+              onPressed: () => launchUrl(Uri.parse(url)),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Play'),
+            ),
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.pause),
+              label: const Text('Pause'),
+            ),
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.stop),
+              label: const Text('Stop'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => launchUrl(Uri.parse(url)),
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Download'),
+            ),
+            for (final speed in const ['1x', '1.5x', '2x'])
+              ChoiceChip(label: Text(speed), selected: speed == '1x'),
+          ]),
+        ],
+      ],
+    );
+  }
+
+  Widget _adminGiftCustomInterestPanel(List<String> customInterests) {
+    return _adminGiftDetailPanel(
+      icon: Icons.hub_outlined,
+      title: 'Custom Interest Review',
+      children: [
+        if (customInterests.isEmpty)
+          const Text('No pending custom interests for this request.')
+        else ...[
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.done_all),
+              label: const Text('Bulk accept'),
+            ),
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.block),
+              label: const Text('Bulk reject'),
+            ),
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.add),
+              label: const Text('Add New Interest'),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          ...customInterests.map((interest) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: widget.colors.border.withValues(alpha: 0.6)),
+                ),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _adminGiftDetailLine('Interest', interest),
+                      _adminGiftDetailLine('Source', 'Sender request'),
+                      _adminGiftDetailLine('Confidence', 'Needs review'),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        OutlinedButton(
+                            onPressed: null, child: const Text('Accepted')),
+                        OutlinedButton(
+                            onPressed: null, child: const Text('Rejected')),
+                        OutlinedButton(
+                            onPressed: null, child: const Text('Edit')),
+                        OutlinedButton(
+                            onPressed: null, child: const Text('Remove')),
+                      ]),
+                    ]),
+              )),
+        ],
       ],
     );
   }
@@ -6848,29 +7109,31 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           ],
         ),
         _adminGiftWorkspaceSection(
-          title: 'IRIS Collaboration',
+          title: 'IRIS Review',
           children: [
             TextField(
               controller: irisAcceptedSignals,
-              decoration: const InputDecoration(labelText: 'Accepted signals'),
+              decoration:
+                  const InputDecoration(labelText: 'Approved gift ideas'),
             ),
             TextField(
               controller: irisRejectedSignals,
-              decoration: const InputDecoration(labelText: 'Rejected signals'),
+              decoration:
+                  const InputDecoration(labelText: 'Rejected suggestions'),
             ),
             TextField(
               controller: irisModifiedSignals,
-              decoration:
-                  const InputDecoration(labelText: 'Modified / added signals'),
+              decoration: const InputDecoration(labelText: 'Manual changes'),
             ),
             TextField(
               controller: curatorFeedback,
               maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Curator feedback'),
+              decoration:
+                  const InputDecoration(labelText: 'Gift specialist notes'),
             ),
             const SizedBox(height: 6),
             const Text(
-              'Every curator decision is saved as structured IRIS learning on this request.',
+              'Every gift specialist decision is saved for this request review.',
             ),
           ],
         ),
@@ -6880,7 +7143,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             SwitchListTile(
               value: needsApproval,
               onChanged: onNeedsApprovalChanged,
-              title: const Text('Needs approval'),
+              title: const Text('Approve gift request'),
             ),
             TextField(
               controller: approvedBy,
@@ -7323,6 +7586,32 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     await _loadAdminData();
   }
 
+  Future<void> _assignCampaignMatchLater(
+      Map<String, dynamic> participant) async {
+    final id = '${participant['id'] ?? participant['_docId'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    final previous = '${participant['matchStatus'] ?? 'unmatched'}';
+    await FirebaseFirestore.instance
+        .collection('giftCampaignParticipants')
+        .doc(id)
+        .set({
+      'matchStatus': 'assign_later',
+      'assignmentDeferredBy': _adminUser?.uid,
+      'assignmentDeferredAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _adminUser?.uid ?? 'unknown-admin',
+      actionType: 'campaign_match_assign_later',
+      recordType: 'giftCampaignParticipants',
+      recordId: id,
+      oldValue: {'matchStatus': previous},
+      newValue: {'matchStatus': 'assign_later'},
+      reason: 'Deferred from campaign matching review',
+    ));
+    await _loadAdminData();
+  }
+
   Future<void> _openGiftRequest(Map<String, dynamic> item) async {
     final notes = TextEditingController(text: '${item['internalNotes'] ?? ''}');
     final decision =
@@ -7351,6 +7640,20 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         text: '${item['procurementEstimatedCost'] ?? ''}');
     final procurementActualCost =
         TextEditingController(text: '${item['procurementActualCost'] ?? ''}');
+    final procurementSupplierLink =
+        TextEditingController(text: '${item['procurementSupplierLink'] ?? ''}');
+    final procurementOrderReference = TextEditingController(
+        text: '${item['procurementOrderReference'] ?? ''}');
+    final procurementPurchasedBy =
+        TextEditingController(text: '${item['procurementPurchasedBy'] ?? ''}');
+    final procurementPurchaseDate =
+        TextEditingController(text: '${item['procurementPurchaseDate'] ?? ''}');
+    final procurementDeliveryEta =
+        TextEditingController(text: '${item['procurementDeliveryEta'] ?? ''}');
+    final procurementReceiptUrl =
+        TextEditingController(text: '${item['procurementReceiptUrl'] ?? ''}');
+    final procurementInvoiceUrl =
+        TextEditingController(text: '${item['procurementInvoiceUrl'] ?? ''}');
     final procurementNotes =
         TextEditingController(text: '${item['procurementNotes'] ?? ''}');
     final workspace = item['giftsTeamWorkspace'] is Map
@@ -7436,7 +7739,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     String workspaceStatus = '${assignment['status'] ?? 'unassigned'}';
     String workspacePriority = '${assignment['priority'] ?? 'standard'}';
     String supplierStatus = '${supplier['supplierStatus'] ?? 'not_started'}';
-    bool needsApproval = approval['needsApproval'] != false;
+    bool needsApproval =
+        '${item['adminReviewStatus'] ?? item['status'] ?? ''}'.toLowerCase() ==
+            'approved';
     bool readyForProcurement = readiness['readyForProcurement'] == true;
     bool readyForRider = readiness['readyForRider'] == true;
     bool readyForScheduling = readiness['readyForScheduling'] == true;
@@ -7452,6 +7757,22 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     bool giftStoryShareEnabled = item['giftStoryShareEnabled'] != false;
     bool giftStoryMusicEnabled =
         '${item['giftStoryCustomAudioUrl'] ?? ''}'.trim().isNotEmpty;
+    final voiceNote = item['voiceNote'] is Map
+        ? Map<String, dynamic>.from(item['voiceNote'] as Map)
+        : const <String, dynamic>{};
+    final senderVoiceNoteUrl =
+        '${voiceNote['downloadUrl'] ?? voiceNote['url'] ?? item['voiceNoteUrl'] ?? ''}'
+            .trim();
+    bool giftStoryIncludeSenderVoiceNote =
+        item['giftStoryIncludeSenderVoiceNote'] == true;
+    String giftStoryMusicSource =
+        '${item['giftStoryMusicSource'] ?? (giftStoryMusicEnabled ? 'uploaded_soundtrack' : 'none')}';
+    String giftStoryVoicePlacement =
+        '${item['giftStoryVoicePlacement'] ?? 'after_intro'}';
+    String giftStoryDuckingLevel =
+        '${item['giftStoryMusicDuckingLevel'] ?? '35'}';
+    double giftStoryVoiceVolume =
+        (item['giftStoryVoiceVolume'] as num?)?.toDouble() ?? 1.0;
     String giftStorySharePrivacy =
         _giftStorySharePrivacy('${item['giftStorySharePrivacy'] ?? ''}');
     String? giftStoryCustomAudioUrl =
@@ -7618,7 +7939,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                               const SizedBox(width: 8),
                               const Expanded(
                                 child: Text(
-                                  'Iris Gift Suggestions',
+                                  'IRIS Gift Review',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w900,
@@ -7629,7 +7950,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                           ),
                           const SizedBox(height: 8),
                           const Text(
-                            'Admin-only procurement ideas. Do not reveal exact items to sender or recipient before delivery.',
+                            'Recommended gifts, suitability, budget fit, recipient interests and notes for specialist review.',
                           ),
                           const SizedBox(height: 12),
                           if (irisGiftRecommendation == null)
@@ -7727,6 +8048,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       controller: procurementSupplier,
                       decoration: const InputDecoration(labelText: 'Supplier')),
                   const SizedBox(height: 10),
+                  TextField(
+                      controller: procurementSupplierLink,
+                      decoration:
+                          const InputDecoration(labelText: 'Supplier link')),
+                  const SizedBox(height: 10),
                   Row(children: [
                     Expanded(
                         child: TextField(
@@ -7741,6 +8067,48 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
                                 labelText: 'Actual cost')))
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                        child: TextField(
+                            controller: procurementOrderReference,
+                            decoration: const InputDecoration(
+                                labelText: 'Order reference'))),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: TextField(
+                            controller: procurementPurchasedBy,
+                            decoration: const InputDecoration(
+                                labelText: 'Purchased by'))),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                        child: TextField(
+                            controller: procurementPurchaseDate,
+                            decoration: const InputDecoration(
+                                labelText: 'Purchase date'))),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: TextField(
+                            controller: procurementDeliveryEta,
+                            decoration: const InputDecoration(
+                                labelText: 'Delivery ETA'))),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                        child: TextField(
+                            controller: procurementReceiptUrl,
+                            decoration: const InputDecoration(
+                                labelText: 'Receipt upload / URL'))),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: TextField(
+                            controller: procurementInvoiceUrl,
+                            decoration: const InputDecoration(
+                                labelText: 'Invoice upload / URL'))),
                   ]),
                   const SizedBox(height: 10),
                   TextField(
@@ -7811,6 +8179,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                     colors: widget.colors,
                     customAudioUrl: giftStoryCustomAudioUrl,
                     pendingAudio: pendingStoryAudio,
+                    senderVoiceNoteUrl:
+                        senderVoiceNoteUrl.isEmpty ? null : senderVoiceNoteUrl,
+                    includeSenderVoiceNote: giftStoryIncludeSenderVoiceNote,
+                    musicSource: giftStoryMusicSource,
+                    voicePlacement: giftStoryVoicePlacement,
+                    duckingLevel: giftStoryDuckingLevel,
+                    voiceVolume: giftStoryVoiceVolume,
                     audioError: storyAudioError,
                     onPickAudio: () async {
                       try {
@@ -7824,6 +8199,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                             giftStoryCustomAudioUrl = null;
                             storyAudioError = null;
                             giftStoryMusicEnabled = true;
+                            giftStoryMusicSource = 'uploaded_soundtrack';
                           } else {
                             storyAudioError = _unsupportedGiftStoryAudioMessage;
                           }
@@ -7837,6 +8213,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       pendingStoryAudio = null;
                       giftStoryCustomAudioUrl = null;
                       giftStoryMusicEnabled = false;
+                      if (giftStoryMusicSource == 'uploaded_soundtrack') {
+                        giftStoryMusicSource = 'none';
+                      }
                       storyAudioError = null;
                     }),
                     onPreviewAudio: () async {
@@ -7844,6 +8223,34 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         setDialogState(() => storyAudioError = null);
                         await _previewGiftStoryAudio(
                             pendingStoryAudio, giftStoryCustomAudioUrl);
+                      } catch (error) {
+                        setDialogState(() => storyAudioError =
+                            _giftStoryAudioDisplayError(error));
+                      }
+                    },
+                    onIncludeSenderVoiceNoteChanged: (value) => setDialogState(
+                        () => giftStoryIncludeSenderVoiceNote = value),
+                    onMusicSourceChanged: (value) => setDialogState(() {
+                      giftStoryMusicSource = value;
+                      giftStoryMusicEnabled =
+                          value != 'none' || giftStoryIncludeSenderVoiceNote;
+                    }),
+                    onVoicePlacementChanged: (value) =>
+                        setDialogState(() => giftStoryVoicePlacement = value),
+                    onDuckingLevelChanged: (value) =>
+                        setDialogState(() => giftStoryDuckingLevel = value),
+                    onVoiceVolumeChanged: (value) =>
+                        setDialogState(() => giftStoryVoiceVolume = value),
+                    onPreviewMixedAudio: () async {
+                      try {
+                        if (giftStoryMusicSource == 'uploaded_soundtrack' ||
+                            pendingStoryAudio != null ||
+                            giftStoryCustomAudioUrl != null) {
+                          await _previewGiftStoryAudio(
+                              pendingStoryAudio, giftStoryCustomAudioUrl);
+                        } else if (senderVoiceNoteUrl.isNotEmpty) {
+                          await launchUrl(Uri.parse(senderVoiceNoteUrl));
+                        }
                       } catch (error) {
                         setDialogState(() => storyAudioError =
                             _giftStoryAudioDisplayError(error));
@@ -8195,7 +8602,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                 plan.text = _formatGiftRecommendationForAdmin(recommendation);
                 if (decision.text.trim().isEmpty) {
                   decision.text =
-                      'Gifts Team to review recommended experience, safety warnings and procurement notes before approval.';
+                      'Gift specialist to review recommendations, safety notes and procurement notes before approval.';
                 }
               },
               child: const Text('Generate Recommended Experience'),
@@ -8281,6 +8688,28 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                       final modifiedSignals = _csv(irisModifiedSignals.text);
                       final suppliers = _csv(supplierNames.text);
                       final supplierUrlList = _csv(supplierLinks.text);
+                      if (needsApproval) {
+                        approvedBy.text = approvedBy.text.trim().isEmpty
+                            ? (_adminUser?.email ?? _adminUser?.uid ?? '')
+                            : approvedBy.text.trim();
+                        approvedAt.text = approvedAt.text.trim().isEmpty
+                            ? DateTime.now().toIso8601String()
+                            : approvedAt.text.trim();
+                        if (approvalReason.text.trim().isEmpty) {
+                          approvalReason.text =
+                              'Approved by Circum Gifts team.';
+                        }
+                        status = 'approved';
+                      }
+                      final approvalPatch = needsApproval
+                          ? AdminGiftsOperations.approveRequestPatch(
+                              adminUserId: _adminUser?.uid ?? '',
+                              adminEmail: _adminUser?.email,
+                              previousStatus: '${item['status'] ?? status}',
+                              reason: approvalReason.text.trim(),
+                              actionAt: FieldValue.serverTimestamp(),
+                            )
+                          : const <String, Object?>{};
                       final workspaceUpdate = {
                         'assignment': {
                           'assignedCurator': assignedCurator.text.trim(),
@@ -8322,7 +8751,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                           'curatorFeedback': curatorFeedback.text.trim(),
                         },
                         'approval': {
-                          'needsApproval': needsApproval,
+                          'approved': needsApproval,
+                          'approvalStatus':
+                              needsApproval ? 'approved' : 'pending',
                           'approvedBy': approvedBy.text.trim(),
                           'approvedAt': approvedAt.text.trim(),
                           'reason': approvalReason.text.trim(),
@@ -8351,6 +8782,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         'updatedBy': _adminUser?.uid ?? _adminUser?.email,
                       };
                       Navigator.pop(context, {
+                        ...approvalPatch,
                         'status': status,
                         'giftsTeamWorkspace': workspaceUpdate,
                         'giftIrisLearning': irisLearning,
@@ -8371,10 +8803,24 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         'internalNotes': notes.text.trim(),
                         'procurementItemTitle': procurementTitle.text.trim(),
                         'procurementSupplier': procurementSupplier.text.trim(),
+                        'procurementSupplierLink':
+                            procurementSupplierLink.text.trim(),
                         'procurementEstimatedCost': double.tryParse(
                             procurementEstimatedCost.text.trim()),
                         'procurementActualCost':
                             double.tryParse(procurementActualCost.text.trim()),
+                        'procurementOrderReference':
+                            procurementOrderReference.text.trim(),
+                        'procurementPurchasedBy':
+                            procurementPurchasedBy.text.trim(),
+                        'procurementPurchaseDate':
+                            procurementPurchaseDate.text.trim(),
+                        'procurementDeliveryEta':
+                            procurementDeliveryEta.text.trim(),
+                        'procurementReceiptUrl':
+                            procurementReceiptUrl.text.trim(),
+                        'procurementInvoiceUrl':
+                            procurementInvoiceUrl.text.trim(),
                         'procurementNotes': procurementNotes.text.trim(),
                         'giftStoryEnabled': giftStoryEnabled,
                         'giftStoryApproved': giftStoryApproved,
@@ -8384,7 +8830,31 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
                         'giftStoryPhotoUrls': storyPhotos.toSet().toList(),
                         'giftStoryCircumMessage': circumMessage.text.trim(),
                         'giftStoryMusicEnabled': giftStoryMusicEnabled,
+                        'giftStoryMusicSource': giftStoryMusicSource,
                         'giftStoryCustomAudioUrl': giftStoryCustomAudioUrl,
+                        'giftStoryIncludeSenderVoiceNote':
+                            giftStoryIncludeSenderVoiceNote,
+                        'giftStorySenderVoiceNoteUrl':
+                            giftStoryIncludeSenderVoiceNote
+                                ? senderVoiceNoteUrl
+                                : null,
+                        'giftStoryVoicePlacement': giftStoryVoicePlacement,
+                        'giftStoryVoiceVolume': giftStoryVoiceVolume,
+                        'giftStoryMusicDuckingLevel': giftStoryDuckingLevel,
+                        'giftStoryAudioMix': {
+                          'musicSource': giftStoryMusicSource,
+                          'includeSenderVoiceNote':
+                              giftStoryIncludeSenderVoiceNote,
+                          'senderVoiceNoteUrl': giftStoryIncludeSenderVoiceNote
+                              ? senderVoiceNoteUrl
+                              : null,
+                          'voicePlacement': giftStoryVoicePlacement,
+                          'voiceVolume': giftStoryVoiceVolume,
+                          'musicDuckingLevel': giftStoryDuckingLevel,
+                          'duckFadeMs': 400,
+                          'restoreFadeMs': 650,
+                          'nonDestructive': true,
+                        },
                         'giftStoryUpdatedAt': FieldValue.serverTimestamp(),
                         if (generatedRecommendation != null) ...{
                           'irisGiftRecommendation': generatedRecommendation,
@@ -8450,6 +8920,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     procurementSupplier.dispose();
     procurementEstimatedCost.dispose();
     procurementActualCost.dispose();
+    procurementSupplierLink.dispose();
+    procurementOrderReference.dispose();
+    procurementPurchasedBy.dispose();
+    procurementPurchaseDate.dispose();
+    procurementDeliveryEta.dispose();
+    procurementReceiptUrl.dispose();
+    procurementInvoiceUrl.dispose();
     procurementNotes.dispose();
     assignedCurator.dispose();
     targetCompletion.dispose();
@@ -8513,6 +8990,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       await _recordGiftBrandExposure('${item['id']}', result);
     }
     await _loadAdminData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result['adminReviewStatus'] == 'approved'
+            ? 'Gift request approved and saved.'
+            : 'Gift request saved.'),
+      ));
+    }
   }
 
   Future<void> _recordGiftBrandExposure(
@@ -12494,6 +12978,7 @@ class _AdminGiftsSection extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onSuggestCampaignMatch;
   final Future<void> Function(Map<String, dynamic>) onApproveCampaignMatch;
   final Future<void> Function(Map<String, dynamic>) onRejectCampaignMatch;
+  final Future<void> Function(Map<String, dynamic>) onAssignCampaignMatchLater;
   final Future<void> Function() onRefreshCampaignMatching;
   final VoidCallback onCreateBrand;
   final VoidCallback onSeedBirdBlend;
@@ -12508,6 +12993,7 @@ class _AdminGiftsSection extends StatelessWidget {
     required this.onSuggestCampaignMatch,
     required this.onApproveCampaignMatch,
     required this.onRejectCampaignMatch,
+    required this.onAssignCampaignMatchLater,
     required this.onRefreshCampaignMatching,
     required this.onCreateBrand,
     required this.onSeedBirdBlend,
@@ -12555,6 +13041,7 @@ class _AdminGiftsSection extends StatelessWidget {
                 onSuggest: onSuggestCampaignMatch,
                 onApprove: onApproveCampaignMatch,
                 onReject: onRejectCampaignMatch,
+                onAssignLater: onAssignCampaignMatchLater,
                 onRefresh: onRefreshCampaignMatching,
               ),
               _AdminDataSection(
@@ -12602,6 +13089,7 @@ class _AdminCampaignMatchingWorkspace extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic>) onSuggest;
   final Future<void> Function(Map<String, dynamic>) onApprove;
   final Future<void> Function(Map<String, dynamic>) onReject;
+  final Future<void> Function(Map<String, dynamic>) onAssignLater;
   final Future<void> Function() onRefresh;
 
   const _AdminCampaignMatchingWorkspace({
@@ -12610,6 +13098,7 @@ class _AdminCampaignMatchingWorkspace extends StatefulWidget {
     required this.onSuggest,
     required this.onApprove,
     required this.onReject,
+    required this.onAssignLater,
     required this.onRefresh,
   });
 
@@ -12773,6 +13262,24 @@ class _AdminCampaignMatchingWorkspaceState
     }
   }
 
+  Future<void> _bulkAssignLater() async {
+    final items =
+        _visible.where((item) => _selected.contains(_id(item))).toList();
+    if (items.isEmpty ||
+        !await _confirm(
+            'Assign selected later?',
+            'Selected participants will remain available for a later campaign pairing review.',
+            'Assign later')) {
+      return;
+    }
+    await _run(() async {
+      for (final item in items) {
+        await widget.onAssignLater(item);
+      }
+      if (mounted) setState(_selected.clear);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _visible;
@@ -12834,7 +13341,7 @@ class _AdminCampaignMatchingWorkspaceState
                     icon: const Icon(Icons.ios_share_outlined),
                     label: const Text('Export')),
                 TextButton(
-                    onPressed: () => setState(_selected.clear),
+                    onPressed: _busy ? null : _bulkAssignLater,
                     child: const Text('Assign Later')),
               ]),
             ],
