@@ -885,6 +885,7 @@ class _PlatformNotificationCenterState
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
   StreamSubscription<User?>? _authSubscription;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _items = const [];
+  User? _currentUser;
   bool _open = false;
   bool _refreshing = false;
   String _category = 'All';
@@ -903,11 +904,24 @@ class _PlatformNotificationCenterState
   @override
   void initState() {
     super.initState();
-    _listen();
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((_) {
-      _listen();
-      if (mounted) setState(() {});
-    });
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    try {
+      await _ensureCircumFirebaseReady();
+      if (!mounted) return;
+      _currentUser = FirebaseAuth.instance.currentUser;
+      await _listen();
+      _authSubscription =
+          FirebaseAuth.instance.authStateChanges().listen((user) {
+        _currentUser = user;
+        _listen();
+        if (mounted) setState(() {});
+      });
+    } catch (_) {
+      // Notification history must never block the hosted app from rendering.
+    }
   }
 
   @override
@@ -925,8 +939,9 @@ class _PlatformNotificationCenterState
   }
 
   Future<void> _listen() async {
+    await _ensureCircumFirebaseReady();
     await _subscription?.cancel();
-    final user = FirebaseAuth.instance.currentUser;
+    final user = _currentUser ?? FirebaseAuth.instance.currentUser;
     if (user == null) {
       if (mounted) setState(() => _items = const []);
       return;
@@ -1143,7 +1158,7 @@ class _PlatformNotificationCenterState
   @override
   Widget build(BuildContext context) {
     final unread = _items.where((item) => item.data()['read'] != true).length;
-    if (FirebaseAuth.instance.currentUser == null) {
+    if (_currentUser == null) {
       return const SizedBox.shrink();
     }
     if (_open) return _panel(context, unread);
