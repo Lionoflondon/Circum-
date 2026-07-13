@@ -32,7 +32,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   final _customWindowEnd = TextEditingController();
   final _item = TextEditingController();
   final _description = TextEditingController();
-  final _weight = TextEditingController(text: '0.5');
+  final _weight = TextEditingController();
   var _searchingPickup = true;
   String? _initializationError;
 
@@ -112,7 +112,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             vanguardProtocolEnabled: draft.vanguard,
             itemName: draft.itemName,
             description: draft.itemDescription,
-            weightKg: double.tryParse(_weight.text) ?? .5,
+            weightKg: _manualWeightKg(_weight.text) ?? 0,
             fragile: draft.fragile,
             highValue: draft.highValue,
             businessContext: business?.toMap(),
@@ -506,12 +506,13 @@ class _BookingPanel extends StatelessWidget {
           fragile: draft.fragile,
           highValue: draft.highValue,
           onChanged: () {
-            final parsed = double.tryParse(weight.text) ?? .5;
+            final parsed = _manualWeightKg(weight.text);
             onDraft(
               draft.copyWith(
                 itemName: item.text,
                 itemDescription: description.text,
-                weightLabel: '${parsed.toStringAsFixed(1)}kg',
+                weightLabel:
+                    parsed == null ? '' : '${parsed.toStringAsFixed(1)}kg',
               ),
             );
           },
@@ -555,6 +556,14 @@ class _BookingPanel extends StatelessWidget {
           ),
         );
   }
+}
+
+double? _manualWeightKg(String value) {
+  final normalized = value.trim().toLowerCase().replaceAll('kg', '').trim();
+  if (normalized.isEmpty) return null;
+  final parsed = double.tryParse(normalized);
+  if (parsed == null || parsed <= 0) return null;
+  return parsed;
 }
 
 class _AddressPanel extends StatelessWidget {
@@ -994,7 +1003,7 @@ class _ParcelPanel extends StatelessWidget {
         const SizedBox(height: 10),
         _TextInput(
           controller: weight,
-          hint: 'Weight kg',
+          hint: 'Estimated after IRIS analysis',
           keyboardType: TextInputType.number,
           onChanged: (_) => onChanged(),
         ),
@@ -1043,21 +1052,13 @@ class _IrisPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iris = engine.canonicalIrisResult;
+    final vehicle = _customerVehicleLabel(iris?.recommendedVehicle);
     return Column(
       children: [
-        const _IrisOrb(),
+        _IrisOrb(active: engine.isIrisResolving),
         const SizedBox(height: 12),
         if (engine.isIrisResolving) ...[
-          const LinearProgressIndicator(
-            minHeight: 2,
-            color: _Tokens.iris,
-            backgroundColor: Colors.transparent,
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Loading IRIS estimate...',
-            style: TextStyle(color: _Tokens.muted, height: 1.35),
-          ),
+          const _IrisAnalysisProgress(),
         ] else if (engine.irisErrorMessage.isNotEmpty) ...[
           Text(
             engine.irisErrorMessage,
@@ -1079,6 +1080,7 @@ class _IrisPanel extends StatelessWidget {
                 ),
           ),
         ] else ...[
+          if (iris != null) const _IrisSuccessPulse(),
           if (iris?.partial == true)
             const Padding(
               padding: EdgeInsets.only(bottom: 10),
@@ -1087,50 +1089,41 @@ class _IrisPanel extends StatelessWidget {
                 style: TextStyle(color: _Tokens.muted, height: 1.35),
               ),
             ),
-          _SummaryLine(
-            label: 'Item & quantity',
-            value: iris?.itemAndQuantity ??
-                '${draft.itemName.isEmpty ? 'Parcel' : draft.itemName} ×1',
+          _IrisResultRow(
+            label: 'Item recognised',
+            value: iris?.itemName.isNotEmpty == true
+                ? iris!.itemName
+                : (draft.itemName.isEmpty ? 'Awaiting IRIS' : draft.itemName),
           ),
-          _SummaryLine(
-            label: 'Estimated total weight',
-            value: iris?.totalWeightLabel ?? 'Unavailable',
+          _IrisResultRow(
+            label: 'Estimated weight',
+            value: iris?.totalWeightKg == null
+                ? 'Estimated after IRIS analysis'
+                : iris!.totalWeightLabel,
           ),
-          _SummaryLine(
-            label: 'Recommended vehicle',
-            value: iris?.recommendedVehicle?.isNotEmpty == true
-                ? iris!.recommendedVehicle!
-                : 'Unavailable',
+          _IrisResultRow(label: 'Recommended vehicle', value: vehicle),
+          _IrisResultRow(
+            label: 'Handling requirements',
+            value: _handlingRequirements(iris, draft),
           ),
-          _SummaryLine(
+          _IrisResultRow(
             label: 'Confidence',
-            value: iris?.confidenceLabel ?? 'Medium',
+            value: iris?.confidenceLabel ?? 'Awaiting IRIS',
+          ),
+          const _IrisResultRow(
+            label: 'Rider verification at collection',
+            value: 'The rider confirms the parcel before departure.',
           ),
         ],
         ExpansionTile(
           collapsedIconColor: _Tokens.lightBlue,
           iconColor: _Tokens.lightBlue,
           title: const Text(
-            'Why IRIS estimated this',
+            'How IRIS reached this estimate',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
           ),
           children: [
-            if (iris?.repositoryMatch?.isNotEmpty == true)
-              _ReasonLine('Repository match: ${iris!.repositoryMatch}'),
-            if (iris?.unitWeightKg != null)
-              _ReasonLine('Unit weight: ${iris!.unitWeightLabel}'),
-            if (iris != null)
-              _ReasonLine('Quantity applied: ×${iris.quantity}'),
-            if (iris?.totalWeightKg != null)
-              _ReasonLine('Total estimated weight: ${iris!.totalWeightLabel}'),
-            if (iris?.similarVerifiedDeliveries != null)
-              _ReasonLine(
-                'Similar verified deliveries: ${iris!.similarVerifiedDeliveries}',
-              ),
-            if (iris?.explanation?.isNotEmpty == true)
-              _ReasonLine('Confidence reason: ${iris!.explanation}'),
-            ...?iris?.reasons.map((reason) => _ReasonLine(reason)),
-            const _ReasonLine('Rider verification still happens at collection'),
+            ..._customerIrisReasons(iris, draft).map(_ReasonLine.new),
           ],
         ),
         _PrimaryButton(
@@ -1141,6 +1134,218 @@ class _IrisPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+class _IrisAnalysisProgress extends StatefulWidget {
+  const _IrisAnalysisProgress();
+
+  @override
+  State<_IrisAnalysisProgress> createState() => _IrisAnalysisProgressState();
+}
+
+class _IrisAnalysisProgressState extends State<_IrisAnalysisProgress>
+    with SingleTickerProviderStateMixin {
+  static const _stages = [
+    'Identifying your parcel...',
+    'Comparing verified parcel data...',
+    'Estimating dimensions...',
+    'Calculating weight...',
+    'Selecting the best vehicle...',
+    'Preparing recommendation...',
+    'Complete ✓',
+  ];
+
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2450),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final index = (_controller.value * _stages.length)
+            .floor()
+            .clamp(0, _stages.length - 1);
+        return Column(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 3,
+                value: (_controller.value + .08).clamp(0, 1),
+                color: index == _stages.length - 1
+                    ? const Color(0xFF22C55E)
+                    : _Tokens.iris,
+                backgroundColor: Colors.white.withValues(alpha: .06),
+              ),
+            ),
+            const SizedBox(height: 14),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              child: Text(
+                _stages[index],
+                key: ValueKey(_stages[index]),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _Tokens.muted,
+                  height: 1.35,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _IrisSuccessPulse extends StatelessWidget {
+  const _IrisSuccessPulse();
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: .86, end: 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF22C55E).withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: const Color(0xFF22C55E).withValues(alpha: .34),
+              ),
+            ),
+            child: const Text(
+              'Complete ✓',
+              style: TextStyle(
+                color: Color(0xFF86EFAC),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _IrisResultRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _IrisResultRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_rounded,
+              color: Color(0xFF86EFAC), size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: _Tokens.muted),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _customerVehicleLabel(String? raw) {
+  final normalized = (raw ?? '').trim().toLowerCase();
+  if (normalized.isEmpty || normalized == 'any') {
+    return 'Multiple suitable vehicles';
+  }
+  final vehicles = <String>[];
+  void addIf(String token, String label) {
+    if (normalized.contains(token) && !vehicles.contains(label)) {
+      vehicles.add(label);
+    }
+  }
+
+  addIf('bike', 'Bike');
+  addIf('bicycle', 'Bike');
+  addIf('motorbike', 'Motorbike');
+  addIf('motorcycle', 'Motorbike');
+  addIf('car', 'Car');
+  addIf('van', 'Van');
+  if (vehicles.length > 1) return 'Multiple suitable vehicles';
+  if (vehicles.length == 1) return vehicles.single;
+  return raw!.trim();
+}
+
+String _handlingRequirements(
+  dynamic iris,
+  SenderBookingDraft draft,
+) {
+  final requirements = <String>[
+    if (draft.fragile) 'Fragile handling',
+    if (draft.highValue) 'High-value care',
+    if (iris?.vanguardRequired == true) 'Vanguard protection required',
+  ];
+  return requirements.isEmpty
+      ? 'Standard parcel care'
+      : requirements.join(' · ');
+}
+
+List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
+  if (iris == null) {
+    return const [
+      'IRIS will compare your parcel with verified parcel data.',
+      'Weight and vehicle guidance appear after analysis completes.',
+      'Rider confirms at collection before departure.',
+    ];
+  }
+  final item = '${iris.itemName}'.trim().isEmpty
+      ? 'your parcel'
+      : '${iris.itemName}'.trim();
+  final reasons = <String>[
+    if ('${iris.explanation}'.trim().isNotEmpty) '${iris.explanation}'.trim(),
+    'Matched to a verified $item profile.',
+    if (iris.totalWeightKg != null)
+      'Estimated weight based on known dimensions.',
+    '${_customerVehicleLabel(iris.recommendedVehicle)} selected for suitable transport.',
+    'Rider confirms at collection before departure.',
+  ];
+  return reasons.toSet().toList(growable: false);
 }
 
 class _OptionsPanel extends StatelessWidget {
@@ -1208,20 +1413,12 @@ class _OptionsPanel extends StatelessWidget {
         _PaymentCard(
           child: Column(
             children: [
-              if (engine.isSenderQuoteLoading)
-                const _SummaryLine(label: 'Backend quote', value: 'Loading')
-              else if (engine.senderQuoteError.isNotEmpty)
-                _SummaryLine(
-                  label: 'Backend quote',
-                  value: engine.senderQuoteError,
-                )
+              if (engine.senderQuoteError.isNotEmpty)
+                _QuoteUnavailable(onRetry: () => _requestQuote(context, draft))
+              else if (engine.isSenderQuoteLoading || quoteTotal == null)
+                const _QuoteSkeleton()
               else
-                _SummaryLine(
-                  label: 'Estimated total',
-                  value: quoteTotal == null
-                      ? 'Requesting backend quote'
-                      : formatSenderCurrency(quoteTotal),
-                ),
+                _BackendPricingBreakdown(engine: engine),
             ],
           ),
         ),
@@ -1242,8 +1439,7 @@ class _OptionsPanel extends StatelessWidget {
             vanguardProtocolEnabled: draft.vanguard,
             itemName: draft.itemName,
             description: draft.itemDescription,
-            weightKg:
-                double.tryParse(draft.weightLabel.replaceAll('kg', '')) ?? .5,
+            weightKg: _manualWeightKg(draft.weightLabel) ?? 0,
             fragile: draft.fragile,
             highValue: draft.highValue,
           ),
@@ -1265,17 +1461,21 @@ class _ReviewPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = engine.senderQuoteTotal;
+    final pickup = engine.pickupLocation ?? draft.pickupAddress;
+    final dropoff = engine.destinationLocation ?? draft.dropoffAddress;
     return Column(
       children: [
-        _ReviewRow(
+        _CompactAddressReviewRow(
           icon: Icons.location_on_outlined,
           label: 'Pickup',
-          value: engine.pickupLocation ?? draft.pickupAddress,
+          value: _compactAddress(pickup),
+          fullAddress: pickup,
         ),
-        _ReviewRow(
+        _CompactAddressReviewRow(
           icon: Icons.flag_outlined,
           label: 'Drop-off',
-          value: engine.destinationLocation ?? draft.dropoffAddress,
+          value: _compactAddress(dropoff),
+          fullAddress: dropoff,
         ),
         _ReviewRow(
           icon: Icons.person_outline_rounded,
@@ -1300,36 +1500,24 @@ class _ReviewPanel extends StatelessWidget {
         _ReviewRow(
           icon: Icons.pedal_bike_rounded,
           label: 'Vehicle',
-          value: engine.irisResult?.vehicleSuitability ?? draft.irisVehicle,
+          value: _customerVehicleLabel(
+            engine.canonicalIrisResult?.recommendedVehicle ?? draft.irisVehicle,
+          ),
         ),
         if (draft.vanguard)
           _ReviewRow(
             icon: Icons.shield_outlined,
             label: senderVanguardProtocolLabel,
-            value: 'Included in backend quote',
+            value: _quoteLineAmount(engine, 'vanguard') ??
+                'Awaiting backend quote',
             accent: _Tokens.lightBlue,
           ),
-        if (engine.senderQuoteLineItems.isNotEmpty)
-          ...engine.senderQuoteLineItems.map(
-            (item) => _ReviewRow(
-              icon: Icons.receipt_long_outlined,
-              label: '${item['label'] ?? 'Price line'}',
-              value: formatSenderCurrency(
-                double.tryParse('${item['amount'] ?? 0}') ?? 0,
-              ),
-            ),
-          ),
         if (engine.senderQuoteError.isNotEmpty)
-          _ReviewRow(
-            icon: Icons.info_outline_rounded,
-            label: 'Backend quote',
-            value: engine.senderQuoteError,
-          ),
-        _ReviewRow(
-          icon: Icons.payments_outlined,
-          label: 'Estimated total due today',
-          value: total == null ? 'Calculating' : '£${total.toStringAsFixed(2)}',
-        ),
+          const _QuoteErrorText()
+        else if (engine.isSenderQuoteLoading || total == null)
+          const _QuoteSkeleton()
+        else
+          _BackendPricingBreakdown(engine: engine),
         const SizedBox(height: 12),
         _PrimaryButton(
           label: 'Continue to payment',
@@ -1409,27 +1597,12 @@ class _PaymentPanel extends StatelessWidget {
                 label: 'Selected delivery class',
                 value: draft.selectedOption,
               ),
-              _SummaryLine(
-                label: 'Base delivery',
-                value: _lineAmount(engine, 'base_delivery') ??
-                    (total == null ? 'Pending route' : 'Included'),
-              ),
-              _SummaryLine(
-                label: 'Speed/class adjustment',
-                value: _lineAmount(engine, 'speed_adjustment') ??
-                    'Included in backend quote',
-              ),
-              if (draft.vanguard)
-                _SummaryLine(
-                  label: senderVanguardProtocolLabel,
-                  value: _lineAmount(engine, 'vanguard') ?? 'Included in quote',
-                ),
-              _SummaryLine(
-                label: 'Estimated total due today',
-                value: total == null
-                    ? 'Pending route'
-                    : formatSenderCurrency(total),
-              ),
+              if (engine.senderQuoteError.isNotEmpty)
+                const _QuoteErrorText()
+              else if (engine.isSenderQuoteLoading || total == null)
+                const _QuoteSkeleton()
+              else
+                _BackendPricingBreakdown(engine: engine),
             ],
           ),
         ),
@@ -1839,17 +2012,6 @@ class _PaymentPanel extends StatelessWidget {
             bookingPayload: _bookingPayload(engine),
           ),
         );
-  }
-
-  String? _lineAmount(SendPackageState engine, String key) {
-    for (final item in engine.senderQuoteLineItems) {
-      if ('${item['key']}' == key) {
-        return formatSenderCurrency(
-          double.tryParse('${item['amount'] ?? 0}') ?? 0,
-        );
-      }
-    }
-    return null;
   }
 
   Map<String, dynamic> _bookingPayload(SendPackageState engine) => {
@@ -2540,6 +2702,231 @@ class _ReviewRow extends StatelessWidget {
   }
 }
 
+class _CompactAddressReviewRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String fullAddress;
+
+  const _CompactAddressReviewRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.fullAddress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _Tokens.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _Tokens.lightBlue, size: 20),
+          const SizedBox(width: 10),
+          Text(label, style: const TextStyle(color: _Tokens.muted)),
+          const Spacer(),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                TextButton(
+                  onPressed: fullAddress.trim().isEmpty
+                      ? null
+                      : () => _showFullAddress(context, label, fullAddress),
+                  child: const Text('View full address'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _compactAddress(String address) {
+  final trimmed = address.trim();
+  if (trimmed.isEmpty) return 'Address pending';
+  final postcode = RegExp(
+    r'\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b',
+    caseSensitive: false,
+  ).firstMatch(trimmed)?.group(0);
+  if (postcode != null && postcode.trim().isNotEmpty) {
+    return postcode.toUpperCase();
+  }
+  final parts = trimmed
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) return trimmed;
+  return parts.length == 1 ? parts.single : parts.last;
+}
+
+void _showFullAddress(BuildContext context, String label, String address) {
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: _Tokens.midnight,
+      surfaceTintColor: Colors.transparent,
+      title: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      content: Text(
+        address,
+        style: const TextStyle(color: _Tokens.muted, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _BackendPricingBreakdown extends StatelessWidget {
+  final SendPackageState engine;
+
+  const _BackendPricingBreakdown({required this.engine});
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = engine.senderQuoteLineItems
+        .map(
+          (item) => (
+            label: _quoteLineLabel(item),
+            amount: _quoteLineAmountFromItem(item),
+          ),
+        )
+        .where((item) => item.amount != null)
+        .toList(growable: false);
+    return Column(
+      children: [
+        ...lines.map(
+          (item) => _SummaryLine(label: item.label, value: item.amount!),
+        ),
+        if (engine.senderQuoteTotal != null)
+          _SummaryLine(
+            label: 'Estimated total today',
+            value: _formatQuoteAmount(engine.senderQuoteTotal!),
+          ),
+      ],
+    );
+  }
+}
+
+class _QuoteSkeleton extends StatelessWidget {
+  const _QuoteSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        3,
+        (index) => Container(
+          margin: const EdgeInsets.symmetric(vertical: 7),
+          height: 16,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .07 + index * .015),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuoteUnavailable extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _QuoteUnavailable({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _QuoteErrorText(),
+        const SizedBox(height: 10),
+        _PrimaryButton(label: 'Retry', enabled: true, onTap: onRetry),
+      ],
+    );
+  }
+}
+
+class _QuoteErrorText extends StatelessWidget {
+  const _QuoteErrorText();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Text(
+      'Unable to retrieve your quote.',
+      style: TextStyle(
+        color: Color(0xFFFCA5A5),
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+String _quoteLineLabel(Map<String, dynamic> item) {
+  final label = '${item['label'] ?? ''}'.trim();
+  if (label.isNotEmpty) return label;
+  return switch ('${item['key'] ?? item['type']}'.trim()) {
+    'base_delivery' || 'base' => 'Base delivery',
+    'distance_adjustment' || 'distance' => 'Distance adjustment',
+    'weight_adjustment' || 'weight' => 'Weight adjustment',
+    'speed_adjustment' || 'speed' => 'Speed adjustment',
+    'economy_discount' => 'Economy discount',
+    'promotional_credit' || 'promotion' => 'Promotional credit',
+    'vanguard' || 'vanguard_protection' => 'Vanguard protection',
+    _ => 'Quote line',
+  };
+}
+
+String? _quoteLineAmount(SendPackageState engine, String key) {
+  for (final item in engine.senderQuoteLineItems) {
+    if ('${item['key']}' == key || '${item['type']}' == key) {
+      return _quoteLineAmountFromItem(item);
+    }
+  }
+  return null;
+}
+
+String? _quoteLineAmountFromItem(Map<String, dynamic> item) {
+  final value = item['amount'] ?? item['total'] ?? item['value'];
+  if (value == null) return null;
+  if (value is num) return _formatQuoteAmount(value.toDouble());
+  final text = '$value'.trim();
+  if (text.isEmpty) return null;
+  final parsed = double.tryParse(text);
+  return parsed == null ? text : _formatQuoteAmount(parsed);
+}
+
+String _formatQuoteAmount(double value) {
+  if (value < 0) return '-£${value.abs().toStringAsFixed(2)}';
+  return formatSenderCurrency(value);
+}
+
 class _ReasonLine extends StatelessWidget {
   final String text;
 
@@ -2692,23 +3079,36 @@ class _TrustPill extends StatelessWidget {
 }
 
 class _IrisOrb extends StatelessWidget {
-  const _IrisOrb();
+  final bool active;
+
+  const _IrisOrb({this.active = false});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 72,
-      height: 72,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const RadialGradient(
-          colors: [_Tokens.iris, _Tokens.vanguard, _Tokens.bg],
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: active ? .94 : 1, end: active ? 1.08 : 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOut,
+      builder: (context, scale, child) {
+        return Transform.scale(scale: scale, child: child);
+      },
+      child: Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const RadialGradient(
+            colors: [_Tokens.iris, _Tokens.vanguard, _Tokens.bg],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _Tokens.iris.withValues(alpha: active ? .34 : .24),
+              blurRadius: active ? 34 : 28,
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(color: _Tokens.iris.withValues(alpha: .24), blurRadius: 28),
-        ],
+        child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
       ),
-      child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
     );
   }
 }

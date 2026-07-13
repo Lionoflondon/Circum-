@@ -1907,11 +1907,55 @@ void main() {
       expect(source, isNot(contains('Receiver name')));
       expect(source, isNot(contains('Receiver phone')));
       expect(source, isNot(contains('Delivery notes')));
-      expect(source, contains('Item & quantity'));
-      expect(source, contains('Estimated total weight'));
+      expect(source, contains('Item recognised'));
+      expect(source, contains('Estimated weight'));
       expect(source, contains('Recommended vehicle'));
-      expect(source, contains('Why IRIS estimated this'));
+      expect(source, contains('How IRIS reached this estimate'));
+      expect(source, contains('Rider verification at collection'));
       expect(source, isNot(contains('Classification')));
+    });
+
+    test('sender IRIS flow has no fake defaults or developer copy', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(source, contains("final _weight = TextEditingController();"));
+      expect(source, contains('Estimated after IRIS analysis'));
+      expect(source, contains('Identifying your parcel...'));
+      expect(source, contains('Comparing verified parcel data...'));
+      expect(source, contains('Estimating dimensions...'));
+      expect(source, contains('Calculating weight...'));
+      expect(source, contains('Selecting the best vehicle...'));
+      expect(source, contains('Preparing recommendation...'));
+      expect(source, contains('Complete ✓'));
+      expect(source, contains('Multiple suitable vehicles'));
+      expect(source, isNot(contains("TextEditingController(text: '0.5')")));
+      expect(source, isNot(contains("value: 'Any'")));
+      expect(source, isNot(contains('Repository match')));
+      expect(source, isNot(contains('Unit weight')));
+      expect(source, isNot(contains('Quantity applied')));
+      expect(source, isNot(contains('Similar verified deliveries')));
+      expect(source, isNot(contains('Confidence reason')));
+    });
+
+    test('sender quote and review surfaces avoid fabricated values', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('Unable to retrieve your quote.'));
+      expect(source, contains('class _QuoteSkeleton'));
+      expect(source, contains('class _BackendPricingBreakdown'));
+      expect(source, contains('Estimated total today'));
+      expect(source, contains('View full address'));
+      expect(source, contains('class _CompactAddressReviewRow'));
+      expect(source, isNot(contains('Requesting backend quote')));
+      expect(source, isNot(contains("value: 'Calculating'")));
+      expect(source, isNot(contains('Included in backend quote')));
+      expect(source, isNot(contains('Included in quote')));
+      expect(source,
+          isNot(contains("double.tryParse('\${item['amount'] ?? 0}')")));
     });
 
     test('canonical IRIS callable and backend auth guard stay in place', () {
@@ -2037,7 +2081,7 @@ void main() {
       expect(source, contains('_ScheduleDateSelector'));
       expect(source, contains('Preferred collection window'));
       expect(source, contains('Payment'));
-      expect(source, contains('Estimated total due today'));
+      expect(source, contains('Estimated total today'));
       expect(source, contains('Apply Roth to this payment'));
       expect(
         source,
