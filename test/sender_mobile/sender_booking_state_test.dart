@@ -1949,7 +1949,7 @@ void main() {
       expect(source, contains('class _BackendPricingBreakdown'));
       expect(source, contains('Estimated total today'));
       expect(source, contains('View full address'));
-      expect(source, contains('class _CompactAddressReviewRow'));
+      expect(source, contains('class _ExpandableReviewAddressRow'));
       expect(source, isNot(contains('Requesting backend quote')));
       expect(source, isNot(contains("value: 'Calculating'")));
       expect(source, isNot(contains('Included in backend quote')));
@@ -2503,6 +2503,60 @@ void main() {
 
       expect(data.code, '111222');
       expect(data.deliveryPin, '333444');
+    });
+
+    test('review delivery screen uses the approved native Sender layout', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('class _SenderReviewDeliveryScreen'));
+      expect(source, contains('class _ReviewRoutePanel'));
+      expect(source, contains('Review your delivery'));
+      expect(source, contains('ESTIMATED DELIVERY'));
+      expect(source, contains('IRIS'));
+      expect(source, contains('Pickup'));
+      expect(source, contains('Drop-off'));
+      expect(source, contains('Recipient'));
+      expect(source, contains('Parcel'));
+      expect(source, contains('Delivery time'));
+      expect(source, contains('Delivery priority'));
+      expect(source, contains('View full address'));
+      expect(source, contains('AnimatedSize'));
+      expect(source, contains('Continue to payment'));
+      expect(source, contains('backgroundColor: _Tokens.bg'));
+      expect(source, isNot(contains('£8.40')));
+    });
+
+    test('review delivery reads quote, route and IRIS from backend state', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('widget.engine.senderQuoteTotal'));
+      expect(source, contains('_formatQuoteAmount(total!)'));
+      expect(source, contains('widget.engine.senderQuoteSpeed'));
+      expect(source, contains('widget.engine.polylineCoordinates.isNotEmpty'));
+      expect(source, contains('widget.engine.polylines.isNotEmpty'));
+      expect(source, contains('widget.engine.distance'));
+      expect(source, contains('engine.canonicalIrisResult'));
+      expect(source, contains('result?.totalWeightLabel'));
+      expect(source, contains('result?.recommendedVehicle'));
+      expect(source, contains('Vanguard protected'));
+      expect(source, isNot(contains('Repository match')));
+      expect(source, isNot(contains('Unit weight')));
+      expect(source, isNot(contains('Classification engine')));
+    });
+
+    test('review delivery masks recipient phone before rider assignment', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_booking_canvas.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('_maskSenderPhoneForReview'));
+      expect(source, contains('Phone masked until rider assigned'));
+      expect(source, contains('•••• •••'));
+      expect(source, isNot(contains('+44 7700 900123')));
     });
   });
 }

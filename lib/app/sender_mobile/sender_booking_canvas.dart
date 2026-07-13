@@ -159,6 +159,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             ),
           );
         }
+        if (_draft.step == SenderBookingStep.review) {
+          return _SenderReviewDeliveryScreen(
+            draft: _draft,
+            engine: engine,
+            onBack: _back,
+            onContinue: _advance,
+          );
+        }
         return Scaffold(
           backgroundColor: _Tokens.bg,
           body: Stack(
@@ -531,11 +539,7 @@ class _BookingPanel extends StatelessWidget {
           onContinue: onContinue,
         );
       case SenderBookingStep.review:
-        return _ReviewPanel(
-          draft: draft,
-          engine: engine,
-          onContinue: onContinue,
-        );
+        return const SizedBox.shrink();
       case SenderBookingStep.payment:
         return _PaymentPanel(engine: engine, draft: draft, onDraft: onDraft);
       case SenderBookingStep.findingRider:
@@ -1447,86 +1451,1073 @@ class _OptionsPanel extends StatelessWidget {
   }
 }
 
-class _ReviewPanel extends StatelessWidget {
+class _SenderReviewDeliveryScreen extends StatefulWidget {
   final SenderBookingDraft draft;
   final SendPackageState engine;
+  final VoidCallback onBack;
   final VoidCallback onContinue;
 
-  const _ReviewPanel({
+  const _SenderReviewDeliveryScreen({
     required this.draft,
     required this.engine,
+    required this.onBack,
+    required this.onContinue,
+  });
+
+  @override
+  State<_SenderReviewDeliveryScreen> createState() =>
+      _SenderReviewDeliveryScreenState();
+}
+
+class _SenderReviewDeliveryScreenState
+    extends State<_SenderReviewDeliveryScreen> {
+  bool _pickupExpanded = false;
+  bool _dropoffExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final total = widget.engine.senderQuoteTotal;
+    final canContinue = total != null && !widget.engine.isSenderQuoteLoading;
+    final pickup = widget.engine.pickupLocation ?? widget.draft.pickupAddress;
+    final dropoff =
+        widget.engine.destinationLocation ?? widget.draft.dropoffAddress;
+    final speed = widget.engine.senderQuoteSpeed?.trim().isNotEmpty == true
+        ? widget.engine.senderQuoteSpeed!.trim()
+        : widget.draft.selectedOption;
+
+    return Scaffold(
+      backgroundColor: _Tokens.bg,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: _ReviewBackdrop()),
+          SafeArea(
+            child: Column(
+              children: [
+                _ReviewTopBar(onBack: widget.onBack),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    switchInCurve: Curves.easeOutCubic,
+                    child: ListView(
+                      key: ValueKey(widget.engine.senderQuoteId ?? speed),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        0,
+                        16,
+                        18 + media.padding.bottom,
+                      ),
+                      children: [
+                        _ReviewRoutePanel(
+                          engine: widget.engine,
+                          draft: widget.draft,
+                          selectedSpeed: speed,
+                        ),
+                        const SizedBox(height: 14),
+                        _ReviewSheet(
+                          child: Column(
+                            children: [
+                              const _ReviewGrabber(),
+                              _ExpandableReviewAddressRow(
+                                icon: Icons.location_on_outlined,
+                                label: 'Pickup',
+                                summary: _reviewAddressSummary(
+                                  pickup,
+                                  widget.engine.pickupLocality,
+                                ),
+                                fullAddress: pickup,
+                                expanded: _pickupExpanded,
+                                onTap: () => setState(
+                                  () => _pickupExpanded = !_pickupExpanded,
+                                ),
+                              ),
+                              _ExpandableReviewAddressRow(
+                                icon: Icons.flag_outlined,
+                                label: 'Drop-off',
+                                summary: _reviewAddressSummary(
+                                  dropoff,
+                                  widget.engine.destinationLocality,
+                                ),
+                                fullAddress: dropoff,
+                                expanded: _dropoffExpanded,
+                                onTap: () => setState(
+                                  () => _dropoffExpanded = !_dropoffExpanded,
+                                ),
+                              ),
+                              _ReviewListRow(
+                                icon: Icons.person_outline_rounded,
+                                label: 'Recipient',
+                                value: widget.draft.receiverName.trim().isEmpty
+                                    ? 'Recipient pending'
+                                    : widget.draft.receiverName.trim(),
+                                secondary: _maskSenderPhoneForReview(
+                                  widget.draft.receiverPhone,
+                                ),
+                              ),
+                              _ReviewListRow(
+                                icon: Icons.inventory_2_outlined,
+                                label: 'Parcel',
+                                value: widget.draft.itemName.trim().isEmpty
+                                    ? 'Parcel pending'
+                                    : widget.draft.itemName.trim(),
+                                secondary: _reviewIrisEstimate(
+                                  widget.engine,
+                                  widget.draft,
+                                ),
+                                badge: widget.draft.vanguard
+                                    ? const _VanguardReviewBadge()
+                                    : null,
+                              ),
+                              _ReviewListRow(
+                                icon: Icons.schedule_rounded,
+                                label: 'Delivery time',
+                                value: widget.draft.deliveryTimeSummary,
+                              ),
+                              _ReviewListRow(
+                                icon: Icons.speed_rounded,
+                                label: 'Delivery priority',
+                                value: speed,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                _ReviewBottomBar(
+                  total: total,
+                  loading: widget.engine.isSenderQuoteLoading,
+                  error: widget.engine.senderQuoteError,
+                  canContinue: canContinue,
+                  onContinue: widget.onContinue,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewBackdrop extends StatelessWidget {
+  const _ReviewBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _Tokens.bg,
+        gradient: RadialGradient(
+          center: const Alignment(-.65, -.95),
+          radius: 1.15,
+          colors: [
+            _Tokens.blue.withValues(alpha: .16),
+            _Tokens.midnight.withValues(alpha: .70),
+            _Tokens.bg,
+          ],
+          stops: const [0, .48, 1],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewTopBar extends StatelessWidget {
+  final VoidCallback onBack;
+
+  const _ReviewTopBar({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      child: Row(
+        children: [
+          _ReviewIconButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            label: 'Back',
+            onTap: onBack,
+          ),
+          const Expanded(
+            child: Text(
+              'Review your delivery',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .1,
+              ),
+            ),
+          ),
+          const SizedBox(width: 40),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewIconButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ReviewIconButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .055),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _Tokens.border),
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewRoutePanel extends StatefulWidget {
+  final SendPackageState engine;
+  final SenderBookingDraft draft;
+  final String selectedSpeed;
+
+  const _ReviewRoutePanel({
+    required this.engine,
+    required this.draft,
+    required this.selectedSpeed,
+  });
+
+  @override
+  State<_ReviewRoutePanel> createState() => _ReviewRoutePanelState();
+}
+
+class _ReviewRoutePanelState extends State<_ReviewRoutePanel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final routeConfirmed = widget.engine.polylineCoordinates.isNotEmpty ||
+        widget.engine.polylines.isNotEmpty ||
+        widget.engine.distance != null;
+    final pickup = _compactAddress(
+      widget.engine.pickupLocation ?? widget.draft.pickupAddress,
+    );
+    final dropoff = _compactAddress(
+      widget.engine.destinationLocation ?? widget.draft.dropoffAddress,
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          height: 238,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withValues(alpha: .10)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _Tokens.blue.withValues(alpha: .16),
+                _Tokens.midnight.withValues(alpha: .92),
+                const Color(0xFF0D111C),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .36),
+                blurRadius: 30,
+                offset: const Offset(0, 18),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              const Positioned.fill(child: _ReviewMapGrid()),
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => CustomPaint(
+                  painter: _ReviewRoutePainter(
+                    t: _controller.value,
+                    routeConfirmed: routeConfirmed,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              Positioned(
+                left: 22,
+                bottom: 30,
+                child: _ReviewPinLabel(label: pickup, color: _Tokens.blue),
+              ),
+              Positioned(
+                right: 22,
+                bottom: 30,
+                child:
+                    _ReviewPinLabel(label: dropoff, color: Color(0xFF34D399)),
+              ),
+              const Positioned(top: 14, right: 14, child: _ReviewIrisBadge()),
+              Positioned(
+                left: 14,
+                bottom: 14,
+                child: _ReviewEtaChip(
+                  routeConfirmed: routeConfirmed,
+                  distanceKm: widget.engine.distance,
+                  speed: widget.selectedSpeed,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewMapGrid extends StatelessWidget {
+  const _ReviewMapGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _ReviewMapGridPainter());
+  }
+}
+
+class _ReviewMapGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: .06)
+      ..strokeWidth = 1;
+    const spacing = 28.0;
+    for (var x = 0.0; x <= size.width; x += spacing) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (var y = 0.0; y <= size.height; y += spacing) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+    final shade = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.transparent,
+          _Tokens.bg.withValues(alpha: .28),
+        ],
+        stops: const [.40, 1],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, shade);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReviewMapGridPainter oldDelegate) => false;
+}
+
+class _ReviewRoutePainter extends CustomPainter {
+  final double t;
+  final bool routeConfirmed;
+
+  const _ReviewRoutePainter({required this.t, required this.routeConfirmed});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final route = Path()
+      ..moveTo(size.width * .10, size.height * .72)
+      ..cubicTo(
+        size.width * .30,
+        size.height * .72,
+        size.width * .30,
+        size.height * .30,
+        size.width * .50,
+        size.height * .30,
+      )
+      ..cubicTo(
+        size.width * .70,
+        size.height * .30,
+        size.width * .70,
+        size.height * .72,
+        size.width * .90,
+        size.height * .72,
+      );
+    final glow = Paint()
+      ..color = _Tokens.blue.withValues(alpha: .16)
+      ..strokeWidth = 8
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    canvas.drawPath(route, glow);
+    final line = Paint()
+      ..color = _Tokens.blue.withValues(alpha: routeConfirmed ? .94 : .74)
+      ..strokeWidth = 2.8
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    if (routeConfirmed) {
+      canvas.drawPath(route, line);
+      final metric = route.computeMetrics().first;
+      final progress = (metric.length * t).clamp(0, metric.length).toDouble();
+      canvas.drawPath(
+        metric.extractPath(0, progress),
+        Paint()
+          ..color = const Color(0xFF38BDF8).withValues(alpha: .75)
+          ..strokeWidth = 4
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      );
+    } else {
+      _drawDashedPath(canvas, route, line, phase: t * 14);
+    }
+    _drawPin(canvas, Offset(size.width * .10, size.height * .72), _Tokens.blue);
+    _drawPin(
+      canvas,
+      Offset(size.width * .90, size.height * .72),
+      const Color(0xFF34D399),
+    );
+  }
+
+  void _drawDashedPath(
+    Canvas canvas,
+    Path path,
+    Paint paint, {
+    required double phase,
+  }) {
+    for (final metric in path.computeMetrics()) {
+      var distance = -phase;
+      while (distance < metric.length) {
+        final start = math.max(0.0, distance);
+        final end = math.min(metric.length, distance + 9);
+        if (end > 0) canvas.drawPath(metric.extractPath(start, end), paint);
+        distance += 17;
+      }
+    }
+  }
+
+  void _drawPin(Canvas canvas, Offset center, Color color) {
+    canvas.drawCircle(
+      center,
+      12,
+      Paint()..color = color.withValues(alpha: .14),
+    );
+    canvas.drawCircle(center, 6, Paint()..color = color);
+    canvas.drawCircle(
+      center,
+      7,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..color = Colors.white.withValues(alpha: .60),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReviewRoutePainter oldDelegate) =>
+      oldDelegate.t != t || oldDelegate.routeConfirmed != routeConfirmed;
+}
+
+class _ReviewPinLabel extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _ReviewPinLabel({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: .58),
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'JetBrains Mono',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewIrisBadge extends StatelessWidget {
+  const _ReviewIrisBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: _Tokens.blue.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _Tokens.blue.withValues(alpha: .30)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: const BoxDecoration(
+              color: _Tokens.blue,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            'IRIS',
+            style: TextStyle(
+              color: _Tokens.lightBlue,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.1,
+              fontFamily: 'JetBrains Mono',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewEtaChip extends StatelessWidget {
+  final bool routeConfirmed;
+  final double? distanceKm;
+  final String speed;
+
+  const _ReviewEtaChip({
+    required this.routeConfirmed,
+    required this.distanceKm,
+    required this.speed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final routeLabel = routeConfirmed
+        ? distanceKm == null
+            ? 'Route confirmed'
+            : '${distanceKm!.toStringAsFixed(1)} km · $speed'
+        : 'Route calculating · $speed';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D111C).withValues(alpha: .86),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: .10)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.schedule_rounded,
+                color: _Tokens.lightBlue,
+                size: 15,
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'ESTIMATED DELIVERY',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: .42),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      fontFamily: 'JetBrains Mono',
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    routeLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewSheet extends StatelessWidget {
+  final Widget child;
+
+  const _ReviewSheet({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D111C).withValues(alpha: .82),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: .10)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewGrabber extends StatelessWidget {
+  const _ReviewGrabber();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 36,
+        height: 4,
+        margin: const EdgeInsets.only(bottom: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .14),
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewListRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? secondary;
+  final Widget? badge;
+
+  const _ReviewListRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.secondary,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withValues(alpha: .08)),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ReviewRowIcon(icon),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ReviewRowLabel(label),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+                if (secondary != null && secondary!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    secondary!,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: .56),
+                      fontSize: 12.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+                if (badge != null) ...[
+                  const SizedBox(height: 7),
+                  badge!,
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpandableReviewAddressRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String summary;
+  final String fullAddress;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  const _ExpandableReviewAddressRow({
+    required this.icon,
+    required this.label,
+    required this.summary,
+    required this.fullAddress,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final canExpand = fullAddress.trim().isNotEmpty;
+    return Semantics(
+      button: true,
+      label: '$label address',
+      child: InkWell(
+        onTap: canExpand ? onTap : null,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.white.withValues(alpha: .08)),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ReviewRowIcon(icon),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ReviewRowLabel(label),
+                      const SizedBox(height: 3),
+                      Text(
+                        summary,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                      ),
+                      if (canExpand) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          expanded ? fullAddress : 'View full address',
+                          style: TextStyle(
+                            color: expanded
+                                ? Colors.white.withValues(alpha: .58)
+                                : _Tokens.lightBlue,
+                            fontSize: 12.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (canExpand)
+                  AnimatedRotation(
+                    turns: expanded ? .25 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white.withValues(alpha: .36),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewRowIcon extends StatelessWidget {
+  final IconData icon;
+
+  const _ReviewRowIcon(this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: _Tokens.blue.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: _Tokens.blue.withValues(alpha: .18)),
+      ),
+      child: Icon(icon, color: _Tokens.lightBlue, size: 16),
+    );
+  }
+}
+
+class _ReviewRowLabel extends StatelessWidget {
+  final String label;
+
+  const _ReviewRowLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: .40),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        fontFamily: 'JetBrains Mono',
+      ),
+    );
+  }
+}
+
+class _VanguardReviewBadge extends StatelessWidget {
+  const _VanguardReviewBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF34D399).withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFF34D399).withValues(alpha: .25),
+        ),
+      ),
+      child: const Text(
+        'Vanguard protected',
+        style: TextStyle(
+          color: Color(0xFF34D399),
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'JetBrains Mono',
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewBottomBar extends StatelessWidget {
+  final double? total;
+  final bool loading;
+  final String error;
+  final bool canContinue;
+  final VoidCallback onContinue;
+
+  const _ReviewBottomBar({
+    required this.total,
+    required this.loading,
+    required this.error,
+    required this.canContinue,
     required this.onContinue,
   });
 
   @override
   Widget build(BuildContext context) {
-    final total = engine.senderQuoteTotal;
-    final pickup = engine.pickupLocation ?? draft.pickupAddress;
-    final dropoff = engine.destinationLocation ?? draft.dropoffAddress;
-    return Column(
-      children: [
-        _CompactAddressReviewRow(
-          icon: Icons.location_on_outlined,
-          label: 'Pickup',
-          value: _compactAddress(pickup),
-          fullAddress: pickup,
-        ),
-        _CompactAddressReviewRow(
-          icon: Icons.flag_outlined,
-          label: 'Drop-off',
-          value: _compactAddress(dropoff),
-          fullAddress: dropoff,
-        ),
-        _ReviewRow(
-          icon: Icons.person_outline_rounded,
-          label: 'Recipient',
-          value: draft.receiverName,
-        ),
-        _ReviewRow(
-          icon: Icons.inventory_2_outlined,
-          label: 'Parcel',
-          value: draft.itemName,
-        ),
-        _ReviewRow(
-          icon: Icons.schedule_rounded,
-          label: 'Delivery time',
-          value: draft.deliveryTimeSummary,
-        ),
-        _ReviewRow(
-          icon: Icons.speed_rounded,
-          label: 'Delivery priority',
-          value: draft.selectedOption,
-        ),
-        _ReviewRow(
-          icon: Icons.pedal_bike_rounded,
-          label: 'Vehicle',
-          value: _customerVehicleLabel(
-            engine.canonicalIrisResult?.recommendedVehicle ?? draft.irisVehicle,
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(18, 13, 18, 12 + bottom),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D111C).withValues(alpha: .88),
+            border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: .10)),
+            ),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 108,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'TOTAL',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .42),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'JetBrains Mono',
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 280),
+                      child: loading
+                          ? const _ReviewTotalSkeleton()
+                          : Text(
+                              error.isNotEmpty
+                                  ? 'Quote needed'
+                                  : total == null
+                                      ? 'Pending'
+                                      : _formatQuoteAmount(total!),
+                              key: ValueKey('$total$error$loading'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'JetBrains Mono',
+                              ),
+                            ),
+                    ),
+                    if (error.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      const Text(
+                        'Unable to retrieve your quote.',
+                        style: TextStyle(
+                          color: Color(0xFFFCA5A5),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: _PrimaryButton(
+                    label: 'Continue to payment',
+                    enabled: canContinue,
+                    onTap: onContinue,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        if (draft.vanguard)
-          _ReviewRow(
-            icon: Icons.shield_outlined,
-            label: senderVanguardProtocolLabel,
-            value: _quoteLineAmount(engine, 'vanguard') ??
-                'Awaiting backend quote',
-            accent: _Tokens.lightBlue,
-          ),
-        if (engine.senderQuoteError.isNotEmpty)
-          const _QuoteErrorText()
-        else if (engine.isSenderQuoteLoading || total == null)
-          const _QuoteSkeleton()
-        else
-          _BackendPricingBreakdown(engine: engine),
-        const SizedBox(height: 12),
-        _PrimaryButton(
-          label: 'Continue to payment',
-          enabled: total != null && !engine.isSenderQuoteLoading,
-          onTap: onContinue,
-        ),
-      ],
+      ),
     );
   }
+}
+
+class _ReviewTotalSkeleton extends StatelessWidget {
+  const _ReviewTotalSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('review-total-skeleton'),
+      width: 72,
+      height: 18,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
+String _reviewAddressSummary(String address, String? locality) {
+  final compact = _compactAddress(address);
+  final area = _reviewAddressArea(address, locality);
+  if (area.isEmpty || area == compact) return compact;
+  return '$compact, $area';
+}
+
+String _reviewAddressArea(String address, String? locality) {
+  final cleanLocality = locality?.trim();
+  if (cleanLocality != null && cleanLocality.isNotEmpty) return cleanLocality;
+  final parts = address
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.length >= 2) return parts[parts.length - 2];
+  return '';
+}
+
+String _maskSenderPhoneForReview(String phone) {
+  final trimmed = phone.trim();
+  if (trimmed.isEmpty) return 'Phone number pending';
+  final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+  if (digits.length <= 3) return 'Phone masked until rider assigned';
+  final suffix = digits.substring(digits.length - 3);
+  final prefix = trimmed.startsWith('+') ? '+${digits.substring(0, 2)} ' : '';
+  return '$prefix•••• •••$suffix';
+}
+
+String _reviewIrisEstimate(
+  SendPackageState engine,
+  SenderBookingDraft draft,
+) {
+  final result = engine.canonicalIrisResult;
+  final weight = result?.totalWeightLabel ??
+      (draft.weightLabel.trim().isEmpty
+          ? 'Estimated after IRIS analysis'
+          : draft.weightLabel.trim());
+  final vehicle = _customerVehicleLabel(
+    result?.recommendedVehicle ?? draft.irisVehicle,
+  );
+  if (weight == 'Estimated after IRIS analysis') {
+    return '$weight • $vehicle recommended';
+  }
+  return 'Estimated $weight • $vehicle recommended';
 }
 
 class _PaymentPanel extends StatelessWidget {
@@ -2657,107 +3648,6 @@ class _SummaryLine extends StatelessWidget {
   }
 }
 
-class _ReviewRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color accent;
-
-  const _ReviewRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.accent = _Tokens.lightBlue,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .045),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _Tokens.border),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: accent, size: 20),
-          const SizedBox(width: 10),
-          Text(label, style: const TextStyle(color: _Tokens.muted)),
-          const Spacer(),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CompactAddressReviewRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final String fullAddress;
-
-  const _CompactAddressReviewRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.fullAddress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .045),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _Tokens.border),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: _Tokens.lightBlue, size: 20),
-          const SizedBox(width: 10),
-          Text(label, style: const TextStyle(color: _Tokens.muted)),
-          const Spacer(),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  value,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                TextButton(
-                  onPressed: fullAddress.trim().isEmpty
-                      ? null
-                      : () => _showFullAddress(context, label, fullAddress),
-                  child: const Text('View full address'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 String _compactAddress(String address) {
   final trimmed = address.trim();
   if (trimmed.isEmpty) return 'Address pending';
@@ -2775,33 +3665,6 @@ String _compactAddress(String address) {
       .toList(growable: false);
   if (parts.isEmpty) return trimmed;
   return parts.length == 1 ? parts.single : parts.last;
-}
-
-void _showFullAddress(BuildContext context, String label, String address) {
-  showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      backgroundColor: _Tokens.midnight,
-      surfaceTintColor: Colors.transparent,
-      title: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-      content: Text(
-        address,
-        style: const TextStyle(color: _Tokens.muted, height: 1.4),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Close'),
-        ),
-      ],
-    ),
-  );
 }
 
 class _BackendPricingBreakdown extends StatelessWidget {
@@ -2901,15 +3764,6 @@ String _quoteLineLabel(Map<String, dynamic> item) {
     'vanguard' || 'vanguard_protection' => 'Vanguard protection',
     _ => 'Quote line',
   };
-}
-
-String? _quoteLineAmount(SendPackageState engine, String key) {
-  for (final item in engine.senderQuoteLineItems) {
-    if ('${item['key']}' == key || '${item['type']}' == key) {
-      return _quoteLineAmountFromItem(item);
-    }
-  }
-  return null;
 }
 
 String? _quoteLineAmountFromItem(Map<String, dynamic> item) {
