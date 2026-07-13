@@ -2247,8 +2247,8 @@ void main() {
       );
     });
 
-    test('both PINs appear together after rider assignment', () {
-      const activeStates = [
+    test('collection PIN appears before collection and receiver PIN waits', () {
+      const collectionPinStates = [
         SenderTrackingState.riderAssigned,
         SenderTrackingState.riderEnRouteToPickup,
         SenderTrackingState.riderArrivedAtPickup,
@@ -2257,17 +2257,27 @@ void main() {
         SenderTrackingState.riderArrivingAtDropoff,
         SenderTrackingState.issue,
       ];
+      const receiverPinStates = [
+        SenderTrackingState.pickupComplete,
+        SenderTrackingState.inTransit,
+        SenderTrackingState.riderArrivingAtDropoff,
+        SenderTrackingState.issue,
+      ];
 
-      final pinStates = SenderTrackingState.values.where((state) {
+      final collectionStates = SenderTrackingState.values.where((state) {
         final content = senderTrackingContentFor(state);
-        return content.showCollectionPin && content.showReceiverPin;
+        return content.showCollectionPin;
+      }).toList();
+      final receiverStates = SenderTrackingState.values.where((state) {
+        final content = senderTrackingContentFor(state);
+        return content.showReceiverPin;
       }).toList();
 
-      expect(pinStates, activeStates);
-      for (final state in activeStates) {
+      expect(collectionStates, collectionPinStates);
+      expect(receiverStates, receiverPinStates);
+      for (final state in collectionPinStates) {
         final content = senderTrackingContentFor(state);
         expect(content.showCollectionPin, isTrue, reason: '$state');
-        expect(content.showReceiverPin, isTrue, reason: '$state');
       }
     });
 
@@ -2403,6 +2413,54 @@ void main() {
       expect(source, isNot(contains('price')));
       expect(source, isNot(contains('eye')));
       expect(source, isNot(contains('Delivery PIN sent to receiver')));
+    });
+
+    test('sender tracking mirrors backend waiting state', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+      final stateSource = File(
+        'lib/app/send_package/bloc/send_package_state.dart',
+      ).readAsStringSync();
+      final blocSource = File(
+        'lib/app/send_package/bloc/send_package_bloc.dart',
+      ).readAsStringSync();
+
+      expect(stateSource, contains('activeDeliveryData'));
+      expect(blocSource,
+          contains('activeDeliveryData: Map<String, dynamic>.from(data)'));
+      expect(source, contains('class SenderWaitingSnapshot'));
+      expect(source, contains('class SenderWaitingCard'));
+      expect(source, contains('class WaitingCountdownRing'));
+      expect(source, contains("data['waiting']"));
+      expect(source, contains("waiting['freeWaitEndsAt']"));
+      expect(source, contains("data['waitingContextState']"));
+      expect(source, contains("data['noShowFinancial']"));
+      expect(source, contains('Additional waiting charge'));
+      expect(source, contains('Waiting timer is server-authoritative.'));
+      expect(source, contains('No-show review'));
+      expect(source, isNot(contains('Timer.periodic')));
+    });
+
+    test('sender tracking keeps Vanguard collection PIN visible safely', () {
+      final source = File(
+        'lib/app/sender_mobile/sender_tracking_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('senderVanguardCollectionPinVisible'));
+      expect(source, contains('class VanguardCollectionPinCard'));
+      expect(source, contains('Vanguard Collection PIN'));
+      expect(
+        source,
+        contains('This PIN must be shown to your rider during collection.'),
+      );
+      expect(source, contains('Clipboard.setData'));
+      expect(source, contains('Copy'));
+      expect(source, contains('showReceiverPin: false'));
+      expect(source,
+          contains('content.showCollectionPin && !hasVanguardCollectionPin'));
+      expect(source, contains("protection['collectionPin']"));
+      expect(source, isNot(contains('backend verification logic')));
     });
 
     test('sender tracking maps assigned vehicles to live map marker kinds', () {

@@ -43,6 +43,7 @@ class SendPackageState {
   double? distance;
   final DeliveryStatus deliveryStatus;
   final String deliveryRequestStatus;
+  final Map<String, dynamic> activeDeliveryData;
   final bool collectionPinVerified;
   final bool deliveryPinVerified;
   PanelControlStatus panelControlStatus;
@@ -101,6 +102,7 @@ class SendPackageState {
     this.distance,
     this.deliveryStatus = DeliveryStatus.inital,
     this.deliveryRequestStatus = '',
+    this.activeDeliveryData = const {},
     this.collectionPinVerified = false,
     this.deliveryPinVerified = false,
     this.panelControlStatus = PanelControlStatus.isClosed,
@@ -166,6 +168,7 @@ class SendPackageState {
     double? distance,
     DeliveryStatus? deliveryStatus,
     String? deliveryRequestStatus,
+    Map<String, dynamic>? activeDeliveryData,
     bool? collectionPinVerified,
     bool? deliveryPinVerified,
     PanelControlStatus? panelControlStatus,
@@ -233,6 +236,7 @@ class SendPackageState {
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
       deliveryRequestStatus:
           deliveryRequestStatus ?? this.deliveryRequestStatus,
+      activeDeliveryData: activeDeliveryData ?? this.activeDeliveryData,
       collectionPinVerified:
           collectionPinVerified ?? this.collectionPinVerified,
       deliveryPinVerified: deliveryPinVerified ?? this.deliveryPinVerified,

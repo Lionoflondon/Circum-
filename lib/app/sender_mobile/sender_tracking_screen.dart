@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../send_package/bloc/send_package_bloc.dart';
 import 'design_system/sender_design_system.dart';
@@ -184,7 +186,11 @@ SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
     'en_route_to_pickup' =>
       SenderTrackingState.riderEnRouteToPickup,
     'arrived_at_pickup' ||
-    'waiting' =>
+    'waiting' ||
+    'waiting_for_collection' ||
+    'waiting_charge_active' ||
+    'waiting_charges_active' ||
+    'no_show_review' =>
       SenderTrackingState.riderArrivedAtPickup,
     'pickup_verification' ||
     'pickup_verified' ||
@@ -266,7 +272,7 @@ SenderTrackingContent senderTrackingContentFor(
         showRider: true,
         showRiderCard: true,
         showCollectionPin: true,
-        showReceiverPin: true,
+        showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.40, .46),
         eta: '7 min',
@@ -283,7 +289,7 @@ SenderTrackingContent senderTrackingContentFor(
         showRider: true,
         showRiderCard: true,
         showCollectionPin: true,
-        showReceiverPin: true,
+        showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.32, .40),
         eta: '4 min',
@@ -300,7 +306,7 @@ SenderTrackingContent senderTrackingContentFor(
         showRider: true,
         showRiderCard: true,
         showCollectionPin: true,
-        showReceiverPin: true,
+        showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.20, .32),
         eta: 'Arrived',
@@ -436,6 +442,119 @@ String senderReceiverPinStatusFor(
   bool verified = false,
 }) {
   return verified ? '✓ Delivery verified' : 'Ready for delivery';
+}
+
+bool senderVanguardCollectionPinVisible(SendPackageState engine) {
+  return senderVanguardCollectionPinFor(engine) != null;
+}
+
+String? senderVanguardCollectionPinFor(SendPackageState engine) {
+  final data = engine.activeDeliveryData;
+  final protection = _mapFrom(data['vanguardProtection']);
+  final enabled = data['vanguardEnabled'] == true ||
+      data['vanguardRequired'] == true ||
+      protection['enabled'] == true ||
+      protection['required'] == true ||
+      '${data['deliveryType'] ?? data['serviceType'] ?? ''}'
+          .toLowerCase()
+          .contains('vanguard');
+  final pin = (engine.deliveryData?.code.trim().isNotEmpty == true
+          ? engine.deliveryData?.code
+          : '${data['collectionPin'] ?? data['pickupPin'] ?? protection['collectionPin'] ?? ''}')
+      ?.trim();
+  return enabled && pin != null && pin.isNotEmpty ? pin : null;
+}
+
+String _senderWaitingStateLabel({
+  required String status,
+  required int? remainingSeconds,
+  required bool noShowAvailable,
+  required String? chargeLabel,
+  required bool customerResponded,
+}) {
+  if (status == 'sender_no_show_pickup' || noShowAvailable) {
+    return 'No-show review';
+  }
+  if (chargeLabel != null && remainingSeconds == 0) {
+    return 'Waiting charges active';
+  }
+  if (customerResponded) return 'Waiting for collection';
+  if (remainingSeconds != null && remainingSeconds <= 60) return 'Final minute';
+  if (status == 'waiting' || status == 'waiting_for_collection') {
+    return 'Waiting for collection';
+  }
+  return 'Rider arrived';
+}
+
+Map<String, dynamic> _mapFrom(Object? value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return const {};
+}
+
+({double amount, String currency})? _customerWaitingCharge(
+  Map<String, dynamic> data,
+  Map<String, dynamic> waiting,
+) {
+  final financial = _mapFrom(data['noShowFinancial']);
+  final amount = _numberFrom(
+    financial['amount'] ??
+        waiting['noShowFeeAmount'] ??
+        data['waitingCharge'] ??
+        data['waitingChargeAmount'] ??
+        data['pickupNoShowSurchargeGbp'],
+  );
+  if (amount == null || amount <= 0) return null;
+  final currency =
+      '${financial['currency'] ?? waiting['currency'] ?? data['currency'] ?? 'GBP'}';
+  return (amount: amount, currency: currency);
+}
+
+double? _numberFrom(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value.trim());
+  return null;
+}
+
+DateTime? _dateTimeFromBackend(Object? value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  if (value is double) {
+    return DateTime.fromMillisecondsSinceEpoch(value.round());
+  }
+  if (value is String) {
+    final millis = int.tryParse(value);
+    if (millis != null) return DateTime.fromMillisecondsSinceEpoch(millis);
+    return DateTime.tryParse(value);
+  }
+  try {
+    final dynamic dynamicValue = value;
+    final seconds = dynamicValue.seconds;
+    if (seconds is int) {
+      return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+    }
+    final milliseconds = dynamicValue.millisecondsSinceEpoch;
+    if (milliseconds is int) {
+      return DateTime.fromMillisecondsSinceEpoch(milliseconds);
+    }
+  } catch (_) {
+    return null;
+  }
+  return null;
+}
+
+String _durationLabel(int seconds) {
+  final minutes = seconds ~/ 60;
+  final remainder = seconds % 60;
+  return '${minutes.toString().padLeft(2, '0')}:${remainder.toString().padLeft(2, '0')}';
+}
+
+String _moneyText(double amount, String currency) {
+  if (currency.trim().toUpperCase() == 'GBP') {
+    return '£${amount.toStringAsFixed(2)}';
+  }
+  return '${currency.trim().toUpperCase()} ${amount.toStringAsFixed(2)}';
 }
 
 String senderVehicleMarkerKindFor(String? vehicle) {
@@ -593,6 +712,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         ? senderLiveLocationStaleLabel(widget.engine.riderLiveLocationUpdatedAt)
         : null;
     final delivered = state == SenderTrackingState.delivered;
+    final vanguardPin = senderVanguardCollectionPinFor(widget.engine);
     return Stack(
       children: [
         SenderTrackingMapLayer(
@@ -613,6 +733,19 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
               child: Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: _TopStatusPill(label: content.pill),
+              ),
+            ),
+          ),
+        if (vanguardPin != null)
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding:
+                    EdgeInsets.only(top: content.pill.isNotEmpty ? 56 : 16),
+                child: VanguardCollectionPinCard(
+                  pin: vanguardPin,
+                ),
               ),
             ),
           ),
@@ -830,6 +963,8 @@ class _TrackingPanelContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state == SenderTrackingState.loading) return const _LoadingTracking();
+    final waiting = SenderWaitingSnapshot.fromEngine(engine);
+    final hasVanguardCollectionPin = senderVanguardCollectionPinVisible(engine);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -879,7 +1014,11 @@ class _TrackingPanelContent extends StatelessWidget {
           const SizedBox(height: 12),
           RiderCard(engine: engine, eta: content.eta),
         ],
-        if (content.showCollectionPin) ...[
+        if (waiting.visible) ...[
+          const SizedBox(height: 12),
+          SenderWaitingCard(waiting: waiting),
+        ],
+        if (content.showCollectionPin && !hasVanguardCollectionPin) ...[
           const SizedBox(height: 12),
           PINCard(
             pin: engine.deliveryData?.code,
@@ -1101,6 +1240,394 @@ class _DelayedFadeChipState extends State<_DelayedFadeChip> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class SenderWaitingSnapshot {
+  final bool visible;
+  final String stateLabel;
+  final String countdownLabel;
+  final double progress;
+  final String? chargeLabel;
+  final bool noShowAvailable;
+  final bool customerResponded;
+  final String message;
+
+  const SenderWaitingSnapshot({
+    required this.visible,
+    required this.stateLabel,
+    required this.countdownLabel,
+    required this.progress,
+    required this.message,
+    this.chargeLabel,
+    this.noShowAvailable = false,
+    this.customerResponded = false,
+  });
+
+  factory SenderWaitingSnapshot.fromEngine(SendPackageState engine) {
+    final data = engine.activeDeliveryData;
+    final waiting = _mapFrom(data['waiting']);
+    final status = _normalizeTrackingStatus(
+      data['status'] ?? data['deliveryStatus'] ?? engine.deliveryRequestStatus,
+    );
+    final visible = waiting['active'] == true ||
+        status == 'arrived_at_pickup' ||
+        status == 'waiting' ||
+        status == 'waiting_for_collection' ||
+        status == 'waiting_charge_active' ||
+        status == 'waiting_charges_active' ||
+        status == 'no_show_review';
+    if (!visible) {
+      return const SenderWaitingSnapshot(
+        visible: false,
+        stateLabel: '',
+        countdownLabel: '',
+        progress: 0,
+        message: '',
+      );
+    }
+
+    final freeWaitEndsAt = _dateTimeFromBackend(waiting['freeWaitEndsAt']);
+    final startedAt = _dateTimeFromBackend(
+      waiting['startedAt'] ?? data['pickupArrivedAt'] ?? data['arrivedAt'],
+    );
+    final freeWaitMinutes = _numberFrom(waiting['freeWaitMinutes']) ?? 3;
+    final totalSeconds = math.max(1, (freeWaitMinutes * 60).round());
+    final remaining = freeWaitEndsAt?.difference(DateTime.now()).inSeconds;
+    final remainingSeconds = remaining == null ? null : math.max(0, remaining);
+    final elapsedSeconds = startedAt == null
+        ? null
+        : math.max(0, DateTime.now().difference(startedAt).inSeconds);
+    final progress = remainingSeconds == null
+        ? elapsedSeconds == null
+            ? 0.0
+            : (elapsedSeconds / totalSeconds).clamp(0.0, 1.0)
+        : ((totalSeconds - remainingSeconds) / totalSeconds).clamp(0.0, 1.0);
+    final waitingContext =
+        _normalizeTrackingStatus(data['waitingContextState']);
+    final customerResponded = waitingContext == 'customer_responded' ||
+        data['customerResponded'] == true ||
+        waiting['customerResponded'] == true;
+    final noShowAvailable = status == 'no_show_review' ||
+        status == 'sender_no_show_pickup' ||
+        data['noShowAvailable'] == true ||
+        waiting['noShowAvailable'] == true ||
+        (remainingSeconds != null && remainingSeconds == 0);
+    final charge = _customerWaitingCharge(data, waiting);
+    final chargeLabel =
+        charge == null ? null : _moneyText(charge.amount, charge.currency);
+    final stateLabel = _senderWaitingStateLabel(
+      status: status,
+      remainingSeconds: remainingSeconds,
+      noShowAvailable: noShowAvailable,
+      chargeLabel: chargeLabel,
+      customerResponded: customerResponded,
+    );
+    final countdown = noShowAvailable
+        ? 'No-show eligible'
+        : remainingSeconds == null
+            ? 'Server countdown active'
+            : _durationLabel(remainingSeconds);
+    return SenderWaitingSnapshot(
+      visible: true,
+      stateLabel: stateLabel,
+      countdownLabel: countdown,
+      progress: progress.toDouble(),
+      chargeLabel: chargeLabel,
+      noShowAvailable: noShowAvailable,
+      customerResponded: customerResponded,
+      message: customerResponded
+          ? 'Customer response received. Waiting continues under the current policy.'
+          : noShowAvailable
+              ? 'Your rider has completed the required waiting period. Contact your rider immediately if you still require this delivery.'
+              : 'Sender notified on arrival. Waiting timer is server-authoritative.',
+    );
+  }
+}
+
+class SenderWaitingCard extends StatelessWidget {
+  final SenderWaitingSnapshot waiting;
+
+  const SenderWaitingCard({super.key, required this.waiting});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGlassContainer(
+      radius: 18,
+      padding: const EdgeInsets.all(14),
+      accent: waiting.noShowAvailable
+          ? const Color(0xFFF5A623)
+          : const Color(0xFF3B82F6),
+      surfaceColor: Colors.white.withValues(alpha: .052),
+      borderColor: (waiting.noShowAvailable
+              ? const Color(0xFFF5A623)
+              : const Color(0xFF3B82F6))
+          .withValues(alpha: .26),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          WaitingCountdownRing(
+            progress: waiting.progress,
+            label: waiting.countdownLabel,
+            warning: waiting.noShowAvailable,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '✓ Rider has arrived',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Meet your rider to hand over your parcel.',
+                  style: TextStyle(
+                    color: _TrackingTokens.muted,
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  waiting.stateLabel,
+                  style: TextStyle(
+                    color: waiting.noShowAvailable
+                        ? const Color(0xFFF5A623)
+                        : const Color(0xFF60A5FA),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  waiting.message,
+                  style: const TextStyle(
+                    color: _TrackingTokens.mid,
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+                if (waiting.chargeLabel != null) ...[
+                  const SizedBox(height: 10),
+                  _WaitingChargeRow(label: waiting.chargeLabel!),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class WaitingCountdownRing extends StatelessWidget {
+  final double progress;
+  final String label;
+  final bool warning;
+
+  const WaitingCountdownRing({
+    super.key,
+    required this.progress,
+    required this.label,
+    this.warning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning ? const Color(0xFFF5A623) : const Color(0xFF3B82F6);
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox.expand(
+            child: CircularProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              strokeWidth: 5,
+              backgroundColor: Colors.white.withValues(alpha: .09),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 7),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'JetBrains Mono',
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WaitingChargeRow extends StatelessWidget {
+  final String label;
+
+  const _WaitingChargeRow({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5A623).withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFF5A623).withValues(alpha: .24),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.payments_outlined,
+            color: Color(0xFFF5A623),
+            size: 15,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Additional waiting charge $label',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class VanguardCollectionPinCard extends StatefulWidget {
+  final String? pin;
+
+  const VanguardCollectionPinCard({super.key, required this.pin});
+
+  @override
+  State<VanguardCollectionPinCard> createState() =>
+      _VanguardCollectionPinCardState();
+}
+
+class _VanguardCollectionPinCardState extends State<VanguardCollectionPinCard> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    final pin = widget.pin;
+    if (pin == null || pin.trim().isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: pin.trim()));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pin = widget.pin?.trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        offset: Offset.zero,
+        child: AppGlassContainer(
+          radius: 18,
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          accent: const Color(0xFF34D399),
+          surfaceColor: const Color(0xFF07090F).withValues(alpha: .72),
+          borderColor: const Color(0xFF34D399).withValues(alpha: .28),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF34D399).withValues(alpha: .13),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF34D399).withValues(alpha: .26),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.shield_outlined,
+                  color: Color(0xFF34D399),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Vanguard Collection PIN',
+                      style: TextStyle(
+                        color: Color(0xFF34D399),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'This PIN must be shown to your rider during collection.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _TrackingTokens.muted,
+                        fontSize: 10.5,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      pin == null || pin.isEmpty
+                          ? 'Awaiting PIN'
+                          : _formatPin(pin),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: pin == null || pin.isEmpty ? null : _copy,
+                icon: Icon(
+                  _copied ? Icons.check_rounded : Icons.copy_rounded,
+                  size: 16,
+                ),
+                label: Text(_copied ? 'Copied' : 'Copy'),
+              ),
+            ],
+          ),
         ),
       ),
     );

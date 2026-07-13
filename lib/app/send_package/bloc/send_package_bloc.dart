@@ -1137,6 +1137,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         deliveryStatus: _deliveryStatusForBackendStatus(requestStatus),
         deliveryRequestStatus: requestStatus,
+        activeDeliveryData: Map<String, dynamic>.from(data),
         pickupDetails: pickupDetails,
         dropoffDetails: dropoffDetails,
         pickupLocation:
