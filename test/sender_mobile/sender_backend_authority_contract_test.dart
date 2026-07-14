@@ -127,4 +127,63 @@ void main() {
     expect(policy, contains('exports.previewSenderCancellation'));
     expect(policy, contains('core.cancellationDecision'));
   });
+
+  test('Sender and support chat actions use the communication engine', () {
+    final deliveryBloc =
+        File('lib/app/send_package/bloc/send_package_bloc.dart')
+            .readAsStringSync();
+    final walletSupport =
+        File('lib/app/send_package/view/ride_chats.dart').readAsStringSync();
+    final supportBloc =
+        File('lib/app/support/bloc/support_bloc.dart').readAsStringSync();
+    final webSender = File('lib/web_sender_app.dart').readAsStringSync();
+    final messaging = File('lib/messaging.dart').readAsStringSync();
+
+    expect(deliveryBloc, contains("httpsCallable('sendCircumMessage')"));
+    expect(deliveryBloc, isNot(contains("httpsCallable('sendMessage')")));
+    expect(deliveryBloc, isNot(contains('ChatsHelper().storeChat')));
+
+    expect(walletSupport,
+        contains("httpsCallable('getOrCreateSupportConversation')"));
+    expect(walletSupport, contains("httpsCallable('sendCircumMessage')"));
+    expect(walletSupport, contains("httpsCallable('setConversationTyping')"));
+    expect(walletSupport, contains("httpsCallable('markConversationRead')"));
+    expect(
+        walletSupport, isNot(contains("collection('supportTickets').doc()")));
+    expect(
+        walletSupport, isNot(contains("collection('chats').doc(chatId).set")));
+
+    expect(supportBloc,
+        contains("httpsCallable('getOrCreateSupportConversation')"));
+    expect(supportBloc, contains("httpsCallable('sendCircumMessage')"));
+    expect(supportBloc, isNot(contains("collection('messages').doc().set")));
+    expect(supportBloc, isNot(contains('ChatsHelper().storeChat')));
+
+    expect(webSender,
+        contains("httpsCallable('updateSupportConversationStatus')"));
+    expect(
+        webSender, contains("httpsCallable('getOrCreateSupportConversation')"));
+    expect(webSender, contains("httpsCallable('startAdminConversation')"));
+    expect(webSender, contains("httpsCallable('sendCircumMessage')"));
+    expect(webSender, isNot(contains("chatRef.collection('messages').add")));
+    expect(
+        webSender, isNot(contains("db.collection('chats').doc(chatId).set")));
+    expect(messaging, isNot(contains('ChatsHelper().storeChat')));
+  });
+
+  test('backend exports canonical support conversation callables', () {
+    final engine =
+        File('server/functions/communication-engine.js').readAsStringSync();
+    final index = File('server/functions/index.js').readAsStringSync();
+    final contracts = File('docs/callable-contracts.md').readAsStringSync();
+
+    expect(engine, contains('async function getOrCreateSupportConversation'));
+    expect(engine, contains('async function updateSupportConversationStatus'));
+    expect(engine, contains('conversationType: "support"'));
+    expect(engine, contains('adminUnreadCount: isAdmin(context) ? 0'));
+    expect(index, contains('exports.getOrCreateSupportConversation'));
+    expect(index, contains('exports.updateSupportConversationStatus'));
+    expect(contracts, contains('| Open support conversation |'));
+    expect(contracts, contains('| Update support conversation status |'));
+  });
 }

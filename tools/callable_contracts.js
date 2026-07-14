@@ -247,6 +247,8 @@ function writeContracts() {
     ["Waiting context", "No", "Yes", "reportWaitingContext", "Canonical"],
     ["Sender customer response", "Yes", "No", "recordCustomerArrivalResponse", "Canonical"],
     ["Delivery chat message", "Yes", "Yes", "sendCircumMessage", "Canonical"],
+    ["Open support conversation", "Yes", "Yes", "getOrCreateSupportConversation", "Canonical"],
+    ["Update support conversation status", "Admin", "Admin", "updateSupportConversationStatus", "Canonical"],
     ["Typing indicator", "Yes", "Yes", "setConversationTyping", "Canonical"],
     ["Mark conversation read", "Yes", "Yes", "markConversationRead", "Canonical"],
     ["Rider earnings summary", "No", "Yes", "getRiderEarningsSummary", "Canonical"],

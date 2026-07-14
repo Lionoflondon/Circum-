@@ -72,58 +72,20 @@ class _RideChatPageViewState extends State<RideChatPageView> {
         }
         return;
       }
-      final db = FirebaseFirestore.instance;
-      final existing = await db
-          .collection('supportTickets')
-          .where('userId', isEqualTo: user.uid)
-          .limit(20)
-          .get();
-      for (final doc in existing.docs) {
-        final data = doc.data();
-        final status = '${data['status'] ?? 'open'}'.toLowerCase();
-        final chatId = '${data['chatId'] ?? ''}'.trim();
-        if (chatId.isNotEmpty && status != 'resolved' && status != 'closed') {
-          if (mounted) setState(() => _chatId = chatId);
-          return;
-        }
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getOrCreateSupportConversation')
+          .call({
+        'topic': 'wallet_support',
+        'title': 'Circum Support',
+        'participantRole': 'sender',
+      });
+      final data = result.data is Map
+          ? Map<String, dynamic>.from(result.data as Map)
+          : const <String, dynamic>{};
+      final chatId = '${data['chatId'] ?? ''}'.trim();
+      if (chatId.isEmpty) {
+        throw StateError('Support conversation was not created.');
       }
-
-      final ticketRef = db.collection('supportTickets').doc();
-      final chatId = 'support_${ticketRef.id}';
-      final batch = db.batch();
-      batch.set(ticketRef, {
-        'channel': 'sender_in_app_chat',
-        'status': 'open',
-        'priority': 'normal',
-        'type': 'wallet_support',
-        'topic': 'wallet',
-        'title': 'Circum Support',
-        'message': 'Wallet support conversation opened.',
-        'lastMessage': '',
-        'adminUnreadCount': 0,
-        'chatId': chatId,
-        'userId': user.uid,
-        'senderId': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(db.collection('chats').doc(chatId), {
-        'threadId': chatId,
-        'type': 'support',
-        'ticketId': ticketRef.id,
-        'participants': [user.uid, 'circum-support'],
-        'participantRoles': {
-          user.uid: 'shipper',
-          'circum-support': 'admin',
-        },
-        'title': 'Circum Support',
-        'status': 'open',
-        'source': 'sender_wallet',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'lastMessage': '',
-      });
-      await batch.commit();
       if (mounted) setState(() => _chatId = chatId);
     } catch (_) {
       if (mounted) {

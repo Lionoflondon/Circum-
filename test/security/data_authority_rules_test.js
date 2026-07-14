@@ -54,6 +54,22 @@ test("operational notifications are backend or admin authored only", () => {
   assert.match(block, /affectedKeys\(\)\.hasOnly\(\[\s*'read', 'readAt', 'archived', 'archivedAt', 'deletedAt'\s*\]\)/);
 });
 
+test("conversation lifecycle and messages are callable-owned", () => {
+  const block = blockFor("match /chats/{chatId}");
+  assert.match(block, /allow read:\s*if isAdmin\(\) \|\| isParticipant\(\);/);
+  assert.match(block, /allow create, update, delete:\s*if false;/);
+  assert.match(block, /match \/messages\/\{messageId\} \{/);
+  assert.match(block, /allow create:\s*if false;/);
+  assert.match(block, /allow update, delete:\s*if false;/);
+});
+
+test("support tickets are backend or narrowly web-live-chat authored only", () => {
+  const block = blockFor("match /supportTickets/{ticketId}");
+  assert.match(block, /allow read, write:\s*if isAdmin\(\);/);
+  assert.match(block, /request\.resource\.data\.channel == 'web_live_chat'/);
+  assert.doesNotMatch(block, /sender_in_app_chat/);
+});
+
 test("sender booking drafts remain callable-owned", () => {
   const block = blockFor("match /senderBookingDrafts/{uid}");
   assert.match(block, /allow read:\s*if signedIn\(\) && uid == request\.auth\.uid;/);

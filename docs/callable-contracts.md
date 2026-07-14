@@ -4,8 +4,8 @@ Generated Phase 3 baseline. Backend exports are preserved; legacy callables are 
 
 ## Callable Inventory
 
-- Exported: 134
-- Referenced by clients/tests: 70
+- Exported: 139
+- Referenced by clients/tests: 75
 - Unused exports: 64
 - Missing referenced exports: 0
 - Legacy exports: StripePayEndpointIntentId, StripePayEndpointMethodId, calculateEarnings, endTrip, getAvaliableRequests, sendMessage, sendRiderUpdate
@@ -35,11 +35,12 @@ Generated Phase 3 baseline. Backend exports are preserved; legacy callables are 
 | Update rider presence | No | Yes | updateRiderPresence | Canonical |
 | Record rider arrival | No | Yes | recordRiderArrival | Canonical |
 | Delivery status transition | No | Yes | updateDeliveryTrackingStatus | Canonical |
-| Rider live location update | No | Yes | updateDeliveryLiveLocation | Canonical |
 | Rider no-show | No | Yes | markRiderNoShow | Canonical |
 | Waiting context | No | Yes | reportWaitingContext | Canonical |
 | Sender customer response | Yes | No | recordCustomerArrivalResponse | Canonical |
 | Delivery chat message | Yes | Yes | sendCircumMessage | Canonical |
+| Open support conversation | Yes | Yes | getOrCreateSupportConversation | Canonical |
+| Update support conversation status | Admin | Admin | updateSupportConversationStatus | Canonical |
 | Typing indicator | Yes | Yes | setConversationTyping | Canonical |
 | Mark conversation read | Yes | Yes | markConversationRead | Canonical |
 | Rider earnings summary | No | Yes | getRiderEarningsSummary | Canonical |

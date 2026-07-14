@@ -1317,7 +1317,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final String? activeRequest = prefs.getString('activeRequest');
 
-      String msg = event.message;
       final riderId = state.deliveryData?.riderId;
 
       if (user == null || activeRequest == null || riderId == null) {
@@ -1325,29 +1324,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       }
 
       emit(state.copyWith(message: ''));
-
-      // print('${state.deliveryData!.code}');
-
-      final messageData = {
-        'requestId': activeRequest,
-        'senderId': user.uid,
-        'message': msg,
-        'timeStamp': '${DateTime.now()}',
-      };
-
-      final callable = FirebaseFunctions.instance.httpsCallable('sendMessage');
+      final callable =
+          FirebaseFunctions.instance.httpsCallable('sendCircumMessage');
       await callable.call({
-        'recipientId': riderId,
-        'requestId': activeRequest,
+        'chatId': activeRequest,
         'message': event.message,
+        'messageType': 'text',
       });
-
-      add(IncomingMessage(data: messageData));
-
-      ChatsHelper().storeChat(messageData);
     } catch (e) {
-      print('Sending messsage failed');
-      print(e);
+      debugPrint('Sending message failed: $e');
     }
   }
 

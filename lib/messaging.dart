@@ -61,7 +61,6 @@ foregoundMessage() {
       Map<String, dynamic> msg = jsonDecode(message.data['data']);
       sendPackageBloc.add(IncomingMessage(data: msg));
 
-      await ChatsHelper().storeChat(msg);
       notifyUser(title: 'New message', body: msg['message']);
     }
 
@@ -133,8 +132,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     Map<String, dynamic> msg = jsonDecode(jsonString);
     sendPackageBloc.add(IncomingMessage(data: msg));
 
-    await ChatsHelper().storeChat(msg);
-
     notifyUser(title: 'New message', body: msg['message']);
   }
 
@@ -143,13 +140,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     Map<String, dynamic> data = jsonDecode(message.data['data']);
     accountBloc.add(UpdatePaymentStatus(data: data));
   }
-
-  // if (message.data['type'] == 'message') {
-  //   final msg = jsonDecode(message.data['data']);
-  //   sendPackageBloc.add(IncomingMessage(data: msg));
-
-  //   await ChatsHelper().storeChat(msg);
-  // }
 
   if (message.data['type'] == 'delivery-completed') {
     print('Delivery completed');

@@ -4829,25 +4829,16 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final id = '${ticket['id'] ?? ''}';
     if (id.isEmpty) return;
     final oldStatus = '${ticket['status'] ?? ''}';
-    final patch = AdminSupportTools.statusPatch(
-      status: status,
-      assignedTo: status == 'assigned' ? _adminUser?.email : null,
-      resolutionNote: status == 'resolved'
+    await FirebaseFunctions.instance
+        .httpsCallable('updateSupportConversationStatus')
+        .call({
+      'ticketId': id,
+      'status': status,
+      'assignedTo': status == 'assigned' ? _adminUser?.email : null,
+      'resolutionNote': status == 'resolved'
           ? 'Resolved from the admin operations panel'
           : null,
-      updatedAt: FieldValue.serverTimestamp(),
-    );
-    await FirebaseFirestore.instance
-        .collection('supportTickets')
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
-    final chatId = '${ticket['chatId'] ?? ''}'.trim();
-    if (chatId.isNotEmpty) {
-      await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
-        'status': status == 'resolved' ? 'resolved' : 'open',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
+    });
     await _writeAudit(
       AdminAuditEntry(
         adminUserId: _adminUser?.uid ?? 'unknown-admin',
@@ -5054,53 +5045,13 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   Future<void> _openSupportTicketChat(Map<String, dynamic> ticket) async {
     final ticketId = '${ticket['id'] ?? ''}'.trim();
     if (ticketId.isEmpty) return;
-    final chatId = '${ticket['chatId'] ?? 'support_$ticketId'}'.trim();
-    final customerId = '${ticket['userId'] ?? ticket['senderId'] ?? ''}'.trim();
-    final participants = <String>{'circum-support'};
-    if (customerId.isNotEmpty) participants.add(customerId);
-    final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
-    await chatRef.set({
-      'threadId': chatId,
-      'type': 'support',
-      'ticketId': ticketId,
-      'participants': FieldValue.arrayUnion(participants.toList()),
-      'participantRoles': {
-        'circum-support': 'admin',
-        if (customerId.isNotEmpty) customerId: 'shipper',
-      },
-      'status':
-          AdminSupportTools.isResolved(ticket['status']) ? 'resolved' : 'open',
-      'updatedAt': FieldValue.serverTimestamp(),
-      'source': 'circum-admin',
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance
-        .collection('supportTickets')
-        .doc(ticketId)
-        .set({
-      'chatId': chatId,
-      'adminUnreadCount': 0,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    final initialText = '${ticket['message'] ?? ''}'.trim();
-    if (initialText.isNotEmpty) {
-      final initialRef = chatRef.collection('messages').doc('ticket_initial');
-      final initial = await initialRef.get();
-      if (!initial.exists) {
-        await initialRef.set({
-          'threadId': chatId,
-          'ticketId': ticketId,
-          'senderId': customerId.isEmpty ? 'support-guest' : customerId,
-          'senderRole': 'shipper',
-          'messageText': initialText,
-          'message': initialText,
-          'attachments': const [],
-          'initialSupportRequest': true,
-          'readBy': const [],
-          'createdAt': ticket['createdAt'] ?? FieldValue.serverTimestamp(),
-        });
-      }
-    }
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('getOrCreateSupportConversation')
+        .call({'ticketId': ticketId});
+    final data = result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : const <String, dynamic>{};
+    final chatId = '${data['chatId'] ?? 'support_$ticketId'}'.trim();
 
     _listenToAdminChat(chatId, errorMessage: 'Could not open support chat.');
     setState(() {
@@ -5245,15 +5196,17 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
   Future<void> _openDriverMessage(Map<String, dynamic> driver) async {
     final id = _driverId(driver);
     if (id.isEmpty) return;
-    final chatId = 'driver_$id';
-    await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
-      'threadId': chatId,
-      'driverId': id,
-      'participants': FieldValue.arrayUnion([id, 'circum-support']),
-      'type': 'driver_admin',
-      'source': 'circum-admin',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('startAdminConversation')
+        .call({
+      'participantId': id,
+      'participantRole': 'rider',
+    });
+    final data = result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : const <String, dynamic>{};
+    final chatId = '${data['chatId'] ?? ''}'.trim();
+    if (chatId.isEmpty) return;
     _adminChatSub?.cancel();
     _adminChatSub = FirebaseFirestore.instance
         .collection('chats')
@@ -5349,44 +5302,11 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     final text = _adminChatInput.text.trim();
     if (id == null || text.isEmpty) return;
     _adminChatInput.clear();
-    final chatRef = FirebaseFirestore.instance.collection('chats').doc(id);
-    await chatRef.collection('messages').add({
-      'threadId': id,
-      'bookingId': id,
-      'requestId': id,
-      'senderId': _adminUser?.uid ?? 'circum-support',
-      'senderRole': 'admin',
-      'senderType': 'support',
-      'messageText': text,
+    await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+      'chatId': id,
       'message': text,
-      'readBy': [_adminUser?.uid ?? 'circum-support'],
-      'system': false,
-      'createdAt': FieldValue.serverTimestamp(),
-      'timeStamp': DateTime.now().toIso8601String(),
+      'messageType': 'text',
     });
-    await chatRef.set({
-      'threadId': id,
-      'bookingId': id,
-      'requestId': id,
-      'participants': FieldValue.arrayUnion(['circum-support']),
-      'lastMessage': text,
-      'lastMessageTimestamp': FieldValue.serverTimestamp(),
-      'unreadBy': FieldValue.arrayUnion(['sender', 'rider']),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'source': 'circum-admin',
-    }, SetOptions(merge: true));
-    final ticketId = _activeAdminTicketId;
-    if (ticketId != null) {
-      await FirebaseFirestore.instance
-          .collection('supportTickets')
-          .doc(ticketId)
-          .set({
-        'lastMessage': text,
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'adminUnreadCount': 0,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
   }
 
   String _formatMessageTime(dynamic timestamp, dynamic fallback) {
@@ -21246,16 +21166,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
-      await db.collection('chats').doc(requestId).set({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'participants': FieldValue.arrayUnion([user.uid, 'circum-support']),
-        'participantRoles': {user.uid: 'rider', 'circum-support': 'admin'},
-        'assignedRiderId': user.uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'circum-web',
-      }, SetOptions(merge: true));
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
     } catch (_) {
@@ -22740,32 +22650,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _riderChatInput.clear();
     try {
       await _ensureCircumFirebaseReady();
-      final chatRef =
-          FirebaseFirestore.instance.collection('chats').doc(requestId);
-      await chatRef.collection('messages').add({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'senderId': user.uid,
-        'senderRole': 'rider',
-        'senderType': 'rider',
-        'messageText': text,
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': requestId,
         'message': text,
-        'readBy': [user.uid],
-        'createdAt': FieldValue.serverTimestamp(),
-        'timeStamp': DateTime.now().toIso8601String(),
+        'messageType': 'text',
       });
-      await chatRef.set({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'participants': FieldValue.arrayUnion([user.uid, 'circum-support']),
-        'lastMessage': text,
-        'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        'unreadBy': FieldValue.arrayUnion(['sender', 'admin']),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'circum-web',
-      }, SetOptions(merge: true));
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Message could not be sent.');
@@ -31363,64 +31252,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           ? Map<String, dynamic>.from(request)
           : null;
       _activeRequestData = Map<String, dynamic>.from(request);
-      final senderId = '${request['senderId']}';
-      final batch = db.batch();
-      batch.set(
-        db.collection('webSenderRequests').doc(createdRequestId),
-        {
-          ...request,
-          'source': 'sender_web',
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-      if (readyToBroadcast) {
-        batch.set(
-            db.collection('chats').doc(createdRequestId),
-            {
-              'threadId': createdRequestId,
-              'bookingId': createdRequestId,
-              'requestId': createdRequestId,
-              'participants': [senderId, 'circum-support'],
-              'participantRoles': {
-                senderId: 'sender',
-                'circum-support': 'admin',
-              },
-              'lastMessage':
-                  'Your request is live. Iris is checking nearby riders now.',
-              'lastMessageTimestamp': FieldValue.serverTimestamp(),
-              'unreadBy': ['admin'],
-              'updatedAt': FieldValue.serverTimestamp(),
-              'source': 'circum-web',
-            },
-            SetOptions(merge: true));
-        batch.set(
-            db
-                .collection('chats')
-                .doc(createdRequestId)
-                .collection('messages')
-                .doc(),
-            {
-              'threadId': createdRequestId,
-              'bookingId': createdRequestId,
-              'requestId': createdRequestId,
-              'senderId': senderId,
-              'senderRole': 'system',
-              'senderType': 'support',
-              'recipientId': senderId,
-              'recipientType': 'sender',
-              'messageText':
-                  'Your request is live. Iris is checking nearby riders now.',
-              'message':
-                  'Your request is live. Iris is checking nearby riders now.',
-              'readBy': [senderId],
-              'system': true,
-              'status': 'sent',
-              'createdAt': FieldValue.serverTimestamp(),
-              'timeStamp': DateTime.now().toIso8601String(),
-            });
-      }
-      await batch.commit();
+      await db.collection('webSenderRequests').doc(createdRequestId).set({
+        ...request,
+        'source': 'sender_web',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       _listenToRequest(createdRequestId);
       if (readyToBroadcast) _listenToChat(createdRequestId);
       if (!mounted) return;
@@ -64147,7 +63983,6 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
       final db = FirebaseFirestore.instance;
       final ticketRef = db.collection('supportTickets').doc();
       final user = FirebaseAuth.instance.currentUser;
-      final chatId = 'support_${ticketRef.id}';
       await ticketRef.set({
         'channel': 'web_live_chat',
         'status': 'open',
@@ -64159,40 +63994,10 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
         'lastMessageAt': FieldValue.serverTimestamp(),
         'adminUnreadCount': 1,
         'pageUrl': Uri.base.toString(),
-        'chatId': chatId,
         if (user != null) 'userId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      if (user != null) {
-        final chatRef = db.collection('chats').doc(chatId);
-        await chatRef.set({
-          'threadId': chatId,
-          'type': 'support',
-          'ticketId': ticketRef.id,
-          'participants': [user.uid, 'circum-support'],
-          'participantRoles': {
-            user.uid: 'shipper',
-            'circum-support': 'admin',
-          },
-          'status': 'open',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'lastMessage': message,
-        });
-        await chatRef.collection('messages').add({
-          'threadId': chatId,
-          'ticketId': ticketRef.id,
-          'senderId': user.uid,
-          'senderRole': 'shipper',
-          'messageText': message,
-          'message': message,
-          'attachments': const [],
-          'initialSupportRequest': true,
-          'readBy': [user.uid],
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
       _message.clear();
       setState(() => _note = 'Sent. Circum support has your message.');
     } catch (_) {
