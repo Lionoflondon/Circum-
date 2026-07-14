@@ -586,19 +586,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       return;
     }
     try {
-      await _callFirstAvailableRiderFunction(
-        const [
-          'markCustomerResponded',
-          'recordCustomerResponded',
-          'sendRiderUpdate',
-        ],
-        {
-          'deliveryId': deliveryId,
-          'requestId': deliveryId,
-          'action': 'customer_responded',
-          'status': 'customer_responded',
-        },
-      );
+      await _callRiderFunction('reportWaitingContext', {
+        'deliveryId': deliveryId,
+        'type': 'customer_responded',
+      });
       if (mounted) {
         setState(() =>
             _message = 'Customer response sent. Collection time will update.');
@@ -618,19 +609,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       return;
     }
     try {
-      await _callFirstAvailableRiderFunction(
-        const [
-          'markSenderNoShow',
-          'declareSenderNoShow',
-          'sendRiderUpdate',
-        ],
-        {
-          'deliveryId': deliveryId,
-          'requestId': deliveryId,
-          'action': 'mark_no_show',
-          'status': 'sender_no_show_pickup',
-        },
-      );
+      await _callRiderFunction('markRiderNoShow', {
+        'deliveryId': deliveryId,
+        'idempotencyKey': '$deliveryId:no_show',
+      });
       if (mounted) {
         setState(() => _message =
             'Missed collection submitted. Waiting payment will update.');
@@ -643,27 +625,16 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     }
   }
 
-  Future<Map<String, dynamic>> _callFirstAvailableRiderFunction(
-    List<String> names,
+  Future<Map<String, dynamic>> _callRiderFunction(
+    String name,
     Map<String, dynamic> payload,
   ) async {
-    Object? lastError;
-    for (final name in names) {
-      try {
-        final result =
-            await FirebaseFunctions.instance.httpsCallable(name).call(payload);
-        final data = result.data;
-        if (data is Map<String, dynamic>) return data;
-        if (data is Map) return Map<String, dynamic>.from(data);
-        return const {};
-      } on FirebaseFunctionsException catch (error) {
-        lastError = error;
-        if (error.code != 'not-found' && error.code != 'unimplemented') {
-          rethrow;
-        }
-      }
-    }
-    throw lastError ?? StateError('No backend callable is available.');
+    final result =
+        await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    final data = result.data;
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return const {};
   }
 
   Future<void> _restoreActiveDeliveryCache() async {

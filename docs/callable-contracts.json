@@ -1,0 +1,2925 @@
+[
+  {
+    "callableName": "sendPackage",
+    "purpose": "send Package",
+    "owningBackendFile": "server/functions/send-package.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "getAvaliableRequests",
+    "purpose": "Get Avaliable Requests",
+    "owningBackendFile": "server/functions/get-avaliable-requests.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Legacy",
+    "deprecationStatus": "Deprecated typo alias. Keep exported for compatibility; clients must use getAvailableRequests."
+  },
+  {
+    "callableName": "getAvailableRequests",
+    "purpose": "Get Available Requests",
+    "owningBackendFile": "server/functions/get-avaliable-requests.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "acceptRideRequests",
+    "purpose": "accept Ride Requests",
+    "owningBackendFile": "server/functions/accept-ride-requests.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "getRiderEarningsSummary",
+    "purpose": "Get Rider Earnings Summary",
+    "owningBackendFile": "server/functions/rider-earnings-summary.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "setFounderRiderAccess",
+    "purpose": "Set Founder Rider Access",
+    "owningBackendFile": "server/functions/founder-rider-access.js",
+    "invokedBy": [
+      "Admin",
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "sendMessage",
+    "purpose": "send Message",
+    "owningBackendFile": "server/functions/send-message.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Legacy",
+    "deprecationStatus": "Legacy chat callable. New clients must use sendCircumMessage."
+  },
+  {
+    "callableName": "sendCircumMessage",
+    "purpose": "send Circum Message",
+    "owningBackendFile": "server/functions/communication-engine.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "startAdminConversation",
+    "purpose": "start Admin Conversation",
+    "owningBackendFile": "server/functions/communication-engine.js",
+    "invokedBy": [
+      "Admin"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "markConversationRead",
+    "purpose": "Mark Conversation Read",
+    "owningBackendFile": "server/functions/communication-engine.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "setConversationTyping",
+    "purpose": "Set Conversation Typing",
+    "owningBackendFile": "server/functions/communication-engine.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "reportCircumMessage",
+    "purpose": "report Circum Message",
+    "owningBackendFile": "server/functions/communication-engine.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "sendCircumAnnouncement",
+    "purpose": "send Circum Announcement",
+    "owningBackendFile": "server/functions/communication-engine.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "sendRiderUpdate",
+    "purpose": "send Rider Update",
+    "owningBackendFile": "server/functions/send-rider-update.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Legacy",
+    "deprecationStatus": "Legacy direct rider update callable. New delivery lifecycle actions must use delivery-policy callables."
+  },
+  {
+    "callableName": "createHealthPlusCheckoutSession",
+    "purpose": "Create Health Plus Checkout Session",
+    "owningBackendFile": "server/functions/health-plus.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "updateHealthPlusPickupStatus",
+    "purpose": "Update Health Plus Pickup Status",
+    "owningBackendFile": "server/functions/health-plus.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onHealthPlusPickupOperationalWrite",
+    "purpose": "Handle Health Plus Pickup Operational Write",
+    "owningBackendFile": "server/functions/health-plus-operations.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "processHealthPlusReminders",
+    "purpose": "process Health Plus Reminders",
+    "owningBackendFile": "server/functions/health-plus-operations.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "resetHealthPlusMonthlyUsage",
+    "purpose": "reset Health Plus Monthly Usage",
+    "owningBackendFile": "server/functions/health-plus-operations.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "generateHealthPlusRecurringBookings",
+    "purpose": "generate Health Plus Recurring Bookings",
+    "owningBackendFile": "server/functions/health-plus-operations.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "analyseIris",
+    "purpose": "analyse Iris",
+    "owningBackendFile": "server/functions/iris.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "adjudicateIris",
+    "purpose": "adjudicate Iris",
+    "owningBackendFile": "server/functions/iris.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "reportLoadDiscrepancy",
+    "purpose": "report Load Discrepancy",
+    "owningBackendFile": "server/functions/delivery-adjustments.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "cancelAdjustedCollection",
+    "purpose": "Cancel Adjusted Collection",
+    "owningBackendFile": "server/functions/delivery-adjustments.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createDeliveryAdjustmentPayment",
+    "purpose": "Create Delivery Adjustment Payment",
+    "owningBackendFile": "server/functions/delivery-adjustments.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "finalizeDeliveryAdjustmentPayment",
+    "purpose": "Finalize Delivery Adjustment Payment",
+    "owningBackendFile": "server/functions/delivery-adjustments.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onDeliveryCreated",
+    "purpose": "Handle Delivery Created",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onDeliveryUpdated",
+    "purpose": "Handle Delivery Updated",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onChatMessageCreated",
+    "purpose": "Handle Chat Message Created",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onSupportTicketCreated",
+    "purpose": "Handle Support Ticket Created",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onDisputeCreated",
+    "purpose": "Handle Dispute Created",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onRiderProfileUpdated",
+    "purpose": "Handle Rider Profile Updated",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onPayoutUpdated",
+    "purpose": "Handle Payout Updated",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "escalateUnclaimedDeliveries",
+    "purpose": "escalate Unclaimed Deliveries",
+    "owningBackendFile": "server/functions/platform-notifications.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "awardLegendOnCompletion",
+    "purpose": "award Legend On Completion",
+    "owningBackendFile": "server/functions/legends.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "awardFoundingRiderOnApproval",
+    "purpose": "award Founding Rider On Approval",
+    "owningBackendFile": "server/functions/legends.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "awardFoundingRiderOnRiderApproval",
+    "purpose": "award Founding Rider On Rider Approval",
+    "owningBackendFile": "server/functions/legends.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "awardPatronOnBusinessInvoicePaid",
+    "purpose": "award Patron On Business Invoice Paid",
+    "owningBackendFile": "server/functions/legends.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "grantRecognition",
+    "purpose": "grant Recognition",
+    "owningBackendFile": "server/functions/legends.js",
+    "invokedBy": [
+      "Admin"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "revokeRecognition",
+    "purpose": "revoke Recognition",
+    "owningBackendFile": "server/functions/legends.js",
+    "invokedBy": [
+      "Admin"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createGiftPayment",
+    "purpose": "Create Gift Payment",
+    "owningBackendFile": "server/functions/gifts-payment.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "finalizeGiftPayment",
+    "purpose": "Finalize Gift Payment",
+    "owningBackendFile": "server/functions/gifts-payment.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "issueRothCredit",
+    "purpose": "issue Roth Credit",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "issueRothToWallets",
+    "purpose": "issue Roth To Wallets",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "debitRothCredit",
+    "purpose": "debit Roth Credit",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "redeemGiftCard",
+    "purpose": "redeem Gift Card",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "setWalletFrozen",
+    "purpose": "Set Wallet Frozen",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createWalletTopUp",
+    "purpose": "Create Wallet Top Up",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "applyCheckoutRoth",
+    "purpose": "apply Checkout Roth",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "initialiseSenderWallet",
+    "purpose": "initialise Sender Wallet",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "getSenderWallet",
+    "purpose": "Get Sender Wallet",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "getSenderWalletTransactions",
+    "purpose": "Get Sender Wallet Transactions",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "completeSenderWalletOnboarding",
+    "purpose": "complete Sender Wallet Onboarding",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "requestSenderWalletDebit",
+    "purpose": "Request Sender Wallet Debit",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "requestSenderWalletRefund",
+    "purpose": "Request Sender Wallet Refund",
+    "owningBackendFile": "server/functions/roth-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "closeCircumAccount",
+    "purpose": "close Circum Account",
+    "owningBackendFile": "server/functions/account-closure.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createBusinessRothCheckout",
+    "purpose": "Create Business Roth Checkout",
+    "owningBackendFile": "server/functions/business-payments.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated user with Business membership where required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createBusinessInvoiceCheckout",
+    "purpose": "Create Business Invoice Checkout",
+    "owningBackendFile": "server/functions/business-payments.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated user with Business membership where required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createBusinessAccount",
+    "purpose": "Create Business Account",
+    "owningBackendFile": "server/functions/business-access.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated user with Business membership where required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "lookupBusinessByCompanyCode",
+    "purpose": "lookup Business By Company Code",
+    "owningBackendFile": "server/functions/business-access.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated user with Business membership where required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "requestBusinessAccess",
+    "purpose": "Request Business Access",
+    "owningBackendFile": "server/functions/business-access.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated user with Business membership where required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "reviewBusinessAccessRequest",
+    "purpose": "review Business Access Request",
+    "owningBackendFile": "server/functions/business-access.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated user with Business membership where required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createStripeConnectAccountForRider",
+    "purpose": "Create Stripe Connect Account For Rider",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createStripeOnboardingLink",
+    "purpose": "Create Stripe Onboarding Link",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "refreshStripeOnboardingLink",
+    "purpose": "refresh Stripe Onboarding Link",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "syncStripeConnectStatus",
+    "purpose": "Sync Stripe Connect Status",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createRiderTransferOrPayout",
+    "purpose": "Create Rider Transfer Or Payout",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "requestRiderWithdrawal",
+    "purpose": "Request Rider Withdrawal",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "cancelRiderWithdrawal",
+    "purpose": "Cancel Rider Withdrawal",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "resetRiderTestStripeAccount",
+    "purpose": "reset Rider Test Stripe Account",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Admin",
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "handleStripeConnectWebhook",
+    "purpose": "handle Stripe Connect Webhook",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "scheduledRiderStripeStatusSync",
+    "purpose": "scheduled Rider Stripe Status Sync",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "redactLegacyPayoutBankFields",
+    "purpose": "redact Legacy Payout Bank Fields",
+    "owningBackendFile": "server/functions/rider-connect.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "syncSenderTrustBaseline",
+    "purpose": "Sync Sender Trust Baseline",
+    "owningBackendFile": "server/functions/sender-trust.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "ensureReferralCode",
+    "purpose": "ensure Referral Code",
+    "owningBackendFile": "server/functions/referrals.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "attachReferralCode",
+    "purpose": "attach Referral Code",
+    "owningBackendFile": "server/functions/referrals.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "activateReferral",
+    "purpose": "activate Referral",
+    "owningBackendFile": "server/functions/referrals.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "activateReferralOnDeliveryCompleted",
+    "purpose": "activate Referral On Delivery Completed",
+    "owningBackendFile": "server/functions/referrals.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "activateReferralOnGiftCompleted",
+    "purpose": "activate Referral On Gift Completed",
+    "owningBackendFile": "server/functions/referrals.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "activateReferralOnHealthPlusCompleted",
+    "purpose": "activate Referral On Health Plus Completed",
+    "owningBackendFile": "server/functions/referrals.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onGiftMovementWrite",
+    "purpose": "Handle Gift Movement Write",
+    "owningBackendFile": "server/functions/movement-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onHealthMovementWrite",
+    "purpose": "Handle Health Movement Write",
+    "owningBackendFile": "server/functions/movement-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onHealthPaymentMovementWrite",
+    "purpose": "Handle Health Payment Movement Write",
+    "owningBackendFile": "server/functions/movement-ledger.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onGiftDeliveryCompleted",
+    "purpose": "Handle Gift Delivery Completed",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "resolveGiftStoryAccess",
+    "purpose": "resolve Gift Story Access",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated participant, admin, or signed Gift Story token depending on action.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "recordGiftStoryEvent",
+    "purpose": "Record Gift Story Event",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated participant, admin, or signed Gift Story token depending on action.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "updateGiftStoryPrivacy",
+    "purpose": "Update Gift Story Privacy",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated participant, admin, or signed Gift Story token depending on action.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "retryGiftStoryAutomation",
+    "purpose": "retry Gift Story Automation",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "manageGiftStoryAccess",
+    "purpose": "manage Gift Story Access",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated participant, admin, or signed Gift Story token depending on action.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createGiftStoryVideoUpload",
+    "purpose": "Create Gift Story Video Upload",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated participant, admin, or signed Gift Story token depending on action.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "finalizeGiftStoryVideoUpload",
+    "purpose": "Finalize Gift Story Video Upload",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated participant, admin, or signed Gift Story token depending on action.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "getGiftStoryVideoDownload",
+    "purpose": "Get Gift Story Video Download",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated participant, admin, or signed Gift Story token depending on action.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "giftStoryLanding",
+    "purpose": "gift Story Landing",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "submitGiftStoryThankYou",
+    "purpose": "submit Gift Story Thank You",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onStoryNotificationWrite",
+    "purpose": "Handle Story Notification Write",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "cleanupExpiredGiftStories",
+    "purpose": "cleanup Expired Gift Stories",
+    "owningBackendFile": "server/functions/gift-story-automation.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "requestSenderCancellation",
+    "purpose": "Request Sender Cancellation",
+    "owningBackendFile": "server/functions/delivery-policy.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "previewSenderCancellation",
+    "purpose": "preview Sender Cancellation",
+    "owningBackendFile": "server/functions/delivery-policy.js",
+    "invokedBy": [
+      "Admin",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "recordRiderArrival",
+    "purpose": "Record Rider Arrival",
+    "owningBackendFile": "server/functions/delivery-policy.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "recordArrivalZoneCheck",
+    "purpose": "Record Arrival Zone Check",
+    "owningBackendFile": "server/functions/delivery-policy.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "recordCustomerArrivalResponse",
+    "purpose": "Record Customer Arrival Response",
+    "owningBackendFile": "server/functions/delivery-policy.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "reportWaitingContext",
+    "purpose": "report Waiting Context",
+    "owningBackendFile": "server/functions/delivery-policy.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "markRiderNoShow",
+    "purpose": "Mark Rider No Show",
+    "owningBackendFile": "server/functions/delivery-policy.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "goOnline",
+    "purpose": "go Online",
+    "owningBackendFile": "server/functions/rider-presence.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "goOffline",
+    "purpose": "go Offline",
+    "owningBackendFile": "server/functions/rider-presence.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "updateRiderPresence",
+    "purpose": "Update Rider Presence",
+    "owningBackendFile": "server/functions/rider-presence.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "onDeliveryPresenceWrite",
+    "purpose": "Handle Delivery Presence Write",
+    "owningBackendFile": "server/functions/rider-presence.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "markStaleRiderPresenceOffline",
+    "purpose": "Mark Stale Rider Presence Offline",
+    "owningBackendFile": "server/functions/rider-presence.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "searchFreeUkAddresses",
+    "purpose": "search Free Uk Addresses",
+    "owningBackendFile": "server/functions/free-address-search.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "getSenderRothBalance",
+    "purpose": "Get Sender Roth Balance",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createSenderBookingQuote",
+    "purpose": "Create Sender Booking Quote",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createSenderPaymentSession",
+    "purpose": "Create Sender Payment Session",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createSenderPaidDelivery",
+    "purpose": "Create Sender Paid Delivery",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "saveSenderDraft",
+    "purpose": "save Sender Draft",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "loadSenderDraft",
+    "purpose": "load Sender Draft",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "deleteSenderDraft",
+    "purpose": "delete Sender Draft",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "cleanupExpiredSenderDrafts",
+    "purpose": "cleanup Expired Sender Drafts",
+    "owningBackendFile": "server/functions/sender-booking.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "listSenderPaymentMethods",
+    "purpose": "list Sender Payment Methods",
+    "owningBackendFile": "server/functions/sender-finance.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "createSenderSetupIntent",
+    "purpose": "Create Sender Setup Intent",
+    "owningBackendFile": "server/functions/sender-finance.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "detachSenderPaymentMethod",
+    "purpose": "detach Sender Payment Method",
+    "owningBackendFile": "server/functions/sender-finance.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "setDefaultSenderPaymentMethod",
+    "purpose": "Set Default Sender Payment Method",
+    "owningBackendFile": "server/functions/sender-finance.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "saveSenderCheckoutPreference",
+    "purpose": "save Sender Checkout Preference",
+    "owningBackendFile": "server/functions/sender-finance.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "saveSenderSavedAddress",
+    "purpose": "save Sender Saved Address",
+    "owningBackendFile": "server/functions/sender-saved-addresses.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "deleteSenderSavedAddress",
+    "purpose": "delete Sender Saved Address",
+    "owningBackendFile": "server/functions/sender-saved-addresses.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "updateDeliveryTrackingStatus",
+    "purpose": "Update Delivery Tracking Status",
+    "owningBackendFile": "server/functions/delivery-tracking.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "archiveExpiredDeliveries",
+    "purpose": "archive Expired Deliveries",
+    "owningBackendFile": "server/functions/delivery-cleanup.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "StripePayEndpointMethodId",
+    "purpose": "Stripe Pay Endpoint Method Id",
+    "owningBackendFile": "server/functions/firebase-functions/v1.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Legacy",
+    "deprecationStatus": "Legacy HTTP payment endpoint retained for existing clients."
+  },
+  {
+    "callableName": "createPaymentIntent",
+    "purpose": "Create Payment Intent",
+    "owningBackendFile": "server/functions/firebase-functions/v1.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "StripePayEndpointIntentId",
+    "purpose": "Stripe Pay Endpoint Intent Id",
+    "owningBackendFile": "server/functions/firebase-functions/v1.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Legacy",
+    "deprecationStatus": "Legacy HTTP payment confirmation endpoint retained for existing clients."
+  },
+  {
+    "callableName": "confirmPaymentIntent",
+    "purpose": "confirm Payment Intent",
+    "owningBackendFile": "server/functions/firebase-functions/v1.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "StripeWebhook",
+    "purpose": "Stripe Webhook",
+    "owningBackendFile": "server/functions/firebase-functions/v1.js",
+    "invokedBy": [
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Admin/service account or scheduled backend context.",
+    "classification": "Internal only",
+    "deprecationStatus": "Active"
+  },
+  {
+    "callableName": "calculateEarnings",
+    "purpose": "calculate Earnings",
+    "owningBackendFile": "server/functions/firebase-functions/v1.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Rider; admin claim where explicitly required.",
+    "classification": "Legacy",
+    "deprecationStatus": "Legacy HTTP endpoint. Rider earnings clients should use getRiderEarningsSummary."
+  },
+  {
+    "callableName": "endTrip",
+    "purpose": "end Trip",
+    "owningBackendFile": "server/functions/firebase-functions/v1.js",
+    "invokedBy": [],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated Firebase user unless owning function explicitly accepts a signed public token.",
+    "classification": "Legacy",
+    "deprecationStatus": "Legacy HTTP endpoint. Delivery completion should use backend delivery lifecycle callables."
+  }
+]
