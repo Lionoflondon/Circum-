@@ -19010,6 +19010,7 @@ class _PhoneStage extends StatelessWidget {
       child: Center(
         child: Container(
           width: double.infinity,
+          height: double.infinity,
           constraints: const BoxConstraints(maxWidth: 430),
           decoration: BoxDecoration(
             color: colors.appBackground,
