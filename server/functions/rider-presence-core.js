@@ -1,5 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const STALE_HEARTBEAT_MS = 2 * 60 * 1000;
+const STALE_LOCATION_MS = 2 * 60 * 1000;
+const MAX_DISPATCH_ACCURACY_METERS = 100;
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -54,7 +56,48 @@ function canReceiveDispatch({profile = {}, presence = {}, now = Date.now()}) {
   if (presence.busy === true) return false;
   const heartbeat = Number(presence.lastHeartbeatAt || 0);
   if (!heartbeat) return false;
-  return now - heartbeat <= STALE_HEARTBEAT_MS;
+  if (now - heartbeat > STALE_HEARTBEAT_MS) return false;
+  return gpsHealthy({presence, now});
+}
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") {
+    return value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1000000);
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function gpsHealthy({presence = {}, now = Date.now()}) {
+  const blockedStatuses = new Set([
+    "disabled",
+    "denied",
+    "restricted",
+    "unavailable",
+    "stale",
+    "mocked",
+    "suspect",
+    "pooraccuracy",
+    "poorgpsaccuracy",
+    "permissionrequired",
+    "locationservicesdisabled",
+  ]);
+  const gpsStatus = lower(presence.gpsStatus || presence.locationStatus || presence.trackingStatus);
+  if (blockedStatuses.has(gpsStatus)) return false;
+  const location = presence.currentLocation || presence.location || presence.riderLiveLocation || {};
+  if (location.mocked === true || location.isMocked === true || presence.mockedLocation === true) return false;
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+  const accuracy = Number(location.accuracyMeters ?? location.accuracy);
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > MAX_DISPATCH_ACCURACY_METERS) return false;
+  const updatedAt = timestampMillis(location.updatedAt || location.clientRecordedAt || presence.lastLocationAt);
+  if (!updatedAt) return false;
+  return now - updatedAt <= STALE_LOCATION_MS;
 }
 
 function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
@@ -77,11 +120,14 @@ function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
 }
 
 module.exports = {
+  MAX_DISPATCH_ACCURACY_METERS,
+  STALE_LOCATION_MS,
   STALE_HEARTBEAT_MS,
   blockedReason,
   blockedReasonForAccess,
   canGoOnline,
   canReceiveDispatch,
+  gpsHealthy,
   nextPresenceOnDelivery,
   riderApproved,
   vehicleVerified,

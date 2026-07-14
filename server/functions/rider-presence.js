@@ -52,25 +52,50 @@ async function hasActiveDelivery(db, riderId) {
 }
 
 function presencePatch({riderId, status, busy = false, location = null}) {
+  const now = Date.now();
   const patch = {
     riderId,
     isOnline: status !== "offline",
     availabilityStatus: status,
     busy,
     updatedAt: FieldValue.serverTimestamp(),
-    lastHeartbeatAt: Date.now(),
+    lastHeartbeatAt: now,
   };
   if (status === "available") patch.lastOnlineAt = FieldValue.serverTimestamp();
   if (status === "offline") patch.lastOfflineAt = FieldValue.serverTimestamp();
   if (location) {
+    const accuracy = Number(location.accuracyMeters || location.accuracy || 0);
+    const gpsStatus = text(location.gpsStatus || location.locationStatus || (accuracy > 0 ? "active" : "unknown"));
+    const updatedAt = Number(location.updatedAt || location.clientRecordedAt || now);
     patch.currentLocation = {
       latitude: Number(location.latitude),
       longitude: Number(location.longitude),
-      accuracyMeters: Number(location.accuracyMeters || location.accuracy || 0),
-      updatedAt: Date.now(),
+      accuracyMeters: accuracy,
+      heading: Number(location.heading || 0),
+      speed: Number(location.speed || 0),
+      mocked: location.mocked === true || location.isMocked === true,
+      updatedAt,
     };
+    patch.lastLocationAt = updatedAt;
+    patch.gpsStatus = gpsStatus;
+    patch.gpsSignalQuality = text(location.gpsSignalQuality || signalQuality(accuracy));
+    patch.locationPermission = text(location.permission || location.locationPermission || "");
+    patch.backgroundTracking = text(location.backgroundTracking || "");
+    patch.batteryOptimisation = text(location.batteryOptimisation || "");
+    patch.connectionStatus = "connected";
+    patch.dispatchEligible = core.gpsHealthy({presence: {...patch}, now});
+  } else if (status === "available") {
+    patch.gpsStatus = "unknown";
+    patch.dispatchEligible = false;
   }
   return patch;
+}
+
+function signalQuality(accuracy) {
+  if (!Number.isFinite(accuracy) || accuracy <= 0) return "unknown";
+  if (accuracy <= 25) return "high";
+  if (accuracy <= 80) return "medium";
+  return "reduced";
 }
 
 exports.goOnline = functions.https.onCall(async (data, context) => {
@@ -166,16 +191,17 @@ exports.markStaleRiderPresenceOffline = functions.pubsub
       const batch = db.batch();
       snapshot.docs.forEach((doc) => {
         batch.set(doc.ref, {
-          isOnline: false,
-          busy: false,
-          availabilityStatus: "offline",
+          availabilityStatus: "connection_lost",
+          connectionStatus: "lost",
+          gpsStatus: "stale",
+          dispatchEligible: false,
           staleAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           source: "staleHeartbeat",
         }, {merge: true});
       });
       await batch.commit();
-      return {markedOffline: snapshot.size};
+      return {markedConnectionLost: snapshot.size};
     });
 
 exports.requireDispatchablePresence = async function(riderId, riderProfileData = {}) {

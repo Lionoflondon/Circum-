@@ -12,6 +12,13 @@ test("approved rider receives dispatch only when online and available", () => {
     availabilityStatus: "available",
     busy: false,
     lastHeartbeatAt: Date.now(),
+    currentLocation: {
+      latitude: 51.5072,
+      longitude: -0.1276,
+      accuracyMeters: 18,
+      updatedAt: Date.now(),
+    },
+    gpsStatus: "active",
   };
   assert.equal(core.canGoOnline(profile), true);
   assert.equal(core.canReceiveDispatch({profile, presence}), true);
@@ -26,6 +33,12 @@ test("unverified vehicle blocks online and dispatch", () => {
     isOnline: true,
     availabilityStatus: "available",
     lastHeartbeatAt: Date.now(),
+    currentLocation: {
+      latitude: 51.5072,
+      longitude: -0.1276,
+      accuracyMeters: 18,
+      updatedAt: Date.now(),
+    },
   };
   assert.equal(core.canGoOnline(profile), false);
   assert.equal(core.blockedReason(profile), "Vehicle verification required.");
@@ -48,8 +61,78 @@ test("stale heartbeat blocks dispatch", () => {
     availabilityStatus: "available",
     busy: false,
     lastHeartbeatAt: Date.now() - core.STALE_HEARTBEAT_MS - 1,
+    currentLocation: {
+      latitude: 51.5072,
+      longitude: -0.1276,
+      accuracyMeters: 18,
+      updatedAt: Date.now(),
+    },
   };
   assert.equal(core.canReceiveDispatch({profile, presence}), false);
+});
+
+test("dispatch requires fresh accurate GPS", () => {
+  const profile = {
+    onboardingStatus: "approved",
+    vehicleStatus: "approved",
+  };
+  const base = {
+    isOnline: true,
+    availabilityStatus: "available",
+    busy: false,
+    lastHeartbeatAt: Date.now(),
+  };
+  assert.equal(core.canReceiveDispatch({profile, presence: base}), false);
+  assert.equal(core.canReceiveDispatch({
+    profile,
+    presence: {
+      ...base,
+      currentLocation: {
+        latitude: 51.5072,
+        longitude: -0.1276,
+        accuracyMeters: 20,
+        updatedAt: Date.now() - core.STALE_LOCATION_MS - 1,
+      },
+    },
+  }), false);
+  assert.equal(core.canReceiveDispatch({
+    profile,
+    presence: {
+      ...base,
+      currentLocation: {
+        latitude: 51.5072,
+        longitude: -0.1276,
+        accuracyMeters: core.MAX_DISPATCH_ACCURACY_METERS + 1,
+        updatedAt: Date.now(),
+      },
+    },
+  }), false);
+  assert.equal(core.canReceiveDispatch({
+    profile,
+    presence: {
+      ...base,
+      gpsStatus: "mocked",
+      currentLocation: {
+        latitude: 51.5072,
+        longitude: -0.1276,
+        accuracyMeters: 20,
+        updatedAt: Date.now(),
+      },
+    },
+  }), false);
+  assert.equal(core.canReceiveDispatch({
+    profile,
+    presence: {
+      ...base,
+      gpsStatus: "active",
+      currentLocation: {
+        latitude: 51.5072,
+        longitude: -0.1276,
+        accuracyMeters: 20,
+        updatedAt: Date.now(),
+      },
+    },
+  }), true);
 });
 
 test("delivery write marks rider busy, then available", () => {
