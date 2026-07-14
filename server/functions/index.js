@@ -176,6 +176,7 @@ exports.submitGiftStoryThankYou = giftStoryAutomation.submitGiftStoryThankYou;
 exports.onStoryNotificationWrite = giftStoryAutomation.onStoryNotificationWrite;
 exports.cleanupExpiredGiftStories = giftStoryAutomation.cleanupExpiredGiftStories;
 exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation;
+exports.previewSenderCancellation = deliveryPolicy.previewSenderCancellation;
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
 exports.recordArrivalZoneCheck = deliveryPolicy.recordArrivalZoneCheck;
 exports.recordCustomerArrivalResponse = deliveryPolicy.recordCustomerArrivalResponse;

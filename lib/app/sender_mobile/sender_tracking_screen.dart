@@ -584,25 +584,14 @@ String _firebaseFunctionMessage(Object error, String fallback) {
   return fallback;
 }
 
-Future<Map<String, dynamic>> _callFirstAvailableFunction(
-  List<String> names,
+Future<Map<String, dynamic>> _callFunction(
+  String name,
   Map<String, dynamic> payload,
 ) async {
-  Object? lastError;
-  for (final name in names) {
-    try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable(name)
-          .call<Map<String, dynamic>>(payload);
-      return Map<String, dynamic>.from(result.data);
-    } on FirebaseFunctionsException catch (error) {
-      lastError = error;
-      if (error.code != 'not-found' && error.code != 'unimplemented') {
-        rethrow;
-      }
-    }
-  }
-  throw lastError ?? StateError('No backend callable is available.');
+  final result = await FirebaseFunctions.instance
+      .httpsCallable(name)
+      .call<Map<String, dynamic>>(payload);
+  return Map<String, dynamic>.from(result.data);
 }
 
 String senderVehicleMarkerKindFor(String? vehicle) {
@@ -855,12 +844,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     }
     Map<String, dynamic> quote;
     try {
-      quote = await _callFirstAvailableFunction(
-        const [
-          'getSenderCancellationQuote',
-          'previewSenderCancellation',
-          'getDeliveryCancellationQuote',
-        ],
+      quote = await _callFunction(
+        'previewSenderCancellation',
         {'deliveryId': deliveryId, 'requestId': deliveryId},
       );
     } catch (error) {
@@ -880,12 +865,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     );
     if (confirmed != true) return;
     try {
-      await _callFirstAvailableFunction(
-        const [
-          'cancelSenderDelivery',
-          'requestSenderCancellation',
-          'cancelDeliveryRequest',
-        ],
+      await _callFunction(
+        'requestSenderCancellation',
         {'deliveryId': deliveryId, 'requestId': deliveryId},
       );
       if (!mounted) return;

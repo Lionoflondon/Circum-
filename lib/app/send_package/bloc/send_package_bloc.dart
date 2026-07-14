@@ -15,8 +15,6 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geocoding/geocoding.dart';
-// import 'package:geoflutterfire2/geoflutterfire2.dart';
-import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -25,7 +23,6 @@ import 'package:geolocator/geolocator.dart';
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/calculate_bearing.dart';
 import '../../../helper/chats_help.dart';
-import '../../delivery_security/vanguard_protection.dart';
 import '../models/canonical_iris_result.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
@@ -863,160 +860,33 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SendDeliveryRequest event,
     Emitter emit,
   ) async {
-    const uuid = Uuid();
-    final uuid2 = uuid.v4();
-    final uuid3 = uuid.v4();
-    final uuidStrong = "$uuid2-$uuid3";
-
-    // print(uuidStrong);
-
-    try {
-      final User? user = auth.currentUser;
-      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final HttpsCallable callable = functions.httpsCallable('sendPackage');
-      await firebaseMessaging.getAPNSToken();
-      final fcmToken = await firebaseMessaging.getToken();
-      final vanguardFields = VanguardProtection.initialFields(
-        description:
-            state.itemDescription ?? state.canonicalIrisResult?.itemName ?? '',
-        packageType: state.canonicalIrisResult?.category ??
-            state.canonicalIrisResult?.weightBand,
-        manuallySelected: false,
-        irisRequired: state.canonicalIrisResult?.vanguardRequired ?? false,
-        irisRequiredReason: state.canonicalIrisResult?.vanguardRequiredReason,
-      );
-
-      GeoFirePoint pickupLocation = GeoFirePoint(
-        GeoPoint(
-          event.pickupDetails.address.lat,
-          event.pickupDetails.address.lng,
-        ),
-      );
-
-      GeoFirePoint dropoffLocation = GeoFirePoint(
-        GeoPoint(
-          event.dropoffDetails.address.lat,
-          event.pickupDetails.address.lng,
-        ),
-      );
-
-      // Document does not exist
-      // print('Document does not exist');
-      await db.collection("deliveryRequests").doc(user?.uid).set({
-        'pickupDetails': {
-          'fullname': event.pickupDetails.fullname,
-          'phone': event.pickupDetails.phoneNumber,
-          'position': pickupLocation.data,
-          'moreInformation': event.pickupDetails.moreInformation,
-          'locality': event.pickupDetails.locality,
-          'address': state.pickupLocation,
-          'subAddress': state.pickupLocationSubAddress,
-        },
-        'dropoffDetails': {
-          'fullname': event.dropoffDetails.fullname,
-          'phone': event.dropoffDetails.phoneNumber,
-          'position': dropoffLocation.data,
-          'moreInformation': event.dropoffDetails.moreInformation,
-          'locality': event.dropoffDetails.locality,
-          'address': state.destinationLocation,
-          'subAddress': state.destinationLocationSubAddress,
-        },
-        "role": 'user',
-        'userId': user?.uid,
-        'senderId': user?.uid,
-        'senderName': user?.displayName,
-        'senderEmail': user?.email,
-        'pickupPosition': pickupLocation.data,
-        'pickupLocality': event.pickupDetails.locality,
-        'requestId': uuidStrong,
-        'code': fcmToken,
-        'price': state.price,
-        'weightKg': state.parcelWeightKg,
-        ...vanguardFields,
-        'dispatchProtocol': {
-          'vanguard': vanguardFields['vanguardProtocolEnabled'] == true,
-        },
-        'pricingBreakdown': DeliveryPricing.calculate(
-          DeliveryPricingInput(
-            distanceMiles: DeliveryPricing.kilometresToMiles(
-              state.distance ?? 0,
-            ),
-            weightKg: state.parcelWeightKg,
-          ),
-        ).toJson(),
-        'currency': 'GBP',
-        'status': 'requested',
-        'createdAt': DateTime.now(),
-      }).then(
-        (value) => print("DocumentSnapshot successfully created!"),
-        onError: (e) => print("Error updating document $e"),
-      );
-
-      final response = await callable.call({
-        // Any data you want to send to the function
-        'requestId': uuidStrong,
-      });
-
-      if (response.data == null) {
-        debugPrint('Request creation returned no payload');
-      }
-
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('activeRequest', uuidStrong);
-      add(WatchActiveDelivery(requestId: uuidStrong));
-
-      // await firebaseMessaging
-      //     .subscribeToTopic(uuidStrong)
-      //     .then((value) => print(uuidStrong));
-      // print(user);
-
-      emit(state.copyWith(
-        deliveryStatus: DeliveryStatus.deliveryConfirmed,
-        deliveryRequestStatus: 'requested',
-      ));
-      add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
-    } catch (e) {
-      print(e);
-    }
+    emit(
+      state.copyWith(
+        senderDeliveryError:
+            'Please continue with the secure booking flow to create this delivery.',
+      ),
+    );
   }
 
   void _handleDeliveryAcceptedEvent(
     DeliveryAccepted event,
     Emitter emit,
   ) async {
-    final User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    final activeDelivery = db.collection("deliveryRequests").doc(user?.uid);
-
-    final activeDeliveryData = await activeDelivery.get();
-
-    if (activeDeliveryData.exists &&
-        activeDeliveryData.data()!['status'] == 'requested') {
-      print('Requested');
-      final DeliveryData deliveryData = DeliveryData.fromJson(event.data);
-
-      await activeDelivery.update({
-        'status': 'accepted',
-        'riderId': deliveryData.riderId,
-        'estimatedDeliveryTime': deliveryData.estimatedDeliveryTime,
-        'updatedAt': DateTime.now(),
-      });
-
-      await prefs.setString(
-        'activeRequest',
-        activeDeliveryData.data()!['requestId'],
-      );
-
-      emit(
-        state.copyWith(
-          deliveryStatus: DeliveryStatus.deliveryOnGoing,
-          deliveryRequestStatus: 'accepted',
-          deliveryData: deliveryData,
-        ),
-      );
-      add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
+    final requestId = '${event.data['requestId'] ?? event.data['id'] ?? ''}';
+    final DeliveryData deliveryData = DeliveryData.fromJson(event.data);
+    if (requestId.isNotEmpty) {
+      await prefs.setString('activeRequest', requestId);
+      add(WatchActiveDelivery(requestId: requestId));
     }
+    emit(
+      state.copyWith(
+        deliveryStatus: DeliveryStatus.deliveryOnGoing,
+        deliveryRequestStatus: 'accepted',
+        deliveryData: deliveryData,
+      ),
+    );
+    add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
   }
 
   void _handleDeliveryCompleted(DeliveryCompleted event, Emitter emit) {
@@ -1324,8 +1194,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         double? price = data['price'];
         String? currency = data['currency'];
 
-        GeoPoint pickUpGeoPoint =
-            data!['pickupDetails']['position']['geopoint'];
+        GeoPoint pickUpGeoPoint = data['pickupDetails']['position']['geopoint'];
         GeoPoint dropoffGeoPoint =
             data['pickupDetails']['position']['geopoint'];
 
@@ -1521,25 +1390,32 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     DeleteCompletedDelivery event,
     Emitter emit,
   ) async {
-    try {
-      User user = auth.currentUser!;
-      final documentReference = db.collection('deliveryRequests').doc(user.uid);
-
-      await documentReference.delete();
-    } catch (e) {
-      print(e);
-    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('activeRequest');
+    emit(state.copyWith(lastHistoryId: ''));
   }
 
   void _handleCancelRequestEvent(CancelRequest event, Emitter emit) async {
-    final User? user = auth.currentUser;
-    final collection = db.collection("deliveryRequests").doc(user?.uid);
-
-    final docResponse = await collection.get();
-    final data = docResponse.data();
-
-    if (data?['status'] == 'requested') {
-      await collection.delete();
+    final prefs = await SharedPreferences.getInstance();
+    final activeRequest = prefs.getString('activeRequest') ??
+        '${state.activeDeliveryData['id'] ?? ''}';
+    if (activeRequest.trim().isNotEmpty) {
+      try {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('requestSenderCancellation')
+            .call({
+          'deliveryId': activeRequest,
+          'idempotencyKey': '$activeRequest:legacy_sender_cancel',
+        });
+      } on FirebaseFunctionsException catch (error) {
+        emit(
+          state.copyWith(
+            senderDeliveryError:
+                error.message ?? 'Cancellation could not be completed.',
+          ),
+        );
+        return;
+      }
     }
     add(
       SetDrawerHeight(

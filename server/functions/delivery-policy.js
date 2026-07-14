@@ -129,6 +129,37 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
   return result;
 });
 
+exports.previewSenderCancellation = functions.https.onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const deliveryId = text(data.deliveryId || data.requestId);
+  if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
+  const db = getFirestore();
+  const ref = db.collection("deliveryRequests").doc(deliveryId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) {
+    throw new functions.https.HttpsError("not-found", "Delivery not found.");
+  }
+  const delivery = {id: snapshot.id, ...snapshot.data()};
+  assertSender(uid, delivery);
+  const decision = core.cancellationDecision({
+    delivery,
+    state: delivery.state || delivery.status,
+    serverNow: Date.now(),
+  });
+  return {
+    success: true,
+    decision,
+    cancellationFee: decision.feeAmount,
+    feeAmount: decision.feeAmount,
+    amount: decision.feeAmount,
+    currency: "GBP",
+    backendReason: decision.userFacingMessage || decision.adminFacingReason || "",
+    reason: decision.cancellationType,
+    amountToChargeOrRefund: decision.feeApplies ? decision.feeAmount : 0,
+    canCancel: decision.canCancel,
+  };
+});
+
 exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);

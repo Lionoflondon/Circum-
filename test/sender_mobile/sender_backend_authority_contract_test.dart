@@ -74,4 +74,45 @@ void main() {
     expect(functions, contains(r'stableId(`${sender.uid}:${draftId'));
     expect(functions, contains('idempotent: true'));
   });
+
+  test('legacy Sender delivery path cannot create or delete delivery records',
+      () {
+    final legacyBloc = File('lib/app/send_package/bloc/send_package_bloc.dart')
+        .readAsStringSync();
+
+    expect(legacyBloc,
+        isNot(contains('.collection("deliveryRequests").doc(user?.uid).set')));
+    expect(
+        legacyBloc,
+        isNot(
+            contains(".collection('deliveryRequests').doc(user.uid).delete")));
+    expect(
+        legacyBloc,
+        isNot(contains(
+            'DeliveryPricing.calculate(\n          DeliveryPricingInput')));
+    expect(
+        legacyBloc,
+        contains(
+            'Please continue with the secure booking flow to create this delivery.'));
+    expect(legacyBloc, contains("httpsCallable('requestSenderCancellation')"));
+  });
+
+  test(
+      'Sender cancellation uses canonical backend preview and execute callables',
+      () {
+    final tracking = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final index = File('server/functions/index.js').readAsStringSync();
+    final policy =
+        File('server/functions/delivery-policy.js').readAsStringSync();
+
+    expect(tracking, contains("'previewSenderCancellation'"));
+    expect(tracking, contains("'requestSenderCancellation'"));
+    expect(tracking, isNot(contains('getSenderCancellationQuote')));
+    expect(tracking, isNot(contains('cancelSenderDelivery')));
+    expect(tracking, isNot(contains('cancelDeliveryRequest')));
+    expect(index, contains('exports.previewSenderCancellation'));
+    expect(policy, contains('exports.previewSenderCancellation'));
+    expect(policy, contains('core.cancellationDecision'));
+  });
 }
