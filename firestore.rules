@@ -574,7 +574,7 @@ service cloud.firestore {
     }
 
     match /senderBookingDrafts/{uid} {
-      allow read: if isAdmin() || (signedIn() && uid == request.auth.uid);
+      allow read: if signedIn() && uid == request.auth.uid;
       allow create, update, delete: if false;
     }
 

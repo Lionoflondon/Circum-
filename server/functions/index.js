@@ -194,6 +194,7 @@ exports.createSenderPaidDelivery = senderBooking.createSenderPaidDelivery(stripe
 exports.saveSenderDraft = senderBooking.saveSenderDraft;
 exports.loadSenderDraft = senderBooking.loadSenderDraft;
 exports.deleteSenderDraft = senderBooking.deleteSenderDraft;
+exports.cleanupExpiredSenderDrafts = senderBooking.cleanupExpiredSenderDrafts;
 exports.listSenderPaymentMethods = senderFinance.listSenderPaymentMethods(stripe);
 exports.createSenderSetupIntent = senderFinance.createSenderSetupIntent(stripe);
 exports.detachSenderPaymentMethod = senderFinance.detachSenderPaymentMethod(stripe);

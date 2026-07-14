@@ -3,10 +3,10 @@ const assert = require("node:assert/strict");
 const {_private} = require("./sender-booking");
 
 test("sender draft sanitizer keeps only canonical draft fields", () => {
-  const draft = _private.sanitizeSenderDraftPayload({
-    uid: "attacker",
-    completed: true,
-    status: "paid",
+  const saved = _private.sanitizeSenderDraftPayload({
+    schemaVersion: 1,
+    baseRevision: 0,
+    draft: {
     step: "recipient",
     pickup: {address: "10 Downing Street", unknown: "x"},
     dropoff: {address: "Buckingham Palace"},
@@ -17,14 +17,15 @@ test("sender draft sanitizer keeps only canonical draft fields", () => {
     deliveryOptions: {selectedOption: "Express", vanguard: true},
     review: {amountDue: "12.50"},
     paymentMethod: {type: "card", paymentMethodId: "pm_123", rothEnabled: true},
-    price: 1,
+    },
   });
+  const draft = saved.draft;
 
-  assert.equal(draft.version, 1);
+  assert.equal(saved.schemaVersion, 1);
+  assert.equal(saved.baseRevision, 0);
+  assert.equal(draft.schemaVersion, 1);
   assert.equal(draft.status, "draft");
   assert.equal(draft.completed, false);
-  assert.equal(draft.uid, undefined);
-  assert.equal(draft.price, undefined);
   assert.equal(draft.pickup.unknown, undefined);
   assert.equal(draft.pickup.address, "10 Downing Street");
   assert.equal(draft.recipient.name, "Ada");
@@ -34,15 +35,65 @@ test("sender draft sanitizer keeps only canonical draft fields", () => {
 });
 
 test("sender draft sanitizer defaults unsafe values", () => {
-  const draft = _private.sanitizeSenderDraftPayload({
-    step: "",
-    deliveryOptions: {vanguard: "yes"},
-    review: {amountDue: "not-money"},
-  });
+  const draft = _private.sanitizeSenderDraftPayload({schemaVersion: 1, draft: {}}).draft;
 
   assert.equal(draft.step, "pickup");
   assert.equal(draft.status, "draft");
   assert.equal(draft.deliveryOptions.selectedOption, "Standard");
   assert.equal(draft.deliveryOptions.vanguard, false);
   assert.equal(draft.review.amountDue, null);
+});
+
+test("sender draft rejects unknown top-level fields", () => {
+  assert.throws(() => _private.sanitizeSenderDraftPayload({
+    schemaVersion: 1,
+    draft: {step: "pickup", unexpected: true},
+  }), /Unsupported draft field/);
+});
+
+test("sender draft rejects forbidden payment and verification fields", () => {
+  assert.throws(() => _private.sanitizeSenderDraftPayload({
+    schemaVersion: 1,
+    draft: {
+      step: "payment",
+      paymentMethod: {clientSecret: "pi_secret"},
+    },
+  }), /cannot be stored/);
+  assert.throws(() => _private.sanitizeSenderDraftPayload({
+    schemaVersion: 1,
+    draft: {
+      recipient: {senderPin: "1234"},
+    },
+  }), /cannot be stored/);
+});
+
+test("sender draft rejects invalid enums and oversized payloads", () => {
+  assert.throws(() => _private.sanitizeSenderDraftPayload({
+    schemaVersion: 1,
+    draft: {step: "backendDebug"},
+  }), /step is not supported/);
+  assert.throws(() => _private.sanitizeSenderDraftPayload({
+    schemaVersion: 1,
+    draft: {deliveryOptions: {selectedOption: "Hyperdrive"}},
+  }), /Delivery option is not supported/);
+  assert.throws(() => _private.sanitizeSenderDraftPayload({
+    schemaVersion: 1,
+    draft: {parcel: {description: "x".repeat(40000)}},
+  }), /too large/);
+});
+
+test("sender draft rejects unsupported future schema", () => {
+  assert.throws(() => _private.sanitizeSenderDraftPayload({
+    schemaVersion: 999,
+    draft: {step: "pickup"},
+  }), /newer version/);
+});
+
+test("delivery idempotency key input is stable", () => {
+  const a = _private.stableId("uid:draft:quote:session");
+  const b = _private.stableId("uid:draft:quote:session");
+  const c = _private.stableId("uid:draft:quote:other");
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+  assert.equal(a.length, 32);
 });

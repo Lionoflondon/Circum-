@@ -2,7 +2,8 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
+const crypto = require("crypto");
+const {getFirestore, FieldValue, GeoPoint, Timestamp} = require("firebase-admin/firestore");
 const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core");
 const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
@@ -13,6 +14,21 @@ const SHORT_TRIP_FARE_FLOOR_MILES = 1.6;
 const LONG_DISTANCE_THRESHOLD_MILES = 20;
 const LONG_DISTANCE_MULTIPLIER = 1.2;
 const VANGUARD_ADD_ON_GBP = 1.99;
+const DRAFT_SCHEMA_VERSION = 1;
+const DRAFT_RETENTION_DAYS = 30;
+const MAX_DRAFT_BYTES = 32768;
+const MAX_STRING_LENGTH = 1000;
+const MAX_DEPTH = 6;
+const ALLOWED_STEPS = new Set(["pickup", "dropoff", "recipient", "deliveryTime", "parcel", "iris", "options", "review", "payment"]);
+const ALLOWED_TIMING_TYPES = new Set(["now", "scheduled"]);
+const ALLOWED_OPTIONS = new Set(["Economy", "Standard", "Express", "economy", "standard", "express"]);
+const FORBIDDEN_DRAFT_KEYS = [
+  "cardnumber", "card_number", "cvc", "cvv", "securitycode", "password",
+  "token", "authtoken", "accesstoken", "refreshtoken", "clientsecret",
+  "client_secret", "paymentpayload", "applepay", "googlepay", "pin",
+  "verificationpin", "receiverpin", "senderpin", "rawmedia", "base64",
+  "blob", "bytes", "debug", "internal", "functionresponse",
+];
 
 function requireSender(context) {
   if (!context.auth) {
@@ -38,7 +54,7 @@ function senderDraftRef(db, uid) {
 }
 
 function cleanString(value, maxLength = 600) {
-  return text(value).slice(0, maxLength);
+  return text(value).slice(0, Math.min(maxLength, MAX_STRING_LENGTH));
 }
 
 function cleanBoolean(value) {
@@ -54,8 +70,66 @@ function cleanNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function sanitizeSenderDraftPayload(raw) {
+function rejectSensitiveDraftKeys(value, path = "", depth = 0) {
+  if (depth > MAX_DEPTH) {
+    throw new functions.https.HttpsError("invalid-argument", "Draft data is too deeply nested.");
+  }
+  if (Array.isArray(value)) {
+    if (value.length > 20) {
+      throw new functions.https.HttpsError("invalid-argument", "Draft data contains too many items.");
+    }
+    value.forEach((item, index) => rejectSensitiveDraftKeys(item, `${path}[${index}]`, depth + 1));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  Object.keys(value).forEach((key) => {
+    const compact = key.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (FORBIDDEN_DRAFT_KEYS.some((forbidden) => compact.includes(forbidden))) {
+      console.warn(`Rejected Sender draft forbidden field at ${path ? `${path}.` : ""}${key}`);
+      throw new functions.https.HttpsError("invalid-argument", "Draft contains payment or verification data that cannot be stored.");
+    }
+    rejectSensitiveDraftKeys(value[key], path ? `${path}.${key}` : key, depth + 1);
+  });
+}
+
+function payloadBytes(value) {
+  return Buffer.byteLength(JSON.stringify(value || {}), "utf8");
+}
+
+function assertKnownTopLevelKeys(input, allowed) {
+  Object.keys(input).forEach((key) => {
+    if (!allowed.has(key)) {
+      throw new functions.https.HttpsError("invalid-argument", `Unsupported draft field: ${key}`);
+    }
+  });
+}
+
+function normalizeIncomingDraft(raw) {
   const input = cleanMap(raw);
+  assertKnownTopLevelKeys(input, new Set(["schemaVersion", "baseRevision", "draft", "version", "step", "status", "completed", "draftId", "pickup", "dropoff", "recipient", "deliveryTime", "parcel", "iris", "deliveryOptions", "review", "paymentMethod"]));
+  const schemaVersion = Number(input.schemaVersion || input.version || DRAFT_SCHEMA_VERSION);
+  if (schemaVersion > DRAFT_SCHEMA_VERSION) {
+    throw new functions.https.HttpsError("failed-precondition", "This saved draft was created by a newer version of Circum. Please update the app.");
+  }
+  if (schemaVersion < 1) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported draft version.");
+  }
+  const draft = cleanMap(input.draft);
+  return {
+    schemaVersion: DRAFT_SCHEMA_VERSION,
+    baseRevision: Number.isFinite(Number(input.baseRevision)) ? Number(input.baseRevision) : 0,
+    draft: Object.prototype.hasOwnProperty.call(input, "draft") ? draft : input,
+  };
+}
+
+function sanitizeSenderDraftPayload(raw) {
+  if (payloadBytes(raw) > MAX_DRAFT_BYTES) {
+    throw new functions.https.HttpsError("invalid-argument", "Draft is too large to save.");
+  }
+  rejectSensitiveDraftKeys(raw);
+  const normalized = normalizeIncomingDraft(raw);
+  const input = cleanMap(normalized.draft);
+  assertKnownTopLevelKeys(input, new Set(["version", "schemaVersion", "step", "status", "completed", "draftId", "pickup", "dropoff", "recipient", "deliveryTime", "parcel", "iris", "deliveryOptions", "review", "paymentMethod"]));
   const pickup = cleanMap(input.pickup);
   const dropoff = cleanMap(input.dropoff);
   const recipient = cleanMap(input.recipient);
@@ -66,12 +140,25 @@ function sanitizeSenderDraftPayload(raw) {
   const review = cleanMap(input.review);
   const paymentMethod = cleanMap(input.paymentMethod);
 
-  return {
-    version: 1,
+  const step = cleanString(input.step, 60) || "pickup";
+  const timingType = cleanString(deliveryTime.type, 40) || "now";
+  const selectedOption = cleanString(deliveryOptions.selectedOption, 80) || "Standard";
+  if (!ALLOWED_STEPS.has(step)) {
+    throw new functions.https.HttpsError("invalid-argument", "Draft step is not supported.");
+  }
+  if (!ALLOWED_TIMING_TYPES.has(timingType)) {
+    throw new functions.https.HttpsError("invalid-argument", "Delivery time type is not supported.");
+  }
+  if (!ALLOWED_OPTIONS.has(selectedOption)) {
+    throw new functions.https.HttpsError("invalid-argument", "Delivery option is not supported.");
+  }
+
+  const draft = {
+    schemaVersion: DRAFT_SCHEMA_VERSION,
     status: "draft",
     completed: false,
     draftId: cleanString(input.draftId, 120),
-    step: cleanString(input.step, 60) || "pickup",
+    step,
     pickup: {
       address: cleanString(pickup.address, 1000),
       subAddress: cleanString(pickup.subAddress, 300),
@@ -89,7 +176,7 @@ function sanitizeSenderDraftPayload(raw) {
       deliveryNotes: cleanString(recipient.deliveryNotes, 1000),
     },
     deliveryTime: {
-      type: cleanString(deliveryTime.type, 40) || "now",
+      type: timingType,
       scheduledDate: cleanString(deliveryTime.scheduledDate, 40),
       scheduledWindow: cleanString(deliveryTime.scheduledWindow, 80),
       customWindowStart: cleanString(deliveryTime.customWindowStart, 20),
@@ -111,7 +198,7 @@ function sanitizeSenderDraftPayload(raw) {
       source: cleanString(iris.source, 120),
     },
     deliveryOptions: {
-      selectedOption: cleanString(deliveryOptions.selectedOption, 80) || "Standard",
+      selectedOption,
       vanguard: cleanBoolean(deliveryOptions.vanguard),
     },
     review: {
@@ -125,27 +212,72 @@ function sanitizeSenderDraftPayload(raw) {
       rothEnabled: cleanBoolean(paymentMethod.rothEnabled),
     },
   };
+  if (payloadBytes(draft) > MAX_DRAFT_BYTES) {
+    throw new functions.https.HttpsError("invalid-argument", "Draft is too large to save.");
+  }
+  return {
+    schemaVersion: DRAFT_SCHEMA_VERSION,
+    baseRevision: normalized.baseRevision,
+    draft,
+  };
+}
+
+function draftExpiresAt() {
+  return Timestamp.fromDate(new Date(Date.now() + DRAFT_RETENTION_DAYS * 24 * 60 * 60 * 1000));
+}
+
+function canonicalDraftResponse(record) {
+  if (!record) return {exists: false};
+  const draft = record.draft ? record.draft : sanitizeSenderDraftPayload(record).draft;
+  return {
+    exists: true,
+    schemaVersion: record.schemaVersion || DRAFT_SCHEMA_VERSION,
+    revision: Number(record.revision || 0),
+    draftId: record.draftId || draft.draftId || "",
+    status: record.status || "draft",
+    expiresAt: record.expiresAt || null,
+    draft,
+  };
 }
 
 exports.saveSenderDraft = functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const db = getFirestore();
   const ref = senderDraftRef(db, sender.uid);
-  const existing = await ref.get();
-  const now = FieldValue.serverTimestamp();
   const safe = sanitizeSenderDraftPayload(data || {});
-  const draftId = safe.draftId || (existing.exists && existing.data().draftId) || ref.id;
+  let savedRecord = null;
 
-  await ref.set({
-    ...safe,
-    uid: sender.uid,
-    draftId,
-    createdAt: existing.exists ? existing.data().createdAt || now : now,
-    updatedAt: now,
-    lastOpenedAt: now,
-  }, {merge: true});
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    const current = existing.exists ? existing.data() || {} : {};
+    const currentRevision = Number(current.revision || 0);
+    if (existing.exists && safe.baseRevision !== currentRevision) {
+      throw new functions.https.HttpsError(
+          "aborted",
+          "Your draft was updated on another device. We refreshed it with the latest version.",
+          {currentRevision},
+      );
+    }
+    const nextRevision = currentRevision + 1;
+    const now = FieldValue.serverTimestamp();
+    const draftId = safe.draft.draftId || current.draftId || ref.id;
+    savedRecord = {
+      schemaVersion: DRAFT_SCHEMA_VERSION,
+      revision: nextRevision,
+      uid: sender.uid,
+      draftId,
+      status: "draft",
+      draft: {...safe.draft, draftId},
+      completed: false,
+      createdAt: existing.exists ? current.createdAt || now : now,
+      updatedAt: now,
+      lastOpenedAt: now,
+      expiresAt: draftExpiresAt(),
+    };
+    transaction.set(ref, savedRecord, {merge: false});
+  });
 
-  return {ok: true, draftId};
+  return {ok: true, ...canonicalDraftResponse(savedRecord)};
 });
 
 exports.loadSenderDraft = functions.https.onCall(async (_data, context) => {
@@ -154,18 +286,36 @@ exports.loadSenderDraft = functions.https.onCall(async (_data, context) => {
   if (!snapshot.exists) {
     return {exists: false};
   }
-  const draft = snapshot.data() || {};
-  if (draft.completed === true || draft.status === "completed") {
+  const record = snapshot.data() || {};
+  if (record.completed === true || record.status === "completed" || record.status === "converting") {
     return {exists: false};
   }
-  await snapshot.ref.set({lastOpenedAt: FieldValue.serverTimestamp()}, {merge: true});
-  return {exists: true, draft};
+  await snapshot.ref.set({
+    lastOpenedAt: FieldValue.serverTimestamp(),
+    expiresAt: draftExpiresAt(),
+  }, {merge: true});
+  return canonicalDraftResponse(record);
 });
 
 exports.deleteSenderDraft = functions.https.onCall(async (_data, context) => {
   const sender = requireSender(context);
   await senderDraftRef(getFirestore(), sender.uid).delete();
   return {ok: true};
+});
+
+exports.cleanupExpiredSenderDrafts = functions.pubsub.schedule("every 24 hours").onRun(async () => {
+  const db = getFirestore();
+  const now = Timestamp.now();
+  const snapshot = await db.collection("senderBookingDrafts")
+      .where("expiresAt", "<=", now)
+      .where("status", "==", "draft")
+      .limit(300)
+      .get();
+  if (snapshot.empty) return {deleted: 0};
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+  return {deleted: snapshot.size};
 });
 
 async function verifiedBusinessContext(db, sender, rawContext) {
@@ -534,6 +684,10 @@ function geoData(point = {}) {
   };
 }
 
+function stableId(value) {
+  return crypto.createHash("sha256").update(`${value || ""}`).digest("hex").slice(0, 32);
+}
+
 exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
@@ -564,10 +718,22 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     throw new functions.https.HttpsError("failed-precondition", "Stripe payment must be confirmed before delivery creation.");
   }
   const quote = quoteSnap.data();
-  const requestId = text(data.requestId) || `sender_${Date.now()}_${sender.uid}`;
+  const draftId = text(data.draftId);
+  const idempotencyKey = text(data.idempotencyKey) ||
+    stableId(`${sender.uid}:${draftId || "no-draft"}:${quoteId}:${paymentSessionId}`);
+  const idempotencyRef = db.collection("senderDeliveryIdempotency").doc(idempotencyKey);
+  const replay = await idempotencyRef.get();
+  if (replay.exists) {
+    const existing = replay.data() || {};
+    return {
+      requestId: existing.requestId,
+      deliveryId: existing.deliveryId || existing.requestId,
+      idempotent: true,
+      idempotencyKey,
+    };
+  }
+  const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${draftId || quoteId}:${paymentSessionId}`)}`;
   const deliveryRef = db.collection("deliveryRequests").doc(requestId);
-  const existing = await deliveryRef.get();
-  if (existing.exists) return {requestId, deliveryId: deliveryRef.id, idempotent: true};
   const pickup = data.pickup || {};
   const dropoff = data.dropoff || {};
   const parcel = data.parcel || {};
@@ -581,7 +747,26 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     description: parcel.description,
     category: iris.category,
   });
-  await deliveryRef.set({
+  await db.runTransaction(async (transaction) => {
+    const [existingDelivery, existingIdem] = await Promise.all([
+      transaction.get(deliveryRef),
+      transaction.get(idempotencyRef),
+    ]);
+    if (existingIdem.exists) return;
+    if (existingDelivery.exists) {
+      transaction.set(idempotencyRef, {
+        idempotencyKey,
+        requestId,
+        deliveryId: deliveryRef.id,
+        userId: sender.uid,
+        quoteId,
+        paymentSessionId,
+        replayedExistingDelivery: true,
+        createdAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return;
+    }
+    transaction.set(deliveryRef, {
     requestId,
     role: "user",
     userId: sender.uid,
@@ -642,11 +827,31 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     },
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(idempotencyRef, {
+      idempotencyKey,
+      requestId,
+      deliveryId: deliveryRef.id,
+      userId: sender.uid,
+      quoteId,
+      paymentSessionId,
+      draftId: draftId || null,
+      createdAt: FieldValue.serverTimestamp(),
+    }, {merge: false});
+    if (draftId) {
+      transaction.set(senderDraftRef(db, sender.uid), {
+        status: "converting",
+        completed: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
   });
-  return {requestId, deliveryId: deliveryRef.id};
+  return {requestId, deliveryId: deliveryRef.id, idempotencyKey};
 });
 
 exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;
 exports._private = {
   sanitizeSenderDraftPayload,
+  stableId,
+  DRAFT_RETENTION_DAYS,
 };

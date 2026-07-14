@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../business/business_journey_context.dart';
 import '../send_package/bloc/send_package_bloc.dart';
@@ -41,6 +44,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   bool _draftLoading = true;
   bool _restoringDraft = false;
   Timer? _draftSaveDebounce;
+  String? _draftId;
+  int _draftRevision = 0;
+  int _saveGeneration = 0;
+  Future<void> _saveChain = Future.value();
+  String _syncStatus = 'Loading draft';
 
   @override
   void initState() {
@@ -73,7 +81,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void dispose() {
     _draftSaveDebounce?.cancel();
     if (!_draftLoading && !_restoringDraft) {
-      unawaited(_saveDraft(_draft));
+      _queueDraftSave(_draft);
     }
     _pickup.dispose();
     _dropoff.dispose();
@@ -94,6 +102,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     if (!_restoringDraft) _scheduleDraftSave(next);
   }
 
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  String? get _localDraftKey {
+    final uid = _uid;
+    return uid == null ? null : 'senderBookingDraftQueue:$uid';
+  }
+
   Future<Map<String, dynamic>> _callDraftFunction(
     String name, [
     Map<String, dynamic> payload = const {},
@@ -110,6 +125,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final data = await _callDraftFunction('loadSenderDraft');
       if (data['exists'] == true && data['draft'] is Map) {
+        _draftRevision = _intFrom(data['revision']);
+        _draftId = '${data['draftId'] ?? ''}'.trim().isEmpty
+            ? null
+            : '${data['draftId']}';
         final restored = SenderBookingDraft.fromBackendDraft(
           Map<String, dynamic>.from(data['draft'] as Map),
         );
@@ -117,6 +136,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         _hydrateDraft(restored);
         _restoringDraft = false;
       }
+      await _restoreQueuedLocalDraft();
       if (mounted) setState(() => _draftLoading = false);
     } on FirebaseFunctionsException catch (error, stackTrace) {
       FlutterError.reportError(
@@ -168,18 +188,60 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _scheduleDraftSave(SenderBookingDraft next) {
     _draftSaveDebounce?.cancel();
     _draftSaveDebounce = Timer(const Duration(milliseconds: 450), () {
-      _saveDraft(next);
+      _queueDraftSave(next);
     });
   }
 
-  Future<void> _saveDraft(SenderBookingDraft next) async {
+  void _queueDraftSave(SenderBookingDraft next) {
+    final generation = ++_saveGeneration;
+    _saveChain = _saveChain.then((_) => _saveDraft(next, generation));
+  }
+
+  Future<void> _saveDraft(
+    SenderBookingDraft next,
+    int generation, {
+    bool retryConflict = true,
+  }) async {
     if (next.step == SenderBookingStep.findingRider ||
         next.step == SenderBookingStep.liveTracking ||
         next.bookingConfirmed) {
       return;
     }
     try {
-      await _callDraftFunction('saveSenderDraft', next.toBackendDraftPayload());
+      if (mounted) setState(() => _syncStatus = 'Saving...');
+      final payload = {
+        'schemaVersion': 1,
+        'baseRevision': _draftRevision,
+        'draft': {
+          ...next.toBackendDraftPayload(),
+          if (_draftId != null) 'draftId': _draftId,
+        },
+      };
+      await _storeQueuedLocalDraft(payload);
+      final data = await _callDraftFunction('saveSenderDraft', payload);
+      if (generation == _saveGeneration) {
+        _draftRevision = _intFrom(data['revision']);
+        _draftId = '${data['draftId'] ?? ''}'.trim().isEmpty
+            ? _draftId
+            : '${data['draftId']}';
+        await _clearQueuedLocalDraft();
+        if (mounted) setState(() => _syncStatus = 'Saved');
+      }
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      if (retryConflict &&
+          (error.code == 'aborted' || error.code == 'failed-precondition')) {
+        await _handleDraftConflict(next, generation);
+        return;
+      }
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('saving Sender booking draft'),
+        ),
+      );
+      if (mounted) setState(() => _syncStatus = 'Saved offline');
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -189,13 +251,73 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           context: ErrorDescription('saving Sender booking draft'),
         ),
       );
+      if (mounted) setState(() => _syncStatus = 'Saved offline');
     }
+  }
+
+  Future<void> _handleDraftConflict(
+    SenderBookingDraft localDraft,
+    int generation,
+  ) async {
+    final data = await _callDraftFunction('loadSenderDraft');
+    if (data['exists'] == true && data['draft'] is Map) {
+      _draftRevision = _intFrom(data['revision']);
+      _draftId = '${data['draftId'] ?? ''}'.trim().isEmpty
+          ? _draftId
+          : '${data['draftId']}';
+      if (mounted) {
+        setState(() {
+          _syncStatus = 'Updated from another device';
+        });
+      }
+    }
+    if (generation == _saveGeneration) {
+      await _saveDraft(localDraft, generation + 1, retryConflict: false);
+    }
+  }
+
+  Future<void> _storeQueuedLocalDraft(Map<String, dynamic> payload) async {
+    final key = _localDraftKey;
+    if (key == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(payload));
+  }
+
+  Future<void> _clearQueuedLocalDraft() async {
+    final key = _localDraftKey;
+    if (key == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
+  }
+
+  Future<void> _restoreQueuedLocalDraft() async {
+    final key = _localDraftKey;
+    if (key == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.isEmpty) {
+      if (mounted) setState(() => _syncStatus = 'Saved');
+      return;
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded['draft'] is! Map) return;
+    final restored = SenderBookingDraft.fromBackendDraft(
+      Map<String, dynamic>.from(decoded['draft'] as Map),
+    );
+    _restoringDraft = true;
+    _hydrateDraft(restored);
+    _restoringDraft = false;
+    if (mounted) setState(() => _syncStatus = 'Sync needed');
+    _queueDraftSave(restored);
   }
 
   Future<void> _deleteBackendDraft() async {
     _draftSaveDebounce?.cancel();
     try {
       await _callDraftFunction('deleteSenderDraft');
+      await _clearQueuedLocalDraft();
+      _draftRevision = 0;
+      _draftId = null;
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -319,11 +441,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
               SafeArea(
                 child: Column(
                   children: [
-                    _TopBar(progress: _draft.progress, onBack: _back),
+                    _TopBar(
+                      progress: _draft.progress,
+                      syncStatus: _syncStatus,
+                      onBack: _back,
+                    ),
                     const Spacer(),
                     _BookingPanel(
                       draft: _draft,
                       engine: engine,
+                      draftId: _draftId,
+                      senderUid: _uid,
                       pickup: _pickup,
                       dropoff: _dropoff,
                       receiverName: _receiverName,
@@ -364,6 +492,12 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         return null;
     }
   }
+}
+
+int _intFrom(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse('$value') ?? 0;
 }
 
 class _SendRouteStateScaffold extends StatelessWidget {
@@ -443,9 +577,14 @@ class _SendRouteStateScaffold extends StatelessWidget {
 
 class _TopBar extends StatelessWidget {
   final double progress;
+  final String syncStatus;
   final VoidCallback onBack;
 
-  const _TopBar({required this.progress, required this.onBack});
+  const _TopBar({
+    required this.progress,
+    required this.syncStatus,
+    required this.onBack,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -469,6 +608,15 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          Text(
+            syncStatus,
+            style: const TextStyle(
+              color: _Tokens.muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 8),
           const _TrustPill(),
         ],
       ),
@@ -479,6 +627,8 @@ class _TopBar extends StatelessWidget {
 class _BookingPanel extends StatelessWidget {
   final SenderBookingDraft draft;
   final SendPackageState engine;
+  final String? draftId;
+  final String? senderUid;
   final TextEditingController pickup;
   final TextEditingController dropoff;
   final TextEditingController receiverName;
@@ -498,6 +648,8 @@ class _BookingPanel extends StatelessWidget {
   const _BookingPanel({
     required this.draft,
     required this.engine,
+    required this.draftId,
+    required this.senderUid,
     required this.pickup,
     required this.dropoff,
     required this.receiverName,
@@ -679,7 +831,13 @@ class _BookingPanel extends StatelessWidget {
       case SenderBookingStep.review:
         return const SizedBox.shrink();
       case SenderBookingStep.payment:
-        return _PaymentPanel(engine: engine, draft: draft, onDraft: onDraft);
+        return _PaymentPanel(
+          engine: engine,
+          draft: draft,
+          draftId: draftId,
+          senderUid: senderUid,
+          onDraft: onDraft,
+        );
       case SenderBookingStep.findingRider:
       case SenderBookingStep.liveTracking:
         return const SizedBox.shrink();
@@ -2661,11 +2819,15 @@ String _reviewIrisEstimate(
 class _PaymentPanel extends StatelessWidget {
   final SendPackageState engine;
   final SenderBookingDraft draft;
+  final String? draftId;
+  final String? senderUid;
   final ValueChanged<SenderBookingDraft> onDraft;
 
   const _PaymentPanel({
     required this.engine,
     required this.draft,
+    required this.draftId,
+    required this.senderUid,
     required this.onDraft,
   });
 
@@ -3146,6 +3308,9 @@ class _PaymentPanel extends StatelessWidget {
   }
 
   Map<String, dynamic> _bookingPayload(SendPackageState engine) => {
+        'draftId': draftId,
+        'idempotencyKey':
+            'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderPaymentSessionId ?? 'session'}',
         'pickup': {
           'address': engine.pickupLocation ?? draft.pickupAddress,
           'subAddress': engine.pickupLocationSubAddress ?? '',
