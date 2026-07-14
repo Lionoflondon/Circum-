@@ -434,6 +434,120 @@ class SenderBookingDraft {
           cardConfirmationStarted ?? this.cardConfirmationStarted,
     );
   }
+
+  Map<String, dynamic> toBackendDraftPayload() => {
+        'version': 1,
+        'step': step.name,
+        'status': 'draft',
+        'completed': false,
+        'pickup': {
+          'address': pickupAddress,
+        },
+        'dropoff': {
+          'address': dropoffAddress,
+        },
+        'recipient': {
+          'name': receiverName,
+          'phone': receiverPhone,
+          'deliveryNotes': deliveryNotes,
+        },
+        'deliveryTime': {
+          'type': deliveryTimingType == SenderDeliveryTimingType.now
+              ? 'now'
+              : 'scheduled',
+          'scheduledDate': scheduledDate,
+          'scheduledWindow': scheduledWindow,
+          'customWindowStart': customWindowStart,
+          'customWindowEnd': customWindowEnd,
+          'summary': deliveryTimeSummary,
+        },
+        'parcel': {
+          'itemName': itemName,
+          'description': itemDescription,
+          'weightLabel': weightLabel,
+          'fragile': fragile,
+          'highValue': highValue,
+        },
+        'iris': {
+          'confidence': irisConfidence,
+          'recommendedVehicle': irisVehicle,
+        },
+        'deliveryOptions': {
+          'selectedOption': selectedOption,
+          'vanguard': vanguard,
+        },
+        'review': {
+          'amountDue': amountDue,
+        },
+        'paymentMethod': {
+          'type': selectedPaymentMethod?.name ?? '',
+          'paymentMethodId': selectedPaymentMethodId,
+          'label': selectedPaymentMethodLabel,
+          'rothEnabled': rothEnabled,
+        },
+      };
+
+  factory SenderBookingDraft.fromBackendDraft(Map<String, dynamic> data) {
+    final pickup = _draftMap(data['pickup']);
+    final dropoff = _draftMap(data['dropoff']);
+    final recipient = _draftMap(data['recipient']);
+    final deliveryTime = _draftMap(data['deliveryTime']);
+    final parcel = _draftMap(data['parcel']);
+    final iris = _draftMap(data['iris']);
+    final deliveryOptions = _draftMap(data['deliveryOptions']);
+    final review = _draftMap(data['review']);
+    final paymentMethod = _draftMap(data['paymentMethod']);
+    final restoredStep = SenderBookingStep.values.firstWhere(
+      (value) => value.name == '${data['step'] ?? ''}',
+      orElse: () => SenderBookingStep.pickup,
+    );
+    final timingType = '${deliveryTime['type'] ?? ''}' == 'scheduled'
+        ? SenderDeliveryTimingType.scheduled
+        : SenderDeliveryTimingType.now;
+    final matchingMethods = SenderFallbackPaymentMethod.values.where(
+      (value) => value.name == '${paymentMethod['type'] ?? ''}',
+    );
+    final fallback = matchingMethods.isEmpty ? null : matchingMethods.first;
+
+    return SenderBookingDraft(
+      step: restoredStep == SenderBookingStep.findingRider ||
+              restoredStep == SenderBookingStep.liveTracking
+          ? SenderBookingStep.pickup
+          : restoredStep,
+      pickupAddress: '${pickup['address'] ?? ''}',
+      dropoffAddress: '${dropoff['address'] ?? ''}',
+      receiverName: '${recipient['name'] ?? ''}',
+      receiverPhone: '${recipient['phone'] ?? ''}',
+      deliveryNotes: '${recipient['deliveryNotes'] ?? ''}',
+      deliveryTimingType: timingType,
+      scheduledDate: '${deliveryTime['scheduledDate'] ?? ''}',
+      scheduledWindow: '${deliveryTime['scheduledWindow'] ?? ''}',
+      customWindowStart: '${deliveryTime['customWindowStart'] ?? ''}',
+      customWindowEnd: '${deliveryTime['customWindowEnd'] ?? ''}',
+      itemName: '${parcel['itemName'] ?? ''}',
+      itemDescription: '${parcel['description'] ?? ''}',
+      weightLabel: '${parcel['weightLabel'] ?? ''}',
+      fragile: parcel['fragile'] == true,
+      highValue: parcel['highValue'] == true,
+      irisConfidence: '${iris['confidence'] ?? 'Medium'}',
+      irisVehicle: '${iris['recommendedVehicle'] ?? 'Bike'}',
+      selectedOption: '${deliveryOptions['selectedOption'] ?? 'Standard'}',
+      vanguard: deliveryOptions['vanguard'] == true,
+      selectedPaymentMethod: fallback,
+      selectedPaymentMethodId: '${paymentMethod['paymentMethodId'] ?? ''}',
+      selectedPaymentMethodLabel: '${paymentMethod['label'] ?? ''}',
+      rothEnabled: paymentMethod['rothEnabled'] == true,
+      amountDue: _draftDouble(review['amountDue']),
+    );
+  }
+}
+
+Map<String, dynamic> _draftMap(Object? value) =>
+    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+double? _draftDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value');
 }
 
 String senderStepTitle(SenderBookingStep step) {

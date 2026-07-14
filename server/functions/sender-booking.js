@@ -33,6 +33,141 @@ function money(value) {
   return roundMoney(Number(value || 0));
 }
 
+function senderDraftRef(db, uid) {
+  return db.collection("senderBookingDrafts").doc(uid);
+}
+
+function cleanString(value, maxLength = 600) {
+  return text(value).slice(0, maxLength);
+}
+
+function cleanBoolean(value) {
+  return value === true;
+}
+
+function cleanMap(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function cleanNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sanitizeSenderDraftPayload(raw) {
+  const input = cleanMap(raw);
+  const pickup = cleanMap(input.pickup);
+  const dropoff = cleanMap(input.dropoff);
+  const recipient = cleanMap(input.recipient);
+  const deliveryTime = cleanMap(input.deliveryTime);
+  const parcel = cleanMap(input.parcel);
+  const iris = cleanMap(input.iris);
+  const deliveryOptions = cleanMap(input.deliveryOptions);
+  const review = cleanMap(input.review);
+  const paymentMethod = cleanMap(input.paymentMethod);
+
+  return {
+    version: 1,
+    status: "draft",
+    completed: false,
+    draftId: cleanString(input.draftId, 120),
+    step: cleanString(input.step, 60) || "pickup",
+    pickup: {
+      address: cleanString(pickup.address, 1000),
+      subAddress: cleanString(pickup.subAddress, 300),
+      locality: cleanString(pickup.locality, 200),
+    },
+    dropoff: {
+      address: cleanString(dropoff.address, 1000),
+      subAddress: cleanString(dropoff.subAddress, 300),
+      locality: cleanString(dropoff.locality, 200),
+    },
+    recipient: {
+      name: cleanString(recipient.name, 200),
+      phone: cleanString(recipient.phone, 80),
+      email: cleanString(recipient.email, 320),
+      deliveryNotes: cleanString(recipient.deliveryNotes, 1000),
+    },
+    deliveryTime: {
+      type: cleanString(deliveryTime.type, 40) || "now",
+      scheduledDate: cleanString(deliveryTime.scheduledDate, 40),
+      scheduledWindow: cleanString(deliveryTime.scheduledWindow, 80),
+      customWindowStart: cleanString(deliveryTime.customWindowStart, 20),
+      customWindowEnd: cleanString(deliveryTime.customWindowEnd, 20),
+      summary: cleanString(deliveryTime.summary, 160),
+    },
+    parcel: {
+      itemName: cleanString(parcel.itemName, 200),
+      description: cleanString(parcel.description, 1000),
+      weightLabel: cleanString(parcel.weightLabel, 80),
+      fragile: cleanBoolean(parcel.fragile),
+      highValue: cleanBoolean(parcel.highValue),
+    },
+    iris: {
+      itemName: cleanString(iris.itemName, 200),
+      confidence: cleanString(iris.confidence, 80),
+      recommendedVehicle: cleanString(iris.recommendedVehicle, 120),
+      category: cleanString(iris.category, 120),
+      source: cleanString(iris.source, 120),
+    },
+    deliveryOptions: {
+      selectedOption: cleanString(deliveryOptions.selectedOption, 80) || "Standard",
+      vanguard: cleanBoolean(deliveryOptions.vanguard),
+    },
+    review: {
+      amountDue: cleanNumber(review.amountDue),
+      quoteId: cleanString(review.quoteId, 160),
+    },
+    paymentMethod: {
+      type: cleanString(paymentMethod.type, 80),
+      paymentMethodId: cleanString(paymentMethod.paymentMethodId, 200),
+      label: cleanString(paymentMethod.label, 200),
+      rothEnabled: cleanBoolean(paymentMethod.rothEnabled),
+    },
+  };
+}
+
+exports.saveSenderDraft = functions.https.onCall(async (data, context) => {
+  const sender = requireSender(context);
+  const db = getFirestore();
+  const ref = senderDraftRef(db, sender.uid);
+  const existing = await ref.get();
+  const now = FieldValue.serverTimestamp();
+  const safe = sanitizeSenderDraftPayload(data || {});
+  const draftId = safe.draftId || (existing.exists && existing.data().draftId) || ref.id;
+
+  await ref.set({
+    ...safe,
+    uid: sender.uid,
+    draftId,
+    createdAt: existing.exists ? existing.data().createdAt || now : now,
+    updatedAt: now,
+    lastOpenedAt: now,
+  }, {merge: true});
+
+  return {ok: true, draftId};
+});
+
+exports.loadSenderDraft = functions.https.onCall(async (_data, context) => {
+  const sender = requireSender(context);
+  const snapshot = await senderDraftRef(getFirestore(), sender.uid).get();
+  if (!snapshot.exists) {
+    return {exists: false};
+  }
+  const draft = snapshot.data() || {};
+  if (draft.completed === true || draft.status === "completed") {
+    return {exists: false};
+  }
+  await snapshot.ref.set({lastOpenedAt: FieldValue.serverTimestamp()}, {merge: true});
+  return {exists: true, draft};
+});
+
+exports.deleteSenderDraft = functions.https.onCall(async (_data, context) => {
+  const sender = requireSender(context);
+  await senderDraftRef(getFirestore(), sender.uid).delete();
+  return {ok: true};
+});
+
 async function verifiedBusinessContext(db, sender, rawContext) {
   const businessId = text(rawContext && rawContext.businessId);
   if (!businessId) return null;
@@ -512,3 +647,6 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
 });
 
 exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;
+exports._private = {
+  sanitizeSenderDraftPayload,
+};

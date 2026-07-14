@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -36,6 +38,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   final _weight = TextEditingController();
   var _searchingPickup = true;
   String? _initializationError;
+  bool _draftLoading = true;
+  bool _restoringDraft = false;
+  Timer? _draftSaveDebounce;
 
   @override
   void initState() {
@@ -48,6 +53,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final bloc = context.read<SendPackageBloc>();
       bloc.add(CheckForPushToken());
       bloc.add(CheckForActiveRequest());
+      _loadBackendDraft();
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -57,6 +63,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           context: ErrorDescription('initialising SenderBookingCanvas'),
         ),
       );
+      _draftLoading = false;
       _initializationError =
           'Send could not start because its booking engine was unavailable.';
     }
@@ -64,6 +71,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   @override
   void dispose() {
+    _draftSaveDebounce?.cancel();
+    if (!_draftLoading && !_restoringDraft) {
+      unawaited(_saveDraft(_draft));
+    }
     _pickup.dispose();
     _dropoff.dispose();
     _receiverName.dispose();
@@ -78,7 +89,124 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     super.dispose();
   }
 
-  void _setDraft(SenderBookingDraft next) => setState(() => _draft = next);
+  void _setDraft(SenderBookingDraft next) {
+    setState(() => _draft = next);
+    if (!_restoringDraft) _scheduleDraftSave(next);
+  }
+
+  Future<Map<String, dynamic>> _callDraftFunction(
+    String name, [
+    Map<String, dynamic> payload = const {},
+  ]) async {
+    final result =
+        await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    return result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : <String, dynamic>{};
+  }
+
+  Future<void> _loadBackendDraft() async {
+    setState(() => _draftLoading = true);
+    try {
+      final data = await _callDraftFunction('loadSenderDraft');
+      if (data['exists'] == true && data['draft'] is Map) {
+        final restored = SenderBookingDraft.fromBackendDraft(
+          Map<String, dynamic>.from(data['draft'] as Map),
+        );
+        _restoringDraft = true;
+        _hydrateDraft(restored);
+        _restoringDraft = false;
+      }
+      if (mounted) setState(() => _draftLoading = false);
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('loading Sender booking draft'),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _draftLoading = false;
+        _initializationError =
+            error.message ?? 'Your saved delivery draft could not be loaded.';
+      });
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('loading Sender booking draft'),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _draftLoading = false;
+        _initializationError = 'Your saved delivery draft could not be loaded.';
+      });
+    }
+  }
+
+  void _hydrateDraft(SenderBookingDraft restored) {
+    _pickup.text = restored.pickupAddress;
+    _dropoff.text = restored.dropoffAddress;
+    _receiverName.text = restored.receiverName;
+    _receiverPhone.text = restored.receiverPhone;
+    _notes.text = restored.deliveryNotes;
+    _scheduledDate.text = restored.scheduledDate;
+    _customWindowStart.text = restored.customWindowStart;
+    _customWindowEnd.text = restored.customWindowEnd;
+    _item.text = restored.itemName;
+    _description.text = restored.itemDescription;
+    _weight.text = restored.weightLabel;
+    setState(() => _draft = restored);
+  }
+
+  void _scheduleDraftSave(SenderBookingDraft next) {
+    _draftSaveDebounce?.cancel();
+    _draftSaveDebounce = Timer(const Duration(milliseconds: 450), () {
+      _saveDraft(next);
+    });
+  }
+
+  Future<void> _saveDraft(SenderBookingDraft next) async {
+    if (next.step == SenderBookingStep.findingRider ||
+        next.step == SenderBookingStep.liveTracking ||
+        next.bookingConfirmed) {
+      return;
+    }
+    try {
+      await _callDraftFunction('saveSenderDraft', next.toBackendDraftPayload());
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('saving Sender booking draft'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteBackendDraft() async {
+    _draftSaveDebounce?.cancel();
+    try {
+      await _callDraftFunction('deleteSenderDraft');
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('deleting completed Sender booking draft'),
+        ),
+      );
+    }
+  }
 
   void _advance() {
     if (_draft.step == SenderBookingStep.payment) return;
@@ -142,12 +270,21 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         },
       );
     }
+    if (_draftLoading) {
+      return const _SendRouteStateScaffold(
+        title: 'Restoring delivery',
+        body: 'Loading your saved delivery draft.',
+        actionLabel: 'Please wait',
+      );
+    }
     return BlocBuilder<SendPackageBloc, SendPackageState>(
       builder: (context, engine) {
         final operationalStep = _stepForEngine(engine);
         if (operationalStep != null && operationalStep != _draft.step) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _setDraft(_draft.copyWith(step: operationalStep));
+            if (!mounted) return;
+            _deleteBackendDraft();
+            _setDraft(_draft.copyWith(step: operationalStep));
           });
         }
         if (_draft.step == SenderBookingStep.findingRider ||
@@ -233,13 +370,13 @@ class _SendRouteStateScaffold extends StatelessWidget {
   final String title;
   final String body;
   final String actionLabel;
-  final VoidCallback onAction;
+  final VoidCallback? onAction;
 
   const _SendRouteStateScaffold({
     required this.title,
     required this.body,
     required this.actionLabel,
-    required this.onAction,
+    this.onAction,
   });
 
   @override
@@ -289,8 +426,8 @@ class _SendRouteStateScaffold extends StatelessWidget {
                       const SizedBox(height: 16),
                       _PrimaryButton(
                         label: actionLabel,
-                        enabled: true,
-                        onTap: onAction,
+                        enabled: onAction != null,
+                        onTap: onAction ?? () {},
                       ),
                     ],
                   ),
