@@ -115,7 +115,7 @@ void main() {
     expect(guard, contains('"circum-2797c" "public"'));
     expect(guard, contains('"Circum Sender App"'));
     expect(guard, contains('"circum-app-2797c" "sender"'));
-    expect(guard, contains('"Circum Rider Web"'));
+    expect(guard, contains('"Circum Rider App"'));
     expect(guard, contains('"circum-rider-2797c" "rider"'));
   });
 }

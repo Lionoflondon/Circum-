@@ -50,7 +50,7 @@ assert_manifest "Circum Web canonical site" "$TMP_DIR/public-direct-manifest.jso
 assert_manifest "Circum Web custom domain" "$TMP_DIR/public-custom-manifest.json" "Circum Web" "circum-2797c" "public"
 assert_manifest "Circum Web www custom domain" "$TMP_DIR/public-www-manifest.json" "Circum Web" "circum-2797c" "public"
 assert_manifest "Sender app canonical site" "$TMP_DIR/sender-manifest.json" "Circum Sender App" "circum-app-2797c" "sender"
-assert_manifest "Rider app canonical site" "$TMP_DIR/rider-manifest.json" "Circum Rider Web" "circum-rider-2797c" "rider"
+assert_manifest "Rider app canonical site" "$TMP_DIR/rider-manifest.json" "Circum Rider App" "circum-rider-2797c" "rider"
 
 cmp "$TMP_DIR/admin-custom.html" "$TMP_DIR/admin-direct.html"
 cmp "$TMP_DIR/public-custom.html" "$TMP_DIR/public-direct.html"
