@@ -6,7 +6,6 @@ import 'app/account/bloc/account_bloc.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/authentication/view/index_page.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
-import 'app/bottom_nav/view/app_nav.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/onboarding/view/onboarding.dart';
 import 'app/rider_jobs/rider_home_screen.dart';
@@ -99,7 +98,7 @@ class _SessionGate extends StatelessWidget {
       builder: (context, state) {
         switch (state.currentState) {
           case AppState.authenticated:
-            return AppNavView();
+            return const SenderMobileHome(initialAuthenticated: true);
           case AppState.unauthenticated:
             return const OnboardingView();
           case AppState.unknownSessionState:

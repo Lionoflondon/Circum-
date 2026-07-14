@@ -55,6 +55,7 @@ enum _SenderAuthMode { signIn, createAccount }
 
 class SenderMobileHome extends StatefulWidget {
   final bool previewAuthEnabled;
+  final bool initialAuthenticated;
   final int initialIndex;
   final ValueChanged<int>? onTabChanged;
   final SenderHomeRepository? homeRepository;
@@ -62,6 +63,7 @@ class SenderMobileHome extends StatefulWidget {
   const SenderMobileHome({
     super.key,
     this.previewAuthEnabled = false,
+    this.initialAuthenticated = false,
     this.initialIndex = 0,
     this.onTabChanged,
     this.homeRepository,
@@ -84,6 +86,9 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
     super.initState();
     _index = widget.initialIndex
         .clamp(0, senderMobileBottomNavigationLabels.length - 1);
+    _entry = widget.initialAuthenticated
+        ? _SenderEntryScreen.app
+        : _SenderEntryScreen.landing;
     _standaloneSendPackageBloc = SendPackageBloc();
     _restoreAuthenticatedSenderSession();
   }
