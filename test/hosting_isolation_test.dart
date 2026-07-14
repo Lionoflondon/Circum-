@@ -32,9 +32,14 @@ void main() {
       source.indexOf('// Temporary architecture-preview routes'),
     );
     expect(senderHostRoute, contains('surface: CircumAppSurface.senderApp'));
-    expect(senderHostRoute, contains('senderEntry: _senderEntryFromTab'));
-    expect(senderHostRoute, contains('useSenderMobileApp: true'));
+    expect(senderHostRoute, contains('senderEntry: _senderEntryFromPath'));
+    expect(senderHostRoute, contains('routeDeliveryId: routeDeliveryId'));
+    expect(senderHostRoute,
+        contains('useSenderMobileApp: routeDeliveryId == null'));
     expect(source, contains("'send' || 'booking' || 'book'"));
+    expect(source, contains("'/send' || '/booking' || '/book'"));
+    expect(source, contains("'/wallet'"));
+    expect(source, contains("'/activity' || '/history'"));
     expect(source, contains('initialIndex: _senderMobileIndexForEntry'));
     expect(
         source,

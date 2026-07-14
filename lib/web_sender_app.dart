@@ -219,11 +219,13 @@ CircumRouteDecision resolveCircumRoute(
     return const CircumRouteDecision(surface: CircumAppSurface.riderWeb);
   }
 
-  if (_isSenderAppHostingHostFor(uri) && (path.isEmpty || path == '/')) {
+  if (_isSenderAppHostingHostFor(uri)) {
     return CircumRouteDecision(
       surface: CircumAppSurface.senderApp,
-      senderEntry: _senderEntryFromTab(senderTab),
-      useSenderMobileApp: true,
+      senderEntry: _senderEntryFromPath(path, senderTab),
+      openSenderGifts: path == '/gifts' || path.startsWith('/gifts/'),
+      routeDeliveryId: routeDeliveryId,
+      useSenderMobileApp: routeDeliveryId == null,
     );
   }
 
@@ -317,6 +319,22 @@ CircumSenderEntry _senderEntryFromTab(String? tab) {
     'activity' || 'history' => CircumSenderEntry.activity,
     'wallet' => CircumSenderEntry.wallet,
     'profile' || 'account' => CircumSenderEntry.account,
+    _ => CircumSenderEntry.dashboard,
+  };
+}
+
+CircumSenderEntry _senderEntryFromPath(String path, String? tab) {
+  final fromTab = _senderEntryFromTab(tab);
+  if (fromTab != CircumSenderEntry.dashboard) {
+    return fromTab;
+  }
+  return switch (path) {
+    '/send' || '/booking' || '/book' => CircumSenderEntry.send,
+    '/activity' || '/history' => CircumSenderEntry.activity,
+    '/wallet' => CircumSenderEntry.wallet,
+    '/profile' || '/account' => CircumSenderEntry.account,
+    '/health' || '/health-plus' => CircumSenderEntry.healthPlus,
+    '/business' => CircumSenderEntry.business,
     _ => CircumSenderEntry.dashboard,
   };
 }
