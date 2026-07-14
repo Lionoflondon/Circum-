@@ -1161,21 +1161,6 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'updatedAt': FieldValue.serverTimestamp(),
       'lastActiveAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final notification = GiftSystemPolicy.statusChangeNotificationPayload(
-        previousStatus: 'draft',
-        newStatus: 'waiting_for_match',
-        userId: user.uid,
-        giftId: participantRef.id,
-        createdAt: FieldValue.serverTimestamp(),
-      );
-      if (notification != null) {
-        await FirebaseFirestore.instance.collection('notifications').doc().set(
-              notification,
-            );
-      }
-    }
   }
 
   void _listenForApprovedMatch() {

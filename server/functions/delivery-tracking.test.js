@@ -86,6 +86,43 @@ test("rider live location writes are throttled for low Firestore cost", () => {
   );
 });
 
+test("live location callable validation normalizes trusted GPS fixes", () => {
+  const location = deliveryTracking.validatedLiveLocation({
+    latitude: 51.5074,
+    longitude: -0.1278,
+    accuracyMeters: 18,
+    heading: 122,
+    speed: 5,
+    clientRecordedAt: 12345,
+    backgroundCapable: true,
+    queueDepth: 2,
+  });
+  assert.equal(location.latitude, 51.5074);
+  assert.equal(location.longitude, -0.1278);
+  assert.equal(location.accuracy, 18);
+  assert.equal(location.gpsSignalQuality, "high");
+  assert.equal(location.backgroundCapable, true);
+  assert.equal(location.queueDepth, 2);
+});
+
+test("live location callable validation rejects invalid or unreliable fixes", () => {
+  assert.throws(
+      () => deliveryTracking.validatedLiveLocation({latitude: 200, longitude: 0, accuracyMeters: 10}),
+      /valid rider location/,
+  );
+  assert.throws(
+      () => deliveryTracking.validatedLiveLocation({latitude: 51, longitude: 0, accuracyMeters: 300}),
+      /GPS accuracy/,
+  );
+  const mocked = deliveryTracking.validatedLiveLocation({
+    latitude: 51,
+    longitude: 0,
+    accuracyMeters: 10,
+    mocked: true,
+  });
+  assert.equal(mocked.mocked, true);
+});
+
 test("PIN lookup reuses canonical and Vanguard fields", () => {
   assert.equal(deliveryTracking.expectedPin({pickupPin: "123456"}, "verify_collection_pin"), "123456");
   assert.equal(deliveryTracking.expectedPin({

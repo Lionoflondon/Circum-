@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const {
   giftNotificationRecord,
   giftNotificationRecordsForTransition,
+  _private,
 } = require("./platform-notifications");
 
 test("Gifts in-app notification record is always created", () => {
@@ -64,4 +65,16 @@ test("Gifts transition creates all channel records without private data", () => 
   assert.deepEqual(records.map((record) => record.channel), ["in_app", "email", "push"]);
   assert.equal(records.some((record) => "matchedParticipantBudget" in record), false);
   assert.equal(records.some((record) => "internalNotes" in record), false);
+});
+
+test("Gift request statuses map to backend-owned notification events", () => {
+  assert.deepEqual(
+      _private.giftStatusNotification("submitted_for_review"),
+      ["gift_submitted", "Gift submitted", "Your gift request has been sent to the Circum team."],
+  );
+  assert.deepEqual(
+      _private.giftStatusNotification("paid_waiting_for_match"),
+      ["campaign_waiting_for_match", "Gift match requested", "We are looking for a compatible gift match."],
+  );
+  assert.equal(_private.giftStatusNotification("draft"), null);
 });

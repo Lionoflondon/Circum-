@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/admin/admin_operations.dart';
 import 'package:circum/app/gifts/gift_system_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -126,6 +128,18 @@ void main() {
       expect(payload, isNotNull);
       expect(payload!['eventType'], 'curation_started');
       expect(payload['giftType'], GiftSystemPolicy.anonymousGiftType);
+    });
+
+    test('Sender Gifts screens do not create operational notifications', () {
+      final giftPayment = File('lib/app/sender_mobile/gift_payment_view.dart')
+          .readAsStringSync();
+      final giftCampaign = File('lib/app/sender_mobile/gift_campaign_view.dart')
+          .readAsStringSync();
+
+      expect(giftPayment, isNot(contains("collection('notifications')")));
+      expect(giftCampaign, isNot(contains("collection('notifications')")));
+      expect(giftPayment, contains('senderGiftPaymentCallableName'));
+      expect(giftCampaign, contains('giftCampaignParticipants'));
     });
 
     test('delivery and story backend states emit required events', () {

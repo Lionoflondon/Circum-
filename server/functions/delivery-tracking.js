@@ -32,6 +32,44 @@ function liveLocationPatch(location) {
   };
 }
 
+function signalQuality(accuracy) {
+  const value = Number(accuracy);
+  if (!Number.isFinite(value) || value <= 0) return "unknown";
+  if (value <= 25) return "high";
+  if (value <= 80) return "medium";
+  return "reduced";
+}
+
+function validatedLiveLocation(input) {
+  const location = input && typeof input === "object" ? input : {};
+  const lat = Number(location.latitude ?? location.lat);
+  const lng = Number(location.longitude ?? location.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+      lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid rider location is required.");
+  }
+  const accuracy = Number(location.accuracyMeters ?? location.accuracy ?? 0);
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 250) {
+    throw new functions.https.HttpsError("failed-precondition", "GPS accuracy is not reliable enough for live tracking.");
+  }
+  const heading = Number(location.heading ?? location.bearing);
+  const speed = Number(location.speed);
+  const clientRecordedAt = Number(location.clientRecordedAt ?? location.updatedAt ?? Date.now());
+  return {
+    latitude: lat,
+    longitude: lng,
+    accuracy,
+    heading: Number.isFinite(heading) ? heading : 0,
+    speed: Number.isFinite(speed) ? speed : 0,
+    clientRecordedAt,
+    gpsStatus: text(location.gpsStatus || (accuracy <= 80 ? "active" : "poorAccuracy")),
+    gpsSignalQuality: text(location.gpsSignalQuality || signalQuality(accuracy)),
+    mocked: location.mocked === true || location.isMocked === true,
+    backgroundCapable: location.backgroundCapable === true,
+    queueDepth: Math.max(0, Number(location.queueDepth || 0)),
+  };
+}
+
 function timestampMs(value) {
   if (!value) return 0;
   if (typeof value.toMillis === "function") return value.toMillis();
@@ -416,10 +454,123 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
   return result;
 });
 
+exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
+  }
+  const deliveryId = text(data && (data.deliveryId || data.requestId));
+  const trackingStatus = text(data && (data.status || data.trackingStatus || "live"));
+  if (!deliveryId) {
+    throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
+  }
+  const location = validatedLiveLocation(data && data.location);
+  if (location.mocked) {
+    throw new functions.https.HttpsError("failed-precondition", "Live tracking requires a trusted GPS signal.");
+  }
+
+  const db = getFirestore();
+  const riderId = context.auth.uid;
+  return db.runTransaction(async (transaction) => {
+    const found = await findDelivery(db, transaction, deliveryId);
+    if (!found) {
+      throw new functions.https.HttpsError("not-found", "Delivery not found.");
+    }
+    const delivery = found.data || {};
+    assertRiderOwnsDelivery(delivery, riderId);
+    const currentStatus = normalized(delivery.status || delivery.deliveryStatus || delivery.deliveryStage);
+    if (["completed", "complete", "delivered", "cancelled", "canceled", "failed", "no_show"].includes(currentStatus)) {
+      throw new functions.https.HttpsError("failed-precondition", "Live tracking is not active for this delivery.");
+    }
+
+    const now = Date.now();
+    const trackingHealth = {
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      accuracyMeters: location.accuracy,
+      lastFixClientAt: location.clientRecordedAt,
+      lastBackendUploadAt: FieldValue.serverTimestamp(),
+      fresh: true,
+      backgroundCapable: location.backgroundCapable,
+      queueDepth: location.queueDepth,
+      source: "updateDeliveryLiveLocation",
+    };
+    const riderLiveLocation = {
+      geopoint: new GeoPoint(location.latitude, location.longitude),
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy: location.accuracy,
+      accuracyMeters: location.accuracy,
+      heading: location.heading,
+      speed: location.speed,
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      clientRecordedAt: location.clientRecordedAt,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    const payload = {
+      riderId,
+      activeDeliveryId: found.id,
+      deliveryId: found.id,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy: location.accuracy,
+      heading: location.heading,
+      speed: location.speed,
+      status: trackingStatus,
+      trackingStatus: "live",
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      gpsAccuracyMeters: location.accuracy,
+      lastGpsUpdateClientAt: location.clientRecordedAt,
+      lastBackendUploadAt: FieldValue.serverTimestamp(),
+      trackingHealth,
+      clientRecordedAt: location.clientRecordedAt,
+      updatedAt: FieldValue.serverTimestamp(),
+      riderLiveLocation,
+    };
+    transaction.set(found.ref.collection("tracking").doc("liveLocation"), payload, {merge: true});
+    transaction.set(db.collection("activeDeliveries").doc(found.id), {
+      deliveryId: found.id,
+      requestId: delivery.requestId || found.id,
+      riderId,
+      status: trackingStatus,
+      riderLiveLocation,
+      trackingHealth,
+      lastBackendUploadAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(db.collection("riderPresence").doc(riderId), {
+      riderId,
+      isOnline: true,
+      availabilityStatus: "busy",
+      busy: true,
+      activeDeliveryId: found.id,
+      currentLocation: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracyMeters: location.accuracy,
+        heading: location.heading,
+        speed: location.speed,
+        updatedAt: now,
+      },
+      lastLocationAt: now,
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      dispatchEligible: false,
+      connectionStatus: "connected",
+      source: "deliveryLiveLocation",
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {success: true, deliveryId: found.id, trackingHealth};
+  });
+});
+
 exports._private = {
   liveLocationPatch,
   shouldWriteLiveLocation,
   distanceMeters,
+  signalQuality,
+  validatedLiveLocation,
   patchForTransition,
   expectedPin,
   assertRiderOwnsDelivery,

@@ -4,8 +4,8 @@ Generated Phase 3 baseline. Backend exports are preserved; legacy callables are 
 
 ## Callable Inventory
 
-- Exported: 133
-- Referenced by clients/tests: 69
+- Exported: 134
+- Referenced by clients/tests: 70
 - Unused exports: 64
 - Missing referenced exports: 0
 - Legacy exports: StripePayEndpointIntentId, StripePayEndpointMethodId, calculateEarnings, endTrip, getAvaliableRequests, sendMessage, sendRiderUpdate
@@ -35,6 +35,7 @@ Generated Phase 3 baseline. Backend exports are preserved; legacy callables are 
 | Update rider presence | No | Yes | updateRiderPresence | Canonical |
 | Record rider arrival | No | Yes | recordRiderArrival | Canonical |
 | Delivery status transition | No | Yes | updateDeliveryTrackingStatus | Canonical |
+| Rider live location update | No | Yes | updateDeliveryLiveLocation | Canonical |
 | Rider no-show | No | Yes | markRiderNoShow | Canonical |
 | Waiting context | No | Yes | reportWaitingContext | Canonical |
 | Sender customer response | Yes | No | recordCustomerArrivalResponse | Canonical |

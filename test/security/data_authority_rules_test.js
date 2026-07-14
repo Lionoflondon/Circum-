@@ -79,27 +79,16 @@ test("sender payment records are explicit and backend-owned", () => {
   assert.match(block, /allow create, update, delete:\s*if false;/);
 });
 
-test("activeDeliveries is explicit and limited to assigned rider location mirrors", () => {
+test("tracking mirrors are explicit and backend-owned", () => {
+  const deliveryRequests = blockFor("match /deliveryRequests/{deliveryId}");
+  assert.match(deliveryRequests, /match \/tracking\/\{trackingId\} \{/);
+  assert.match(deliveryRequests, /allow read:\s*if canReadDeliveryTracking\(deliveryId\);/);
+  assert.match(deliveryRequests, /allow create, update:\s*if false;/);
+
   const block = blockFor("match /activeDeliveries/{deliveryId}");
   assert.match(block, /allow read:\s*if canReadDeliveryTracking\(deliveryId\);/);
-  assert.match(block, /allow create, update:\s*if canWriteOwnActiveDeliveryLocation\(deliveryId\);/);
+  assert.match(block, /allow create, update:\s*if false;/);
   assert.match(block, /allow delete:\s*if isAdmin\(\);/);
-
-  const functionStart = rules.indexOf("function canWriteOwnActiveDeliveryLocation(deliveryId)");
-  assert.notStrictEqual(functionStart, -1, "active delivery writer guard missing");
-  const functionEnd = rules.indexOf("function canReadBusinessAccount", functionStart);
-  const source = rules.slice(functionStart, functionEnd);
-  for (const field of [
-    "deliveryId",
-    "riderId",
-    "status",
-    "riderLiveLocation",
-    "trackingHealth",
-    "lastBackendUploadAt",
-    "updatedAt",
-  ]) {
-    assert.ok(source.includes(`'${field}'`), `${field} must be allowlisted`);
-  }
 });
 
 test("business financial collections have explicit least-privilege rules", () => {

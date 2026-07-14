@@ -107,6 +107,9 @@ exports.createDeliveryAdjustmentPayment = deliveryAdjustments.createDeliveryAdju
 exports.finalizeDeliveryAdjustmentPayment = deliveryAdjustments.finalizeDeliveryAdjustmentPayment;
 exports.onDeliveryCreated = platformNotifications.onDeliveryCreated;
 exports.onDeliveryUpdated = platformNotifications.onDeliveryUpdated;
+exports.onGiftRequestCreated = platformNotifications.onGiftRequestCreated;
+exports.onGiftRequestUpdated = platformNotifications.onGiftRequestUpdated;
+exports.onGiftCampaignParticipantUpdated = platformNotifications.onGiftCampaignParticipantUpdated;
 exports.onChatMessageCreated = platformNotifications.onChatMessageCreated;
 exports.onSupportTicketCreated = platformNotifications.onSupportTicketCreated;
 exports.onDisputeCreated = platformNotifications.onDisputeCreated;
@@ -204,6 +207,7 @@ exports.saveSenderCheckoutPreference = senderFinance.saveSenderCheckoutPreferenc
 exports.saveSenderSavedAddress = senderSavedAddresses.saveSenderSavedAddress;
 exports.deleteSenderSavedAddress = senderSavedAddresses.deleteSenderSavedAddress;
 exports.updateDeliveryTrackingStatus = deliveryTracking.updateDeliveryTrackingStatus;
+exports.updateDeliveryLiveLocation = deliveryTracking.updateDeliveryLiveLocation;
 exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
 
 const generateResponse = function(intent) {

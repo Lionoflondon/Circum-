@@ -186,6 +186,48 @@ function moneyText(value, currency = "GBP") {
   return `${prefix}${amount.toFixed(2)}`;
 }
 
+function giftStatus(data = {}) {
+  return text(data.status || data.giftStatus || data.flowStatus || data.campaignStatus).toLowerCase();
+}
+
+function giftStatusNotification(status) {
+  const normalized = text(status).toLowerCase();
+  const map = {
+    submitted_for_review: ["gift_submitted", "Gift submitted", "Your gift request has been sent to the Circum team."],
+    waiting_for_match: ["campaign_waiting_for_match", "Gift match requested", "We are looking for a compatible gift match."],
+    paid_waiting_for_match: ["campaign_waiting_for_match", "Gift match requested", "We are looking for a compatible gift match."],
+    approved: ["gift_approved", "Gift approved", "Your gift request has been approved."],
+    rejected: ["gift_rejected", "Gift update", "Your gift request needs attention."],
+    curation_started: ["curation_started", "Gift curation started", "The Circum team has started preparing your gift."],
+    ready_for_gift_delivery: ["ready_for_gift_delivery", "Gift ready for delivery", "Your gift is ready for delivery."],
+    delivered: ["gift_delivered", "Gift delivered", "Your gift has been delivered."],
+  };
+  return map[normalized] || null;
+}
+
+async function notifyGiftStatus({before = {}, after = {}, giftId}) {
+  const oldStatus = giftStatus(before);
+  const nextStatus = giftStatus(after);
+  if (!nextStatus || oldStatus === nextStatus) return null;
+  const copy = giftStatusNotification(nextStatus);
+  if (!copy) return null;
+  const senderId = text(after.senderId || after.userId || after.uid);
+  if (!senderId) return null;
+  return notify({
+    recipientId: senderId,
+    recipientRole: "shipper",
+    type: copy[0],
+    title: copy[1],
+    body: copy[2],
+    bookingId: text(after.deliveryId || after.requestId || giftId),
+    data: {
+      category: "Gifts",
+      giftId,
+      giftType: text(after.giftType || after.type || "gift"),
+    },
+  });
+}
+
 function customerWaitingCharge(data) {
   const waiting = data.waiting || {};
   const financial = data.noShowFinancial || {};
@@ -284,6 +326,15 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
 });
 
+exports.onGiftRequestCreated = functions.firestore.document("giftRequests/{giftId}").onCreate((snapshot, context) =>
+  notifyGiftStatus({after: snapshot.data(), giftId: context.params.giftId}));
+
+exports.onGiftRequestUpdated = functions.firestore.document("giftRequests/{giftId}").onUpdate((change, context) =>
+  notifyGiftStatus({before: change.before.data(), after: change.after.data(), giftId: context.params.giftId}));
+
+exports.onGiftCampaignParticipantUpdated = functions.firestore.document("giftCampaignParticipants/{participantId}").onUpdate((change, context) =>
+  notifyGiftStatus({before: change.before.data(), after: change.after.data(), giftId: context.params.participantId}));
+
 exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/messages/{messageId}").onCreate(async (snapshot, context) => {
   const message = snapshot.data();
   const chat = await getFirestore().collection("chats").doc(context.params.chatId).get();
@@ -355,3 +406,7 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
 
 exports.giftNotificationRecord = giftNotificationRecord;
 exports.giftNotificationRecordsForTransition = giftNotificationRecordsForTransition;
+exports._private = {
+  giftStatus,
+  giftStatusNotification,
+};

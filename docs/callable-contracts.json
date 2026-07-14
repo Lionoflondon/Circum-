@@ -2751,6 +2751,28 @@
     "deprecationStatus": "Active"
   },
   {
+    "callableName": "updateDeliveryLiveLocation",
+    "purpose": "Update Delivery Live Location",
+    "owningBackendFile": "server/functions/delivery-tracking.js",
+    "invokedBy": [
+      "Rider"
+    ],
+    "inputSchema": "{ deliveryId: string, status?: string, trackingStatus?: string, location: { latitude: number, longitude: number, accuracyMeters: number, heading?: number, speed?: number, clientRecordedAt?: number, gpsStatus?: string, gpsSignalQuality?: string, mocked?: boolean, backgroundCapable?: boolean, queueDepth?: number } }",
+    "outputSchema": "{ success: true, deliveryId: string, trackingHealth: object }",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Authenticated assigned Rider. Backend validates delivery assignment, active delivery state, GPS trust and accuracy.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
     "callableName": "archiveExpiredDeliveries",
     "purpose": "archive Expired Deliveries",
     "owningBackendFile": "server/functions/delivery-cleanup.js",
