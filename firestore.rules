@@ -412,6 +412,49 @@ service cloud.firestore {
         ]);
     }
 
+    function canWriteOwnActiveDeliveryLocation(deliveryId) {
+      return signedIn() &&
+        request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.riderId == request.auth.uid &&
+        (
+          deliveryFor(deliveryId).riderId == request.auth.uid ||
+          deliveryFor(deliveryId).driverId == request.auth.uid ||
+          deliveryFor(deliveryId).assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.keys().hasOnly([
+          'deliveryId',
+          'riderId',
+          'status',
+          'riderLiveLocation',
+          'trackingHealth',
+          'lastBackendUploadAt',
+          'updatedAt'
+        ]) &&
+        request.resource.data.riderLiveLocation is map;
+    }
+
+    function canReadBusinessAccount(businessId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
+        (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
+          normalizedAuthEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
+          request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.managerIds ||
+          normalizedAuthEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.managerIds
+        );
+    }
+
+    function canManageBusinessAccount(businessId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
+        (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.managerIds ||
+          normalizedAuthEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.managerIds
+        );
+    }
+
     function isAssignedRiderPrivateCreate() {
       return signedIn() &&
         request.resource.data.deliveryDocId is string &&
@@ -512,10 +555,9 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.recipientId == request.auth.uid);
-      // Client-generated in-app notices remain restricted to the signed-in
-      // recipient. Canonical status notices are written by Cloud Functions.
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.recipientId == request.auth.uid);
+      // Canonical operational notices are written by Cloud Functions.
+      // Clients may only manage read/archive state on their own notices.
+      allow create: if isAdmin();
       allow update: if isAdmin() ||
         (signedIn() && resource.data.recipientId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -636,6 +678,67 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /business_wallets/{businessId} {
+      allow read: if isFinanceAdmin() || isAdmin() || canReadBusinessAccount(businessId);
+      allow create, update: if isFinanceAdmin();
+      allow delete: if hasRole('super_admin');
+
+      match /transactions/{transactionId} {
+        allow read: if isFinanceAdmin() || isAdmin() || canReadBusinessAccount(businessId);
+        allow create, update: if isFinanceAdmin();
+        allow delete: if hasRole('super_admin');
+      }
+    }
+
+    match /businessInvoices/{invoiceId} {
+      allow read: if isFinanceAdmin() ||
+        isAdmin() ||
+        (signedIn() && resource.data.businessId is string &&
+          canReadBusinessAccount(resource.data.businessId));
+      allow create: if isFinanceAdmin() ||
+        (signedIn() && request.resource.data.businessId is string &&
+          canManageBusinessAccount(request.resource.data.businessId));
+      allow update: if isFinanceAdmin() ||
+        (signedIn() && resource.data.businessId is string &&
+          canManageBusinessAccount(resource.data.businessId) &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny([
+            'status',
+            'amountPaid',
+            'balanceDue',
+            'paidAt',
+            'paymentStatus',
+            'stripePaymentIntentId',
+            'stripeCheckoutSessionId',
+            'rothOffsetUsed',
+            'updatedByAdminId',
+            'updatedByAdminEmail'
+          ]));
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /businessInvoicePayments/{paymentId} {
+      allow read: if isFinanceAdmin() ||
+        isAdmin() ||
+        (signedIn() && resource.data.businessId is string &&
+          canReadBusinessAccount(resource.data.businessId));
+      allow create, update: if isFinanceAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /businessRothPurchases/{purchaseId} {
+      allow read: if isFinanceAdmin() ||
+        isAdmin() ||
+        (signedIn() && resource.data.businessId is string &&
+          canReadBusinessAccount(resource.data.businessId));
+      allow create: if isFinanceAdmin() ||
+        (signedIn() && request.resource.data.businessId is string &&
+          canManageBusinessAccount(request.resource.data.businessId) &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.paymentProvider in ['stripe', 'manual']);
+      allow update: if isFinanceAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /businessJoinRequests/{requestId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.userId == request.auth.uid) ||
@@ -711,6 +814,17 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read: if isFinanceAdmin();
       allow write: if isFinanceAdmin();
+    }
+
+    match /senderPaymentRecords/{paymentId} {
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.senderId == request.auth.uid ||
+          resource.data.userEmail == normalizedAuthEmail() ||
+          resource.data.senderEmail == normalizedAuthEmail()
+        ));
+      allow create, update, delete: if false;
     }
 
     match /wallets/{userId} {
@@ -840,7 +954,7 @@ service cloud.firestore {
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
         isAvailableRiderJob();
-      allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow create: if isAdmin();
       allow update: if isAdmin() ||
         isOwnDeliveryUpdate() ||
         isAssignedRiderUpdate();
@@ -852,6 +966,12 @@ service cloud.firestore {
           canWriteOwnLiveLocation(deliveryId);
         allow delete: if isAdmin();
       }
+    }
+
+    match /activeDeliveries/{deliveryId} {
+      allow read: if canReadDeliveryTracking(deliveryId);
+      allow create, update: if canWriteOwnActiveDeliveryLocation(deliveryId);
+      allow delete: if isAdmin();
     }
 
     match /webSenderRequests/{requestId} {
