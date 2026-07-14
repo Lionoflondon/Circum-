@@ -568,7 +568,15 @@ service cloud.firestore {
         request.resource.data.status == 'draft' &&
         request.resource.data.paymentStatus == 'payment_pending' &&
         request.resource.data.grossBudget is number &&
-        request.resource.data.grossBudget >= 50;
+        request.resource.data.grossBudget >= 50 &&
+        (!('rothApplied' in request.resource.data) ||
+          request.resource.data.rothApplied == 0) &&
+        (!('walletContributionGbp' in request.resource.data) ||
+          request.resource.data.walletContributionGbp == 0) &&
+        (!('cardAmount' in request.resource.data) ||
+          request.resource.data.cardAmount == request.resource.data.grossBudget) &&
+        (!('remainingStripeAmountGbp' in request.resource.data) ||
+          request.resource.data.remainingStripeAmountGbp == request.resource.data.grossBudget);
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid);
       allow update, delete: if isAdmin();

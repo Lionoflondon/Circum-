@@ -2347,10 +2347,11 @@ void main() {
       expect(source, contains('RideChatPageView('));
       expect(source, contains('supportConversation: true'));
       expect(source, contains('senderCanCancelBeforeCollection'));
-      expect(source, contains('getSenderCancellationQuote'));
       expect(source, contains('previewSenderCancellation'));
-      expect(source, contains('cancelSenderDelivery'));
       expect(source, contains('requestSenderCancellation'));
+      expect(source, isNot(contains('getSenderCancellationQuote')));
+      expect(source, isNot(contains('cancelSenderDelivery')));
+      expect(source, isNot(contains('cancelDeliveryRequest')));
       expect(source, contains('Cancellation fee'));
       expect(source, contains('Reason'));
       expect(source, contains('Amount to be charged/refunded'));

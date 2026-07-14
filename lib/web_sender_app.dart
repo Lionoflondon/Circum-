@@ -31319,36 +31319,44 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'deliveryId': id,
         'paymentStatus': 'payment_pending',
         'paymentStatusUpdatedAt': FieldValue.serverTimestamp(),
-        'completedSteps': [
-          'details',
-          'vehicle',
-          'quote',
-          'canonical_record_saved',
-        ],
-        'auditTrail': [
-          {
-            'event': 'sender_web_booking_saved_before_payment',
-            'status': SenderWebBookingRecovery.awaitingPayment,
-            'source': 'sender_web',
-            'createdAt': DateTime.now().toIso8601String(),
-          },
-        ],
+        'completedSteps': ['details', 'vehicle', 'quote'],
       });
-      await _createCanonicalSenderBookingTransaction(
-        db: db,
-        id: id,
+      final quote = await _createSenderWebBookingQuote(
         request: request,
         irisEstimate: irisEstimate,
       );
-      final paymentResult = await _collectDeliveryPayment(id, _quoteTotal);
-      final completion = await _completeSenderBookingPaymentTransaction(
-        db: db,
+      final quoteId = '${quote['quoteId'] ?? ''}';
+      if (quoteId.isEmpty) {
+        throw StateError('We could not prepare your delivery estimate.');
+      }
+      final paymentResult = await _collectDeliveryPayment(
+        quoteId: quoteId,
+        total: _quoteTotal,
+      );
+      final createdDelivery = await _createSenderWebPaidDelivery(
         id: id,
         request: request,
+        irisEstimate: irisEstimate,
+        quoteId: quoteId,
+        paymentSessionId: '${paymentResult['paymentSessionId'] ?? ''}',
+      );
+      final createdRequestId = '${createdDelivery['requestId'] ?? id}';
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('sendPackage')
+          .call({'requestId': createdRequestId});
+      final createdSnapshot =
+          await db.collection('deliveryRequests').doc(createdRequestId).get();
+      final createdData = createdSnapshot.data() ?? const <String, dynamic>{};
+      final completion = _senderWebCompletionFromDelivery(
+        createdData: createdData,
         paymentResult: paymentResult,
       );
       request
+        ..['requestId'] = createdRequestId
+        ..['deliveryId'] = createdRequestId
+        ..['quoteId'] = quoteId
         ..addAll(paymentResult)
+        ..addAll(createdData)
         ..addAll(completion.requestPatch);
       final readyToBroadcast = completion.readyToBroadcast;
       _activeVanguardData = request['vanguardEnabled'] == true
@@ -31357,13 +31365,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _activeRequestData = Map<String, dynamic>.from(request);
       final senderId = '${request['senderId']}';
       final batch = db.batch();
+      batch.set(
+        db.collection('webSenderRequests').doc(createdRequestId),
+        {
+          ...request,
+          'source': 'sender_web',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
       if (readyToBroadcast) {
         batch.set(
-            db.collection('chats').doc(id),
+            db.collection('chats').doc(createdRequestId),
             {
-              'threadId': id,
-              'bookingId': id,
-              'requestId': id,
+              'threadId': createdRequestId,
+              'bookingId': createdRequestId,
+              'requestId': createdRequestId,
               'participants': [senderId, 'circum-support'],
               'participantRoles': {
                 senderId: 'sender',
@@ -31377,31 +31394,39 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               'source': 'circum-web',
             },
             SetOptions(merge: true));
-        batch.set(db.collection('chats').doc(id).collection('messages').doc(), {
-          'threadId': id,
-          'bookingId': id,
-          'requestId': id,
-          'senderId': senderId,
-          'senderRole': 'system',
-          'senderType': 'support',
-          'recipientId': senderId,
-          'recipientType': 'sender',
-          'messageText':
-              'Your request is live. Iris is checking nearby riders now.',
-          'message':
-              'Your request is live. Iris is checking nearby riders now.',
-          'readBy': [senderId],
-          'system': true,
-          'status': 'sent',
-          'createdAt': FieldValue.serverTimestamp(),
-          'timeStamp': DateTime.now().toIso8601String(),
-        });
-        await batch.commit();
+        batch.set(
+            db
+                .collection('chats')
+                .doc(createdRequestId)
+                .collection('messages')
+                .doc(),
+            {
+              'threadId': createdRequestId,
+              'bookingId': createdRequestId,
+              'requestId': createdRequestId,
+              'senderId': senderId,
+              'senderRole': 'system',
+              'senderType': 'support',
+              'recipientId': senderId,
+              'recipientType': 'sender',
+              'messageText':
+                  'Your request is live. Iris is checking nearby riders now.',
+              'message':
+                  'Your request is live. Iris is checking nearby riders now.',
+              'readBy': [senderId],
+              'system': true,
+              'status': 'sent',
+              'createdAt': FieldValue.serverTimestamp(),
+              'timeStamp': DateTime.now().toIso8601String(),
+            });
       }
-      _listenToRequest(id);
-      if (readyToBroadcast) _listenToChat(id);
+      await batch.commit();
+      _listenToRequest(createdRequestId);
+      if (readyToBroadcast) _listenToChat(createdRequestId);
       if (!mounted) return;
       setState(() {
+        _activeOrderId = createdRequestId;
+        _activeRequestDocId = createdRequestId;
         _checkoutState = readyToBroadcast
             ? _CheckoutState.matchingRiders
             : _CheckoutState.failed;
@@ -31437,39 +31462,70 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
-  Future<Map<String, dynamic>> _collectDeliveryPayment(
-    String requestId,
-    double total,
-  ) async {
+  Future<Map<String, dynamic>> _createSenderWebBookingQuote({
+    required Map<String, dynamic> request,
+    required Map<String, dynamic> irisEstimate,
+  }) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createSenderBookingQuote')
+        .call({
+      'selectedSpeed': _selectedSpeed,
+      'vanguardProtocolEnabled': request['vanguardEnabled'] == true ||
+          request['vanguardAddonSelected'] == true ||
+          irisEstimate['requiresVanguard'] == true,
+      'distanceMiles': (request['distanceMiles'] as num?)?.toDouble() ??
+          _confirmedRouteDistanceMiles ??
+          _webQuoteDistanceMiles,
+      'weightKg': (request['finalWeightKg'] as num?)?.toDouble() ??
+          (request['weightKg'] as num?)?.toDouble() ??
+          _deliveryClassification.finalWeightKg,
+      'parcel': {
+        'itemName': request['normalizedItemName'] ?? request['packageType'],
+        'description': request['packageDescription'],
+        'weightKg': request['weightKg'],
+        'quantity': request['quantity'],
+        'fragile': request['irisDeliveryFlags'] is List &&
+            (request['irisDeliveryFlags'] as List).contains('fragile'),
+        'highValue': request['irisDeliveryFlags'] is List &&
+            (request['irisDeliveryFlags'] as List).contains('high_value'),
+      },
+      'iris': irisEstimate,
+      if (_activeBusinessId != null)
+        'businessContext': {
+          'businessId': _activeBusinessId,
+          'businessAccountId': _activeBusinessId,
+        },
+    });
+    return result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> _collectDeliveryPayment({
+    required String quoteId,
+    required double total,
+  }) async {
     final user = _senderUser ?? FirebaseAuth.instance.currentUser;
     if (user == null) throw StateError('Sign in to pay for this delivery.');
-    var paymentIntentId = '';
     var clientSecret = '';
-    Map<String, dynamic> data;
+    late Map<String, dynamic> data;
     try {
       Stripe.publishableKey = Env.publishableLiveKey;
       await Stripe.instance.applySettings();
-      final response = await http.post(
-        Uri.parse(
-          'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
-        ),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'currency': 'gbp',
-          'amount': (total * 100).round(),
-          'pushToken': '',
-          'email': user.email,
-          'name': _senderName.text.trim(),
-          'userId': user.uid,
-          'saveCard': true,
-          'useWallet': _senderRothBalance > 0,
-          'referenceId': requestId,
-        }),
-      );
-      data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (data['walletPaidInFull'] == true) {
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('createSenderPaymentSession')
+          .call({
+        'quoteId': quoteId,
+        'rothEnabled': _senderRothBalance > 0,
+        'fallbackMethod': 'card',
+      });
+      data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      if ('${data['paymentStatus'] ?? data['status']}' == 'succeeded') {
         return {
-          'paymentStatus': 'paid',
+          ...data,
+          'paymentStatus': 'succeeded',
           'paidByRoth': true,
           'rothApplied': data['walletContributionGbp'] ?? total,
           'walletContributionGbp': data['walletContributionGbp'] ?? total,
@@ -31478,7 +31534,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         };
       }
       clientSecret = '${data['clientSecret'] ?? ''}';
-      paymentIntentId = '${data['paymentIntentId'] ?? data['id'] ?? ''}';
       if (clientSecret.isEmpty || data['error'] != null) {
         throw StateError('${data['error'] ?? 'Could not start card payment.'}');
       }
@@ -31489,9 +31544,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           customerId: '${data['customerId'] ?? ''}'.isEmpty
               ? null
               : '${data['customerId']}',
-          customerEphemeralKeySecret: '${data['ephemeralKey'] ?? ''}'.isEmpty
-              ? null
-              : '${data['ephemeralKey']}',
+          customerEphemeralKeySecret:
+              '${data['ephemeralKeySecret'] ?? ''}'.isEmpty
+                  ? null
+                  : '${data['ephemeralKeySecret']}',
           style: ThemeMode.dark,
         ),
       );
@@ -31501,173 +31557,121 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       throw StateError(
           'We could not start card payment just now. Please try again.');
     }
-    final rothApplied =
-        (data['walletContributionGbp'] as num?)?.toDouble() ?? 0;
-    final cardRemaining =
+    final rothApplied = (data['rothAppliedAmount'] as num?)?.toDouble() ??
+        (data['walletContributionGbp'] as num?)?.toDouble() ??
+        0;
+    final cardRemaining = (data['remainingAmount'] as num?)?.toDouble() ??
         (data['remainingStripeAmountGbp'] as num?)?.toDouble() ??
-            math.max(0, total - rothApplied);
+        math.max(0, total - rothApplied);
     return {
-      'paymentStatus': 'paid',
+      ...data,
+      'paymentStatus': 'succeeded',
       'paidByRoth': cardRemaining <= 0,
       'rothApplied': rothApplied,
       'walletContributionGbp': rothApplied,
       'cardRemaining': cardRemaining,
       'stripeAmount': cardRemaining,
-      'paymentReferenceId': requestId,
-      'paymentIntentId': paymentIntentId,
-      'stripePaymentId': paymentIntentId,
+      'paymentReferenceId': data['paymentSessionId'],
+      'paymentIntentId': data['stripePaymentIntentId'],
+      'stripePaymentId': data['stripePaymentIntentId'],
       'stripeClientSecret': clientSecret,
     };
   }
 
-  Future<void> _createCanonicalSenderBookingTransaction({
-    required FirebaseFirestore db,
+  Future<Map<String, dynamic>> _createSenderWebPaidDelivery({
     required String id,
     required Map<String, dynamic> request,
     required Map<String, dynamic> irisEstimate,
+    required String quoteId,
+    required String paymentSessionId,
   }) async {
-    final missing = SenderWebBookingRecovery.missingCanonicalFields(request);
-    final hasMissingFields = missing.isNotEmpty;
-    if (missing.isNotEmpty) {
-      request.addAll(SenderWebBookingRecovery.lifecycleFields(
-        status: SenderWebBookingRecovery.recoverableIncomplete,
-        currentStep: 'recovery',
-      ));
-      request.addAll({
-        'matchingStatus': 'blocked',
-        'dispatchStatus': 'blocked',
-        'broadcastBlocked': true,
-        'broadcastBlockReason': 'missing_canonical_booking_fields',
-        'missingCanonicalFields': missing,
-        'auditTrail': [
+    if (paymentSessionId.isEmpty) {
+      throw StateError('Payment could not be confirmed.');
+    }
+    final pickup = Map<String, dynamic>.from(
+      (request['pickupDetails'] as Map?) ?? const <String, dynamic>{},
+    );
+    final dropoff = Map<String, dynamic>.from(
+      (request['dropoffDetails'] as Map?) ?? const <String, dynamic>{},
+    );
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createSenderPaidDelivery')
+        .call({
+      'requestId': id,
+      'draftId': id,
+      'idempotencyKey': 'sender-web-${request['senderId']}-$id-$quoteId',
+      'quoteId': quoteId,
+      'paymentSessionId': paymentSessionId,
+      'pickup': {
+        'fullname': pickup['fullname'] ?? request['senderName'],
+        'phone': pickup['phone'] ?? request['senderPhone'],
+        'address': pickup['address'] ?? request['pickupAddress'],
+        'subAddress': pickup['subAddress'] ?? '',
+        'locality': pickup['locality'] ?? request['pickupLocality'] ?? '',
+        'instructions': pickup['moreInformation'] ?? '',
+        'coordinates': pickup['coordinates'],
+      },
+      'dropoff': {
+        'fullname': dropoff['fullname'] ?? request['receiverName'],
+        'phone': dropoff['phone'] ?? request['receiverPhone'],
+        'address': dropoff['address'] ?? request['dropoffAddress'],
+        'subAddress': dropoff['subAddress'] ?? '',
+        'locality': dropoff['locality'] ?? '',
+        'instructions': dropoff['moreInformation'] ?? '',
+        'coordinates': dropoff['coordinates'],
+      },
+      'recipient': request['receiverDetails'] ??
           {
-            'event': 'sender_web_booking_recoverable_incomplete',
-            'status': SenderWebBookingRecovery.recoverableIncomplete,
-            'missingCanonicalFields': missing,
-            'source': 'sender_web',
-            'createdAt': DateTime.now().toIso8601String(),
+            'name': request['receiverName'],
+            'phone': request['receiverPhone'],
           },
-        ],
-      });
-    }
-
-    await db.runTransaction((transaction) async {
-      final deliveryRef = db.collection('deliveryRequests').doc(id);
-      final webRef = db.collection('webSenderRequests').doc(id);
-      final irisRef = db.collection('irisDeliveryEstimates').doc(id);
-      final existing = await transaction.get(deliveryRef);
-      if (existing.exists) {
-        throw StateError('This booking already exists. Refresh to resume it.');
-      }
-      transaction.set(webRef, request, SetOptions(merge: true));
-      transaction.set(deliveryRef, request, SetOptions(merge: true));
-      transaction.set(irisRef, irisEstimate, SetOptions(merge: true));
+      'deliveryTime': {
+        'timingType': request['deliveryTimingType'],
+        'scheduledPickupDate': request['scheduledPickupDate'],
+        'scheduledPickupWindow': request['scheduledPickupWindow'],
+        'scheduledDropoffDate': request['scheduledDropoffDate'],
+        'scheduledDropoffWindow': request['scheduledDropoffWindow'],
+      },
+      'parcel': {
+        'itemName': request['normalizedItemName'] ?? request['packageType'],
+        'description': request['packageDescription'],
+        'weightKg': request['weightKg'],
+        'quantity': request['quantity'],
+        'photoUrl': request['photoUrl'],
+        'handlingNotes': request['specialHandlingNotes'],
+      },
+      'iris': irisEstimate,
     });
-    if (hasMissingFields) {
-      throw StateError(
-        'This booking was saved for recovery, but it is missing required delivery details: ${missing.join(', ')}.',
-      );
-    }
+    return result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : <String, dynamic>{};
   }
 
-  Future<_SenderBookingPaymentCompletion>
-      _completeSenderBookingPaymentTransaction({
-    required FirebaseFirestore db,
-    required String id,
-    required Map<String, dynamic> request,
+  _SenderBookingPaymentCompletion _senderWebCompletionFromDelivery({
+    required Map<String, dynamic> createdData,
     required Map<String, dynamic> paymentResult,
-  }) async {
-    final deliveryRef = db.collection('deliveryRequests').doc(id);
-    final webRef = db.collection('webSenderRequests').doc(id);
-    return db.runTransaction((transaction) async {
-      final snapshot = await transaction.get(deliveryRef);
-      if (!snapshot.exists) {
-        throw StateError(
-          'Payment cannot be recorded because the delivery was not saved.',
-        );
-      }
-      final canonical = <String, dynamic>{
-        ...(snapshot.data() ?? const <String, dynamic>{}),
-        ...paymentResult,
-        'paymentStatus': paymentResult['paymentStatus'] ?? 'paid',
-      };
-      final paymentReference = _firstNonEmpty([
-        paymentResult['paymentIntentId'],
-        paymentResult['stripePaymentId'],
-        paymentResult['stripeIntentId'],
-        paymentResult['referenceId'],
-      ]);
-      canonical.addAll(SenderWebBookingRecovery.lifecycleFields(
-        status: SenderWebBookingRecovery.paymentComplete,
-        currentStep: 'payment_complete',
-      ));
-      final paymentAuditEntry = {
-        'event': 'sender_web_payment_complete',
-        'status': SenderWebBookingRecovery.paymentComplete,
-        'paymentReference': paymentReference.isEmpty ? id : paymentReference,
-        'source': 'sender_web',
-        'createdAt': DateTime.now().toIso8601String(),
-      };
-      final paymentCompletePatch = {
-        ...paymentResult,
-        ...SenderWebBookingRecovery.lifecycleFields(
-          status: SenderWebBookingRecovery.paymentComplete,
-          currentStep: 'payment_complete',
-        ),
-        'paymentReference': paymentReference.isEmpty ? id : paymentReference,
-        'paymentCompletedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      final readyToBroadcast = SenderWebBookingRecovery.canBroadcast(canonical);
-      final missingCanonicalFields =
-          SenderWebBookingRecovery.missingCanonicalFields(canonical);
-      final broadcastAuditEntry = {
-        'event': readyToBroadcast
-            ? 'sender_web_booking_ready_for_broadcast'
-            : 'sender_web_booking_recoverable_incomplete',
-        'status': readyToBroadcast
-            ? SenderWebBookingRecovery.broadcasting
-            : SenderWebBookingRecovery.recoverableIncomplete,
-        'missingCanonicalFields': missingCanonicalFields,
-        'source': 'sender_web',
-        'createdAt': DateTime.now().toIso8601String(),
-      };
-      final broadcastPatch = {
-        ...SenderWebBookingRecovery.lifecycleFields(
-          status: readyToBroadcast
-              ? SenderWebBookingRecovery.broadcasting
-              : SenderWebBookingRecovery.recoverableIncomplete,
-          currentStep: readyToBroadcast ? 'tracking' : 'recovery',
-        ),
+  }) {
+    final canonical = <String, dynamic>{
+      ...createdData,
+      ...paymentResult,
+      'paymentStatus': 'paid',
+    };
+    final readyToBroadcast = SenderWebBookingRecovery.canBroadcast(canonical);
+    final missingCanonicalFields =
+        SenderWebBookingRecovery.missingCanonicalFields(canonical);
+    return _SenderBookingPaymentCompletion(
+      readyToBroadcast: readyToBroadcast,
+      missingCanonicalFields: missingCanonicalFields,
+      requestPatch: {
+        'paymentStatus': 'paid',
         'matchingStatus': readyToBroadcast ? 'available' : 'blocked',
         'dispatchStatus': readyToBroadcast ? 'requested' : 'blocked',
         'broadcastBlocked': !readyToBroadcast,
         'broadcastBlockReason':
             readyToBroadcast ? null : 'missing_canonical_booking_fields',
         'missingCanonicalFields': missingCanonicalFields,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      final persistencePatch = {
-        ...paymentCompletePatch,
-        ...broadcastPatch,
-        'auditTrail': FieldValue.arrayUnion([
-          paymentAuditEntry,
-          broadcastAuditEntry,
-        ]),
-      };
-      transaction.set(deliveryRef, persistencePatch, SetOptions(merge: true));
-      transaction.set(webRef, persistencePatch, SetOptions(merge: true));
-      return _SenderBookingPaymentCompletion(
-        readyToBroadcast: readyToBroadcast,
-        missingCanonicalFields: missingCanonicalFields,
-        requestPatch: {
-          ...paymentCompletePatch,
-          ...broadcastPatch,
-          'auditTrail': [paymentAuditEntry, broadcastAuditEntry],
-        },
-      );
-    });
+      },
+    );
   }
 
   Future<void> _bookHealthPlus() async {

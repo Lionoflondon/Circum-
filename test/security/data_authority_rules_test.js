@@ -60,6 +60,16 @@ test("sender booking drafts remain callable-owned", () => {
   assert.match(block, /allow create, update, delete:\s*if false;/);
 });
 
+test("gift payment drafts cannot carry client-authored settlement amounts", () => {
+  const block = blockFor("match /giftPaymentDrafts/{giftDraftId}");
+  assert.match(block, /request\.resource\.data\.paymentStatus == 'payment_pending'/);
+  assert.match(block, /request\.resource\.data\.rothApplied == 0/);
+  assert.match(block, /request\.resource\.data\.walletContributionGbp == 0/);
+  assert.match(block, /request\.resource\.data\.cardAmount == request\.resource\.data\.grossBudget/);
+  assert.match(block, /request\.resource\.data\.remainingStripeAmountGbp == request\.resource\.data\.grossBudget/);
+  assert.match(block, /allow update, delete:\s*if isAdmin\(\);/);
+});
+
 test("wallet and payment ledgers remain backend-owned", () => {
   for (const collection of [
     "match /wallets/{userId}",

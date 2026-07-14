@@ -1,16 +1,19 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
-import 'package:circum/app/send_package/models/contact_info.dart';
 import 'package:circum/helper/toast_helper.dart';
+import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/utils/theme/theme.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
+import 'package:circum/env/env.dart';
 import '../../../utils/theme/text_field.dart';
-import '../../account/bloc/account_bloc.dart';
-import '../../account/view/payment.dart';
 
 class DeliveryReviewExpandedView extends StatefulWidget {
   const DeliveryReviewExpandedView({super.key});
@@ -33,6 +36,7 @@ class _DeliveryReviewExpandedViewState
   String? dropoffAdditionalInformation;
 
   String? email;
+  bool _isConfirmingDelivery = false;
 
   @override
   void initState() {
@@ -292,14 +296,20 @@ class _DeliveryReviewExpandedViewState
   Widget confirmDeliveryButton() {
     return BlocBuilder<SendPackageBloc, SendPackageState>(
         builder: (context, state) {
+      final isBusy = _isConfirmingDelivery ||
+          state.isSenderPaymentLoading ||
+          state.isSenderDeliveryCreating;
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32)
             .copyWith(top: 16),
         child: AppButton.button(
             widget: Center(
-                child: AppText.text('Confirm delivery',
-                    fontSize: 16, fontWeight: FontWeight.bold)),
+                child: AppText.text(
+                    isBusy ? 'Confirming...' : 'Confirm delivery',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
             onPressed: () async {
+              if (isBusy) return;
               if (phoneNumber == null || phoneNumber!.trim().isEmpty) {
                 return ShowToast()
                     .errorToast(title: 'Please add a pick-up phone number');
@@ -314,43 +324,240 @@ class _DeliveryReviewExpandedViewState
                 return ShowToast()
                     .errorToast(title: 'Please add a drop-off phone number');
               }
-
-              context.read<AccountBloc>().add(
-                    PaymentCreateIntent(
-                      amount: (state.price! * 100).round(),
-                      email: email!,
-                    ),
-                  );
-
-              final payForDelivery = await showPaymentBottomSheet(context,
-                  amount: state.price!, phone: phoneNumber);
-
-              if (payForDelivery != 'success') {
-                if (!context.mounted) return;
-                context.read<AccountBloc>().add(PaymentStart());
-                return;
+              if (state.pickupCoordinate == null ||
+                  state.desinationCoordinate == null) {
+                return ShowToast().errorToast(
+                    title: 'Add pickup and drop-off addresses to continue');
               }
-
-              if (!context.mounted) return;
-              context.read<SendPackageBloc>().add(SendDeliveryRequest(
-                  pickupDetails: ContactInfo.fromJson(
-                      fullname: username,
-                      address: state.pickupCoordinate!,
-                      phoneNumber: phoneNumber,
-                      moreInformation: additonalPickupInformation,
-                      locality: state.pickupLocality),
-                  dropoffDetails: ContactInfo.fromJson(
-                      fullname: dropoffContactName,
-                      phoneNumber: dropoffContactPhoneNumber,
-                      address: state.desinationCoordinate!,
-                      moreInformation: dropoffAdditionalInformation,
-                      locality: state.destinationLocality)));
-              await Future.delayed(const Duration(milliseconds: 300));
-              if (!context.mounted) return;
-              Navigator.pop(context);
+              await _confirmWithCanonicalPayment(context, state);
             }),
       );
     });
+  }
+
+  Future<void> _confirmWithCanonicalPayment(
+    BuildContext context,
+    SendPackageState state,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ShowToast().errorToast(title: 'Sign in to confirm this delivery');
+      return;
+    }
+    setState(() => _isConfirmingDelivery = true);
+    try {
+      final quote = await _ensureCanonicalQuote(state);
+      final quoteId = '${quote['quoteId'] ?? state.senderQuoteId ?? ''}';
+      if (quoteId.isEmpty) {
+        throw StateError('Could not load delivery estimate. Try again.');
+      }
+      final payment = await _startCanonicalPaymentSession(quoteId);
+      final paymentStatus = '${payment['paymentStatus'] ?? payment['status']}';
+      if (paymentStatus != 'succeeded') {
+        final clientSecret = '${payment['clientSecret'] ?? ''}';
+        if (clientSecret.isEmpty) {
+          throw StateError('Payment could not be started. Try again.');
+        }
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Circum',
+            customerId: '${payment['customerId'] ?? ''}'.isEmpty
+                ? null
+                : '${payment['customerId']}',
+            customerEphemeralKeySecret:
+                '${payment['ephemeralKeySecret'] ?? ''}'.isEmpty
+                    ? null
+                    : '${payment['ephemeralKeySecret']}',
+            applePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+                ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
+                : null,
+            googlePay:
+                !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+                    ? const PaymentSheetGooglePay(
+                        merchantCountryCode: 'GB',
+                        currencyCode: 'GBP',
+                      )
+                    : null,
+            style: ThemeMode.dark,
+          ),
+        );
+        await Stripe.instance.presentPaymentSheet();
+      }
+
+      final paymentSessionId = '${payment['paymentSessionId'] ?? ''}';
+      if (paymentSessionId.isEmpty) {
+        throw StateError('Payment could not be confirmed. Try again.');
+      }
+      final created = await _createCanonicalPaidDelivery(
+        state: state,
+        quoteId: quoteId,
+        paymentSessionId: paymentSessionId,
+        userId: user.uid,
+      );
+      final requestId = '${created['requestId'] ?? ''}';
+      if (requestId.isEmpty) {
+        throw StateError('Delivery could not be created after payment.');
+      }
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('sendPackage')
+          .call({'requestId': requestId});
+      if (!context.mounted) return;
+      context
+          .read<SendPackageBloc>()
+          .add(WatchActiveDelivery(requestId: requestId));
+      ShowToast().successToast(title: 'Delivery confirmed');
+      Navigator.pop(context);
+    } on StripeException {
+      ShowToast().errorToast(title: 'Payment was cancelled.');
+    } on FirebaseFunctionsException catch (error) {
+      ShowToast().errorToast(
+          title: error.message ?? 'Delivery could not be confirmed.');
+    } catch (error) {
+      ShowToast().errorToast(title: '$error'.replaceFirst('Bad state: ', ''));
+    } finally {
+      if (mounted) setState(() => _isConfirmingDelivery = false);
+    }
+  }
+
+  Future<Map<String, dynamic>> _ensureCanonicalQuote(
+    SendPackageState state,
+  ) async {
+    if (state.senderQuoteId != null && state.senderQuoteId!.isNotEmpty) {
+      return {
+        'quoteId': state.senderQuoteId,
+        'total': state.senderQuoteTotal ?? state.price,
+        'selectedSpeed': state.senderQuoteSpeed ?? 'standard',
+      };
+    }
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createSenderBookingQuote')
+        .call({
+      'selectedSpeed': 'standard',
+      'vanguardProtocolEnabled':
+          state.canonicalIrisResult?.vanguardRequired == true,
+      'distanceMiles': state.distance == null
+          ? 0
+          : DeliveryPricing.kilometresToMiles(state.distance!),
+      'weightKg': state.parcelWeightKg,
+      'parcel': {
+        'itemName': state.canonicalIrisResult?.itemName ??
+            state.itemDescription ??
+            'Parcel',
+        'description': state.itemDescription ?? '',
+        'weightKg': state.parcelWeightKg,
+        'fragile': false,
+        'highValue': state.canonicalIrisResult?.vanguardRequired == true,
+      },
+      'iris': {
+        if (state.canonicalIrisResult != null) ...{
+          'itemName': state.canonicalIrisResult!.itemName,
+          'quantity': state.canonicalIrisResult!.quantity,
+          'totalWeightKg': state.canonicalIrisResult!.totalWeightKg,
+          'category': state.canonicalIrisResult!.category,
+          'recommendedVehicle': state.canonicalIrisResult!.recommendedVehicle,
+          'confidence': state.canonicalIrisResult!.confidenceLabel,
+          'vanguardRequired': state.canonicalIrisResult!.vanguardRequired,
+          'vanguardRequiredReason':
+              state.canonicalIrisResult!.vanguardRequiredReason,
+        },
+      },
+    });
+    return result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> _startCanonicalPaymentSession(
+    String quoteId,
+  ) async {
+    Stripe.publishableKey = Env.publishableLiveKey;
+    await Stripe.instance.applySettings();
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createSenderPaymentSession')
+        .call({
+      'quoteId': quoteId,
+      'rothEnabled': false,
+      'fallbackMethod': 'card',
+    });
+    return result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> _createCanonicalPaidDelivery({
+    required SendPackageState state,
+    required String quoteId,
+    required String paymentSessionId,
+    required String userId,
+  }) async {
+    final requestId = 'sender-${DateTime.now().millisecondsSinceEpoch}';
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createSenderPaidDelivery')
+        .call({
+      'requestId': requestId,
+      'draftId': requestId,
+      'idempotencyKey': 'sender-$userId-$requestId-$quoteId',
+      'quoteId': quoteId,
+      'paymentSessionId': paymentSessionId,
+      'pickup': {
+        'fullname': username,
+        'phone': phoneNumber,
+        'address': state.pickupLocation,
+        'subAddress': state.pickupLocationSubAddress ?? '',
+        'locality': state.pickupLocality ?? '',
+        'instructions': additonalPickupInformation ?? '',
+        'coordinates': {
+          'lat': state.pickupCoordinate!.lat,
+          'lng': state.pickupCoordinate!.lng,
+        },
+      },
+      'dropoff': {
+        'fullname': dropoffContactName,
+        'phone': dropoffContactPhoneNumber,
+        'address': state.destinationLocation,
+        'subAddress': state.destinationLocationSubAddress ?? '',
+        'locality': state.destinationLocality ?? '',
+        'instructions': dropoffAdditionalInformation ?? '',
+        'coordinates': {
+          'lat': state.desinationCoordinate!.lat,
+          'lng': state.desinationCoordinate!.lng,
+        },
+      },
+      'recipient': {
+        'name': dropoffContactName,
+        'phone': dropoffContactPhoneNumber,
+        'deliveryNotes': dropoffAdditionalInformation,
+      },
+      'deliveryTime': {
+        'type': 'now',
+        'summary': 'Deliver now',
+      },
+      'parcel': {
+        'itemName': state.canonicalIrisResult?.itemName ??
+            state.itemDescription ??
+            'Parcel',
+        'description': state.itemDescription ?? '',
+        'weightKg': state.parcelWeightKg,
+        'highValue': state.canonicalIrisResult?.vanguardRequired == true,
+      },
+      'iris': {
+        if (state.canonicalIrisResult != null) ...{
+          'itemName': state.canonicalIrisResult!.itemName,
+          'quantity': state.canonicalIrisResult!.quantity,
+          'totalWeightKg': state.canonicalIrisResult!.totalWeightKg,
+          'recommendedVehicle': state.canonicalIrisResult!.recommendedVehicle,
+          'confidence': state.canonicalIrisResult!.confidenceLabel,
+          'category': state.canonicalIrisResult!.category,
+          'vanguardRequired': state.canonicalIrisResult!.vanguardRequired,
+          'vanguardRequiredReason':
+              state.canonicalIrisResult!.vanguardRequiredReason,
+        },
+      },
+    });
+    return result.data is Map
+        ? Map<String, dynamic>.from(result.data as Map)
+        : <String, dynamic>{};
   }
 
   Future<String?> textDetailsBottomSheet({

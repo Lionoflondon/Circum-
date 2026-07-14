@@ -86,21 +86,22 @@ void main() {
           standard, contains('Vanguard/PIN data exists and survives reload'));
     });
 
-    test('Sender Web creates canonical booking before payment collection', () {
+    test('Sender Web uses backend quote, payment session and paid delivery',
+        () {
       final source = File('lib/web_sender_app.dart').readAsStringSync();
-      final createIndex =
-          source.indexOf('_createCanonicalSenderBookingTransaction(');
+      final quoteIndex = source.indexOf('_createSenderWebBookingQuote(');
       final paymentIndex = source.indexOf('_collectDeliveryPayment(');
+      final createIndex = source.indexOf('_createSenderWebPaidDelivery(');
 
-      expect(createIndex, isNonNegative);
+      expect(quoteIndex, isNonNegative);
       expect(paymentIndex, isNonNegative);
-      expect(createIndex, lessThan(paymentIndex));
-      expect(source, contains('db.runTransaction((transaction) async'));
-      expect(
-        source,
-        contains(
-            'Payment cannot be recorded because the delivery was not saved.'),
-      );
+      expect(createIndex, isNonNegative);
+      expect(quoteIndex, lessThan(paymentIndex));
+      expect(paymentIndex, lessThan(createIndex));
+      expect(source, contains("httpsCallable('createSenderBookingQuote')"));
+      expect(source, contains("httpsCallable('createSenderPaymentSession')"));
+      expect(source, contains("httpsCallable('createSenderPaidDelivery')"));
+      expect(source, isNot(contains('cloudfunctions.net/createPaymentIntent')));
     });
 
     test('My Bookings recovers signed-in sender deliveries by UID and email',

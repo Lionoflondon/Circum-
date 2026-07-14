@@ -30,6 +30,18 @@ void main() {
     expect(source, contains("'createSenderPaidDelivery'"));
   });
 
+  test('Sender web delivery checkout uses canonical payment callables only',
+      () {
+    final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+    expect(source, contains("httpsCallable('createSenderBookingQuote')"));
+    expect(source, contains("httpsCallable('createSenderPaymentSession')"));
+    expect(source, contains("httpsCallable('createSenderPaidDelivery')"));
+    expect(source, isNot(contains('cloudfunctions.net/createPaymentIntent')));
+    expect(
+        source, isNot(contains('_completeSenderBookingPaymentTransaction(')));
+  });
+
   test('Sender delivery drafts persist through backend callables only', () {
     final canvas = File('lib/app/sender_mobile/sender_booking_canvas.dart')
         .readAsStringSync();

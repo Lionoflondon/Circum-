@@ -766,8 +766,14 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       }, {merge: true});
       return;
     }
+    const selectedServiceLevel = `${quote.selectedSpeed || "standard"}`.toLowerCase();
+    const parcelDescription = parcel.description || parcel.itemName || "Parcel";
+    const irisWeightKg =
+      Number(iris.finalBillableWeightKg || iris.irisWeightKg || iris.totalWeightKg || parcel.weightKg || 0) || null;
+
     transaction.set(deliveryRef, {
     requestId,
+    deliveryId: requestId,
     role: "user",
     userId: sender.uid,
     senderId: sender.uid,
@@ -801,12 +807,26 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       subAddress: dropoff.subAddress || "",
     },
     pickupPosition: geoData(pickup.coordinates),
+    pickupAddress: pickup.address || "",
     pickupLocality: pickup.locality || "",
+    dropoffAddress: dropoff.address || "",
+    dropoffLocality: dropoff.locality || "",
+    receiverName: data.recipient && data.recipient.name || dropoff.fullname || "",
+    receiverPhone: data.recipient && data.recipient.phone || dropoff.phone || "",
     recipient: data.recipient || {},
     deliveryTime: data.deliveryTime || {},
     parcel,
+    packageDescription: parcelDescription,
+    originalDescription: parcelDescription,
+    normalizedItemName: parcel.itemName || parcelDescription,
     iris,
+    irisDeliveryEstimateId: requestId,
+    irisDeliveryEstimate: iris,
+    irisEstimatedWeight: irisWeightKg,
     selectedSpeed: quote.selectedSpeed,
+    selectedServiceLevel,
+    serviceLevel: selectedServiceLevel,
+    selectedTier: selectedServiceLevel,
     quoteId,
     paymentSessionId,
     price: quote.total,
@@ -821,6 +841,12 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     pricingBreakdown: quote,
     currency: "GBP",
     status: "requested",
+    deliveryStatus: "requested",
+    flowStatus: "requested",
+    currentStep: "tracking",
+    dispatchStatus: "requested",
+    matchingStatus: "available",
+    trackingUrl: `/?app=sender&deliveryId=${requestId}`,
     ...vanguardFields,
     dispatchProtocol: {
       vanguard: vanguardFields.vanguardProtocolEnabled === true,
