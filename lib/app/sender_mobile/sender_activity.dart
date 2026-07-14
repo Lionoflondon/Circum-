@@ -293,9 +293,12 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       active: senderActivityIsLiveDeliveryStatus(normalized),
       riderId: _riderId(data),
       riderPhotoUrl: _first([
+        profile['profileThumbnailUrl'],
+        profile['profilePhotoUrl'],
         profile['photoURL'],
         profile['photoUrl'],
-        profile['profilePhotoUrl'],
+        assignedRider['profileThumbnailUrl'],
+        assignedRider['profilePhotoUrl'],
         assignedRider['photoURL'],
         data['riderPhotoURL'],
       ]),

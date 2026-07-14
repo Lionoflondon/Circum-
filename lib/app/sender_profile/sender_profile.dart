@@ -378,7 +378,7 @@ class SenderDeliveryRecord {
       assignedDriverPhone:
           '${data['riderPhone'] ?? data['driverPhone'] ?? data['courierPhone'] ?? ''}',
       assignedDriverPhotoUrl:
-          '${assignedRider['photoURL'] ?? data['riderPhotoURL'] ?? data['riderPhotoUrl'] ?? data['driverPhotoUrl'] ?? data['photoURL'] ?? data['photoUrl'] ?? ''}',
+          '${assignedRider['profileThumbnailUrl'] ?? assignedRider['profilePhotoUrl'] ?? assignedRider['photoURL'] ?? data['profileThumbnailUrl'] ?? data['profilePhotoUrl'] ?? data['riderPhotoURL'] ?? data['riderPhotoUrl'] ?? data['driverPhotoUrl'] ?? data['photoURL'] ?? data['photoUrl'] ?? ''}',
       assignedDriverVehicle:
           '${data['vehicleMakeModel'] ?? data['vehicleType'] ?? data['vehicle'] ?? ''}',
       pricePaid: price,

@@ -73,6 +73,18 @@ service firebase.storage {
       allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == userId);
     }
 
+    match /rider-profiles/{riderId}/{fileName} {
+      allow read: if signedIn() || isAdmin();
+      allow create, update: if signedIn() &&
+        request.auth.uid == riderId &&
+        fileName.matches('profile\\.jpg|thumbnail\\.jpg') &&
+        request.resource != null &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/jpeg|image/jpg|image/png|image/heic');
+      allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == riderId);
+    }
+
     match /businessUploads/{businessId}/{allPaths=**} {
       allow read, create, update: if isAdmin();
       allow delete: if isSuperAdmin();

@@ -120,6 +120,22 @@ void main() {
       expect(delivery.assignedDriverPhotoUrl, 'https://example.com/rider.jpg');
     });
 
+    test('prefers canonical rider thumbnail over legacy photo fields', () {
+      final delivery = SenderDeliveryRecord.fromMap('CIR-CANONICAL', {
+        'senderId': 'sender-1',
+        'requestId': 'CIR-CANONICAL',
+        'status': 'accepted',
+        'assignedRider': {
+          'name': 'Ayo Rider',
+          'profileThumbnailUrl': 'https://example.com/thumb.jpg',
+          'profilePhotoUrl': 'https://example.com/full.jpg',
+          'photoURL': 'https://example.com/old.jpg',
+        },
+      });
+
+      expect(delivery.assignedDriverPhotoUrl, 'https://example.com/thumb.jpg');
+    });
+
     test('falls back to legacy rider photo fields for older deliveries', () {
       final delivery = SenderDeliveryRecord.fromMap('CIR-OLD', {
         'senderId': 'sender-1',

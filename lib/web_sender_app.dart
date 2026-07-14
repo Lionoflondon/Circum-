@@ -4553,13 +4553,24 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     controller.dispose();
     if (reason.isEmpty) return;
     final photoPath =
-        '${driver['photoPath'] ?? 'rider-profile-photos/$riderId/profile.jpg'}';
+        '${driver['profilePhotoPath'] ?? driver['photoPath'] ?? 'rider-profiles/$riderId/profile.jpg'}';
+    final thumbnailPath =
+        '${driver['profileThumbnailPath'] ?? 'rider-profiles/$riderId/thumbnail.jpg'}';
     await FirebaseStorage.instance.ref(photoPath).delete().catchError((_) {});
+    await FirebaseStorage.instance
+        .ref(thumbnailPath)
+        .delete()
+        .catchError((_) {});
     final patch = {
       'photoURL': FieldValue.delete(),
       'photoUrl': FieldValue.delete(),
       'photoPath': FieldValue.delete(),
       'profilePhotoUrl': FieldValue.delete(),
+      'profileThumbnailUrl': FieldValue.delete(),
+      'profilePhotoPath': FieldValue.delete(),
+      'profileThumbnailPath': FieldValue.delete(),
+      'profilePhotoMetadata': FieldValue.delete(),
+      'profilePhotoVersion': FieldValue.increment(1),
       'photoRemovedAt': FieldValue.serverTimestamp(),
       'photoRemovedBy': _adminUser?.uid ?? _adminUser?.email,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -16529,7 +16540,7 @@ class _AdminDriverProfileDrawer extends StatelessWidget {
     final phone = _phone();
     final blockers = _approvalBlockers();
     final photoUrl =
-        '${driver['photoURL'] ?? driver['photoUrl'] ?? driver['profilePhotoUrl'] ?? ''}'
+        '${driver['profileThumbnailUrl'] ?? driver['profilePhotoUrl'] ?? driver['photoURL'] ?? driver['photoUrl'] ?? ''}'
             .trim();
     final initialSource =
         '${driver['fullName'] ?? driver['name'] ?? 'C'}'.trim();
@@ -32950,7 +32961,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               data['driverName'] ??
               data['riderName'] ??
               'Circum rider',
-          'photoURL': assignedRider['photoURL'] ??
+          'photoURL': assignedRider['profileThumbnailUrl'] ??
+              assignedRider['profilePhotoUrl'] ??
+              assignedRider['photoURL'] ??
+              data['profileThumbnailUrl'] ??
+              data['profilePhotoUrl'] ??
               data['photoUrl'] ??
               data['driverPhotoUrl'] ??
               data['riderPhotoUrl'] ??

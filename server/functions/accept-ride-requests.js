@@ -24,7 +24,9 @@ const riderPayload = (riderId, rider) => {
     code: cleanText(rider.code || rider.fcmToken),
     rating: cleanText(rider.rating || rider.averageRating, "New"),
     riderId,
-    photoURL: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl, "null"),
+    photoURL: cleanText(rider.profileThumbnailUrl || rider.profilePhotoUrl || rider.photoURL || rider.photoUrl || rider.avatarUrl, "null"),
+    profilePhotoUrl: cleanText(rider.profilePhotoUrl || rider.photoURL || rider.photoUrl || rider.avatarUrl, ""),
+    profileThumbnailUrl: cleanText(rider.profileThumbnailUrl || rider.profilePhotoUrl || rider.photoURL || rider.photoUrl || rider.avatarUrl, ""),
   };
 };
 

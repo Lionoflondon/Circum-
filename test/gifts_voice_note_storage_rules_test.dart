@@ -35,4 +35,19 @@ void main() {
     expect(rules, contains('allow delete: if isSuperAdmin();'));
     expect(rules, isNot(contains('allow read, write: if signedIn();')));
   });
+
+  test('rider profile photos use the canonical secure storage path', () {
+    final rules = File('storage.rules').readAsStringSync();
+
+    expect(rules, contains('match /rider-profiles/{riderId}/{fileName}'));
+    expect(rules, contains("request.auth.uid == riderId"));
+    expect(rules,
+        contains("fileName.matches('profile\\\\.jpg|thumbnail\\\\.jpg')"));
+    expect(rules, contains('request.resource.size <= 10 * 1024 * 1024'));
+    expect(rules, contains('image/jpeg|image/jpg|image/png|image/heic'));
+    expect(
+        rules,
+        contains(
+            'allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == riderId);'));
+  });
 }
