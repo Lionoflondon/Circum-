@@ -32,28 +32,6 @@
   <title>Circum</title>
   <link rel="manifest" href="manifest.json?v=circum-20260528">
 
-  <script>
-    // The value below is injected by flutter build, do not touch.
-    const serviceWorkerVersion = null;
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (const registration of registrations) {
-          registration.unregister();
-        }
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(keys) {
-        for (const key of keys) {
-          caches.delete(key);
-        }
-      });
-    }
-  </script>
-  <!-- This script adds the flutter initialization JS code -->
-  <script src="flutter.js" defer=""></script>
-  
-  
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
   
   
@@ -69,88 +47,53 @@
           background-size: 100% 100%;
     }
 
-    .center {
-      margin: 0;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      -ms-transform: translate(-50%, -50%);
-      transform: translate(-50%, -50%);
-    }
-
-    .contain {
-      display:block;
-      width:100%; height:100%;
-      object-fit: contain;
-    }
-
-    .stretch {
-      display:block;
-      width:100%; height:100%;
-    }
-
-    .cover {
-      display:block;
-      width:100%; height:100%;
-      object-fit: cover;
-    }
-
-    .bottom {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      -ms-transform: translate(-50%, 0);
-      transform: translate(-50%, 0);
-    }
-
-    .bottomLeft {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-    }
-
-    .bottomRight {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-    }
+    #startup-shell { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: #F5F7FB; font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; background: #07090F; z-index: 9999; }
+    .startup-card { width: min(420px, 100%); text-align: center; }
+    .startup-brand { color: #3B82F6; font-size: 13px; font-weight: 800; letter-spacing: 2px; }
+    .startup-spinner { width: 28px; height: 28px; margin: 24px auto 18px; border: 3px solid rgba(59,130,246,.22); border-top-color: #3B82F6; border-radius: 50%; animation: spin .8s linear infinite; }
+    .startup-title { margin: 0; font-size: 21px; }
+    .startup-copy { color: #9CA8B8; line-height: 1.5; }
+    .startup-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+    .startup-actions button { min-height: 46px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); padding: 0 20px; color: #F5F7FB; background: #111827; font-weight: 700; cursor: pointer; }
+    .startup-actions button:first-child { background: #3B82F6; border-color: #3B82F6; }
+    #startup-error { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .startup-spinner { animation: none; } }
   </style>
   <script id="splash-screen-script">
-    function removeSplashFromWeb() {
-      document.getElementById("splash")?.remove();
-      document.getElementById("splash-branding")?.remove();
-      document.body.style.background = "#07090F";
-      sessionStorage.setItem('circumSplashShown', '1');
+    function removeStartupShell() {
+      document.getElementById("startup-shell")?.remove();
     }
   </script>
 </head>
 <body>
-  <picture id="splash">
-      <source srcset="splash/img/light-1x.png 1x, splash/img/light-2x.png 2x, splash/img/light-3x.png 3x, splash/img/light-4x.png 4x" media="(prefers-color-scheme: light)">
-      <source srcset="splash/img/dark-1x.png 1x, splash/img/dark-2x.png 2x, splash/img/dark-3x.png 3x, splash/img/dark-4x.png 4x" media="(prefers-color-scheme: dark)">
-      <img class="center" aria-hidden="true" src="splash/img/light-1x.png" alt="">
-  </picture>
+  <div id="startup-shell" role="status" aria-live="polite">
+    <div class="startup-card">
+      <div class="startup-brand">CIRCUM</div>
+      <div id="startup-loading">
+        <div class="startup-spinner" aria-hidden="true"></div>
+        <h1 class="startup-title">Starting Circum</h1>
+      </div>
+      <div id="startup-error" role="alert">
+        <h1 class="startup-title">Something went wrong.</h1>
+        <p class="startup-copy">We could not start the app. Check your connection and try again.</p>
+        <p class="startup-copy">Reference: SND-WEB-BOOT-001</p>
+        <div class="startup-actions">
+          <button type="button" onclick="location.reload()">Retry</button>
+          <button type="button" onclick="location.href = location.href">Reload</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <script>
-    if (sessionStorage.getItem('circumSplashShown')) {
-      document.getElementById('splash').style.display = 'none';
-    }
+    window.addEventListener('flutter-first-frame', removeStartupShell, { once: true });
+    window.setTimeout(function () {
+      if (!document.getElementById('startup-shell')) return;
+      document.getElementById('startup-loading').style.display = 'none';
+      document.getElementById('startup-error').style.display = 'block';
+    }, 20000);
   </script>
-  
-  
-  <script>
-    window.addEventListener('load', function(ev) {
-      // Download main.dart.js
-      _flutter.loader.loadEntrypoint({
-        entrypointUrl: 'main.dart.js?v=firebase-dynamic-20260529',
-        onEntrypointLoaded: function(engineInitializer) {
-          engineInitializer.initializeEngine().then(function(appRunner) {
-            appRunner.runApp();
-            setTimeout(removeSplashFromWeb, 200);
-          });
-        }
-      });
-    });
-  </script>
+  <script src="flutter_bootstrap.js" async></script>
 
 
 </body></html>
