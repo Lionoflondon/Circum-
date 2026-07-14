@@ -830,6 +830,57 @@ function requestRiderWithdrawal() {
   });
 }
 
+function cancelRiderWithdrawal() {
+  return functions.https.onCall(async (data, context) => {
+    const riderId = text(context.auth && context.auth.uid);
+    await assertActor(context, riderId);
+    const requestId = text(data && data.requestId) || `active_${riderId}`;
+    const db = getFirestore();
+    const requestRef = db.collection("payoutRequests").doc(requestId);
+    await db.runTransaction(async (transaction) => {
+      const requestDoc = await transaction.get(requestRef);
+      if (!requestDoc.exists) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "No active withdrawal request was found.",
+        );
+      }
+      const request = requestDoc.data() || {};
+      if (text(request.riderId) !== riderId) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "You can only cancel your own withdrawal request.",
+        );
+      }
+      const status = text(request.status || request.payoutStatus).toLowerCase();
+      if (!["requested", "pending"].includes(status)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This withdrawal can no longer be cancelled.",
+        );
+      }
+      transaction.set(requestRef, {
+        status: "cancelled",
+        payoutStatus: "cancelled",
+        cancelledAt: FieldValue.serverTimestamp(),
+        cancelledBy: riderId,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
+    await db.collection("riderPayoutAudit").add({
+      riderId,
+      payoutRequestId: requestId,
+      action: "withdrawal_cancelled",
+      actorId: riderId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      requestId,
+      status: "cancelled",
+    };
+  });
+}
+
 function handleStripeConnectWebhook(stripeOrFactory) {
   return stripeWebhookRuntime.https.onRequest(async (req, res) => {
     const stripe = stripeFrom(stripeOrFactory);
@@ -1002,6 +1053,7 @@ module.exports = {
   syncStripeConnectStatus,
   createRiderTransferOrPayout,
   requestRiderWithdrawal,
+  cancelRiderWithdrawal,
   resetRiderTestStripeAccount,
   handleStripeConnectWebhook,
   scheduledRiderStripeStatusSync,
