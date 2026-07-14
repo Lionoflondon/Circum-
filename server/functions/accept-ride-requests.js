@@ -5,6 +5,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 const riderPresence = require("./rider-presence");
+const {buildRiderVehicleSnapshot} = require("./rider-vehicle-snapshot");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -14,6 +15,7 @@ const cleanText = (value, fallback = "") => {
 
 const riderPayload = (riderId, rider) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
+  const vehicleSnapshot = buildRiderVehicleSnapshot(rider);
   return {
     courierName: cleanText(rider.fullName || rider.name || rider.displayName || rider.email, "Circum rider"),
     phoneNumber: cleanText(rider.phone || rider.phoneNumber || rider.mobile),
@@ -27,6 +29,7 @@ const riderPayload = (riderId, rider) => {
     photoURL: cleanText(rider.profileThumbnailUrl || rider.profilePhotoUrl || rider.photoURL || rider.photoUrl || rider.avatarUrl, "null"),
     profilePhotoUrl: cleanText(rider.profilePhotoUrl || rider.photoURL || rider.photoUrl || rider.avatarUrl, ""),
     profileThumbnailUrl: cleanText(rider.profileThumbnailUrl || rider.profilePhotoUrl || rider.photoURL || rider.photoUrl || rider.avatarUrl, ""),
+    vehicleSnapshot,
   };
 };
 
@@ -170,6 +173,12 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       courierName: payload.courierName,
       driverVehicle: payload.typeOfVehicle,
       driverPlateNumber: payload.plateNumber,
+      driverVehicleSnapshot: payload.vehicleSnapshot,
+      riderVehicleSnapshot: payload.vehicleSnapshot,
+      driverVehicleManufacturer: payload.vehicleSnapshot.manufacturer || "",
+      driverVehicleModel: payload.vehicleSnapshot.model || "",
+      driverVehicleColour: payload.vehicleSnapshot.colour || "",
+      driverVehicleRegistration: payload.vehicleSnapshot.registration || payload.plateNumber,
       acceptedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
