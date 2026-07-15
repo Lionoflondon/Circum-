@@ -73,6 +73,7 @@ const senderFinance = require("./sender-finance");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const deliveryTracking = require("./delivery-tracking");
 const deliveryCleanup = require("./delivery-cleanup");
+const staleDelivery = require("./stale-delivery");
 const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
 const {calculateWalletCheckout} = require("./wallet-core");
@@ -211,6 +212,8 @@ exports.deleteSenderSavedAddress = senderSavedAddresses.deleteSenderSavedAddress
 exports.updateDeliveryTrackingStatus = deliveryTracking.updateDeliveryTrackingStatus;
 exports.updateDeliveryLiveLocation = deliveryTracking.updateDeliveryLiveLocation;
 exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
+exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
+exports.reconcileStaleDeliveryLocks = staleDelivery.reconcileStaleDeliveryLocks;
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status

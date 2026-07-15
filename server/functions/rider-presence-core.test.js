@@ -152,4 +152,12 @@ test("delivery write marks rider busy, then available", () => {
       }),
       "available",
   );
+  assert.equal(
+      core.nextPresenceOnDelivery({
+        before: {status: "recoverable_incomplete", riderId: "rider-1"},
+        after: {status: "archived_stale", riderId: "rider-1"},
+        riderId: "rider-1",
+      }),
+      "available",
+  );
 });

@@ -3243,46 +3243,15 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
         ),
       );
       if (reason == null || reason.trim().isEmpty) return;
-      final previousStatus = '${delivery['status'] ?? ''}';
       final reference =
           '${delivery['trackingReference'] ?? delivery['reference'] ?? delivery['requestId'] ?? id}';
-      final adminId = _adminUser?.uid ?? _adminUser?.email ?? 'unknown-admin';
-      final removedAt = FieldValue.serverTimestamp();
-      final batch = FirebaseFirestore.instance.batch();
-      final deliveryRef =
-          FirebaseFirestore.instance.collection('deliveryRequests').doc(id);
-      final cleanupRef = FirebaseFirestore.instance
-          .collection('deliveryStaleCleanupEvents')
-          .doc();
-      final removalPatch = AdminDeliveryTools.removeStaleOrderPatch(
-        delivery: delivery,
-        adminUserId: adminId,
-        adminEmail: _adminUser?.email,
-        reason: reason,
-        removedAt: removedAt,
-      );
-      batch.set(deliveryRef, removalPatch, SetOptions(merge: true));
-      final auditPayload = {
-        'adminId': adminId,
-        'adminEmail': _adminUser?.email,
-        'orderId': id,
-        'reference': reference,
-        'previousStatus': previousStatus,
-        'newStatus': 'admin_removed_stale',
+      await FirebaseFunctions.instance
+          .httpsCallable('resolveStaleDeliveryLock')
+          .call(<String, dynamic>{
+        'deliveryId': id,
+        'action': 'admin_removed_stale',
         'reason': reason,
-        'staleReasons': AdminDeliveryTools.staleDeliveryReasons(delivery),
-        'timestamp': removedAt,
-      };
-      batch.set(cleanupRef, auditPayload);
-      batch.set(FirebaseFirestore.instance.collection('adminAuditLogs').doc(), {
-        ...auditPayload,
-        'action': 'stale_delivery_removed',
-        'actionType': 'stale_delivery_removed',
-        'recordType': 'deliveryRequests',
-        'recordId': id,
-        'createdAt': removedAt,
       });
-      await batch.commit();
       setState(() => _message =
           'Order $reference was removed from active operations and added to Delivery Archives.');
       await _loadAdminData();
@@ -28216,7 +28185,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               .get(),
       ]);
       final byId = <String, SenderDeliveryRecord>{};
-      final recoveryUpdates = <Future<void>>[];
       for (final snapshot in snapshots) {
         for (final doc in snapshot.docs) {
           final data = Map<String, dynamic>.from(doc.data());
@@ -28237,27 +28205,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               'broadcastBlockReason': 'missing_canonical_booking_fields',
               'missingCanonicalFields': missing,
             });
-            recoveryUpdates.add(doc.reference.set({
-              ...SenderWebBookingRecovery.lifecycleFields(
-                status: SenderWebBookingRecovery.recoverableIncomplete,
-                currentStep: 'recovery',
-              ),
-              'matchingStatus': 'blocked',
-              'dispatchStatus': 'blocked',
-              'broadcastBlocked': true,
-              'broadcastBlockReason': 'missing_canonical_booking_fields',
-              'missingCanonicalFields': missing,
-              'updatedAt': FieldValue.serverTimestamp(),
-              'auditTrail': FieldValue.arrayUnion([
-                {
-                  'event': 'sender_web_booking_recovery_marked_on_load',
-                  'status': SenderWebBookingRecovery.recoverableIncomplete,
-                  'missingCanonicalFields': missing,
-                  'source': 'sender_web',
-                  'createdAt': DateTime.now().toIso8601String(),
-                },
-              ]),
-            }, SetOptions(merge: true)));
           }
           final record = SenderDeliveryRecord.fromMap(doc.id, data);
           byId[record.requestId] = record;
@@ -28278,7 +28225,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderDeliveries = records;
         _senderDeliveryLoadError = null;
       });
-      await Future.wait(recoveryUpdates);
       await _syncSenderTrustBaseline(uid, records);
     } catch (error) {
       debugPrint('Could not load sender deliveries: $error');

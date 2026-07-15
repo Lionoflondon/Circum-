@@ -115,13 +115,18 @@ void main() {
       expect(source, contains('ownDeliveriesForIdentity'));
     });
 
-    test('recovered incomplete bookings are marked and blocked on load', () {
+    test('incomplete bookings are display-only during history loading', () {
       final source = File('lib/web_sender_app.dart').readAsStringSync();
-
-      expect(
-        source,
-        contains('sender_web_booking_recovery_marked_on_load'),
+      final loadStart = source.indexOf('Future<void> _loadSenderDeliveries');
+      final loadEnd = source.indexOf(
+        'void _openSenderDeliveryTracking',
+        loadStart,
       );
+      final loader = source.substring(loadStart, loadEnd);
+
+      expect(source,
+          isNot(contains('sender_web_booking_recovery_marked_on_load')));
+      expect(loader, isNot(contains('doc.reference.set(')));
       expect(source, contains("'broadcastBlocked': true"));
       expect(
         source,

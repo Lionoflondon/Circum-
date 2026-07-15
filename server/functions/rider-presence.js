@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./rider-presence-core");
+const staleCore = require("./stale-delivery-core");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -23,7 +24,7 @@ async function riderProfile(db, riderId) {
   };
 }
 
-async function hasActiveDelivery(db, riderId) {
+async function activeDelivery(db, riderId) {
   const activeStates = [
     "accepted",
     "navigating_to_pickup",
@@ -42,13 +43,13 @@ async function hasActiveDelivery(db, riderId) {
       .where("status", "in", activeStates)
       .limit(1)
       .get();
-  if (!byRider.empty) return true;
+  if (!byRider.empty) return byRider.docs[0];
   const byAssigned = await db.collection("deliveryRequests")
       .where("assignedRiderId", "==", riderId)
       .where("status", "in", activeStates)
       .limit(1)
       .get();
-  return !byAssigned.empty;
+  return byAssigned.empty ? null : byAssigned.docs[0];
 }
 
 function presencePatch({riderId, status, busy = false, location = null}) {
@@ -121,21 +122,58 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const current = await db.collection("riderPresence").doc(riderId).get();
   const presence = current.exists ? current.data() : {};
-  if (
-    presence.busy === true ||
-    text(presence.activeDeliveryId) ||
-    await hasActiveDelivery(db, riderId)
-  ) {
+  const referencedId = text(presence.activeDeliveryId || presence.currentDeliveryId);
+  let staleRepair = null;
+  if (referencedId) {
+    const referenced = await db.collection("deliveryRequests").doc(referencedId).get();
+    const tracking = referenced.exists ? await referenced.ref.collection("tracking").doc("liveLocation").get() : null;
+    const referencedData = referenced.exists ? {
+      ...referenced.data(),
+      _lastTrackingAt: tracking && tracking.exists ? tracking.data().updatedAt : null,
+    } : null;
+    const decision = staleCore.evaluateDeliveryLock(
+        referencedData,
+        {exists: referenced.exists},
+    );
+    if (decision.block) {
+      const status = referenced.exists ? staleCore.statusOf(referencedData) : "unknown";
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          `Delivery ${referencedId} is still ${status.replaceAll("_", " ")}. Resolve it before going offline.`,
+          {deliveryId: referencedId, status, reason: decision.reason},
+      );
+    }
+    staleRepair = {deliveryId: referencedId, reason: decision.reason};
+  }
+  const active = await activeDelivery(db, riderId);
+  if (active) {
+    const status = staleCore.statusOf(active.data());
     throw new functions.https.HttpsError(
         "failed-precondition",
-        "Complete your active delivery before going offline.",
+        `Delivery ${active.id} is still ${status.replaceAll("_", " ")}. Complete or resolve it before going offline.`,
+        {deliveryId: active.id, status, reason: `active_${status}`},
     );
   }
   const patch = presencePatch({riderId, status: "offline", busy: false, location: data && data.location});
   const batch = db.batch();
-  batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOffline"}, {merge: true});
+  batch.set(db.collection("riderPresence").doc(riderId), {
+    ...patch,
+    activeDeliveryId: FieldValue.delete(),
+    currentDeliveryId: FieldValue.delete(),
+    source: staleRepair ? "goOfflineStaleReferenceRepair" : "goOffline",
+  }, {merge: true});
   batch.set(db.collection("riders").doc(riderId), {status: "offline", availabilityStatus: "offline", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
   batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_offline", actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
+  if (staleRepair) {
+    batch.set(db.collection("riderOperationalAudit").doc(), {
+      riderId,
+      deliveryId: staleRepair.deliveryId,
+      action: "stale_active_delivery_reference_repaired",
+      reason: staleRepair.reason,
+      actorUid: riderId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
   await batch.commit();
   return {success: true, presence: {...patch, serverTimestampPending: true}};
 });

@@ -110,7 +110,10 @@ function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
   if (afterRider === riderId && beforeStatus !== "accepted" && afterStatus === "accepted") {
     return "busy";
   }
-  if (afterRider === riderId && ["delivered", "completed"].includes(afterStatus)) {
+  if (afterRider === riderId && [
+    "delivered", "completed", "cancelled", "canceled", "cancelled_admin",
+    "admin_removed_stale", "archived_stale", "archived_expired", "expired",
+  ].includes(afterStatus)) {
     return "available";
   }
   if (beforeRider === riderId && afterStatus.startsWith("cancel")) {
