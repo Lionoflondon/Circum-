@@ -133,6 +133,33 @@ void main() {
       expect(dashboard, contains('onTap: onBusiness'));
       expect(dashboard, contains('onTap: onGifts'));
       expect('prominent: true'.allMatches(dashboard), hasLength(3));
+      expect(dashboard, contains('return Container('));
+      expect(dashboard, isNot(contains('return SingleChildScrollView(')));
+      expect(dashboard, contains("'Welcome to Circum'"));
+    });
+
+    test('Sender desktop hero remains balanced and never has a blank column',
+        () {
+      final sender = File('lib/web_sender_app.dart').readAsStringSync();
+      final desktopLayout = sender.substring(
+        sender.indexOf('class _DesktopPortalLayout'),
+        sender.indexOf('class _DesktopDeliveryLoadError'),
+      );
+
+      expect(desktopLayout, contains('if (step == _SenderStep.dashboard)'));
+      expect(
+        'Expanded('.allMatches(desktopLayout).length,
+        greaterThanOrEqualTo(2),
+      );
+      expect(desktopLayout, contains('child: child'));
+      expect(desktopLayout, contains('final Widget dashboardChild'));
+      expect(
+        desktopLayout,
+        contains('step == _SenderStep.tracking ? dashboardChild : child'),
+      );
+      expect(desktopLayout, contains("'No active deliveries'"));
+      expect(desktopLayout, contains("label: const Text('Send a parcel')"));
+      expect(sender, contains("'Delivery Status'"));
     });
 
     test('public homepage exposes service pills beside notifications', () {

@@ -24343,6 +24343,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           _senderProfileTab = 1;
                         }),
                         onCancelBooking: _cancelSenderBooking,
+                        dashboardChild: _buildSenderDashboardStep(colors),
                         child: _buildCurrentStep(colors),
                       )
                     : _step == _SenderStep.healthPlus &&
@@ -24412,7 +24413,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return _buildHealthPlusStep(colors);
     }
     if (_senderAuthLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _SenderHeroLoadingState(colors: colors);
     }
     if (_senderUser == null) {
       return _buildSenderAccessGate(colors);
@@ -24429,33 +24430,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       );
     }
     return switch (_step) {
-      _SenderStep.dashboard => _SenderDashboardStep(
-          key: const ValueKey('sender-dashboard'),
-          colors: colors,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          businessAccounts: _senderBusinessAccounts,
-          onSendParcel: () => setState(() {
-            _activeBusinessId = null;
-            _activeBusinessName = null;
-            _activeBusinessRole = null;
-            _businessCostCentre.clear();
-            _businessReference.clear();
-            _step = _SenderStep.details;
-          }),
-          onBusiness: () => setState(() => _step = _SenderStep.business),
-          onGifts: widget.onOpenGifts,
-          onHealthPlus: () => setState(() {
-            _roleChoiceConfirmed = true;
-            _healthRouteDismissed = false;
-            _step = _SenderStep.healthPlus;
-          }),
-          onProfile: () => setState(() => _step = _SenderStep.profile),
-          onSupport: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-        ),
+      _SenderStep.dashboard => _buildSenderDashboardStep(colors),
       _SenderStep.details => _DetailsStep(
           key: const ValueKey('details'),
           colors: colors,
@@ -24758,6 +24733,36 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           key: const ValueKey('sender-profile'),
         ),
     };
+  }
+
+  Widget _buildSenderDashboardStep(_CircumColors colors) {
+    return _SenderDashboardStep(
+      key: const ValueKey('sender-dashboard'),
+      colors: colors,
+      profile: _senderProfile,
+      deliveries: _senderDeliveries,
+      businessAccounts: _senderBusinessAccounts,
+      onSendParcel: () => setState(() {
+        _activeBusinessId = null;
+        _activeBusinessName = null;
+        _activeBusinessRole = null;
+        _businessCostCentre.clear();
+        _businessReference.clear();
+        _step = _SenderStep.details;
+      }),
+      onBusiness: () => setState(() => _step = _SenderStep.business),
+      onGifts: widget.onOpenGifts,
+      onHealthPlus: () => setState(() {
+        _roleChoiceConfirmed = true;
+        _healthRouteDismissed = false;
+        _step = _SenderStep.healthPlus;
+      }),
+      onProfile: () => setState(() => _step = _SenderStep.profile),
+      onSupport: () => setState(() {
+        _supportChat = true;
+        _chatOpen = true;
+      }),
+    );
   }
 
   Widget _buildSenderProfileStep(
@@ -30405,6 +30410,7 @@ class _DesktopPortalLayout extends StatelessWidget {
   final VoidCallback onSendParcel;
   final VoidCallback onViewHistory;
   final ValueChanged<SenderDeliveryRecord> onCancelBooking;
+  final Widget dashboardChild;
   final Widget child;
 
   const _DesktopPortalLayout({
@@ -30428,6 +30434,7 @@ class _DesktopPortalLayout extends StatelessWidget {
     required this.onSendParcel,
     required this.onViewHistory,
     required this.onCancelBooking,
+    required this.dashboardChild,
     required this.child,
   });
 
@@ -30437,8 +30444,7 @@ class _DesktopPortalLayout extends StatelessWidget {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: MediaQuery.sizeOf(context).width >= 1100 ? 560 : 430,
+          Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(28, 28, 24, 36),
               child: AnimatedSwitcher(
@@ -30479,19 +30485,24 @@ class _DesktopPortalLayout extends StatelessWidget {
         statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
     final statusLabel = status.title;
 
+    final leftColumn = SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(28, 28, 24, 36),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        child: step == _SenderStep.tracking ? dashboardChild : child,
+      ),
+    );
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: MediaQuery.sizeOf(context).width >= 1100 ? 560 : 430,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 28, 24, 36),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
-              child: child,
-            ),
+        if (step == _SenderStep.tracking)
+          Expanded(child: leftColumn)
+        else
+          SizedBox(
+            width: MediaQuery.sizeOf(context).width >= 1100 ? 560 : 430,
+            child: leftColumn,
           ),
-        ),
         Container(width: 1, color: colors.border),
         Expanded(
           child: Container(
@@ -30615,7 +30626,7 @@ class _DesktopNoActiveDelivery extends StatelessWidget {
           Icon(Icons.local_shipping_outlined, color: colors.text, size: 32),
           const SizedBox(height: 14),
           Text(
-            'No active delivery',
+            'No active deliveries',
             style: TextStyle(
               color: colors.text,
               fontSize: 26,
@@ -32126,7 +32137,7 @@ class _SenderDashboardStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = SenderProfileService.summarize(deliveries);
     final firstName = (profile?.fullName ?? '').trim().split(' ').first;
-    return SingleChildScrollView(
+    return Container(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -32296,6 +32307,61 @@ class _SenderDashboardStep extends StatelessWidget {
                   onTap: onSupport,
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderHeroLoadingState extends StatelessWidget {
+  const _SenderHeroLoadingState({required this.colors});
+
+  final _CircumColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Welcome to Circum',
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 30,
+              height: 1.05,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Preparing your Sender workspace...',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            height: 48,
+            width: 190,
+            decoration: BoxDecoration(
+              color: colors.field,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.border),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            height: 112,
+            decoration: BoxDecoration(
+              color: colors.field.withValues(alpha: .72),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: colors.border),
             ),
           ),
         ],
