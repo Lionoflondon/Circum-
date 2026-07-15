@@ -41,12 +41,33 @@ class HomeViewState extends State<HomeView> {
         builder: (context, state) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (state.deliveryStatus == DeliveryStatus.deliveryCompleted) {
+          final deliveryId =
+              '${state.activeDeliveryData['id'] ?? state.activeDeliveryData['requestId'] ?? state.senderCreatedRequestId ?? state.lastHistoryId ?? ''}'
+                  .trim();
+          final completedDelivery = <String, dynamic>{
+            ...state.activeDeliveryData,
+            if (state.deliveryData != null) ...state.deliveryData!.toJson(),
+            'pickupAddress': state.pickupLocation,
+            'dropoffAddress': state.destinationLocation,
+            'distance': state.distance,
+            'price': state.price,
+            'requestId': deliveryId,
+          };
           context.read<SendPackageBloc>().add(DeleteCompletedDelivery());
 
           context.read<SendPackageBloc>().add(
               const SetDeliveryStatus(deliveryStatus: DeliveryStatus.inital));
-          Navigator.push(
-              context, MaterialPageRoute(builder: (_) => RatingsView()));
+          if (deliveryId.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RatingsView(
+                  deliveryId: deliveryId,
+                  initialDelivery: completedDelivery,
+                ),
+              ),
+            );
+          }
         }
       });
       if (state.panelControlStatus == PanelControlStatus.isOpened) {

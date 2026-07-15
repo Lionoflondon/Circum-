@@ -815,6 +815,7 @@ service cloud.firestore {
       allow read: if isFinanceAdmin() ||
         (signedIn() && (
           resource.data.userId == request.auth.uid ||
+          resource.data.riderId == request.auth.uid ||
           resource.data.userId == normalizedAuthEmail() ||
           resource.data.uid == request.auth.uid ||
           resource.data.userEmail == normalizedAuthEmail()
@@ -903,12 +904,33 @@ service cloud.firestore {
     match /driverRatings/{ratingId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.customerId == request.auth.uid) ||
-        (signedIn() && resource.data.driverId == request.auth.uid);
-      allow create: if signedIn() &&
-        request.resource.data.customerId == request.auth.uid;
-      allow update: if isAdmin() &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['starRating']);
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.driverId == request.auth.uid) ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if false;
+      allow update: if false;
       allow delete: if false;
+    }
+
+    match /deliveryTips/{tipId} {
+      allow read: if isFinanceAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.customerId == request.auth.uid) ||
+        (signedIn() && resource.data.riderId == request.auth.uid) ||
+        (signedIn() && resource.data.driverId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /ratingReports/{reportId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.reportedBy == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /notificationEvents/{eventId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.recipientId == request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     match /driverPerformanceMetrics/{metricId} {

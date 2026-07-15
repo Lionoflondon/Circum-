@@ -76,6 +76,7 @@ const deliveryCleanup = require("./delivery-cleanup");
 const staleDelivery = require("./stale-delivery");
 const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
+const ratingsTipping = require("./ratings-tipping");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -140,6 +141,9 @@ exports.getSenderWalletTransactions = rothLedger.getSenderWalletTransactions;
 exports.completeSenderWalletOnboarding = rothLedger.completeSenderWalletOnboarding;
 exports.requestSenderWalletDebit = rothLedger.requestSenderWalletDebit;
 exports.requestSenderWalletRefund = rothLedger.requestSenderWalletRefund;
+exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
+exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
+exports.reportRating = ratingsTipping.reportRating;
 exports.closeCircumAccount = accountClosure.closeAccount;
 exports.createBusinessRothCheckout = businessPayments.createBusinessRothCheckout(stripe);
 exports.createBusinessInvoiceCheckout = businessPayments.createBusinessInvoiceCheckout(stripe);
@@ -643,6 +647,9 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
     }
     if (metadata.paymentType === "delivery") {
       await recordSenderStripeIntent(intent, event.id);
+    }
+    if (metadata.paymentType === "delivery_tip") {
+      await ratingsTipping.processStripeTipIntent(stripe, intent);
     }
   }
 

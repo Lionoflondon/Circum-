@@ -42,6 +42,94 @@ enum AdminPermission {
   viewAudit,
 }
 
+enum AdminRatingTipFilter { all, tipped, notTipped, reported }
+
+class AdminRatingTipRecord {
+  const AdminRatingTipRecord({
+    required this.ratingId,
+    required this.deliveryId,
+    required this.riderId,
+    required this.senderId,
+    required this.stars,
+    required this.feedback,
+    required this.tipAmount,
+    required this.paymentMethod,
+    required this.reportStatus,
+    required this.timestamp,
+  });
+
+  final String ratingId;
+  final String deliveryId;
+  final String riderId;
+  final String senderId;
+  final int stars;
+  final String feedback;
+  final double tipAmount;
+  final String paymentMethod;
+  final String reportStatus;
+  final Object? timestamp;
+
+  bool get tipped => tipAmount > 0;
+  bool get reported => reportStatus != 'clear' && reportStatus.isNotEmpty;
+
+  factory AdminRatingTipRecord.fromBackend({
+    required String ratingId,
+    required Map<String, dynamic> rating,
+    Map<String, dynamic> tip = const {},
+  }) {
+    return AdminRatingTipRecord(
+      ratingId: ratingId,
+      deliveryId: '${rating['deliveryId'] ?? ratingId}',
+      riderId: '${rating['riderId'] ?? rating['driverId'] ?? ''}',
+      senderId: '${rating['senderId'] ?? rating['customerId'] ?? ''}',
+      stars: (rating['starRating'] as num? ?? 0).toInt(),
+      feedback: '${rating['feedbackText'] ?? ''}',
+      tipAmount: (tip['amount'] as num? ?? 0).toDouble(),
+      paymentMethod: '${tip['paymentMethod'] ?? ''}',
+      reportStatus: '${rating['reportStatus'] ?? 'clear'}',
+      timestamp: rating['createdAt'],
+    );
+  }
+}
+
+class AdminRatingsTipsPolicy {
+  static List<AdminRatingTipRecord> filter(
+    Iterable<AdminRatingTipRecord> records, {
+    String search = '',
+    int? stars,
+    AdminRatingTipFilter filter = AdminRatingTipFilter.all,
+  }) {
+    final query = search.trim().toLowerCase();
+    return records.where((record) {
+      if (stars != null && record.stars != stars) return false;
+      if (filter == AdminRatingTipFilter.tipped && !record.tipped) return false;
+      if (filter == AdminRatingTipFilter.notTipped && record.tipped) {
+        return false;
+      }
+      if (filter == AdminRatingTipFilter.reported && !record.reported) {
+        return false;
+      }
+      return query.isEmpty ||
+          [record.riderId, record.senderId, record.deliveryId]
+              .any((value) => value.toLowerCase().contains(query));
+    }).toList(growable: false);
+  }
+
+  static Map<String, dynamic> moderationRequest({
+    required String ratingId,
+    required String action,
+    required String reason,
+  }) {
+    if (!{'hide', 'unhide', 'investigate'}.contains(action)) {
+      throw ArgumentError('Unsupported rating moderation action.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A moderation reason is required.');
+    }
+    return {'ratingId': ratingId, 'action': action, 'reason': reason.trim()};
+  }
+}
+
 class AdminAccessPolicy {
   static const _rolePermissions = {
     AdminRole.superAdmin: AdminPermission.values,

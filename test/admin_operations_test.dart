@@ -6,6 +6,61 @@ import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('Ratings and tips', () {
+    final records = [
+      AdminRatingTipRecord.fromBackend(
+        ratingId: 'delivery-1',
+        rating: const {
+          'deliveryId': 'delivery-1',
+          'riderId': 'rider-1',
+          'senderId': 'sender-1',
+          'starRating': 5,
+          'feedbackText': 'Careful',
+          'reportStatus': 'clear',
+        },
+        tip: const {'amount': 5, 'paymentMethod': 'roth'},
+      ),
+      AdminRatingTipRecord.fromBackend(
+        ratingId: 'delivery-2',
+        rating: const {
+          'deliveryId': 'delivery-2',
+          'riderId': 'rider-2',
+          'senderId': 'sender-2',
+          'starRating': 2,
+          'reportStatus': 'reported',
+        },
+      ),
+    ];
+
+    test('supports Rider, Sender, delivery, stars, tip and report filters', () {
+      expect(AdminRatingsTipsPolicy.filter(records, search: 'rider-1'),
+          hasLength(1));
+      expect(AdminRatingsTipsPolicy.filter(records, stars: 5), hasLength(1));
+      expect(
+          AdminRatingsTipsPolicy.filter(records,
+              filter: AdminRatingTipFilter.tipped),
+          hasLength(1));
+      expect(
+          AdminRatingsTipsPolicy.filter(records,
+              filter: AdminRatingTipFilter.reported),
+          hasLength(1));
+    });
+
+    test('moderation produces callable input without editing rating values',
+        () {
+      expect(
+          AdminRatingsTipsPolicy.moderationRequest(
+            ratingId: 'delivery-1',
+            action: 'hide',
+            reason: 'Abusive content',
+          ),
+          {
+            'ratingId': 'delivery-1',
+            'action': 'hide',
+            'reason': 'Abusive content',
+          });
+    });
+  });
   group('Admin operations', () {
     test('support ticket actions reflect resolved status', () {
       expect(

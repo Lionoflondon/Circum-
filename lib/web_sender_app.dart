@@ -10,6 +10,7 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:circum/app/admin/admin_operations.dart';
+import 'package:circum/app/admin/ratings_tips_admin_view.dart';
 import 'package:circum/app/authentication/access/role_access.dart';
 import 'package:circum/app/delivery_security/vanguard_protection.dart';
 import 'package:circum/app/delivery/booking_cancellation.dart';
@@ -641,6 +642,9 @@ class _CircumAdminHostingAppState extends State<CircumAdminHostingApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Circum Admin Portal | $_buildMarker',
+      routes: {
+        AdminRatingsTipsView.routeName: (_) => const AdminRatingsTipsView(),
+      },
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Helvetica',
@@ -1271,6 +1275,7 @@ enum _AdminSection {
   irisRepository,
   gifts,
   finance,
+  ratingsTips,
   businessAccounts,
   healthPlus,
   support,
@@ -4349,6 +4354,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
           rothTools: _rothCreditTools(colors),
           rowBuilder: _financeRow,
         ),
+      _AdminSection.ratingsTips => const AdminRatingsTipsView(embedded: true),
       _AdminSection.businessAccounts => _AdminBusinessControlTowerSection(
           colors: colors,
           companies: adminSearch(_businessAccounts, query, [
@@ -16274,6 +16280,7 @@ String _adminSectionLabel(_AdminSection section) {
     _AdminSection.irisRepository => 'IRIS Repository',
     _AdminSection.gifts => 'Gifts',
     _AdminSection.finance => 'Finance',
+    _AdminSection.ratingsTips => 'Ratings & Tips',
     _AdminSection.businessAccounts => 'Business',
     _AdminSection.healthPlus => 'Health+',
     _AdminSection.support => 'Support',
@@ -16294,6 +16301,7 @@ IconData _adminSectionIcon(_AdminSection section) {
     _AdminSection.irisRepository => Icons.hub,
     _AdminSection.gifts => Icons.card_giftcard,
     _AdminSection.finance => Icons.payments,
+    _AdminSection.ratingsTips => Icons.star_outline_rounded,
     _AdminSection.businessAccounts => Icons.business_center,
     _AdminSection.healthPlus => Icons.health_and_safety,
     _AdminSection.support => Icons.support_agent,

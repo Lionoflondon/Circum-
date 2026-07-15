@@ -209,12 +209,6 @@ class MessageRider extends SendPackageEvent {
   MessageRider({required this.message});
 }
 
-class RateRider extends SendPackageEvent {
-  final double rating;
-
-  RateRider({required this.rating});
-}
-
 class DeleteCompletedDelivery extends SendPackageEvent {}
 
 class CancelRequest extends SendPackageEvent {}

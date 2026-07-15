@@ -98,6 +98,21 @@ test("wallet and payment ledgers remain backend-owned", () => {
   }
 });
 
+test("ratings, tips, reports, and appreciation events are backend-owned", () => {
+  for (const collection of [
+    "match /driverRatings/{ratingId}",
+    "match /deliveryTips/{tipId}",
+    "match /ratingReports/{reportId}",
+    "match /notificationEvents/{eventId}",
+  ]) {
+    const block = blockFor(collection);
+    assert.match(block, /allow create[^;]*if false|allow create, update, delete:\s*if false/);
+    assert.match(block, /allow delete:\s*if false|allow create, update, delete:\s*if false/);
+  }
+  const ratings = blockFor("match /driverRatings/{ratingId}");
+  assert.match(ratings, /allow update:\s*if false/);
+});
+
 test("sender payment records are explicit and backend-owned", () => {
   const block = blockFor("match /senderPaymentRecords/{paymentId}");
   assert.match(block, /allow read:[\s\S]*isFinanceAdmin\(\)/);
