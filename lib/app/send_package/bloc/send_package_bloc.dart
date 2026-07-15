@@ -26,6 +26,7 @@ import '../../../helper/chats_help.dart';
 import '../models/canonical_iris_result.dart';
 import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
+import '../models/delivery_restoration_coordinates.dart';
 import '../models/message.m.dart';
 import '../models/suggestions.m.dart';
 import '../repo/place_api.dart';
@@ -1193,26 +1194,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         double? price = data['price'];
         String? currency = data['currency'];
 
-        GeoPoint pickUpGeoPoint = data['pickupDetails']['position']['geopoint'];
-        GeoPoint dropoffGeoPoint =
-            data['pickupDetails']['position']['geopoint'];
-
-        PlaceCoordinate pickUpCoordinates = PlaceCoordinate(
-          lat: pickUpGeoPoint.latitude,
-          lng: pickUpGeoPoint.longitude,
-        );
-        PlaceCoordinate dropoffCoordinates = PlaceCoordinate(
-          lat: dropoffGeoPoint.latitude,
-          lng: dropoffGeoPoint.longitude,
-        );
+        final restoredCoordinates = restoreDeliveryCoordinates(data);
 
         final ContactInfo pickupDetails = ContactInfo.fromJson(
-          address: pickUpCoordinates,
+          address: restoredCoordinates.pickup,
           moreInformation: data['pickupDetails']['moreInformation'],
         );
 
         final ContactInfo dropoffDetails = ContactInfo.fromJson(
-          address: dropoffCoordinates,
+          address: restoredCoordinates.dropoff,
           moreInformation: data['dropoffDetails']['moreInformation'],
         );
 
