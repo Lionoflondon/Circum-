@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -26,6 +28,9 @@ class _GiftStoryViewState extends State<GiftStoryView>
   var _index = 0;
   var _paused = false;
   var _soundOn = true;
+  var _actionBusy = false;
+  var _thankYouSent = false;
+  var _storySaved = false;
 
   @override
   void initState() {
@@ -53,6 +58,7 @@ class _GiftStoryViewState extends State<GiftStoryView>
         if (status == AnimationStatus.completed) _next();
       });
     if (widget.draft.giftStoryUnlocked) _run();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadActionState());
   }
 
   @override
@@ -99,6 +105,92 @@ class _GiftStoryViewState extends State<GiftStoryView>
   void _replay() {
     setState(() => _index = 0);
     _run();
+  }
+
+  Map<String, String> get _actionPayload {
+    final giftRequestId = widget.draft.giftRequestId?.trim() ?? '';
+    final token = Uri.base.queryParameters['giftStoryToken']?.trim() ?? '';
+    return {
+      if (giftRequestId.isNotEmpty) 'giftRequestId': giftRequestId,
+      if (token.isNotEmpty) 'token': token,
+    };
+  }
+
+  Future<Map<String, dynamic>> _callAction(String name) async {
+    if (_actionPayload.isEmpty) {
+      throw StateError('Gift Story access could not be verified.');
+    }
+    final result = await FirebaseFunctions.instance
+        .httpsCallable(name)
+        .call<Map<String, dynamic>>(_actionPayload);
+    return Map<String, dynamic>.from(result.data);
+  }
+
+  Future<void> _loadActionState() async {
+    if (!mounted || !widget.draft.giftStoryUnlocked || _actionPayload.isEmpty) {
+      return;
+    }
+    try {
+      final data = await _callAction('getGiftStoryActionState');
+      if (!mounted) return;
+      setState(() {
+        _thankYouSent = data['thanked'] == true;
+        _storySaved = data['saved'] == true;
+      });
+    } catch (_) {
+      // The action buttons retain their own retry and error handling.
+    }
+  }
+
+  Future<void> _sendThankYou() async {
+    if (_actionBusy || _thankYouSent) return;
+    setState(() => _actionBusy = true);
+    try {
+      await _callAction('acknowledgeGiftStory');
+      if (!mounted) return;
+      setState(() => _thankYouSent = true);
+      _showConfirmation('Your thank you has been sent.');
+    } catch (error) {
+      if (mounted) _showConfirmation(_actionError(error));
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  Future<void> _keepStory() async {
+    if (_actionBusy || _storySaved) return;
+    if (FirebaseAuth.instance.currentUser == null) {
+      final authenticated = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _GiftStoryAuthDialog(),
+      );
+      if (authenticated != true || !mounted) return;
+    }
+    setState(() => _actionBusy = true);
+    try {
+      await _callAction('saveGiftStoryToVault');
+      if (!mounted) return;
+      setState(() => _storySaved = true);
+      _showConfirmation('This Gift Story is saved to your Vault.');
+    } catch (error) {
+      if (mounted) _showConfirmation(_actionError(error));
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  String _actionError(Object error) {
+    if (error is FirebaseFunctionsException && error.message != null) {
+      return error.message!;
+    }
+    return 'Something went wrong. Please try again.';
+  }
+
+  void _showConfirmation(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -214,6 +306,11 @@ class _GiftStoryViewState extends State<GiftStoryView>
                   slide: _slides[_index],
                   recipientName: widget.draft.recipientName ?? 'you',
                   onReplay: _replay,
+                  onThankYou: _sendThankYou,
+                  onKeepStory: _keepStory,
+                  thankYouSent: _thankYouSent,
+                  storySaved: _storySaved,
+                  actionBusy: _actionBusy,
                 ),
               ),
               if (_paused)
@@ -352,12 +449,22 @@ class _StorySlideView extends StatelessWidget {
   final GiftStorySlide slide;
   final String recipientName;
   final VoidCallback onReplay;
+  final VoidCallback onThankYou;
+  final VoidCallback onKeepStory;
+  final bool thankYouSent;
+  final bool storySaved;
+  final bool actionBusy;
 
   const _StorySlideView({
     super.key,
     required this.slide,
     required this.recipientName,
     required this.onReplay,
+    required this.onThankYou,
+    required this.onKeepStory,
+    required this.thankYouSent,
+    required this.storySaved,
+    required this.actionBusy,
   });
 
   @override
@@ -370,7 +477,14 @@ class _StorySlideView extends StatelessWidget {
       GiftStorySlideType.voiceNote => _VoiceNoteSlide(slide: slide),
       GiftStorySlideType.giftReveal => _RevealSlide(slide: slide),
       GiftStorySlideType.whyChosen => _TextSlide(slide: slide),
-      GiftStorySlideType.finale => _FinaleSlide(onReplay: onReplay),
+      GiftStorySlideType.finale => _FinaleSlide(
+          onReplay: onReplay,
+          onThankYou: onThankYou,
+          onKeepStory: onKeepStory,
+          thankYouSent: thankYouSent,
+          storySaved: storySaved,
+          actionBusy: actionBusy,
+        ),
     };
   }
 }
@@ -616,7 +730,20 @@ class _TextSlide extends StatelessWidget {
 
 class _FinaleSlide extends StatelessWidget {
   final VoidCallback onReplay;
-  const _FinaleSlide({required this.onReplay});
+  final VoidCallback onThankYou;
+  final VoidCallback onKeepStory;
+  final bool thankYouSent;
+  final bool storySaved;
+  final bool actionBusy;
+
+  const _FinaleSlide({
+    required this.onReplay,
+    required this.onThankYou,
+    required this.onKeepStory,
+    required this.thankYouSent,
+    required this.storySaved,
+    required this.actionBusy,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -632,13 +759,16 @@ class _FinaleSlide extends StatelessWidget {
             'Keep this story in the Circum app. Download Circum to save your gift story, replay it anytime, and keep thank-you messages in one place.',
           ),
           const SizedBox(height: 18),
-          _StoryButton(label: 'Tell sender thank you', onTap: () {}),
+          _StoryButton(
+            label: thankYouSent ? 'Thank you sent' : 'Tell sender thank you',
+            onTap: actionBusy || thankYouSent ? null : onThankYou,
+          ),
           const SizedBox(height: 10),
           _StoryButton(label: 'Replay story', onTap: onReplay, secondary: true),
           const SizedBox(height: 10),
           _StoryButton(
             label: 'Keep this story in the Circum app',
-            onTap: () {},
+            onTap: actionBusy || storySaved ? null : onKeepStory,
             secondary: true,
           ),
         ],
@@ -649,7 +779,7 @@ class _FinaleSlide extends StatelessWidget {
 
 class _StoryButton extends StatelessWidget {
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool secondary;
   const _StoryButton({
     required this.label,
@@ -669,6 +799,110 @@ class _StoryButton extends StatelessWidget {
       ),
       onPressed: onTap,
       child: Text(label),
+    );
+  }
+}
+
+class _GiftStoryAuthDialog extends StatefulWidget {
+  const _GiftStoryAuthDialog();
+
+  @override
+  State<_GiftStoryAuthDialog> createState() => _GiftStoryAuthDialogState();
+}
+
+class _GiftStoryAuthDialogState extends State<_GiftStoryAuthDialog> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  var _createAccount = false;
+  var _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (_createAccount) {
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _email.text.trim().toLowerCase(),
+          password: _password.text,
+        );
+      } else {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _email.text.trim().toLowerCase(),
+          password: _password.text,
+        );
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } on FirebaseAuthException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message ?? 'Authentication failed.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF10122A),
+      title: const Text('Keep this Gift Story'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Gift Stories are stored securely in your Circum account.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: const TextStyle(color: Color(0xFFFCA5A5))),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _busy
+              ? null
+              : () => setState(() => _createAccount = !_createAccount),
+          child: Text(_createAccount ? 'Sign In' : 'Create Account'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _submit,
+          child: Text(_busy
+              ? 'Please wait...'
+              : _createAccount
+                  ? 'Create Account'
+                  : 'Sign In'),
+        ),
+      ],
     );
   }
 }

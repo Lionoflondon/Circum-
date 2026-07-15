@@ -4,9 +4,9 @@ Generated Phase 3 baseline. Backend exports are preserved; legacy callables are 
 
 ## Callable Inventory
 
-- Exported: 139
-- Referenced by clients/tests: 75
-- Unused exports: 64
+- Exported: 147
+- Referenced by clients/tests: 79
+- Unused exports: 68
 - Missing referenced exports: 0
 - Legacy exports: StripePayEndpointIntentId, StripePayEndpointMethodId, calculateEarnings, endTrip, getAvaliableRequests, sendMessage, sendRiderUpdate
 

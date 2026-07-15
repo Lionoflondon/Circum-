@@ -4,6 +4,7 @@
 const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
 
 const STORY_RETENTION_HOURS = 48;
@@ -665,6 +666,177 @@ async function tokenRecord(db, token) {
   return {snap, data};
 }
 
+function giftStoryActionIds(giftId, recipientId = "") {
+  return {
+    thankYou: `${giftId}_recipient_thank_you`,
+    thankYouAudit: `gift_story_thank_you_${giftId}`,
+    thankYouNotification: `gift_thank_you_${giftId}`,
+    vault: `${recipientId}_${giftId}`,
+    vaultAudit: `gift_story_saved_${giftId}_${recipientId}`,
+  };
+}
+
+async function resolveGiftStoryActionAccess(db, data, context, {requireAccount = false} = {}) {
+  const suppliedToken = text(data && data.token);
+  const suppliedGiftId = text(data && data.giftRequestId);
+  const tokenAccess = suppliedToken ? await tokenRecord(db, suppliedToken) : null;
+  const giftId = tokenAccess ? text(tokenAccess.data.giftRequestId) : suppliedGiftId;
+  if (!giftId) throw new functions.https.HttpsError("invalid-argument", "Gift Story reference required.");
+  if (tokenAccess && suppliedGiftId && suppliedGiftId !== giftId) {
+    throw new functions.https.HttpsError("permission-denied", "Gift Story reference mismatch.");
+  }
+  const giftRef = db.collection("giftRequests").doc(giftId);
+  const giftSnap = await giftRef.get();
+  if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
+  const gift = giftSnap.data() || {};
+  if (!isComplete(gift.giftStatus || gift.status) && gift.giftStoryAdminOverride !== true) {
+    throw new functions.https.HttpsError("failed-precondition", "This Gift Story is not available yet.");
+  }
+  if (text(gift.giftStoryStatus) === "locked" || text(gift.giftStoryAccessStatus) === "revoked") {
+    throw new functions.https.HttpsError("failed-precondition", "This Gift Story is currently locked.");
+  }
+  const uid = context.auth && context.auth.uid ? context.auth.uid : "";
+  const email = normalizeEmail(context.auth && context.auth.token && context.auth.token.email);
+  const recipientIdentity = uid && uid === text(gift.recipientUserId) ||
+    email && email === normalizeEmail(gift.recipientEmail);
+  const recipientToken = Boolean(tokenAccess && text(tokenAccess.data.role || "recipient") === "recipient");
+  if (requireAccount && !uid) throw new functions.https.HttpsError("unauthenticated", "Sign in to keep this Gift Story.");
+  if (!recipientIdentity && !recipientToken) {
+    throw new functions.https.HttpsError("permission-denied", "Recipient Gift Story access required.");
+  }
+  return {giftId, giftRef, gift, uid, tokenAccess};
+}
+
+async function sendThankYouPush(giftId, gift, notificationId) {
+  const senderId = text(gift.senderId || gift.userId || gift.customerId);
+  if (!senderId) return;
+  let token = "";
+  for (const collection of ["users", "senders"]) {
+    const profile = await getFirestore().collection(collection).doc(senderId).get();
+    if (profile.exists) {
+      token = text(profile.data().fcmToken || profile.data().pushToken || profile.data().code);
+      if (token) break;
+    }
+  }
+  if (!token) return;
+  await getMessaging().send({
+    token,
+    notification: {
+      title: "A thank you for your gift",
+      body: "Your recipient sent a thank you for their Gift Story.",
+    },
+    data: {
+      type: "gift_story_thank_you",
+      notificationId,
+      giftId,
+      route: "gift",
+    },
+  }).catch((error) => console.error("Gift Story thank-you push failed", error));
+}
+
+async function acknowledgeGiftStory(db, access) {
+  const ids = giftStoryActionIds(access.giftId);
+  const eventRef = access.giftRef.collection("timeline").doc(ids.thankYou);
+  const auditRef = db.collection("auditLogs").doc(ids.thankYouAudit);
+  const notificationRef = db.collection("notifications").doc(ids.thankYouNotification);
+  const senderId = text(access.gift.senderId || access.gift.userId || access.gift.customerId);
+  const created = await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(eventRef);
+    const previouslyAcknowledged = access.gift.giftStoryThankYouSent === true ||
+      Boolean(access.gift.thankYouMessageCreatedAt);
+    if (existing.exists || previouslyAcknowledged) return false;
+    const event = {
+      type: "recipient_thank_you",
+      title: "Recipient sent a thank you",
+      giftRequestId: access.giftId,
+      actorRole: "recipient",
+      actorId: access.uid || null,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+    transaction.set(eventRef, event);
+    transaction.set(auditRef, {...event, source: "gift_story_action"});
+    if (senderId) {
+      transaction.set(notificationRef, {
+        recipientId: senderId,
+        recipientRole: "sender",
+        type: "gift_story_thank_you",
+        title: "A thank you for your gift",
+        body: "Your recipient sent a thank you for their Gift Story.",
+        message: "Your recipient sent a thank you for their Gift Story.",
+        category: "gifts",
+        giftId: access.giftId,
+        data: {giftId: access.giftId, destination: {route: "gift", giftId: access.giftId}},
+        destination: {route: "gift", giftId: access.giftId},
+        read: false,
+        archived: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    transaction.set(access.giftRef, {
+      giftStoryThankYouSent: true,
+      giftStoryThankYouSentAt: FieldValue.serverTimestamp(),
+      giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return true;
+  });
+  if (created && senderId) await sendThankYouPush(access.giftId, access.gift, ids.thankYouNotification);
+  return {ok: true, alreadySent: !created};
+}
+
+exports.acknowledgeGiftStory = functions.https.onCall(async (data, context) => {
+  const db = getFirestore();
+  return acknowledgeGiftStory(db, await resolveGiftStoryActionAccess(db, data, context));
+});
+
+exports.saveGiftStoryToVault = functions.https.onCall(async (data, context) => {
+  const db = getFirestore();
+  const access = await resolveGiftStoryActionAccess(db, data, context, {requireAccount: true});
+  const ids = giftStoryActionIds(access.giftId, access.uid);
+  const vaultRef = db.collection("giftStoryVaults").doc(access.uid).collection("stories").doc(access.giftId);
+  const auditRef = db.collection("auditLogs").doc(ids.vaultAudit);
+  const created = await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(vaultRef);
+    if (existing.exists) return false;
+    transaction.set(vaultRef, {
+      giftRequestId: access.giftId,
+      recipientId: access.uid,
+      title: text(access.gift.occasion || "Gift Story"),
+      status: "saved",
+      savedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(auditRef, {
+      type: "gift_story_saved",
+      giftRequestId: access.giftId,
+      actorId: access.uid,
+      actorRole: "recipient",
+      source: "gift_story_action",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(access.giftRef, {
+      giftStorySavedBy: FieldValue.arrayUnion(access.uid),
+      giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return true;
+  });
+  return {ok: true, alreadySaved: !created};
+});
+
+exports.getGiftStoryActionState = functions.https.onCall(async (data, context) => {
+  const db = getFirestore();
+  const access = await resolveGiftStoryActionAccess(db, data, context);
+  let saved = false;
+  if (access.uid) {
+    saved = (await db.collection("giftStoryVaults").doc(access.uid).collection("stories").doc(access.giftId).get()).exists;
+  }
+  return {
+    thanked: access.gift.giftStoryThankYouSent === true ||
+      Boolean(access.gift.thankYouMessageCreatedAt),
+    saved,
+    authenticated: Boolean(access.uid),
+  };
+});
+
 exports.resolveGiftStoryAccess = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const record = await tokenRecord(db, data && data.token);
@@ -910,28 +1082,14 @@ exports.submitGiftStoryThankYou = functions.https.onRequest(async (req, res) => 
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).json({ok: false});
   const token = text(req.body && req.body.token);
-  const thankYouMessage = text(req.body && req.body.thankYouMessage).slice(0, 1200);
-  if (!thankYouMessage) return res.status(400).json({ok: false, error: "missing_message"});
   const db = getFirestore();
-  const record = await tokenRecord(db, token);
-  if (!record) return res.status(403).json({ok: false, error: "invalid_token"});
-  const giftRef = db.collection("giftRequests").doc(record.data.giftRequestId);
-  const giftSnap = await giftRef.get();
-  if (!giftSnap.exists) return res.status(404).json({ok: false, error: "not_found"});
-  const gift = giftSnap.data() || {};
-  if (text(gift.giftStoryStatus) === "locked" || text(gift.giftStoryAccessStatus) === "revoked") {
-    return res.status(423).json({ok: false, error: "story_locked"});
+  try {
+    const access = await resolveGiftStoryActionAccess(db, {token}, {auth: null});
+    return res.status(200).json(await acknowledgeGiftStory(db, access));
+  } catch (error) {
+    const status = error.code === "not-found" ? 404 : error.code === "failed-precondition" ? 423 : 403;
+    return res.status(status).json({ok: false, error: error.code || "gift_story_action_failed"});
   }
-  if (!isComplete(gift.giftStatus || gift.status) && gift.giftStoryAdminOverride !== true) {
-    return res.status(423).json({ok: false, error: "story_locked"});
-  }
-  await giftRef.set({
-    thankYouMessage,
-    thankYouMessageSource: "recipient_web",
-    thankYouMessageCreatedAt: FieldValue.serverTimestamp(),
-    giftStoryUpdatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
-  return res.status(200).json({ok: true});
 });
 
 exports.onStoryNotificationWrite = functions.firestore.document("storyNotifications/{notificationId}").onUpdate(async (change) => {
@@ -1008,3 +1166,4 @@ module.exports.hasActiveGiftDispute = hasActiveGiftDispute;
 module.exports.revealPolicyAllowsMutualReveal = revealPolicyAllowsMutualReveal;
 module.exports.campaignRevealMatchDecision = campaignRevealMatchDecision;
 module.exports.buildRevealedCampaignMatchRecord = buildRevealedCampaignMatchRecord;
+module.exports.giftStoryActionIds = giftStoryActionIds;

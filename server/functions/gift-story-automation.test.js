@@ -24,6 +24,16 @@ test("secure story token hashes are deterministic and opaque", () => {
   assert.equal(hash.length, 64);
 });
 
+test("Gift Story action IDs are deterministic for idempotent writes", () => {
+  assert.deepEqual(story.giftStoryActionIds("gift-1", "recipient-1"), {
+    thankYou: "gift-1_recipient_thank_you",
+    thankYouAudit: "gift_story_thank_you_gift-1",
+    thankYouNotification: "gift_thank_you_gift-1",
+    vault: "recipient-1_gift-1",
+    vaultAudit: "gift_story_saved_gift-1_recipient-1",
+  });
+});
+
 test("safe story payload excludes private operational fields", () => {
   const safe = story.safeStory("gift-1", {
     occasion: "Birthday",

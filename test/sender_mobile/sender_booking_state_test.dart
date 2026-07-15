@@ -890,6 +890,36 @@ void main() {
       expect(campaignPayload['participantConsentRequired'], isTrue);
     });
 
+    test('Gift Story finale uses canonical idempotent backend actions', () {
+      final client = File(
+        'lib/app/sender_mobile/gift_story_view.dart',
+      ).readAsStringSync();
+      final backend = File(
+        'server/functions/gift-story-automation.js',
+      ).readAsStringSync();
+      final exports = File(
+        'server/functions/index.js',
+      ).readAsStringSync();
+
+      expect(client, contains("_callAction('acknowledgeGiftStory')"));
+      expect(client, contains("_callAction('saveGiftStoryToVault')"));
+      expect(client, contains("_callAction('getGiftStoryActionState')"));
+      expect(client, contains('Your thank you has been sent.'));
+      expect(client, contains('Gift Stories are stored securely'));
+      expect(client, contains('createUserWithEmailAndPassword'));
+      expect(client, contains('signInWithEmailAndPassword'));
+      expect(client, isNot(contains("onTap: () {}")));
+      expect(backend, contains('db.runTransaction'));
+      expect(backend, contains('giftStoryVaults'));
+      expect(backend, contains('recipient_thank_you'));
+      expect(backend, contains('gift_story_thank_you_'));
+      expect(backend, contains('gift_thank_you_'));
+      expect(backend, contains('thankYouMessageCreatedAt'));
+      expect(exports, contains('exports.acknowledgeGiftStory'));
+      expect(exports, contains('exports.saveGiftStoryToVault'));
+      expect(exports, contains('exports.getGiftStoryActionState'));
+    });
+
     test('Gift themes map only supported IRIS signals', () {
       expect(
         senderGiftIrisSignalsForThemes(
