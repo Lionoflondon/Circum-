@@ -71,7 +71,7 @@ void main() {
     expect(firebase, contains('"target": "admin"'));
     expect(firebase, contains('"public": "build/web_admin"'));
     expect(firebase, contains('"target": "public"'));
-    expect(firebase, contains('"public": "build/web_main"'));
+    expect(firebase, contains('"public": "build/web_platform"'));
     expect(firebase, contains('"target": "sender"'));
     expect(firebase, contains('"public": "build/web_sender"'));
     expect(firebase, contains('"target": "rider"'));
@@ -118,11 +118,9 @@ void main() {
     expect(File('lib/main_rider.dart').existsSync(), isFalse);
     expect(
       source,
-      contains(
-        "const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app'",
-      ),
+      contains("const _canonicalRiderWebUrl = '/rider'"),
     );
-    expect(source, contains('_openExternal(_canonicalRiderAppUrl)'));
+    expect(source, contains('_openExternal(_canonicalRiderWebUrl)'));
     expect(source, isNot(contains('class CircumRiderApp')));
     expect(source, isNot(contains('CircumAppSurface.riderWeb')));
     expect(entry, contains("import 'public_app.dart';"));
@@ -139,13 +137,35 @@ void main() {
     final deploy = File('scripts/deploy_main_web.sh').readAsStringSync();
 
     expect(source, contains('Earn as a Rider'));
-    expect(source, contains('https://circum-rider-2797c.web.app'));
+    expect(source, contains("const _canonicalRiderWebUrl = '/rider'"));
     expect(source, isNot(contains('web_sender_app.dart')));
     expect(source, isNot(contains('CircumSenderAppRoot')));
     expect(source, isNot(contains('CircumRiderAppRoot')));
     expect(source, isNot(contains('CircumAdminAppRoot')));
     expect(deploy, contains('--target lib/public_web/main_public.dart'));
+    expect(deploy, contains('--target lib/sender_web/main_sender_web.dart'));
+    expect(deploy, contains('--target lib/rider_web/main_rider_web.dart'));
     expect(deploy, contains('node scripts/guard_public_web_architecture.js'));
+  });
+
+  test('all web platform products have independent roots and route mounts', () {
+    final sender =
+        File('lib/sender_web/main_sender_web.dart').readAsStringSync();
+    final rider = File('lib/rider_web/main_rider_web.dart').readAsStringSync();
+    final public = File('lib/public_web/main_public.dart').readAsStringSync();
+    final firebase = File('firebase.json').readAsStringSync();
+
+    expect(public, contains('CircumPublicWebsiteApp'));
+    expect(sender, contains('WebSenderApp'));
+    expect(rider, contains('CircumRiderWebApp'));
+    expect(public, isNot(contains('WebSenderApp')));
+    expect(public, isNot(contains('CircumRiderWebApp')));
+    expect(sender, isNot(contains('CircumRiderWebApp')));
+    expect(rider, isNot(contains('WebSenderApp')));
+    expect(firebase, contains('"source": "/send/**"'));
+    expect(firebase, contains('"destination": "/send/index.html"'));
+    expect(firebase, contains('"source": "/rider/**"'));
+    expect(firebase, contains('"destination": "/rider/index.html"'));
   });
 
   test('generic Hosting deployment entry points are absent', () {

@@ -28,7 +28,7 @@ const CONFIGS = Object.freeze({
     buildIdentity: 'CIRCUM_BUILD_ID=circum-web',
     targetAlias: 'public',
     siteId: 'circum-2797c',
-    outputDirectory: 'build/web_main',
+    outputDirectory: 'build/web_platform',
     requiredBundleMarkers: ['Send anything across town'],
     forbiddenBundleMarkers: [
       'CIRCUM_BUILD_ID=admin',

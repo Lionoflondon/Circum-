@@ -30,7 +30,7 @@ function fixture() {
   fs.writeFileSync(path.join(root, 'firebase.json'), JSON.stringify({
     hosting: [
       { target: 'admin', public: 'build/web_admin' },
-      { target: 'public', public: 'build/web_main' },
+      { target: 'public', public: 'build/web_platform' },
       { target: 'sender', public: 'build/web_sender' },
       { target: 'rider', public: 'build/web_rider' },
     ],

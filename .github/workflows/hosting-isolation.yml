@@ -8,6 +8,9 @@ on:
       - 'lib/main.dart'
       - 'lib/main_admin.dart'
       - 'lib/web_sender_app.dart'
+      - 'lib/public_web/**'
+      - 'lib/sender_web/**'
+      - 'lib/rider_web/**'
       - 'scripts/deploy_admin_web.sh'
       - 'scripts/deploy_main_web.sh'
       - 'scripts/hosting_manifest.js'
@@ -36,4 +39,6 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter test test/hosting_isolation_test.dart
+      - run: flutter test test/product_isolation_test.dart
       - run: node --test test/hosting_manifest_test.js
+      - run: node scripts/guard_public_web_architecture.js

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, 'build', 'web_main');
+const output = path.join(root, 'build', 'web_platform');
 const indexPath = path.join(output, 'index.html');
 const bootstrapPath = path.join(output, 'flutter_bootstrap.js');
 const workerPath = path.join(output, 'flutter_service_worker.js');

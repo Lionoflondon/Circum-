@@ -4,65 +4,65 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('Sender/Public product isolation', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
-    final firebase = File('firebase.json').readAsStringSync();
+  group('canonical Circum web platform isolation', () {
+    final publicEntry =
+        File('lib/public_web/main_public.dart').readAsStringSync();
+    final publicApp = File('lib/public_web/public_app.dart').readAsStringSync();
+    final senderEntry =
+        File('lib/sender_web/main_sender_web.dart').readAsStringSync();
+    final riderEntry =
+        File('lib/rider_web/main_rider_web.dart').readAsStringSync();
+    final firebase = jsonDecode(File('firebase.json').readAsStringSync())
+        as Map<String, dynamic>;
 
-    test('direct Rider path stays inside public website routing', () {
-      final riderRoute = source.substring(
-        source.indexOf("if (path == '/rider')"),
-        source.indexOf("if (path == '/gifts')"),
-      );
-
-      expect(riderRoute, contains('surface: CircumAppSurface.publicWebsite'));
-      expect(riderRoute, isNot(contains('CircumAppSurface.riderApp')));
-      expect(riderRoute, isNot(contains('circum-rider-2797c.web.app')));
+    test('each browser product boots its own root', () {
+      expect(publicEntry, contains('CircumPublicWebsiteApp'));
+      expect(senderEntry, contains('WebSenderApp'));
+      expect(riderEntry, contains('CircumRiderWebApp'));
+      expect(publicEntry, isNot(contains('WebSenderApp')));
+      expect(publicEntry, isNot(contains('CircumRiderWebApp')));
+      expect(senderEntry, isNot(contains('CircumRiderWebApp')));
+      expect(riderEntry, isNot(contains('WebSenderApp')));
     });
 
-    test('legacy Rider app aliases do not select Rider UI', () {
-      final riderAliases = source.substring(
-        source.indexOf("'rider' ||"),
-        source.indexOf("'gifts' =>"),
-      );
-
-      expect(riderAliases, contains('surface: CircumAppSurface.publicWebsite'));
-      expect(riderAliases, isNot(contains('CircumAppSurface.riderApp')));
-      expect(riderAliases, isNot(contains('CircumRiderAppRoot')));
+    test('public navigation enters route-mounted applications', () {
+      expect(publicApp, contains("const _canonicalSenderAppUrl = '/send'"));
+      expect(publicApp, contains("const _canonicalRiderWebUrl = '/rider'"));
+      expect(publicApp, contains('_openExternal(_canonicalSenderAppUrl)'));
+      expect(publicApp, contains('_openExternal(_canonicalRiderWebUrl)'));
     });
 
-    test('hosting config does not merge Rider output into public or Sender',
+    test('public hosting routes Sender and Rider Web bundles independently',
         () {
-      final config = jsonDecode(firebase) as Map<String, dynamic>;
-      final hosting = (config['hosting'] as List).cast<Map<String, dynamic>>();
-      for (final target in const ['public', 'sender']) {
-        final site = hosting.singleWhere((item) => item['target'] == target);
-        final redirects =
-            (site['redirects'] as List?)?.cast<Map<String, dynamic>>() ??
-                const <Map<String, dynamic>>[];
-        expect(
-          redirects.any((redirect) =>
-              '${redirect['source']}'.contains('rider') ||
-              '${redirect['destination']}'.contains('circum-rider')),
-          isFalse,
-        );
-      }
+      final hosting =
+          (firebase['hosting'] as List).cast<Map<String, dynamic>>();
+      final public = hosting.singleWhere((item) => item['target'] == 'public');
+      final rewrites =
+          (public['rewrites'] as List).cast<Map<String, dynamic>>();
+      expect(public['public'], 'build/web_platform');
+      expect(
+        rewrites.any((route) =>
+            route['source'] == '/send/**' &&
+            route['destination'] == '/send/index.html'),
+        isTrue,
+      );
+      expect(
+        rewrites.any((route) =>
+            route['source'] == '/rider/**' &&
+            route['destination'] == '/rider/index.html'),
+        isTrue,
+      );
     });
 
-    test('Sender/Public exposes only an external Rider application entry', () {
+    test('standalone Rider App hosting remains isolated', () {
+      final hosting =
+          (firebase['hosting'] as List).cast<Map<String, dynamic>>();
+      final rider = hosting.singleWhere((item) => item['target'] == 'rider');
+      expect(rider['public'], 'build/web_rider');
       expect(
-        source,
-        contains(
-          "const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app'",
-        ),
+        rider['predeploy'],
+        contains('node scripts/block_rider_deploy_from_circum.js'),
       );
-      expect(source,
-          contains('html.window.location.assign(_canonicalRiderAppUrl)'));
-      expect(source, contains("path == '/rider'"));
-      expect(source, isNot(contains('CircumRiderAppRoot')));
-      expect(source, isNot(contains('class CircumRiderApp')));
-      expect(source, isNot(contains('CircumAppSurface.riderWeb')));
-      expect(source, isNot(contains('CircumAppSurface.riderApp')));
-      expect(source, isNot(contains('CircumAppSurface.riderStripeConnect')));
     });
   });
 }

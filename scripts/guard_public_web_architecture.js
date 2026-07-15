@@ -3,6 +3,8 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const publicRoot = path.join(root, 'lib', 'public_web');
+const senderRoot = path.join(root, 'lib', 'sender_web');
+const riderWebRoot = path.join(root, 'lib', 'rider_web');
 const files = fs
   .readdirSync(publicRoot, { recursive: true })
   .filter((entry) => entry.endsWith('.dart'));
@@ -66,6 +68,30 @@ if (fs.existsSync(path.join(root, 'lib', 'main_rider.dart'))) {
   violations.push('Circum repository contains a Rider application entry');
 }
 
+function assertEntryBoundary(entry, forbidden) {
+  const source = fs.readFileSync(path.join(root, entry), 'utf8');
+  for (const marker of forbidden) {
+    if (source.includes(marker)) violations.push(`${entry} references ${marker}`);
+  }
+}
+
+assertEntryBoundary('lib/public_web/main_public.dart', [
+  'sender_web',
+  'rider_web',
+  'web_sender_app.dart',
+]);
+assertEntryBoundary('lib/sender_web/main_sender_web.dart', [
+  'public_web',
+  'rider_web',
+  'CircumRiderWebApp',
+]);
+assertEntryBoundary('lib/rider_web/main_rider_web.dart', [
+  'public_web',
+  'sender_web',
+  'WebSenderApp',
+  'CircumAdminHostingApp',
+]);
+
 const riderRoot = path.resolve(root, '..', 'Circum-Rider');
 if (fs.existsSync(path.join(riderRoot, 'lib'))) {
   const riderFiles = [];
@@ -91,6 +117,16 @@ const deploy = fs.readFileSync(path.join(root, 'scripts', 'deploy_main_web.sh'),
 if (!deploy.includes('--target lib/public_web/main_public.dart')) {
   violations.push('deploy_main_web.sh does not build the dedicated public entry');
 }
+for (const expected of [
+  '--target lib/sender_web/main_sender_web.dart',
+  '--target lib/rider_web/main_rider_web.dart',
+  '--base-href /send/',
+  '--base-href /rider/',
+]) {
+  if (!deploy.includes(expected)) {
+    violations.push(`deploy_main_web.sh is missing ${expected}`);
+  }
+}
 if (!deploy.includes('--only hosting:public')) {
   violations.push('deploy_main_web.sh is not restricted to hosting:public');
 }
@@ -112,10 +148,18 @@ assertBundleBoundary('build/web_sender/main.dart.js', [
   'CircumPublicAppRoot',
   'public-landing',
 ]);
-assertBundleBoundary('build/web_main/main.dart.js', [
+assertBundleBoundary('build/web_platform/main.dart.js', [
   'CircumSenderAppRoot',
   'CircumRiderAppRoot',
   'CircumAdminAppRoot',
+]);
+assertBundleBoundary('build/web_platform/send/main.dart.js', [
+  'Earn as a Rider',
+  'rider-web-root',
+]);
+assertBundleBoundary('build/web_platform/rider/main.dart.js', [
+  'Send anything across town',
+  'sender-root',
 ]);
 
 if (violations.length) {

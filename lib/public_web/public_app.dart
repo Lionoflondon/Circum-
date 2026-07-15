@@ -21,8 +21,8 @@ import 'package:uuid/uuid.dart';
 
 import '../firebase_options.dart';
 
-const _canonicalSenderAppUrl = 'https://circum-app-2797c.web.app';
-const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app';
+const _canonicalSenderAppUrl = '/send';
+const _canonicalRiderWebUrl = '/rider';
 
 class CircumPublicWebsiteApp extends StatefulWidget {
   const CircumPublicWebsiteApp({super.key});
@@ -43,7 +43,7 @@ class _CircumPublicWebsiteAppState extends State<CircumPublicWebsiteApp> {
     _assertPublicSurfaceIntegrity();
     if (_isRiderEntry(Uri.base)) {
       WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _openExternal(_canonicalRiderAppUrl),
+        (_) => _openExternal(_canonicalRiderWebUrl),
       );
     }
   }
@@ -83,7 +83,7 @@ class _CircumPublicWebsiteAppState extends State<CircumPublicWebsiteApp> {
                   onStart: () => _openExternal(_canonicalSenderAppUrl),
                   onLogin: () => _openAuth(_PublicAuthMode.login),
                   onSignup: () => _openAuth(_PublicAuthMode.signup),
-                  onRider: () => _openExternal(_canonicalRiderAppUrl),
+                  onRider: () => _openExternal(_canonicalRiderWebUrl),
                   onHealthPlus: () =>
                       _openExternal('$_canonicalSenderAppUrl/health-plus'),
                   onGifts: () => _openRoute(CircumPublicRoute.gifts),
@@ -114,7 +114,7 @@ class _CircumPublicWebsiteAppState extends State<CircumPublicWebsiteApp> {
 
 void _assertPublicSurfaceIntegrity() {
   assert(() {
-    if (_canonicalSenderAppUrl == _canonicalRiderAppUrl) {
+    if (_canonicalSenderAppUrl == _canonicalRiderWebUrl) {
       throw StateError(
         'Public surface boundary violation: application hosts overlap.',
       );
