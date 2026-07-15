@@ -117,5 +117,21 @@ void main() {
       expect(sender, contains('_SenderStep.profile'));
       expect(sender, contains("path.startsWith('/send/')"));
     });
+
+    test('Sender hero retains its canonical feature-card composition', () {
+      final sender = File('lib/web_sender_app.dart').readAsStringSync();
+      final dashboard = sender.substring(
+        sender.indexOf('class _SenderDashboardStep'),
+        sender.indexOf('const _senderGlyphHome'),
+      );
+
+      expect('_SenderPreviewServiceChip('.allMatches(dashboard), hasLength(3));
+      expect(dashboard, contains("title: 'Health+'"));
+      expect(dashboard, contains("title: 'Business'"));
+      expect(dashboard, contains("title: 'Gifts'"));
+      expect(dashboard, contains('onTap: onHealthPlus'));
+      expect(dashboard, contains('onTap: onBusiness'));
+      expect(dashboard, contains('onTap: onGifts'));
+    });
   });
 }

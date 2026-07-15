@@ -32056,27 +32056,44 @@ class _SenderDashboardStep extends StatelessWidget {
                       icon: const Icon(Icons.add_box_outlined),
                       label: const Text('Send a parcel'),
                     ),
-                    OutlinedButton.icon(
-                      onPressed: onHealthPlus,
-                      icon: const Icon(Icons.local_pharmacy_outlined),
-                      label: const Text('Health+'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onGifts,
-                      icon: const Icon(Icons.card_giftcard_outlined),
-                      label: const Text('Gifts'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onBusiness,
-                      icon: const Icon(Icons.business_center_outlined),
-                      label: Text(businessAccounts.isEmpty
-                          ? 'Business · optional'
-                          : 'Business'),
-                    ),
                   ],
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _SenderPreviewServiceChip(
+                  colors: colors,
+                  glyph: _senderGlyphHealth,
+                  title: 'Health+',
+                  accent: const Color(0xff4ade80),
+                  onTap: onHealthPlus,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: _SenderPreviewServiceChip(
+                  colors: colors,
+                  glyph: _senderGlyphBusiness,
+                  title: 'Business',
+                  accent: colors.adminAccent,
+                  onTap: onBusiness,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: _SenderPreviewServiceChip(
+                  colors: colors,
+                  glyph: _senderGlyphGift,
+                  title: 'Gifts',
+                  accent: const Color(0xffa78bfa),
+                  onTap: onGifts,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           GridView.count(
