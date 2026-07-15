@@ -2566,6 +2566,60 @@ void main() {
       expect(source, contains('Collection countdown is live.'));
       expect(source, contains('No-show review'));
       expect(source, isNot(contains('Timer.periodic')));
+      expect(
+        source,
+        isNot(
+          contains('(remainingSeconds != null && remainingSeconds == 0)'),
+        ),
+      );
+      expect(
+        source,
+        isNot(contains('remainingSeconds != null && remainingSeconds <= 60')),
+      );
+      expect(source, contains("waiting['noShowAvailable'] == true"));
+      expect(source, contains("waiting['waitingChargesActive'] == true"));
+      expect(source, contains("waiting['finalMinute'] == true"));
+    });
+
+    test('expired visual countdown does not infer no-show eligibility', () {
+      final snapshot = SenderWaitingSnapshot.fromEngine(
+        SendPackageState(
+          deliveryRequestStatus: 'waiting',
+          activeDeliveryData: {
+            'status': 'waiting',
+            'waiting': {
+              'active': true,
+              'freeWaitEndsAt': DateTime.now()
+                  .subtract(const Duration(minutes: 1))
+                  .millisecondsSinceEpoch,
+            },
+          },
+        ),
+      );
+
+      expect(snapshot.visible, isTrue);
+      expect(snapshot.countdownLabel, '00:00');
+      expect(snapshot.noShowAvailable, isFalse);
+      expect(snapshot.stateLabel, 'Waiting for collection');
+    });
+
+    test('backend no-show eligibility controls the waiting card', () {
+      final snapshot = SenderWaitingSnapshot.fromEngine(
+        SendPackageState(
+          deliveryRequestStatus: 'waiting',
+          activeDeliveryData: {
+            'status': 'waiting',
+            'waiting': {
+              'active': true,
+              'noShowAvailable': true,
+            },
+          },
+        ),
+      );
+
+      expect(snapshot.noShowAvailable, isTrue);
+      expect(snapshot.countdownLabel, 'No-show eligible');
+      expect(snapshot.stateLabel, 'No-show review');
     });
 
     test('sender tracking keeps Vanguard collection PIN visible safely', () {

@@ -470,19 +470,17 @@ String? senderVanguardCollectionPinFor(SendPackageState engine) {
 
 String _senderWaitingStateLabel({
   required String status,
-  required int? remainingSeconds,
   required bool noShowAvailable,
-  required String? chargeLabel,
+  required bool waitingChargesActive,
+  required bool finalMinute,
   required bool customerResponded,
 }) {
   if (status == 'sender_no_show_pickup' || noShowAvailable) {
     return 'No-show review';
   }
-  if (chargeLabel != null && remainingSeconds == 0) {
-    return 'Waiting charges active';
-  }
+  if (waitingChargesActive) return 'Waiting charges active';
   if (customerResponded) return 'Waiting for collection';
-  if (remainingSeconds != null && remainingSeconds <= 60) return 'Final minute';
+  if (finalMinute) return 'Final minute';
   if (status == 'waiting' || status == 'waiting_for_collection') {
     return 'Waiting for collection';
   }
@@ -1468,16 +1466,22 @@ class SenderWaitingSnapshot {
     final noShowAvailable = status == 'no_show_review' ||
         status == 'sender_no_show_pickup' ||
         data['noShowAvailable'] == true ||
-        waiting['noShowAvailable'] == true ||
-        (remainingSeconds != null && remainingSeconds == 0);
+        waiting['noShowAvailable'] == true;
+    final waitingChargesActive = status == 'waiting_charge_active' ||
+        status == 'waiting_charges_active' ||
+        data['waitingChargesActive'] == true ||
+        waiting['waitingChargesActive'] == true;
+    final finalMinute = status == 'final_minute' ||
+        data['waitingFinalMinute'] == true ||
+        waiting['finalMinute'] == true;
     final charge = _customerWaitingCharge(data, waiting);
     final chargeLabel =
         charge == null ? null : _moneyText(charge.amount, charge.currency);
     final stateLabel = _senderWaitingStateLabel(
       status: status,
-      remainingSeconds: remainingSeconds,
       noShowAvailable: noShowAvailable,
-      chargeLabel: chargeLabel,
+      waitingChargesActive: waitingChargesActive,
+      finalMinute: finalMinute,
       customerResponded: customerResponded,
     );
     final countdown = noShowAvailable
