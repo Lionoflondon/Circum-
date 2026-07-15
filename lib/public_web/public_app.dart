@@ -180,6 +180,7 @@ class _CircumPublicWebsiteAppState extends State<CircumPublicWebsiteApp> {
           section: CircumWebSection.home,
           darkMode: _darkMode,
           onToggleTheme: _toggleTheme,
+          showSectionNavigation: false,
           headerActions: !_authOpen && _route == CircumPublicRoute.landing
               ? _PublicHeaderServicePills(
                   colors: colors,

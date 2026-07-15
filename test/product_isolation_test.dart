@@ -156,6 +156,9 @@ void main() {
       expect(pills, contains("label: 'Health+'"));
       expect(pills, contains("label: 'Business'"));
       expect(pills, contains("label: 'Gifts'"));
+      expect(publicApp, contains('showSectionNavigation: false'));
+      expect(shell, contains('if (!mobile && showSectionNavigation)'));
+      expect(shell, contains('if (mobile && showSectionNavigation)'));
     });
   });
 }

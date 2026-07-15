@@ -25,6 +25,7 @@ class CircumWebShell extends StatelessWidget {
     required this.child,
     this.locationLabel,
     this.headerActions,
+    this.showSectionNavigation = true,
   });
 
   final CircumWebSection section;
@@ -33,6 +34,7 @@ class CircumWebShell extends StatelessWidget {
   final Widget child;
   final String? locationLabel;
   final Widget? headerActions;
+  final bool showSectionNavigation;
 
   static const _blue = Color(0xFF3B82F6);
 
@@ -95,7 +97,7 @@ class CircumWebShell extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 18),
-                  if (!mobile) ...[
+                  if (!mobile && showSectionNavigation) ...[
                     _ShellNavItem(
                       label: 'Home',
                       selected: section == CircumWebSection.home,
@@ -114,7 +116,7 @@ class CircumWebShell extends StatelessWidget {
                       onTap: () => _open('/rider'),
                       textColor: text,
                     ),
-                  ] else ...[
+                  ] else if (showSectionNavigation) ...[
                     Container(width: 1, height: 22, color: border),
                     const SizedBox(width: 12),
                     Flexible(
@@ -177,7 +179,7 @@ class CircumWebShell extends StatelessWidget {
                 ),
               ),
             ),
-            if (mobile)
+            if (mobile && showSectionNavigation)
               Container(
                 height: 68,
                 decoration: BoxDecoration(
