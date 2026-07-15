@@ -135,29 +135,27 @@ void main() {
       expect('prominent: true'.allMatches(dashboard), hasLength(3));
     });
 
-    test('Sender Web exposes permanent service pills beside notifications', () {
+    test('public homepage exposes service pills beside notifications', () {
       final sender = File('lib/web_sender_app.dart').readAsStringSync();
-      final pills = sender.substring(
-        sender.indexOf('class _SenderHeaderServicePills'),
-        sender.indexOf('class _SenderDashboardStep'),
+      final pills = publicApp.substring(
+        publicApp.indexOf('class _PublicHeaderServicePills'),
+        publicApp.indexOf('class _CircumPublicWebsiteAppState'),
       );
       final shell =
           File('lib/shared_web/circum_web_shell.dart').readAsStringSync();
 
-      expect(sender, contains('headerActions: widget.useCanonicalSenderWeb'));
-      expect(sender, contains('_SenderHeaderServicePills(colors: colors)'));
+      expect(publicApp, contains('headerActions: !_authOpen'));
+      expect(publicApp, contains('_route == CircumPublicRoute.landing'));
+      expect(publicApp, contains('_PublicHeaderServicePills('));
+      expect(sender, isNot(contains('_SenderHeaderServicePills')));
       expect(shell, contains('final Widget? headerActions;'));
       expect(shell.indexOf('child: headerActions!'),
           lessThan(shell.indexOf("tooltip: 'Notifications'")));
-      expect('_SenderServicePill('.allMatches(pills), hasLength(5));
+      expect('_PublicHeaderServicePill('.allMatches(pills), hasLength(5));
       expect(pills, contains("label: 'Send a Parcel'"));
       expect(pills, contains("label: 'Health+'"));
       expect(pills, contains("label: 'Business'"));
       expect(pills, contains("label: 'Gifts'"));
-      expect(pills, contains("_open('/send/send')"));
-      expect(pills, contains("_open('/send/health-plus')"));
-      expect(pills, contains("_open('/send/business')"));
-      expect(pills, contains("_open('/send?sender_mobile_gifts=1')"));
     });
   });
 }
