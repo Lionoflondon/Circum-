@@ -24312,6 +24312,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               _step != _SenderStep.healthPlus;
           return Column(
             children: [
+              _SenderServicePills(
+                colors: colors,
+                onSendParcel: () => _selectSenderNavStep(_SenderStep.details),
+                onHealthPlus: () =>
+                    _selectSenderNavStep(_SenderStep.healthPlus),
+                onBusiness: () => _selectSenderNavStep(_SenderStep.business),
+                onGifts: widget.onOpenGifts,
+              ),
               Expanded(
                 child: desktop
                     ? _DesktopPortalLayout(
@@ -31984,6 +31992,124 @@ class _IrisPill extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SenderServicePills extends StatelessWidget {
+  const _SenderServicePills({
+    required this.colors,
+    required this.onSendParcel,
+    required this.onHealthPlus,
+    required this.onBusiness,
+    required this.onGifts,
+  });
+
+  final _CircumColors colors;
+  final VoidCallback onSendParcel;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+  final VoidCallback onGifts;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+      decoration: BoxDecoration(
+        color: colors.appBackground.withValues(alpha: .82),
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _SenderServicePill(
+            colors: colors,
+            glyph: _senderGlyphTruck,
+            label: 'Send a Parcel',
+            accent: colors.adminAccent,
+            onTap: onSendParcel,
+          ),
+          _SenderServicePill(
+            colors: colors,
+            glyph: _senderGlyphHealth,
+            label: 'Health+',
+            accent: const Color(0xff4ade80),
+            onTap: onHealthPlus,
+          ),
+          _SenderServicePill(
+            colors: colors,
+            glyph: _senderGlyphBusiness,
+            label: 'Business',
+            accent: colors.adminAccent,
+            onTap: onBusiness,
+          ),
+          _SenderServicePill(
+            colors: colors,
+            glyph: _senderGlyphGift,
+            label: 'Gifts',
+            accent: const Color(0xffa78bfa),
+            onTap: onGifts,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SenderServicePill extends StatelessWidget {
+  const _SenderServicePill({
+    required this.colors,
+    required this.glyph,
+    required this.label,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final _CircumColors colors;
+  final String glyph;
+  final String label;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 260),
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
+            color: colors.panel.withValues(alpha: .88),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: colors.border),
+            boxShadow: const [
+              BoxShadow(color: Color(0x26000000), blurRadius: 14),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SenderLineGlyph(glyph, color: accent, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

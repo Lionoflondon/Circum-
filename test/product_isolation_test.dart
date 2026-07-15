@@ -134,5 +134,28 @@ void main() {
       expect(dashboard, contains('onTap: onGifts'));
       expect('prominent: true'.allMatches(dashboard), hasLength(3));
     });
+
+    test('Sender Web exposes permanent service pills above the dashboard', () {
+      final sender = File('lib/web_sender_app.dart').readAsStringSync();
+      final portal = sender.substring(
+        sender.indexOf('class _CustomerPortalState'),
+        sender.indexOf('class _SenderDashboardStep'),
+      );
+      final pills = sender.substring(
+        sender.indexOf('class _SenderServicePills'),
+        sender.indexOf('class _SenderDashboardStep'),
+      );
+
+      expect(portal, contains('_SenderServicePills('));
+      expect(portal, contains('_selectSenderNavStep(_SenderStep.details)'));
+      expect(portal, contains('_selectSenderNavStep(_SenderStep.healthPlus)'));
+      expect(portal, contains('_selectSenderNavStep(_SenderStep.business)'));
+      expect(portal, contains('onGifts: widget.onOpenGifts'));
+      expect('_SenderServicePill('.allMatches(pills), hasLength(5));
+      expect(pills, contains("label: 'Send a Parcel'"));
+      expect(pills, contains("label: 'Health+'"));
+      expect(pills, contains("label: 'Business'"));
+      expect(pills, contains("label: 'Gifts'"));
+    });
   });
 }
