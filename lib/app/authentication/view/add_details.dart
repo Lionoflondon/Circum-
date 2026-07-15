@@ -1,10 +1,8 @@
-import 'package:circum/app/authentication/view/enable_location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
-import '../../bottom_nav/view/index.dart';
 import '../bloc/auth_bloc.dart';
 
 class AddDetailsView extends StatelessWidget {
@@ -19,13 +17,6 @@ class AddDetailsView extends StatelessWidget {
               if (state.status == Status.success) {
                 print('Ssuccess');
                 context.read<AuthBloc>().add(ResetStatus());
-
-                // Navigator.popUntil(context, (route) => route.isFirst);
-
-                // Navigator.push(
-                //   context,
-                //   MaterialPageRoute(builder: (_) => const EnableLocation()),
-                // );
               }
             },
             child: WillPopScope(

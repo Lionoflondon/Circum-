@@ -453,41 +453,6 @@ class _GiftInlineTextField extends StatelessWidget {
   }
 }
 
-class GiftJourneyPlaceholderView extends StatelessWidget {
-  final String message;
-
-  const GiftJourneyPlaceholderView({super.key, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _GiftJourneyTokens.bg,
-      body: Stack(
-        children: [
-          const _GiftJourneyAmbient(),
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.dmSerifDisplay(
-                    color: Colors.white,
-                    fontSize: 32,
-                    height: 1.08,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class GiftJourneyWidgets {
   static Widget scaffold({
     required int activeStep,

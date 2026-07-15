@@ -5,7 +5,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/authentication/view/index_page.dart';
-import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/onboarding/view/onboarding.dart';
 import 'app/rider_jobs/rider_home_screen.dart';
@@ -25,7 +24,6 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   late final AuthBloc _authBloc;
-  late final NavbarBloc _navbarBloc;
   late final HistoryBloc _historyBloc;
   late final SupportBloc _supportBloc;
 
@@ -33,7 +31,6 @@ class _AppState extends State<App> {
   void initState() {
     super.initState();
     _authBloc = AuthBloc()..add(SortSessionState());
-    _navbarBloc = NavbarBloc();
     _historyBloc = HistoryBloc();
     _supportBloc = SupportBloc();
   }
@@ -41,7 +38,6 @@ class _AppState extends State<App> {
   @override
   void dispose() {
     _authBloc.close();
-    _navbarBloc.close();
     _historyBloc.close();
     _supportBloc.close();
     sendPackageBloc.close();
@@ -54,7 +50,6 @@ class _AppState extends State<App> {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>.value(value: _authBloc),
-        BlocProvider<NavbarBloc>.value(value: _navbarBloc),
         BlocProvider<SendPackageBloc>.value(value: sendPackageBloc),
         BlocProvider<AccountBloc>.value(value: accountBloc),
         BlocProvider<HistoryBloc>.value(value: _historyBloc),

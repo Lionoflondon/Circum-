@@ -2,18 +2,14 @@
 
 import 'dart:async';
 
-import 'package:circum/app/bottom_nav/view/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:pinput/pinput.dart';
 
-import '../../../app.dart';
 import '../../../utils/app_state/app_state.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
-import 'add_details.dart';
 
 class EnterOTPView extends StatefulWidget {
   final bool deleteAccount;
@@ -81,10 +77,6 @@ class EnterOTPViewState extends State<EnterOTPView> {
                 context.read<AuthBloc>().add(ResetStatus());
                 // context.read<AuthBloc>().add(StartCountDown());
                 Navigator.popUntil(context, (route) => route.isFirst);
-                // Navigator.pushReplacement(
-                //   context,
-                //   MaterialPageRoute(builder: (_) => AppNavView()),
-                // );
               }
 
               if (state.authenticatedStatus ==
@@ -97,9 +89,6 @@ class EnterOTPViewState extends State<EnterOTPView> {
                   widget.deleteAccount == true) {
                 print('signing out');
                 Navigator.popUntil(context, (route) => route.isFirst);
-                // await Future.delayed(const Duration(milliseconds: 500));
-                // Navigator.pushReplacement(
-                //     context, MaterialPageRoute(builder: (_) => App()));
               }
             },
             child: SizedBox(

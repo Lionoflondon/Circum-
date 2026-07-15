@@ -40,7 +40,8 @@ void main() {
 
     final senderWebSource = File('lib/web_sender_app.dart').readAsStringSync();
     expect(senderWebSource, isNot(contains('enum _PublicAuthMode')));
-    expect(senderWebSource, isNot(contains('Welcome to Circum')));
+    expect(senderWebSource,
+        isNot(contains('Sign in to continue or create a new account.')));
     expect(senderWebSource, isNot(contains('CircumPublicAppRoot')));
     expect(senderWebSource, isNot(contains('class _LandingPage')));
   });

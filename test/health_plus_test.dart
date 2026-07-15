@@ -369,12 +369,12 @@ void main() {
       expect(backend, contains('billingSource'));
     });
 
-    test('Health+ tab renders the guided status view', () {
-      final source =
-          File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
+    test('canonical Sender dashboard opens the Health+ experience', () {
+      final source = File('lib/app/sender_mobile/sender_mobile_home.dart')
+          .readAsStringSync();
 
-      expect(source, contains('const HealthStatusView()'));
-      expect(source, isNot(contains('const HealthPlusView(),')));
+      expect(source, contains('onOpenHealth:'));
+      expect(source, contains('const HealthPlusView()'));
     });
   });
 }

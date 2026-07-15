@@ -4,7 +4,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
-import '../../bottom_nav/view/app_nav.dart';
 import '../bloc/auth_bloc.dart';
 
 class EnableLocation extends StatelessWidget {
@@ -27,11 +26,6 @@ class EnableLocation extends StatelessWidget {
                 context.read<AuthBloc>().add(ResetStatus());
                 locationAllowed();
                 Navigator.popUntil(context, (route) => route.isFirst);
-                // context.read<AuthBloc>().add(StartCountDown());
-                // Navigator.pushReplacement(
-                //   context,
-                //   MaterialPageRoute(builder: (_) => AppNavView()),
-                // );
               }
             },
             child: WillPopScope(
@@ -72,10 +66,6 @@ class EnableLocation extends StatelessWidget {
                           onPressed: () {
                             Navigator.popUntil(
                                 context, (route) => route.isFirst);
-                            // Navigator.pushReplacement(
-                            //     context,
-                            //     MaterialPageRoute(
-                            //         builder: (_) => AppNavView()));
                           }))
                 ],
               ),

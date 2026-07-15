@@ -15,9 +15,6 @@ class CreateNewPasswordView extends StatelessWidget {
         listener: (context, state) {
           if (state.status == Status.success) {
             context.read<AuthBloc>().add(ResetStatus());
-            // AppNavView()
-            // AdvisorView()
-
             Navigator.popUntil(context, (route) => route.isFirst);
             // Navigator.push(context,
             //     MaterialPageRoute(builder: (_) => const SuccessScreenView()));

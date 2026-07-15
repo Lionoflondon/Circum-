@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../utils/theme/theme.dart';
-import '../../bottom_nav/view/app_nav.dart';
 import '../bloc/auth_bloc.dart';
 import 'enable_location.dart';
 import 'signin_form.dart';
