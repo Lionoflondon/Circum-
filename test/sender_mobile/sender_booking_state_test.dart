@@ -1800,12 +1800,14 @@ void main() {
         expect(source, contains('_SenderAuthMode.createAccount'));
         expect(source, contains('EMAIL OR PHONE'));
         expect(source, contains('PASSWORD'));
-        expect(source, contains('Continue with Apple'));
-        expect(source, contains('Continue with Google'));
+        expect(source, isNot(contains('Continue with Apple')));
+        expect(source, isNot(contains('Continue with Google')));
         expect(source, contains('Terms'));
         expect(source, contains('Privacy Policy'));
         expect(source, contains('After you join'));
-        expect(source, contains('OR CONTINUE WITH'));
+        expect(source, isNot(contains('OR CONTINUE WITH')));
+        expect(source, isNot(contains('_SocialAuthButton')));
+        expect(source, isNot(contains('TODO(sender-mobile-auth)')));
         expect(source, contains('Trusted Riders'));
         expect(source, contains('bool get _isSignIn'));
         expect(source, contains('previewAuthEnabled'));
@@ -1821,6 +1823,20 @@ void main() {
         );
       },
     );
+
+    test('visible onboarding social providers dispatch implemented auth', () {
+      final onboardingSource =
+          File('lib/app/onboarding/view/onboarding.dart').readAsStringSync();
+      final authSource =
+          File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+
+      expect(onboardingSource, contains('SignInWithGoogle()'));
+      expect(onboardingSource, contains('SignInWithAppleAuth()'));
+      expect(onboardingSource, contains('!kIsWeb && Platform.isIOS'));
+      expect(authSource, contains('_handleSignInWithGoogle'));
+      expect(authSource, contains('_handleSignInWithAppleAuth'));
+      expect(authSource, contains('auth.signInWithCredential'));
+    });
 
     test(
       'sender mobile preview enables real Firebase auth only for preview',

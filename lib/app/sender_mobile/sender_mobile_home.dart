@@ -546,18 +546,6 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                 ),
               ),
             ],
-            const SizedBox(height: 26),
-            const _LabelledDivider(),
-            const SizedBox(height: 22),
-            const _SocialAuthButton(
-              icon: Icons.apple_rounded,
-              label: 'Continue with Apple',
-            ),
-            const SizedBox(height: 10),
-            const _SocialAuthButton(
-              icon: Icons.g_mobiledata,
-              label: 'Continue with Google',
-            ),
             const SizedBox(height: 28),
             _AuthSwitchLine(
               isSignIn: _isSignIn,
@@ -1410,68 +1398,6 @@ class _AuthField extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _LabelledDivider extends StatelessWidget {
-  const _LabelledDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: _SenderTokens.hairline)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            'OR CONTINUE WITH',
-            style: GoogleFonts.jetBrainsMono(
-              color: _SenderTokens.muted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const Expanded(child: Divider(color: _SenderTokens.hairline)),
-      ],
-    );
-  }
-}
-
-class _SocialAuthButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _SocialAuthButton({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: OutlinedButton.icon(
-        onPressed: () {
-          // TODO(sender-mobile-auth): Wire social provider handlers when enabled.
-        },
-        icon: Icon(icon, color: Colors.white, size: 21),
-        label: Text(
-          label,
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          side: const BorderSide(color: _SenderTokens.glassBorder),
-          backgroundColor: _SenderTokens.glass,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
       ),
     );
   }
