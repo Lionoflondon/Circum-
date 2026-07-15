@@ -36813,19 +36813,6 @@ class _SenderProfileStep extends StatelessWidget {
         const SizedBox(height: 12),
         _SettingsSection(
           colors: colors,
-          title: 'Notifications',
-          icon: Icons.notifications_none,
-          children: const [
-            _DisabledPreference(label: 'Delivery updates'),
-            _DisabledPreference(label: 'Rider updates'),
-            _DisabledPreference(label: 'Gifts updates'),
-            _DisabledPreference(label: 'Health+ updates'),
-            _DisabledPreference(label: 'Marketing preferences'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _SettingsSection(
-          colors: colors,
           title: 'Payment & Roth',
           icon: Icons.account_balance_wallet_outlined,
           children: [
@@ -36840,7 +36827,11 @@ class _SenderProfileStep extends StatelessWidget {
               value: profile?.paymentCustomerReference ??
                   'No saved payment profile attached',
             ),
-            const _DisabledPreference(label: 'Circum Gift Card history'),
+            TextButton.icon(
+              onPressed: () => onTab(3),
+              icon: const Icon(Icons.card_giftcard_outlined),
+              label: const Text('Circum Gift Card history'),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -36848,10 +36839,17 @@ class _SenderProfileStep extends StatelessWidget {
           colors: colors,
           title: 'Privacy',
           icon: Icons.privacy_tip_outlined,
-          children: const [
-            _DisabledPreference(label: 'Privacy policy'),
-            _DisabledPreference(label: 'Terms'),
-            _DisabledPreference(label: 'Data download'),
+          children: [
+            TextButton.icon(
+              onPressed: () => unawaited(_openPublicPolicy('/privacy')),
+              icon: const Icon(Icons.privacy_tip_outlined),
+              label: const Text('Privacy policy'),
+            ),
+            TextButton.icon(
+              onPressed: () => unawaited(_openPublicPolicy('/terms')),
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('Terms'),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -36887,6 +36885,11 @@ class _SenderProfileStep extends StatelessWidget {
       ],
     );
   }
+
+  Future<void> _openPublicPolicy(String path) => launchUrl(
+        Uri.parse('https://circumuk.com$path'),
+        webOnlyWindowName: '_self',
+      );
 
   Future<void> _confirmSignOut(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -37945,26 +37948,6 @@ class _SettingsLine extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DisabledPreference extends StatelessWidget {
-  final String label;
-
-  const _DisabledPreference({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          const Icon(Icons.lock_clock, size: 16),
-          const SizedBox(width: 8),
-          Expanded(child: Text('$label · coming soon')),
         ],
       ),
     );
