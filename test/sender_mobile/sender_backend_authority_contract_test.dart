@@ -171,6 +171,72 @@ void main() {
     expect(messaging, isNot(contains('ChatsHelper().storeChat')));
   });
 
+  test('legacy Rider web shell uses canonical backend authority only', () {
+    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final riderShell = source.substring(
+      source.indexOf('class _RiderEnrollmentPortalState'),
+      source.indexOf('class _CustomerPortal'),
+    );
+    final customerPortal = source.substring(
+      source.indexOf('class _CustomerPortal'),
+      source.indexOf('class _DesktopPortalLayout'),
+    );
+
+    expect(
+      riderShell,
+      contains("_callLegacyRiderCallable('acceptRideRequests'"),
+    );
+    expect(
+      riderShell,
+      contains("_callLegacyRiderCallable('updateDeliveryTrackingStatus'"),
+    );
+    expect(
+      riderShell,
+      contains("_callLegacyRiderCallable('updateDeliveryLiveLocation'"),
+    );
+    expect(
+      riderShell,
+      contains("_callLegacyRiderCallable('reportWaitingContext'"),
+    );
+    expect(
+      riderShell,
+      contains("_callLegacyRiderCallable('markRiderNoShow'"),
+    );
+    expect(riderShell, contains("httpsCallable('sendCircumMessage')"));
+    expect(riderShell, contains("httpsCallable('requestRiderWithdrawal')"));
+
+    expect(riderShell, isNot(contains("'pickupNoShowSurchargeGbp': 5.0")));
+    expect(riderShell,
+        isNot(contains("'waitingSurchargeTotalGbp': FieldValue.increment")));
+    expect(
+        riderShell, isNot(contains("'pickupWaitExtensionChargeGbp': charge")));
+    expect(riderShell,
+        isNot(contains("db.collection('riderEarnings').doc(user.uid).set")));
+    expect(riderShell,
+        isNot(contains("db.collection('walletTransactions').doc('roth_")));
+    expect(riderShell,
+        isNot(contains("db.collection('riderWalletTransactions')")));
+    expect(
+        riderShell, isNot(contains(".collection('messages')\n        .add")));
+    expect(riderShell, isNot(contains("'senderId': 'circum-system'")));
+    expect(riderShell, isNot(contains("'matchingStatus': 'accepted'")));
+    expect(riderShell,
+        isNot(contains("'acceptedAt': FieldValue.serverTimestamp()")));
+    expect(riderShell, isNot(contains("'status': 'sender_no_show_pickup'")));
+    expect(riderShell, isNot(contains("collection('irisCorrections')")));
+    expect(riderShell, isNot(contains("collection('irisDeliveryEstimates')")));
+    expect(riderShell, isNot(contains('DeliveryPricing.calculate')));
+    expect(riderShell, isNot(contains('VanguardProtection.verifyPin')));
+    expect(customerPortal,
+        isNot(contains("db.collection('riderEarnings').doc(driverId)")));
+    expect(
+        customerPortal,
+        isNot(
+            contains("db.collection('riderWalletTransactions').doc(tipTxId)")));
+    expect(customerPortal,
+        isNot(contains("Customer tip credited to rider available earnings.")));
+  });
+
   test('backend exports canonical support conversation callables', () {
     final engine =
         File('server/functions/communication-engine.js').readAsStringSync();

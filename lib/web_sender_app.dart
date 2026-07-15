@@ -20745,17 +20745,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'verificationStatus': 'pending',
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await db.collection('riderEarnings').doc(user.uid).set({
-      'riderId': user.uid,
-      'availableBalance': FieldValue.increment(0),
-      'pendingBalance': FieldValue.increment(0),
-      'pendingWithdrawal': FieldValue.increment(0),
-      'lifetimeEarnings': FieldValue.increment(0),
-      'totalWithdrawn': FieldValue.increment(0),
-      'tipsReceived': FieldValue.increment(0),
-      'completedJobs': FieldValue.increment(0),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
   }
 
   void _listenToRiderProfile(String riderId) {
@@ -21100,77 +21089,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     setState(() => _jobMessage = 'Accepting job $requestId...');
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
-      final rider = riderDoc.data() ?? const <String, dynamic>{};
-      final riderVehicle =
-          (rider['vehicle'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
-      final riderName =
-          '${rider['fullName'] ?? user.displayName ?? user.email}';
-      final riderPhotoUrl =
-          '${rider['photoURL'] ?? rider['photoUrl'] ?? user.photoURL ?? ''}'
-              .trim();
-      final riderRank = '${rider['riderRank'] ?? rider['rank'] ?? 'agent'}';
-      final vehicleType =
-          '${riderVehicle['type'] ?? rider['vehicleType'] ?? rider['vehicle'] ?? ''}';
-      final requiredVehicle =
-          '${job['minimumVehicle'] ?? job['recommendedVehicle'] ?? job['irisRecommendedVehicle'] ?? job['vehicleType'] ?? ''}';
-      if (!_superAdminRiderBypass &&
-          requiredVehicle.trim().isNotEmpty &&
-          !DeliveryPricing.vehicleMeetsMinimum(vehicleType, requiredVehicle)) {
-        setState(
-          () => _jobMessage =
-              'This delivery needs a $requiredVehicle or larger verified vehicle.',
-        );
-        return;
-      }
-      final vehicleMakeModel =
-          '${riderVehicle['makeModel'] ?? rider['vehicleMakeModel'] ?? ''}';
-      final vehicleColour =
-          '${riderVehicle['colour'] ?? riderVehicle['color'] ?? rider['vehicleColour'] ?? ''}';
-      final registrationNumber =
-          '${riderVehicle['plateNumber'] ?? rider['plateNumber'] ?? rider['vehicleRegistration'] ?? ''}';
-      final assignedRider = {
-        'riderId': user.uid,
-        'name': riderName,
-        'photoURL': riderPhotoUrl,
-        'rank': riderRank,
-        'vehicleType': vehicleType,
-        'vehicleMakeModel': vehicleMakeModel,
-        'vehicleColour': vehicleColour,
-        'registrationNumber': registrationNumber,
-        'verified': true,
-      };
-      await db.collection('deliveryRequests').doc(requestId).set({
-        'status': 'accepted',
-        'dispatchStatus': 'accepted',
-        'matchingStatus': 'accepted',
-        'riderId': user.uid,
-        'driverId': user.uid,
-        'assignedDriverId': user.uid,
-        'assignedRider': assignedRider,
-        'riderName': riderName,
-        'driverName': riderName,
-        'riderPhotoURL': riderPhotoUrl,
-        'driverPhotoUrl': riderPhotoUrl,
-        'riderRank': riderRank,
-        'driverVehicle': rider['vehicle'],
-        'driverPlateNumber': registrationNumber,
-        'vehicleType': vehicleType,
-        'vehicleMakeModel': vehicleMakeModel,
-        'vehicleColour': vehicleColour,
-        'vehicleRegistration': registrationNumber,
-        'plateNumber': registrationNumber,
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await _callLegacyRiderCallable('acceptRideRequests', {
+        'requestId': requestId,
+      });
       await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _jobMessage = 'Could not accept this job. Try again.');
+      setState(() => _jobMessage =
+          _legacyRiderFunctionMessage(error, 'Could not accept this job.'));
     }
   }
 
@@ -21229,23 +21157,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   void _stopRiderLiveLocationPublishing({required String status}) {
-    final deliveryId = _trackingDeliveryId;
-    final riderId = _riderUser?.uid;
     _riderLiveLocationTimer?.cancel();
     _riderLiveLocationTimer = null;
     _trackingDeliveryId = null;
-    if (deliveryId != null && riderId != null) {
-      FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(deliveryId)
-          .collection('tracking')
-          .doc('liveLocation')
-          .set({
-        'riderId': riderId,
-        'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
   }
 
   Future<bool> _ensureRiderLocationPermission() async {
@@ -21275,24 +21189,22 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           timeLimit: Duration(seconds: 6),
         ),
       );
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(deliveryId)
-          .collection('tracking')
-          .doc('liveLocation')
-          .set({
-        'riderId': riderId,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'heading': position.heading,
-        'speed': position.speed,
-        'accuracy': position.accuracy,
+      await _callLegacyRiderCallable('updateDeliveryLiveLocation', {
+        'deliveryId': deliveryId,
         'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } catch (_) {
+        'location': {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'heading': position.heading,
+          'speed': position.speed,
+          'accuracy': position.accuracy,
+          'clientRecordedAt': DateTime.now().millisecondsSinceEpoch,
+        },
+      });
+    } catch (error) {
       if (mounted) {
-        setState(() => _jobMessage = 'Live tracking update could not be sent.');
+        setState(() => _jobMessage = _legacyRiderFunctionMessage(
+            error, 'Live tracking update could not be sent.'));
       }
     }
   }
@@ -21308,26 +21220,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
-    final field = action == 'reject' ? 'rejectedByRiders' : 'ignoredByRiders';
-    final timestampField = action == 'reject' ? 'rejectedAt' : 'ignoredAt';
-    try {
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(requestId)
-          .set({
-        field: FieldValue.arrayUnion([user.uid]),
-        timestampField: FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      if (!mounted) return;
-      setState(
-        () => _jobMessage =
-            action == 'reject' ? 'Job rejected.' : 'Job hidden for now.',
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _jobMessage = 'Could not update this job. Try again.');
-    }
+    setState(() => _jobMessage = action == 'reject'
+        ? 'Rejecting deliveries from this legacy screen is unavailable. Use the Rider app.'
+        : 'Hiding deliveries from this legacy screen is unavailable. Use the Rider app.');
   }
 
   Future<void> _updateAcceptedJobStatus(
@@ -21343,999 +21238,135 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (requestId.isEmpty) return;
     setState(() => _jobMessage = 'Updating job $requestId...');
     try {
-      final db = FirebaseFirestore.instance;
       if (status == 'rider_arrived_pickup') {
-        await _markRiderArrivedAtPickup(db, requestId, user.uid);
+        await _callLegacyRiderCallable('recordRiderArrival', {
+          'deliveryId': requestId,
+        });
         if (!mounted) return;
-        setState(() => _jobMessage = 'Sender notified. Waiting timer started.');
+        setState(
+          () => _jobMessage =
+              'Arrival reported. Collection countdown is managed by Circum.',
+        );
         return;
       }
       if (status == 'sender_contact_established' ||
           status == 'sender_no_contact') {
-        await _updateSenderContactStatus(
-          db,
-          requestId,
-          user.uid,
-          established: status == 'sender_contact_established',
-        );
+        await _callLegacyRiderCallable('reportWaitingContext', {
+          'deliveryId': requestId,
+          'type': status == 'sender_contact_established'
+              ? 'customer_responded'
+              : 'customer_unreachable',
+        });
         if (!mounted) return;
         setState(() => _jobMessage = status == 'sender_contact_established'
-            ? 'Contact marked as established.'
-            : 'No contact marked.');
+            ? 'Customer response sent.'
+            : 'Customer contact status sent.');
         return;
       }
       if (status.startsWith('extend_wait_')) {
-        final minutes = int.tryParse(status.replaceFirst('extend_wait_', ''));
-        if (minutes == null) return;
-        await _extendPickupWaiting(db, job, requestId, user.uid, minutes);
+        await _callLegacyRiderCallable('reportWaitingContext', {
+          'deliveryId': requestId,
+          'type': 'customer_responded',
+          'note': 'Legacy rider screen requested continued waiting.',
+        });
         if (!mounted) return;
-        setState(() => _jobMessage = 'Waiting time extended.');
+        setState(() => _jobMessage =
+            'Waiting update sent. Circum will apply the current policy.');
         return;
       }
       if (status == 'sender_no_show_pickup') {
-        await _markSenderNoShowAtPickup(db, requestId, user.uid);
-        if (!mounted) return;
-        setState(() => _jobMessage = 'Sender no-show recorded.');
-        return;
-      }
-      final vanguardPatch = await _collectVanguardPinVerification(
-        job,
-        requestId,
-        user.uid,
-        status,
-      );
-      if (vanguardPatch == null &&
-          _jobVanguardEnabled(job) &&
-          (status == 'picked_up' || status == 'completed')) {
-        return;
-      }
-      final verificationPatch = status == 'picked_up'
-          ? await _collectWeightVerification(job, requestId, user.uid)
-          : null;
-      if (status == 'picked_up' && verificationPatch == null) {
-        if (!mounted) return;
-        setState(() => _jobMessage = 'Verify parcel weight before pickup.');
-        return;
-      }
-      final updates = <String, dynamic>{
-        'status': status,
-        'dispatchStatus': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      if (status == 'picked_up') {
-        updates['pickedUpAt'] = FieldValue.serverTimestamp();
-        if (vanguardPatch != null) updates.addAll(vanguardPatch);
-        updates.addAll(verificationPatch!);
-      }
-      if (status == 'in_transit') {
-        updates['outForDeliveryAt'] = FieldValue.serverTimestamp();
-      }
-      if (status == 'completed') {
-        updates['completedAt'] = FieldValue.serverTimestamp();
-        if (vanguardPatch != null) updates.addAll(vanguardPatch);
-        final payout = _jobPayout(job);
-        final tip = _jobTip(job);
-        final totalCredit = payout + tip;
-        final txId = RiderMarketplaceRules.earningTransactionId(
-          deliveryId: requestId,
-          riderId: user.uid,
-        );
-        final deliveryRef = db.collection('deliveryRequests').doc(requestId);
-        final walletRef = db.collection('riderWalletTransactions').doc(txId);
-        final earningsRef = db.collection('riderEarnings').doc(user.uid);
-        final rothWalletRef = db.collection('wallets').doc(user.uid);
-        final rothLedgerRef =
-            db.collection('walletTransactions').doc('roth_$txId');
-        await db.runTransaction((transaction) async {
-          final existingWallet = await transaction.get(walletRef);
-          final existingRothLedger = await transaction.get(rothLedgerRef);
-          final rothWallet = await transaction.get(rothWalletRef);
-          transaction.set(deliveryRef, updates, SetOptions(merge: true));
-          if (existingWallet.exists) return;
-          transaction.set(
-              walletRef,
-              {
-                'id': txId,
-                'transactionId': txId,
-                'deliveryId': requestId,
-                'requestId': requestId,
-                'riderId': user.uid,
-                'type': 'earning',
-                'deliveryEarning': payout,
-                'tipAmount': tip,
-                'amount': totalCredit,
-                'status': 'pending',
-                'notes': 'Completed delivery awaiting admin settlement.',
-                'createdAt': FieldValue.serverTimestamp(),
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
-          transaction.set(
-              earningsRef,
-              {
-                'riderId': user.uid,
-                'availableBalance': FieldValue.increment(0),
-                'pendingBalance': FieldValue.increment(totalCredit),
-                'lifetimeEarnings': FieldValue.increment(totalCredit),
-                'totalWithdrawn': FieldValue.increment(0),
-                'tipsReceived': FieldValue.increment(tip),
-                'completedJobs': FieldValue.increment(1),
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
-          if (!existingRothLedger.exists) {
-            final rothBefore =
-                (rothWallet.data()?['pendingEarnings'] as num?)?.toDouble() ??
-                    0;
-            final rothAfter =
-                double.parse((rothBefore + totalCredit).toStringAsFixed(2));
-            transaction.set(
-                rothLedgerRef,
-                {
-                  'id': 'roth_$txId',
-                  'userId': user.uid,
-                  'amount': totalCredit,
-                  'balanceType': 'pendingEarnings',
-                  'type': 'earnings_pending',
-                  'reason': 'Completed delivery awaiting admin settlement.',
-                  'relatedEntityId': requestId,
-                  'paymentProvider': 'roth_internal',
-                  'providerTransactionId': null,
-                  'balanceBefore': rothBefore,
-                  'balanceAfter': rothAfter,
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'metadata': {
-                    'deliveryId': requestId,
-                    'riderId': user.uid,
-                    'legacyTransactionId': txId,
-                    'deliveryEarning': payout,
-                    'tipAmount': tip,
-                  },
-                },
-                SetOptions(merge: false));
-            transaction.set(
-                rothWalletRef,
-                {
-                  'userId': user.uid,
-                  'rothCredit': FieldValue.increment(0),
-                  'pendingEarnings': FieldValue.increment(totalCredit),
-                  'availableEarnings': FieldValue.increment(0),
-                  'updatedAt': FieldValue.serverTimestamp(),
-                  'createdAt': FieldValue.serverTimestamp(),
-                },
-                SetOptions(merge: true));
-          }
+        await _callLegacyRiderCallable('markRiderNoShow', {
+          'deliveryId': requestId,
+          'idempotencyKey': '$requestId:no_show:${user.uid}',
         });
-      } else {
-        await db
-            .collection('deliveryRequests')
-            .doc(requestId)
-            .set(updates, SetOptions(merge: true));
+        if (!mounted) return;
+        setState(() => _jobMessage = 'Missed collection submitted.');
+        return;
       }
+      final action = _legacyRiderActionForStatus(status);
+      if (action == null) {
+        if (!mounted) return;
+        setState(() => _jobMessage =
+            'This legacy action is unavailable. Use the Rider app for verified delivery progress.');
+        return;
+      }
+      await _callLegacyRiderCallable('updateDeliveryTrackingStatus', {
+        'deliveryId': requestId,
+        'action': action,
+      });
       if (status == 'completed' || status == 'cancelled') {
         _stopRiderLiveLocationPublishing(status: status);
       }
       if (!mounted) return;
       setState(
-        () => _jobMessage =
-            status == 'completed' ? 'Delivery completed.' : 'Job updated.',
+        () => _jobMessage = status == 'completed'
+            ? 'Delivery completion sent.'
+            : 'Job updated.',
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _jobMessage = 'Could not update this job. Try again.');
-    }
-  }
-
-  Future<void> _markRiderArrivedAtPickup(
-    FirebaseFirestore db,
-    String requestId,
-    String riderId,
-  ) async {
-    final now = DateTime.now();
-    final deadline = now.add(const Duration(minutes: 3));
-    final deliveryRef = db.collection('deliveryRequests').doc(requestId);
-    var alreadyArrived = false;
-    await db.runTransaction((transaction) async {
-      final snap = await transaction.get(deliveryRef);
-      final data = snap.data();
-      if (data == null) throw StateError('Delivery not found.');
-      if (data['riderArrivedAtPickupAt'] != null ||
-          '${data['status'] ?? ''}' == 'rider_arrived_pickup') {
-        alreadyArrived = true;
-        return;
-      }
-      transaction.set(
-          deliveryRef,
-          {
-            'status': 'rider_arrived_pickup',
-            'dispatchStatus': 'rider_arrived_pickup',
-            'riderArrivedAtPickupAt': FieldValue.serverTimestamp(),
-            'pickupWaitStartedAt': FieldValue.serverTimestamp(),
-            'pickupWaitDeadlineAt': Timestamp.fromDate(deadline),
-            'senderContactEstablished': false,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'auditTrail': FieldValue.arrayUnion([
-              _deliveryAuditEvent(
-                type: 'rider_arrived_pickup',
-                label: 'Rider arrived at pickup',
-                riderId: riderId,
-                status: 'rider_arrived_pickup',
-              ),
-              _deliveryAuditEvent(
-                type: 'pickup_wait_started',
-                label: 'Waiting period started',
-                riderId: riderId,
-                status: 'rider_arrived_pickup',
-              ),
-            ]),
-          },
-          SetOptions(merge: true));
-    });
-    if (alreadyArrived) return;
-    await _sendDeliverySystemMessage(
-      requestId,
-      'Your rider is waiting at the pickup address. Please meet them within 3 minutes.',
-    );
-  }
-
-  Future<void> _updateSenderContactStatus(
-    FirebaseFirestore db,
-    String requestId,
-    String riderId, {
-    required bool established,
-  }) async {
-    await db.collection('deliveryRequests').doc(requestId).set({
-      'senderContactEstablished': established,
-      'senderContactEstablishedAt':
-          established ? FieldValue.serverTimestamp() : FieldValue.delete(),
-      'senderContactStatusUpdatedBy': riderId,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'auditTrail': FieldValue.arrayUnion([
-        _deliveryAuditEvent(
-          type:
-              established ? 'sender_contact_established' : 'sender_no_contact',
-          label: established ? 'Contact established' : 'No contact',
-          riderId: riderId,
-          status: 'rider_arrived_pickup',
-        ),
-      ]),
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> _extendPickupWaiting(
-    FirebaseFirestore db,
-    Map<String, dynamic> job,
-    String requestId,
-    String riderId,
-    int minutes,
-  ) async {
-    const charges = {5: 2.0, 10: 4.0, 15: 6.0};
-    final charge = charges[minutes];
-    if (charge == null) return;
-    if (job['senderContactEstablished'] != true) {
       setState(() => _jobMessage =
-          'Waiting can only be extended after contact is established.');
-      return;
+          _legacyRiderFunctionMessage(error, 'Could not update this job.'));
     }
-    if (job['pickupWaitExtended'] == true) {
-      setState(() => _jobMessage = 'Waiting has already been extended.');
-      return;
+  }
+
+  String? _legacyRiderActionForStatus(String status) {
+    switch (status) {
+      case 'en_route_to_pickup':
+      case 'navigating_to_pickup':
+        return 'start_heading_to_pickup';
+      case 'arrived_at_pickup':
+        return 'arrived_at_pickup';
+      case 'picked_up':
+      case 'pickup_verified':
+      case 'collected':
+        return 'confirm_collected';
+      case 'in_transit':
+      case 'out_for_delivery':
+      case 'navigating_to_dropoff':
+        return 'start_delivery';
+      case 'arrived_at_dropoff':
+        return 'arrived_at_dropoff';
+      case 'completed':
+      case 'delivered':
+        return 'verify_receiver_pin';
+      case 'cancelled':
+        return 'cancel';
+      case 'issue_reported':
+        return 'report_issue';
     }
-    final currentDeadline = _timestampDate(job['pickupWaitDeadlineAt']);
-    final base =
-        currentDeadline != null && currentDeadline.isAfter(DateTime.now())
-            ? currentDeadline
-            : DateTime.now();
-    final newDeadline = base.add(Duration(minutes: minutes));
-    await db.collection('deliveryRequests').doc(requestId).set({
-      'pickupWaitExtended': true,
-      'pickupWaitExtensionMinutes': minutes,
-      'pickupWaitExtensionCharge': charge,
-      'pickupWaitExtensionChargeGbp': charge,
-      'pickupWaitExtensionReason': 'Contact established',
-      'pickupWaitExtendedAt': FieldValue.serverTimestamp(),
-      'pickupWaitDeadlineAt': Timestamp.fromDate(newDeadline),
-      'waitingSurchargeTotalGbp': FieldValue.increment(charge),
-      'currency': 'GBP',
-      'updatedAt': FieldValue.serverTimestamp(),
-      'auditTrail': FieldValue.arrayUnion([
-        _deliveryAuditEvent(
-          type: 'pickup_wait_extended',
-          label: 'Waiting extended by $minutes minutes',
-          riderId: riderId,
-          status: 'rider_arrived_pickup',
-          amountGbp: charge,
-        ),
-        _deliveryAuditEvent(
-          type: 'waiting_charge_applied',
-          label:
-              'Additional waiting charge applied: £${charge.toStringAsFixed(2)}',
-          riderId: riderId,
-          status: 'rider_arrived_pickup',
-          amountGbp: charge,
-        ),
-      ]),
-    }, SetOptions(merge: true));
-    await _sendDeliverySystemMessage(
-      requestId,
-      'Your rider is still waiting. Extra waiting time has been approved. Additional waiting charge: £${charge.toStringAsFixed(2)}.',
-    );
-  }
-
-  Future<void> _markSenderNoShowAtPickup(
-    FirebaseFirestore db,
-    String requestId,
-    String riderId,
-  ) async {
-    final deliveryRef = db.collection('deliveryRequests').doc(requestId);
-    await db.runTransaction((transaction) async {
-      final snap = await transaction.get(deliveryRef);
-      final data = snap.data();
-      if (data == null) {
-        throw StateError('Delivery not found.');
-      }
-      if (data['senderContactEstablished'] == true) {
-        throw StateError('Contact was established. Extend waiting instead.');
-      }
-      final deadline = _timestampDate(data['pickupWaitDeadlineAt']);
-      if (deadline == null || DateTime.now().isBefore(deadline)) {
-        throw StateError('The 3-minute waiting period is still active.');
-      }
-      if (data['pickupNoShowSurchargeApplied'] == true) {
-        return;
-      }
-      transaction.set(
-          deliveryRef,
-          {
-            'status': 'sender_no_show_pickup',
-            'dispatchStatus': 'sender_no_show_pickup',
-            'pickupNoShowAt': FieldValue.serverTimestamp(),
-            'pickupNoShowReason': 'No contact after pickup waiting period',
-            'pickupNoShowSurchargeApplied': true,
-            'pickupNoShowSurchargeGbp': 5.0,
-            'waitingSurchargeTotalGbp': FieldValue.increment(5.0),
-            'currency': 'GBP',
-            'updatedAt': FieldValue.serverTimestamp(),
-            'auditTrail': FieldValue.arrayUnion([
-              _deliveryAuditEvent(
-                type: 'sender_no_show_pickup',
-                label: 'Sender no-show marked',
-                riderId: riderId,
-                status: 'sender_no_show_pickup',
-              ),
-              _deliveryAuditEvent(
-                type: 'no_show_surcharge_applied',
-                label: 'No-show surcharge applied: £5.00',
-                riderId: riderId,
-                status: 'sender_no_show_pickup',
-                amountGbp: 5.0,
-              ),
-            ]),
-          },
-          SetOptions(merge: true));
-    });
-    await _sendDeliverySystemMessage(
-      requestId,
-      'Pickup was marked as no-show after the waiting period. A £5.00 waiting/no-show surcharge has been applied because the rider could not make contact.',
-    );
-  }
-
-  Map<String, dynamic> _deliveryAuditEvent({
-    required String type,
-    required String label,
-    required String riderId,
-    required String status,
-    double? amountGbp,
-  }) {
-    return {
-      'type': type,
-      'label': label,
-      'event': label,
-      'actorType': 'rider',
-      'actorId': riderId,
-      'statusAfterEvent': status,
-      'currency': 'GBP',
-      if (amountGbp != null) 'amountGbp': amountGbp,
-      'createdAt': Timestamp.now(),
-    };
-  }
-
-  Future<void> _sendDeliverySystemMessage(
-    String requestId,
-    String message,
-  ) async {
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(requestId)
-        .collection('messages')
-        .add({
-      'threadId': requestId,
-      'bookingId': requestId,
-      'requestId': requestId,
-      'senderId': 'circum-system',
-      'senderRole': 'system',
-      'senderType': 'support',
-      'messageText': message,
-      'message': message,
-      'system': true,
-      'status': 'sent',
-      'createdAt': FieldValue.serverTimestamp(),
-      'timeStamp': DateTime.now().toIso8601String(),
-    });
-  }
-
-  DateTime? _timestampDate(dynamic value) {
-    if (value is Timestamp) return value.toDate();
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value);
     return null;
   }
 
-  Future<Map<String, dynamic>?> _collectVanguardPinVerification(
-    Map<String, dynamic> job,
-    String requestId,
-    String riderId,
-    String status,
+  Future<Map<String, dynamic>> _callLegacyRiderCallable(
+    String name,
+    Map<String, dynamic> payload,
   ) async {
-    if (!_jobVanguardEnabled(job) ||
-        (status != 'picked_up' && status != 'completed')) {
-      return const <String, dynamic>{};
-    }
-    final stage = status == 'completed' ? 'delivery' : 'collection';
-    final alreadyVerified = stage == 'delivery'
-        ? job['deliveryPinVerified'] == true
-        : job['collectionPinVerified'] == true;
-    if (alreadyVerified) return const <String, dynamic>{};
-
-    final summary =
-        (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final collectionContact =
-        (job['collectionContact'] as Map?)?.cast<String, dynamic>();
-    final receiverDetails =
-        (job['receiverDetails'] as Map?)?.cast<String, dynamic>();
-    final collectionName =
-        '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the sender or collection contact'}'
-            .trim();
-    final receiverName =
-        '${summary['receiverName'] ?? job['receiverName'] ?? receiverDetails?['name'] ?? 'the receiver'}'
-            .trim();
-    final pinController = TextEditingController();
-    String? errorText;
-    final enteredPin = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(
-            stage == 'delivery' ? 'Enter delivery PIN' : 'Enter collection PIN',
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                stage == 'delivery'
-                    ? 'This is a Vanguard protected delivery. Enter ${receiverName.isEmpty ? 'the receiver' : receiverName}’s delivery PIN to complete delivery.'
-                    : 'This is a Vanguard protected delivery. Enter ${collectionName.isEmpty ? 'the sender or collection contact' : collectionName}’s collection PIN to confirm handover.',
-                style: TextStyle(color: Theme.of(context).hintColor),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: pinController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: const InputDecoration(
-                  labelText: '6-digit PIN',
-                  border: OutlineInputBorder(),
-                  counterText: '',
-                ),
-              ),
-              if (errorText != null) ...[
-                const SizedBox(height: 8),
-                Text(errorText!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = pinController.text.trim();
-                if (!RegExp(r'^\d{6}$').hasMatch(value)) {
-                  setDialogState(
-                    () => errorText = 'Enter the 6-digit Vanguard PIN.',
-                  );
-                  return;
-                }
-                Navigator.pop(context, value);
-              },
-              child: const Text('Verify PIN'),
-            ),
-          ],
-        ),
-      ),
-    );
-    pinController.dispose();
-    if (enteredPin == null) {
-      setState(
-        () => _jobMessage = stage == 'delivery'
-            ? 'Delivery PIN required before completion.'
-            : 'Collection PIN required before pickup.',
-      );
-      return null;
-    }
-
-    final attemptField = stage == 'delivery'
-        ? 'deliveryPinAttemptCount'
-        : 'collectionPinAttemptCount';
-    final attemptCount = _numberValue(job[attemptField])?.toInt() ?? 0;
-    final expectedPin = stage == 'delivery'
-        ? VanguardProtection.deliveryPin(job)
-        : VanguardProtection.collectionPin(job);
-    final check = VanguardProtection.verifyPin(
-      enabled: true,
-      expectedPin: expectedPin,
-      enteredPin: enteredPin,
-      attemptCount: attemptCount,
-      stage: stage,
-    );
-    if (!check.passed) {
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(requestId)
-          .set({
-        attemptField: check.attemptCount,
-        'vanguardReviewRequired': check.flagForReview,
-        'vanguardLastFailedStage': stage,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      if (!mounted) return null;
-      setState(() => _jobMessage = check.errorMessage);
-      return null;
-    }
-
-    final protection =
-        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final nextProtection = {
-      ...protection,
-      stage == 'delivery' ? 'deliveryPin' : 'collectionPin': null,
-    };
-    final verifiedField =
-        stage == 'delivery' ? 'deliveryPinVerified' : 'collectionPinVerified';
-    final verifiedAtField = stage == 'delivery'
-        ? 'deliveryPinVerifiedAt'
-        : 'collectionPinVerifiedAt';
-    final verifiedByField = stage == 'delivery'
-        ? 'deliveryPinVerifiedBy'
-        : 'collectionPinVerifiedBy';
-    return {
-      verifiedField: true,
-      verifiedAtField: FieldValue.serverTimestamp(),
-      verifiedByField: riderId,
-      attemptField: check.attemptCount,
-      'vanguardProtection': nextProtection,
-      'vanguardVerification': {
-        stage: {
-          'status': 'passed',
-          'riderId': riderId,
-          'verifiedAt': FieldValue.serverTimestamp(),
-          'attemptCount': check.attemptCount,
-        },
-      },
-    };
+    final result = await FirebaseFunctions.instance.httpsCallable(name).call(
+          payload,
+        );
+    final data = result.data;
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return const {};
   }
 
-  bool _jobVanguardEnabled(Map<String, dynamic> job) {
-    if (job['vanguardEnabled'] == true) return true;
-    final protection =
-        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>();
-    return protection?['enabled'] == true;
-  }
-
-  Future<Map<String, dynamic>?> _collectWeightVerification(
-    Map<String, dynamic> job,
-    String requestId,
-    String riderId,
-  ) async {
-    final currentFinalWeight = _jobFinalWeight(job);
-    final weightController = TextEditingController(
-      text: currentFinalWeight.toStringAsFixed(1),
-    );
-    final noteController = TextEditingController();
-    final irisEstimate =
-        (job['irisDeliveryEstimate'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final rawIrisFlags =
-        (irisEstimate['flags'] as List?) ?? (job['irisDeliveryFlags'] as List?);
-    final irisFlags = (rawIrisFlags ?? const [])
-        .map((flag) => '$flag')
-        .where((flag) => flag.trim().isNotEmpty)
-        .toList(growable: false);
-    var option = 'accurate';
-    var pickedPhotos = <XFile>[];
-    String? errorText;
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Verify parcel weight'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Before pickup, confirm whether the parcel matches the paid weight. Evidence is required for increases.',
-                  style: TextStyle(color: Theme.of(context).hintColor),
-                ),
-                if (irisEstimate.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'IRIS estimate: ${irisEstimate['finalBillableWeightKg'] ?? irisEstimate['irisWeightKg'] ?? currentFinalWeight}kg'
-                    ' · ${irisEstimate['confidenceBand'] ?? job['irisConfidenceBand'] ?? 'pending'} confidence'
-                    ' · ${irisEstimate['suggestedVehicle'] ?? job['vehicleType'] ?? 'vehicle to verify'}',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  if (irisFlags.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: irisFlags
-                          .map(
-                            (flag) => Chip(
-                              visualDensity: VisualDensity.compact,
-                              label: Text(
-                                flag.replaceAll('_', ' '),
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                ],
-                const SizedBox(height: 12),
-                RadioListTile<String>(
-                  value: 'accurate',
-                  groupValue: option,
-                  onChanged: (value) =>
-                      setDialogState(() => option = value ?? option),
-                  title: const Text('Looks correct'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                RadioListTile<String>(
-                  value: 'heavier',
-                  groupValue: option,
-                  onChanged: (value) =>
-                      setDialogState(() => option = value ?? option),
-                  title: const Text('Needs correction - weight is higher'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                RadioListTile<String>(
-                  value: 'significant',
-                  groupValue: option,
-                  onChanged: (value) =>
-                      setDialogState(() => option = value ?? option),
-                  title: const Text('Weight is significantly heavier'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: weightController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Verified weight in kg',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: noteController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Optional note',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final picked = await ImagePicker().pickMultiImage(
-                      imageQuality: 80,
-                      maxWidth: 1800,
-                    );
-                    setDialogState(() => pickedPhotos = picked);
-                  },
-                  icon: const Icon(Icons.photo_camera),
-                  label: Text(
-                    pickedPhotos.isEmpty
-                        ? 'Add evidence photo'
-                        : '${pickedPhotos.length} photo(s) added',
-                  ),
-                ),
-                if (errorText != null) ...[
-                  const SizedBox(height: 8),
-                  Text(errorText!, style: const TextStyle(color: Colors.red)),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final verifiedWeight =
-                    double.tryParse(weightController.text.trim()) ?? 0;
-                final requiresEvidence = option != 'accurate';
-                if (verifiedWeight <= 0) {
-                  setDialogState(() => errorText = 'Enter a valid weight.');
-                  return;
-                }
-                if (requiresEvidence && verifiedWeight <= currentFinalWeight) {
-                  setDialogState(
-                    () => errorText =
-                        'Corrected weight must be higher than the current paid weight.',
-                  );
-                  return;
-                }
-                if (requiresEvidence && pickedPhotos.isEmpty) {
-                  setDialogState(
-                    () => errorText = 'Add at least one evidence photo.',
-                  );
-                  return;
-                }
-                Navigator.pop(context, {
-                  'option': option,
-                  'verifiedWeightKg': verifiedWeight,
-                  'note': noteController.text.trim(),
-                  'photos': pickedPhotos,
-                });
-              },
-              child: const Text('Save verification'),
-            ),
-          ],
-        ),
-      ),
-    );
-    weightController.dispose();
-    noteController.dispose();
-    if (result == null) return null;
-
-    final optionValue = '${result['option']}';
-    final verifiedWeight = result['verifiedWeightKg'] as double;
-    final photos = (result['photos'] as List<XFile>? ?? const <XFile>[]);
-    final evidenceUrls = <String>[];
-    final storagePaths = <String>[];
-    for (final photo in photos) {
-      final bytes = await photo.readAsBytes();
-      final safeName = photo.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final path =
-          'delivery_weight_evidence/$requestId/$riderId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      final ref = FirebaseStorage.instance.ref(path);
-      await ref.putData(bytes);
-      storagePaths.add(path);
-      evidenceUrls.add(await ref.getDownloadURL());
+  String _legacyRiderFunctionMessage(Object error, String fallback) {
+    if (error is FirebaseFunctionsException) {
+      final message = error.message?.trim();
+      if (message != null && message.isNotEmpty) return message;
+      switch (error.code) {
+        case 'already-exists':
+          return 'This delivery has already been accepted.';
+        case 'unauthenticated':
+          return 'Sign in again before continuing.';
+        case 'permission-denied':
+          return 'You are not authorised for this delivery.';
+        case 'failed-precondition':
+          return 'This action is not available yet.';
+      }
     }
-
-    final customerWeight = _jobCustomerWeight(job);
-    final irisWeight = _jobIrisWeight(job);
-    final finalWeightUsed = DeliveryPricing.finalVerifiedWeightKg(
-      customerWeightKg: customerWeight,
-      irisWeightKg: irisWeight,
-      riderVerifiedWeightKg: verifiedWeight,
-    );
-    final distanceMiles = _jobDistanceMiles(job);
-    final vehicle = DeliveryPricing.recommendedVehicleForWeight(
-      finalWeightUsed,
-    );
-    DeliveryAccess accessValue(Object? value) {
-      return switch ('$value') {
-        'stairs' => DeliveryAccess.stairs,
-        'liftAvailable' => DeliveryAccess.liftAvailable,
-        _ => DeliveryAccess.groundFloor,
-      };
-    }
-
-    final revisedHandling = SpecialHandlingEngine.evaluate(
-      description: '${job['packageDescription'] ?? ''}',
-      itemName: '${job['normalizedItemName'] ?? ''}',
-      pickupAccess: accessValue(job['pickupAccess']),
-      dropoffAccess: accessValue(job['dropoffAccess']),
-    );
-    final revisedQuote = revisedHandling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: finalWeightUsed,
-        vehicleType: vehicle,
-      ),
-    ));
-    final revisedPayout = revisedQuote.totalRiderEarnings;
-    final revisedPlatformRevenue = revisedQuote.totalCircumRevenue;
-    final heavier = finalWeightUsed > currentFinalWeight + 0.01;
-    final summary =
-        (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-
-    if (heavier) {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'recipientId': job['senderId'] ?? job['userId'],
-        'requestId': requestId,
-        'type': 'weight_adjusted',
-        'title': 'Parcel weight updated',
-        'message':
-            'Parcel weight differs from original declaration. Pricing has been adjusted.',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-        'source': 'circum-web',
-      });
-    }
-
-    final correctionId =
-        'IC-$requestId-${DateTime.now().millisecondsSinceEpoch}';
-    final previousEstimateId =
-        '${job['irisDeliveryEstimateId'] ?? requestId}'.trim();
-    if (optionValue == 'accurate') {
-      await FirebaseFirestore.instance
-          .collection('irisDeliveryEstimates')
-          .doc(previousEstimateId.isEmpty ? requestId : previousEstimateId)
-          .set({
-        'riderVerificationStatus': 'looks_correct',
-        'riderVerifiedWeightKg': verifiedWeight,
-        'riderVerifiedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } else {
-      await FirebaseFirestore.instance
-          .collection('irisCorrections')
-          .doc(correctionId)
-          .set({
-        'correctionId': correctionId,
-        'estimateId':
-            previousEstimateId.isEmpty ? requestId : previousEstimateId,
-        'bookingId': requestId,
-        'correctedBy': 'rider',
-        'previousWeightKg': currentFinalWeight,
-        'correctedWeightKg': verifiedWeight,
-        'correctionReason': optionValue,
-        'correctionNotes': result['note'],
-        'evidenceUrls': evidenceUrls,
-        'storagePaths': storagePaths,
-        'riderId': riderId,
-        'createdAt': FieldValue.serverTimestamp(),
-        'approvedByAdmin': false,
-        'appliedToRepository': false,
-      });
-      await FirebaseFirestore.instance
-          .collection('irisDeliveryEstimates')
-          .doc(previousEstimateId.isEmpty ? requestId : previousEstimateId)
-          .set({
-        'latestCorrectionId': correctionId,
-        'riderVerificationStatus': 'needs_correction',
-        'riderVerifiedWeightKg': verifiedWeight,
-        'adminReviewStatus': 'open',
-        'requiresAdminReview': true,
-        'flags': FieldValue.arrayUnion(['admin_review_required']),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
-
-    return {
-      'riderVerifiedWeight': verifiedWeight,
-      'riderVerifiedWeightKg': verifiedWeight,
-      'finalVerifiedWeight': finalWeightUsed,
-      'finalWeightUsed': finalWeightUsed,
-      'finalChargeableWeight': finalWeightUsed,
-      'confirmedWeightKg': finalWeightUsed,
-      'confirmedWeightBand': DeliveryPricing.weightBandFor(
-        finalWeightUsed,
-      ).category,
-      'weightCategory': DeliveryPricing.weightBandFor(finalWeightUsed).category,
-      'vehicleType': vehicle,
-      'vehicle': vehicle,
-      'preferredVehicle': vehicle.toLowerCase(),
-      'quote': revisedQuote.total,
-      'price': revisedQuote.total,
-      'fare': revisedQuote.total,
-      'driverPayout': revisedPayout,
-      'riderPayout': revisedPayout,
-      'platformRevenue': revisedPlatformRevenue,
-      'riderBaseShare': revisedQuote.riderBaseShare,
-      'riderLabourShare': revisedQuote.riderLabourShare,
-      'circumBaseShare': revisedQuote.circumBaseShare,
-      'circumLabourShare': revisedQuote.circumLabourShare,
-      'platformShare': DeliveryPricing.platformDeliveryFareShare,
-      'driverShare': DeliveryPricing.riderDeliveryFareShare,
-      'pricingBreakdown': revisedQuote.toJson(),
-      'weightReviewRequired': optionValue != 'accurate',
-      'weightDisputeStatus':
-          optionValue == 'accurate' ? 'verified' : 'admin_review',
-      'driverWeightDispute': {
-        'reported': optionValue != 'accurate',
-        'issueType': optionValue,
-        'reportedBy': riderId,
-        'reportedAt': FieldValue.serverTimestamp(),
-        'status': optionValue == 'accurate' ? 'verified' : 'admin_review',
-      },
-      'weightVerification': {
-        'customerWeight': customerWeight,
-        'irisWeight': irisWeight,
-        'riderVerifiedWeight': verifiedWeight,
-        'finalWeightUsed': finalWeightUsed,
-        'previousFinalWeight': currentFinalWeight,
-        'option': optionValue,
-        'riderId': riderId,
-        'note': result['note'],
-        'supportingImages': evidenceUrls,
-        'storagePaths': storagePaths,
-        'timestamp': FieldValue.serverTimestamp(),
-      },
-      'driverJobSummary': {
-        ...summary,
-        'finalWeightUsed': finalWeightUsed,
-        'finalChargeableWeight': finalWeightUsed,
-        'confirmedWeightKg': finalWeightUsed,
-        'confirmedWeightBand': DeliveryPricing.weightBandFor(
-          finalWeightUsed,
-        ).category,
-        'driverPayout': revisedPayout,
-        'riderPayout': revisedPayout,
-        'platformRevenue': revisedPlatformRevenue,
-        'totalFare': revisedQuote.total,
-        'vehicleType': vehicle,
-      },
-    };
-  }
-
-  double _jobPayout(Map<String, dynamic> job) {
-    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
-    final value = summary?['driverPayout'] ?? job['driverPayout'];
-    if (value is num) return value.toDouble();
-    return double.tryParse('$value') ?? 0;
-  }
-
-  double _jobTip(Map<String, dynamic> job) {
-    final value = job['tipAmount'] ?? job['riderTip'] ?? job['tip'];
-    if (value is num) return value.toDouble();
-    return double.tryParse('$value') ?? 0;
-  }
-
-  double _jobCustomerWeight(Map<String, dynamic> job) {
-    return _jobNumber(job, [
-      'customerWeight',
-      'customerDeclaredWeight',
-      'senderEnteredWeightKg',
-      'declaredWeightKg',
-    ]);
-  }
-
-  double _jobIrisWeight(Map<String, dynamic> job) {
-    return _jobNumber(job, [
-      'irisWeight',
-      'irisEstimatedWeight',
-      'irisEstimatedWeightKg',
-    ]);
-  }
-
-  double _jobFinalWeight(Map<String, dynamic> job) {
-    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
-    return _numberValue(job['finalWeightUsed']) ??
-        _numberValue(job['finalChargeableWeight']) ??
-        _numberValue(job['confirmedWeightKg']) ??
-        _numberValue(summary?['finalWeightUsed']) ??
-        _numberValue(summary?['confirmedWeightKg']) ??
-        0;
+    return fallback;
   }
 
   double _jobDistanceMiles(Map<String, dynamic> job) {
@@ -22345,17 +21376,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _numberValue(job['estimatedDistanceMiles']) ??
         _numberValue(pricing?['distanceMiles']) ??
         _webQuoteDistanceMiles;
-  }
-
-  double _jobNumber(Map<String, dynamic> job, List<String> keys) {
-    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
-    for (final key in keys) {
-      final direct = _numberValue(job[key]);
-      if (direct != null) return direct;
-      final nested = _numberValue(summary?[key]);
-      if (nested != null) return nested;
-    }
-    return 0;
   }
 
   double? _numberValue(Object? value) {
@@ -22871,68 +21891,23 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final pending = await db
-          .collection('payoutRequests')
-          .where('riderId', isEqualTo: user.uid)
-          .where('status', whereIn: ['requested', 'approved', 'pending'])
-          .limit(1)
-          .get();
-      if (pending.docs.isNotEmpty) {
-        if (!mounted) return;
-        setState(
-          () => _withdrawMessage = 'Payout already pending.',
-        );
-        return;
-      }
-      final requestRef = db.collection('payoutRequests').doc();
-      final batch = db.batch();
-      batch.set(requestRef, {
-        'requestId': requestRef.id,
-        'riderId': user.uid,
-        'riderEmail': user.email,
+      await FirebaseFunctions.instance
+          .httpsCallable('requestRiderWithdrawal')
+          .call({
         'amount': amount,
-        'stripeAccountId': _riderProfile?['stripeAccountId'] ??
-            _riderProfile?['stripeConnectAccountId'],
-        'paymentProvider': 'stripe_connect_express',
-        'feePayer': 'rider',
-        'payoutFeePayer': 'rider',
-        'status': 'requested',
-        'notes': '',
-        'auditTrail': [
-          {
-            'type': 'withdrawal_requested',
-            'riderId': user.uid,
-            'amount': amount,
-            'status': 'requested',
-            'source': 'circum-web',
-            'paymentProvider': 'stripe_connect_express',
-            'payoutFeePayer': 'rider',
-            'createdAt': Timestamp.now(),
-          },
-        ],
-        'source': 'circum-web',
-        'requestedAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
       });
-      batch.set(
-          db.collection('riderEarnings').doc(user.uid),
-          {
-            'pendingWithdrawal': FieldValue.increment(amount),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-      await batch.commit();
       if (!mounted) return;
       setState(
         () => _withdrawMessage =
             'Payout request sent. Circum will release it through Stripe Connect.',
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(
-        () => _withdrawMessage = 'We could not send the request. Try again.',
+        () => _withdrawMessage = _legacyRiderFunctionMessage(
+          error,
+          'We could not send the request. Try again.',
+        ),
       );
     } finally {
       if (mounted) setState(() => _withdrawSubmitting = false);
@@ -32890,6 +31865,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() => _ratingMessage = 'Choose a star rating first.');
       return;
     }
+    if (_selectedTipAmount > 0) {
+      setState(() => _ratingMessage =
+          'Tips are handled by Circum payments. Submit the rating without a tip for now.');
+      return;
+    }
     setState(() {
       _ratingSubmitting = true;
       _ratingMessage = 'Saving your rating...';
@@ -32904,12 +31884,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final ratingRef = db.collection('driverRatings').doc(ratingId);
       await db.runTransaction((transaction) async {
         final existing = await transaction.get(ratingRef);
-        final tipTxId = '${requestId}_${driverId}_tip';
-        final rothTipTxId = 'roth_$tipTxId';
-        final rothWalletRef = db.collection('wallets').doc(driverId);
-        final rothWallet = _selectedTipAmount > 0
-            ? await transaction.get(rothWalletRef)
-            : null;
         if (existing.exists) {
           throw StateError('duplicate-rating');
         }
@@ -32931,77 +31905,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           {
             'driverRatingId': ratingId,
             'driverRatedByCustomer': true,
-            if (_selectedTipAmount > 0) ...{
-              'tipAmount': _selectedTipAmount,
-              'riderTip': _selectedTipAmount,
-              'tipStatus': 'paid',
-            },
             'ratedAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
         );
-        if (_selectedTipAmount > 0) {
-          final rothAvailable =
-              (rothWallet?.data()?['availableEarnings'] as num?)?.toDouble() ??
-                  0;
-          transaction.set(
-            db.collection('riderWalletTransactions').doc(tipTxId),
-            {
-              'transactionId': tipTxId,
-              'requestId': requestId,
-              'riderId': driverId,
-              'customerId': customerId,
-              'type': 'tip',
-              'tipAmount': _selectedTipAmount,
-              'amount': _selectedTipAmount,
-              'status': 'available',
-              'source': 'circum-web',
-              'createdAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
-          transaction.set(
-              db.collection('riderEarnings').doc(driverId),
-              {
-                'availableBalance': FieldValue.increment(_selectedTipAmount),
-                'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
-                'tipsReceived': FieldValue.increment(_selectedTipAmount),
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
-          transaction.set(
-            db.collection('walletTransactions').doc(rothTipTxId),
-            {
-              'id': rothTipTxId,
-              'userId': driverId,
-              'amount': _selectedTipAmount,
-              'balanceType': 'availableEarnings',
-              'type': 'earnings_available',
-              'reason': 'Customer tip credited to rider available earnings.',
-              'relatedEntityId': requestId,
-              'paymentProvider': 'stripe',
-              'balanceBefore': rothAvailable,
-              'balanceAfter': double.parse(
-                  (rothAvailable + _selectedTipAmount).toStringAsFixed(2)),
-              'createdAt': FieldValue.serverTimestamp(),
-              'metadata': {
-                'legacyTransactionId': tipTxId,
-                'source': 'customer_tip',
-              },
-            },
-            SetOptions(merge: true),
-          );
-          transaction.set(
-              rothWalletRef,
-              {
-                'userId': driverId,
-                'availableEarnings': FieldValue.increment(_selectedTipAmount),
-                'updatedAt': FieldValue.serverTimestamp(),
-                'createdAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
-        }
       });
       await _recalculateDriverPerformance(driverId);
       if (!mounted) return;
