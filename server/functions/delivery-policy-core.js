@@ -47,6 +47,17 @@ function normalizeState(value) {
   return `${value || ""}`.trim().toLowerCase().replace(/[-\s]+/g, "_");
 }
 
+function lifecycleStateFields(value) {
+  const state = normalizeState(value);
+  if (!state) throw new Error("A lifecycle state is required.");
+  return {
+    state,
+    status: state,
+    deliveryStatus: state,
+    deliveryStage: state,
+  };
+}
+
 function money(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
@@ -493,6 +504,7 @@ module.exports = {
   fraudSignals,
   freeWaitExpired,
   geofenceReentryDecision,
+  lifecycleStateFields,
   noShowDecision,
   normalizeState,
   policy,

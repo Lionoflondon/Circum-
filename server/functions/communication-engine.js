@@ -6,6 +6,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const terminalDeliveryStatuses = new Set([
   "delivered", "completed", "cancelled", "canceled", "failed",
   "archived", "archived_stale", "archived_expired", "admin_removed_stale",
+  "sender_no_show_pickup",
 ]);
 const allowedConversationTypes = new Set([
   "sender_rider", "admin_sender", "admin_rider", "support",

@@ -31,6 +31,7 @@ test("backend statuses map to Sender tracking states", () => {
     collected: "pickup_complete",
     navigating_to_dropoff: "in_transit",
     arrived_at_dropoff: "rider_arriving_at_dropoff",
+    sender_no_show_pickup: "cancelled",
     delivered: "delivered",
     cancelled: "cancelled",
     issue_reported: "issue",

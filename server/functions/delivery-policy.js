@@ -356,6 +356,7 @@ exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
       event,
       evidenceId: evidenceRef.id,
       extra: {
+        ...core.lifecycleStateFields("sender_no_show_pickup"),
         noShowPolicy: decision,
         noShowFinancial: financial,
         noShowMarkedAt: FieldValue.serverTimestamp(),

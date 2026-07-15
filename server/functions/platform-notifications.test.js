@@ -78,3 +78,24 @@ test("Gift request statuses map to backend-owned notification events", () => {
   );
   assert.equal(_private.giftStatusNotification("draft"), null);
 });
+
+test("no-show lifecycle emits one canonical system message", () => {
+  assert.equal(
+      _private.deliverySystemMessage("sender_no_show_pickup"),
+      "Pickup was marked as missed after the collection wait.",
+  );
+  assert.equal(_private.deliverySystemMessage("waiting"), null);
+});
+
+test("backend lifecycle messages do not emit duplicate chat notifications", () => {
+  assert.equal(_private.isBackendSystemMessage({
+    senderId: "circum-system",
+    senderRole: "system",
+    messageType: "system",
+  }), true);
+  assert.equal(_private.isBackendSystemMessage({
+    senderId: "sender-1",
+    senderRole: "sender",
+    messageType: "text",
+  }), false);
+});

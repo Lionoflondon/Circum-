@@ -186,6 +186,16 @@ test("financial actions are idempotent and frontend cannot alter existing fee re
   assert.equal(duplicate.riderCompensation, 4);
 });
 
+test("no-show lifecycle fields are synchronized from one canonical state", () => {
+  assert.deepEqual(policy.lifecycleStateFields("Sender No-Show Pickup"), {
+    state: "sender_no_show_pickup",
+    status: "sender_no_show_pickup",
+    deliveryStatus: "sender_no_show_pickup",
+    deliveryStage: "sender_no_show_pickup",
+  });
+  assert.throws(() => policy.lifecycleStateFields(""), /lifecycle state/);
+});
+
 test("customer acknowledgement hooks record controlled extensions", () => {
   const coming = policy.customerResponseDecision({
     deliveryId: "delivery-1",

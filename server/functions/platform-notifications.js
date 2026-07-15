@@ -179,6 +179,29 @@ function deliveryIds(data) {
   };
 }
 
+function deliverySystemMessage(status) {
+  return {
+    accepted: "Rider accepted the delivery.",
+    navigating_to_pickup: "Rider is heading to pickup.",
+    arrived: "Rider has arrived.",
+    arrived_at_pickup: "Rider has arrived.",
+    pickup_verified: "Pickup completed.",
+    collected: "Delivery started.",
+    picked_up: "Delivery started.",
+    navigating_to_dropoff: "Delivery is in progress.",
+    pin_required: "Recipient PIN verification is required.",
+    sender_no_show_pickup: "Pickup was marked as missed after the collection wait.",
+    delivered: "Delivery completed.",
+    completed: "Delivery completed.",
+  }[text(status).toLowerCase()] || null;
+}
+
+function isBackendSystemMessage(message = {}) {
+  return text(message.senderId) === "circum-system" ||
+    text(message.senderRole).toLowerCase() === "system" ||
+    text(message.messageType).toLowerCase() === "system";
+}
+
 function moneyText(value, currency = "GBP") {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount) || amount <= 0) return "";
@@ -277,23 +300,12 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const waitingCharge = customerWaitingCharge(after);
   const waitingChargeAmount = Number(waitingCharge.amount || 0);
   if (!statusChanged && oldPayment === payment && oldWaitingContext === waitingContext && oldWaitingCharge === waitingChargeAmount) return;
-  if (statusChanged) await communicationEngine.closeDeliveryConversation(
-      ids.bookingId, status);
-  const systemMessages = {
-    accepted: "Rider accepted the delivery.",
-    navigating_to_pickup: "Rider is heading to pickup.",
-    arrived: "Rider has arrived.",
-    arrived_at_pickup: "Rider has arrived.",
-    pickup_verified: "Pickup completed.",
-    collected: "Delivery started.",
-    picked_up: "Delivery started.",
-    navigating_to_dropoff: "Delivery is in progress.",
-    pin_required: "Recipient PIN verification is required.",
-    delivered: "Delivery completed.",
-    completed: "Delivery completed.",
-  };
-  if (statusChanged && systemMessages[status]) {
-    await communicationEngine.appendSystemMessage(ids.bookingId, systemMessages[status]);
+  if (statusChanged) {
+    await communicationEngine.closeDeliveryConversation(ids.bookingId, status);
+  }
+  const systemMessage = statusChanged ? deliverySystemMessage(status) : null;
+  if (systemMessage) {
+    await communicationEngine.appendSystemMessage(ids.bookingId, systemMessage);
   }
   const chargeText = moneyText(waitingCharge.amount, waitingCharge.currency);
   const senderMessages = {
@@ -337,6 +349,7 @@ exports.onGiftCampaignParticipantUpdated = functions.firestore.document("giftCam
 
 exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/messages/{messageId}").onCreate(async (snapshot, context) => {
   const message = snapshot.data();
+  if (isBackendSystemMessage(message)) return;
   const chat = await getFirestore().collection("chats").doc(context.params.chatId).get();
   if (!chat.exists) return;
   const chatData = chat.data();
@@ -407,6 +420,8 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
 exports.giftNotificationRecord = giftNotificationRecord;
 exports.giftNotificationRecordsForTransition = giftNotificationRecordsForTransition;
 exports._private = {
+  deliverySystemMessage,
+  isBackendSystemMessage,
   giftStatus,
   giftStatusNotification,
 };
