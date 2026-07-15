@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('public website owns the Sender login and signup entry flow', () {
-    final publicSource = File('lib/web_sender_app.dart').readAsStringSync();
+    final publicSource =
+        File('lib/public_web/public_app.dart').readAsStringSync();
 
     expect(publicSource, contains('enum _PublicAuthMode'));
     expect(publicSource, contains('Welcome to Circum'));
@@ -36,5 +37,11 @@ void main() {
     expect(senderAppSource, isNot(contains('Welcome to Circum')));
     expect(senderAppSource, isNot(contains('Sign up')));
     expect(senderAppSource, isNot(contains("label: 'Accept Terms'")));
+
+    final senderWebSource = File('lib/web_sender_app.dart').readAsStringSync();
+    expect(senderWebSource, isNot(contains('enum _PublicAuthMode')));
+    expect(senderWebSource, isNot(contains('Welcome to Circum')));
+    expect(senderWebSource, isNot(contains('CircumPublicAppRoot')));
+    expect(senderWebSource, isNot(contains('class _LandingPage')));
   });
 }

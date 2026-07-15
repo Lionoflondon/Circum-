@@ -3,13 +3,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('public hosting never resolves the admin surface', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
-    expect(source, isNot(contains("|| path == '/admin'")));
-    expect(
-      source,
-      contains('if (adminHostingTarget && !_isPublicHostingHostFor(uri))'),
-    );
+  test('public hosting has no Sender or Admin route resolver', () {
+    final source = File('lib/public_web/public_app.dart').readAsStringSync();
+    expect(source, isNot(contains('CircumSenderAppRoot')));
+    expect(source, isNot(contains('CircumAdminAppRoot')));
+    expect(source, isNot(contains('CircumAppSurface')));
   });
 
   test('admin hosting resolves only through the compile-time admin boundary',
@@ -29,7 +27,7 @@ void main() {
         contains("uri.host.toLowerCase() == 'circum-app-2797c.web.app'"));
     final senderHostRoute = source.substring(
       source.indexOf('if (_isSenderAppHostingHostFor(uri)'),
-      source.indexOf('// Temporary architecture-preview routes'),
+      source.indexOf('return switch (app)'),
     );
     expect(senderHostRoute, contains('surface: CircumAppSurface.senderApp'));
     expect(senderHostRoute, contains('senderEntry: _senderEntryFromPath'));
@@ -53,6 +51,8 @@ void main() {
     expect(source, contains('previewAuthEnabled: true'));
     expect(source, isNot(contains('useSenderPreview')));
     expect(source, isNot(contains('_SenderArchitecturePreviewApp(')));
+    expect(source, isNot(contains('CircumPublicAppRoot')));
+    expect(source, isNot(contains('class _LandingPage')));
   });
 
   test('hosting aliases and build outputs are permanently isolated', () {
@@ -113,7 +113,8 @@ void main() {
   });
 
   test('Circum Web links to Rider without embedding Rider UI', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final source = File('lib/public_web/public_app.dart').readAsStringSync();
+    final entry = File('lib/public_web/main_public.dart').readAsStringSync();
     expect(File('lib/main_rider.dart').existsSync(), isFalse);
     expect(
       source,
@@ -121,10 +122,30 @@ void main() {
         "const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app'",
       ),
     );
-    expect(
-        source, contains('html.window.location.assign(_canonicalRiderAppUrl)'));
+    expect(source, contains('_openExternal(_canonicalRiderAppUrl)'));
     expect(source, isNot(contains('class CircumRiderApp')));
     expect(source, isNot(contains('CircumAppSurface.riderWeb')));
+    expect(entry, contains("import 'public_app.dart';"));
+    expect(entry, isNot(contains('web_sender_app.dart')));
+  });
+
+  test('public web has a dedicated entry and no application shell imports', () {
+    final publicFiles = Directory('lib/public_web')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'));
+    final source =
+        publicFiles.map((file) => file.readAsStringSync()).join('\n');
+    final deploy = File('scripts/deploy_main_web.sh').readAsStringSync();
+
+    expect(source, contains('Earn as a Rider'));
+    expect(source, contains('https://circum-rider-2797c.web.app'));
+    expect(source, isNot(contains('web_sender_app.dart')));
+    expect(source, isNot(contains('CircumSenderAppRoot')));
+    expect(source, isNot(contains('CircumRiderAppRoot')));
+    expect(source, isNot(contains('CircumAdminAppRoot')));
+    expect(deploy, contains('--target lib/public_web/main_public.dart'));
+    expect(deploy, contains('node scripts/guard_public_web_architecture.js'));
   });
 
   test('generic Hosting deployment entry points are absent', () {
