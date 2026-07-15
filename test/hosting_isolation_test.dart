@@ -40,6 +40,10 @@ void main() {
     expect(source, contains("'/send' || '/booking' || '/book'"));
     expect(source, contains("'/wallet'"));
     expect(source, contains("'/activity' || '/history'"));
+    expect(
+      source,
+      contains("'/profile' || '/account' => CircumSenderEntry.account"),
+    );
     expect(source, contains('initialIndex: _senderMobileIndexForEntry'));
     expect(
         source,

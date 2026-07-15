@@ -10,6 +10,7 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
   bool failSave;
   bool loggedOut = false;
   bool photoUploaded = false;
+  bool accountClosed = false;
 
   _FakeProfileRepository({
     required this.profile,
@@ -32,12 +33,14 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
   @override
   Future<SenderMobileProfileData> save({
     required String displayName,
+    required String username,
     required String phone,
   }) async {
     if (failSave) throw Exception('save failed');
     profile = SenderMobileProfileData(
       userId: profile.userId,
       displayName: displayName,
+      username: username,
       email: profile.email,
       phone: phone,
       photoUrl: profile.photoUrl,
@@ -58,6 +61,11 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
   }
 
   @override
+  Future<void> closeAccount() async {
+    accountClosed = true;
+  }
+
+  @override
   Future<SenderMobileProfileData> uploadPhoto(
     SenderProfilePhoto photo,
   ) async {
@@ -65,6 +73,7 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
     profile = SenderMobileProfileData(
       userId: profile.userId,
       displayName: profile.displayName,
+      username: profile.username,
       email: profile.email,
       phone: profile.phone,
       photoUrl: '',
@@ -107,10 +116,20 @@ Widget _app(
   );
 }
 
+Future<void> _scrollTo(WidgetTester tester, Finder target) async {
+  await tester.dragUntilVisible(
+    target,
+    find.byKey(const Key('sender-profile-view')),
+    const Offset(0, -320),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   final completeProfile = SenderMobileProfileData(
     userId: 'sender-1',
     displayName: 'Jason Adesanya',
+    username: 'jasonadesanya',
     email: 'jason@example.com',
     phone: '+44 7700 900123',
     photoUrl: '',
@@ -140,14 +159,14 @@ void main() {
     expect(find.text('SENDER ACCOUNT'), findsOneWidget);
     expect(find.text('Member since 2021'), findsOneWidget);
     expect(find.text('Edit Profile'), findsOneWidget);
-    expect(find.text('★★★★★'), findsOneWidget);
-    expect(find.text('Priority Sender'), findsOneWidget);
+    expect(find.text('@jasonadesanya'), findsWidgets);
+    expect(find.text('Priority'), findsOneWidget);
     expect(find.text('342'), findsOneWidget);
     expect(find.text('48'), findsOneWidget);
     expect(find.text('408 Trust Points until Platinum'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('+44 7700 900123'), 250);
+    await _scrollTo(tester, find.text('+44 7700 900123'));
     expect(find.text('+44 7700 900123'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Trust'), 250);
+    await _scrollTo(tester, find.text('Trust'));
     expect(find.text('Trust'), findsOneWidget);
     expect(find.text('Recent Trust Activity'), findsOneWidget);
     expect(find.text('Successful Delivery'), findsOneWidget);
@@ -160,7 +179,7 @@ void main() {
     expect(find.text('Regular Sender Benefits'), findsNothing);
     expect(find.text('Regular Sender benefit'), findsNothing);
     expect(find.text('Eligibility for earlier rider acceptance'), findsNothing);
-    await tester.scrollUntilVisible(find.text('Saved addresses'), 250);
+    await _scrollTo(tester, find.text('Saved addresses'));
     expect(find.text('Saved addresses'), findsOneWidget);
     expect(
       find.text('No saved addresses yet.'),
@@ -168,25 +187,24 @@ void main() {
     );
     expect(find.text('Wallet'), findsOneWidget);
     expect(
-      find.text('Manage your Roth balance and rewards.'),
+      find.text('Roth balance, rewards and transactions.'),
       findsOneWidget,
     );
     expect(find.text('Referrals'), findsOneWidget);
-    expect(find.text('Invite friends and earn Roth rewards.'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Accessibility'), 300);
+    expect(
+        find.text('Invite friends and view referral rewards.'), findsOneWidget);
+    await _scrollTo(tester, find.text('Accessibility'));
     expect(find.text('Notifications'), findsOneWidget);
     expect(find.text('Payment methods'), findsOneWidget);
     expect(find.text('Security'), findsOneWidget);
     expect(find.text('Language'), findsOneWidget);
     expect(find.text('Accessibility'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Help & support'), 250);
+    await _scrollTo(tester, find.text('Help & Support'));
     expect(find.text('Help'), findsOneWidget);
-    expect(find.text('Help & support'), findsOneWidget);
-    expect(find.text('Legal'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('sender-profile-logout')),
-      300,
-    );
+    expect(find.text('Help & Support'), findsOneWidget);
+    expect(find.text('Terms'), findsOneWidget);
+    expect(find.text('Privacy'), findsOneWidget);
+    await _scrollTo(tester, find.byKey(const Key('sender-profile-logout')));
     expect(find.text('Log out'), findsOneWidget);
     expect(find.textContaining('Rider'), findsNothing);
   });
@@ -197,7 +215,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('Security'), 300);
+    await _scrollTo(tester, find.text('Security'));
     await tester.tap(find.text('Security'));
     await tester.pumpAndSettle();
     expect(find.text('Change password'), findsOneWidget);
@@ -209,7 +227,7 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Language'), 300);
+    await _scrollTo(tester, find.text('Language'));
     await tester.tap(find.text('Language'));
     await tester.pumpAndSettle();
     expect(find.text('App Language'), findsOneWidget);
@@ -224,7 +242,7 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Accessibility'), 300);
+    await _scrollTo(tester, find.text('Accessibility'));
     await tester.tap(find.text('Accessibility'));
     await tester.pumpAndSettle();
     expect(find.text('Appearance'), findsOneWidget);
@@ -249,18 +267,20 @@ void main() {
         email: 'known@example.com',
         phone: '',
         photoUrl: '',
+        hasTrustScore: false,
+        hasCompletedDeliveries: false,
       ),
     );
     await tester.pumpWidget(_app(repository));
     await tester.pumpAndSettle();
 
     expect(find.text('Add your name'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Phone'), 250);
-    expect(find.text('Not added yet'), findsNWidgets(2));
-    await tester.scrollUntilVisible(
+    await _scrollTo(tester, find.text('Phone'));
+    expect(find.text('Not added yet'), findsNWidgets(3));
+    await tester.ensureVisible(
       find.byKey(const Key('sender-profile-primary-edit')),
-      -250,
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sender-profile-primary-edit')));
     await tester.pumpAndSettle();
     await tester.drag(
@@ -280,32 +300,28 @@ void main() {
         email: 'new@example.com',
         phone: '',
         photoUrl: '',
+        hasTrustScore: false,
+        hasCompletedDeliveries: false,
       ),
     );
     await tester.pumpWidget(_app(repository));
     await tester.pumpAndSettle();
 
     expect(find.text('New Sender'), findsWidgets);
-    expect(find.text('0'), findsWidgets);
-    expect(find.text('25 Trust Points until Active'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('No recent trust activity yet.'),
-      250,
-    );
+    expect(find.text('—'), findsNWidgets(2));
+    expect(find.text('Trust progress unavailable'), findsOneWidget);
+    await _scrollTo(tester, find.text('No recent trust activity yet.'));
     expect(find.text('No recent trust activity yet.'), findsOneWidget);
   });
 
-  testWidgets('edits and saves display name and phone', (tester) async {
+  testWidgets('edits and saves name, username and phone', (tester) async {
     final repository = _FakeProfileRepository(profile: completeProfile);
     await tester.pumpWidget(_app(repository));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('sender-profile-primary-edit')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('sender-profile-name-field')),
-      250,
-    );
+    await _scrollTo(tester, find.byKey(const Key('sender-profile-name-field')));
     await tester.enterText(
       find.byKey(const Key('sender-profile-name-field')),
       'Jason A',
@@ -314,12 +330,17 @@ void main() {
       find.byKey(const Key('sender-profile-phone-field')),
       '+44 7700 900456',
     );
+    await tester.enterText(
+      find.byKey(const Key('sender-profile-username-field')),
+      'jason-a',
+    );
     await tester.ensureVisible(find.byKey(const Key('sender-profile-save')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sender-profile-save')));
     await tester.pumpAndSettle();
 
     expect(repository.profile.displayName, 'Jason A');
+    expect(repository.profile.username, 'jason-a');
     expect(repository.profile.phone, '+44 7700 900456');
     expect(find.text('Profile saved.'), findsOneWidget);
   });
@@ -348,10 +369,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sender-profile-primary-edit')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('sender-profile-save')),
-      250,
-    );
+    await _scrollTo(tester, find.byKey(const Key('sender-profile-save')));
     await tester.ensureVisible(find.byKey(const Key('sender-profile-save')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sender-profile-save')));
@@ -394,14 +412,148 @@ void main() {
       _app(repository, onLoggedOut: () => callbackCalled = true),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('sender-profile-logout')),
-      300,
-    );
+    await _scrollTo(tester, find.byKey(const Key('sender-profile-logout')));
     await tester.tap(find.byKey(const Key('sender-profile-logout')));
     await tester.pumpAndSettle();
 
     expect(repository.loggedOut, isTrue);
     expect(callbackCalled, isTrue);
+  });
+
+  testWidgets('uses a single-column layout on mobile', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      _app(_FakeProfileRepository(profile: completeProfile)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sender-profile-desktop-grid')), findsNothing);
+    expect(find.byKey(const Key('sender-profile-constrained-layout')),
+        findsOneWidget);
+  });
+
+  testWidgets('constrains and centres the desktop profile', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      _app(_FakeProfileRepository(profile: completeProfile)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const Key('sender-profile-desktop-grid')), findsOneWidget);
+    final constrained = tester.widget<ConstrainedBox>(
+      find.byKey(const Key('sender-profile-constrained-layout')),
+    );
+    expect(constrained.constraints.maxWidth, 1040);
+  });
+
+  testWidgets('shows one edit action and one trust summary', (tester) async {
+    await tester.pumpWidget(
+      _app(_FakeProfileRepository(profile: completeProfile)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Profile'), findsOneWidget);
+    expect(find.text('Trust'), findsOneWidget);
+    expect(find.text('Trust Score'), findsOneWidget);
+  });
+
+  testWidgets('keeps content clear of the fixed Sender navigation',
+      (tester) async {
+    await tester.pumpWidget(
+      _app(_FakeProfileRepository(profile: completeProfile)),
+    );
+    await tester.pumpAndSettle();
+
+    final list = tester.widget<ListView>(
+      find.byKey(const Key('sender-profile-view')),
+    );
+    final padding = list.padding! as EdgeInsets;
+    expect(padding.bottom, greaterThanOrEqualTo(96));
+  });
+
+  testWidgets('account rows use transient interaction states only',
+      (tester) async {
+    await tester.pumpWidget(
+      _app(_FakeProfileRepository(profile: completeProfile)),
+    );
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.byKey(const Key('sender-profile-terms')));
+
+    final ink = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(const Key('sender-profile-terms')),
+        matching: find.byType(InkWell),
+      ),
+    );
+    expect(ink.hoverColor, isNot(const Color(0xFF3B82F6)));
+    expect(ink.focusColor, isNot(const Color(0xFF3B82F6)));
+  });
+
+  testWidgets(
+      'maps internal baseline activity to customer copy and limits preview',
+      (tester) async {
+    final profile = SenderMobileProfileData(
+      userId: completeProfile.userId,
+      displayName: completeProfile.displayName,
+      username: completeProfile.username,
+      email: completeProfile.email,
+      phone: completeProfile.phone,
+      photoUrl: '',
+      trustHistory: [
+        SenderTrustActivity.fromMap(const {
+          'label': 'System Baseline From Delivery History',
+          'points': 10,
+        }),
+        const SenderTrustActivity(points: 2, label: 'Delivery completed'),
+        const SenderTrustActivity(points: 3, label: 'Trust points added'),
+        const SenderTrustActivity(points: 4, label: 'Fourth entry'),
+      ],
+    );
+    await tester.pumpWidget(_app(_FakeProfileRepository(profile: profile)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('System Baseline From Delivery History'), findsNothing);
+    expect(find.text('Account trust baseline established'), findsOneWidget);
+    expect(find.text('Fourth entry'), findsNothing);
+  });
+
+  testWidgets('Terms and Privacy open independent dark routes', (tester) async {
+    await tester.pumpWidget(
+      _app(_FakeProfileRepository(profile: completeProfile)),
+    );
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.byKey(const Key('sender-profile-terms')));
+    await tester.tap(find.byKey(const Key('sender-profile-terms')));
+    await tester.pumpAndSettle();
+    expect(find.text('Circum Terms of Service'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.byKey(const Key('sender-profile-privacy')));
+    await tester.tap(find.byKey(const Key('sender-profile-privacy')));
+    await tester.pumpAndSettle();
+    expect(find.text('Circum Privacy Policy'), findsOneWidget);
+  });
+
+  testWidgets('account closure requires confirmation and uses repository',
+      (tester) async {
+    final repository = _FakeProfileRepository(profile: completeProfile);
+    await tester.pumpWidget(_app(repository));
+    await tester.pumpAndSettle();
+    await _scrollTo(
+        tester, find.byKey(const Key('sender-profile-close-account')));
+    await tester.tap(find.byKey(const Key('sender-profile-close-account')));
+    await tester.pumpAndSettle();
+    expect(find.text('Close your Circum account?'), findsOneWidget);
+    expect(repository.accountClosed, isFalse);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close account'));
+    await tester.pumpAndSettle();
+    expect(repository.accountClosed, isTrue);
   });
 }
