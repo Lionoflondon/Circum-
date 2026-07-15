@@ -24,6 +24,7 @@ class CircumWebShell extends StatelessWidget {
     required this.onToggleTheme,
     required this.child,
     this.locationLabel,
+    this.headerActions,
   });
 
   final CircumWebSection section;
@@ -31,6 +32,7 @@ class CircumWebShell extends StatelessWidget {
   final VoidCallback onToggleTheme;
   final Widget child;
   final String? locationLabel;
+  final Widget? headerActions;
 
   static const _blue = Color(0xFF3B82F6);
 
@@ -128,6 +130,16 @@ class CircumWebShell extends StatelessWidget {
                     ),
                   ],
                   const Spacer(),
+                  if (!mobile && headerActions != null) ...[
+                    Flexible(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        reverse: true,
+                        child: headerActions!,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   IconButton(
                     tooltip: darkMode
                         ? 'Use light appearance'

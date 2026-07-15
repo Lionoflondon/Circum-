@@ -386,6 +386,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
           section: CircumWebSection.sender,
           darkMode: _darkMode,
           onToggleTheme: _toggleTheme,
+          headerActions: widget.useCanonicalSenderWeb
+              ? _SenderHeaderServicePills(colors: colors)
+              : null,
           child: Stack(
             children: [
               AnimatedSwitcher(
@@ -24312,14 +24315,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               _step != _SenderStep.healthPlus;
           return Column(
             children: [
-              _SenderServicePills(
-                colors: colors,
-                onSendParcel: () => _selectSenderNavStep(_SenderStep.details),
-                onHealthPlus: () =>
-                    _selectSenderNavStep(_SenderStep.healthPlus),
-                onBusiness: () => _selectSenderNavStep(_SenderStep.business),
-                onGifts: widget.onOpenGifts,
-              ),
               Expanded(
                 child: desktop
                     ? _DesktopPortalLayout(
@@ -31997,64 +31992,50 @@ class _IrisPill extends StatelessWidget {
   }
 }
 
-class _SenderServicePills extends StatelessWidget {
-  const _SenderServicePills({
-    required this.colors,
-    required this.onSendParcel,
-    required this.onHealthPlus,
-    required this.onBusiness,
-    required this.onGifts,
-  });
+class _SenderHeaderServicePills extends StatelessWidget {
+  const _SenderHeaderServicePills({required this.colors});
 
   final _CircumColors colors;
-  final VoidCallback onSendParcel;
-  final VoidCallback onHealthPlus;
-  final VoidCallback onBusiness;
-  final VoidCallback onGifts;
+
+  void _open(String path) => html.window.location.assign(path);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
-      decoration: BoxDecoration(
-        color: colors.appBackground.withValues(alpha: .82),
-        border: Border(bottom: BorderSide(color: colors.border)),
-      ),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: [
-          _SenderServicePill(
-            colors: colors,
-            glyph: _senderGlyphTruck,
-            label: 'Send a Parcel',
-            accent: colors.adminAccent,
-            onTap: onSendParcel,
-          ),
-          _SenderServicePill(
-            colors: colors,
-            glyph: _senderGlyphHealth,
-            label: 'Health+',
-            accent: const Color(0xff4ade80),
-            onTap: onHealthPlus,
-          ),
-          _SenderServicePill(
-            colors: colors,
-            glyph: _senderGlyphBusiness,
-            label: 'Business',
-            accent: colors.adminAccent,
-            onTap: onBusiness,
-          ),
-          _SenderServicePill(
-            colors: colors,
-            glyph: _senderGlyphGift,
-            label: 'Gifts',
-            accent: const Color(0xffa78bfa),
-            onTap: onGifts,
-          ),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SenderServicePill(
+          colors: colors,
+          glyph: _senderGlyphTruck,
+          label: 'Send a Parcel',
+          accent: colors.adminAccent,
+          onTap: () => _open('/send/send'),
+        ),
+        const SizedBox(width: 8),
+        _SenderServicePill(
+          colors: colors,
+          glyph: _senderGlyphHealth,
+          label: 'Health+',
+          accent: const Color(0xff4ade80),
+          onTap: () => _open('/send/health-plus'),
+        ),
+        const SizedBox(width: 8),
+        _SenderServicePill(
+          colors: colors,
+          glyph: _senderGlyphBusiness,
+          label: 'Business',
+          accent: colors.adminAccent,
+          onTap: () => _open('/send/business'),
+        ),
+        const SizedBox(width: 8),
+        _SenderServicePill(
+          colors: colors,
+          glyph: _senderGlyphGift,
+          label: 'Gifts',
+          accent: const Color(0xffa78bfa),
+          onTap: () => _open('/send?sender_mobile_gifts=1'),
+        ),
+      ],
     );
   }
 }
