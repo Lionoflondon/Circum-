@@ -22,6 +22,10 @@ service cloud.firestore {
         hasRole('driver_manager');
     }
 
+    function isIrisAdmin() {
+      return hasRole('super_admin') || hasRole('operations_admin');
+    }
+
     function isFinanceAdmin() {
       return hasRole('super_admin') || hasRole('finance_admin');
     }
@@ -478,6 +482,11 @@ service cloud.firestore {
     match /adminAuditLogs/{logId} {
       allow read, create: if isAdmin();
       allow update, delete: if false;
+    }
+
+    match /irisReferenceImages/{itemId} {
+      allow read: if isIrisAdmin();
+      allow write: if false;
     }
 
     match /adminNotes/{noteId} {

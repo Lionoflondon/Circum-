@@ -13923,6 +13923,12 @@ class _AdminIrisRepositorySectionState
       {Map<String, dynamic>? item, bool duplicate = false}) {
     final editing = item != null && !duplicate;
     final source = item ?? const <String, dynamic>{};
+    final sourceItemId = '${source['id'] ?? source['canonicalName']}'
+        .trim()
+        .replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final itemId = editing && sourceItemId.isNotEmpty
+        ? sourceItemId
+        : 'admin_${DateTime.now().microsecondsSinceEpoch}';
     final name = TextEditingController(
       text: duplicate
           ? '${source['canonicalName'] ?? ''} copy'
@@ -14018,10 +14024,10 @@ class _AdminIrisRepositorySectionState
                     ]),
                   ]),
                   _drawerGroup('Media', [
-                    _AdminNotice(
+                    _AdminIrisReferenceImageEditor(
                       colors: widget.colors,
-                      message:
-                          'Upload Reference Images placeholder. Storage wiring is intentionally not changed in this UI pass.',
+                      itemId: itemId,
+                      enabled: editing,
                     ),
                   ]),
                   _drawerGroup('Internal', [
@@ -14074,8 +14080,7 @@ class _AdminIrisRepositorySectionState
                                   (row) => row['id'] == source['id']);
                               if (index >= 0) _managedItems[index] = next;
                             } else {
-                              next['id'] =
-                                  'admin_${DateTime.now().microsecondsSinceEpoch}';
+                              next['id'] = itemId;
                               _managedItems.insert(0, next);
                             }
                             _recordAudit(
@@ -14792,6 +14797,278 @@ class _AdminIrisRepositorySectionState
         ],
       ),
     ];
+  }
+}
+
+class _AdminIrisReferenceImageEditor extends StatefulWidget {
+  final _CircumColors colors;
+  final String itemId;
+  final bool enabled;
+
+  const _AdminIrisReferenceImageEditor({
+    required this.colors,
+    required this.itemId,
+    required this.enabled,
+  });
+
+  @override
+  State<_AdminIrisReferenceImageEditor> createState() =>
+      _AdminIrisReferenceImageEditorState();
+}
+
+class _AdminIrisReferenceImageEditorState
+    extends State<_AdminIrisReferenceImageEditor> {
+  bool _loading = true;
+  bool _submitting = false;
+  String? _previewUrl;
+  String? _fileName;
+  String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.enabled) {
+      _load();
+    } else {
+      _loading = false;
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getIrisReferenceImage')
+          .call({'itemId': widget.itemId});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      setState(() {
+        _previewUrl = data['exists'] == true ? '${data['previewUrl']}' : null;
+        _fileName = data['exists'] == true ? '${data['fileName']}' : null;
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = error.code == 'not-found'
+          ? null
+          : 'Reference image could not be loaded. Try again.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+          () => _message = 'Reference image could not be loaded. Try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _contentType(XFile file) {
+    final supplied = file.mimeType?.toLowerCase();
+    if (supplied == 'image/jpeg' ||
+        supplied == 'image/png' ||
+        supplied == 'image/webp') {
+      return supplied!;
+    }
+    final name = file.name.toLowerCase();
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  Future<void> _upload() async {
+    if (_submitting) return;
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (bytes.isEmpty || bytes.length > 10 * 1024 * 1024) {
+      setState(() => _message = 'Use an image no larger than 10 MB.');
+      return;
+    }
+    final contentType = _contentType(picked);
+    final safeName = picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final storagePath =
+        'irisReferenceImages/${widget.itemId}/${DateTime.now().microsecondsSinceEpoch}_$safeName';
+    setState(() {
+      _submitting = true;
+      _message = 'Uploading reference image...';
+    });
+    try {
+      await FirebaseStorage.instance.ref(storagePath).putData(
+            bytes,
+            SettableMetadata(contentType: contentType),
+          );
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('finalizeIrisReferenceImage')
+          .call({'itemId': widget.itemId, 'storagePath': storagePath});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      setState(() {
+        _previewUrl = '${data['previewUrl']}';
+        _fileName = safeName;
+        _message = data['action'] == 'iris_reference_image_replaced'
+            ? 'Reference image replaced.'
+            : 'Reference image uploaded.';
+      });
+    } on FirebaseFunctionsException catch (error) {
+      await FirebaseStorage.instance
+          .ref(storagePath)
+          .delete()
+          .catchError((_) {});
+      if (!mounted) return;
+      setState(() => _message =
+          error.message ?? 'Reference image could not be uploaded. Try again.');
+    } catch (_) {
+      await FirebaseStorage.instance
+          .ref(storagePath)
+          .delete()
+          .catchError((_) {});
+      if (!mounted) return;
+      setState(
+          () => _message = 'Reference image could not be uploaded. Try again.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    if (_submitting || _previewUrl == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete reference image?'),
+        content: const Text(
+          'The image will be removed. Its audit history will be retained.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _submitting = true;
+      _message = 'Deleting reference image...';
+    });
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('deleteIrisReferenceImage')
+          .call({'itemId': widget.itemId});
+      if (!mounted) return;
+      setState(() {
+        _previewUrl = null;
+        _fileName = null;
+        _message = 'Reference image deleted.';
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _message =
+          error.message ?? 'Reference image could not be deleted. Try again.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+          () => _message = 'Reference image could not be deleted. Try again.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) {
+      return Text(
+        'Save this canonical item before adding its reference image.',
+        style: TextStyle(
+          color: widget.colors.mutedText,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: LinearProgressIndicator(),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_previewUrl != null) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Image.network(
+                _previewUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Text(
+                    'Preview unavailable',
+                    style: TextStyle(color: widget.colors.mutedText),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _fileName ?? 'Reference image',
+            style: TextStyle(
+              color: widget.colors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ] else
+          Text(
+            'No reference image uploaded.',
+            style: TextStyle(
+              color: widget.colors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: _submitting ? null : _upload,
+              icon: const Icon(Icons.image_outlined),
+              label:
+                  Text(_previewUrl == null ? 'Upload image' : 'Replace image'),
+            ),
+            if (_previewUrl != null)
+              TextButton.icon(
+                onPressed: _submitting ? null : _delete,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete'),
+              ),
+            IconButton(
+              tooltip: 'Refresh reference image',
+              onPressed: _submitting ? null : _load,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _message!,
+            style: TextStyle(
+              color: widget.colors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 

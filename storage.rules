@@ -27,6 +27,10 @@ service firebase.storage {
       return hasRole('super_admin');
     }
 
+    function isIrisAdmin() {
+      return hasRole('super_admin') || hasRole('operations_admin');
+    }
+
     function isSafeUpload() {
       return request.resource != null &&
         request.resource.size <= 15 * 1024 * 1024 &&
@@ -98,6 +102,16 @@ service firebase.storage {
     match /giftStories/{giftId}/{allPaths=**} {
       allow read, create, update: if isAdmin();
       allow delete: if isSuperAdmin();
+    }
+
+    match /irisReferenceImages/{itemId}/{fileName} {
+      allow read: if isIrisAdmin();
+      allow create, update: if isIrisAdmin() &&
+        request.resource != null &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/jpeg|image/png|image/webp');
+      allow delete: if false;
     }
 
     match /gift_requests/{requestId}/voice/{fileName} {
