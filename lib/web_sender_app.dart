@@ -372,20 +372,15 @@ class WebSenderApp extends StatefulWidget {
   State<WebSenderApp> createState() => _WebSenderAppState();
 }
 
-class CircumRiderWebApp extends StatefulWidget {
-  const CircumRiderWebApp({super.key});
+class CircumRiderApp extends StatefulWidget {
+  const CircumRiderApp({super.key});
 
   @override
-  State<CircumRiderWebApp> createState() => _CircumRiderWebAppState();
+  State<CircumRiderApp> createState() => _CircumRiderAppState();
 }
 
-class _CircumRiderWebAppState extends State<CircumRiderWebApp> {
+class _CircumRiderAppState extends State<CircumRiderApp> {
   bool _darkMode = true;
-
-  void _handleRoleSelected(CircumRole role) {
-    if (!mounted) return;
-    setState(() {});
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -405,11 +400,10 @@ class _CircumRiderWebAppState extends State<CircumRiderWebApp> {
       home: Scaffold(
         backgroundColor: colors.background,
         body: _RiderEnrollmentPortal(
-          key: const ValueKey('rider-web-root'),
+          key: const ValueKey('rider-app-root'),
           colors: colors,
           darkMode: _darkMode,
           onBack: () {},
-          onRoleSelected: _handleRoleSelected,
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
       ),
@@ -515,11 +509,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
                 CircumAppSurface.riderWeb => _RiderEnrollmentPortal(
-                    key: const ValueKey('rider-web-root'),
+                    key: const ValueKey('rider-app-root'),
                     colors: colors,
                     darkMode: _darkMode,
                     onBack: () {},
-                    onRoleSelected: _openRole,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
                 CircumAppSurface.adminApp => _adminHostingTarget
@@ -20188,7 +20181,6 @@ class _RiderEnrollmentPortal extends StatefulWidget {
   final bool darkMode;
   final _CircumColors colors;
   final VoidCallback onBack;
-  final ValueChanged<CircumRole> onRoleSelected;
   final VoidCallback onToggleTheme;
 
   const _RiderEnrollmentPortal({
@@ -20196,7 +20188,6 @@ class _RiderEnrollmentPortal extends StatefulWidget {
     required this.darkMode,
     required this.colors,
     required this.onBack,
-    required this.onRoleSelected,
     required this.onToggleTheme,
   });
 
@@ -20232,7 +20223,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   bool _submitting = false;
   bool _withdrawSubmitting = false;
   bool _documentSubmitting = false;
-  bool _roleChoiceConfirmed = false;
   User? _riderUser;
   _RiderEarningsSnapshot _earnings = _RiderEarningsSnapshot.empty();
   String? _message;
@@ -20260,7 +20250,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   bool _availableJobsInitialised = false;
   bool _newJobSoundEnabled = true;
   Map<String, dynamic>? _riderProfile;
-  Set<CircumRole> _availableRoles = const {};
   bool _superAdminRiderBypass = false;
   late _RiderPortalTab _riderTab = _initialRiderTab();
   String? _jobMessage;
@@ -20284,9 +20273,21 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   _RiderPortalTab _initialRiderTab() {
+    final path = Uri.base.path.toLowerCase();
     final section = Uri.base.queryParameters['section'] ??
         Uri.base.queryParameters['tab'] ??
-        Uri.base.queryParameters['app'];
+        Uri.base.queryParameters['app'] ??
+        (path == '/jobs'
+            ? 'jobs'
+            : path == '/schedule'
+                ? 'schedule'
+                : path == '/earnings' || path == '/roth'
+                    ? 'earnings'
+                    : path == '/profile' ||
+                            path == '/documents' ||
+                            path == '/settings'
+                        ? 'profile'
+                        : null);
     return switch (section) {
       'earnings' => _RiderPortalTab.earnings,
       'jobs' => _RiderPortalTab.jobs,
@@ -20351,7 +20352,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _riderUser = user;
         _riderProfile = riderProfile;
         _email.text = user.email ?? _email.text;
-        _roleChoiceConfirmed = false;
       });
       _listenToRiderProfile(user.uid);
       if (RiderOnboardingPolicy.canViewJobs(
@@ -20417,7 +20417,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         await _saveRiderProfile(user, phoneNumber: normalizedPhone!);
         await _attachIncomingReferralIfPresent();
         _riderProfile = await _loadRiderProfile(user.uid);
-        _availableRoles = {CircumRole.rider};
       } else if (!await _allowRiderUser(user)) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
@@ -20443,7 +20442,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(() {
         _riderUser = user;
-        _roleChoiceConfirmed = _availableRoles.length <= 1;
         _authMessage =
             _signupMode ? 'Your rider account is ready.' : 'You are signed in.';
       });
@@ -20602,8 +20600,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<bool> _allowRiderUser(User user) async {
     final roles = await _rolesForUser(user);
-    if (!mounted) return false;
-    setState(() => _availableRoles = roles);
     return RoleAccessPolicy.rolesCanAccessRider(roles);
   }
 
@@ -21682,8 +21678,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _availableJobs = const [];
       _acceptedJobs = const [];
       _completedJobs = const [];
-      _availableRoles = const {};
-      _roleChoiceConfirmed = false;
       _authMessage = 'Signed out.';
       _riderChatOpen = false;
       _activeRiderChatJob = null;
@@ -22364,33 +22358,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                               ),
                             ],
                           )
-                        : !_roleChoiceConfirmed && _availableRoles.length > 1
-                            ? ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  wide ? 28 : 18,
-                                  18,
-                                  wide ? 28 : 18,
-                                  34,
-                                ),
-                                children: [
-                                  _MultiRoleChoicePanel(
-                                    colors: colors,
-                                    roles: _availableRoles,
-                                    onSender: () => widget
-                                        .onRoleSelected(CircumRole.sender),
-                                    onRider: () => setState(
-                                      () => _roleChoiceConfirmed = true,
-                                    ),
-                                    onAdmin: () =>
-                                        widget.onRoleSelected(CircumRole.admin),
-                                  ),
-                                ],
-                              )
-                            : _buildSignedInRiderContent(
-                                colors,
-                                wide,
-                                section: _riderTab,
-                              ),
+                        : _buildSignedInRiderContent(
+                            colors,
+                            wide,
+                            section: _riderTab,
+                          ),
                   },
                 ),
               ],

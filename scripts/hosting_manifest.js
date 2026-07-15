@@ -54,13 +54,13 @@ const CONFIGS = Object.freeze({
     ],
   }),
   rider: Object.freeze({
-    product: 'Circum Rider Web',
-    buildIdentity: 'CIRCUM_BUILD_ID=rider-web',
+    product: 'Circum Rider App',
+    buildIdentity: 'CIRCUM_BUILD_ID=rider-app',
     targetAlias: 'rider',
     siteId: 'circum-rider-2797c',
     outputDirectory: 'build/web_rider',
     requiredBundleMarkers: [
-      'rider-web-root',
+      'rider-app-root',
       'Earn as a Rider',
       'Rider details',
     ],
@@ -69,6 +69,10 @@ const CONFIGS = Object.freeze({
       'CIRCUM_ADMIN_PORTAL_CANONICAL_V1',
       'Employee access only. Sign in with an account that has a Circum admin role.',
       'admin-root',
+      'sender-root',
+      'Continue as Sender',
+      'Continue as Admin',
+      'Choose how to continue',
     ],
   }),
 });

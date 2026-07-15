@@ -11,7 +11,6 @@ import 'app.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
 import 'firebase_options.dart';
-import 'helper/chats_help.dart';
 import 'helper/notifications_helper.dart';
 import 'web_sender_app.dart';
 
@@ -29,9 +28,7 @@ Future<void> main() async {
   if (kIsWeb) {
     runApp(CircumSenderStartup(
       initializer: _initializeSenderWeb,
-      appBuilder: (_) => const bool.fromEnvironment('CIRCUM_RIDER_HOSTING')
-          ? const CircumRiderWebApp()
-          : const WebSenderApp(),
+      appBuilder: (_) => const WebSenderApp(),
     ));
     return;
   }

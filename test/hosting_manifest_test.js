@@ -72,13 +72,21 @@ test('Sender app build rejects Admin hosting markers', () => {
   );
 });
 
-test('Rider Web build rejects Admin markers and allows shared dormant Sender code', () => {
+test('Rider app build rejects Sender, Admin and workspace selector markers', () => {
   assert.throws(
-    () => validateBundle(CONFIGS.rider, 'rider-web-root Earn as a Rider Rider details CIRCUM_ADMIN_PORTAL_CANONICAL_V1'),
+    () => validateBundle(CONFIGS.rider, 'rider-app-root Earn as a Rider Rider details CIRCUM_ADMIN_PORTAL_CANONICAL_V1'),
+    /forbidden marker/,
+  );
+  assert.throws(
+    () => validateBundle(CONFIGS.rider, 'rider-app-root Earn as a Rider Rider details sender-root'),
+    /forbidden marker/,
+  );
+  assert.throws(
+    () => validateBundle(CONFIGS.rider, 'rider-app-root Earn as a Rider Rider details Continue as Sender'),
     /forbidden marker/,
   );
   assert.equal(
-    validateBundle(CONFIGS.rider, 'rider-web-root Earn as a Rider Rider details sender-root'),
+    validateBundle(CONFIGS.rider, 'rider-app-root Earn as a Rider Rider details Rider dashboard'),
     true,
   );
 });

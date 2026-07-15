@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-flutter build web --release --target lib/main.dart --dart-define=CIRCUM_RIDER_HOSTING=true
+flutter build web --release --target lib/main_rider.dart
 rm -rf build/web_rider
 mv build/web build/web_rider
 node scripts/hosting_manifest.js prepare rider
