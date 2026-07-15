@@ -2,13 +2,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import '../firebase_options.dart';
-import '../main.dart' show CircumSenderStartup;
+import '../shared_web/circum_web_bootstrap.dart';
+import '../shared_web/circum_web_shell.dart';
 import '../web_sender_app.dart' show WebSenderApp;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
-    CircumSenderStartup(
+    CircumWebBootstrap(
+      section: CircumWebSection.sender,
+      showSectionNavigation: false,
       initializer: _initializeFirebase,
       appBuilder: (_) => const WebSenderApp(useCanonicalSenderWeb: true),
     ),

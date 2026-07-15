@@ -147,7 +147,12 @@ void main() {
       expect(publicApp, contains('headerActions: !_authOpen'));
       expect(publicApp, contains('_route == CircumPublicRoute.landing'));
       expect(publicApp, contains('_PublicHeaderServicePills('));
-      expect(sender, isNot(contains('_SenderHeaderServicePills')));
+      expect(sender, contains('_SenderHeaderServicePills'));
+      expect(sender, contains('showSectionNavigation: false'));
+      expect(sender, contains("label: 'Send a Parcel'"));
+      expect(sender, contains("label: 'Health+'"));
+      expect(sender, contains("label: 'Business'"));
+      expect(sender, contains("label: 'Gifts'"));
       expect(shell, contains('final Widget? headerActions;'));
       expect(shell.indexOf('child: headerActions!'),
           lessThan(shell.indexOf("tooltip: 'Notifications'")));

@@ -386,6 +386,10 @@ class _WebSenderAppState extends State<WebSenderApp> {
           section: CircumWebSection.sender,
           darkMode: _darkMode,
           onToggleTheme: _toggleTheme,
+          showSectionNavigation: false,
+          headerActions: widget.useCanonicalSenderWeb
+              ? _SenderHeaderServicePills(colors: colors)
+              : null,
           child: Stack(
             children: [
               AnimatedSwitcher(
@@ -31984,6 +31988,109 @@ class _IrisPill extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SenderHeaderServicePills extends StatelessWidget {
+  const _SenderHeaderServicePills({required this.colors});
+
+  final _CircumColors colors;
+
+  void _open(String path) => html.window.location.assign(path);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SenderServicePill(
+          icon: Icons.local_shipping_outlined,
+          label: 'Send a Parcel',
+          accent: colors.adminAccent,
+          colors: colors,
+          onTap: () => _open('/send/send'),
+        ),
+        const SizedBox(width: 8),
+        _SenderServicePill(
+          icon: Icons.health_and_safety_outlined,
+          label: 'Health+',
+          accent: const Color(0xff4ade80),
+          colors: colors,
+          onTap: () => _open('/send/health-plus'),
+        ),
+        const SizedBox(width: 8),
+        _SenderServicePill(
+          icon: Icons.business_center_outlined,
+          label: 'Business',
+          accent: colors.adminAccent,
+          colors: colors,
+          onTap: () => _open('/send/business'),
+        ),
+        const SizedBox(width: 8),
+        _SenderServicePill(
+          icon: Icons.card_giftcard_outlined,
+          label: 'Gifts',
+          accent: const Color(0xffa78bfa),
+          colors: colors,
+          onTap: () => _open('/send?sender_mobile_gifts=1'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderServicePill extends StatelessWidget {
+  const _SenderServicePill({
+    required this.icon,
+    required this.label,
+    required this.accent,
+    required this.colors,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color accent;
+  final _CircumColors colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
+            color: colors.panel.withValues(alpha: .88),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: colors.border),
+            boxShadow: const [
+              BoxShadow(color: Color(0x26000000), blurRadius: 14),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: accent, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
