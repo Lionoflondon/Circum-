@@ -32071,6 +32071,7 @@ class _SenderDashboardStep extends StatelessWidget {
                   title: 'Health+',
                   accent: const Color(0xff4ade80),
                   onTap: onHealthPlus,
+                  prominent: true,
                 ),
               ),
               const SizedBox(width: 9),
@@ -32081,6 +32082,7 @@ class _SenderDashboardStep extends StatelessWidget {
                   title: 'Business',
                   accent: colors.adminAccent,
                   onTap: onBusiness,
+                  prominent: true,
                 ),
               ),
               const SizedBox(width: 9),
@@ -32091,6 +32093,7 @@ class _SenderDashboardStep extends StatelessWidget {
                   title: 'Gifts',
                   accent: const Color(0xffa78bfa),
                   onTap: onGifts,
+                  prominent: true,
                 ),
               ),
             ],
@@ -33185,6 +33188,7 @@ class _SenderPreviewServiceChip extends StatelessWidget {
   final String title;
   final Color accent;
   final VoidCallback onTap;
+  final bool prominent;
 
   const _SenderPreviewServiceChip({
     required this.colors,
@@ -33192,6 +33196,7 @@ class _SenderPreviewServiceChip extends StatelessWidget {
     required this.title,
     required this.accent,
     required this.onTap,
+    this.prominent = false,
   });
 
   @override
@@ -33199,40 +33204,57 @@ class _SenderPreviewServiceChip extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 260),
+        constraints: prominent
+            ? const BoxConstraints(minHeight: 132)
+            : const BoxConstraints(),
+        padding: EdgeInsets.symmetric(
+          horizontal: prominent ? 18 : 10,
+          vertical: prominent ? 18 : 12,
+        ),
         decoration: BoxDecoration(
           color: const Color(0xff111827),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.white.withValues(alpha: .07)),
         ),
         child: Column(
+          crossAxisAlignment:
+              prominent ? CrossAxisAlignment.start : CrossAxisAlignment.center,
           children: [
             Container(
-              width: 34,
-              height: 34,
+              width: prominent ? 48 : 34,
+              height: prominent ? 48 : 34,
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: .12),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(prominent ? 14 : 10),
               ),
               child: Center(
                 child: _SenderLineGlyph(
                   glyph,
                   color: accent,
-                  size: 19,
+                  size: prominent ? 24 : 19,
                 ),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colors.mutedText,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
-              ),
+            SizedBox(height: prominent ? 18 : 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: prominent ? colors.text : colors.mutedText,
+                      fontSize: prominent ? 16.5 : 10.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (prominent)
+                  Icon(Icons.arrow_forward_rounded, color: accent, size: 19),
+              ],
             ),
           ],
         ),

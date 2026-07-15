@@ -132,6 +132,7 @@ void main() {
       expect(dashboard, contains('onTap: onHealthPlus'));
       expect(dashboard, contains('onTap: onBusiness'));
       expect(dashboard, contains('onTap: onGifts'));
+      expect('prominent: true'.allMatches(dashboard), hasLength(3));
     });
   });
 }
