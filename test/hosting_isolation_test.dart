@@ -102,44 +102,29 @@ void main() {
     expect(senderDeploy, contains('hosting_manifest.js prepare sender'));
     expect(senderDeploy, contains('scripts/verify_hosting_build.sh sender'));
     expect(senderDeploy, contains('--only hosting:sender'));
-    expect(riderDeploy, contains('--target lib/main_rider.dart'));
-    expect(riderDeploy, contains('hosting_manifest.js prepare rider'));
-    expect(riderDeploy, contains('scripts/verify_hosting_build.sh rider'));
-    expect(riderDeploy, contains('--only hosting:rider'));
-    expect(riderDeploy, isNot(contains('CIRCUM_RIDER_HOSTING')));
+    expect(riderDeploy, contains('Rider deployment blocked'));
+    expect(riderDeploy, contains('canonical Circum-Rider repository'));
+    expect(riderDeploy, isNot(contains('flutter build web')));
+    expect(riderDeploy, isNot(contains('firebase deploy')));
+    expect(
+      firebase,
+      contains('node scripts/block_rider_deploy_from_circum.js'),
+    );
   });
 
-  test('Rider app has a dedicated root with no workspace selector', () {
-    final entry = File('lib/main_rider.dart').readAsStringSync();
+  test('Circum Web links to Rider without embedding Rider UI', () {
     final source = File('lib/web_sender_app.dart').readAsStringSync();
-    final riderRoot = source.substring(
-      source.indexOf('class CircumRiderApp'),
-      source.indexOf('class _WebSenderAppState'),
+    expect(File('lib/main_rider.dart').existsSync(), isFalse);
+    expect(
+      source,
+      contains(
+        "const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app'",
+      ),
     );
-    final riderPortal = source.substring(
-      source.indexOf('class _RiderEnrollmentPortal'),
-      source.indexOf('class _RiderPublicIntro'),
-    );
-    final guard = File('scripts/hosting_manifest.js').readAsStringSync();
-
-    expect(entry, contains('runApp(const _RiderStartup())'));
-    expect(entry, contains('return const CircumRiderApp()'));
-    expect(entry, isNot(contains('WebSenderApp')));
-    expect(entry, isNot(contains('CircumAdminAppRoot')));
-    expect(riderRoot, contains("ValueKey('rider-app-root')"));
-    expect(riderRoot, isNot(contains('onRoleSelected')));
-    expect(riderPortal, isNot(contains('_MultiRoleChoicePanel')));
-    expect(riderPortal, isNot(contains('Choose how to continue')));
-    expect(riderPortal, isNot(contains('Continue as Sender')));
-    expect(riderPortal, isNot(contains('Continue as Admin')));
-    expect(riderPortal, contains("path == '/jobs'"));
-    expect(riderPortal, contains("path == '/schedule'"));
-    expect(riderPortal, contains("path == '/earnings'"));
-    expect(riderPortal, contains("path == '/profile'"));
-    expect(guard, contains("product: 'Circum Rider App'"));
-    expect(guard, contains("buildIdentity: 'CIRCUM_BUILD_ID=rider-app'"));
-    expect(guard, contains("'Continue as Sender'"));
-    expect(guard, contains("'Continue as Admin'"));
+    expect(
+        source, contains('html.window.location.assign(_canonicalRiderAppUrl)'));
+    expect(source, isNot(contains('class CircumRiderApp')));
+    expect(source, isNot(contains('CircumAppSurface.riderWeb')));
   });
 
   test('generic Hosting deployment entry points are absent', () {

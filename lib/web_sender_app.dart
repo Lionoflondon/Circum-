@@ -56,11 +56,11 @@ import 'package:share_plus/share_plus.dart';
 import 'firebase_options.dart';
 
 const _companyName = 'Circum';
+const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _vanguardAddonPriceGbp = 1.99;
 const _adminHostingTarget = bool.fromEnvironment('CIRCUM_ADMIN_HOSTING');
-const _riderHostingTarget = bool.fromEnvironment('CIRCUM_RIDER_HOSTING');
 const _googlePlacesApiKey = String.fromEnvironment(
   'GOOGLE_PLACES_API_KEY',
   defaultValue: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
@@ -130,7 +130,6 @@ enum _WebAppMode {
 enum CircumAppSurface {
   publicWebsite,
   senderApp,
-  riderWeb,
   adminApp,
 }
 
@@ -188,7 +187,6 @@ class CircumRouteDecision {
   _WebAppMode get _legacyMode => switch (surface) {
         CircumAppSurface.senderApp => _WebAppMode.sender,
         CircumAppSurface.adminApp => _WebAppMode.admin,
-        CircumAppSurface.riderWeb => _WebAppMode.sender,
         CircumAppSurface.publicWebsite => switch (publicRoute) {
             CircumPublicRoute.gifts => _WebAppMode.gifts,
             CircumPublicRoute.terms => _WebAppMode.terms,
@@ -213,10 +211,6 @@ CircumRouteDecision resolveCircumRoute(
 
   if (adminHostingTarget && !_isPublicHostingHostFor(uri)) {
     return const CircumRouteDecision(surface: CircumAppSurface.adminApp);
-  }
-
-  if (_riderHostingTarget || _isRiderWebHostingHostFor(uri)) {
-    return const CircumRouteDecision(surface: CircumAppSurface.riderWeb);
   }
 
   if (_isSenderAppHostingHostFor(uri)) {
@@ -351,10 +345,6 @@ bool _isSenderAppHostingHostFor(Uri uri) {
   return uri.host.toLowerCase() == 'circum-app-2797c.web.app';
 }
 
-bool _isRiderWebHostingHostFor(Uri uri) {
-  return uri.host.toLowerCase() == 'circum-rider-2797c.web.app';
-}
-
 Future<void> _ensureCircumFirebaseReady() async {
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
@@ -372,45 +362,6 @@ class WebSenderApp extends StatefulWidget {
   State<WebSenderApp> createState() => _WebSenderAppState();
 }
 
-class CircumRiderApp extends StatefulWidget {
-  const CircumRiderApp({super.key});
-
-  @override
-  State<CircumRiderApp> createState() => _CircumRiderAppState();
-}
-
-class _CircumRiderAppState extends State<CircumRiderApp> {
-  bool _darkMode = true;
-
-  @override
-  Widget build(BuildContext context) {
-    const colors = _CircumColors(true);
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Circum Rider',
-      theme: ThemeData(
-        useMaterial3: true,
-        fontFamily: 'Helvetica',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff2563eb),
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: colors.background,
-      ),
-      home: Scaffold(
-        backgroundColor: colors.background,
-        body: _RiderEnrollmentPortal(
-          key: const ValueKey('rider-app-root'),
-          colors: colors,
-          darkMode: _darkMode,
-          onBack: () {},
-          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-        ),
-      ),
-    );
-  }
-}
-
 class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
   late CircumRouteDecision _route = resolveCircumRoute(Uri.base);
@@ -421,6 +372,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
   @override
   void initState() {
     super.initState();
+    if (_isPublicHostingHostFor(Uri.base) && _isRiderEntryUri(Uri.base)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openRider());
+    }
     _logWebsiteVisit();
   }
 
@@ -508,13 +462,6 @@ class _WebSenderAppState extends State<WebSenderApp> {
                     onOpenGifts: _openSenderMobileGifts,
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
-                CircumAppSurface.riderWeb => _RiderEnrollmentPortal(
-                    key: const ValueKey('rider-app-root'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onBack: () {},
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
                 CircumAppSurface.adminApp => _adminHostingTarget
                     ? CircumAdminAppRoot(
                         key: const ValueKey('admin-root'),
@@ -537,15 +484,17 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   void _openRole(CircumRole role) {
+    if (role == CircumRole.rider) {
+      _openRider();
+      return;
+    }
     setState(() {
       _publicAuthOpen = false;
       _route = switch (role) {
         CircumRole.sender => const CircumRouteDecision(
             surface: CircumAppSurface.senderApp,
           ),
-        CircumRole.rider => const CircumRouteDecision(
-            surface: CircumAppSurface.publicWebsite,
-          ),
+        CircumRole.rider => throw StateError('Rider opens its standalone app'),
         CircumRole.admin => const CircumRouteDecision(
             surface: CircumAppSurface.adminApp,
           ),
@@ -640,13 +589,18 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   void _openRider() {
-    setState(() {
-      _publicAuthOpen = false;
-      _route =
-          const CircumRouteDecision(surface: CircumAppSurface.publicWebsite);
-      _senderInitialStep = _route._senderInitialStep;
-    });
+    html.window.location.assign(_canonicalRiderAppUrl);
   }
+}
+
+bool _isRiderEntryUri(Uri uri) {
+  final path = uri.path.toLowerCase().replaceAll(RegExp(r'/+$'), '');
+  final app = uri.queryParameters['app']?.toLowerCase();
+  return path == '/rider' ||
+      app == 'rider' ||
+      app == 'driver' ||
+      app == 'earn' ||
+      app == 'circum-order';
 }
 
 class CircumPublicAppRoot extends StatelessWidget {

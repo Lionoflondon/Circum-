@@ -133,6 +133,7 @@
       "target": "rider",
       "public": "build/web_rider",
       "predeploy": [
+        "node scripts/block_rider_deploy_from_circum.js",
         "node scripts/hosting_manifest.js verify rider"
       ],
       "ignore": [

@@ -30,7 +30,8 @@ void main() {
       expect(riderAliases, isNot(contains('CircumRiderAppRoot')));
     });
 
-    test('public and sender hosting do not redirect to Rider app', () {
+    test('hosting config does not merge Rider output into public or Sender',
+        () {
       final config = jsonDecode(firebase) as Map<String, dynamic>;
       final hosting = (config['hosting'] as List).cast<Map<String, dynamic>>();
       for (final target in const ['public', 'sender']) {
@@ -47,10 +48,19 @@ void main() {
       }
     });
 
-    test('Sender/Public bundle has no hosted Rider app UI redirect root', () {
-      expect(source, isNot(contains('const _canonicalRiderAppUrl')));
+    test('Sender/Public exposes only an external Rider application entry', () {
+      expect(
+        source,
+        contains(
+          "const _canonicalRiderAppUrl = 'https://circum-rider-2797c.web.app'",
+        ),
+      );
+      expect(source,
+          contains('html.window.location.assign(_canonicalRiderAppUrl)'));
+      expect(source, contains("path == '/rider'"));
       expect(source, isNot(contains('CircumRiderAppRoot')));
-      expect(source, isNot(contains('html.window.location.replace')));
+      expect(source, isNot(contains('class CircumRiderApp')));
+      expect(source, isNot(contains('CircumAppSurface.riderWeb')));
       expect(source, isNot(contains('CircumAppSurface.riderApp')));
       expect(source, isNot(contains('CircumAppSurface.riderStripeConnect')));
     });
