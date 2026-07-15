@@ -1194,6 +1194,11 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /riderIrisAcknowledgements/{deliveryId} {
+      allow read: if canReadDeliveryTracking(deliveryId);
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read: if isAdmin();
       allow write: if hasRole('super_admin');

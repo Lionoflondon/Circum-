@@ -77,6 +77,7 @@ const staleDelivery = require("./stale-delivery");
 const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
 const ratingsTipping = require("./ratings-tipping");
+const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 initializeApp();
@@ -144,6 +145,7 @@ exports.requestSenderWalletRefund = rothLedger.requestSenderWalletRefund;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
 exports.reportRating = ratingsTipping.reportRating;
+exports.confirmRiderIrisAssessment = riderIrisAcknowledgement.confirmRiderIrisAssessment;
 exports.closeCircumAccount = accountClosure.closeAccount;
 exports.createBusinessRothCheckout = businessPayments.createBusinessRothCheckout(stripe);
 exports.createBusinessInvoiceCheckout = businessPayments.createBusinessInvoiceCheckout(stripe);

@@ -132,6 +132,12 @@ test("tracking mirrors are explicit and backend-owned", () => {
   assert.match(block, /allow delete:\s*if isAdmin\(\);/);
 });
 
+test("Rider IRIS acknowledgements are explicit and backend-owned", () => {
+  const block = blockFor("match /riderIrisAcknowledgements/{deliveryId}");
+  assert.match(block, /allow read:\s*if canReadDeliveryTracking\(deliveryId\);/);
+  assert.match(block, /allow create, update, delete:\s*if false;/);
+});
+
 test("business financial collections have explicit least-privilege rules", () => {
   const wallet = blockFor("match /business_wallets/{businessId}");
   assert.match(wallet, /allow read:[\s\S]*canReadBusinessAccount\(businessId\)/);

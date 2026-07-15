@@ -1373,6 +1373,29 @@
     "deprecationStatus": "Active"
   },
   {
+    "callableName": "confirmRiderIrisAssessment",
+    "purpose": "confirm Rider Iris Assessment",
+    "owningBackendFile": "server/functions/rider-iris-acknowledgement.js",
+    "invokedBy": [
+      "Rider",
+      "Sender"
+    ],
+    "inputSchema": "Validated by owning backend function. See owningBackendFile for exact accepted fields.",
+    "outputSchema": "Returns the owning backend function response; throws Firebase HttpsError or HTTP error on failure.",
+    "errorCodes": [
+      "unauthenticated",
+      "permission-denied",
+      "invalid-argument",
+      "failed-precondition",
+      "not-found",
+      "already-exists",
+      "internal"
+    ],
+    "authenticationRequirements": "Backend trigger, scheduler, webhook signature, or public-token guarded request as implemented.",
+    "classification": "Canonical",
+    "deprecationStatus": "Active"
+  },
+  {
     "callableName": "closeCircumAccount",
     "purpose": "close Circum Account",
     "owningBackendFile": "server/functions/account-closure.js",
