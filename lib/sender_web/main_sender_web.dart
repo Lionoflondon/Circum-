@@ -10,7 +10,7 @@ Future<void> main() async {
   runApp(
     CircumSenderStartup(
       initializer: _initializeFirebase,
-      appBuilder: (_) => const WebSenderApp(),
+      appBuilder: (_) => const WebSenderApp(useCanonicalSenderWeb: true),
     ),
   );
 }

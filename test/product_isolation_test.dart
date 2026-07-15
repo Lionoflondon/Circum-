@@ -18,6 +18,10 @@ void main() {
     test('each browser product boots its own root', () {
       expect(publicEntry, contains('CircumPublicWebsiteApp'));
       expect(senderEntry, contains('WebSenderApp'));
+      expect(
+        senderEntry,
+        contains('WebSenderApp(useCanonicalSenderWeb: true)'),
+      );
       expect(riderEntry, contains('CircumRiderWebApp'));
       expect(publicEntry, isNot(contains('WebSenderApp')));
       expect(publicEntry, isNot(contains('CircumRiderWebApp')));
@@ -96,6 +100,22 @@ void main() {
       expect(riderBuild, isNot(contains('_PortalHeader(')));
       expect('_PortalHeader('.allMatches(sender), hasLength(1));
       expect('_LandingNav('.allMatches(publicApp), hasLength(1));
+    });
+
+    test('Sender Web mounts the complete canonical portal behind the shell',
+        () {
+      final sender = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(sender, contains('final bool useCanonicalSenderWeb;'));
+      expect(sender, contains('widget.useCanonicalSenderWeb'));
+      expect(sender, contains('_CustomerPortal('));
+      expect(sender, contains('_SenderDashboardStep('));
+      expect(sender, contains('_SenderStep.healthPlus'));
+      expect(sender, contains('_SenderStep.business'));
+      expect(sender, contains('onGifts: widget.onOpenGifts'));
+      expect(sender, contains('_SenderStep.roth'));
+      expect(sender, contains('_SenderStep.profile'));
+      expect(sender, contains("path.startsWith('/send/')"));
     });
   });
 }

@@ -243,7 +243,12 @@ CircumSenderEntry _senderEntryFromPath(String path, String? tab) {
   if (fromTab != CircumSenderEntry.dashboard) {
     return fromTab;
   }
-  return switch (path) {
+  final senderPath = path == '/send'
+      ? '/'
+      : path.startsWith('/send/')
+          ? path.substring('/send'.length)
+          : path;
+  return switch (senderPath) {
     '/send' || '/booking' || '/book' => CircumSenderEntry.send,
     '/activity' || '/history' => CircumSenderEntry.activity,
     '/wallet' => CircumSenderEntry.wallet,
@@ -269,7 +274,12 @@ Future<void> _ensureCircumFirebaseReady() async {
 }
 
 class WebSenderApp extends StatefulWidget {
-  const WebSenderApp({super.key});
+  const WebSenderApp({
+    super.key,
+    this.useCanonicalSenderWeb = false,
+  });
+
+  final bool useCanonicalSenderWeb;
 
   @override
   State<WebSenderApp> createState() => _WebSenderAppState();
@@ -387,7 +397,9 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       darkMode: _darkMode,
                       initialStep: _senderInitialStep,
                       senderEntry: _route.senderEntry,
-                      useSenderMobileApp: _route.useSenderMobileApp,
+                      useSenderMobileApp: widget.useCanonicalSenderWeb
+                          ? false
+                          : _route.useSenderMobileApp,
                       openGifts: _route.openSenderGifts,
                       routeDeliveryId: _route.routeDeliveryId,
                       onBack: _openPublicHome,
