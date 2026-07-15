@@ -54,6 +54,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'firebase_options.dart';
+import 'shared_web/circum_web_shell.dart';
 
 const _companyName = 'Circum';
 const _canonicalPublicWebsiteUrl = 'https://circumuk.com';
@@ -282,7 +283,7 @@ class CircumRiderWebApp extends StatefulWidget {
 }
 
 class _CircumRiderWebAppState extends State<CircumRiderWebApp> {
-  bool _darkMode = true;
+  bool _darkMode = readCircumWebDarkMode();
 
   @override
   Widget build(BuildContext context) {
@@ -301,20 +302,30 @@ class _CircumRiderWebAppState extends State<CircumRiderWebApp> {
       ),
       home: Scaffold(
         backgroundColor: colors.background,
-        body: _RiderEnrollmentPortal(
-          key: const ValueKey('rider-web-root'),
-          colors: colors,
+        body: CircumWebShell(
+          section: CircumWebSection.rider,
           darkMode: _darkMode,
-          onBack: () {},
-          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+          onToggleTheme: _toggleTheme,
+          child: _RiderEnrollmentPortal(
+            key: const ValueKey('rider-web-root'),
+            colors: colors,
+            darkMode: _darkMode,
+            onBack: () {},
+            onToggleTheme: _toggleTheme,
+          ),
         ),
       ),
     );
   }
+
+  void _toggleTheme() => setState(() {
+        _darkMode = !_darkMode;
+        persistCircumWebDarkMode(_darkMode);
+      });
 }
 
 class _WebSenderAppState extends State<WebSenderApp> {
-  bool _darkMode = true;
+  bool _darkMode = readCircumWebDarkMode();
   late CircumRouteDecision _route = resolveCircumRoute(Uri.base);
   late _SenderStep _senderInitialStep = _route._senderInitialStep;
 
@@ -361,46 +372,56 @@ class _WebSenderAppState extends State<WebSenderApp> {
       ),
       home: Scaffold(
         backgroundColor: colors.background,
-        body: Stack(
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
-              child: switch (_route.surface) {
-                CircumAppSurface.senderApp => CircumSenderAppRoot(
-                    key: const ValueKey('sender-root'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    initialStep: _senderInitialStep,
-                    senderEntry: _route.senderEntry,
-                    useSenderMobileApp: _route.useSenderMobileApp,
-                    openGifts: _route.openSenderGifts,
-                    routeDeliveryId: _route.routeDeliveryId,
-                    onBack: _openPublicHome,
-                    onRoleSelected: _openRole,
-                    onOpenBooking: _openSenderBooking,
-                    onOpenGifts: _openSenderMobileGifts,
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
-                CircumAppSurface.adminApp => _adminHostingTarget
-                    ? CircumAdminAppRoot(
-                        key: const ValueKey('admin-root'),
-                        colors: colors,
-                        darkMode: _darkMode,
-                        onBack: () {},
-                        onToggleTheme: () =>
-                            setState(() => _darkMode = !_darkMode),
-                      )
-                    : const SizedBox.shrink(),
-              },
-            ),
-            _PlatformNotificationCenter(
-                colors: colors, mode: _route._legacyMode),
-            _CompanyLiveChatButton(colors: colors),
-          ],
+        body: CircumWebShell(
+          section: CircumWebSection.sender,
+          darkMode: _darkMode,
+          onToggleTheme: _toggleTheme,
+          child: Stack(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                child: switch (_route.surface) {
+                  CircumAppSurface.senderApp => CircumSenderAppRoot(
+                      key: const ValueKey('sender-root'),
+                      colors: colors,
+                      darkMode: _darkMode,
+                      initialStep: _senderInitialStep,
+                      senderEntry: _route.senderEntry,
+                      useSenderMobileApp: _route.useSenderMobileApp,
+                      openGifts: _route.openSenderGifts,
+                      routeDeliveryId: _route.routeDeliveryId,
+                      onBack: _openPublicHome,
+                      onRoleSelected: _openRole,
+                      onOpenBooking: _openSenderBooking,
+                      onOpenGifts: _openSenderMobileGifts,
+                      onToggleTheme: _toggleTheme,
+                    ),
+                  CircumAppSurface.adminApp => _adminHostingTarget
+                      ? CircumAdminAppRoot(
+                          key: const ValueKey('admin-root'),
+                          colors: colors,
+                          darkMode: _darkMode,
+                          onBack: () {},
+                          onToggleTheme: () =>
+                              setState(() => _darkMode = !_darkMode),
+                        )
+                      : const SizedBox.shrink(),
+                },
+              ),
+              _PlatformNotificationCenter(
+                  colors: colors, mode: _route._legacyMode),
+              _CompanyLiveChatButton(colors: colors),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  void _toggleTheme() => setState(() {
+        _darkMode = !_darkMode;
+        persistCircumWebDarkMode(_darkMode);
+      });
 
   void _openRole(CircumRole role) {
     if (role == CircumRole.rider) {
@@ -20583,12 +20604,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             final wide = constraints.maxWidth >= _desktopWebBreakpoint;
             return Column(
               children: [
-                _PortalHeader(
-                  colors: colors,
-                  darkMode: widget.darkMode,
-                  onBack: widget.onBack,
-                  onToggleTheme: widget.onToggleTheme,
-                ),
                 _RiderPortalTabs(
                   colors: colors,
                   selected: _riderTab,
@@ -24285,13 +24300,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               _step != _SenderStep.healthPlus;
           return Column(
             children: [
-              _PortalHeader(
-                colors: colors,
-                darkMode: widget.darkMode,
-                onBack: widget.onBack,
-                onToggleTheme: widget.onToggleTheme,
-                onProfile: () => setState(() => _step = _SenderStep.profile),
-              ),
               Expanded(
                 child: desktop
                     ? _DesktopPortalLayout(

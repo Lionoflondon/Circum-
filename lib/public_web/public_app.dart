@@ -20,6 +20,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../firebase_options.dart';
+import '../shared_web/circum_web_shell.dart';
 
 const _canonicalSenderAppUrl = '/send';
 const _canonicalRiderWebUrl = '/rider';
@@ -32,7 +33,7 @@ class CircumPublicWebsiteApp extends StatefulWidget {
 }
 
 class _CircumPublicWebsiteAppState extends State<CircumPublicWebsiteApp> {
-  bool _darkMode = true;
+  bool _darkMode = readCircumWebDarkMode();
   bool _authOpen = false;
   _PublicAuthMode _authMode = _PublicAuthMode.login;
   late CircumPublicRoute _route = _routeFromUri(Uri.base);
@@ -64,35 +65,41 @@ class _CircumPublicWebsiteAppState extends State<CircumPublicWebsiteApp> {
       ),
       home: Scaffold(
         backgroundColor: colors.background,
-        body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 260),
-          child: _authOpen
-              ? _PublicAuthEntry(
-                  key: ValueKey('public-auth-${_authMode.name}'),
-                  colors: colors,
-                  mode: _authMode,
-                  onModeChanged: (mode) => setState(() => _authMode = mode),
-                  onClose: () => setState(() => _authOpen = false),
-                  onAuthenticated: () => _openExternal(_canonicalSenderAppUrl),
-                )
-              : CircumPublicAppRoot(
-                  key: ValueKey('public-${_route.name}'),
-                  colors: colors,
-                  darkMode: _darkMode,
-                  route: _route,
-                  onStart: () => _openExternal(_canonicalSenderAppUrl),
-                  onLogin: () => _openAuth(_PublicAuthMode.login),
-                  onSignup: () => _openAuth(_PublicAuthMode.signup),
-                  onRider: () => _openExternal(_canonicalRiderWebUrl),
-                  onHealthPlus: () =>
-                      _openExternal('$_canonicalSenderAppUrl/health-plus'),
-                  onGifts: () => _openRoute(CircumPublicRoute.gifts),
-                  onBusiness: () => _openRoute(CircumPublicRoute.business),
-                  onBusinessAccess: () =>
-                      _openExternal('$_canonicalSenderAppUrl/business'),
-                  onHome: () => _openRoute(CircumPublicRoute.landing),
-                  onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                ),
+        body: CircumWebShell(
+          section: CircumWebSection.home,
+          darkMode: _darkMode,
+          onToggleTheme: _toggleTheme,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            child: _authOpen
+                ? _PublicAuthEntry(
+                    key: ValueKey('public-auth-${_authMode.name}'),
+                    colors: colors,
+                    mode: _authMode,
+                    onModeChanged: (mode) => setState(() => _authMode = mode),
+                    onClose: () => setState(() => _authOpen = false),
+                    onAuthenticated: () =>
+                        _openExternal(_canonicalSenderAppUrl),
+                  )
+                : CircumPublicAppRoot(
+                    key: ValueKey('public-${_route.name}'),
+                    colors: colors,
+                    darkMode: _darkMode,
+                    route: _route,
+                    onStart: () => _openExternal(_canonicalSenderAppUrl),
+                    onLogin: () => _openAuth(_PublicAuthMode.login),
+                    onSignup: () => _openAuth(_PublicAuthMode.signup),
+                    onRider: () => _openExternal(_canonicalRiderWebUrl),
+                    onHealthPlus: () =>
+                        _openExternal('$_canonicalSenderAppUrl/health-plus'),
+                    onGifts: () => _openRoute(CircumPublicRoute.gifts),
+                    onBusiness: () => _openRoute(CircumPublicRoute.business),
+                    onBusinessAccess: () =>
+                        _openExternal('$_canonicalSenderAppUrl/business'),
+                    onHome: () => _openRoute(CircumPublicRoute.landing),
+                    onToggleTheme: _toggleTheme,
+                  ),
+          ),
         ),
       ),
     );
@@ -110,6 +117,11 @@ class _CircumPublicWebsiteAppState extends State<CircumPublicWebsiteApp> {
       });
 
   void _openExternal(String url) => html.window.location.assign(url);
+
+  void _toggleTheme() => setState(() {
+        _darkMode = !_darkMode;
+        persistCircumWebDarkMode(_darkMode);
+      });
 }
 
 void _assertPublicSurfaceIntegrity() {
@@ -1157,18 +1169,6 @@ class _LandingPage extends StatelessWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
-          _LandingNav(
-            colors: colors,
-            darkMode: darkMode,
-            onStart: onStart,
-            onLogin: onLogin,
-            onSignup: onSignup,
-            onRider: onRider,
-            onHealthPlus: onHealthPlus,
-            onGifts: onGifts,
-            onBusiness: onBusiness,
-            onToggleTheme: onToggleTheme,
-          ),
           Container(
             width: double.infinity,
             decoration: BoxDecoration(

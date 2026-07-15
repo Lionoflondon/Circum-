@@ -64,5 +64,38 @@ void main() {
         contains('node scripts/block_rider_deploy_from_circum.js'),
       );
     });
+
+    test('shared shell provides consistent cross-platform navigation', () {
+      final shell =
+          File('lib/shared_web/circum_web_shell.dart').readAsStringSync();
+      final sender = File('lib/web_sender_app.dart').readAsStringSync();
+
+      expect(shell, contains("label: 'Home'"));
+      expect(shell, contains("label: 'Sender'"));
+      expect(shell, contains("label: 'Rider'"));
+      expect(shell, contains("label: 'Profile'"));
+      expect(shell, contains("html.window.location.assign(path)"));
+      expect(shell, contains('FirebaseAuth.instance.authStateChanges()'));
+      expect(shell, contains('readCircumWebDarkMode'));
+      expect(publicApp, contains('section: CircumWebSection.home'));
+      expect(sender, contains('section: CircumWebSection.sender'));
+      expect(sender, contains('section: CircumWebSection.rider'));
+    });
+
+    test('legacy product headers no longer render inside the shared shell', () {
+      final sender = File('lib/web_sender_app.dart').readAsStringSync();
+      final publicLanding = publicApp.substring(
+        publicApp.indexOf('class _LandingPage'),
+        publicApp.indexOf('List<String> _interests'),
+      );
+      final riderBuild = sender.substring(
+        sender.indexOf('class _RiderEnrollmentPortalState'),
+        sender.indexOf('class _RiderPublicIntro'),
+      );
+      expect(publicLanding, isNot(contains('_LandingNav(')));
+      expect(riderBuild, isNot(contains('_PortalHeader(')));
+      expect('_PortalHeader('.allMatches(sender), hasLength(1));
+      expect('_LandingNav('.allMatches(publicApp), hasLength(1));
+    });
   });
 }
