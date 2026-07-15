@@ -97,11 +97,13 @@ void main() {
 
       expect(source, contains('Customer Responded'));
       expect(source, contains('Mark No-show'));
-      expect(source, contains('markCustomerResponded'));
-      expect(source, contains('recordCustomerResponded'));
-      expect(source, contains('markSenderNoShow'));
-      expect(source, contains('declareSenderNoShow'));
-      expect(source, contains('sendRiderUpdate'));
+      expect(source, contains('_markCustomerResponded'));
+      expect(source, contains('reportWaitingContext'));
+      expect(source, contains('_markNoShow'));
+      expect(source, contains('markRiderNoShow'));
+      expect(source, isNot(contains('recordCustomerResponded')));
+      expect(source, isNot(contains('declareSenderNoShow')));
+      expect(source, isNot(contains("httpsCallable('sendRiderUpdate')")));
       expect(source, contains('RideChatPageView(chatId: chatId)'));
       expect(source,
           contains('Missed collection unlocks when the waiting period'));
