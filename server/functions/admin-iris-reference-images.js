@@ -2,27 +2,13 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
+const {requireAdmin} = require("./admin-auth");
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 10 * 1024 * 1024;
 
 function text(value) {
   return `${value || ""}`.trim();
-}
-
-function requireIrisAdmin(context) {
-  if (!context.auth || !context.auth.uid) {
-    throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
-  }
-  const token = context.auth.token || {};
-  const roles = Array.isArray(token.roles) ? token.roles : [];
-  const allowed = token.admin === true || token.superAdmin === true ||
-    [token.adminRole, token.role, ...roles].some((role) =>
-      ["admin", "super_admin", "operations_admin"].includes(role));
-  if (!allowed) {
-    throw new functions.https.HttpsError("permission-denied", "IRIS administrator access is required.");
-  }
-  return context.auth.uid;
 }
 
 function identifiers(data) {
@@ -47,7 +33,7 @@ async function signedPreview(storagePath) {
 }
 
 exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => {
-  requireIrisAdmin(context);
+  requireAdmin(context, "IRIS administrator access is required.");
   const {itemId} = identifiers(data);
   const snapshot = await getFirestore().collection("irisReferenceImages").doc(itemId).get();
   if (!snapshot.exists || snapshot.data().deleted === true) {
@@ -67,7 +53,7 @@ exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => 
 });
 
 exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context) => {
-  const adminId = requireIrisAdmin(context);
+  const adminId = requireAdmin(context, "IRIS administrator access is required.");
   const {itemId, storagePath} = identifiers(data);
   if (!storagePath) {
     throw new functions.https.HttpsError("invalid-argument", "storagePath is required.");
@@ -127,7 +113,7 @@ exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context
 });
 
 exports.deleteIrisReferenceImage = functions.https.onCall(async (data, context) => {
-  const adminId = requireIrisAdmin(context);
+  const adminId = requireAdmin(context, "IRIS administrator access is required.");
   const {itemId} = identifiers(data);
   const db = getFirestore();
   const reference = db.collection("irisReferenceImages").doc(itemId);
@@ -156,4 +142,3 @@ exports.deleteIrisReferenceImage = functions.https.onCall(async (data, context) 
   await batch.commit();
   return {success: true, duplicate: false, itemId};
 });
-

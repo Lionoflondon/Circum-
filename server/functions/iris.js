@@ -7,6 +7,7 @@ const {
   customerSafeIris,
   privateIris,
 } = require("./iris-core");
+const {requireAdmin} = require("./admin-auth");
 
 async function loadLearningExamples(description) {
   const text = `${description || ""}`.trim();
@@ -28,10 +29,7 @@ const analyseIris = functions.https.onCall(async (data, context) => {
 });
 
 const adjudicateIris = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated",
-        "User must be authenticated to adjudicate Iris.");
-  }
+  const adminUid = requireAdmin(context, "IRIS administrator access is required.");
   const {requestId, decision, finalCategory, finalWeightBand, finalHandlingFlags, reason, referralType, serviceabilityStatus} = data;
   if (!requestId || !decision || !reason) {
     throw new functions.https.HttpsError("invalid-argument",
@@ -44,7 +42,9 @@ const adjudicateIris = functions.https.onCall(async (data, context) => {
   }
   const doc = snapshot.docs[0];
   const adjudication = {
-    adminUserId: context.auth.uid,
+    adminUserId: adminUid,
+    createdBy: adminUid,
+    updatedBy: adminUid,
     decision,
     finalCategory: finalCategory || null,
     finalWeightBand: finalWeightBand || null,
@@ -71,7 +71,8 @@ const adjudicateIris = functions.https.onCall(async (data, context) => {
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   await db.collection("adminAuditLogs").add({
-    adminUserId: context.auth.uid,
+    adminUserId: adminUid,
+    actorUid: adminUid,
     actionType: "iris_adjudication",
     recordType: "deliveryRequests",
     recordId: requestId,
@@ -86,6 +87,8 @@ const adjudicateIris = functions.https.onCall(async (data, context) => {
       status: "open",
       reason,
       source: "admin_adjudication",
+      createdBy: adminUid,
+      updatedBy: adminUid,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
