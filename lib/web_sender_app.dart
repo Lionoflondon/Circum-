@@ -12,7 +12,6 @@ import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
-import 'package:circum/app/rider_marketplace/rider_marketplace_rules.dart';
 import 'package:circum/app/rider_marketplace/rider_onboarding_policy.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:circum/app/sender_profile/sender_profile.dart';
@@ -1972,6 +1971,27 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
     }
   }
 
+  Future<void> _resolveStaleDeliveryLock(Map<String, dynamic> record) async {
+    final id = '${record['id'] ?? record['requestId'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('resolveStaleDeliveryLock')
+          .call({
+        'deliveryId': id,
+        'action': 'admin_removed_stale',
+        'reason': 'Admin cleared stale delivery lock from operations panel.',
+      });
+      setState(() => _message = 'Released stale delivery lock for $id.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() =>
+          _message = error.message ?? 'Could not release stale delivery lock.');
+    } catch (_) {
+      setState(() => _message = 'Could not release stale delivery lock.');
+    }
+  }
+
   String _formatMessageTime(dynamic timestamp, dynamic fallback) {
     DateTime? date;
     if (timestamp is Timestamp) date = timestamp.toDate();
@@ -3097,6 +3117,10 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
 
   List<Widget> _deliveryRow(Map<String, dynamic> item) {
     final id = '${item['id'] ?? item['requestId'] ?? ''}';
+    final deliveryStatus = '${item['status'] ?? ''}'.toLowerCase();
+    final canReleaseStaleLock = deliveryStatus.contains('stale') ||
+        deliveryStatus.contains('archived') ||
+        deliveryStatus.contains('admin_review');
     final pickupCanonical = item['pickupAddressCanonical'] as Map?;
     final dropoffCanonical = item['dropoffAddressCanonical'] as Map?;
     String addressSummary(String fallback, Map? canonical) {
@@ -3153,6 +3177,12 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             onTap: () =>
                 _updateRecordStatus('deliveryRequests', item, 'resolved'),
           ),
+          if (canReleaseStaleLock)
+            _AdminAction(
+              label: 'Release lock',
+              enabled: _can(AdminPermission.editDeliveries),
+              onTap: () => _resolveStaleDeliveryLock(item),
+            ),
           _AdminAction(
             label: 'Chat',
             enabled: _can(AdminPermission.viewSupport),
@@ -8162,17 +8192,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'verificationStatus': 'pending',
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    await db.collection('riderEarnings').doc(user.uid).set({
-      'riderId': user.uid,
-      'availableBalance': FieldValue.increment(0),
-      'pendingBalance': FieldValue.increment(0),
-      'pendingWithdrawal': FieldValue.increment(0),
-      'lifetimeEarnings': FieldValue.increment(0),
-      'totalWithdrawn': FieldValue.increment(0),
-      'tipsReceived': FieldValue.increment(0),
-      'completedJobs': FieldValue.increment(0),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
     await db.collection('driverPerformanceMetrics').doc(user.uid).set(
           DriverPerformanceMetric.empty(user.uid).toJson()
             ..addAll({'updatedAt': FieldValue.serverTimestamp()}),
@@ -8388,34 +8407,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     setState(() => _jobMessage = 'Accepting job $requestId...');
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
-      final rider = riderDoc.data() ?? const <String, dynamic>{};
-      await db.collection('deliveryRequests').doc(requestId).set({
-        'status': 'accepted',
-        'dispatchStatus': 'accepted',
-        'matchingStatus': 'accepted',
-        'riderId': user.uid,
-        'driverId': user.uid,
-        'assignedDriverId': user.uid,
-        'riderName': rider['fullName'] ?? user.displayName ?? user.email,
-        'driverName': rider['fullName'] ?? user.displayName ?? user.email,
-        'driverVehicle': rider['vehicle'],
-        'driverPlateNumber': rider['plateNumber'],
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('acceptRideRequests')
+          .call({'requestId': requestId});
       await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
-      await db.collection('chats').doc(requestId).set({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'participants': FieldValue.arrayUnion([user.uid, 'circum-support']),
-        'participantRoles': {user.uid: 'rider', 'circum-support': 'admin'},
-        'assignedRiderId': user.uid,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'circum-web',
-      }, SetOptions(merge: true));
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
     } catch (_) {
@@ -8477,23 +8472,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   void _stopRiderLiveLocationPublishing({required String status}) {
-    final deliveryId = _trackingDeliveryId;
-    final riderId = _riderUser?.uid;
     _riderLiveLocationTimer?.cancel();
     _riderLiveLocationTimer = null;
     _trackingDeliveryId = null;
-    if (deliveryId != null && riderId != null) {
-      FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(deliveryId)
-          .collection('tracking')
-          .doc('liveLocation')
-          .set({
-        'riderId': riderId,
-        'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
   }
 
   Future<bool> _ensureRiderLocationPermission() async {
@@ -8523,21 +8504,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           timeLimit: Duration(seconds: 6),
         ),
       );
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(deliveryId)
-          .collection('tracking')
-          .doc('liveLocation')
-          .set({
-        'riderId': riderId,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'heading': position.heading,
-        'speed': position.speed,
-        'accuracy': position.accuracy,
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateDeliveryLiveLocation')
+          .call({
+        'deliveryId': deliveryId,
         'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'location': {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'heading': position.heading,
+          'speed': position.speed,
+          'accuracy': position.accuracy,
+          'clientRecordedAt': DateTime.now().millisecondsSinceEpoch,
+        },
+      });
     } catch (_) {
       if (mounted) {
         setState(() => _jobMessage = 'Live tracking update could not be sent.');
@@ -8591,7 +8571,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (requestId.isEmpty) return;
     setState(() => _jobMessage = 'Updating job $requestId...');
     try {
-      final db = FirebaseFirestore.instance;
       final vanguardPatch = await _collectVanguardPinVerification(
         job,
         requestId,
@@ -8611,74 +8590,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         setState(() => _jobMessage = 'Verify parcel weight before pickup.');
         return;
       }
-      final updates = <String, dynamic>{
-        'status': status,
-        'dispatchStatus': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      if (status == 'picked_up') {
-        updates['pickedUpAt'] = FieldValue.serverTimestamp();
-        if (vanguardPatch != null) updates.addAll(vanguardPatch);
-        updates.addAll(verificationPatch!);
-      }
-      if (status == 'in_transit') {
-        updates['outForDeliveryAt'] = FieldValue.serverTimestamp();
-      }
-      if (status == 'completed') {
-        updates['completedAt'] = FieldValue.serverTimestamp();
-        if (vanguardPatch != null) updates.addAll(vanguardPatch);
-        final payout = _jobPayout(job);
-        final tip = _jobTip(job);
-        final totalCredit = payout + tip;
-        final txId = RiderMarketplaceRules.earningTransactionId(
-          deliveryId: requestId,
-          riderId: user.uid,
-        );
-        final deliveryRef = db.collection('deliveryRequests').doc(requestId);
-        final walletRef = db.collection('riderWalletTransactions').doc(txId);
-        final earningsRef = db.collection('riderEarnings').doc(user.uid);
-        await db.runTransaction((transaction) async {
-          final existingWallet = await transaction.get(walletRef);
-          transaction.set(deliveryRef, updates, SetOptions(merge: true));
-          if (existingWallet.exists) return;
-          transaction.set(
-              walletRef,
-              {
-                'id': txId,
-                'transactionId': txId,
-                'deliveryId': requestId,
-                'requestId': requestId,
-                'riderId': user.uid,
-                'type': 'earning',
-                'deliveryEarning': payout,
-                'tipAmount': tip,
-                'amount': totalCredit,
-                'status': 'pending',
-                'notes': 'Completed delivery awaiting admin settlement.',
-                'createdAt': FieldValue.serverTimestamp(),
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
-          transaction.set(
-              earningsRef,
-              {
-                'riderId': user.uid,
-                'availableBalance': FieldValue.increment(0),
-                'pendingBalance': FieldValue.increment(totalCredit),
-                'lifetimeEarnings': FieldValue.increment(totalCredit),
-                'totalWithdrawn': FieldValue.increment(0),
-                'tipsReceived': FieldValue.increment(tip),
-                'completedJobs': FieldValue.increment(1),
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
-        });
-      } else {
-        await db
-            .collection('deliveryRequests')
-            .doc(requestId)
-            .set(updates, SetOptions(merge: true));
-      }
+      await _advanceAcceptedJobThroughBackend(
+        job: job,
+        requestId: requestId,
+        targetStatus: status,
+        vanguardPatch: vanguardPatch,
+        verificationPatch: verificationPatch,
+      );
       if (status == 'completed' || status == 'cancelled') {
         _stopRiderLiveLocationPublishing(status: status);
       }
@@ -8691,6 +8609,103 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not update this job. Try again.');
     }
+  }
+
+  Future<void> _advanceAcceptedJobThroughBackend({
+    required Map<String, dynamic> job,
+    required String requestId,
+    required String targetStatus,
+    Map<String, dynamic>? vanguardPatch,
+    Map<String, dynamic>? verificationPatch,
+  }) async {
+    final currentStatus = _canonicalRiderBackendStatus(
+        '${job['status'] ?? 'accepted'}'
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[-\s]+'), '_'));
+    final actions = _backendActionsForRiderTarget(currentStatus, targetStatus);
+    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateDeliveryTrackingStatus');
+    for (final action in actions) {
+      await callable.call({
+        'deliveryId': requestId,
+        'action': action,
+        if (action == 'verify_collection_pin' ||
+            action == 'verify_receiver_pin') ...{
+          if (vanguardPatch?['enteredPin'] != null)
+            'pin': vanguardPatch!['enteredPin'],
+          'evidence': {
+            if (verificationPatch?['riderVerifiedWeightKg'] != null)
+              'actualWeightKg': verificationPatch!['riderVerifiedWeightKg'],
+            if ((verificationPatch?['riderWeightEvidenceUrls'] as List?)
+                    ?.isNotEmpty ==
+                true)
+              'photoUrl':
+                  (verificationPatch!['riderWeightEvidenceUrls'] as List).first,
+            'conditionConfirmed': true,
+            'riderDeclarationAccepted': true,
+          },
+        },
+      });
+    }
+  }
+
+  List<String> _backendActionsForRiderTarget(
+    String currentStatus,
+    String targetStatus,
+  ) {
+    const pickupAdvance = {
+      'accepted': ['start_heading_to_pickup', 'arrived_at_pickup'],
+      'navigating_to_pickup': ['arrived_at_pickup'],
+      'arrived_at_pickup': <String>[],
+      'waiting': <String>[],
+      'pickup_verification': <String>[],
+    };
+    final actions = <String>[];
+    if (targetStatus == 'picked_up') {
+      actions.addAll(pickupAdvance[currentStatus] ?? const <String>[]);
+      if (currentStatus != 'pickup_verified' && currentStatus != 'collected') {
+        actions.add('verify_collection_pin');
+      }
+      if (currentStatus != 'collected') actions.add('confirm_collected');
+      return actions;
+    }
+    if (targetStatus == 'in_transit') {
+      if (currentStatus != 'collected' &&
+          currentStatus != 'navigating_to_dropoff') {
+        actions
+            .addAll(_backendActionsForRiderTarget(currentStatus, 'picked_up'));
+      }
+      if (currentStatus != 'navigating_to_dropoff') {
+        actions.add('start_delivery');
+      }
+      return actions;
+    }
+    if (targetStatus == 'completed') {
+      if (currentStatus != 'navigating_to_dropoff' &&
+          currentStatus != 'arrived_at_dropoff' &&
+          currentStatus != 'pin_required') {
+        actions
+            .addAll(_backendActionsForRiderTarget(currentStatus, 'in_transit'));
+      }
+      if (currentStatus != 'arrived_at_dropoff' &&
+          currentStatus != 'pin_required') {
+        actions.add('near_dropoff');
+      }
+      actions.add('verify_receiver_pin');
+      return actions;
+    }
+    if (targetStatus == 'cancelled') return ['cancel'];
+    return const <String>[];
+  }
+
+  String _canonicalRiderBackendStatus(String status) {
+    return switch (status) {
+      'picked_up' => 'collected',
+      'in_transit' || 'out_for_delivery' => 'navigating_to_dropoff',
+      'completed' => 'delivered',
+      _ => status,
+    };
   }
 
   Future<Map<String, dynamic>?> _collectVanguardPinVerification(
@@ -8836,6 +8851,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         ? 'deliveryPinVerifiedBy'
         : 'collectionPinVerifiedBy';
     return {
+      'enteredPin': enteredPin,
       verifiedField: true,
       verifiedAtField: FieldValue.serverTimestamp(),
       verifiedByField: riderId,
@@ -9133,19 +9149,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'vehicleType': vehicle,
       },
     };
-  }
-
-  double _jobPayout(Map<String, dynamic> job) {
-    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
-    final value = summary?['driverPayout'] ?? job['driverPayout'];
-    if (value is num) return value.toDouble();
-    return double.tryParse('$value') ?? 0;
-  }
-
-  double _jobTip(Map<String, dynamic> job) {
-    final value = job['tipAmount'] ?? job['riderTip'] ?? job['tip'];
-    if (value is num) return value.toDouble();
-    return double.tryParse('$value') ?? 0;
   }
 
   double _jobCustomerWeight(Map<String, dynamic> job) {
@@ -9487,32 +9490,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _riderChatInput.clear();
     try {
       await _ensureCircumFirebaseReady();
-      final chatRef =
-          FirebaseFirestore.instance.collection('chats').doc(requestId);
-      await chatRef.collection('messages').add({
-        'threadId': requestId,
-        'bookingId': requestId,
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('sendCircumMessage')
+          .call({
+        'chatId': requestId,
         'requestId': requestId,
-        'senderId': user.uid,
-        'senderRole': 'rider',
-        'senderType': 'rider',
-        'messageText': text,
         'message': text,
-        'readBy': [user.uid],
-        'createdAt': FieldValue.serverTimestamp(),
-        'timeStamp': DateTime.now().toIso8601String(),
       });
-      await chatRef.set({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'participants': FieldValue.arrayUnion([user.uid, 'circum-support']),
-        'lastMessage': text,
-        'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        'unreadBy': FieldValue.arrayUnion(['sender', 'admin']),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'circum-web',
-      }, SetOptions(merge: true));
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Message could not be sent.');
@@ -14238,9 +14222,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (confirmed != true) return;
 
     try {
-      final response = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('cancelDelivery')
-          .call({'deliveryId': delivery.id});
+      final response =
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('cancelDelivery')
+              .call({'deliveryId': delivery.id});
       final data = Map<String, dynamic>.from(response.data as Map);
       if (data['success'] != true) {
         final decision =
@@ -16642,42 +16627,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (requestId == null) return;
     try {
       await _ensureFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final chatRef = db.collection('chats').doc(requestId);
-      await chatRef.collection('messages').add({
-        'threadId': requestId,
-        'bookingId': requestId,
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('sendCircumMessage')
+          .call({
+        'chatId': requestId,
         'requestId': requestId,
-        'senderId': _senderUser?.uid ?? 'web-sender',
-        'senderRole': 'sender',
-        'senderType': 'user',
-        'recipientId': _supportChat
-            ? 'circum-support'
-            : (_assignedDriverId ?? 'assigned-rider'),
-        'recipientType': _supportChat ? 'admin' : 'rider',
-        'messageText': text,
         'message': text,
-        'status': 'sent',
-        'readBy': [_senderUser?.uid ?? 'web-sender'],
-        'createdAt': FieldValue.serverTimestamp(),
-        'timeStamp': DateTime.now().toIso8601String(),
       });
-      await chatRef.set({
-        'threadId': requestId,
-        'bookingId': requestId,
-        'requestId': requestId,
-        'lastMessage': text,
-        'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        'participants': FieldValue.arrayUnion([
-          _senderUser?.uid ?? 'web-sender',
-          _supportChat
-              ? 'circum-support'
-              : (_assignedDriverId ?? 'assigned-rider'),
-        ]),
-        'unreadBy': FieldValue.arrayUnion([_supportChat ? 'admin' : 'rider']),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'source': 'circum-web',
-      }, SetOptions(merge: true));
     } catch (_) {
       if (!mounted) return;
       setState(

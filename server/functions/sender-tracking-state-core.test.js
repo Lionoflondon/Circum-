@@ -51,6 +51,9 @@ test("delivery status transition rules block unsafe jumps", () => {
   assert.equal(tracking.canTransitionDeliveryStatus("pickup_verified", "collected"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("pickup_verified", "navigating_to_dropoff"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("collected", "navigating_to_dropoff"), true);
+  assert.equal(tracking.canTransitionDeliveryStatus("picked_up", "navigating_to_dropoff"), true);
+  assert.equal(tracking.canTransitionDeliveryStatus("in_transit", "arrived_at_dropoff"), true);
+  assert.equal(tracking.canTransitionDeliveryStatus("out_for_delivery", "arrived_at_dropoff"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("arrived_at_dropoff", "pin_required"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("pin_required", "delivered"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("delivered", "accepted"), false);

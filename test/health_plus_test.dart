@@ -66,10 +66,36 @@ void main() {
     test('uses delivery pricing plus Health+ minimum starting price', () {
       final quote = HealthPlusPricing.calculate();
 
-      expect(quote.delivery.baseFare, 6);
+      expect(quote.delivery.baseFare, 5);
       expect(quote.serviceFee, HealthPlusPricing.serviceFeeGbp);
-      expect(quote.total, 11);
-      expect(quote.amountPence, 1100);
+      expect(quote.total, 13.4);
+      expect(quote.amountPence, 1340);
+    });
+
+    test('applies the Health+ minimum only below the floor', () {
+      final quote = HealthPlusPricing.calculate(distanceMiles: 0.1);
+
+      expect(quote.total, HealthPlusPricing.minimumStartingPriceGbp);
+      expect(quote.minimumAdjustment, greaterThan(0));
+    });
+
+    test('does not double-apply the Health+ minimum at the floor', () {
+      final quote = HealthPlusPricing.calculate(distanceMiles: 3.2);
+
+      expect(quote.total, HealthPlusPricing.minimumStartingPriceGbp);
+      expect(quote.minimumAdjustment, 0);
+    });
+
+    test('prices Health+ above the minimum with service uplifts', () {
+      final quote = HealthPlusPricing.calculate(
+        distanceMiles: 8,
+        subscriptionPlan: 'priority',
+      );
+
+      expect(
+          quote.total, greaterThan(HealthPlusPricing.minimumStartingPriceGbp));
+      expect(quote.priorityFee, HealthPlusPricing.priorityFeeGbp);
+      expect(quote.minimumAdjustment, lessThanOrEqualTo(0));
     });
 
     test('cancelling or pausing uses explicit status fields', () {

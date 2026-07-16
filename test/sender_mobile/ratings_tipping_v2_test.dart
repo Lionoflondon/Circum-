@@ -70,4 +70,69 @@ void main() {
     expect(submitSource, isNot(contains("collection('riderEarnings')")));
     expect(source, isNot(contains('_recalculateDriverPerformance')));
   });
+
+  test('legacy web Rider acceptance uses the canonical callable', () {
+    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final acceptStart = source.indexOf('Future<void> _acceptDeliveryJob');
+    final acceptEnd =
+        source.indexOf('void _syncRiderLiveLocationPublishing', acceptStart);
+    expect(acceptStart, isNonNegative);
+    expect(acceptEnd, greaterThan(acceptStart));
+    final acceptSource = source.substring(acceptStart, acceptEnd);
+
+    expect(acceptSource, contains("httpsCallable('acceptRideRequests')"));
+    expect(acceptSource, isNot(contains("collection('deliveryRequests')")));
+    expect(acceptSource, isNot(contains("collection('chats')")));
+    expect(acceptSource, isNot(contains("'status': 'accepted'")));
+  });
+
+  test('legacy web Rider lifecycle uses canonical delivery callables', () {
+    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final statusStart = source.indexOf('Future<void> _updateAcceptedJobStatus');
+    final statusEnd = source.indexOf(
+      'Future<Map<String, dynamic>?> _collectVanguardPinVerification',
+      statusStart,
+    );
+    expect(statusStart, isNonNegative);
+    expect(statusEnd, greaterThan(statusStart));
+    final statusSource = source.substring(statusStart, statusEnd);
+
+    expect(
+      statusSource,
+      contains("httpsCallable('updateDeliveryTrackingStatus')"),
+    );
+    expect(statusSource, isNot(contains("collection('deliveryRequests')")));
+    expect(statusSource, isNot(contains("collection('riderEarnings')")));
+    expect(
+      statusSource,
+      isNot(contains("collection('riderWalletTransactions')")),
+    );
+    expect(statusSource, isNot(contains('runTransaction')));
+  });
+
+  test('legacy web tracking and chat use canonical callables', () {
+    final source = File('lib/web_sender_app.dart').readAsStringSync();
+
+    expect(source, contains("httpsCallable('updateDeliveryLiveLocation')"));
+    expect(source, contains("httpsCallable('sendCircumMessage')"));
+    expect(source,
+        isNot(contains("collection('riderEarnings').doc(user.uid).set")));
+
+    final riderChatStart = source.indexOf('Future<void> _sendRiderChatMessage');
+    final riderChatEnd =
+        source.indexOf('String _formatMessageTime', riderChatStart);
+    expect(riderChatStart, isNonNegative);
+    expect(riderChatEnd, greaterThan(riderChatStart));
+    final riderChatSource = source.substring(riderChatStart, riderChatEnd);
+    expect(riderChatSource, contains("httpsCallable('sendCircumMessage')"));
+    expect(riderChatSource, isNot(contains("collection('chats')")));
+
+    final senderChatStart = source.indexOf('Future<void> _sendMessage()');
+    final senderChatEnd = source.indexOf('void _reset()', senderChatStart);
+    expect(senderChatStart, isNonNegative);
+    expect(senderChatEnd, greaterThan(senderChatStart));
+    final senderChatSource = source.substring(senderChatStart, senderChatEnd);
+    expect(senderChatSource, contains("httpsCallable('sendCircumMessage')"));
+    expect(senderChatSource, isNot(contains("collection('chats')")));
+  });
 }

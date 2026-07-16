@@ -592,6 +592,22 @@ function riderDispatchPriority(rider, request, now = Date.now()) {
   return elapsedMinutes >= thresholds[rank] ? 1 : 0;
 }
 
+function deliveryProtocolState(delivery = {}) {
+  return {
+    vanguardProtocolEnabled: delivery.vanguardProtocolEnabled === true ||
+      delivery.vanguardEnabled === true ||
+      delivery.requiresVanguard === true ||
+      Boolean(delivery.vanguardProtocol && delivery.vanguardProtocol.enabled === true),
+    vanguardStatus: delivery.vanguardStatus ||
+      delivery.vanguardProtocol && delivery.vanguardProtocol.status ||
+      delivery.vanguardVerificationStatus ||
+      "not_required",
+    vanguardRequiredReason: delivery.vanguardRequiredReason ||
+      delivery.vanguardProtocol && delivery.vanguardProtocol.reason ||
+      "",
+  };
+}
+
 module.exports = {
   CATEGORIES,
   WEIGHT_BANDS,
@@ -611,6 +627,7 @@ module.exports = {
   normalizeRiderRank,
   riderCanViewDispatch,
   riderDispatchPriority,
+  deliveryProtocolState,
   normalizeVehicleClass: vehicleDispatch.normalizeVehicleClass,
   normalizeRiderVehicle: vehicleDispatch.normalizeRiderVehicle,
   pickRequiredVehicle: vehicleDispatch.pickRequiredVehicle,

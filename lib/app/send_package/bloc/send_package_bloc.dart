@@ -319,7 +319,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           event.pickupDetails.address.lat, event.pickupDetails.address.lng));
 
       GeoFirePoint dropoffLocation = GeoFirePoint(GeoPoint(
-          event.dropoffDetails.address.lat, event.pickupDetails.address.lng));
+          event.dropoffDetails.address.lat, event.dropoffDetails.address.lng));
 
       // Document does not exist
       // print('Document does not exist');
@@ -362,7 +362,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ).toJson(),
         'currency': 'GBP',
         'stripePaymentIntentId': event.paymentIntentId,
-        'paymentStatus': event.paymentIntentId == null ? 'pending' : 'succeeded',
+        'paymentStatus':
+            event.paymentIntentId == null ? 'pending' : 'succeeded',
         'status': 'requested',
         'createdAt': DateTime.now()
       }).then((value) => print("DocumentSnapshot successfully created!"),
@@ -667,8 +668,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           .call({'deliveryId': user.uid});
       final data = Map<String, dynamic>.from(result.data as Map);
       if (data['success'] != true) {
-        emit(state.copyWith(message:
-            '${(data['decision'] as Map?)?['userFacingMessage'] ?? 'This delivery requires support review.'}'));
+        emit(state.copyWith(
+            message:
+                '${(data['decision'] as Map?)?['userFacingMessage'] ?? 'This delivery requires support review.'}'));
         return;
       }
       add(SetDrawerHeight(

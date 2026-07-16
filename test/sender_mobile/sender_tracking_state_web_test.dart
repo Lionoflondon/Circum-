@@ -3,6 +3,30 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('Sender mobile preserves distinct pickup and drop-off coordinates', () {
+    final source = File('lib/app/send_package/bloc/send_package_bloc.dart')
+        .readAsStringSync();
+
+    expect(
+      source,
+      contains(
+        'GeoPoint(\n'
+        '          event.dropoffDetails.address.lat, '
+        'event.dropoffDetails.address.lng)',
+      ),
+    );
+    expect(
+      source,
+      isNot(
+        contains(
+          'GeoPoint(\n'
+          '          event.dropoffDetails.address.lat, '
+          'event.pickupDetails.address.lng)',
+        ),
+      ),
+    );
+  });
+
   test('Sender Web reads canonical delivery lifecycle fields', () {
     final source = File('lib/web_sender_app.dart').readAsStringSync();
 
