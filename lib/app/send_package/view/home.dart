@@ -1,13 +1,10 @@
 import 'dart:async';
 
-import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
-import 'package:circum/helper/google_map_controller.dart';
 import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 
@@ -15,9 +12,7 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../../send_package/view/delivery_review_expanded.dart';
-import '../../send_package/view/index.dart';
 import 'parts/active_delivery_details.dart';
-import 'parts/connecting_with_rider.dart';
 import 'parts/initial_bs.dart';
 import 'ratings.dart';
 
@@ -107,13 +102,13 @@ class HomeViewState extends State<HomeView> {
                             const InitialBS(),
                           if (state.deliveryStatus ==
                               DeliveryStatus.reconnectingWithRider)
-                            const ConnectingWithARider(),
+                            const ActiveDeliveryDetails(),
                           if (state.deliveryStatus ==
                               DeliveryStatus.addressesSelected)
                             deliveryReview(),
                           if (state.deliveryStatus ==
                               DeliveryStatus.deliveryConfirmed)
-                            const ConnectingToCourier(),
+                            const ActiveDeliveryDetails(),
                           if (state.deliveryStatus ==
                                   DeliveryStatus.deliveryOnGoing &&
                               state.deliveryData != null)

@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:async';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/utils/theme/colors.dart';
@@ -7,7 +7,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -35,6 +34,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _activeDeliverySubscription;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -62,6 +63,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<DeleteCompletedDelivery>(_handleDeleteCompletedDelivery);
     on<CancelRequest>(_handleCancelRequestEvent);
     on<BackButtonPressed>(_handleBackButtonPressedEvent);
+    on<ActiveDeliverySnapshotUpdated>(_handleActiveDeliverySnapshotUpdated);
   }
 
   void _handleCheckForPushToken(
@@ -311,7 +313,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final User? user = auth.currentUser;
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final HttpsCallable callable = functions.httpsCallable('sendPackage');
-      final apnsToken = await firebaseMessaging.getAPNSToken();
+      await firebaseMessaging.getAPNSToken();
       // print('apnsToken: $apnsToken');
       final fcmToken = await firebaseMessaging.getToken();
 
@@ -378,6 +380,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('activeRequest', uuidStrong);
+      _listenToActiveDelivery(db.collection("deliveryRequests").doc(user?.uid));
 
       // await firebaseMessaging
       //     .subscribeToTopic(uuidStrong)
@@ -414,9 +417,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
       await prefs.setString(
           'activeRequest', activeDeliveryData.data()!['requestId']);
+      _listenToActiveDelivery(activeDelivery);
 
       emit(state.copyWith(
           deliveryStatus: DeliveryStatus.deliveryOnGoing,
+          trackingStage: SenderTrackingStage.riderAssigned,
           deliveryData: deliveryData));
       add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
     }
@@ -432,6 +437,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         polylineCoordinates: [],
         markers: {},
         deliveryStatus: DeliveryStatus.deliveryCompleted,
+        trackingStage: SenderTrackingStage.delivered,
         lastHistoryId: event.data['historyId']));
   }
 
@@ -480,8 +486,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         final docResponse = await documentReference.get();
 
         if (docResponse.exists) {
-          final data = docResponse.data();
-
           // print(data);
 
           final deliveryData = DeliveryData.fromJson(event.data);
@@ -510,19 +514,21 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           db.collection('deliveryRequests').doc(user!.uid);
 
       final docResponse = await documentReference.get();
+      _listenToActiveDelivery(documentReference);
 
       if (docResponse.exists) {
         print('There is an active ride');
         final data = docResponse.data();
-        String? pickupAddress = data!['pickupDetails']['address'];
+        if (data == null) return;
+        String? pickupAddress = data['pickupDetails']['address'];
         String? dropoffAddress = data['dropoffDetails']['address'];
         double? price = data['price'];
         String? currency = data['currency'];
+        final trackingStage = senderTrackingStageFromDelivery(data);
 
-        GeoPoint pickUpGeoPoint =
-            data!['pickupDetails']['position']['geopoint'];
+        GeoPoint pickUpGeoPoint = data['pickupDetails']['position']['geopoint'];
         GeoPoint dropoffGeoPoint =
-            data['pickupDetails']['position']['geopoint'];
+            data['dropoffDetails']['position']['geopoint'];
 
         PlaceCoordinate pickUpCoordinates = PlaceCoordinate(
             lat: pickUpGeoPoint.latitude, lng: pickUpGeoPoint.longitude);
@@ -549,6 +555,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           status = DeliveryStatus.reconnectingWithRider;
           emit(state.copyWith(
               deliveryStatus: status,
+              trackingStage: trackingStage,
+              activeDeliveryData: data,
+              senderVisiblePin: senderVisiblePinFromDelivery(data),
               pickupDetails: pickupDetails,
               dropoffDetails: dropoffDetails,
               pickupLocation: pickupAddress,
@@ -562,6 +571,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           emit(state.copyWith(
             lastHistoryId: data['historyId'],
             deliveryStatus: status,
+            trackingStage: SenderTrackingStage.delivered,
+            activeDeliveryData: data,
           ));
         }
 
@@ -654,6 +665,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final documentReference = db.collection('deliveryRequests').doc(user.uid);
 
       await documentReference.delete();
+      await _activeDeliverySubscription?.cancel();
+      _activeDeliverySubscription = null;
     } catch (e) {
       print(e);
     }
@@ -681,6 +694,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         polylineCoordinates: [],
         markers: {},
         deliveryStatus: DeliveryStatus.inital,
+        trackingStage: SenderTrackingStage.findingRider,
+        clearActiveDeliveryData: true,
+        clearSenderVisiblePin: true,
         message: 'Delivery cancelled.',
       ));
     } on FirebaseFunctionsException catch (error) {
@@ -698,6 +714,81 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       polylineCoordinates: [],
       markers: {},
       deliveryStatus: DeliveryStatus.inital,
+      trackingStage: SenderTrackingStage.findingRider,
+      clearActiveDeliveryData: true,
+      clearSenderVisiblePin: true,
     ));
+  }
+
+  void _listenToActiveDelivery(
+      DocumentReference<Map<String, dynamic>> documentReference) {
+    _activeDeliverySubscription?.cancel();
+    _activeDeliverySubscription = documentReference.snapshots().listen(
+      (snapshot) {
+        add(ActiveDeliverySnapshotUpdated(data: snapshot.data()));
+      },
+      onError: (_) {
+        add(const ActiveDeliverySnapshotUpdated(data: null));
+      },
+    );
+  }
+
+  void _handleActiveDeliverySnapshotUpdated(
+      ActiveDeliverySnapshotUpdated event, Emitter<SendPackageState> emit) {
+    final data = event.data;
+    if (data == null) return;
+
+    final trackingStage = senderTrackingStageFromDelivery(data);
+    final deliveryData = _deliveryDataFromActiveDelivery(data);
+    final nextDeliveryStatus = trackingStage == SenderTrackingStage.delivered
+        ? DeliveryStatus.deliveryCompleted
+        : trackingStage == SenderTrackingStage.findingRider
+            ? DeliveryStatus.deliveryConfirmed
+            : DeliveryStatus.deliveryOnGoing;
+
+    emit(state.copyWith(
+      deliveryStatus: nextDeliveryStatus,
+      trackingStage: trackingStage,
+      activeDeliveryData: data,
+      deliveryData: deliveryData ?? state.deliveryData,
+      senderVisiblePin: senderVisiblePinFromDelivery(data),
+      clearSenderVisiblePin: senderVisiblePinFromDelivery(data) == null,
+    ));
+  }
+
+  DeliveryData? _deliveryDataFromActiveDelivery(Map<String, dynamic> data) {
+    final riderId =
+        '${data['riderId'] ?? data['driverId'] ?? data['assignedRiderId'] ?? data['assignedDriverId'] ?? ''}'
+            .trim();
+    final riderName =
+        '${data['courierName'] ?? data['driverName'] ?? data['riderName'] ?? data['assignedDriverName'] ?? ''}'
+            .trim();
+    if (riderId.isEmpty && riderName.isEmpty) return null;
+
+    final photoUrl =
+        '${data['photoURL'] ?? data['photoUrl'] ?? data['riderPhotoUrl'] ?? ''}'
+            .trim();
+
+    return DeliveryData(
+      courierName: riderName.isEmpty ? 'Circum rider' : riderName,
+      phoneNumber:
+          '${data['phoneNumber'] ?? data['driverPhone'] ?? data['riderPhone'] ?? ''}',
+      typeOfVehicle:
+          '${data['typeOfVehicle'] ?? data['vehicleType'] ?? data['vehicle'] ?? ''}',
+      estimatedDeliveryTime:
+          '${data['estimatedDeliveryTime'] ?? data['etaText'] ?? ''}',
+      plateNumber:
+          '${data['plateNumber'] ?? data['vehicleRegistration'] ?? data['registration'] ?? ''}',
+      code: '${data['code'] ?? ''}',
+      rating: '${data['rating'] ?? data['riderRating'] ?? '0'}',
+      riderId: riderId,
+      photoURL: photoUrl.isEmpty || photoUrl == 'null' ? null : photoUrl,
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    await _activeDeliverySubscription?.cancel();
+    return super.close();
   }
 }

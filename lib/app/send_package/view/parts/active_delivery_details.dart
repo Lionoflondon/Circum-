@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../utils/theme/theme.dart';
@@ -28,6 +27,14 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
   Widget build(BuildContext context) {
     return BlocBuilder<SendPackageBloc, SendPackageState>(
         builder: (context, state) {
+      final trackingCopy = senderTrackingCopy[state.trackingStage] ??
+          senderTrackingCopy[SenderTrackingStage.findingRider]!;
+      final hasRider = state.deliveryData != null &&
+          state.trackingStage != SenderTrackingStage.findingRider;
+      final terminalStage =
+          state.trackingStage == SenderTrackingStage.delivered ||
+              state.trackingStage == SenderTrackingStage.cancelled ||
+              state.trackingStage == SenderTrackingStage.issue;
       // if (state.panelControlStatus == PanelControlStatus.isClosed) {
       //   print('hits here');
       //   panelController.animatePanelToPosition(0);
@@ -38,157 +45,212 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
       return Container(
           color: AppColors.secondary,
           child: Column(children: [
-            Padding(
+            Semantics(
+              label: '${trackingCopy.title}. ${trackingCopy.body}',
+              child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                child: Row(
-                  children: [
-                    Container(
-                      height: 36,
-                      width: 36,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(100),
-                        color: AppColors.input,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.input,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.borderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.radar, color: AppColors.primary),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: AppText.text(
+                              trackingCopy.title,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                      child: state.deliveryData?.photoURL != null &&
-                              state.deliveryData?.photoURL != 'null'
-                          ? CachedNetworkImage(
-                              imageUrl: state.deliveryData!.photoURL!,
-                              imageBuilder: (context, imageProvider) =>
-                                  Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(100),
-                                  image: DecorationImage(
-                                    image: imageProvider,
-                                    fit: BoxFit.cover,
+                      const SizedBox(height: 8),
+                      AppText.text(
+                        trackingCopy.body,
+                        color: AppColors.textGrey,
+                        fontSize: 13,
+                      ),
+                      if (state.trackingStage ==
+                          SenderTrackingStage.riderArrivingAtDropoff) ...[
+                        const SizedBox(height: 12),
+                        AppText.text(
+                          state.senderVisiblePin == null
+                              ? 'Your handover PIN will appear here if required.'
+                              : 'Handover PIN: ${state.senderVisiblePin}',
+                          color: AppColors.textGrey,
+                          fontSize: 13,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (hasRider)
+              Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  child: Row(
+                    children: [
+                      Container(
+                        height: 36,
+                        width: 36,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(100),
+                          color: AppColors.input,
+                        ),
+                        child: state.deliveryData?.photoURL != null &&
+                                state.deliveryData?.photoURL != 'null'
+                            ? CachedNetworkImage(
+                                imageUrl: state.deliveryData!.photoURL!,
+                                imageBuilder: (context, imageProvider) =>
+                                    Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(100),
+                                    image: DecorationImage(
+                                      image: imageProvider,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
+                                placeholder: (context, url) => Container(),
+                                //     CircularProgressIndicator(
+                                //   color: Colors.grey,
+                                // ),
+                                errorWidget: (context, url, error) =>
+                                    Icon(Icons.error),
+                              )
+                            : Image.asset(
+                                'assets/images/red_profile_icon.png',
+                                height: 36,
+                                width: 36,
                               ),
-                              placeholder: (context, url) => Container(),
-                              //     CircularProgressIndicator(
-                              //   color: Colors.grey,
-                              // ),
-                              errorWidget: (context, url, error) =>
-                                  Icon(Icons.error),
-                            )
-                          : Image.asset(
-                              'assets/images/red_profile_icon.png',
-                              height: 36,
-                              width: 36,
+                      ),
+                      const SizedBox(width: 14),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppText.text(state.deliveryData!.courierName,
+                              fontWeight: FontWeight.w600),
+                          AppText.text('Rating', color: AppColors.textGrey),
+                          if (state.deliveryData?.rating != null)
+                            RatingBar(
+                              initialRating:
+                                  double.tryParse(state.deliveryData!.rating) ??
+                                      0,
+                              itemSize: 16,
+                              direction: Axis.horizontal,
+                              allowHalfRating: true,
+                              ignoreGestures: true,
+                              itemCount: 5,
+                              ratingWidget: RatingWidget(
+                                full: SvgPicture.asset(
+                                    'assets/svg/star_full.svg'),
+                                half: SvgPicture.asset(
+                                    'assets/svg/star_half.svg'),
+                                empty: SvgPicture.asset(
+                                    'assets/svg/star_empty.svg'),
+                              ),
+                              itemPadding:
+                                  const EdgeInsets.symmetric(horizontal: 4.0),
+                              onRatingUpdate: (rating) {
+                                // Navigator.pop(context);
+                                // print(rating);
+                              },
                             ),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppText.text(state.deliveryData!.courierName,
-                            fontWeight: FontWeight.w600),
-                        AppText.text('Rating', color: AppColors.textGrey),
-                        if (state.deliveryData?.rating != null)
-                          RatingBar(
-                            initialRating:
-                                double.parse(state.deliveryData!.rating),
-                            itemSize: 16,
-                            direction: Axis.horizontal,
-                            allowHalfRating: true,
-                            ignoreGestures: true,
-                            itemCount: 5,
-                            ratingWidget: RatingWidget(
-                              full:
-                                  SvgPicture.asset('assets/svg/star_full.svg'),
-                              half:
-                                  SvgPicture.asset('assets/svg/star_half.svg'),
-                              empty:
-                                  SvgPicture.asset('assets/svg/star_empty.svg'),
-                            ),
-                            itemPadding:
-                                const EdgeInsets.symmetric(horizontal: 4.0),
-                            onRatingUpdate: (rating) {
-                              // Navigator.pop(context);
-                              // print(rating);
-                            },
-                          ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        AppText.text(state.deliveryData!.plateNumber,
-                            fontWeight: FontWeight.w600),
-                        AppText.text('Type of vehicle',
-                            color: AppColors.textGrey)
-                      ],
-                    ),
-                  ],
-                )),
+                        ],
+                      ),
+                      const Spacer(),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          AppText.text(state.deliveryData!.plateNumber,
+                              fontWeight: FontWeight.w600),
+                          AppText.text('Type of vehicle',
+                              color: AppColors.textGrey)
+                        ],
+                      ),
+                    ],
+                  )),
             const Divider(
               color: AppColors.borderColor,
               height: 1,
               thickness: 1,
             ),
-            Row(
-              children: [
-                Expanded(
-                    child: Column(
-                  children: [
-                    AppText.text('Estimated delivery time',
-                        fontSize: 10, color: AppColors.textGrey),
-                    AppText.text(
-                        state.deliveryData!.estimatedDeliveryTime.trim() !=
-                                'null'
-                            ? state.deliveryData!.estimatedDeliveryTime
-                            : '',
-                        fontSize: 16)
-                  ],
-                )),
-                Expanded(
-                    child: AppButton.button(
-                        backgroundColor: AppColors.grey,
-                        minimumSize: const Size(0, 99),
-                        widget: Column(
-                          children: [
-                            AppText.text('Call Courier',
-                                fontSize: 12, color: AppColors.textGrey),
-                            const SizedBox(height: 9),
-                            SvgPicture.asset('assets/svg/phone_outline.svg')
-                          ],
-                        ),
-                        onPressed: () {
-                          launch("tel://${state.deliveryData!.phoneNumber}");
-                        }))
-              ],
-            ),
+            if (hasRider)
+              Row(
+                children: [
+                  Expanded(
+                      child: Column(
+                    children: [
+                      AppText.text('Estimated delivery time',
+                          fontSize: 10, color: AppColors.textGrey),
+                      AppText.text(
+                          state.deliveryData!.estimatedDeliveryTime.trim() !=
+                                  'null'
+                              ? state.deliveryData!.estimatedDeliveryTime
+                              : '',
+                          fontSize: 16)
+                    ],
+                  )),
+                  Expanded(
+                      child: AppButton.button(
+                          backgroundColor: AppColors.grey,
+                          minimumSize: const Size(0, 99),
+                          widget: Column(
+                            children: [
+                              AppText.text('Call Courier',
+                                  fontSize: 12, color: AppColors.textGrey),
+                              const SizedBox(height: 9),
+                              SvgPicture.asset('assets/svg/phone_outline.svg')
+                            ],
+                          ),
+                          onPressed: () {
+                            launch("tel://${state.deliveryData!.phoneNumber}");
+                          }))
+                ],
+              ),
             const Divider(
               color: AppColors.borderColor,
               height: 1,
               thickness: 1,
             ),
             const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: AppButton.button(
-                  backgroundColor: AppColors.grey,
-                  widget: Row(
-                    children: [
-                      const SizedBox(width: 22),
-                      AppText.text('Message Courier',
-                          fontSize: 12, color: AppColors.textGrey),
-                      const Spacer(),
-                      const Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 22),
-                    ],
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const RideChatPageView()));
-                  }),
-            ),
+            if (hasRider && !terminalStage)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: AppButton.button(
+                    backgroundColor: AppColors.grey,
+                    widget: Row(
+                      children: [
+                        const SizedBox(width: 22),
+                        AppText.text('Message Courier',
+                            fontSize: 12, color: AppColors.textGrey),
+                        const Spacer(),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 22),
+                      ],
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const RideChatPageView()));
+                    }),
+              ),
             const SizedBox(height: 20),
             const Divider(
               color: AppColors.borderColor,
@@ -274,16 +336,19 @@ class _ActiveDeliveryDetailsState extends State<ActiveDeliveryDetails> {
               height: 1,
               thickness: 1,
             ),
-            TextButton(
-                onPressed: () {},
-                style: TextButton.styleFrom(
-                    minimumSize: Size(MediaQuery.of(context).size.width, 60)),
-                child: Center(
-                  child: AppText.text('Cancel request',
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16),
-                )),
+            if (!terminalStage)
+              TextButton(
+                  onPressed: () {
+                    context.read<SendPackageBloc>().add(CancelRequest());
+                  },
+                  style: TextButton.styleFrom(
+                      minimumSize: Size(MediaQuery.of(context).size.width, 60)),
+                  child: Center(
+                    child: AppText.text('Cancel request',
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16),
+                  )),
           ]));
     });
   }

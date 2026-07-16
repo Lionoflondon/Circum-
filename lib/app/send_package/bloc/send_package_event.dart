@@ -132,3 +132,8 @@ class DeleteCompletedDelivery extends SendPackageEvent {}
 class CancelRequest extends SendPackageEvent {}
 
 class BackButtonPressed extends SendPackageEvent {}
+
+class ActiveDeliverySnapshotUpdated extends SendPackageEvent {
+  final Map<String, dynamic>? data;
+  const ActiveDeliverySnapshotUpdated({required this.data});
+}

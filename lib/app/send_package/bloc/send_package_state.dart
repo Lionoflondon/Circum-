@@ -11,6 +11,154 @@ enum DeliveryStatus {
 
 enum ParcelStatus { requested, accepted, outForDelivery, delivered }
 
+enum SenderTrackingStage {
+  findingRider,
+  riderAssigned,
+  riderEnRouteToPickup,
+  riderArrivedAtPickup,
+  pickupComplete,
+  inTransit,
+  riderArrivingAtDropoff,
+  delivered,
+  cancelled,
+  issue,
+}
+
+class SenderTrackingCopy {
+  final String title;
+  final String body;
+
+  const SenderTrackingCopy(this.title, this.body);
+}
+
+const Map<SenderTrackingStage, SenderTrackingCopy> senderTrackingCopy = {
+  SenderTrackingStage.findingRider: SenderTrackingCopy(
+    'Finding a rider',
+    'Iris is checking nearby riders for this delivery.',
+  ),
+  SenderTrackingStage.riderAssigned: SenderTrackingCopy(
+    'Rider assigned',
+    'CIRCUM has assigned a rider to this delivery.',
+  ),
+  SenderTrackingStage.riderEnRouteToPickup: SenderTrackingCopy(
+    'Travelling to pickup',
+    'Your rider is heading to the pickup location.',
+  ),
+  SenderTrackingStage.riderArrivedAtPickup: SenderTrackingCopy(
+    'Arrived at pickup',
+    'Your rider has arrived and is waiting for collection.',
+  ),
+  SenderTrackingStage.pickupComplete: SenderTrackingCopy(
+    'Pickup verified',
+    'Collection has been verified and the parcel is with your rider.',
+  ),
+  SenderTrackingStage.inTransit: SenderTrackingCopy(
+    'In transit',
+    'Your rider is travelling to the drop-off location.',
+  ),
+  SenderTrackingStage.riderArrivingAtDropoff: SenderTrackingCopy(
+    'Arrived at drop-off',
+    'Your rider is at the destination and ready for handover.',
+  ),
+  SenderTrackingStage.delivered: SenderTrackingCopy(
+    'Delivered',
+    'Proof of delivery is saved in your Circum history.',
+  ),
+  SenderTrackingStage.cancelled: SenderTrackingCopy(
+    'Closed',
+    'This delivery is no longer active.',
+  ),
+  SenderTrackingStage.issue: SenderTrackingCopy(
+    'Needs attention',
+    'Circum is reviewing this delivery.',
+  ),
+};
+
+String _normalizeBackendStatus(Object? value) {
+  return '${value ?? ''}'
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[-\s]+'), '_');
+}
+
+String backendStatusFromDelivery(Map<String, dynamic> data) {
+  return _normalizeBackendStatus(data['deliveryStage'] ??
+      data['deliveryStatus'] ??
+      data['trackingStatus'] ??
+      data['status'] ??
+      'requested');
+}
+
+SenderTrackingStage senderTrackingStageForBackendStatus(String status) {
+  switch (_normalizeBackendStatus(status)) {
+    case '':
+    case 'requested':
+    case 'pending':
+    case 'unmatched':
+    case 'finding_rider':
+    case 'awaiting_rider':
+    case 'broadcast':
+    case 'broadcasted':
+      return SenderTrackingStage.findingRider;
+    case 'accepted':
+    case 'rider_assigned':
+      return SenderTrackingStage.riderAssigned;
+    case 'navigating_to_pickup':
+    case 'en_route_to_pickup':
+      return SenderTrackingStage.riderEnRouteToPickup;
+    case 'arrived_at_pickup':
+    case 'waiting':
+      return SenderTrackingStage.riderArrivedAtPickup;
+    case 'pickup_verification':
+    case 'pickup_verified':
+    case 'collected':
+      return SenderTrackingStage.pickupComplete;
+    case 'out_for_delivery':
+    case 'outfordelivery':
+    case 'navigating_to_dropoff':
+      return SenderTrackingStage.inTransit;
+    case 'arrived_at_dropoff':
+    case 'pin_required':
+    case 'handover_pending':
+      return SenderTrackingStage.riderArrivingAtDropoff;
+    case 'delivered':
+    case 'completed':
+    case 'delivery_completed':
+      return SenderTrackingStage.delivered;
+    case 'cancelled':
+    case 'canceled':
+    case 'cancelled_verified_discrepancy':
+    case 'sender_no_show_pickup':
+      return SenderTrackingStage.cancelled;
+    case 'issue':
+    case 'issue_reported':
+    case 'failed':
+    case 'failed_delivery':
+    case 'error':
+      return SenderTrackingStage.issue;
+    default:
+      return SenderTrackingStage.inTransit;
+  }
+}
+
+SenderTrackingStage senderTrackingStageFromDelivery(Map<String, dynamic> data) {
+  return senderTrackingStageForBackendStatus(backendStatusFromDelivery(data));
+}
+
+String? senderVisiblePinFromDelivery(Map<String, dynamic> data) {
+  final stage = senderTrackingStageFromDelivery(data);
+  if (stage != SenderTrackingStage.riderArrivingAtDropoff) return null;
+  for (final key in const [
+    'senderVisiblePin',
+    'senderHandoverPin',
+    'senderPin',
+  ]) {
+    final value = '${data[key] ?? ''}'.trim();
+    if (RegExp(r'^\d{4,8}$').hasMatch(value)) return value;
+  }
+  return null;
+}
+
 enum PanelControlStatus { initialized, isOpened, isClosed }
 
 // default MapCameraStatus is initial, lat 0, lng 0
@@ -58,6 +206,9 @@ class SendPackageState {
   ChatStatus chatStatus;
   String? message;
   String? lastHistoryId;
+  SenderTrackingStage trackingStage;
+  Map<String, dynamic>? activeDeliveryData;
+  String? senderVisiblePin;
   SendPackageState(
       {this.suggestions = const [],
       this.ongoingRequests = const [],
@@ -89,7 +240,10 @@ class SendPackageState {
       this.chatMessages = const [],
       this.chatStatus = ChatStatus.initial,
       this.message,
-      this.lastHistoryId});
+      this.lastHistoryId,
+      this.trackingStage = SenderTrackingStage.findingRider,
+      this.activeDeliveryData,
+      this.senderVisiblePin});
 
   SendPackageState copyWith(
       {List<Suggestion>? suggestions,
@@ -122,7 +276,12 @@ class SendPackageState {
       List<Message>? chatMessages,
       ChatStatus? chatStatus,
       String? message,
-      String? lastHistoryId}) {
+      String? lastHistoryId,
+      SenderTrackingStage? trackingStage,
+      Map<String, dynamic>? activeDeliveryData,
+      String? senderVisiblePin,
+      bool clearActiveDeliveryData = false,
+      bool clearSenderVisiblePin = false}) {
     return SendPackageState(
         suggestions: suggestions ?? this.suggestions,
         pickupLocation: pickupLocation ?? this.pickupLocation,
@@ -157,6 +316,13 @@ class SendPackageState {
         minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
         maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
         message: message ?? this.message,
-        lastHistoryId: lastHistoryId ?? this.lastHistoryId);
+        lastHistoryId: lastHistoryId ?? this.lastHistoryId,
+        trackingStage: trackingStage ?? this.trackingStage,
+        activeDeliveryData: clearActiveDeliveryData
+            ? null
+            : activeDeliveryData ?? this.activeDeliveryData,
+        senderVisiblePin: clearSenderVisiblePin
+            ? null
+            : senderVisiblePin ?? this.senderVisiblePin);
   }
 }
