@@ -26028,7 +26028,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'netGiftBudgetAfterFees':
             GiftRequestPolicy.estimatedNetGiftBudget(grossBudget),
         'estimatedNetGiftBudget':
-            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget!),
+            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget),
         'budgetStatus': 'pending_allocation',
         'personalMessage': _personalMessage.text.trim(),
         'interests': _interests.toList(),
