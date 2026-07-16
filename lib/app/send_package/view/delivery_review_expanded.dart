@@ -491,13 +491,6 @@ class _DeliveryReviewExpandedViewState
                 return ShowToast()
                     .errorToast(title: 'Please add a pick up phone number');
               }
-              context.read<AccountBloc>().add(
-                    PaymentCreateIntent(
-                      amount: (state.price! * 100).round(),
-                      email: email!,
-                    ),
-                  );
-
               final payForDelivery = await showPaymentBottomSheet(context,
                   amount: state.price!, phone: phoneNumber);
 
@@ -515,7 +508,9 @@ class _DeliveryReviewExpandedViewState
                         phoneNumber: dropoffContactPhoneNumber,
                         address: state.desinationCoordinate!,
                         moreInformation: dropoffAdditionalInformation,
-                        locality: state.destinationLocality)));
+                        locality: state.destinationLocality),
+                    paymentIntentId:
+                        context.read<AccountBloc>().state.paymentIntentId));
                 // The wait is required to avoid a glitch effect
                 await Future.delayed(const Duration(milliseconds: 300));
                 // ignore: use_build_context_synchronously

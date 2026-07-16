@@ -82,7 +82,9 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
             customerId: paymentIntentResult['customerId'],
             saveCard: event.saveCard);
 
-        emit(state.copyWith(status: PaymentStatus.success));
+        emit(state.copyWith(
+            status: PaymentStatus.success,
+            paymentIntentId: paymentIntentResult['paymentIntentId'] as String?));
       }
 
       if (paymentIntentResult['clientSecret'] != null &&

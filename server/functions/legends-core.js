@@ -8,7 +8,7 @@ function isEligibleLegendDelivery(delivery) {
   const payment = normalize(delivery.paymentStatus || delivery.stripePaymentStatus || delivery.payment && delivery.payment.status);
   const refund = normalize(delivery.refundStatus);
   const cancelled = delivery.cancelled === true || status.includes("cancel");
-  const refunded = delivery.refunded === true || refund === "refunded" || status === "refunded";
+  const refunded = delivery.refunded === true || ["refunded", "partially_refunded"].includes(refund) || status === "refunded";
   return status === "completed" && ["paid", "succeeded", "success"].includes(payment) && !cancelled && !refunded;
 }
 

@@ -1,9 +1,11 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const functions = require("firebase-functions/v1");
+const {defineSecret} = require("firebase-functions/params");
 const stripeConfig = functions.config().stripe || {};
+const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripe = require("stripe")(stripeConfig.livekey);
 const {v4: uuidv4} = require("uuid");
 
@@ -22,8 +24,21 @@ const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
 const deliveryTracking = require("./delivery-tracking");
 const ratingsTipping = require("./ratings-tipping");
+const riderEarnings = require("./rider-earnings");
+const stripeRefunds = require("./stripe-refunds");
 
 initializeApp();
+
+function allowCors(req, res) {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return true;
+  }
+  return false;
+}
 
 exports.sendPackage = sendPackage;
 exports.getAvaliableRequests = getAvaliableRequests;
@@ -56,6 +71,7 @@ exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
 exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
 exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
+exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
 exports.updateDeliveryTrackingStatus = deliveryTracking.updateDeliveryTrackingStatus;
 exports.updateDeliveryLiveLocation = deliveryTracking.updateDeliveryLiveLocation;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
@@ -92,6 +108,7 @@ const generateResponse = function(intent) {
 
 
 const createPaymentIntentHandler = async (req, res) => {
+  if (allowCors(req, res)) return;
   const {
     // paymentMethodId,
     amount,
@@ -102,6 +119,7 @@ const createPaymentIntentHandler = async (req, res) => {
     // phone,
     email,
     userId,
+    deliveryId,
     saveCard,
   } = req.body;
 
@@ -132,6 +150,8 @@ const createPaymentIntentHandler = async (req, res) => {
         name: name,
         email: email,
         pushToken: pushToken,
+        userId: userId || "",
+        deliveryId: deliveryId || "",
       },
       payment_method_types: ["card"],
       setup_future_usage: saveCard ? "off_session" : undefined,
@@ -169,7 +189,17 @@ const createPaymentIntentHandler = async (req, res) => {
 
     const intent = await stripe.paymentIntents.create(params);
 
+    if (deliveryId) {
+      await getFirestore().collection("deliveryRequests").doc(deliveryId).set({
+        stripePaymentIntentId: intent.id,
+        paymentStatus: intent.status,
+        stripePaymentStatus: intent.status,
+        paymentUpdatedAt: Date.now(),
+      }, {merge: true});
+    }
+
     const response = generateResponse(intent);
+    response.paymentIntentId = intent.id;
     response.customerId = customerId;
     response.ephemeralKey = ephemeralKey.secret,
 
@@ -187,6 +217,7 @@ exports.StripePayEndpointMethodId = functions.https.onRequest(createPaymentInten
 exports.createPaymentIntent = functions.https.onRequest(createPaymentIntentHandler);
 
 const confirmPaymentIntentHandler = async (req, res) => {
+  if (allowCors(req, res)) return;
   const {
     paymentIntentId,
   } = req.body;
@@ -209,11 +240,11 @@ const confirmPaymentIntentHandler = async (req, res) => {
 exports.StripePayEndpointIntentId = functions.https.onRequest(confirmPaymentIntentHandler);
 exports.confirmPaymentIntent = functions.https.onRequest(confirmPaymentIntentHandler);
 
-exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
+exports.StripeWebhook = functions.runWith({secrets: [stripeWebhookSecret]}).https.onRequest(async (req, res) => {
   const sig = req.headers["stripe-signature"];
   // console.log(sig);
 
-  const stripeWebhookSigningSecret = stripeConfig.webhooksecret;
+  const stripeWebhookSigningSecret = stripeWebhookSecret.value() || stripeConfig.webhooksecret;
   if (!stripeWebhookSigningSecret) {
     return res.status(500).send({error: "Stripe webhook secret is not configured"});
   }
@@ -228,6 +259,11 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
 
   console.log("💰 Webhook working!");
   console.log(`Event: ${event.type}`);
+
+  if (event.type === "charge.refunded") {
+    const refundResult = await stripeRefunds.syncChargeRefund({db: getFirestore(), event});
+    return res.send({success: true, refund: refundResult});
+  }
 
   if (event.type === "payment_intent.succeeded" ||
       event.type === "payment_intent.processing" ||
@@ -348,6 +384,7 @@ exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
 
 
 exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
+  if (allowCors(req, res)) return;
   try {
     const {riderId} = req.body;
 
@@ -433,6 +470,7 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
 });
 
 exports.endTrip = functions.https.onRequest(async (req, res) => {
+  if (allowCors(req, res)) return;
   try {
     const {riderId, requestId, riderName} = req.body;
 
@@ -467,19 +505,8 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
     const uuid1 = uuidv4();
     const uuid2 = uuidv4();
     const uuiduuid = `${uuid1}${uuid2}`;
-    let riderBalance = 0;
-
-    const paymentRef = getFirestore().collection("payments").doc(riderId);
-
-    const getPaymentData = await paymentRef.get();
-    const paymentData = getPaymentData.data();
-
-    if (getPaymentData.exists) {
-      riderBalance = paymentData.accountBalance || 0;
-    }
-
-    await paymentRef.set({
-      accountBalance: riderBalance+ rideCost,
+    await riderEarnings.creditRiderEarnings({
+      db: getFirestore(), riderId, deliveryId: requestId, amount: rideCost,
     });
 
     const irisData = require("./iris-core");

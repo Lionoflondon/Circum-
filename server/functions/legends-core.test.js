@@ -8,6 +8,7 @@ test("only paid completed deliveries qualify", () => {
   assert.equal(isEligibleLegendDelivery({status: "pending", paymentStatus: "paid"}), false);
   assert.equal(isEligibleLegendDelivery({status: "cancelled", paymentStatus: "paid"}), false);
   assert.equal(isEligibleLegendDelivery({status: "completed", paymentStatus: "paid", refunded: true}), false);
+  assert.equal(isEligibleLegendDelivery({status: "completed", paymentStatus: "paid", refundStatus: "partially_refunded"}), false);
 });
 
 test("counter stops at 1500 and assigns unique next values", () => {

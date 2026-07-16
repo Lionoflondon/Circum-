@@ -2233,6 +2233,8 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'senderName',
             'riderName',
             'status',
+            'stripePaymentIntentId',
+            'refundStatus',
           ]),
           columns: const [
             'ID',
@@ -2241,6 +2243,7 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
             'Status',
             'Weight / IRIS',
             'Price',
+            'Payment / refund',
             'Actions',
           ],
           rowBuilder: _deliveryRow,
@@ -3127,6 +3130,9 @@ class _AdminOperationsPanelState extends State<_AdminOperationsPanel> {
       ),
       _AdminCell(_adminIrisWeightSummary(item)),
       _AdminCell('£${_adminMoney(item).toStringAsFixed(2)}'),
+      _AdminCell(
+        '${item['stripePaymentIntentId'] ?? item['paymentIntentId'] ?? 'No PaymentIntent recorded'}\n${_displayStatusLabel('${item['refundStatus'] ?? 'not_refunded'}')}',
+      ),
       _AdminActions(
         colors: widget.colors,
         actions: [
@@ -14232,31 +14238,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (confirmed != true) return;
 
     try {
-      final reference = FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(delivery.id);
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final snapshot = await transaction.get(reference);
-        final data = snapshot.data();
-        if (data == null) throw StateError('Booking no longer exists.');
-        final ownerId = '${data['senderId'] ?? data['userId'] ?? ''}';
-        if (ownerId != user.uid) {
-          throw StateError('You cannot cancel this booking.');
-        }
-        final currentStatus = '${data['status'] ?? ''}';
-        if (!BookingCancellationPolicy.canSenderCancel(currentStatus)) {
-          throw StateError(
-              'This booking has already started and cannot be cancelled.');
-        }
-        transaction.update(reference, {
-          'status': 'cancelled_by_sender',
-          'matchingStatus': 'cancelled',
-          'cancelledAt': FieldValue.serverTimestamp(),
-          'cancelledBy': user.uid,
-          'cancelledByEmail': user.email,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      });
+      final response = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('cancelDelivery')
+          .call({'deliveryId': delivery.id});
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (data['success'] != true) {
+        final decision =
+            Map<String, dynamic>.from(data['decision'] as Map? ?? {});
+        throw StateError(
+            '${decision['userFacingMessage'] ?? 'This delivery requires support review.'}');
+      }
       await _loadSenderDeliveries(user.uid);
       if (!mounted) return;
       setState(() {

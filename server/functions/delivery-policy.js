@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./delivery-policy-core");
+const communicationEngine = require("./communication-engine");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -58,7 +59,8 @@ function policyPatch({state, event, evidenceId, extra = {}}) {
 
 exports.requestSenderCancellation = functions.https.onCall(async (data, context) => {
   const uid = requireAuth(context);
-  const deliveryId = text(data.deliveryId);
+  const deliveryId = text(data.deliveryId || data.requestId);
+  const cancellationReason = text(data.reason || data.cancellationReason) || "Sender requested cancellation";
   const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:sender_cancel:${uid}`);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
 
@@ -71,6 +73,10 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
     const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
     assertSender(uid, delivery);
     const now = Date.now();
+    const previousLifecycleState = text(delivery.state || delivery.deliveryStage || delivery.deliveryStatus || delivery.status);
+    const paymentStatus = text(delivery.paymentStatus || delivery.stripePaymentStatus || delivery.payment && delivery.payment.status);
+    const stripePaymentIntentId = text(delivery.stripePaymentIntentId || delivery.paymentIntentId) || null;
+    const refundReviewRequired = ["paid", "succeeded", "success", "captured"].includes(paymentStatus.toLowerCase());
     const decision = core.cancellationDecision({
       delivery,
       state: delivery.state || delivery.status,
@@ -114,7 +120,10 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
       createdAt: now,
     };
     transaction.set(evidenceRef, evidence);
-    transaction.set(idemRef, {success: true, decision, financial, evidenceId: evidenceRef.id, createdAt: now});
+    const result = {success: true, decision, financial, evidenceId: evidenceRef.id, createdAt: now,
+      deliveryId, riderId: text(delivery.riderId || delivery.assignedRiderId) || null,
+      stripePaymentIntentId, paymentStatus, refundReviewRequired};
+    transaction.set(idemRef, result);
     transaction.update(ref, policyPatch({
       state: "cancelled_by_sender",
       event,
@@ -124,10 +133,30 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
         cancellationFinancial: financial,
         cancelledAt: FieldValue.serverTimestamp(),
         cancelledBy: uid,
+        cancellationReason,
+        previousLifecycleState,
+        cancellationPaymentStatus: paymentStatus || null,
+        cancellationStripePaymentIntentId: stripePaymentIntentId,
+        refundReviewRequired,
+        refundReviewStatus: refundReviewRequired ? "pending_manual_review" : "not_required",
       },
     }));
-    return {success: true, decision, financial, evidenceId: evidenceRef.id};
+    transaction.set(db.collection("deliveryTimeline").doc(), event);
+    return result;
   });
+  if (result.success && !result.duplicate) {
+    await communicationEngine.emitNotification({
+      recipientId: "circum-support", recipientRole: "admin", type: "delivery_cancelled",
+      title: "Delivery cancelled", body: `Delivery ${deliveryId} was cancelled${result.refundReviewRequired ? " and requires manual refund review" : ""}.`,
+      data: {deliveryId, stripePaymentIntentId: result.stripePaymentIntentId || "", refundReviewRequired: `${result.refundReviewRequired}`},
+    });
+    if (result.riderId) {
+      await communicationEngine.emitNotification({
+        recipientId: result.riderId, recipientRole: "rider", type: "delivery_cancelled",
+        title: "Delivery cancelled", body: "A delivery assigned to you was cancelled.", data: {deliveryId},
+      });
+    }
+  }
   return result;
 });
 

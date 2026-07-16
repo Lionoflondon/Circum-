@@ -361,6 +361,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           ),
         ).toJson(),
         'currency': 'GBP',
+        'stripePaymentIntentId': event.paymentIntentId,
+        'paymentStatus': event.paymentIntentId == null ? 'pending' : 'succeeded',
         'status': 'requested',
         'createdAt': DateTime.now()
       }).then((value) => print("DocumentSnapshot successfully created!"),
@@ -658,23 +660,31 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleCancelRequestEvent(CancelRequest event, Emitter emit) async {
     final User? user = auth.currentUser;
-    final collection = db.collection("deliveryRequests").doc(user?.uid);
-
-    final docResponse = await collection.get();
-    final data = docResponse.data();
-
-    if (data?['status'] == 'requested') {
-      await collection.delete();
+    if (user == null) return;
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('cancelDelivery')
+          .call({'deliveryId': user.uid});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (data['success'] != true) {
+        emit(state.copyWith(message:
+            '${(data['decision'] as Map?)?['userFacingMessage'] ?? 'This delivery requires support review.'}'));
+        return;
+      }
+      add(SetDrawerHeight(
+          minDrawerHeight: state.minDrawerHeight,
+          maxDrawerHeight: state.minDrawerHeight));
+      emit(state.copyWith(
+        polylines: [],
+        polylineCoordinates: [],
+        markers: {},
+        deliveryStatus: DeliveryStatus.inital,
+        message: 'Delivery cancelled.',
+      ));
+    } on FirebaseFunctionsException catch (error) {
+      emit(state.copyWith(
+          message: error.message ?? 'Cancellation was not confirmed.'));
     }
-    add(SetDrawerHeight(
-        minDrawerHeight: state.minDrawerHeight,
-        maxDrawerHeight: state.minDrawerHeight));
-    emit(state.copyWith(
-      polylines: [],
-      polylineCoordinates: [],
-      markers: {},
-      deliveryStatus: DeliveryStatus.inital,
-    ));
   }
 
   void _handleBackButtonPressedEvent(BackButtonPressed event, Emitter emit) {

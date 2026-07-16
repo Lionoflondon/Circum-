@@ -49,8 +49,11 @@ class SetDeliveryStatus extends SendPackageEvent {
 class SendDeliveryRequest extends SendPackageEvent {
   final ContactInfo pickupDetails;
   final ContactInfo dropoffDetails;
+  final String? paymentIntentId;
   const SendDeliveryRequest(
-      {required this.pickupDetails, required this.dropoffDetails});
+      {required this.pickupDetails,
+      required this.dropoffDetails,
+      this.paymentIntentId});
 }
 
 class SetDistance extends SendPackageEvent {
