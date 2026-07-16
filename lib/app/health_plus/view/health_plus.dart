@@ -125,6 +125,10 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         'price': quote.total,
         'currency': 'GBP',
         'pricingBreakdown': quote.toJson(),
+        'pricingInputs': {
+          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
+          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
+        },
         'type': 'health_plus_prescription_pickup',
         'source': 'circum-mobile',
         'createdAt': FieldValue.serverTimestamp(),
@@ -225,11 +229,15 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     required HealthPlusPriceBreakdown quote,
   }) async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse(
           'https://us-central1-circum-2797c.cloudfunctions.net/createHealthPlusCheckoutSession',
         ),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         body: jsonEncode({
           'bookingId': pickupId,
           'profileId': profileId,
