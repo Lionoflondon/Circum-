@@ -1,0 +1,581 @@
+/* eslint-disable max-len */
+"use strict";
+
+const functions = require("firebase-functions/v1");
+const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
+const tracking = require("./sender-tracking-state-core");
+
+function text(value) {
+  return `${value || ""}`.trim();
+}
+
+function normalized(value) {
+  return tracking.normalizeStatus(value);
+}
+
+function liveLocationPatch(location) {
+  if (!location || typeof location !== "object") return {};
+  const lat = Number(location.latitude ?? location.lat);
+  const lng = Number(location.longitude ?? location.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {};
+  const heading = Number(location.heading ?? location.bearing);
+  const speed = Number(location.speed);
+  return {
+    riderLiveLocation: {
+      geopoint: new GeoPoint(lat, lng),
+      latitude: lat,
+      longitude: lng,
+      ...(Number.isFinite(heading) ? {heading} : {}),
+      ...(Number.isFinite(speed) ? {speed} : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+  };
+}
+
+function signalQuality(accuracy) {
+  const value = Number(accuracy);
+  if (!Number.isFinite(value) || value <= 0) return "unknown";
+  if (value <= 25) return "high";
+  if (value <= 80) return "medium";
+  return "reduced";
+}
+
+function validatedLiveLocation(input) {
+  const location = input && typeof input === "object" ? input : {};
+  const lat = Number(location.latitude ?? location.lat);
+  const lng = Number(location.longitude ?? location.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+      lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid rider location is required.");
+  }
+  const accuracy = Number(location.accuracyMeters ?? location.accuracy ?? 0);
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 250) {
+    throw new functions.https.HttpsError("failed-precondition", "GPS accuracy is not reliable enough for live tracking.");
+  }
+  const heading = Number(location.heading ?? location.bearing);
+  const speed = Number(location.speed);
+  const clientRecordedAt = Number(location.clientRecordedAt ?? location.updatedAt ?? Date.now());
+  return {
+    latitude: lat,
+    longitude: lng,
+    accuracy,
+    heading: Number.isFinite(heading) ? heading : 0,
+    speed: Number.isFinite(speed) ? speed : 0,
+    clientRecordedAt,
+    gpsStatus: text(location.gpsStatus || (accuracy <= 80 ? "active" : "poorAccuracy")),
+    gpsSignalQuality: text(location.gpsSignalQuality || signalQuality(accuracy)),
+    mocked: location.mocked === true || location.isMocked === true,
+    backgroundCapable: location.backgroundCapable === true,
+    queueDepth: Math.max(0, Number(location.queueDepth || 0)),
+  };
+}
+
+function timestampMs(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return value;
+  return 0;
+}
+
+function distanceMeters(a, b) {
+  if (!a || !b) return Number.POSITIVE_INFINITY;
+  const lat1 = Number(a.latitude ?? a.lat);
+  const lon1 = Number(a.longitude ?? a.lng);
+  const lat2 = Number(b.latitude ?? b.lat);
+  const lon2 = Number(b.longitude ?? b.lng);
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
+  const radians = (deg) => deg * Math.PI / 180;
+  const dLat = radians(lat2 - lat1);
+  const dLon = radians(lon2 - lon1);
+  const rLat1 = radians(lat1);
+  const rLat2 = radians(lat2);
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function headingDelta(a, b) {
+  const h1 = Number(a);
+  const h2 = Number(b);
+  if (!Number.isFinite(h1) || !Number.isFinite(h2)) return 0;
+  const delta = Math.abs(((h2 - h1 + 540) % 360) - 180);
+  return delta;
+}
+
+function shouldWriteLiveLocation(previous, next, nowMs = Date.now()) {
+  if (!next || !next.riderLiveLocation) return false;
+  const previousLocation = previous && previous.riderLiveLocation;
+  if (!previousLocation) return true;
+  const ageMs = nowMs - timestampMs(previousLocation.updatedAt);
+  if (ageMs < 10000) return false;
+  const moved = distanceMeters(previousLocation, next.riderLiveLocation);
+  const turned = headingDelta(previousLocation.heading, next.riderLiveLocation.heading);
+  if (moved >= 25 || turned >= 15) return true;
+  return ageMs >= 30000;
+}
+
+async function findDelivery(db, transaction, deliveryId) {
+  const directRef = db.collection("deliveryRequests").doc(deliveryId);
+  const direct = await transaction.get(directRef);
+  if (direct.exists) return {ref: directRef, id: direct.id, data: direct.data()};
+
+  const query = await transaction.get(
+      db.collection("deliveryRequests")
+          .where("requestId", "==", deliveryId)
+          .limit(1),
+  );
+  if (query.empty) return null;
+  const doc = query.docs[0];
+  return {ref: doc.ref, id: doc.id, data: doc.data()};
+}
+
+function assertRiderOwnsDelivery(delivery, riderId) {
+  const assigned = text(
+      delivery.riderId ||
+      delivery.driverId ||
+      delivery.assignedRiderId ||
+      delivery.assignedDriverId,
+  );
+  if (!assigned || assigned !== riderId) {
+    throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can update this delivery.");
+  }
+}
+
+function assertRiderOperational(rider = {}) {
+  const state = normalized(
+      rider.accountState || rider.accountStatus || rider.status || rider.approvalStatus,
+  );
+  if (["suspended", "frozen", "closed", "rejected"].includes(state)) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "This rider account cannot perform delivery actions.",
+    );
+  }
+}
+
+function expectedPin(delivery, action) {
+  const protection = delivery.vanguardProtection || {};
+  if (action === "verify_collection_pin") {
+    return text(delivery.collectionPin || delivery.pickupPin || protection.collectionPin);
+  }
+  if (action === "verify_receiver_pin") {
+    return text(delivery.deliveryPin || delivery.receiverPin || delivery.dropoffPin || protection.deliveryPin);
+  }
+  return "";
+}
+
+function pinAttemptField(action) {
+  return action === "verify_receiver_pin" ?
+    "deliveryPinAttemptCount" : "collectionPinAttemptCount";
+}
+
+function evidenceRequirements(delivery, action, evidence = {}) {
+  const pickup = action === "verify_collection_pin";
+  const handover = action === "verify_receiver_pin";
+  if (!pickup && !handover) return {valid: true};
+  const required = pickup ?
+    delivery.verificationRequired === true ||
+      delivery.requiresVerification === true ||
+      delivery.requiresVanguard === true :
+    delivery.deliveryPhotoRequired === true ||
+      delivery.requiresVanguard === true ||
+      delivery.secureHandoverRequired === true;
+  if (!required) return {valid: true};
+  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
+  if (pickup && evidence.conditionConfirmed !== true) {
+    return {valid: false, reason: "Parcel condition must be confirmed."};
+  }
+  if (pickup && evidence.riderDeclarationAccepted !== true) {
+    return {valid: false, reason: "Rider declaration is required."};
+  }
+  if (pickup && delivery.weightVerificationRequired === true &&
+      !(Number(evidence.actualWeightKg) > 0)) {
+    return {valid: false, reason: "Actual parcel weight is required."};
+  }
+  if (handover && !text(evidence.recipientName) && evidence.recipientConfirmed !== true) {
+    return {valid: false, reason: "Recipient confirmation is required."};
+  }
+  return {valid: true};
+}
+
+function settlementValues(delivery = {}) {
+  const base = Number(
+      delivery.riderEarning ||
+      delivery.estimatedEarnings ||
+      delivery.riderShare ||
+      delivery.riderPayout ||
+      0,
+  );
+  const breakdown = delivery.riderEarningBreakdown || {};
+  const tip = Number(breakdown.tip || delivery.riderTip || delivery.tipAmount || 0);
+  const waiting = Number(breakdown.waiting || delivery.riderWaitingEarning || delivery.noShowEarning || 0);
+  const adjustment = Number(breakdown.adjustment || delivery.riderAdjustment || 0);
+  const amount = Number.isFinite(base) ? base : 0;
+  return {
+    amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
+    deliveryAmount: Math.max(0, Math.round((amount - tip - waiting - adjustment) * 100) / 100),
+    tip: Number.isFinite(tip) ? Math.round(tip * 100) / 100 : 0,
+    waiting: Number.isFinite(waiting) ? Math.round(waiting * 100) / 100 : 0,
+    adjustment: Number.isFinite(adjustment) ? Math.round(adjustment * 100) / 100 : 0,
+    trustPoints: highestTrustAward(delivery),
+  };
+}
+
+function highestTrustAward(delivery = {}) {
+  const text = `${delivery.category || delivery.deliveryType || delivery.serviceType || ""}`.toLowerCase();
+  const enabled = (key) => delivery[key] === true;
+  if (enabled("isHealthPlus") || enabled("healthPlus") || text.includes("health")) return 6;
+  if (enabled("isGift") || enabled("gift") || text.includes("gift")) return 5;
+  if (enabled("isScheduled") || enabled("scheduled") || delivery.scheduledAt || text.includes("scheduled")) return 5;
+  if (enabled("requiresVanguard") || enabled("vanguard") || text.includes("vanguard")) return 4;
+  if (enabled("isHeavyDuty") || enabled("heavyDuty") || text.includes("heavy")) return 4;
+  if (enabled("isBusiness") || enabled("business") || text.includes("business")) return 3;
+  if (enabled("isMarketplace") || enabled("marketplace") || text.includes("marketplace")) return 2;
+  return 1;
+}
+
+function patchForTransition({action, nextStatus, riderId}) {
+  const now = FieldValue.serverTimestamp();
+  const patch = {
+    status: nextStatus,
+    deliveryStatus: nextStatus,
+    deliveryStage: nextStatus,
+    updatedAt: now,
+    lastRiderAction: action,
+    lastRiderActionAt: now,
+  };
+
+  if (nextStatus === "navigating_to_pickup") patch.headingToPickupAt = now;
+  if (nextStatus === "arrived_at_pickup") patch.arrivedAtPickupAt = now;
+  if (nextStatus === "pickup_verified") {
+    patch.collectionPinVerified = true;
+    patch.collectionPinVerifiedAt = now;
+    patch.collectionPinVerifiedBy = riderId;
+  }
+  if (nextStatus === "collected") patch.collectedAt = now;
+  if (nextStatus === "navigating_to_dropoff") {
+    patch.collectedAt = now;
+    patch.inTransitAt = now;
+  }
+  if (nextStatus === "arrived_at_dropoff") patch.arrivedAtDropoffAt = now;
+  if (nextStatus === "delivered") {
+    patch.deliveryPinVerified = true;
+    patch.deliveryPinVerifiedAt = now;
+    patch.deliveryPinVerifiedBy = riderId;
+    patch.deliveredAt = now;
+    patch.completedAt = now;
+  }
+  if (nextStatus === "issue_reported") {
+    patch.issueReportedAt = now;
+    patch.issueReportedBy = riderId;
+  }
+  if (nextStatus === "cancelled") {
+    patch.cancelledAt = now;
+    patch.cancelledBy = riderId;
+  }
+  return patch;
+}
+
+exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
+  }
+  const deliveryId = text(data && (data.deliveryId || data.requestId));
+  const action = normalized(data && data.action);
+  const nextStatus = tracking.statusForRiderAction(action);
+  if (!deliveryId) {
+    throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
+  }
+  if (!nextStatus) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported rider tracking action.");
+  }
+
+  const db = getFirestore();
+  const riderId = context.auth.uid;
+  const result = await db.runTransaction(async (transaction) => {
+    const found = await findDelivery(db, transaction, deliveryId);
+    if (!found) {
+      throw new functions.https.HttpsError("not-found", "Delivery not found.");
+    }
+    const delivery = found.data || {};
+    assertRiderOwnsDelivery(delivery, riderId);
+
+    const riderRef = db.collection("riders").doc(riderId);
+    const riderSnapshot = await transaction.get(riderRef);
+    if (!(context.auth.token && context.auth.token.founderRider === true)) assertRiderOperational(riderSnapshot.data());
+
+    const currentStatus = normalized(delivery.status || delivery.deliveryStatus || "requested");
+    if (currentStatus === nextStatus ||
+        (nextStatus === "delivered" && currentStatus === "completed")) {
+      return {
+        deliveryId: found.id,
+        requestId: delivery.requestId || found.id,
+        status: currentStatus,
+        senderTrackingState: tracking.senderTrackingStateForBackendStatus(currentStatus),
+        idempotent: true,
+      };
+    }
+    if (!tracking.canTransitionDeliveryStatus(currentStatus, nextStatus)) {
+      throw new functions.https.HttpsError("failed-precondition", `Cannot move delivery from ${currentStatus} to ${nextStatus}.`);
+    }
+
+    const evidence = data && data.evidence && typeof data.evidence === "object" ? data.evidence : {};
+    const evidenceDecision = evidenceRequirements(delivery, action, evidence);
+    if (!evidenceDecision.valid) {
+      throw new functions.https.HttpsError("failed-precondition", evidenceDecision.reason);
+    }
+
+
+    const requiredPin = expectedPin(delivery, action);
+    if (requiredPin) {
+      const suppliedPin = text(data && data.pin);
+      const attemptField = pinAttemptField(action);
+      const attempts = Number(delivery[attemptField] || 0);
+      if (attempts >= 5) {
+        throw new functions.https.HttpsError(
+            "resource-exhausted",
+            "Too many incorrect PIN attempts. Contact Circum Support.",
+        );
+      }
+      if (!/^\d{6}$/.test(suppliedPin) || suppliedPin !== requiredPin) {
+        transaction.set(found.ref, {
+          [attemptField]: attempts + 1,
+          lastPinAttemptAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        return {verificationFailed: true, attemptsRemaining: 4 - attempts};
+      }
+    }
+
+    const patch = patchForTransition({
+      action,
+      nextStatus,
+      riderId,
+    });
+    if (Object.keys(evidence).length > 0) {
+      patch[ action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
+        ...evidence,
+        recordedAt: FieldValue.serverTimestamp(),
+        recordedBy: riderId,
+      };
+    }
+    if (action === "report_issue") {
+      const issue = data && data.issue && typeof data.issue === "object" ? data.issue : {};
+      patch.deliveryIssue = {
+        category: text(issue.category || "other"),
+        notes: text(issue.notes),
+        evidenceUrls: Array.isArray(issue.evidenceUrls) ? issue.evidenceUrls : [],
+        reportedBy: riderId,
+        reportedAt: FieldValue.serverTimestamp(),
+      };
+      patch.requiresAdminReview = true;
+    }
+    const liveLocation = liveLocationPatch(data && data.location);
+    let activeRef = null;
+    let shouldWriteLocation = false;
+    if (Object.keys(liveLocation).length > 0) {
+      activeRef = db.collection("activeDeliveries").doc(found.id);
+      const activeSnapshot = await transaction.get(activeRef);
+      shouldWriteLocation = shouldWriteLiveLocation(activeSnapshot.data(), liveLocation);
+    }
+    const earningRef = nextStatus === "delivered" ?
+      db.collection("riderEarningTransactions").doc(found.id) : null;
+    const existingEarning = earningRef ? await transaction.get(earningRef) : null;
+    transaction.set(found.ref, patch, {merge: true});
+    if (nextStatus === "delivered") {
+      const settlement = settlementValues(delivery);
+      if (earningRef && existingEarning && !existingEarning.exists) {
+        transaction.set(earningRef, {
+          transactionId: found.id,
+          deliveryId: found.id,
+          riderId,
+          type: "delivery_earning",
+          amount: settlement.amount,
+          trustPoints: settlement.trustPoints,
+          status: "completed",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(db.collection("riderEarnings").doc(riderId), {
+          availableBalance: FieldValue.increment(settlement.amount),
+          deliveryEarningsTotal: FieldValue.increment(settlement.deliveryAmount),
+          tipsTotal: FieldValue.increment(settlement.tip),
+          waitingNoShowTotal: FieldValue.increment(settlement.waiting),
+          adjustmentsTotal: FieldValue.increment(settlement.adjustment),
+          lifetimeEarnings: FieldValue.increment(settlement.amount),
+          totalAmountEarned: FieldValue.increment(settlement.amount),
+          completedDeliveries: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        if (settlement.trustPoints > 0) {
+          transaction.set(db.collection("riderProfiles").doc(riderId), {
+            trustPoints: FieldValue.increment(settlement.trustPoints),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
+        patch.settlementId = earningRef.id;
+        patch.settlementCompletedAt = FieldValue.serverTimestamp();
+        patch.trustPointsAwarded = settlement.trustPoints;
+        transaction.set(found.ref, patch, {merge: true});
+        transaction.set(db.collection("chats").doc(delivery.requestId || found.id), {
+          readOnly: true,
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+    }
+    if (activeRef && shouldWriteLocation) {
+      transaction.set(
+          activeRef,
+          {
+            deliveryId: found.id,
+            requestId: delivery.requestId || found.id,
+            riderId,
+            status: nextStatus,
+            ...liveLocation,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          {merge: true},
+      );
+    }
+    return {
+      deliveryId: found.id,
+      requestId: delivery.requestId || found.id,
+      status: nextStatus,
+      senderTrackingState: tracking.senderTrackingStateForBackendStatus(nextStatus),
+    };
+  });
+  if (result.verificationFailed) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Incorrect PIN. ${Math.max(0, result.attemptsRemaining)} attempts remaining.`,
+    );
+  }
+  return result;
+});
+
+exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
+  }
+  const deliveryId = text(data && (data.deliveryId || data.requestId));
+  const trackingStatus = text(data && (data.status || data.trackingStatus || "live"));
+  if (!deliveryId) {
+    throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
+  }
+  const location = validatedLiveLocation(data && data.location);
+  if (location.mocked) {
+    throw new functions.https.HttpsError("failed-precondition", "Live tracking requires a trusted GPS signal.");
+  }
+
+  const db = getFirestore();
+  const riderId = context.auth.uid;
+  return db.runTransaction(async (transaction) => {
+    const found = await findDelivery(db, transaction, deliveryId);
+    if (!found) {
+      throw new functions.https.HttpsError("not-found", "Delivery not found.");
+    }
+    const delivery = found.data || {};
+    assertRiderOwnsDelivery(delivery, riderId);
+    const currentStatus = normalized(delivery.status || delivery.deliveryStatus || delivery.deliveryStage);
+    if (["completed", "complete", "delivered", "cancelled", "canceled", "failed", "no_show"].includes(currentStatus)) {
+      throw new functions.https.HttpsError("failed-precondition", "Live tracking is not active for this delivery.");
+    }
+
+    const now = Date.now();
+    const trackingHealth = {
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      accuracyMeters: location.accuracy,
+      lastFixClientAt: location.clientRecordedAt,
+      lastBackendUploadAt: FieldValue.serverTimestamp(),
+      fresh: true,
+      backgroundCapable: location.backgroundCapable,
+      queueDepth: location.queueDepth,
+      source: "updateDeliveryLiveLocation",
+    };
+    const riderLiveLocation = {
+      geopoint: new GeoPoint(location.latitude, location.longitude),
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy: location.accuracy,
+      accuracyMeters: location.accuracy,
+      heading: location.heading,
+      speed: location.speed,
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      clientRecordedAt: location.clientRecordedAt,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    const payload = {
+      riderId,
+      activeDeliveryId: found.id,
+      deliveryId: found.id,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy: location.accuracy,
+      heading: location.heading,
+      speed: location.speed,
+      status: trackingStatus,
+      trackingStatus: "live",
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      gpsAccuracyMeters: location.accuracy,
+      lastGpsUpdateClientAt: location.clientRecordedAt,
+      lastBackendUploadAt: FieldValue.serverTimestamp(),
+      trackingHealth,
+      clientRecordedAt: location.clientRecordedAt,
+      updatedAt: FieldValue.serverTimestamp(),
+      riderLiveLocation,
+    };
+    transaction.set(found.ref.collection("tracking").doc("liveLocation"), payload, {merge: true});
+    transaction.set(db.collection("activeDeliveries").doc(found.id), {
+      deliveryId: found.id,
+      requestId: delivery.requestId || found.id,
+      riderId,
+      status: trackingStatus,
+      riderLiveLocation,
+      trackingHealth,
+      lastBackendUploadAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(db.collection("riderPresence").doc(riderId), {
+      riderId,
+      isOnline: true,
+      availabilityStatus: "busy",
+      busy: true,
+      activeDeliveryId: found.id,
+      currentLocation: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracyMeters: location.accuracy,
+        heading: location.heading,
+        speed: location.speed,
+        updatedAt: now,
+      },
+      lastLocationAt: now,
+      gpsStatus: location.gpsStatus,
+      gpsSignalQuality: location.gpsSignalQuality,
+      dispatchEligible: false,
+      connectionStatus: "connected",
+      source: "deliveryLiveLocation",
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {success: true, deliveryId: found.id, trackingHealth};
+  });
+});
+
+exports._private = {
+  liveLocationPatch,
+  shouldWriteLiveLocation,
+  distanceMeters,
+  signalQuality,
+  validatedLiveLocation,
+  patchForTransition,
+  expectedPin,
+  assertRiderOwnsDelivery,
+  assertRiderOperational,
+  evidenceRequirements,
+  settlementValues,
+  highestTrustAward,
+};

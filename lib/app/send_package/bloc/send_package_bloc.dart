@@ -59,7 +59,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<IncomingMessage>(_handleIncomingMessage);
     on<MessageRider>(_handleMessageRiderEvent);
     on<LoadChatMessages>(_handleLoadChatMessagesEvent);
-    on<RateRider>(_handleRateRider);
     on<DeleteCompletedDelivery>(_handleDeleteCompletedDelivery);
     on<CancelRequest>(_handleCancelRequestEvent);
     on<BackButtonPressed>(_handleBackButtonPressedEvent);
@@ -642,19 +641,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final messagesList = jsonData.map((e) => Message.fromJson(e)).toList();
       emit(state.copyWith(
           chatMessages: messagesList, chatStatus: ChatStatus.newMessage));
-    }
-  }
-
-  void _handleRateRider(RateRider event, Emitter emit) async {
-    try {
-      if (state.lastHistoryId != null) {
-        await db
-            .collection('history')
-            .doc(state.lastHistoryId)
-            .update({'riderRating': event.rating, 'updatedAt': DateTime.now()});
-      }
-    } catch (e) {
-      print(e);
     }
   }
 

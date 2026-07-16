@@ -18,6 +18,10 @@ const deliveryAdjustments = require("./delivery-adjustments");
 const platformNotifications = require("./platform-notifications");
 const legends = require("./legends");
 const giftsPayment = require("./gifts-payment");
+const communicationEngine = require("./communication-engine");
+const deliveryPolicy = require("./delivery-policy");
+const deliveryTracking = require("./delivery-tracking");
+const ratingsTipping = require("./ratings-tipping");
 
 initializeApp();
 
@@ -26,6 +30,9 @@ exports.getAvaliableRequests = getAvaliableRequests;
 exports.getAvailableRequests = getAvaliableRequests;
 exports.acceptRideRequests = acceptRideRequests;
 exports.sendMessage = sendMessage;
+exports.sendCircumMessage = communicationEngine.sendCircumMessage;
+exports.markConversationRead = communicationEngine.markConversationRead;
+exports.setConversationTyping = communicationEngine.setConversationTyping;
 exports.sendRiderUpdate = sendRiderUpdate;
 exports.createHealthPlusCheckoutSession = healthPlus.createHealthPlusCheckoutSession;
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
@@ -46,6 +53,13 @@ exports.escalateUnclaimedDeliveries = platformNotifications.escalateUnclaimedDel
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
+exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
+exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
+exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
+exports.updateDeliveryTrackingStatus = deliveryTracking.updateDeliveryTrackingStatus;
+exports.updateDeliveryLiveLocation = deliveryTracking.updateDeliveryLiveLocation;
+exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
+exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
 
 const generateResponse = function(intent) {
   // Generate a response based on the intent's status
@@ -214,6 +228,14 @@ exports.StripeWebhook = functions.https.onRequest(async (req, res) => {
 
   console.log("💰 Webhook working!");
   console.log(`Event: ${event.type}`);
+
+  if (event.type === "payment_intent.succeeded" ||
+      event.type === "payment_intent.processing" ||
+      event.type === "payment_intent.payment_failed" ||
+      event.type === "payment_intent.canceled") {
+    const tipResult = await ratingsTipping.processStripeTipIntent(stripe, event.data.object);
+    if (tipResult && tipResult.handled) return res.send({success: true, tip: tipResult});
+  }
 
   if (event.type === "charge.succeeded") {
     console.log("💰 Payment completed!");

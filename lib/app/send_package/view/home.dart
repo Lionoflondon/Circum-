@@ -49,8 +49,15 @@ class HomeViewState extends State<HomeView> {
 
           context.read<SendPackageBloc>().add(
               const SetDeliveryStatus(deliveryStatus: DeliveryStatus.inital));
-          Navigator.push(
-              context, MaterialPageRoute(builder: (_) => RatingsView()));
+          final deliveryId = state.lastHistoryId;
+          if (deliveryId != null && deliveryId.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RatingsView(deliveryId: deliveryId),
+              ),
+            );
+          }
         }
       });
       if (state.panelControlStatus == PanelControlStatus.isOpened) {

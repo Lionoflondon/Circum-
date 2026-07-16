@@ -3,9 +3,35 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {riderMatchesIris} = require("./iris-core");
+const communicationEngine = require("./communication-engine");
 
 const text = (value) => `${value || ""}`.trim();
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
+const giftEvents = new Set([
+  "gift_draft_saved",
+  "gift_submitted",
+  "payment_succeeded",
+  "payment_failed",
+  "subscription_created",
+  "subscription_cancelled",
+  "campaign_waiting_for_match",
+  "campaign_match_found",
+  "campaign_match_confirmed",
+  "gift_approved",
+  "gift_rejected",
+  "curation_started",
+  "ready_for_gift_delivery",
+  "delivery_started",
+  "rider_assigned",
+  "gift_delivered",
+  "story_locked",
+  "story_unlocked",
+  "story_manually_locked",
+  "story_manually_unlocked",
+  "issue_raised",
+  "dispute_opened",
+  "dispute_resolved",
+]);
 
 async function profileToken(uid, role) {
   if (!uid) return "";
@@ -31,6 +57,16 @@ async function adminRecipients() {
 }
 
 async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, data = {}}) {
+  if (recipientRole !== "admin") {
+    return communicationEngine.emitNotification({
+      recipientId,
+      recipientRole: recipientRole === "shipper" ? "sender" : recipientRole,
+      type,
+      title,
+      body,
+      data: {...data, bookingId, ticketId},
+    });
+  }
   const db = getFirestore();
   const ref = db.collection("notifications").doc();
   await ref.set({
@@ -70,6 +106,71 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
   return ref.id;
 }
 
+function giftNotificationRecord({
+  notificationId = "",
+  userId,
+  email = "",
+  giftId,
+  giftType,
+  eventType,
+  title,
+  body,
+  channel = "in_app",
+  deliveryStatus = "pending",
+  createdAt = FieldValue.serverTimestamp(),
+  sentAt = null,
+  failureReason = "",
+}) {
+  if (!giftEvents.has(eventType)) {
+    throw new Error(`Unsupported Gifts notification event: ${eventType}`);
+  }
+  const channelName = text(channel) || "in_app";
+  const configured = channelName === "in_app" ||
+    (channelName === "email" && text(process.env.GIFTS_EMAIL_PROVIDER)) ||
+    (channelName === "push" && text(process.env.FCM_SERVER_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS));
+  const finalStatus = channelName === "in_app" ? deliveryStatus : configured ? deliveryStatus : "skipped";
+  const skippedReason = configured ? failureReason : `${channelName}_not_configured`;
+  return {
+    notificationId: notificationId || `${giftId}_${eventType}_${channelName}`,
+    userId,
+    email: text(email).toLowerCase(),
+    giftId,
+    giftType,
+    eventType,
+    title,
+    body,
+    channel: channelName,
+    deliveryStatus: finalStatus,
+    createdAt,
+    sentAt: sentAt || null,
+    failureReason: finalStatus === "skipped" || failureReason ? skippedReason : null,
+  };
+}
+
+function giftNotificationRecordsForTransition({
+  userId,
+  email = "",
+  giftId,
+  giftType,
+  eventType,
+  title,
+  body,
+  channels = ["in_app", "email", "push"],
+  createdAt = FieldValue.serverTimestamp(),
+}) {
+  return channels.map((channel) => giftNotificationRecord({
+    userId,
+    email,
+    giftId,
+    giftType,
+    eventType,
+    title,
+    body,
+    channel,
+    createdAt,
+  }));
+}
+
 function deliveryIds(data) {
   return {
     bookingId: text(data.requestId || data.bookingId || data.id),
@@ -78,9 +179,68 @@ function deliveryIds(data) {
   };
 }
 
+function moneyText(value, currency = "GBP") {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  const prefix = text(currency).toUpperCase() === "GBP" ? "£" : `${text(currency).toUpperCase()} `;
+  return `${prefix}${amount.toFixed(2)}`;
+}
+
+function giftStatus(data = {}) {
+  return text(data.status || data.giftStatus || data.flowStatus || data.campaignStatus).toLowerCase();
+}
+
+function giftStatusNotification(status) {
+  const normalized = text(status).toLowerCase();
+  const map = {
+    submitted_for_review: ["gift_submitted", "Gift submitted", "Your gift request has been sent to the Circum team."],
+    waiting_for_match: ["campaign_waiting_for_match", "Gift match requested", "We are looking for a compatible gift match."],
+    paid_waiting_for_match: ["campaign_waiting_for_match", "Gift match requested", "We are looking for a compatible gift match."],
+    approved: ["gift_approved", "Gift approved", "Your gift request has been approved."],
+    rejected: ["gift_rejected", "Gift update", "Your gift request needs attention."],
+    curation_started: ["curation_started", "Gift curation started", "The Circum team has started preparing your gift."],
+    ready_for_gift_delivery: ["ready_for_gift_delivery", "Gift ready for delivery", "Your gift is ready for delivery."],
+    delivered: ["gift_delivered", "Gift delivered", "Your gift has been delivered."],
+  };
+  return map[normalized] || null;
+}
+
+async function notifyGiftStatus({before = {}, after = {}, giftId}) {
+  const oldStatus = giftStatus(before);
+  const nextStatus = giftStatus(after);
+  if (!nextStatus || oldStatus === nextStatus) return null;
+  const copy = giftStatusNotification(nextStatus);
+  if (!copy) return null;
+  const senderId = text(after.senderId || after.userId || after.uid);
+  if (!senderId) return null;
+  return notify({
+    recipientId: senderId,
+    recipientRole: "shipper",
+    type: copy[0],
+    title: copy[1],
+    body: copy[2],
+    bookingId: text(after.deliveryId || after.requestId || giftId),
+    data: {
+      category: "Gifts",
+      giftId,
+      giftType: text(after.giftType || after.type || "gift"),
+    },
+  });
+}
+
+function customerWaitingCharge(data) {
+  const waiting = data.waiting || {};
+  const financial = data.noShowFinancial || {};
+  return {
+    amount: financial.amount || waiting.noShowFeeAmount || data.waitingCharge || data.waitingChargeAmount || data.pickupNoShowSurchargeGbp,
+    currency: financial.currency || waiting.currency || data.currency || "GBP",
+  };
+}
+
 exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deliveryId}").onCreate(async (snapshot) => {
   const delivery = snapshot.data();
   const ids = deliveryIds({...delivery, id: snapshot.id});
+  if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
   const riders = await getFirestore().collection("riderProfiles").get();
   const eligible = riders.docs.filter((doc) => {
     const rider = doc.data();
@@ -107,22 +267,73 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const after = change.after.data();
   const oldStatus = text(before.status || before.deliveryStatus).toLowerCase();
   const status = text(after.status || after.deliveryStatus).toLowerCase();
-  if (!status || status === oldStatus) return;
+  const statusChanged = status && status !== oldStatus;
   const ids = deliveryIds({...after, id: change.after.id});
-  const senderMessages = {
-    accepted: ["Rider accepted", "A rider has accepted your delivery."],
-    arrived: ["Rider arrived", "Your rider has arrived at the pickup."],
-    arrived_at_pickup: ["Rider arrived", "Your rider has arrived at the pickup."],
-    collected: ["Parcel collected", "Your parcel has been collected."],
-    picked_up: ["Parcel collected", "Your parcel has been collected."],
-    delivered: ["Parcel delivered", "Your parcel has been delivered."],
-    completed: ["Parcel delivered", "Your delivery is complete."],
-    refunded: ["Refund updated", "Your delivery refund has been updated."],
+  const oldPayment = text(before.paymentStatus || before.paymentState).toLowerCase();
+  const payment = text(after.paymentStatus || after.paymentState).toLowerCase();
+  const oldWaitingContext = text(before.waitingContextState).toLowerCase();
+  const waitingContext = text(after.waitingContextState).toLowerCase();
+  const oldWaitingCharge = Number(customerWaitingCharge(before).amount || 0);
+  const waitingCharge = customerWaitingCharge(after);
+  const waitingChargeAmount = Number(waitingCharge.amount || 0);
+  if (!statusChanged && oldPayment === payment && oldWaitingContext === waitingContext && oldWaitingCharge === waitingChargeAmount) return;
+  if (statusChanged) await communicationEngine.closeDeliveryConversation(
+      ids.bookingId, status);
+  const systemMessages = {
+    accepted: "Rider accepted the delivery.",
+    navigating_to_pickup: "Rider is heading to pickup.",
+    arrived: "Rider has arrived.",
+    arrived_at_pickup: "Rider has arrived.",
+    pickup_verified: "Pickup completed.",
+    collected: "Delivery started.",
+    picked_up: "Delivery started.",
+    navigating_to_dropoff: "Delivery is in progress.",
+    pin_required: "Recipient PIN verification is required.",
+    delivered: "Delivery completed.",
+    completed: "Delivery completed.",
   };
-  const senderMessage = senderMessages[status];
-  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId});
-  if (ids.riderId && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
+  if (statusChanged && systemMessages[status]) {
+    await communicationEngine.appendSystemMessage(ids.bookingId, systemMessages[status]);
+  }
+  const chargeText = moneyText(waitingCharge.amount, waitingCharge.currency);
+  const senderMessages = {
+    accepted: ["Rider accepted", "A rider has accepted your delivery.", "Deliveries"],
+    finding_rider: ["Searching for rider", "Circum is searching for an eligible rider.", "Deliveries"],
+    awaiting_rider: ["Searching for rider", "Circum is searching for an eligible rider.", "Deliveries"],
+    navigating_to_pickup: ["Rider en route", "Your rider is on the way to the pickup.", "Deliveries"],
+    arrived: ["Rider arrived", "Your rider has arrived at the pickup.", "Deliveries"],
+    arrived_at_pickup: ["Rider waiting", "Your rider has arrived. Free waiting has started.", "Deliveries"],
+    rider_arrived_pickup: ["Waiting timer started", "Your Circum rider has arrived at the pickup address.", "Deliveries"],
+    sender_no_show_pickup: ["No-show", `Pickup was marked as no-show after the waiting period.${chargeText ? ` Additional waiting charge: ${chargeText}.` : ""}`, "Deliveries"],
+    pickup_verified: ["Pickup confirmed", "Your rider has verified pickup.", "Deliveries"],
+    collected: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],
+    picked_up: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],
+    navigating_to_dropoff: ["Delivery in progress", "Your parcel is on the way to drop-off.", "Deliveries"],
+    arrived_at_dropoff: ["Near destination", "Your rider is arriving at the drop-off.", "Deliveries"],
+    pin_required: ["Receiver PIN needed", "The receiver PIN is needed to complete handover.", "Deliveries"],
+    delivered: ["Delivered", "Your parcel has been delivered.", "Deliveries"],
+    completed: ["Delivered", "Your delivery is complete.", "Deliveries"],
+    cancelled: ["Delivery cancelled", "Your delivery has been cancelled.", "Deliveries"],
+    issue_reported: ["Delivery issue reported", "Your rider reported an issue. Circum support can review it.", "Support"],
+    refunded: ["Refund issued", "Your delivery refund has been updated.", "Payments"],
+  };
+  const senderMessage = statusChanged ? senderMessages[status] : null;
+  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId, data: {category: senderMessage[2]}});
+  if (ids.senderId && oldPayment !== payment && ["paid", "succeeded", "success"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_successful", title: "Payment successful", body: "Your delivery payment was successful.", bookingId: ids.bookingId, data: {category: "Payments"}});
+  if (ids.senderId && oldPayment !== payment && ["failed", "declined"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_failed", title: "Payment failed", body: "Your delivery payment was not completed.", bookingId: ids.bookingId, data: {category: "Payments"}});
+  if (ids.senderId && oldWaitingContext !== waitingContext && waitingContext === "customer_responded") await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "customer_responded", title: "Customer response received", body: "Waiting continues under the current policy.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
+  if (ids.senderId && oldWaitingCharge !== waitingChargeAmount && waitingChargeAmount > 0) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "waiting_charge_updated", title: "Waiting charge updated", body: `Additional waiting charge: ${moneyText(waitingCharge.amount, waitingCharge.currency)}.`, bookingId: ids.bookingId, data: {category: "Payments"}});
+  if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
 });
+
+exports.onGiftRequestCreated = functions.firestore.document("giftRequests/{giftId}").onCreate((snapshot, context) =>
+  notifyGiftStatus({after: snapshot.data(), giftId: context.params.giftId}));
+
+exports.onGiftRequestUpdated = functions.firestore.document("giftRequests/{giftId}").onUpdate((change, context) =>
+  notifyGiftStatus({before: change.before.data(), after: change.after.data(), giftId: context.params.giftId}));
+
+exports.onGiftCampaignParticipantUpdated = functions.firestore.document("giftCampaignParticipants/{participantId}").onUpdate((change, context) =>
+  notifyGiftStatus({before: change.before.data(), after: change.after.data(), giftId: context.params.participantId}));
 
 exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/messages/{messageId}").onCreate(async (snapshot, context) => {
   const message = snapshot.data();
@@ -192,3 +403,10 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
   }
   return null;
 });
+
+exports.giftNotificationRecord = giftNotificationRecord;
+exports.giftNotificationRecordsForTransition = giftNotificationRecordsForTransition;
+exports._private = {
+  giftStatus,
+  giftStatusNotification,
+};

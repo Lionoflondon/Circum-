@@ -16188,7 +16188,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       (snapshot) {
         final data = snapshot.data();
         if (!mounted || data == null) return;
-        final status = '${data['status'] ?? 'requested'}'.toLowerCase();
+        final status = _backendStatusFromDelivery(data);
         final driverId = _driverIdFromRequest(data);
         setState(() {
           final matchingStatus = status == 'requested' || status == 'pending';
@@ -16439,85 +16439,33 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
 
     try {
-      final db = FirebaseFirestore.instance;
-      final ratingId = DriverRating.documentId(
-        deliveryId: requestId,
-        customerId: customerId,
-      );
-      final ratingRef = db.collection('driverRatings').doc(ratingId);
-      await db.runTransaction((transaction) async {
-        final existing = await transaction.get(ratingRef);
-        if (existing.exists) {
-          throw StateError('duplicate-rating');
-        }
-        transaction.set(ratingRef, {
-          'ratingId': ratingId,
-          'driverId': driverId,
-          'customerId': customerId,
-          'deliveryId': requestId,
-          'tripId': requestId,
-          'starRating': _selectedRating,
-          'feedbackText': _ratingFeedback.text.trim(),
-          'feedbackTags': _selectedRatingTags.toList(),
-          'hiddenByAdmin': false,
-          'source': 'circum-web',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        transaction.set(
-          db.collection('deliveryRequests').doc(requestId),
-          {
-            'driverRatingId': ratingId,
-            'driverRatedByCustomer': true,
-            if (_selectedTipAmount > 0) ...{
-              'tipAmount': _selectedTipAmount,
-              'riderTip': _selectedTipAmount,
-              'tipStatus': 'paid',
-            },
-            'ratedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-        if (_selectedTipAmount > 0) {
-          final tipTxId = '${requestId}_${driverId}_tip';
-          transaction.set(
-            db.collection('riderWalletTransactions').doc(tipTxId),
-            {
-              'transactionId': tipTxId,
-              'requestId': requestId,
-              'riderId': driverId,
-              'customerId': customerId,
-              'type': 'tip',
-              'tipAmount': _selectedTipAmount,
-              'amount': _selectedTipAmount,
-              'status': 'available',
-              'source': 'circum-web',
-              'createdAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
-          transaction.set(
-              db.collection('riderEarnings').doc(driverId),
-              {
-                'availableBalance': FieldValue.increment(_selectedTipAmount),
-                'lifetimeEarnings': FieldValue.increment(_selectedTipAmount),
-                'tipsReceived': FieldValue.increment(_selectedTipAmount),
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true));
-        }
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      await functions.httpsCallable('submitDeliveryRating').call({
+        'deliveryId': requestId,
+        'stars': _selectedRating,
+        'feedback': _ratingFeedback.text.trim(),
+        'feedbackTags': _selectedRatingTags.toList(),
       });
-      await _recalculateDriverPerformance(driverId);
+      if (_selectedTipAmount > 0) {
+        await functions.httpsCallable('submitDeliveryTip').call({
+          'deliveryId': requestId,
+          'amountPence': (_selectedTipAmount * 100).round(),
+          'paymentMethod': 'roth',
+        });
+      }
       if (!mounted) return;
       setState(() {
         _ratingSubmitted = true;
         _ratingMessage = 'Thanks. Your rating has been saved.';
       });
-    } on StateError {
+    } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
+      final alreadyRated = error.code == 'already-exists';
       setState(() {
-        _ratingSubmitted = true;
-        _ratingMessage = 'This delivery has already been rated.';
+        _ratingSubmitted = alreadyRated;
+        _ratingMessage = alreadyRated
+            ? 'This delivery has already been rated.'
+            : (error.message ?? 'We could not save the rating. Try again.');
       });
     } catch (_) {
       if (!mounted) return;
@@ -16527,57 +16475,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     } finally {
       if (mounted) setState(() => _ratingSubmitting = false);
     }
-  }
-
-  Future<void> _recalculateDriverPerformance(String driverId) async {
-    final db = FirebaseFirestore.instance;
-    final ratingsSnapshot = await db
-        .collection('driverRatings')
-        .where('driverId', isEqualTo: driverId)
-        .get();
-    final ratings = ratingsSnapshot.docs
-        .map((doc) => DriverRating.fromMap(doc.data()))
-        .toList();
-    final completedIds = <String>{};
-    for (final driverField in ['riderId', 'driverId', 'assignedDriverId']) {
-      final completedSnapshot = await db
-          .collection('deliveryRequests')
-          .where(driverField, isEqualTo: driverId)
-          .where('status', isEqualTo: 'completed')
-          .get();
-      completedIds.addAll(completedSnapshot.docs.map((doc) => doc.id));
-    }
-    final complaints = ratings.where((rating) => rating.isComplaint).length;
-    final metric = DriverPerformanceService.calculate(
-      DriverPerformanceInput(
-        driverId: driverId,
-        ratings: ratings,
-        completedTrips:
-            completedIds.isEmpty ? ratings.length : completedIds.length,
-        complaints: complaints,
-      ),
-    );
-    await db.collection('driverPerformanceMetrics').doc(driverId).set({
-      ...metric.toJson(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'lowRatingFlag': DriverPerformanceService.shouldFlagLowRatedDriver(
-        metric,
-      ),
-    }, SetOptions(merge: true));
-    await db.collection('riderProfiles').doc(driverId).set({
-      'averageRating': metric.averageRating,
-      'totalRatings': metric.totalRatings,
-      'completedTrips': metric.completedTrips,
-      'driverStatus': metric.driverStatus,
-      'qualityScore': metric.qualityScore,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await db.collection('riders').doc(driverId).set({
-      'rating': metric.averageRating.toStringAsFixed(2),
-      'driverStatus': metric.driverStatus,
-      'qualityScore': metric.qualityScore,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
   }
 
   void _listenToChat(String id) {
@@ -16652,14 +16549,81 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   int _statusIndexFromFirebase(String status) {
-    if (status.contains('delivered') || status.contains('complete')) return 3;
-    if (status.contains('picked') || status.contains('collected')) return 2;
-    if (status.contains('accepted') ||
-        status.contains('assigned') ||
-        status.contains('transit')) {
-      return 1;
+    switch (_senderTrackingStateForBackendStatus(status)) {
+      case 'finding_rider':
+        return 0;
+      case 'rider_assigned':
+        return 1;
+      case 'rider_en_route_to_pickup':
+        return 2;
+      case 'rider_arrived_at_pickup':
+        return 3;
+      case 'pickup_complete':
+        return 4;
+      case 'in_transit':
+        return 5;
+      case 'rider_arriving_at_dropoff':
+        return 6;
+      case 'delivered':
+        return 7;
+      case 'cancelled':
+        return 8;
+      case 'issue':
+      case 'error':
+        return 9;
+      default:
+        return 0;
     }
-    return 0;
+  }
+
+  String _backendStatusFromDelivery(Map<String, dynamic> data) {
+    return '${data['deliveryStage'] ?? data['deliveryStatus'] ?? data['trackingStatus'] ?? data['status'] ?? 'requested'}'
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[-\s]+'), '_');
+  }
+
+  String _senderTrackingStateForBackendStatus(String status) {
+    final normalized =
+        status.trim().toLowerCase().replaceAll(RegExp(r'[-\s]+'), '_');
+    const mapping = {
+      'requested': 'finding_rider',
+      'pending': 'finding_rider',
+      'unmatched': 'finding_rider',
+      'finding_rider': 'finding_rider',
+      'awaiting_rider': 'finding_rider',
+      'broadcast': 'finding_rider',
+      'broadcasted': 'finding_rider',
+      'accepted': 'rider_assigned',
+      'rider_assigned': 'rider_assigned',
+      'navigating_to_pickup': 'rider_en_route_to_pickup',
+      'en_route_to_pickup': 'rider_en_route_to_pickup',
+      'arrived_at_pickup': 'rider_arrived_at_pickup',
+      'waiting': 'rider_arrived_at_pickup',
+      'pickup_verification': 'pickup_complete',
+      'pickup_verified': 'pickup_complete',
+      'collected': 'pickup_complete',
+      'out_for_delivery': 'in_transit',
+      'outfordelivery': 'in_transit',
+      'navigating_to_dropoff': 'in_transit',
+      'arrived_at_dropoff': 'rider_arriving_at_dropoff',
+      'pin_required': 'rider_arriving_at_dropoff',
+      'handover_pending': 'rider_arriving_at_dropoff',
+      'delivered': 'delivered',
+      'completed': 'delivered',
+      'delivery_completed': 'delivered',
+      'cancelled': 'cancelled',
+      'canceled': 'cancelled',
+      'cancelled_verified_discrepancy': 'cancelled',
+      'sender_no_show_pickup': 'cancelled',
+      'issue': 'issue',
+      'issue_reported': 'issue',
+      'failed': 'issue',
+      'failed_delivery': 'issue',
+      'error': 'error',
+    };
+    if (normalized.isEmpty) return 'no_active_delivery';
+    return mapping[normalized] ?? 'in_transit';
   }
 
   String _formatMessageTime(dynamic timestamp, dynamic fallback) {
@@ -22043,7 +22007,7 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
       );
     }
 
-    final destination = statusIndex < 2 ? pickup! : dropoff!;
+    final destination = statusIndex < 5 ? pickup! : dropoff!;
     final remainingMiles = _coordinateDistanceMiles(
           riderLat,
           riderLng,
@@ -22079,7 +22043,7 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
                 ),
               ),
               Text(
-                'Updated ${_relativeSeconds(updatedAt!)} ago',
+                'Updated ${_relativeSeconds(updatedAt)} ago',
                 style: TextStyle(
                   color: colors.mutedText,
                   fontSize: 12,
@@ -27496,9 +27460,36 @@ const _trackingStatuses = [
     'Rider assigned',
     'CIRCUM has assigned a rider to this delivery.',
   ),
-  _TrackingStatus('Package picked up', 'Your rider has collected the package.'),
+  _TrackingStatus(
+    'Travelling to pickup',
+    'Your rider is heading to the pickup location.',
+  ),
+  _TrackingStatus(
+    'Arrived at pickup',
+    'Your rider has arrived and is waiting for collection.',
+  ),
+  _TrackingStatus(
+    'Pickup verified',
+    'Collection has been verified and the parcel is with your rider.',
+  ),
+  _TrackingStatus(
+    'In transit',
+    'Your rider is travelling to the drop-off location.',
+  ),
+  _TrackingStatus(
+    'Arrived at drop-off',
+    'Your rider is at the destination and ready for handover.',
+  ),
   _TrackingStatus(
     'Delivered',
     'Proof of delivery is saved in your Circum history.',
+  ),
+  _TrackingStatus(
+    'Closed',
+    'This delivery is no longer active.',
+  ),
+  _TrackingStatus(
+    'Needs attention',
+    'Circum is reviewing this delivery.',
   ),
 ];
