@@ -413,6 +413,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "glass_cabinet",
+    patterns: [/\bglass cabinets?\b/, /\bdisplay cabinets?\b/, /\bglass display cabinets?\b/, /\bglass tables?\b/],
+    category: "Fragile & Valuable",
+    weightKg: 30,
+    handlingFlags: ["Fragile", "Keep Upright", "Bulky", "Van Required", "Two Person Lift"],
+    vehicleRequired: "van",
+  },
+  {
     id: "car_tyre",
     patterns: [/\bcar tyres?\b/, /\bcar tires?\b/, /\btyres?\b/, /\btires?\b/],
     category: "Tools & Machinery",
@@ -433,6 +441,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\bdisplay\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bps5\b/, /\bplaystation(?:\s+\d+)?\b/, /\bxbox(?:\s+series\s+[xs])?\b/, /\bnintendo switch(?:\s+\d+)?\b/],
     category: "Electronics",
     weightKg: 2,
+    handlingFlags: ["Fragile", "High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "speakers",
+    patterns: [/\bspeakers?\b/, /\baudio speakers?\b/],
+    category: "Electronics",
+    weightKg: 5,
     handlingFlags: ["Fragile", "High Value"],
     vehicleRequired: "any",
   },
@@ -662,7 +678,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "gaming_pc",
-    patterns: [/\bgaming pc(?: tower)?\b/, /\bpc tower\b/, /\bcomputer tower\b/],
+    patterns: [/\bgaming pcs?(?: tower)?\b/, /\bpc towers?\b/, /\bcomputer towers?\b/],
     category: "Electronics",
     weightKg: 14,
     handlingFlags: ["Fragile", "High Value", "Bulky"],
@@ -765,6 +781,23 @@ const PRICING = Object.freeze({
 
 function normalize(value) {
   return `${value || ""}`.toLowerCase().replace(/[^a-z0-9.+\s-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function safeText(value, seen = new WeakSet(), depth = 0) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return `${value}`;
+  if (typeof value !== "object") return "";
+  if (seen.has(value) || depth > 3) return "";
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.map((item) => safeText(item, seen, depth + 1)).filter(Boolean).join(" ");
+  }
+  return Object.entries(value)
+      .filter(([key]) => !["__proto__", "constructor", "prototype"].includes(key))
+      .map(([key, item]) => `${key} ${safeText(item, seen, depth + 1)}`)
+      .filter(Boolean)
+      .join(" ");
 }
 
 function includesAny(text, terms) {
@@ -870,6 +903,8 @@ function parseQuantity(text) {
     "trees",
     "barbell",
     "barbells",
+    "speaker",
+    "speakers",
     "ac",
   ]);
   const measurementUnits = new Set([
@@ -953,6 +988,9 @@ function parseQuantity(text) {
     {patterns: [/^many\b/, /^lots of\b/, /^loads of\b/], value: 10},
     {patterns: [/^hundreds of\b/], value: 200},
     {patterns: [/^thousands of\b/], value: 2000},
+    {patterns: [/^(?:two|2) pairs? of\b/], value: 4},
+    {patterns: [/^(?:three|3) pairs? of\b/], value: 6},
+    {patterns: [/^(?:four|4) pairs? of\b/], value: 8},
     {patterns: [/^pair of\b/, /^a pair of\b/], value: 2},
     {patterns: [/^set of\b/, /^a set of\b/], value: 1},
     {patterns: [/^box of\b/, /^a box of\b/], value: 1},
@@ -1102,7 +1140,58 @@ function hasContainerContents(rawText) {
   return /\b(suitcase|box|crate|bag|envelope|backpack|toolbox)\s+(containing|full of|filled with|with|of)\b/i.test(`${rawText || ""}`);
 }
 
+function parseQuantityToken(token) {
+  const normalized = normalize(token);
+  const direct = Number(normalized);
+  if (Number.isInteger(direct) && direct > 0) return direct;
+  const numbers = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    eleven: 11,
+    twelve: 12,
+  };
+  return numbers[normalized] || null;
+}
+
+function extractNestedContainerItems(rawText) {
+  const source = normalize(rawText).replace(/[×*]/g, " x ");
+  const nested = [];
+  const pattern = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:boxes|box|crates?|bags?|packs?)\s+(?:containing|with|of|full of|filled with)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+([a-z0-9 .+-]+?)(?:\s+each\b|$)/g;
+  let match = pattern.exec(source);
+  while (match) {
+    const containerQuantity = parseQuantityToken(match[1]);
+    const itemQuantity = parseQuantityToken(match[2]);
+    const itemText = match[3].replace(/\beach\b/g, "").trim();
+    const object = detectObject(itemText);
+    if (containerQuantity && itemQuantity && object) {
+      const quantity = containerQuantity * itemQuantity;
+      nested.push({
+        id: object.id,
+        description: `${match[2]} ${itemText} in each ${match[1]} container`,
+        category: object.category,
+        quantity,
+        unitWeightKg: object.weightKg,
+        totalWeightKg: Math.round(object.weightKg * quantity * 100) / 100,
+        handlingFlags: object.handlingFlags,
+        vehicleRequired: object.vehicleRequired,
+      });
+    }
+    match = pattern.exec(source);
+  }
+  return nested;
+}
+
 function extractShipmentItems(rawText) {
+  const nestedItems = extractNestedContainerItems(rawText);
+  if (nestedItems.length) return nestedItems;
   const clauses = splitItemClauses(rawText);
   const items = [];
   const describesContainerContents = hasContainerContents(rawText);
@@ -1183,6 +1272,11 @@ function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipme
   const itemWeightKg = Array.isArray(shipmentItems) && shipmentItems.length ?
     Math.round(shipmentItems.reduce((sum, item) => sum + item.totalWeightKg, 0) * 100) / 100 :
     null;
+  const parsedQuantity = parseQuantity(rawText);
+  const perUnitDeclaredWeightKg = declaredWeightKg != null && parsedQuantity > 1 &&
+    /\b(each|per item|per unit|per piece)\b/.test(normalize(rawText)) ?
+    Math.round(declaredWeightKg * parsedQuantity * 100) / 100 :
+    null;
   const fallbackIrisWeightKg = estimateIrisWeightKg(rawText);
   const irisEstimatedWeightKg = itemWeightKg != null ? itemWeightKg : fallbackIrisWeightKg;
   const candidates = [
@@ -1193,6 +1287,9 @@ function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipme
   }
   if (declaredWeightKg != null && declaredWeightKg >= 0) {
     candidates.push({source: "declared_weight", value: declaredWeightKg, confidence: "sender_declared"});
+  }
+  if (perUnitDeclaredWeightKg != null && perUnitDeclaredWeightKg >= 0) {
+    candidates.push({source: "declared_per_unit_weight", value: perUnitDeclaredWeightKg, confidence: "sender_declared_per_unit"});
   }
   const best = candidates
       .filter((candidate) => Number.isFinite(candidate.value) && candidate.value >= 0)
@@ -1233,7 +1330,7 @@ function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
   const flags = new Set(shipmentSummary ? shipmentSummary.handlingFlags : object ? object.handlingFlags : []);
   if (category === "Electronics" || category === "Fragile & Valuable" || includesAny(text, ["glass", "mirror", "ceramic", "tv", "monitor", "fragile"])) flags.add("Fragile");
   if (category === "Food & Consumables" || includesAny(text, ["food", "meal", "cake", "groceries"])) flags.add("Perishable");
-  if (includesAny(text, ["upright", "keep upright", "tv", "fridge"])) flags.add("Keep Upright");
+  if (includesAny(text, ["upright", "keep upright", "tv", "fridge", "glass cabinet", "display cabinet", "glass table"])) flags.add("Keep Upright");
   if (category === "Fragile & Valuable" || includesAny(text, ["iphone", "laptop", "jewellery", "jewelry", "valuable", "expensive", "designer", "luxury"])) flags.add("High Value");
   if (includesAny(text, ["cold", "frozen", "temperature", "medicine", "insulin"])) flags.add("Temperature Sensitive");
   if (weightKg > 10 || includesAny(text, ["large", "65 inch", "65-inch", "sofa", "wardrobe", "mattress", "pallet"])) flags.add("Bulky");
@@ -1275,15 +1372,113 @@ function containsDangerousEmoji(rawText) {
 
 function containsLiveAnimalEmoji(rawText) {
   const compact = compactEmojiText(rawText);
-  return ["🐶", "🐕", "🐩", "🐈", "🐱"]
+  return ["🐶", "🐕", "🐩", "🐈", "🐱", "🐍", "🐐", "🐟", "🐠", "🐛", "🐜", "🪲"]
       .some((symbol) => compact.includes(symbol));
 }
 
+function safetyScanFor(rawText) {
+  const source = safeText(rawText).normalize("NFKC")
+      .replace(/\u200b|\u200c|\u200d|\uFE0E|\uFE0F|\uFEFF/g, "")
+      .toLowerCase();
+  const spaced = source
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const compact = source.replace(/[^a-z0-9]/g, "");
+  return {spaced, compact};
+}
+
+function spacedLetterPattern(term) {
+  return new RegExp(`(?:^|\\b)${term.split("").join("\\s*")}(?:\\b|$)`);
+}
+
+function hasSafetyTerm(scan, terms) {
+  return terms.some((term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${escaped}\\b`).test(scan.spaced)) return true;
+    if (term.length >= 3 && spacedLetterPattern(term).test(scan.spaced)) return true;
+    return false;
+  });
+}
+
+function hasSafetyPhrase(scan, phrases) {
+  return phrases.some((phrase) => scan.spaced.includes(phrase));
+}
+
 function complianceFor(text, rawText = text) {
+  const safetyScan = safetyScanFor(rawText);
+  const prohibitedTerms = [
+    "gun",
+    "rifle",
+    "pistol",
+    "firearm",
+    "shotgun",
+    "grenade",
+    "bullet",
+    "bullets",
+    "ammunition",
+    "ammo",
+    "taser",
+    "knife",
+    "switchblade",
+    "sword",
+    "machete",
+    "weapon",
+    "explosive",
+    "explosives",
+    "bomb",
+    "bomba",
+    "pistola",
+    "gnub",
+    "fireworks",
+    "petrol",
+    "gasoline",
+    "cocaine",
+    "heroin",
+    "poison",
+    "detonator",
+    "dynamite",
+    "biohazard",
+  ];
+  const prohibitedPhrases = [
+    "illegal drugs",
+    "controlled drugs",
+    "hazardous chemical",
+    "hazardous chemicals",
+    "hazardous material",
+    "hazardous materials",
+    "hazmat",
+    "toxic chemical",
+    "radioactive material",
+    "corrosive acid",
+    "compressed gas",
+  ];
+  const specialistTerms = [
+    "snake",
+    "goat",
+    "insect",
+    "insects",
+    "livestock",
+    "perro",
+  ];
+  const specialistPhrases = [
+    "live animal",
+    "live animals",
+    "live fish",
+    "pet transport",
+    "dog transport",
+    "cat transport",
+    "human remains",
+    "body transport",
+    "funeral",
+    "deceased",
+    "biological specimen",
+    "biological specimens",
+  ];
   if (containsDangerousEmoji(rawText)) {
     return {status: "prohibited", reasonCodes: ["dangerous_symbol"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
-  if (includesAny(text, ["illegal drugs", "cocaine", "heroin", "weapon", "gun", "firearm", "ammunition", "ammo", "knife", "explosive", "bomb", "fireworks", "petrol", "gasoline", "hazardous chemical", "hazmat", "hazardous materials"])) {
+  if (hasSafetyTerm(safetyScan, prohibitedTerms) || hasSafetyPhrase(safetyScan, prohibitedPhrases)) {
     return {status: "prohibited", reasonCodes: ["prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
   if (multilingualProhibitedMatch(rawText)) {
@@ -1292,11 +1487,12 @@ function complianceFor(text, rawText = text) {
   if (containsLiveAnimalEmoji(rawText) && !includesAny(text, ["dog food", "cat food", "pet food", "food", "lead", "collar", "toy"])) {
     return {status: "referral_required", reasonCodes: ["specialist_transport_required"], referralType: "pet_transport", customerMessage: "This request needs a specialist referral rather than normal rider dispatch."};
   }
-  if (includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
+  if (hasSafetyTerm(safetyScan, specialistTerms) || hasSafetyPhrase(safetyScan, specialistPhrases) ||
+    includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "human remains", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
     /\b(dog|cat)\b/.test(text) && !includesAny(text, ["dog food", "cat food", "cat litter", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy"])) {
     let referralType = "specialist_freight";
-    if (includesAny(text, ["pet", "dog", "cat", "live animal", "livestock"])) referralType = "pet_transport";
-    if (includesAny(text, ["funeral", "deceased", "body transport"])) referralType = "funeral_transport";
+    if (hasSafetyTerm(safetyScan, ["snake", "goat", "insect", "insects", "perro"]) || includesAny(text, ["pet", "dog", "cat", "live animal", "livestock", "live fish"])) referralType = "pet_transport";
+    if (includesAny(text, ["funeral", "deceased", "body transport", "human remains"])) referralType = "funeral_transport";
     if (includesAny(text, ["car transport", "vehicle transport", "motorbike transport"])) referralType = "vehicle_transport";
     return {status: "referral_required", reasonCodes: ["specialist_transport_required"], referralType, customerMessage: "This request needs a specialist referral rather than normal rider dispatch."};
   }
@@ -1458,6 +1654,8 @@ function verificationPolicyFor({text, category, handlingFlags, complianceStatus,
 
 function accessIntelligenceFor(input = {}) {
   const values = [
+    safeText(input.description),
+    safeText(input.packageDescription),
     input.pickupPropertyType,
     input.deliveryPropertyType,
     input.pickupLocationType,
@@ -1474,9 +1672,9 @@ function accessIntelligenceFor(input = {}) {
   const instructions = [];
   if (collectionFloor > 2 || deliveryFloor > 2) constraints.push("upper_floor_access");
   if (liftUnavailable && (collectionFloor > 1 || deliveryFloor > 1)) constraints.push("stairs_without_lift");
-  if (includesAny(values, ["tower block", "estate", "gated"])) constraints.push("managed_or_gated_access");
+  if (includesAny(values, ["tower block", "estate", "gated", "concierge"])) constraints.push("managed_or_gated_access");
   if (includesAny(values, ["hospital", "airport", "station", "stadium", "hotel", "university", "warehouse", "construction"])) constraints.push("controlled_site_access");
-  if (includesAny(values, ["red route", "loading restriction", "restricted parking", "pedestrian", "market", "forecourt", "bus gate", "ltn", "ulez", "congestion charge", "road closure", "school traffic", "school street", "airport", "airport security", "airport drop off", "security checkpoint", "event congestion", "event traffic", "football match", "match day", "concert congestion", "station", "station forecourt", "stadium", "temporary access restriction", "hospital access", "hospital loading", "construction zone", "construction site", "roadworks", "bridge restriction"])) constraints.push("declared_loading_or_parking_constraint");
+  if (includesAny(values, ["red route", "loading restriction", "loading bay", "restricted parking", "pedestrian", "market", "forecourt", "bus gate", "ltn", "ulez", "congestion charge", "road closure", "school traffic", "school street", "airport", "airport security", "airport drop off", "security checkpoint", "event congestion", "event traffic", "football match", "match day", "concert congestion", "station", "station forecourt", "stadium", "temporary access restriction", "hospital access", "hospital loading", "construction zone", "construction site", "roadworks", "bridge restriction", "underground car park", "height restriction"])) constraints.push("declared_loading_or_parking_constraint");
   if (constraints.includes("stairs_without_lift")) instructions.push("Confirm stair access and safe carry before dispatch.");
   if (constraints.includes("managed_or_gated_access")) instructions.push("Request gate, estate, concierge or block access details.");
   if (constraints.includes("controlled_site_access")) instructions.push("Confirm reception, security or loading point before arrival.");
@@ -1565,10 +1763,10 @@ function applyLearningMemory(recommendation, description, completedExamples) {
 }
 
 function classifyIris(input = {}) {
-  const description = `${input.description || input.packageDescription || ""}`;
+  const description = safeText(input.description || input.packageDescription || "");
   const text = normalize(description);
-  const declaredWeightText = input.declaredWeightText || input.weight || "";
-  const speed = `${input.speed || ""}`;
+  const declaredWeightText = safeText(input.declaredWeightText || input.weight || "");
+  const speed = safeText(input.speed || "");
   const express = normalize(speed) === "express" || input.express === true || input.urgent === true;
   const compliance = complianceFor(text, description);
   const shipmentItems = extractShipmentItems(description);
@@ -1645,6 +1843,9 @@ function classifyIris(input = {}) {
     weightKg: authoritativeRecommendation.estimatedWeightKg,
     express,
   });
+  if (compliance.status !== "allowed") {
+    matching.vehicleRequired = "van";
+  }
   const access = accessIntelligenceFor(input);
   const verificationPolicy = verificationPolicyFor({
     text,
