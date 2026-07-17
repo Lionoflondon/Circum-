@@ -182,6 +182,11 @@ test("parser distinguishes quantities from model numbers screen sizes capacities
     ["5 iPhone 13 Pro Max devices", 1.5, "any"],
     ["10 Dell 27\" monitors", 20, "van"],
     ["2 RTX 5090 graphics cards", 3, "any"],
+    ["2 gaming PC", 28, "van"],
+    ["3 gaming PC", 42, "van"],
+    ["2 generator", 56, "van"],
+    ["3 DJ equipment", 60, "van"],
+    ["2 server equipment", 50, "van"],
   ];
   for (const [description, expectedKg, expectedVehicle] of quantityCases) {
     const result = classifyIris({description});
@@ -393,11 +398,61 @@ test("IRIS RC1 prohibited certification examples cannot bypass policy", () => {
     "Petrol.",
     "Illegal drugs.",
     "Fireworks.",
+    "💣",
+    "💣💣",
+    "package 💣",
+    "🔫",
+    "🧨",
+    "☢️",
+    "☣️",
+    "🔪",
   ]) {
     const result = classifyIris({description});
     assert.equal(result.compliance.status, "prohibited", description);
     assert.equal(result.serviceability.status, "manual_review", description);
   }
+
+  for (const description of ["🎁", "📦", "birthday gift 🎁", "ordinary parcel 📦"]) {
+    assert.equal(classifyIris({description}).compliance.status, "allowed", description);
+  }
+
+  assert.equal(classifyIris({description: "🐶 food"}).compliance.status, "allowed");
+  assert.equal(classifyIris({description: "🐶"}).compliance.status, "referral_required");
+});
+
+test("London stress strictness preserves item semantics inside product context", () => {
+  const ps5 = classifyIris({
+    description: "PS5 from Heathrow terminal to museum, Business account",
+  });
+  assert.equal(ps5.recommendation.category, "Electronics");
+  assert.ok(ps5.recommendation.handlingFlags.includes("Fragile"));
+  assert.ok(ps5.recommendation.handlingFlags.includes("High Value"));
+
+  const aquarium = classifyIris({description: "aquarium from warehouse to flat"});
+  assert.ok(aquarium.recommendation.handlingFlags.includes("Keep Upright"));
+  assert.equal(aquarium.internal.riderMatching.vehicleRequired, "van");
+
+  const barbell = classifyIris({
+    description: "barbell from red route flat to tower block estate, Health+",
+  });
+  assert.equal(barbell.recommendation.category, "Tools & Machinery");
+  assert.ok(barbell.recommendation.handlingFlags.includes("Awkward Shape"));
+  assert.equal(barbell.internal.riderMatching.vehicleRequired, "van");
+
+  const portableAc = classifyIris({description: "3 portable AC units"});
+  assert.equal(portableAc.recommendation.estimatedWeightKg, 54);
+  assert.equal(portableAc.internal.riderMatching.vehicleRequired, "van");
+
+  const portablePlural = classifyIris({description: "3 portable AC"});
+  assert.equal(portablePlural.recommendation.estimatedWeightKg, 54);
+  assert.equal(portablePlural.internal.riderMatching.vehicleRequired, "van");
+
+  const christmasTree = classifyIris({
+    description: "Christmas tree from market, Business account",
+  });
+  assert.ok(christmasTree.recommendation.handlingFlags.includes("Keep Upright"));
+  assert.ok(christmasTree.recommendation.handlingFlags.includes("Bulky"));
+  assert.equal(christmasTree.internal.riderMatching.vehicleRequired, "van");
 });
 
 test("London intelligence uses supplied access facts without fabricating live routing", () => {

@@ -430,7 +430,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "electronics",
-    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\bdisplay\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bplaystation\b/, /\bxbox\b/, /\bnintendo switch\b/],
+    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\bdisplay\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bps5\b/, /\bplaystation(?:\s+\d+)?\b/, /\bxbox(?:\s+series\s+[xs])?\b/, /\bnintendo switch(?:\s+\d+)?\b/],
     category: "Electronics",
     weightKg: 2,
     handlingFlags: ["Fragile", "High Value"],
@@ -491,6 +491,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     weightKg: 0.8,
     handlingFlags: [],
     vehicleRequired: "any",
+  },
+  {
+    id: "christmas_tree",
+    patterns: [/\bchristmas trees?\b/],
+    category: "Furniture & Home",
+    weightKg: 10,
+    handlingFlags: ["Bulky", "Keep Upright", "Van Required"],
+    vehicleRequired: "van",
   },
   {
     id: "flowers_plants",
@@ -557,6 +565,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "van",
   },
   {
+    id: "barbell",
+    patterns: [/\bbarbells?\b/, /\bbar bell\b/],
+    category: "Tools & Machinery",
+    weightKg: 20,
+    handlingFlags: ["Bulky", "Awkward Shape", "Van Required"],
+    vehicleRequired: "van",
+  },
+  {
     id: "treadmill",
     patterns: [/\btreadmills?\b/],
     category: "Tools & Machinery",
@@ -609,7 +625,15 @@ const OBJECT_MAPPINGS = Object.freeze([
     patterns: [/\baquariums?\b/, /\bglass aquarium\b/],
     category: "Fragile & Valuable",
     weightKg: 25,
-    handlingFlags: ["Fragile", "Bulky", "Van Required"],
+    handlingFlags: ["Fragile", "Keep Upright", "Bulky", "Van Required"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "portable_ac",
+    patterns: [/\bportable ac\b/, /\bportable air conditioner\b/, /\bair conditioning unit\b/],
+    category: "Furniture & Home",
+    weightKg: 18,
+    handlingFlags: ["Bulky", "Keep Upright", "Van Required"],
     vehicleRequired: "van",
   },
   {
@@ -833,6 +857,20 @@ function parseQuantity(text) {
     "tables",
     "shoe",
     "shoes",
+    "pc",
+    "pcs",
+    "generator",
+    "generators",
+    "equipment",
+    "server",
+    "servers",
+    "unit",
+    "units",
+    "tree",
+    "trees",
+    "barbell",
+    "barbells",
+    "ac",
   ]);
   const measurementUnits = new Set([
     "inch",
@@ -1218,12 +1256,41 @@ function multilingualProhibitedMatch(rawText) {
   return highRiskPatterns.some((pattern) => pattern.test(source) || pattern.test(compact));
 }
 
+function compactEmojiText(rawText) {
+  return `${rawText || ""}`.normalize("NFKC")
+      .replace(/\s/g, "")
+      .replace(/\u200b/g, "")
+      .replace(/\u200c/g, "")
+      .replace(/\u200d/g, "")
+      .replace(/\uFE0E/g, "")
+      .replace(/\uFE0F/g, "")
+      .replace(/\uFEFF/g, "");
+}
+
+function containsDangerousEmoji(rawText) {
+  const compact = compactEmojiText(rawText);
+  return ["💣", "🔫", "🧨", "☢", "☣", "🔪"]
+      .some((symbol) => compact.includes(symbol));
+}
+
+function containsLiveAnimalEmoji(rawText) {
+  const compact = compactEmojiText(rawText);
+  return ["🐶", "🐕", "🐩", "🐈", "🐱"]
+      .some((symbol) => compact.includes(symbol));
+}
+
 function complianceFor(text, rawText = text) {
+  if (containsDangerousEmoji(rawText)) {
+    return {status: "prohibited", reasonCodes: ["dangerous_symbol"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
+  }
   if (includesAny(text, ["illegal drugs", "cocaine", "heroin", "weapon", "gun", "firearm", "ammunition", "ammo", "knife", "explosive", "bomb", "fireworks", "petrol", "gasoline", "hazardous chemical", "hazmat", "hazardous materials"])) {
     return {status: "prohibited", reasonCodes: ["prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
   if (multilingualProhibitedMatch(rawText)) {
     return {status: "prohibited", reasonCodes: ["multilingual_prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
+  }
+  if (containsLiveAnimalEmoji(rawText) && !includesAny(text, ["dog food", "cat food", "pet food", "food", "lead", "collar", "toy"])) {
+    return {status: "referral_required", reasonCodes: ["specialist_transport_required"], referralType: "pet_transport", customerMessage: "This request needs a specialist referral rather than normal rider dispatch."};
   }
   if (includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
     /\b(dog|cat)\b/.test(text) && !includesAny(text, ["dog food", "cat food", "cat litter", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy"])) {
