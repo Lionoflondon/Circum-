@@ -45,6 +45,38 @@ const INTERNAL_CONTEXTS = Object.freeze(["domestic", "commercial", "industrial"]
 
 const OBJECT_MAPPINGS = Object.freeze([
   {
+    id: "tv_remote",
+    patterns: [/\btv remote\b/, /\btelevision remote\b/, /\bremote control\b/],
+    category: "Electronics",
+    weightKg: 0.2,
+    handlingFlags: ["Fragile"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "usb_cable",
+    patterns: [/\busb cable\b/, /\bcharging cable\b/, /\bphone charger\b/, /\bcharger cable\b/],
+    category: "Electronics",
+    weightKg: 0.1,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "smart_watch",
+    patterns: [/\bapple watch\b/, /\bsmart watch\b/, /\bsmartwatch\b/],
+    category: "Electronics",
+    weightKg: 0.2,
+    handlingFlags: ["Fragile", "High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "jewellery",
+    patterns: [/\bwedding ring\b/, /\bring\b/, /\bjewellery\b/, /\bjewelry\b/, /\bluxury watch\b/],
+    category: "Fragile & Valuable",
+    weightKg: 0.1,
+    handlingFlags: ["High Value"],
+    vehicleRequired: "any",
+  },
+  {
     id: "dresser_cabinet",
     patterns: [/\bdresser cabinet\b/, /\bdresser\b/, /\bdrawer cabinet\b/],
     category: "Furniture & Home",
@@ -70,7 +102,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "tv",
-    patterns: [/\b(65[- ]?inch|65in|large)\s+(tv|television)\b/, /\btv\b/, /\btelevision\b/],
+    patterns: [/\b(65[- ]?inch|65in|large|massive|big screen)\s+(tv|television|telly)\b/, /\btelly\b/, /\bbig screen\b/, /\btv\b/, /\btelevision\b/],
     category: "Electronics",
     weightKg: 32,
     handlingFlags: ["Fragile", "Keep Upright", "Bulky", "Van Required", "Two Person Lift"],
@@ -78,7 +110,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "laptop",
-    patterns: [/\blaptop\b/, /\bmacbook\b/, /\bnotebook computer\b/],
+    patterns: [/\blaptops?\b/, /\bmacbooks?\b/, /\bnotebook computers?\b/],
     category: "Electronics",
     weightKg: 2,
     handlingFlags: ["Fragile", "High Value"],
@@ -86,7 +118,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "iphone",
-    patterns: [/\biphone\b/, /\bsmartphone\b/, /\bmobile phone\b/],
+    patterns: [/\biphones?\b/, /\bsmartphones?\b/, /\bmobile phones?\b/],
     category: "Electronics",
     weightKg: 0.3,
     handlingFlags: ["Fragile", "High Value"],
@@ -150,7 +182,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "electronics",
-    patterns: [/\belectronics\b/, /\btablet\b/, /\bcamera\b/, /\bconsole\b/, /\bmonitor\b/],
+    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsole\b/, /\bmonitor\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bserver rack\b/],
     category: "Electronics",
     weightKg: 2,
     handlingFlags: ["Fragile", "High Value"],
@@ -158,9 +190,49 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "furniture",
-    patterns: [/\bfurniture\b/, /\bwardrobe\b/, /\bcabinet\b/, /\btable\b/],
+    patterns: [/\bfurniture\b/, /\bwardrobe\b/, /\bcabinet\b/, /\btable\b/, /\bdining chairs?\b/, /\bchairs?\b/, /\bbed\b/, /\bhouse move\b/, /\bbedroom\b/, /\bgarage contents\b/],
     category: "Furniture & Home",
     weightKg: 30,
+    handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "wedding_dress",
+    patterns: [/\bwedding dresses\b/, /\bwedding dress\b/],
+    category: "Clothing & Fashion",
+    weightKg: 2,
+    handlingFlags: ["High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "flowers_plants",
+    patterns: [/\bflowers?\b/, /\bplants?\b/],
+    category: "Food & Consumables",
+    weightKg: 1,
+    handlingFlags: ["Perishable", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "perfume",
+    patterns: [/\bperfumes?\b/, /\bfragrance\b/, /\bcologne\b/],
+    category: "Fragile & Valuable",
+    weightKg: 0.5,
+    handlingFlags: ["Fragile", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "blood_samples",
+    patterns: [/\bblood samples?\b/, /\bmedical samples?\b/, /\blab samples?\b/],
+    category: "Medical & Pharmacy",
+    weightKg: 0.5,
+    handlingFlags: ["Temperature Sensitive", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "construction_materials",
+    patterns: [/\bbricks?\b/, /\btiles?\b/, /\bconcrete\b/, /\btimber\b/, /\bconcrete mixer\b/],
+    category: "Tools & Machinery",
+    weightKg: 75,
     handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
     vehicleRequired: "van",
   },
@@ -200,6 +272,32 @@ function detectObject(text) {
     mapping.patterns.some((pattern) => pattern.test(text))) || null;
 }
 
+function parseQuantity(text) {
+  const normalized = normalize(text);
+  const quantityNouns = "(laptops?|macbooks?|phones?|smartphones?|dresses|chairs?|books?|monitors?|tablets?|cameras?|boxes|parcels|items|suitcases?|bags?)";
+  const numeric = normalized.match(new RegExp(`\\b(\\d{1,4})\\s+(?:[a-z]+\\s+){0,2}${quantityNouns}\\b`));
+  if (numeric) return Math.max(1, Number(numeric[1]));
+  const words = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    twenty: 20,
+    fifty: 50,
+    hundred: 100,
+  };
+  for (const [word, value] of Object.entries(words)) {
+    if (new RegExp(`\\b${word}\\s+(?:[a-z]+\\s+){0,2}${quantityNouns}\\b`).test(normalized)) return value;
+  }
+  return 1;
+}
+
 function roundMoney(value) {
   return Math.round(value * 100) / 100;
 }
@@ -226,7 +324,7 @@ function estimateWeightKg(text, declaredWeightText) {
   const explicit = parseWeightKg(text, declaredWeightText);
   if (explicit != null) return explicit;
   const object = detectObject(text);
-  if (object) return object.weightKg;
+  if (object) return object.weightKg * parseQuantity(text);
   if (includesAny(text, ["iphone", "phone", "smartphone", "passport", "document", "letter"])) return 0.3;
   if (includesAny(text, ["laptop", "tablet", "camera", "console"])) return 2;
   if (includesAny(text, ["65 inch tv", "65-inch tv", "65in tv", "large tv"])) return 32;
@@ -275,7 +373,8 @@ function complianceFor(text) {
   if (includesAny(text, ["illegal drugs", "cocaine", "heroin", "weapon", "gun", "firearm", "knife", "explosive", "bomb", "hazardous chemical", "hazmat", "hazardous materials"])) {
     return {status: "prohibited", reasonCodes: ["prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
-  if (includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"])) {
+  if (includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
+    /\b(dog|cat)\b/.test(text) && !includesAny(text, ["dog food", "cat food", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy"])) {
     let referralType = "specialist_freight";
     if (includesAny(text, ["pet", "dog", "cat", "live animal", "livestock"])) referralType = "pet_transport";
     if (includesAny(text, ["funeral", "deceased", "body transport"])) referralType = "funeral_transport";
