@@ -334,6 +334,7 @@ test("multi-item reasoning understands containers by their contents", () => {
     ["Bag of tools", "Tools & Machinery", 15, "tools"],
     ["Envelope containing passports", "Documents", 0.3, "passport_documents"],
     ["Toolbox", "Tools & Machinery", 15, "tools"],
+    ["Toolbox full of tools", "Tools & Machinery", 15, "tools"],
     ["Backpack with a laptop and two books", "Personal Items & Luggage", 26, "books"],
   ];
   for (const [description, expectedCategory, expectedKg, expectedDominant] of cases) {
@@ -348,6 +349,32 @@ test("multi-item reasoning understands containers by their contents", () => {
   }
 });
 
+test("IRIS RC1 certification examples preserve item extraction and dominant logistics", () => {
+  const cases = [
+    ["Printer with toner", 16, "Business & Commercial", "van", "printer", 2],
+    ["Backpack with laptop and charger", 2.1, "Electronics", "any", "laptop", 2],
+    ["Jewellery + safe", 40.1, "Fragile & Valuable", "van", "safe", 2],
+    ["Blood samples + flowers", 1.5, "Food & Consumables", "any", "flowers_plants", 2],
+    ["Prescription + groceries", 3.5, "Food & Consumables", "any", "food", 2],
+    ["2 litre paint", 2, "Tools & Machinery", "any", "paint", 1],
+    ["Mirror + laptop", 10, "Fragile & Valuable", "any", "mirror", 2],
+    ["Flowers + TV", 33, "Electronics", "van", "tv", 2],
+    ["Bike + printer", 29, "Business & Commercial", "van", "printer", 2],
+    ["Mattress + suitcase", 38, "Furniture & Home", "van", "mattress", 2],
+    ["Table + dining chairs", 26, "Furniture & Home", "van", "table", 2],
+    ["Engine + books", 87, "Tools & Machinery", "van", "construction_materials", 2],
+  ];
+  for (const [description, expectedKg, expectedCategory, expectedVehicle, expectedDominant, expectedItemCount] of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.estimatedWeightKg, expectedKg, description);
+    assert.equal(result.recommendation.category, expectedCategory, description);
+    assert.equal(result.internal.riderMatching.vehicleRequired, expectedVehicle, description);
+    assert.equal(result.recommendation.detectedItems.length, expectedItemCount, description);
+    const dominant = result.recommendation.dominantItem || result.recommendation.detectedItems[0];
+    assert.equal(dominant.id, expectedDominant, description);
+  }
+});
+
 test("multi-item reasoning keeps policy blockers dominant over allowed items", () => {
   const prohibited = classifyIris({description: "Laptop, cake and explosive"});
   assert.equal(prohibited.compliance.status, "prohibited");
@@ -356,6 +383,21 @@ test("multi-item reasoning keeps policy blockers dominant over allowed items", (
   const referral = classifyIris({description: "Flowers and dog"});
   assert.equal(referral.compliance.status, "referral_required");
   assert.equal(referral.serviceability.status, "manual_review");
+});
+
+test("IRIS RC1 prohibited certification examples cannot bypass policy", () => {
+  for (const description of [
+    "This explosive is a birthday present.",
+    "Replica firearm.",
+    "Old ammunition.",
+    "Petrol.",
+    "Illegal drugs.",
+    "Fireworks.",
+  ]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "prohibited", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+  }
 });
 
 test("multi-item stress corpus remains deterministic and practical", () => {

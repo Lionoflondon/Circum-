@@ -54,7 +54,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "usb_cable",
-    patterns: [/\busb cable\b/, /\bcharging cable\b/, /\bphone charger\b/, /\bcharger cable\b/],
+    patterns: [/\busb cable\b/, /\bcharging cable\b/, /\bphone chargers?\b/, /\bchargers?\b/, /\bcharger cable\b/],
     category: "Electronics",
     weightKg: 0.1,
     handlingFlags: [],
@@ -75,6 +75,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     weightKg: 0.1,
     handlingFlags: ["High Value"],
     vehicleRequired: "any",
+  },
+  {
+    id: "safe",
+    patterns: [/\bsafes?\b/, /\bsecurity safe\b/],
+    category: "Fragile & Valuable",
+    weightKg: 40,
+    handlingFlags: ["High Value", "Bulky", "Van Required", "Two Person Lift"],
+    vehicleRequired: "van",
   },
   {
     id: "passport_documents",
@@ -107,6 +115,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     weightKg: 14,
     handlingFlags: ["Bulky", "Awkward Shape", "Van Required"],
     vehicleRequired: "van",
+  },
+  {
+    id: "suitcase",
+    patterns: [/\bsuitcases?\b/, /\bluggage\b/, /\bbackpacks?\b/, /\bbags?\b/],
+    category: "Personal Items & Luggage",
+    weightKg: 8,
+    handlingFlags: ["Bulky"],
+    vehicleRequired: "any",
   },
   {
     id: "tv",
@@ -357,6 +373,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "toner",
+    patterns: [/\btoner\b/, /\bprinter ink\b/, /\bink cartridges?\b/],
+    category: "Business & Commercial",
+    weightKg: 1,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
     id: "furniture",
     patterns: [/\bfurniture\b/, /\bwardrobe\b/, /\bcabinet\b/, /\bbed\b/, /\bhouse move\b/, /\boffice move\b/, /\bstudent move\b/, /\bbedroom\b/, /\bbedroom contents\b/, /\bgarage contents\b/],
     category: "Furniture & Home",
@@ -413,6 +437,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "paint",
+    patterns: [/\bpaint\b/, /\bpaint tins?\b/, /\bpaint cans?\b/],
+    category: "Tools & Machinery",
+    weightKg: 2,
+    handlingFlags: ["Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
     id: "blood_samples",
     patterns: [/\bblood samples?\b/, /\bmedical samples?\b/, /\blab samples?\b/],
     category: "Medical & Pharmacy",
@@ -446,7 +478,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "construction_materials",
-    patterns: [/\bconcrete\b/, /\btimber\b/, /\bconcrete mixer\b/, /\bengine blocks?\b/],
+    patterns: [/\bconcrete\b/, /\btimber\b/, /\bconcrete mixer\b/, /\bengine blocks?\b/, /\bengines?\b/],
     category: "Tools & Machinery",
     weightKg: 75,
     handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
@@ -788,24 +820,41 @@ function parseWeightKg(...values) {
 }
 
 function splitItemClauses(rawText) {
-  return `${rawText || ""}`
+  const normalized = `${rawText || ""}`
       .replace(/\n+/g, ",")
       .replace(/[+&]/g, ",")
       .replace(/\bcontaining\b/gi, ",")
       .replace(/\bfull of\b/gi, ",")
       .replace(/\bfilled with\b/gi, ",")
       .replace(/\bwith\b/gi, ",")
-      .split(/\s*,\s*|\s+and\s+/i)
+      .replace(/\b(suitcase|box|crate|bag|envelope|backpack|toolbox)\s+of\b/gi, "$1,");
+  const clauses = normalized
+      .split(/\s*,\s*/i)
       .map((part) => part.trim())
       .filter(Boolean);
+  const expanded = [];
+  for (const clause of clauses) {
+    const andParts = clause.split(/\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
+    if (andParts.length > 1 && andParts.every((part) => detectObject(normalize(part)))) {
+      expanded.push(...andParts);
+    } else {
+      expanded.push(clause);
+    }
+  }
+  return expanded;
+}
+
+function hasContainerContents(rawText) {
+  return /\b(suitcase|box|crate|bag|envelope|backpack|toolbox)\s+(containing|full of|filled with|with|of)\b/i.test(`${rawText || ""}`);
 }
 
 function extractShipmentItems(rawText) {
   const clauses = splitItemClauses(rawText);
   const items = [];
+  const describesContainerContents = hasContainerContents(rawText);
   for (const clause of clauses) {
     const text = normalize(clause);
-    if (clauses.length > 1 && /^(suitcase|box|crate|bag|envelope|backpack)$/i.test(text)) continue;
+    if (describesContainerContents && /^(suitcase|box|crate|bag|envelope|backpack|toolbox)$/i.test(text)) continue;
     const object = detectObject(text);
     if (!object) continue;
     const quantity = parseQuantity(clause);
@@ -842,8 +891,10 @@ function summarizeShipmentItems(items = []) {
 }
 
 function estimateCombinedWeightKg(rawText) {
+  const clauses = splitItemClauses(rawText);
+  if (clauses.length < 2) return null;
   const items = extractShipmentItems(rawText);
-  if (items.length < 2) return null;
+  if (items.length < 1) return null;
   return summarizeShipmentItems(items).combinedWeightKg;
 }
 
@@ -909,7 +960,7 @@ function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
 }
 
 function complianceFor(text) {
-  if (includesAny(text, ["illegal drugs", "cocaine", "heroin", "weapon", "gun", "firearm", "knife", "explosive", "bomb", "hazardous chemical", "hazmat", "hazardous materials"])) {
+  if (includesAny(text, ["illegal drugs", "cocaine", "heroin", "weapon", "gun", "firearm", "ammunition", "ammo", "knife", "explosive", "bomb", "fireworks", "petrol", "gasoline", "hazardous chemical", "hazmat", "hazardous materials"])) {
     return {status: "prohibited", reasonCodes: ["prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
   if (includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
@@ -1066,7 +1117,8 @@ function classifyIris(input = {}) {
   const express = normalize(speed) === "express" || input.express === true || input.urgent === true;
   const compliance = complianceFor(text);
   const shipmentItems = extractShipmentItems(description);
-  const shipmentSummary = shipmentItems.length >= 2 ? summarizeShipmentItems(shipmentItems) : null;
+  const shipmentSummary = splitItemClauses(description).length >= 2 && shipmentItems.length >= 1 ?
+    summarizeShipmentItems(shipmentItems) : null;
   const estimatedWeightKg = estimateWeightKg(description, declaredWeightText);
   const baseCategory = classifyCategory(text, shipmentSummary);
   const baseWeightBand = weightBandFor(estimatedWeightKg);
