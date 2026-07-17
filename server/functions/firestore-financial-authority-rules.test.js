@@ -31,7 +31,7 @@ test("deliveryRequests reserves payment and lifecycle fields for backend/admin a
   }
   assert.match(
       rules,
-      /function isOwnDeliveryUpdate\(\)[\s\S]*changedKeys\(\)\.hasAny\(protectedDeliveryFields\(\)\)/,
+      /function isOwnDeliveryUpdate\(\)[\s\S]*affectedKeys\(\)\.hasAny\(protectedDeliveryFields\(\)\)/,
   );
   assert.match(
       rules,
@@ -42,7 +42,7 @@ test("deliveryRequests reserves payment and lifecycle fields for backend/admin a
 test("assigned riders can only make non-authoritative offer preference updates directly", () => {
   assert.match(
       rules,
-      /function isAssignedRiderUpdate\(\)[\s\S]*changedKeys\(\)\.hasOnly\(\[[\s\S]*'rejectedByRiders'[\s\S]*'ignoredByRiders'[\s\S]*'updatedAt'/,
+      /function isAssignedRiderUpdate\(\)[\s\S]*affectedKeys\(\)\.hasOnly\(\[[\s\S]*'rejectedByRiders'[\s\S]*'ignoredByRiders'[\s\S]*'updatedAt'/,
   );
   assert.doesNotMatch(
       rules,

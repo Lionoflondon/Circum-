@@ -19,7 +19,7 @@ test("Firestore rules expose irisPrivate to admins only for reads", () => {
 });
 
 test("Firestore rules prevent senders from mutating public Iris", () => {
-  assert.match(rules, /function isOwnDeliveryUpdate\(\)[\s\S]*changedKeys\(\)\.hasAny\(\['iris'\]\)/);
+  assert.match(rules, /function isOwnDeliveryUpdate\(\)[\s\S]*affectedKeys\(\)\.hasAny\(\['iris'\]\)/);
   assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*changedKeys\(\)\.hasAny\(\['iris'\]\)/);
 });
 

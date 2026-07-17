@@ -98,6 +98,14 @@ service cloud.firestore {
         'paymentSessionId',
         'paymentCompletedAt',
         'paidAt',
+        'finalAmount',
+        'finalChargeAmount',
+        'finalChargeableAmount',
+        'quotedAmount',
+        'quotedPrice',
+        'authoritativeQuote',
+        'pricingSnapshot',
+        'priceBreakdown',
         'refundStatus',
         'refundAmount',
         'refundReviewStatus',
@@ -111,6 +119,7 @@ service cloud.firestore {
         'ledgerReferences',
         'trustScore',
         'trustAwards',
+        'trustPointsAwarded',
         'rank',
         'riderRank',
         'completionState',
@@ -185,13 +194,13 @@ service cloud.firestore {
 
     function isOwnDeliveryUpdate() {
       return isOwnDelivery('') &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']) &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(protectedDeliveryFields());
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['iris']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedDeliveryFields());
     }
 
     function isAssignedRiderUpdate() {
       return isAssignedRider() &&
-        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'rejectedByRiders',
           'ignoredByRiders',
           'rejectedAt',
@@ -215,24 +224,159 @@ service cloud.firestore {
       );
     }
 
-    function canWriteOwnLiveLocation(deliveryId) {
-      return signedIn() &&
-        request.resource.data.riderId == request.auth.uid &&
-        (
-          deliveryFor(deliveryId).riderId == request.auth.uid ||
-          deliveryFor(deliveryId).driverId == request.auth.uid ||
-          deliveryFor(deliveryId).assignedDriverId == request.auth.uid
-        ) &&
-        request.resource.data.keys().hasOnly([
-          'riderId',
+    function assignedRiderForDelivery(deliveryId) {
+      return signedIn() && (
+        deliveryFor(deliveryId).riderId == request.auth.uid ||
+        deliveryFor(deliveryId).driverId == request.auth.uid ||
+        deliveryFor(deliveryId).assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isTrackableDelivery(deliveryId) {
+      return !([
+        'completed',
+        'delivered',
+        'cancelled',
+        'canceled',
+        'expired',
+        'archived',
+        'archived_stale'
+      ].hasAny([
+        deliveryFor(deliveryId).status,
+        deliveryFor(deliveryId).deliveryStatus,
+        deliveryFor(deliveryId).deliveryStage
+      ]));
+    }
+
+    function validRiderLiveLocationMap() {
+      return request.resource.data.riderLiveLocation is map &&
+        request.resource.data.riderLiveLocation.keys().hasOnly([
+          'geopoint',
           'latitude',
           'longitude',
+          'accuracy',
           'heading',
           'speed',
+          'freshness',
+          'deliveryState',
+          'updatedAt'
+        ]) &&
+        request.resource.data.riderLiveLocation.geopoint is latlng &&
+        request.resource.data.riderLiveLocation.latitude is number &&
+        request.resource.data.riderLiveLocation.longitude is number &&
+        request.resource.data.riderLiveLocation.accuracy is number &&
+        request.resource.data.riderLiveLocation.heading is number &&
+        request.resource.data.riderLiveLocation.speed is number &&
+        request.resource.data.riderLiveLocation.freshness is string &&
+        request.resource.data.riderLiveLocation.deliveryState is string &&
+        request.resource.data.riderLiveLocation.updatedAt is timestamp;
+    }
+
+    function validLiveTrackingPayload(deliveryId) {
+      return request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.activeDeliveryId == deliveryId &&
+        request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.latitude is number &&
+        request.resource.data.longitude is number &&
+        request.resource.data.accuracy is number &&
+        request.resource.data.heading is number &&
+        request.resource.data.speed is number &&
+        request.resource.data.status is string &&
+        request.resource.data.trackingStatus == 'live' &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.freshness == 'fresh' &&
+        request.resource.data.clientRecordedAt is timestamp &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        validRiderLiveLocationMap() &&
+        request.resource.data.keys().hasOnly([
+          'riderId',
+          'activeDeliveryId',
+          'deliveryId',
+          'latitude',
+          'longitude',
           'accuracy',
+          'heading',
+          'speed',
+          'status',
+          'trackingStatus',
+          'deliveryState',
+          'freshness',
+          'clientRecordedAt',
           'updatedAt',
-          'status'
+          'freshnessUpdatedAt',
+          'riderLiveLocation'
         ]);
+    }
+
+    function validStoppedTrackingPayload(deliveryId) {
+      return request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.activeDeliveryId == deliveryId &&
+        request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.trackingStatus == 'stopped' &&
+        request.resource.data.status is string &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.freshness == 'stopped' &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        request.resource.data.keys().hasOnly([
+          'riderId',
+          'activeDeliveryId',
+          'deliveryId',
+          'trackingStatus',
+          'status',
+          'deliveryState',
+          'freshness',
+          'updatedAt',
+          'freshnessUpdatedAt'
+        ]);
+    }
+
+    function validActiveDeliveryLivePayload(deliveryId) {
+      return request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.status is string &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.trackingStatus == 'live' &&
+        request.resource.data.freshness == 'fresh' &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        validRiderLiveLocationMap() &&
+        request.resource.data.keys().hasOnly([
+          'deliveryId',
+          'riderId',
+          'status',
+          'deliveryState',
+          'trackingStatus',
+          'freshness',
+          'riderLiveLocation',
+          'updatedAt',
+          'freshnessUpdatedAt'
+        ]);
+    }
+
+    function validActiveDeliveryStoppedPayload(deliveryId) {
+      return validStoppedTrackingPayload(deliveryId);
+    }
+
+    function canWriteOwnLiveLocation(deliveryId) {
+      return signedIn() &&
+        assignedRiderForDelivery(deliveryId) &&
+        isTrackableDelivery(deliveryId) &&
+        (
+          validLiveTrackingPayload(deliveryId) ||
+          validStoppedTrackingPayload(deliveryId)
+        );
+    }
+
+    function canWriteActiveDelivery(deliveryId) {
+      return signedIn() &&
+        assignedRiderForDelivery(deliveryId) &&
+        isTrackableDelivery(deliveryId) &&
+        (
+          validActiveDeliveryLivePayload(deliveryId) ||
+          validActiveDeliveryStoppedPayload(deliveryId)
+        );
     }
 
     function isAssignedRiderPrivateCreate() {
@@ -490,6 +634,12 @@ service cloud.firestore {
           canWriteOwnLiveLocation(deliveryId);
         allow delete: if isAdmin();
       }
+    }
+
+    match /activeDeliveries/{deliveryId} {
+      allow read: if canReadDeliveryTracking(deliveryId);
+      allow create, update: if canWriteActiveDelivery(deliveryId);
+      allow delete: if isAdmin();
     }
 
     match /webSenderRequests/{requestId} {
