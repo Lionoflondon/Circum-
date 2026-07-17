@@ -1,11 +1,12 @@
-/* eslint-disable require-jsdoc */
+/* eslint-disable max-len, require-jsdoc */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
 const indexSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
-const accountBlocPath = path.join(
+const senderBookingSource = fs.readFileSync(path.join(__dirname, "sender-booking.js"), "utf8");
+const accountBlocSource = fs.readFileSync(path.join(
     __dirname,
     "..",
     "..",
@@ -14,67 +15,69 @@ const accountBlocPath = path.join(
     "account",
     "bloc",
     "account_bloc.dart",
-);
-const paymentViewPath = path.join(
+), "utf8");
+const sendBlocSource = fs.readFileSync(path.join(
     __dirname,
     "..",
     "..",
     "lib",
     "app",
-    "account",
+    "send_package",
+    "bloc",
+    "send_package_bloc.dart",
+), "utf8");
+const reviewSource = fs.readFileSync(path.join(
+    __dirname,
+    "..",
+    "..",
+    "lib",
+    "app",
+    "send_package",
     "view",
-    "payment.dart",
-);
-const accountBlocSource = fs.readFileSync(accountBlocPath, "utf8");
-const paymentViewSource = fs.readFileSync(paymentViewPath, "utf8");
-const methodExportPattern = new RegExp(
-    "exports\\.StripePayEndpointMethodId\\s*=\\s*" +
-    "functions\\.https\\.onRequest\\(createPaymentIntentHandler\\)",
-);
-const createExportPattern = new RegExp(
-    "exports\\.createPaymentIntent\\s*=\\s*" +
-    "functions\\.https\\.onRequest\\(createPaymentIntentHandler\\)",
-);
+    "delivery_review_expanded.dart",
+), "utf8");
 
-test("core delivery payment endpoints share the secured handler", () => {
-  assert.match(indexSource, methodExportPattern);
-  assert.match(indexSource, createExportPattern);
-  assert.match(indexSource, /requireHttpSender\(req\)/);
-  assert.match(indexSource, /getAuth\(\)\.verifyIdToken/);
+test("legacy standard delivery payment HTTP endpoints are retired", () => {
+  assert.doesNotMatch(indexSource, /exports\.StripePayEndpointMethodId/);
+  assert.doesNotMatch(indexSource, /exports\.createPaymentIntent/);
+  assert.doesNotMatch(indexSource, /exports\.StripePayEndpointIntentId/);
+  assert.doesNotMatch(indexSource, /exports\.confirmPaymentIntent/);
+  assert.doesNotMatch(indexSource, /createPaymentIntentHandler/);
+  assert.doesNotMatch(indexSource, /legacyCorePaymentSessions/);
+  assert.doesNotMatch(accountBlocSource, /createPaymentIntent/);
+  assert.doesNotMatch(accountBlocSource, /confirmPaymentIntent/);
 });
 
-test("core delivery payment ignores client amount for Stripe charge", () => {
-  assert.doesNotMatch(indexSource, /const\s+orderAmount\s*=\s*amount/);
-  assert.doesNotMatch(indexSource, /amount:\s*orderAmount/);
-  assert.match(indexSource, /authoritativeAmountPence/);
-  assert.match(indexSource, /stripe\.paymentIntents\.create\(params,\s*\{/);
-  assert.match(indexSource, /submittedAmountPence/);
-  assert.match(indexSource, /pricingDiscrepancyPence/);
+test("Sender mobile uses canonical quote, payment session, and paid delivery callables", () => {
+  assert.match(accountBlocSource, /httpsCallable\('createSenderBookingQuote'\)/);
+  assert.match(accountBlocSource, /httpsCallable\('createSenderPaymentSession'\)/);
+  assert.match(sendBlocSource, /httpsCallable\('createSenderPaidDelivery'\)/);
+  assert.doesNotMatch(sendBlocSource, /httpsCallable\('sendPackage'\)/);
+  assert.doesNotMatch(sendBlocSource, /collection\("deliveryRequests"\)\.doc\(user\?\.uid\)\.set/);
+  assert.match(reviewSource, /quoteId: accountState\.quoteId/);
+  assert.match(reviewSource, /paymentSessionId: accountState\.paymentSessionId/);
 });
 
-test("core payment derives amount from stored delivery or quote", () => {
-  assert.match(indexSource, /deliveryRequests/);
-  assert.match(indexSource, /blockedDeliveryStatus/);
-  assert.match(indexSource, /terminalPaymentStatus/);
-  assert.match(indexSource, /senderBooking\._private\.quotePayload/);
-  assert.match(indexSource, /missing-authoritative-pricing/);
-  assert.match(indexSource, /validateLegacyPricingInput/);
-  assert.match(indexSource, /distanceMiles == null \|\| distanceMiles <= 0/);
-  assert.match(indexSource, /weightKg == null \|\| weightKg <= 0/);
+test("canonical payment authority calculates and records authoritative pricing", () => {
+  assert.match(senderBookingSource, /exports\.createSenderBookingQuote/);
+  assert.match(senderBookingSource, /quotePayload\(data \|\| \{\}, sender\.uid\)/);
+  assert.match(senderBookingSource, /clientDisplayQuote/);
+  assert.match(senderBookingSource, /pricingDiscrepancyPence/);
+  assert.match(senderBookingSource, /exports\.createSenderPaymentSession/);
+  assert.match(senderBookingSource, /const quoteSnap = await db\.collection\("senderBookingQuotes"\)/);
+  assert.match(senderBookingSource, /quoteSnap\.data\(\)\.userId !== sender\.uid/);
+  assert.match(senderBookingSource, /calculateWalletCheckout/);
+  assert.match(senderBookingSource, /collection\("senderPaymentSessions"\)\.doc\(quoteId\)/);
+  assert.match(senderBookingSource, /existingSessionSnap\.exists/);
+  assert.match(senderBookingSource, /stripe\.paymentIntents\.create/);
+  assert.match(senderBookingSource, /const idempotencyKey = `sender_booking_\$\{quoteId\}`/);
 });
 
-test("core payment protects ownership and duplicate sessions", () => {
-  assert.match(indexSource, /owner !== sender\.uid/);
-  assert.match(indexSource, /legacyCorePaymentSessions/);
-  assert.match(indexSource, /idempotent:\s*true/);
-  assert.match(indexSource, /core_delivery_\$\{idempotencyKey\}/);
-});
-
-test("sender mobile payment sends auth and booking inputs", () => {
-  assert.match(accountBlocSource, /Authorization/);
-  assert.match(accountBlocSource, /Bearer \$token/);
-  assert.match(accountBlocSource, /pricingInput/);
-  assert.match(paymentViewSource, /distanceMiles/);
-  assert.match(paymentViewSource, /weightKg/);
-  assert.match(paymentViewSource, /paymentRequestId/);
+test("canonical paid delivery finalization requires succeeded payment and is idempotent", () => {
+  assert.match(senderBookingSource, /exports\.createSenderPaidDelivery/);
+  assert.match(senderBookingSource, /paymentSessionId/);
+  assert.match(senderBookingSource, /Stripe payment must be confirmed before delivery creation/);
+  assert.match(senderBookingSource, /senderDeliveryIdempotency/);
+  assert.match(senderBookingSource, /paymentStatus: "paid"/);
+  assert.match(senderBookingSource, /pricingBreakdown: quote/);
 });

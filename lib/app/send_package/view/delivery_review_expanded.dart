@@ -499,6 +499,7 @@ class _DeliveryReviewExpandedViewState
                   paymentRequestId: requestId);
 
               if (payForDelivery == 'success') {
+                final accountState = context.read<AccountBloc>().state;
                 // ignore: use_build_context_synchronously
                 context.read<SendPackageBloc>().add(SendDeliveryRequest(
                     requestId: requestId,
@@ -514,8 +515,9 @@ class _DeliveryReviewExpandedViewState
                         address: state.desinationCoordinate!,
                         moreInformation: dropoffAdditionalInformation,
                         locality: state.destinationLocality),
-                    paymentIntentId:
-                        context.read<AccountBloc>().state.paymentIntentId));
+                    paymentIntentId: accountState.paymentIntentId,
+                    quoteId: accountState.quoteId,
+                    paymentSessionId: accountState.paymentSessionId));
                 // The wait is required to avoid a glitch effect
                 await Future.delayed(const Duration(milliseconds: 300));
                 // ignore: use_build_context_synchronously

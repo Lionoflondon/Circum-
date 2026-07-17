@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
 const cancellation = fs.readFileSync(path.join(__dirname, "delivery-policy.js"), "utf8");
+const senderBooking = fs.readFileSync(path.join(__dirname, "sender-booking.js"), "utf8");
 const mobile = fs.readFileSync(path.join(__dirname, "../../lib/app/send_package/bloc/send_package_bloc.dart"), "utf8");
 const web = fs.readFileSync(path.join(__dirname, "../../lib/web_sender_app.dart"), "utf8");
 
@@ -30,6 +31,8 @@ test("Sender clients wait for the cancellation callable and never delete the del
 });
 
 test("payment intents and Stripe refunds map back to deliveries", () => {
-  assert.match(index, /stripePaymentIntentId:\s*intent\.id/);
+  assert.match(senderBooking, /stripe\.paymentIntents\.retrieve/);
+  assert.match(senderBooking, /updateSenderPaymentIntentStatus\(stripe, intent/);
+  assert.match(senderBooking, /stripePaymentIntentId:\s*payment\.stripePaymentIntentId/);
   assert.match(index, /event\.type === "charge\.refunded"/);
 });

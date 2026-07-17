@@ -454,12 +454,35 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
   const db = getFirestore();
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
   const quote = quotePayload(data || {}, sender.uid);
+  const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
+  const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
+  const clientDisplayedAmountPence = cleanNumber(clientDisplayQuote.amountPence);
+  const clientDisplayAmount = clientDisplayedAmount != null ?
+    money(clientDisplayedAmount) :
+    clientDisplayedAmountPence != null ? money(clientDisplayedAmountPence / 100) : null;
+  const discrepancy = clientDisplayAmount == null ? null :
+    money(clientDisplayAmount - money(quote.total));
   await db.collection("senderBookingQuotes").doc(quote.quoteId).set({
     ...quote,
     ...(businessContext || {}),
+    clientDisplayQuote: clientDisplayAmount == null ? null : {
+      amount: clientDisplayAmount,
+      amountPence: minorUnits(clientDisplayAmount, "gbp"),
+      currency: text(clientDisplayQuote.currency || "GBP").toUpperCase(),
+    },
+    pricingDiscrepancy: discrepancy,
+    pricingDiscrepancyPence: discrepancy == null ? null : minorUnits(discrepancy, "gbp"),
     createdAt: FieldValue.serverTimestamp(),
   }, {merge: true});
-  return quote;
+  return {
+    ...quote,
+    clientDisplayQuote: clientDisplayAmount == null ? null : {
+      amount: clientDisplayAmount,
+      amountPence: minorUnits(clientDisplayAmount, "gbp"),
+      currency: text(clientDisplayQuote.currency || "GBP").toUpperCase(),
+    },
+    pricingDiscrepancy: discrepancy,
+  };
 });
 
 exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (data, context) => {
@@ -484,7 +507,34 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     walletBalanceGbp: rothEnabled ? rothBalance : 0,
     selectedCurrency: "gbp",
   });
-  const sessionRef = db.collection("senderPaymentSessions").doc();
+  const sessionRef = db.collection("senderPaymentSessions").doc(quoteId);
+  const existingSessionSnap = await sessionRef.get();
+  if (existingSessionSnap.exists) {
+    const existingSession = existingSessionSnap.data() || {};
+    if (existingSession.userId !== sender.uid || existingSession.quoteId !== quoteId) {
+      throw new functions.https.HttpsError("permission-denied", "Payment session ownership mismatch.");
+    }
+    if (existingSession.paymentStatus === "succeeded" || existingSession.status === "succeeded") {
+      return {
+        ...existingSession,
+        paymentSessionId: sessionRef.id,
+        idempotent: true,
+      };
+    }
+    if (existingSession.clientSecret && existingSession.stripeCustomerId) {
+      const existingEphemeralKey = await stripe.ephemeralKeys.create(
+          {customer: existingSession.stripeCustomerId},
+          {apiVersion: "2020-08-27"},
+      );
+      return {
+        ...existingSession,
+        paymentSessionId: sessionRef.id,
+        customerId: existingSession.stripeCustomerId,
+        ephemeralKeySecret: existingEphemeralKey.secret,
+        idempotent: true,
+      };
+    }
+  }
   const sessionBase = {
     paymentSessionId: sessionRef.id,
     quoteId,
@@ -499,6 +549,10 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       paymentProfileSource: quote.paymentProfileSource,
     } : {}),
     amountDue: total,
+    authoritativeQuote: quote,
+    clientDisplayQuote: quote.clientDisplayQuote || null,
+    pricingDiscrepancy: quote.pricingDiscrepancy || null,
+    pricingDiscrepancyPence: quote.pricingDiscrepancyPence || null,
     rothEnabled,
     rothAppliedAmount: split.walletContributionGbp,
     remainingAmount: split.remainingGbp,
@@ -545,7 +599,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       {customer: customerId},
       {apiVersion: "2020-08-27"},
   );
-  const idempotencyKey = `sender_booking_${quoteId}_${sessionRef.id}`;
+  const idempotencyKey = `sender_booking_${quoteId}`;
   const intent = await stripe.paymentIntents.create({
     amount: minorUnits(split.customerPaymentAmount, "gbp"),
     currency: "gbp",

@@ -11,18 +11,16 @@ void main() {
     expect(
       source,
       contains(
-        'GeoPoint(\n'
-        '          event.dropoffDetails.address.lat, '
-        'event.dropoffDetails.address.lng)',
+        "'lat': event.dropoffDetails.address.lat,\n"
+        "            'lng': event.dropoffDetails.address.lng",
       ),
     );
     expect(
       source,
       isNot(
         contains(
-          'GeoPoint(\n'
-          '          event.dropoffDetails.address.lat, '
-          'event.pickupDetails.address.lng)',
+          "'lat': event.dropoffDetails.address.lat,\n"
+          "            'lng': event.pickupDetails.address.lng",
         ),
       ),
     );

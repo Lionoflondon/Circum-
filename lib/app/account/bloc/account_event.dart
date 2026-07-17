@@ -47,15 +47,6 @@ class UpdatePaymentStatus extends AccountEvent {
   const UpdatePaymentStatus({required this.data});
 }
 
-class PaymentConfirmIntent extends AccountEvent {
-  final String clientSecret;
-
-  const PaymentConfirmIntent({required this.clientSecret});
-
-  @override
-  List<Object?> get props => [clientSecret];
-}
-
 class SaveCard extends AccountEvent {
   final bool val;
   SaveCard({required this.val});

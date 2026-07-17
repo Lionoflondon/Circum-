@@ -11,8 +11,6 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geocoding/geocoding.dart';
-// import 'package:geoflutterfire2/geoflutterfire2.dart';
-import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -310,77 +308,61 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     // print(uuidStrong);
 
     try {
-      final User? user = auth.currentUser;
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final HttpsCallable callable = functions.httpsCallable('sendPackage');
       await firebaseMessaging.getAPNSToken();
       // print('apnsToken: $apnsToken');
       final fcmToken = await firebaseMessaging.getToken();
-
-      GeoFirePoint pickupLocation = GeoFirePoint(GeoPoint(
-          event.pickupDetails.address.lat, event.pickupDetails.address.lng));
-
-      GeoFirePoint dropoffLocation = GeoFirePoint(GeoPoint(
-          event.dropoffDetails.address.lat, event.dropoffDetails.address.lng));
-
-      // Document does not exist
-      // print('Document does not exist');
-      await db.collection("deliveryRequests").doc(user?.uid).set({
-        'pickupDetails': {
+      final HttpsCallable callable =
+          functions.httpsCallable('createSenderPaidDelivery');
+      final response = await callable.call({
+        'requestId': uuidStrong,
+        'quoteId': event.quoteId,
+        'paymentSessionId': event.paymentSessionId,
+        'idempotencyKey': uuidStrong,
+        'pickup': {
           'fullname': event.pickupDetails.fullname,
           'phone': event.pickupDetails.phoneNumber,
-          'position': pickupLocation.data,
-          'moreInformation': event.pickupDetails.moreInformation,
+          'coordinates': {
+            'lat': event.pickupDetails.address.lat,
+            'lng': event.pickupDetails.address.lng,
+          },
+          'instructions': event.pickupDetails.moreInformation,
           'locality': event.pickupDetails.locality,
           'address': state.pickupLocation,
-          'subAddress': state.pickupLocationSubAddress
+          'subAddress': state.pickupLocationSubAddress,
         },
-        'dropoffDetails': {
+        'dropoff': {
           'fullname': event.dropoffDetails.fullname,
           'phone': event.dropoffDetails.phoneNumber,
-          'position': dropoffLocation.data,
-          'moreInformation': event.dropoffDetails.moreInformation,
+          'coordinates': {
+            'lat': event.dropoffDetails.address.lat,
+            'lng': event.dropoffDetails.address.lng,
+          },
+          'instructions': event.dropoffDetails.moreInformation,
           'locality': event.dropoffDetails.locality,
           'address': state.destinationLocation,
-          'subAddress': state.destinationLocationSubAddress
+          'subAddress': state.destinationLocationSubAddress,
         },
-        "role": 'user',
-        'userId': user?.uid,
-        'senderId': user?.uid,
-        'senderName': user?.displayName,
-        'senderEmail': user?.email,
-        'pickupPosition': pickupLocation.data,
-        'pickupLocality': event.pickupDetails.locality,
-        'requestId': uuidStrong,
-        'code': fcmToken,
-        'price': state.price,
-        'weightKg': state.parcelWeightKg,
-        'pricingBreakdown': DeliveryPricing.calculate(
-          DeliveryPricingInput(
-            distanceMiles:
-                DeliveryPricing.kilometresToMiles(state.distance ?? 0),
-            weightKg: state.parcelWeightKg,
-          ),
-        ).toJson(),
-        'currency': 'GBP',
-        'stripePaymentIntentId': event.paymentIntentId,
-        'paymentStatus':
-            event.paymentIntentId == null ? 'pending' : 'succeeded',
-        'status': 'requested',
-        'createdAt': DateTime.now()
-      }).then((value) => print("DocumentSnapshot successfully created!"),
-          onError: (e) => print("Error updating document $e"));
-
-      final response = await callable.call({
-        // Any data you want to send to the function
-        'requestId': uuidStrong
+        'recipient': {
+          'name': event.dropoffDetails.fullname,
+          'phone': event.dropoffDetails.phoneNumber,
+          'deliveryNotes': event.dropoffDetails.moreInformation,
+        },
+        'parcel': {
+          'description': 'Parcel',
+          'weightKg': state.parcelWeightKg,
+        },
+        'deliveryTime': {'type': 'now'},
+        'pushToken': fcmToken,
       });
 
       print('Function response: ${response.data}');
+      final responseData = Map<String, dynamic>.from(response.data as Map);
+      final requestId = '${responseData['requestId'] ?? uuidStrong}';
 
       final SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('activeRequest', uuidStrong);
-      _listenToActiveDelivery(db.collection("deliveryRequests").doc(user?.uid));
+      await prefs.setString('activeRequest', requestId);
+      _listenToActiveDelivery(db.collection("deliveryRequests").doc(requestId));
 
       // await firebaseMessaging
       //     .subscribeToTopic(uuidStrong)

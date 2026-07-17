@@ -1,12 +1,9 @@
-import 'dart:convert';
-
 import 'package:equatable/equatable.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
-import 'package:http/http.dart' as http;
 
 part 'account_event.dart';
 part 'account_state.dart';
@@ -16,7 +13,6 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   AccountBloc() : super(const AccountState()) {
     on<PaymentStart>(_onPaymentStart);
     on<PaymentCreateIntent>(_onPaymentCreateIntent);
-    on<PaymentConfirmIntent>(_onPaymentConfirmIntent);
     on<UpdatePaymentStatus>(_updatePaymentStatus);
     on<SaveCard>(_onSaveCard);
   }
@@ -41,11 +37,6 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
   ) async {
     emit(state.copyWith(status: PaymentStatus.loading));
 
-    final storage = FlutterSecureStorage();
-    final pushToken = (await storage.readAll())["pushToken"];
-
-    User? user = auth.currentUser;
-
     try {
       // final paymentMethod = await Stripe.instance.createPaymentMethod(
       //   params: PaymentMethodParams.card(
@@ -55,21 +46,13 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       //   ),
       // );
 
-      final paymentIntentResult = await _callPayEndpointMethodId(
-          // useStripeSdk: true,
-          // paymentMethodId: paymentMethod.id,
+      final paymentIntentResult = await _createSenderPaymentSession(
           currency: 'gbp',
-          amount: event.amount,
+          clientDisplayAmount: event.amount,
           distanceMiles: event.distanceMiles,
           weightKg: event.weightKg,
           selectedSpeed: event.selectedSpeed,
           paymentRequestId: event.paymentRequestId,
-          deliveryId: event.deliveryId,
-          userId: user!.uid,
-          name: user.displayName,
-          email: event.email,
-          pushToken: pushToken ?? '',
-          phone: user.phoneNumber,
           saveCard: event.saveCard);
 
       print(paymentIntentResult);
@@ -83,58 +66,25 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       if (paymentIntentResult['clientSecret'] != null) {
         await processPayment(
             clientIntentSecret: paymentIntentResult['clientSecret'],
-            ephemeralKeySecret: paymentIntentResult['ephemeralKey'],
+            ephemeralKeySecret: paymentIntentResult['ephemeralKeySecret'],
             customerId: paymentIntentResult['customerId'],
             saveCard: event.saveCard);
+      }
 
+      if (paymentIntentResult['paymentSessionId'] != null) {
         emit(state.copyWith(
             status: PaymentStatus.success,
             paymentIntentId:
-                paymentIntentResult['paymentIntentId'] as String?));
+                paymentIntentResult['stripePaymentIntentId'] as String?,
+            quoteId: paymentIntentResult['quoteId'] as String?,
+            paymentSessionId:
+                paymentIntentResult['paymentSessionId'] as String?,
+            authoritativeAmount:
+                (paymentIntentResult['amountDue'] as num?)?.toDouble()));
       }
-
-      if (paymentIntentResult['clientSecret'] != null &&
-          paymentIntentResult['requiresAction'] == null) {
-        // The payment succedeed / went through.
-        // emit(state.copyWith(status: PaymentStatus.success));
-      }
-
-      if (paymentIntentResult['clientSecret'] != null &&
-          paymentIntentResult['requiresAction'] == true) {
-        // final String clientSecret = paymentIntentResult['clientSecret'];
-        // add(PaymentConfirmIntent(clientSecret: clientSecret));
-      } else {}
     } catch (e) {
       print('_onPaymentCreateIntent');
       print(e);
-      emit(state.copyWith(status: PaymentStatus.failure));
-    }
-  }
-
-  void _onPaymentConfirmIntent(
-    PaymentConfirmIntent event,
-    Emitter<AccountState> emit,
-  ) async {
-    // The payment requires action calling handleNextAction
-    try {
-      final paymentIntent =
-          await Stripe.instance.handleNextAction(event.clientSecret);
-
-      if (paymentIntent.status == PaymentIntentsStatus.RequiresConfirmation) {
-        // Call API to confirm intent
-        Map<String, dynamic> results =
-            await _callPayEndpointIntentId(paymentIntentId: paymentIntent.id);
-
-        print(results);
-
-        if (results['error'] != null) {
-          emit(state.copyWith(status: PaymentStatus.failure));
-        } else {
-          // emit(state.copyWith(status: PaymentStatus.success));
-        }
-      }
-    } catch (err) {
-      print(err);
       emit(state.copyWith(status: PaymentStatus.failure));
     }
   }
@@ -148,76 +98,49 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     }
   }
 
-  Future<Map<String, dynamic>> _callPayEndpointMethodId({
-    // required bool useStripeSdk,
-    // required String paymentMethodId,
+  Future<Map<String, dynamic>> _createSenderPaymentSession({
     required String currency,
     required bool saveCard,
-    required String pushToken,
-    required String userId,
-    String? name,
-    String? phone,
-    String? email,
-    int? amount,
+    int? clientDisplayAmount,
     double? distanceMiles,
     double? weightKg,
     String? selectedSpeed,
     String? paymentRequestId,
-    String? deliveryId,
   }) async {
-    final url = Uri.parse(
-      'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
-    );
-    final token = await auth.currentUser?.getIdToken();
-
-    final data = {
-      // 'useStripeSdk': useStripeSdk,
-      // 'paymentMethodId': paymentMethodId,
-      'currency': currency,
-      'amount': amount,
-      'pushToken': pushToken,
-      'email': email,
-      'name': name,
-      'phone': phone,
-      'userId': userId,
-      'deliveryId': deliveryId,
-      'paymentRequestId': paymentRequestId,
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+    final quoteResponse =
+        await functions.httpsCallable('createSenderBookingQuote').call({
+      'quoteId': paymentRequestId,
+      'currency': currency.toUpperCase(),
+      'clientDisplayQuote': {
+        'amountPence': clientDisplayAmount,
+        'amount':
+            clientDisplayAmount == null ? null : clientDisplayAmount / 100,
+        'currency': currency.toUpperCase(),
+      },
       'pricingInput': {
         'distanceMiles': distanceMiles,
         'weightKg': weightKg,
         'selectedSpeed': selectedSpeed ?? 'standard',
-      }
-    };
-
-    if (saveCard == true) {
-      data['saveCard'] = saveCard;
-    }
-
-    final response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
       },
-      body: json.encode(data),
-    );
-    return json.decode(response.body);
-  }
-
-  Future<Map<String, dynamic>> _callPayEndpointIntentId({
-    required String paymentIntentId,
-  }) async {
-    final url = Uri.parse(
-      'https://us-central1-circum-2797c.cloudfunctions.net/confirmPaymentIntent',
-    );
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'paymentIntentId': paymentIntentId,
-      }),
-    );
-    return json.decode(response.body);
+      'distanceMiles': distanceMiles,
+      'weightKg': weightKg,
+      'selectedSpeed': selectedSpeed ?? 'standard',
+    });
+    final quote = Map<String, dynamic>.from(quoteResponse.data as Map);
+    final sessionResponse =
+        await functions.httpsCallable('createSenderPaymentSession').call({
+      'quoteId': quote['quoteId'],
+      'fallbackMethod': 'card',
+      'saveCard': saveCard,
+    });
+    final session = Map<String, dynamic>.from(sessionResponse.data as Map);
+    return {
+      ...session,
+      'quoteId': quote['quoteId'],
+      'authoritativeQuote': quote,
+      'amountDue': quote['amountDue'] ?? quote['total'],
+    };
   }
 
   static Future<void> processPayment({
