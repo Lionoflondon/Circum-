@@ -176,6 +176,7 @@ class SenderDeliveryRecord {
   final String paymentStatus;
   final String trackingReference;
   final num? ratingGiven;
+  final Map<String, dynamic> raw;
   final Map<String, dynamic> proofOfDelivery;
   final List<dynamic> supportNotes;
 
@@ -194,6 +195,7 @@ class SenderDeliveryRecord {
     required this.paymentStatus,
     required this.trackingReference,
     required this.ratingGiven,
+    this.raw = const {},
     this.proofOfDelivery = const {},
     this.supportNotes = const [],
   });
@@ -223,6 +225,7 @@ class SenderDeliveryRecord {
       paymentStatus: '${data['paymentStatus'] ?? 'pending'}',
       trackingReference: '${data['code'] ?? requestId}',
       ratingGiven: data['riderRating'] ?? data['userRating'],
+      raw: Map<String, dynamic>.from(data),
       proofOfDelivery:
           Map<String, dynamic>.from(data['proofOfDelivery'] ?? const {}),
       supportNotes: data['supportNotes'] as List<dynamic>? ?? const [],

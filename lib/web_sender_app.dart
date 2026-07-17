@@ -80,6 +80,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
   late _SenderStep _senderInitialStep =
       switch (Uri.base.queryParameters['app']) {
     'health' => _SenderStep.healthPlus,
+    'business' => _SenderStep.business,
     'profile' => _SenderStep.profile,
     _ => _SenderStep.dashboard,
   };
@@ -95,7 +96,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
       return _WebAppMode.admin;
     }
     return switch (Uri.base.queryParameters['app']) {
-      'sender' || 'health' || 'profile' => _WebAppMode.sender,
+      'sender' || 'health' || 'business' || 'profile' => _WebAppMode.sender,
       'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
       'gifts' => _WebAppMode.gifts,
       _ => _WebAppMode.landing,
@@ -153,6 +154,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
                       initialStep: _senderInitialStep,
                       onBack: () => setState(() => _mode = _WebAppMode.landing),
                       onRoleSelected: _openRole,
+                      onGifts: () => setState(() => _mode = _WebAppMode.gifts),
                       onToggleTheme: () =>
                           setState(() => _darkMode = !_darkMode),
                     ),
@@ -12437,6 +12439,7 @@ enum _SenderStep {
   payment,
   tracking,
   healthPlus,
+  business,
   profile,
 }
 
@@ -12458,6 +12461,7 @@ class _CustomerPortal extends StatefulWidget {
   final _SenderStep initialStep;
   final VoidCallback onBack;
   final ValueChanged<CircumRole> onRoleSelected;
+  final VoidCallback onGifts;
   final VoidCallback onToggleTheme;
 
   const _CustomerPortal({
@@ -12466,6 +12470,7 @@ class _CustomerPortal extends StatefulWidget {
     required this.initialStep,
     required this.onBack,
     required this.onRoleSelected,
+    required this.onGifts,
     required this.onToggleTheme,
   });
 
@@ -12494,6 +12499,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _healthPreferredDay = TextEditingController();
   final _healthPreferredTime = TextEditingController();
   final _healthCustomSchedule = TextEditingController();
+  final _businessCompanyName = TextEditingController();
+  final _businessType = TextEditingController(text: 'Limited company');
+  final _businessEmail = TextEditingController();
+  final _businessPhone = TextEditingController();
+  final _businessAddress = TextEditingController();
+  final _businessVatNumber = TextEditingController();
+  final _businessWebsite = TextEditingController();
+  final _businessCompanyCode = TextEditingController();
+  final _businessInvoiceAmount = TextEditingController();
+  final _businessRothAmount = TextEditingController(text: '50');
   final _ratingFeedback = TextEditingController();
   final _senderEmail = TextEditingController();
   final _senderPassword = TextEditingController();
@@ -12554,6 +12569,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _healthConsent = false;
   bool _healthSavePayment = true;
   bool _healthSubmitting = false;
+  bool _businessLoading = false;
+  bool _businessBusy = false;
   String _healthPrescriptionType = 'NHS prescription';
   String _healthSubscriptionPlan = 'basic';
   bool _ratingSubmitting = false;
@@ -12565,6 +12582,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _healthScheduleId;
   String? _healthMessage;
   String? _healthCheckoutUrl;
+  String? _businessMessage;
+  String? _selectedBusinessId;
   String? _firebaseError;
   String? _ratingMessage;
   String? _senderProfileMessage;
@@ -12603,6 +12622,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   Set<CircumRole> _availableRoles = const {};
   final List<Map<String, dynamic>> _healthPickups = [];
   final List<Map<String, dynamic>> _healthPayments = [];
+  List<Map<String, dynamic>> _businessAccounts = const [];
+  List<Map<String, dynamic>> _businessInvoices = const [];
+  List<Map<String, dynamic>> _businessJoinRequests = const [];
+  List<Map<String, dynamic>> _businessAuditLogs = const [];
+  Map<String, dynamic>? _businessWallet;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _requestSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _liveLocationSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSub;
@@ -12676,6 +12700,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _healthPreferredDay.dispose();
     _healthPreferredTime.dispose();
     _healthCustomSchedule.dispose();
+    _businessCompanyName.dispose();
+    _businessType.dispose();
+    _businessEmail.dispose();
+    _businessPhone.dispose();
+    _businessAddress.dispose();
+    _businessVatNumber.dispose();
+    _businessWebsite.dispose();
+    _businessCompanyCode.dispose();
+    _businessInvoiceAmount.dispose();
+    _businessRothAmount.dispose();
     _ratingFeedback.dispose();
     _senderEmail.dispose();
     _senderPassword.dispose();
@@ -12820,6 +12854,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           deliveries: _senderDeliveries,
           onSendParcel: () => setState(() => _step = _SenderStep.details),
           onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+          onBusiness: () => setState(() => _step = _SenderStep.business),
           onProfile: () => setState(() => _step = _SenderStep.profile),
           onSupport: () => setState(() {
             _supportChat = true;
@@ -13082,6 +13117,57 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onCancelPickup: _cancelNextHealthPlusPickup,
           onUpdatePayment: _openHealthPlusCheckout,
           onAdminStatus: _adminUpdateHealthPlusStatus,
+        ),
+      _SenderStep.business => _BusinessCentreStep(
+          key: const ValueKey('business-centre'),
+          colors: colors,
+          loading: _businessLoading,
+          busy: _businessBusy,
+          message: _businessMessage,
+          accounts: _businessAccounts,
+          selectedBusinessId: _selectedBusinessId,
+          account: _selectedBusinessAccount,
+          invoices: _businessInvoices,
+          deliveries: _senderDeliveries,
+          joinRequests: _businessJoinRequests,
+          auditLogs: _businessAuditLogs,
+          wallet: _businessWallet,
+          companyName: _businessCompanyName,
+          businessType: _businessType,
+          businessEmail: _businessEmail,
+          businessPhone: _businessPhone,
+          businessAddress: _businessAddress,
+          vatNumber: _businessVatNumber,
+          website: _businessWebsite,
+          companyCode: _businessCompanyCode,
+          rothAmount: _businessRothAmount,
+          onBack: () => setState(() => _step = _SenderStep.dashboard),
+          onRefresh: () {
+            final user = _senderUser;
+            if (user != null) _loadBusinessWorkspaces(user.uid);
+          },
+          onSelectBusiness: (id) async {
+            setState(() {
+              _selectedBusinessId = id;
+              final account = _selectedBusinessAccount;
+              if (account != null) _populateBusinessControllers(account);
+            });
+            final user = _senderUser;
+            if (user != null) await _loadBusinessWorkspaces(user.uid);
+          },
+          onCreateBusiness: _createBusinessAccount,
+          onJoinBusiness: _joinBusinessByCode,
+          onSaveProfile: _saveBusinessProfile,
+          onReviewRequest: _reviewBusinessRequest,
+          onUpdateMemberRole: _updateBusinessMemberRole,
+          onRemoveMember: _removeBusinessMember,
+          onPayInvoice: (invoiceId) => _openBusinessInvoiceCheckout(invoiceId),
+          onPayInvoiceWithRoth: (invoiceId) =>
+              _openBusinessInvoiceCheckout(invoiceId, useRoth: true),
+          onBuyRoth: _openBusinessRothCheckout,
+          onCreateDelivery: () => setState(() => _step = _SenderStep.details),
+          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+          onGifts: widget.onGifts,
         ),
       _SenderStep.profile => _SenderProfileStep(
           key: const ValueKey('sender-profile'),
@@ -13573,6 +13659,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
+      await _loadBusinessWorkspaces(user.uid);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -13612,6 +13699,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _senderPhone.text = profile.phoneNumber;
         }
       });
+      _loadBusinessWorkspaces(user.uid);
       if (profile.isLegend &&
           profile.legendNumber != null &&
           profile.legendCelebrationSeenAt == null &&
@@ -13681,6 +13769,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   static int _timestampMillis(Object? value) {
     if (value is Timestamp) return value.millisecondsSinceEpoch;
     if (value is num) return value.toInt();
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    if (value is String) {
+      return DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0;
+    }
     return 0;
   }
 
@@ -14191,6 +14283,344 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderDeliveryLoadError =
             'We could not load your delivery status. Please refresh or contact support.';
       });
+    }
+  }
+
+  Future<void> _loadBusinessWorkspaces(String uid) async {
+    if (_businessLoading) return;
+    setState(() => _businessLoading = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      final userSnap = await db.collection('users').doc(uid).get();
+      final userData = userSnap.data() ?? <String, dynamic>{};
+      final ids = <String>{
+        for (final id
+            in (userData['businessWorkspaceIds'] as List? ?? const []))
+          '$id',
+        if ('${userData['lastBusinessWorkspaceId'] ?? ''}'.trim().isNotEmpty)
+          '${userData['lastBusinessWorkspaceId']}',
+      };
+      final memberships = await db
+          .collection('businessMemberships')
+          .where('userId', isEqualTo: uid)
+          .get();
+      for (final doc in memberships.docs) {
+        final status = '${doc.data()['status'] ?? 'active'}';
+        if (status == 'active') ids.add('${doc.data()['businessId'] ?? ''}');
+      }
+      ids.removeWhere((id) => id.trim().isEmpty);
+      final accounts = <Map<String, dynamic>>[];
+      for (final id in ids) {
+        final snap = await db.collection('businessAccounts').doc(id).get();
+        if (snap.exists) {
+          accounts.add({'id': snap.id, ...snap.data()!});
+        }
+      }
+      final selectedId = _selectedBusinessId != null &&
+              accounts.any((account) => account['id'] == _selectedBusinessId)
+          ? _selectedBusinessId!
+          : accounts.isEmpty
+              ? null
+              : '${accounts.first['id']}';
+      final invoices = <Map<String, dynamic>>[];
+      final requests = <Map<String, dynamic>>[];
+      final audits = <Map<String, dynamic>>[];
+      Map<String, dynamic>? wallet;
+      if (selectedId != null) {
+        final invoiceSnap = await db
+            .collection('businessInvoices')
+            .where('businessId', isEqualTo: selectedId)
+            .limit(80)
+            .get();
+        invoices.addAll(
+          invoiceSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}),
+        );
+        final requestSnap = await db
+            .collection('businessJoinRequests')
+            .where('businessId', isEqualTo: selectedId)
+            .limit(40)
+            .get();
+        requests.addAll(
+          requestSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}),
+        );
+        final auditSnap = await db
+            .collection('businessAuditLogs')
+            .where('businessId', isEqualTo: selectedId)
+            .limit(30)
+            .get();
+        audits
+            .addAll(auditSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}));
+        final walletSnap =
+            await db.collection('business_wallets').doc(selectedId).get();
+        if (walletSnap.exists) {
+          wallet = {'id': walletSnap.id, ...walletSnap.data()!};
+        }
+      }
+      invoices.sort((a, b) => _timestampMillis(b['createdAt'])
+          .compareTo(_timestampMillis(a['createdAt'])));
+      audits.sort((a, b) => _timestampMillis(b['createdAt'])
+          .compareTo(_timestampMillis(a['createdAt'])));
+      if (!mounted) return;
+      setState(() {
+        _businessAccounts = accounts;
+        _selectedBusinessId = selectedId;
+        _businessInvoices = invoices;
+        _businessJoinRequests = requests;
+        _businessAuditLogs = audits;
+        _businessWallet = wallet;
+        _businessLoading = false;
+        Map<String, dynamic>? selectedAccount;
+        for (final account in accounts) {
+          if (account['id'] == selectedId) {
+            selectedAccount = account;
+            break;
+          }
+        }
+        if (selectedAccount != null) {
+          _populateBusinessControllers(selectedAccount);
+        }
+      });
+    } catch (error) {
+      debugPrint('Could not load Business workspaces: $error');
+      if (!mounted) return;
+      setState(() {
+        _businessLoading = false;
+        _businessMessage = 'Business could not be loaded. Try again.';
+      });
+    }
+  }
+
+  Map<String, dynamic>? get _selectedBusinessAccount {
+    for (final account in _businessAccounts) {
+      if (account['id'] == _selectedBusinessId) return account;
+    }
+    return _businessAccounts.isEmpty ? null : _businessAccounts.first;
+  }
+
+  void _populateBusinessControllers(Map<String, dynamic> account) {
+    if (_businessCompanyName.text.trim().isEmpty) {
+      _businessCompanyName.text = '${account['businessName'] ?? ''}';
+    }
+    if (_businessEmail.text.trim().isEmpty) {
+      _businessEmail.text =
+          '${account['contactEmail'] ?? account['billingEmail'] ?? ''}';
+    }
+    if (_businessPhone.text.trim().isEmpty) {
+      _businessPhone.text = '${account['phone'] ?? ''}';
+    }
+    if (_businessAddress.text.trim().isEmpty) {
+      _businessAddress.text = '${account['businessAddress'] ?? ''}';
+    }
+    if (_businessVatNumber.text.trim().isEmpty) {
+      _businessVatNumber.text = '${account['vatNumber'] ?? ''}';
+    }
+    if (_businessWebsite.text.trim().isEmpty) {
+      _businessWebsite.text = '${account['website'] ?? ''}';
+    }
+  }
+
+  Future<void> _createBusinessAccount() async {
+    if (_senderUser == null || _businessBusy) return;
+    setState(() {
+      _businessBusy = true;
+      _businessMessage = 'Creating Business workspace...';
+    });
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createBusinessAccount')
+          .call({
+        'companyName': _businessCompanyName.text.trim(),
+        'businessType': _businessType.text.trim(),
+        'businessEmail': _businessEmail.text.trim().isEmpty
+            ? _senderUser?.email
+            : _businessEmail.text.trim(),
+        'businessPhone': _businessPhone.text.trim(),
+        'businessAddress': _businessAddress.text.trim(),
+        'vatNumber': _businessVatNumber.text.trim(),
+        'businessSize': '1-10',
+        'acceptTerms': true,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      _selectedBusinessId = '${data['businessId']}';
+      await _loadBusinessWorkspaces(_senderUser!.uid);
+      if (!mounted) return;
+      setState(() => _businessMessage =
+          'Business workspace created. Company code ${data['companyCode']}.');
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _businessMessage =
+          error.message ?? 'Business workspace could not be created.');
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
+  Future<void> _joinBusinessByCode() async {
+    if (_senderUser == null || _businessBusy) return;
+    setState(() {
+      _businessBusy = true;
+      _businessMessage = 'Checking company code...';
+    });
+    try {
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final lookup =
+          await functions.httpsCallable('lookupBusinessByCompanyCode').call({
+        'companyCode': _businessCompanyCode.text.trim(),
+      });
+      final found = Map<String, dynamic>.from(lookup.data as Map);
+      await functions.httpsCallable('requestBusinessAccess').call({
+        'businessId': found['businessId'],
+        'role': 'member',
+      });
+      if (!mounted) return;
+      setState(() => _businessMessage =
+          'Access request sent to ${found['companyName'] ?? 'the company'}.');
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _businessMessage =
+          error.message ?? 'Business access request could not be sent.');
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
+  Future<void> _reviewBusinessRequest(String requestId, bool approved) async {
+    if (_senderUser == null || _businessBusy) return;
+    setState(() => _businessBusy = true);
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('reviewBusinessAccessRequest')
+          .call({'requestId': requestId, 'approved': approved});
+      await _loadBusinessWorkspaces(_senderUser!.uid);
+      if (!mounted) return;
+      setState(() => _businessMessage =
+          approved ? 'Business access approved.' : 'Business access rejected.');
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
+  Future<void> _saveBusinessProfile() async {
+    final businessId = _selectedBusinessId;
+    if (_senderUser == null || businessId == null || _businessBusy) return;
+    setState(() => _businessBusy = true);
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateBusinessProfile')
+          .call({
+        'businessId': businessId,
+        'businessName': _businessCompanyName.text.trim(),
+        'businessType': _businessType.text.trim(),
+        'contactEmail': _businessEmail.text.trim(),
+        'billingEmail': _businessEmail.text.trim(),
+        'phone': _businessPhone.text.trim(),
+        'businessAddress': _businessAddress.text.trim(),
+        'vatNumber': _businessVatNumber.text.trim(),
+        'website': _businessWebsite.text.trim(),
+      });
+      await _loadBusinessWorkspaces(_senderUser!.uid);
+      if (!mounted) return;
+      setState(() => _businessMessage = 'Business profile saved.');
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
+  Future<void> _updateBusinessMemberRole(
+    String memberUserId,
+    String role,
+  ) async {
+    final businessId = _selectedBusinessId;
+    if (_senderUser == null || businessId == null || _businessBusy) return;
+    setState(() => _businessBusy = true);
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateBusinessMemberRole')
+          .call({
+        'businessId': businessId,
+        'memberUserId': memberUserId,
+        'role': role
+      });
+      await _loadBusinessWorkspaces(_senderUser!.uid);
+      if (!mounted) return;
+      setState(() => _businessMessage = 'Team role updated.');
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
+  Future<void> _removeBusinessMember(String memberUserId) async {
+    final businessId = _selectedBusinessId;
+    if (_senderUser == null || businessId == null || _businessBusy) return;
+    setState(() => _businessBusy = true);
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('removeBusinessMember')
+          .call({'businessId': businessId, 'memberUserId': memberUserId});
+      await _loadBusinessWorkspaces(_senderUser!.uid);
+      if (!mounted) return;
+      setState(() => _businessMessage = 'Team member removed.');
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
+  Future<void> _openBusinessInvoiceCheckout(
+    String invoiceId, {
+    bool useRoth = false,
+  }) async {
+    final businessId = _selectedBusinessId;
+    if (businessId == null || _businessBusy) return;
+    setState(() {
+      _businessBusy = true;
+      _businessMessage = 'Preparing invoice payment...';
+    });
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createBusinessInvoiceCheckout')
+          .call({
+        'businessId': businessId,
+        'invoiceId': invoiceId,
+        'useRoth': useRoth,
+        'returnUrl': 'https://circumuk.com/?app=business',
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final url = '${data['checkoutUrl'] ?? ''}';
+      if (url.startsWith('http')) {
+        await launchUrl(Uri.parse(url), webOnlyWindowName: '_self');
+      } else {
+        await _loadBusinessWorkspaces(_senderUser!.uid);
+        if (!mounted) return;
+        setState(() => _businessMessage = 'Invoice paid with Business Roth.');
+      }
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
+  Future<void> _openBusinessRothCheckout() async {
+    final businessId = _selectedBusinessId;
+    final amount = double.tryParse(_businessRothAmount.text.trim()) ?? 0;
+    if (businessId == null || amount <= 0 || _businessBusy) return;
+    setState(() {
+      _businessBusy = true;
+      _businessMessage = 'Preparing Roth checkout...';
+    });
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createBusinessRothCheckout')
+          .call({
+        'businessId': businessId,
+        'amount': amount,
+        'returnUrl': 'https://circumuk.com/?app=business',
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final url = '${data['checkoutUrl'] ?? ''}';
+      if (url.startsWith('http')) {
+        await launchUrl(Uri.parse(url), webOnlyWindowName: '_self');
+      }
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
     }
   }
 
@@ -17297,6 +17727,7 @@ class _StepBadge extends StatelessWidget {
       _SenderStep.payment => 'Payment',
       _SenderStep.tracking => 'Tracking',
       _SenderStep.healthPlus => 'Health+',
+      _SenderStep.business => 'Business',
       _SenderStep.profile => 'Profile',
     };
 
@@ -17860,6 +18291,7 @@ class _SenderDashboardStep extends StatelessWidget {
   final List<SenderDeliveryRecord> deliveries;
   final VoidCallback onSendParcel;
   final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
   final VoidCallback onProfile;
   final VoidCallback onSupport;
 
@@ -17870,6 +18302,7 @@ class _SenderDashboardStep extends StatelessWidget {
     required this.deliveries,
     required this.onSendParcel,
     required this.onHealthPlus,
+    required this.onBusiness,
     required this.onProfile,
     required this.onSupport,
   });
@@ -17919,6 +18352,11 @@ class _SenderDashboardStep extends StatelessWidget {
                       onPressed: onHealthPlus,
                       icon: const Icon(Icons.local_pharmacy_outlined),
                       label: const Text('Health+ pickup'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: onBusiness,
+                      icon: const Icon(Icons.business_center_outlined),
+                      label: const Text('Business Centre'),
                     ),
                   ],
                 ),
@@ -18003,6 +18441,1176 @@ class _SenderDashboardStep extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BusinessCentreStep extends StatelessWidget {
+  final _CircumColors colors;
+  final bool loading;
+  final bool busy;
+  final String? message;
+  final List<Map<String, dynamic>> accounts;
+  final String? selectedBusinessId;
+  final Map<String, dynamic>? account;
+  final List<Map<String, dynamic>> invoices;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<Map<String, dynamic>> joinRequests;
+  final List<Map<String, dynamic>> auditLogs;
+  final Map<String, dynamic>? wallet;
+  final TextEditingController companyName;
+  final TextEditingController businessType;
+  final TextEditingController businessEmail;
+  final TextEditingController businessPhone;
+  final TextEditingController businessAddress;
+  final TextEditingController vatNumber;
+  final TextEditingController website;
+  final TextEditingController companyCode;
+  final TextEditingController rothAmount;
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+  final ValueChanged<String> onSelectBusiness;
+  final VoidCallback onCreateBusiness;
+  final VoidCallback onJoinBusiness;
+  final VoidCallback onSaveProfile;
+  final void Function(String requestId, bool approved) onReviewRequest;
+  final void Function(String memberUserId, String role) onUpdateMemberRole;
+  final ValueChanged<String> onRemoveMember;
+  final ValueChanged<String> onPayInvoice;
+  final ValueChanged<String> onPayInvoiceWithRoth;
+  final VoidCallback onBuyRoth;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+
+  const _BusinessCentreStep({
+    super.key,
+    required this.colors,
+    required this.loading,
+    required this.busy,
+    required this.message,
+    required this.accounts,
+    required this.selectedBusinessId,
+    required this.account,
+    required this.invoices,
+    required this.deliveries,
+    required this.joinRequests,
+    required this.auditLogs,
+    required this.wallet,
+    required this.companyName,
+    required this.businessType,
+    required this.businessEmail,
+    required this.businessPhone,
+    required this.businessAddress,
+    required this.vatNumber,
+    required this.website,
+    required this.companyCode,
+    required this.rothAmount,
+    required this.onBack,
+    required this.onRefresh,
+    required this.onSelectBusiness,
+    required this.onCreateBusiness,
+    required this.onJoinBusiness,
+    required this.onSaveProfile,
+    required this.onReviewRequest,
+    required this.onUpdateMemberRole,
+    required this.onRemoveMember,
+    required this.onPayInvoice,
+    required this.onPayInvoiceWithRoth,
+    required this.onBuyRoth,
+    required this.onCreateDelivery,
+    required this.onHealthPlus,
+    required this.onGifts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final businessDeliveries = _businessDeliveries;
+    final activeDeliveries = businessDeliveries
+        .where((delivery) => _isActiveSenderDeliveryStatus(delivery.status))
+        .toList();
+    final completedDeliveries = businessDeliveries
+        .where((delivery) =>
+            ['completed', 'delivered'].contains(delivery.status.toLowerCase()))
+        .toList();
+    final outstandingInvoices =
+        invoices.where((invoice) => !_invoicePaid(invoice)).toList();
+    final monthlySpend = businessDeliveries.fold<double>(
+      0,
+      (total, delivery) => total + delivery.pricePaid,
+    );
+    final members = _teamMembers;
+    final accountName = '${account?['businessName'] ?? 'Circum Business'}';
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StepTopBar(colors: colors, title: 'Business Centre', onBack: onBack),
+          const SizedBox(height: 12),
+          _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            account == null
+                                ? 'Set up Circum Business'
+                                : accountName,
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            account == null
+                                ? 'Create or join a company workspace to manage team deliveries, invoices, Roth, Health+, Gifts, and Vanguard.'
+                                : 'Manage company deliveries, teams, invoices, analytics, and premium services from one backend-authoritative workspace.',
+                            style: TextStyle(
+                              color: colors.mutedText,
+                              height: 1.45,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Refresh Business',
+                      onPressed: busy ? null : onRefresh,
+                      icon: Icon(Icons.refresh, color: colors.text),
+                    ),
+                  ],
+                ),
+                if (message != null && message!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _BusinessNotice(colors: colors, message: message!),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (loading)
+            _BusinessSkeleton(colors: colors)
+          else if (account == null)
+            _BusinessOnboardingPanel(
+              colors: colors,
+              busy: busy,
+              companyName: companyName,
+              businessType: businessType,
+              businessEmail: businessEmail,
+              businessPhone: businessPhone,
+              businessAddress: businessAddress,
+              vatNumber: vatNumber,
+              companyCode: companyCode,
+              onCreateBusiness: onCreateBusiness,
+              onJoinBusiness: onJoinBusiness,
+            )
+          else ...[
+            if (accounts.length > 1)
+              _GlassPanel(
+                colors: colors,
+                child: DropdownButtonFormField<String>(
+                  value: selectedBusinessId,
+                  dropdownColor: colors.panel,
+                  decoration: const InputDecoration(labelText: 'Workspace'),
+                  items: accounts
+                      .map(
+                        (item) => DropdownMenuItem<String>(
+                          value: '${item['id']}',
+                          child: Text('${item['businessName'] ?? item['id']}'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: busy || loading || selectedBusinessId == null
+                      ? null
+                      : (value) {
+                          if (value != null) onSelectBusiness(value);
+                        },
+                ),
+              ),
+            if (accounts.length > 1) const SizedBox(height: 14),
+            _BusinessOverviewGrid(
+              colors: colors,
+              activeDeliveries: activeDeliveries.length,
+              completedDeliveries: completedDeliveries.length,
+              outstandingInvoices: outstandingInvoices.length,
+              monthlySpend: monthlySpend,
+              teamMembers: members
+                  .where((member) => member['status'] != 'removed')
+                  .length,
+              rothBalance:
+                  _money(wallet?['balance'] ?? wallet?['availableBalance']),
+            ),
+            const SizedBox(height: 14),
+            _BusinessQuickActions(
+              colors: colors,
+              onCreateDelivery: onCreateDelivery,
+              onHealthPlus: onHealthPlus,
+              onGifts: onGifts,
+              onBuyRoth: onBuyRoth,
+              rothAmount: rothAmount,
+              busy: busy,
+            ),
+            const SizedBox(height: 14),
+            _BusinessDeliveriesPanel(
+              colors: colors,
+              deliveries: businessDeliveries,
+              activeDeliveries: activeDeliveries,
+              onCreateDelivery: onCreateDelivery,
+            ),
+            const SizedBox(height: 14),
+            _BusinessInvoicesPanel(
+              colors: colors,
+              invoices: invoices,
+              onPayInvoice: onPayInvoice,
+              onPayInvoiceWithRoth: onPayInvoiceWithRoth,
+            ),
+            const SizedBox(height: 14),
+            _BusinessTeamPanel(
+              colors: colors,
+              members: members,
+              joinRequests: joinRequests,
+              busy: busy,
+              onReviewRequest: onReviewRequest,
+              onUpdateMemberRole: onUpdateMemberRole,
+              onRemoveMember: onRemoveMember,
+            ),
+            const SizedBox(height: 14),
+            _BusinessAnalyticsPanel(
+              colors: colors,
+              deliveries: businessDeliveries,
+              invoices: invoices,
+            ),
+            const SizedBox(height: 14),
+            _BusinessSettingsPanel(
+              colors: colors,
+              busy: busy,
+              account: account!,
+              companyName: companyName,
+              businessType: businessType,
+              businessEmail: businessEmail,
+              businessPhone: businessPhone,
+              businessAddress: businessAddress,
+              vatNumber: vatNumber,
+              website: website,
+              onSaveProfile: onSaveProfile,
+            ),
+            const SizedBox(height: 14),
+            _BusinessAuditPanel(colors: colors, auditLogs: auditLogs),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<SenderDeliveryRecord> get _businessDeliveries {
+    final businessId = selectedBusinessId;
+    if (businessId == null) return const [];
+    return deliveries
+        .where((delivery) =>
+            delivery.raw['businessId'] == businessId ||
+            delivery.raw['businessAccountId'] == businessId ||
+            delivery.raw['businessMode'] == true)
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> get _teamMembers {
+    final raw = account?['teamMembers'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
+  static bool _invoicePaid(Map<String, dynamic> invoice) {
+    final status =
+        '${invoice['status'] ?? invoice['paymentStatus'] ?? ''}'.toLowerCase();
+    return status == 'paid' || status == 'paid_manually';
+  }
+
+  static double _money(dynamic value) =>
+      value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+}
+
+class _BusinessNotice extends StatelessWidget {
+  final _CircumColors colors;
+  final String message;
+
+  const _BusinessNotice({required this.colors, required this.message});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colors.field,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colors.border),
+        ),
+        child: Text(
+          message,
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+        ),
+      );
+}
+
+class _BusinessSkeleton extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _BusinessSkeleton({required this.colors});
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Loading Business'),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(color: colors.text),
+            const SizedBox(height: 10),
+            Text(
+              'Loading company workspace, invoices, team and delivery records.',
+              style: TextStyle(color: colors.mutedText),
+            ),
+          ],
+        ),
+      );
+}
+
+class _BusinessOnboardingPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final bool busy;
+  final TextEditingController companyName;
+  final TextEditingController businessType;
+  final TextEditingController businessEmail;
+  final TextEditingController businessPhone;
+  final TextEditingController businessAddress;
+  final TextEditingController vatNumber;
+  final TextEditingController companyCode;
+  final VoidCallback onCreateBusiness;
+  final VoidCallback onJoinBusiness;
+
+  const _BusinessOnboardingPanel({
+    required this.colors,
+    required this.busy,
+    required this.companyName,
+    required this.businessType,
+    required this.businessEmail,
+    required this.businessPhone,
+    required this.businessAddress,
+    required this.vatNumber,
+    required this.companyCode,
+    required this.onCreateBusiness,
+    required this.onJoinBusiness,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final twoColumn = constraints.maxWidth >= 760;
+          final create = _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Create company'),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: companyName,
+                    hint: 'Company name'),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: businessType,
+                    hint: 'Business type'),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: businessEmail,
+                    hint: 'Business email'),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: businessPhone,
+                    hint: 'Business phone'),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: businessAddress,
+                    hint: 'Registered address'),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: vatNumber,
+                    hint: 'VAT number optional'),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: busy ? null : onCreateBusiness,
+                    icon: const Icon(Icons.business_center_outlined),
+                    label: const Text('Create Business workspace'),
+                  ),
+                ),
+              ],
+            ),
+          );
+          final join = _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Join company'),
+                const SizedBox(height: 10),
+                Text(
+                  'Enter the company code from your Business owner or admin.',
+                  style: TextStyle(color: colors.mutedText, height: 1.4),
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                    colors: colors,
+                    controller: companyCode,
+                    hint: 'Company code'),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : onJoinBusiness,
+                    icon: const Icon(Icons.group_add_outlined),
+                    label: const Text('Request access'),
+                  ),
+                ),
+              ],
+            ),
+          );
+          if (!twoColumn) {
+            return Column(children: [create, const SizedBox(height: 14), join]);
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: create),
+              const SizedBox(width: 14),
+              Expanded(child: join),
+            ],
+          );
+        },
+      );
+}
+
+class _BusinessOverviewGrid extends StatelessWidget {
+  final _CircumColors colors;
+  final int activeDeliveries;
+  final int completedDeliveries;
+  final int outstandingInvoices;
+  final double monthlySpend;
+  final int teamMembers;
+  final double rothBalance;
+
+  const _BusinessOverviewGrid({
+    required this.colors,
+    required this.activeDeliveries,
+    required this.completedDeliveries,
+    required this.outstandingInvoices,
+    required this.monthlySpend,
+    required this.teamMembers,
+    required this.rothBalance,
+  });
+
+  @override
+  Widget build(BuildContext context) => GridView.count(
+        shrinkWrap: true,
+        crossAxisCount: MediaQuery.sizeOf(context).width < 720 ? 2 : 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.65,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          _MetricPill(
+              colors: colors,
+              label: "Today's deliveries",
+              value: '$activeDeliveries'),
+          _MetricPill(
+              colors: colors,
+              label: 'Completed',
+              value: '$completedDeliveries'),
+          _MetricPill(
+              colors: colors,
+              label: 'Outstanding invoices',
+              value: '$outstandingInvoices'),
+          _MetricPill(
+              colors: colors,
+              label: 'Monthly spend',
+              value: '£${monthlySpend.toStringAsFixed(2)}'),
+          _MetricPill(
+              colors: colors, label: 'Team members', value: '$teamMembers'),
+          _MetricPill(
+              colors: colors,
+              label: 'Business Roth',
+              value: '£${rothBalance.toStringAsFixed(2)}'),
+        ],
+      );
+}
+
+class _BusinessQuickActions extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBuyRoth;
+  final TextEditingController rothAmount;
+  final bool busy;
+
+  const _BusinessQuickActions({
+    required this.colors,
+    required this.onCreateDelivery,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBuyRoth,
+    required this.rothAmount,
+    required this.busy,
+  });
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Quick actions'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                    onPressed: onCreateDelivery,
+                    icon: const Icon(Icons.add_box_outlined),
+                    label: const Text('Create delivery')),
+                OutlinedButton.icon(
+                    onPressed: onHealthPlus,
+                    icon: const Icon(Icons.local_pharmacy_outlined),
+                    label: const Text('Health+ for Business')),
+                OutlinedButton.icon(
+                    onPressed: onGifts,
+                    icon: const Icon(Icons.card_giftcard),
+                    label: const Text('Gifts for Business')),
+                OutlinedButton.icon(
+                    onPressed: onCreateDelivery,
+                    icon: const Icon(Icons.verified_user_outlined),
+                    label: const Text('Vanguard delivery')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: _InputBox(
+                      colors: colors, controller: rothAmount, hint: 'Roth £'),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onBuyRoth,
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('Add Business Roth'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _BusinessDeliveriesPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<SenderDeliveryRecord> activeDeliveries;
+  final VoidCallback onCreateDelivery;
+
+  const _BusinessDeliveriesPanel({
+    required this.colors,
+    required this.deliveries,
+    required this.activeDeliveries,
+    required this.onCreateDelivery,
+  });
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Delivery management'),
+            const SizedBox(height: 8),
+            if (deliveries.isEmpty)
+              _BusinessEmptyState(
+                colors: colors,
+                icon: Icons.local_shipping_outlined,
+                title: 'No Business deliveries yet',
+                body:
+                    'Create a Business delivery to see live tracking, scheduled jobs, repeat jobs and history here.',
+                action: 'Create delivery',
+                onAction: onCreateDelivery,
+              )
+            else ...[
+              Text(
+                '${activeDeliveries.length} active · ${deliveries.length} total',
+                style: TextStyle(
+                    color: colors.mutedText, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              ...deliveries.take(8).map(
+                    (delivery) => _BusinessRecordRow(
+                      colors: colors,
+                      icon: Icons.route_outlined,
+                      title: delivery.trackingReference.isEmpty
+                          ? delivery.requestId
+                          : delivery.trackingReference,
+                      subtitle:
+                          '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
+                      trailing: _displayStatusLabel(delivery.status),
+                    ),
+                  ),
+            ],
+          ],
+        ),
+      );
+}
+
+class _BusinessInvoicesPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> invoices;
+  final ValueChanged<String> onPayInvoice;
+  final ValueChanged<String> onPayInvoiceWithRoth;
+
+  const _BusinessInvoicesPanel({
+    required this.colors,
+    required this.invoices,
+    required this.onPayInvoice,
+    required this.onPayInvoiceWithRoth,
+  });
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Invoices'),
+            const SizedBox(height: 8),
+            if (invoices.isEmpty)
+              _BusinessEmptyState(
+                colors: colors,
+                icon: Icons.receipt_long_outlined,
+                title: 'No invoices yet',
+                body:
+                    'Business invoices will appear here with Stripe, Roth and part-payment actions.',
+              )
+            else
+              ...invoices.take(10).map((invoice) {
+                final id = '${invoice['id']}';
+                final status =
+                    '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}';
+                final total = _BusinessCentreStep._money(
+                    invoice['balanceDue'] ?? invoice['total']);
+                final paid = status.toLowerCase() == 'paid';
+                return _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.receipt_long_outlined,
+                  title: '${invoice['invoiceNumber'] ?? id}',
+                  subtitle:
+                      'Balance £${total.toStringAsFixed(2)} · ${_displayStatusLabel(status)}',
+                  trailing: paid ? 'Paid' : 'Pay',
+                  actions: paid
+                      ? const []
+                      : [
+                          TextButton(
+                              onPressed: () => onPayInvoice(id),
+                              child: const Text('Stripe')),
+                          TextButton(
+                              onPressed: () => onPayInvoiceWithRoth(id),
+                              child: const Text('Roth')),
+                        ],
+                );
+              }),
+          ],
+        ),
+      );
+}
+
+class _BusinessTeamPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> members;
+  final List<Map<String, dynamic>> joinRequests;
+  final bool busy;
+  final void Function(String requestId, bool approved) onReviewRequest;
+  final void Function(String memberUserId, String role) onUpdateMemberRole;
+  final ValueChanged<String> onRemoveMember;
+
+  const _BusinessTeamPanel({
+    required this.colors,
+    required this.members,
+    required this.joinRequests,
+    required this.busy,
+    required this.onReviewRequest,
+    required this.onUpdateMemberRole,
+    required this.onRemoveMember,
+  });
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Team management'),
+            const SizedBox(height: 8),
+            if (members.isEmpty)
+              _BusinessEmptyState(
+                colors: colors,
+                icon: Icons.groups_outlined,
+                title: 'No team records',
+                body:
+                    'Team members and roles appear after onboarding or access approval.',
+              )
+            else
+              ...members.where((member) => member['status'] != 'removed').map(
+                    (member) => _BusinessTeamRow(
+                      colors: colors,
+                      member: member,
+                      busy: busy,
+                      onRole: (role) =>
+                          onUpdateMemberRole('${member['userId']}', role),
+                      onRemove: () => onRemoveMember('${member['userId']}'),
+                    ),
+                  ),
+            if (joinRequests
+                .any((request) => '${request['status']}' == 'pending')) ...[
+              const SizedBox(height: 12),
+              _SectionTitle(colors: colors, title: 'Access requests'),
+              const SizedBox(height: 8),
+              ...joinRequests
+                  .where((request) => '${request['status']}' == 'pending')
+                  .map(
+                    (request) => _BusinessRecordRow(
+                      colors: colors,
+                      icon: Icons.person_add_alt_1_outlined,
+                      title:
+                          '${request['name'] ?? request['email'] ?? 'Requester'}',
+                      subtitle:
+                          'Requested role: ${request['roleRequested'] ?? 'member'}',
+                      trailing: 'Pending',
+                      actions: [
+                        TextButton(
+                            onPressed: busy
+                                ? null
+                                : () =>
+                                    onReviewRequest('${request['id']}', true),
+                            child: const Text('Approve')),
+                        TextButton(
+                            onPressed: busy
+                                ? null
+                                : () =>
+                                    onReviewRequest('${request['id']}', false),
+                            child: const Text('Reject')),
+                      ],
+                    ),
+                  ),
+            ],
+          ],
+        ),
+      );
+}
+
+class _BusinessTeamRow extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> member;
+  final bool busy;
+  final ValueChanged<String> onRole;
+  final VoidCallback onRemove;
+
+  const _BusinessTeamRow({
+    required this.colors,
+    required this.member,
+    required this.busy,
+    required this.onRole,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final role = '${member['role'] ?? 'member'}';
+    final isOwner = role == 'owner';
+    return _BusinessRecordRow(
+      colors: colors,
+      icon: Icons.badge_outlined,
+      title: '${member['name'] ?? member['email'] ?? 'Team member'}',
+      subtitle: '${member['email'] ?? ''} · ${_displayStatusLabel(role)}',
+      trailing: '${member['status'] ?? 'active'}',
+      actions: isOwner
+          ? const []
+          : [
+              DropdownButton<String>(
+                value: [
+                  'admin',
+                  'manager',
+                  'dispatcher',
+                  'finance',
+                  'viewer',
+                  'member'
+                ].contains(role)
+                    ? role
+                    : 'member',
+                dropdownColor: colors.panel,
+                items: const [
+                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                  DropdownMenuItem(value: 'manager', child: Text('Manager')),
+                  DropdownMenuItem(
+                      value: 'dispatcher', child: Text('Dispatcher')),
+                  DropdownMenuItem(value: 'finance', child: Text('Finance')),
+                  DropdownMenuItem(value: 'viewer', child: Text('Viewer')),
+                  DropdownMenuItem(value: 'member', child: Text('Member')),
+                ],
+                onChanged: busy
+                    ? null
+                    : (value) {
+                        if (value != null) onRole(value);
+                      },
+              ),
+              TextButton(
+                  onPressed: busy ? null : onRemove,
+                  child: const Text('Remove')),
+            ],
+    );
+  }
+}
+
+class _BusinessAnalyticsPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<Map<String, dynamic>> invoices;
+
+  const _BusinessAnalyticsPanel({
+    required this.colors,
+    required this.deliveries,
+    required this.invoices,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = deliveries
+        .where((delivery) =>
+            ['completed', 'delivered'].contains(delivery.status.toLowerCase()))
+        .length;
+    final successRate =
+        deliveries.isEmpty ? 0 : completed / deliveries.length * 100;
+    final spend = deliveries.fold<double>(
+        0, (total, delivery) => total + delivery.pricePaid);
+    final average = deliveries.isEmpty ? 0 : spend / deliveries.length;
+    final destinations = <String, int>{};
+    for (final delivery in deliveries) {
+      final key = delivery.dropoffAddress.trim().isEmpty
+          ? 'Unknown destination'
+          : delivery.dropoffAddress;
+      destinations[key] = (destinations[key] ?? 0) + 1;
+    }
+    final topDestinations = destinations.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Analytics'),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _BusinessMiniMetric(
+                  colors: colors,
+                  label: 'Spend',
+                  value: '£${spend.toStringAsFixed(2)}'),
+              _BusinessMiniMetric(
+                  colors: colors,
+                  label: 'Deliveries',
+                  value: '${deliveries.length}'),
+              _BusinessMiniMetric(
+                  colors: colors,
+                  label: 'Success rate',
+                  value: '${successRate.toStringAsFixed(0)}%'),
+              _BusinessMiniMetric(
+                  colors: colors,
+                  label: 'Average cost',
+                  value: '£${average.toStringAsFixed(2)}'),
+              _BusinessMiniMetric(
+                  colors: colors,
+                  label: 'Invoices',
+                  value: '${invoices.length}'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (topDestinations.isEmpty)
+            Text(
+                'Top destinations will appear after Business deliveries complete.',
+                style: TextStyle(color: colors.mutedText))
+          else
+            ...topDestinations.take(3).map((entry) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.place_outlined,
+                  title: entry.key,
+                  subtitle: 'Destination frequency',
+                  trailing: '${entry.value}',
+                )),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessSettingsPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final bool busy;
+  final Map<String, dynamic> account;
+  final TextEditingController companyName;
+  final TextEditingController businessType;
+  final TextEditingController businessEmail;
+  final TextEditingController businessPhone;
+  final TextEditingController businessAddress;
+  final TextEditingController vatNumber;
+  final TextEditingController website;
+  final VoidCallback onSaveProfile;
+
+  const _BusinessSettingsPanel({
+    required this.colors,
+    required this.busy,
+    required this.account,
+    required this.companyName,
+    required this.businessType,
+    required this.businessEmail,
+    required this.businessPhone,
+    required this.businessAddress,
+    required this.vatNumber,
+    required this.website,
+    required this.onSaveProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Settings'),
+            const SizedBox(height: 10),
+            _InputBox(
+                colors: colors, controller: companyName, hint: 'Company name'),
+            const SizedBox(height: 10),
+            _InputBox(
+                colors: colors,
+                controller: businessType,
+                hint: 'Business type'),
+            const SizedBox(height: 10),
+            _InputBox(
+                colors: colors,
+                controller: businessEmail,
+                hint: 'Billing email'),
+            const SizedBox(height: 10),
+            _InputBox(colors: colors, controller: businessPhone, hint: 'Phone'),
+            const SizedBox(height: 10),
+            _InputBox(
+                colors: colors,
+                controller: businessAddress,
+                hint: 'Business address'),
+            const SizedBox(height: 10),
+            _InputBox(
+                colors: colors, controller: vatNumber, hint: 'VAT number'),
+            const SizedBox(height: 10),
+            _InputBox(
+                colors: colors,
+                controller: website,
+                hint: 'Website / brand URL'),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: busy ? null : onSaveProfile,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save Business settings'),
+                ),
+                _StatusPill(
+                    colors: colors,
+                    label: '${account['status'] ?? 'approved'}'),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _BusinessAuditPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> auditLogs;
+
+  const _BusinessAuditPanel({required this.colors, required this.auditLogs});
+
+  @override
+  Widget build(BuildContext context) => _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Audit history'),
+            const SizedBox(height: 8),
+            if (auditLogs.isEmpty)
+              Text('Business audit events will appear here.',
+                  style: TextStyle(color: colors.mutedText))
+            else
+              ...auditLogs.take(8).map(
+                    (log) => _BusinessRecordRow(
+                      colors: colors,
+                      icon: Icons.fact_check_outlined,
+                      title: '${log['action'] ?? 'Business event'}',
+                      subtitle: _adminDateText(log['createdAt']),
+                      trailing: '${log['actorUserId'] ?? ''}'.isEmpty
+                          ? 'System'
+                          : 'User',
+                    ),
+                  ),
+          ],
+        ),
+      );
+}
+
+class _BusinessMiniMetric extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+
+  const _BusinessMiniMetric({
+    required this.colors,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 150,
+        child: _MetricPill(colors: colors, label: label, value: value),
+      );
+}
+
+class _BusinessRecordRow extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String trailing;
+  final List<Widget> actions;
+
+  const _BusinessRecordRow({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+    this.actions = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colors.field,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(icon, color: colors.text),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          color: colors.text, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 3),
+                  Text(subtitle,
+                      style: TextStyle(color: colors.mutedText, height: 1.35)),
+                ],
+              ),
+            ),
+            if (actions.isEmpty)
+              Text(trailing,
+                  style: TextStyle(
+                      color: colors.text, fontWeight: FontWeight.w900))
+            else
+              Wrap(spacing: 4, children: actions),
+          ],
+        ),
+      );
+}
+
+class _BusinessEmptyState extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String body;
+  final String? action;
+  final VoidCallback? onAction;
+
+  const _BusinessEmptyState({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.action,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colors.field,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: colors.text),
+            const SizedBox(height: 10),
+            Text(title,
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text(body, style: TextStyle(color: colors.mutedText, height: 1.4)),
+            if (action != null && onAction != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton(onPressed: onAction, child: Text(action!)),
+            ],
+          ],
+        ),
+      );
 }
 
 class _LegendBadge extends StatelessWidget {
