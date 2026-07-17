@@ -5,8 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('Sender mobile bottom navigation matches the locked Sender contract',
       () {
-    final source =
+    final navSource =
         File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
+    final appSource = File('lib/app.dart').readAsStringSync();
+    final senderHomeSource =
+        File('lib/app/sender_mobile/sender_mobile_home.dart')
+            .readAsStringSync();
 
     for (final label in const [
       'Home',
@@ -15,13 +19,16 @@ void main() {
       'Wallet',
       'Profile'
     ]) {
-      expect(source, contains("label: '$label'"));
+      expect(navSource, contains("label: '$label'"));
+      expect(senderHomeSource, contains("'$label'"));
     }
 
-    expect(source, isNot(contains("label: 'Marketplace'")));
-    expect(source, isNot(contains("label: 'Rider'")));
-    expect(source, isNot(contains("label: 'Live Chat'")));
-    expect(source, isNot(contains("label: 'Health+'")));
-    expect(source, contains('const WalletView()'));
+    expect(navSource, isNot(contains("label: 'Marketplace'")));
+    expect(navSource, isNot(contains("label: 'Rider'")));
+    expect(navSource, isNot(contains("label: 'Live Chat'")));
+    expect(navSource, isNot(contains("label: 'Health+'")));
+    expect(navSource, contains('const WalletView()'));
+    expect(appSource, contains('const SenderMobileHome()'));
+    expect(appSource, isNot(contains('return AppNavView()')));
   });
 }
