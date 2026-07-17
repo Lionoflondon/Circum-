@@ -33,7 +33,7 @@ function resolveStripeRuntimeConfig({
   webhookSecret = "",
   requireWebhookSecret = false,
 } = {}) {
-  const mode = text(env.STRIPE_MODE || config.mode || config.environment || "test").toLowerCase();
+  const mode = text(env.STRIPE_MODE || config.mode || config.environment).toLowerCase();
   if (!["test", "live"].includes(mode)) {
     throw new Error("Stripe mode must be explicitly test or live.");
   }

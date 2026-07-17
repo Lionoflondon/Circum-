@@ -26,6 +26,17 @@ test("test mode accepts only test secret keys", () => {
   );
 });
 
+test("missing Stripe mode fails closed", () => {
+  assert.throws(
+      () => resolveStripeRuntimeConfig({
+        config: {testkey: "sk_test_example"},
+        env: {},
+        firebaseProject: "circum-2797c",
+      }),
+      /mode must be explicitly test or live/,
+  );
+});
+
 test("live mode fails closed without explicit enablement and project allow-list", () => {
   assert.throws(
       () => resolveStripeRuntimeConfig({
