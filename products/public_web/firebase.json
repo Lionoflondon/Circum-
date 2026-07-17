@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "target": "public",
+    "public": "build/web_public",
+    "predeploy": ["node scripts/public/validate_public.js"],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [{
+      "source": "**",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    }],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}

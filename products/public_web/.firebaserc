@@ -1,0 +1,8 @@
+{
+  "projects": { "default": "circum-2797c" },
+  "targets": {
+    "circum-2797c": {
+      "hosting": { "public": ["circum-2797c"] }
+    }
+  }
+}
