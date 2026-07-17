@@ -1,0 +1,100 @@
+<!DOCTYPE html><html><head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Book, track, and manage Circum deliveries.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Circum">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=circum-20260528">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon.png?v=circum-20260528">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=circum-20260528">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png?v=circum-20260528">
+
+  <title>Circum</title>
+  <link rel="manifest" href="manifest.json?v=circum-20260528">
+
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+
+
+  <style id="splash-screen-style">
+    html {
+      height: 100%
+    }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      background-color: #07090F;
+          background-size: 100% 100%;
+    }
+
+    #startup-shell { position: fixed; inset: 0; color: #F5F7FB; font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; background: #07090F; z-index: 9999; }
+    .startup-header { height: 68px; display: flex; align-items: center; padding: 0 28px; background: rgba(13,17,28,.95); border-bottom: 1px solid rgba(255,255,255,.08); }
+    .startup-brand { color: #3B82F6; font-size: 15px; font-weight: 800; letter-spacing: 2px; }
+    .startup-header-actions { margin-left: auto; display: flex; gap: 14px; }
+    .startup-header-dot { width: 22px; height: 22px; border-radius: 50%; background: #172033; border: 1px solid rgba(255,255,255,.08); }
+    .startup-content { width: min(1120px, calc(100% - 48px)); margin: 28px auto; }
+    .startup-skeleton { background: #111827; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; }
+    .startup-skeleton-title { width: 46%; height: 44px; margin-bottom: 22px; }
+    .startup-skeleton-hero { height: 188px; margin-bottom: 18px; }
+    .startup-skeleton-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .startup-skeleton-card { height: 122px; }
+    @media (max-width: 759px) {
+      .startup-header { height: 58px; padding: 0 16px; }
+      .startup-content { width: calc(100% - 32px); margin-top: 22px; }
+      .startup-skeleton-row { grid-template-columns: 1fr; gap: 12px; }
+      .startup-skeleton-card { height: 96px; }
+    }
+  </style>
+  <script id="splash-screen-script">
+    function removeStartupShell() {
+      document.getElementById("startup-shell")?.remove();
+    }
+  </script>
+</head>
+<body>
+  <div id="startup-shell" aria-hidden="true">
+    <div class="startup-header">
+      <div class="startup-brand">CIRCUM</div>
+      <div class="startup-header-actions">
+        <div class="startup-header-dot"></div>
+        <div class="startup-header-dot"></div>
+        <div class="startup-header-dot"></div>
+      </div>
+    </div>
+    <div class="startup-content">
+      <div class="startup-skeleton startup-skeleton-title"></div>
+      <div class="startup-skeleton startup-skeleton-hero"></div>
+      <div class="startup-skeleton-row">
+        <div class="startup-skeleton startup-skeleton-card"></div>
+        <div class="startup-skeleton startup-skeleton-card"></div>
+        <div class="startup-skeleton startup-skeleton-card"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', removeStartupShell, { once: true });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+
+
+</body></html>

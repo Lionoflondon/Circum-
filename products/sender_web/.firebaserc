@@ -1,0 +1,8 @@
+{
+  "projects": { "default": "circum-2797c" },
+  "targets": {
+    "circum-2797c": {
+      "hosting": { "sender": ["circum-app-2797c"] }
+    }
+  }
+}

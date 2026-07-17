@@ -1,0 +1,1280 @@
+import '../gifts/gift_system_policy.dart';
+import '../gifts/gift_story_studio_policy.dart';
+import '../delivery/sender_web_booking_recovery.dart';
+import '../platform/address_engine.dart';
+
+enum AdminRole {
+  superAdmin('super_admin'),
+  operationsAdmin('operations_admin'),
+  supportAgent('support_agent'),
+  financeAdmin('finance_admin'),
+  driverManager('driver_manager');
+
+  final String value;
+
+  const AdminRole(this.value);
+
+  static AdminRole? fromString(String? value) {
+    for (final role in AdminRole.values) {
+      if (role.value == value) return role;
+    }
+    return null;
+  }
+}
+
+enum AdminPermission {
+  viewDashboard,
+  manageAdmins,
+  viewCustomers,
+  editCustomers,
+  viewDrivers,
+  editDrivers,
+  approveDrivers,
+  manageDriverRanks,
+  viewDeliveries,
+  editDeliveries,
+  duplicateDeliveries,
+  viewFinance,
+  viewHealthPlus,
+  manageHealthPlus,
+  viewSupport,
+  manageIssues,
+  viewAudit,
+}
+
+enum AdminRatingTipFilter { all, tipped, notTipped, reported }
+
+class AdminRatingTipRecord {
+  const AdminRatingTipRecord({
+    required this.ratingId,
+    required this.deliveryId,
+    required this.riderId,
+    required this.senderId,
+    required this.stars,
+    required this.feedback,
+    required this.tipAmount,
+    required this.paymentMethod,
+    required this.reportStatus,
+    required this.timestamp,
+  });
+
+  final String ratingId;
+  final String deliveryId;
+  final String riderId;
+  final String senderId;
+  final int stars;
+  final String feedback;
+  final double tipAmount;
+  final String paymentMethod;
+  final String reportStatus;
+  final Object? timestamp;
+
+  bool get tipped => tipAmount > 0;
+  bool get reported => reportStatus != 'clear' && reportStatus.isNotEmpty;
+
+  factory AdminRatingTipRecord.fromBackend({
+    required String ratingId,
+    required Map<String, dynamic> rating,
+    Map<String, dynamic> tip = const {},
+  }) {
+    return AdminRatingTipRecord(
+      ratingId: ratingId,
+      deliveryId: '${rating['deliveryId'] ?? ratingId}',
+      riderId: '${rating['riderId'] ?? rating['driverId'] ?? ''}',
+      senderId: '${rating['senderId'] ?? rating['customerId'] ?? ''}',
+      stars: (rating['starRating'] as num? ?? 0).toInt(),
+      feedback: '${rating['feedbackText'] ?? ''}',
+      tipAmount: (tip['amount'] as num? ?? 0).toDouble(),
+      paymentMethod: '${tip['paymentMethod'] ?? ''}',
+      reportStatus: '${rating['reportStatus'] ?? 'clear'}',
+      timestamp: rating['createdAt'],
+    );
+  }
+}
+
+class AdminRatingsTipsPolicy {
+  static List<AdminRatingTipRecord> filter(
+    Iterable<AdminRatingTipRecord> records, {
+    String search = '',
+    int? stars,
+    AdminRatingTipFilter filter = AdminRatingTipFilter.all,
+  }) {
+    final query = search.trim().toLowerCase();
+    return records.where((record) {
+      if (stars != null && record.stars != stars) return false;
+      if (filter == AdminRatingTipFilter.tipped && !record.tipped) return false;
+      if (filter == AdminRatingTipFilter.notTipped && record.tipped) {
+        return false;
+      }
+      if (filter == AdminRatingTipFilter.reported && !record.reported) {
+        return false;
+      }
+      return query.isEmpty ||
+          [record.riderId, record.senderId, record.deliveryId]
+              .any((value) => value.toLowerCase().contains(query));
+    }).toList(growable: false);
+  }
+
+  static Map<String, dynamic> moderationRequest({
+    required String ratingId,
+    required String action,
+    required String reason,
+  }) {
+    if (!{'hide', 'unhide', 'investigate'}.contains(action)) {
+      throw ArgumentError('Unsupported rating moderation action.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A moderation reason is required.');
+    }
+    return {'ratingId': ratingId, 'action': action, 'reason': reason.trim()};
+  }
+}
+
+class AdminAccessPolicy {
+  static const _rolePermissions = {
+    AdminRole.superAdmin: AdminPermission.values,
+    AdminRole.operationsAdmin: [
+      AdminPermission.viewDashboard,
+      AdminPermission.viewCustomers,
+      AdminPermission.editCustomers,
+      AdminPermission.viewDrivers,
+      AdminPermission.viewDeliveries,
+      AdminPermission.editDeliveries,
+      AdminPermission.duplicateDeliveries,
+      AdminPermission.viewHealthPlus,
+      AdminPermission.manageHealthPlus,
+      AdminPermission.viewSupport,
+      AdminPermission.manageIssues,
+      AdminPermission.viewAudit,
+    ],
+    AdminRole.supportAgent: [
+      AdminPermission.viewDashboard,
+      AdminPermission.viewCustomers,
+      AdminPermission.editCustomers,
+      AdminPermission.viewDrivers,
+      AdminPermission.viewDeliveries,
+      AdminPermission.viewSupport,
+      AdminPermission.manageIssues,
+      AdminPermission.viewAudit,
+    ],
+    AdminRole.financeAdmin: [
+      AdminPermission.viewDashboard,
+      AdminPermission.viewCustomers,
+      AdminPermission.viewDrivers,
+      AdminPermission.viewDeliveries,
+      AdminPermission.viewFinance,
+      AdminPermission.viewHealthPlus,
+      AdminPermission.viewAudit,
+    ],
+    AdminRole.driverManager: [
+      AdminPermission.viewDashboard,
+      AdminPermission.viewDrivers,
+      AdminPermission.editDrivers,
+      AdminPermission.approveDrivers,
+      AdminPermission.manageDriverRanks,
+      AdminPermission.viewDeliveries,
+      AdminPermission.viewHealthPlus,
+      AdminPermission.viewSupport,
+      AdminPermission.manageIssues,
+      AdminPermission.viewAudit,
+    ],
+  };
+
+  static bool hasAnyAdminRole(Iterable<String> roles) {
+    return roles.any((role) => AdminRole.fromString(role) != null);
+  }
+
+  static bool can(Iterable<String> roles, AdminPermission permission) {
+    for (final rawRole in roles) {
+      final role = AdminRole.fromString(rawRole);
+      if (role == null) continue;
+      if ((_rolePermissions[role] ?? const []).contains(permission)) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+class RiderRankPolicy {
+  static const ranks = ['agent', 'sentinel', 'warden', 'knight', 'veteran'];
+
+  static String normalize(Object? value) {
+    final rank = '$value'.trim().toLowerCase();
+    return ranks.contains(rank) ? rank : 'agent';
+  }
+
+  static String fromProfile(Map<String, dynamic> profile) {
+    return normalize(profile['rank'] ?? profile['riderRank']);
+  }
+
+  static bool canManage(Iterable<String> roles) {
+    return roles.contains(AdminRole.superAdmin.value) ||
+        roles.contains(AdminRole.driverManager.value);
+  }
+
+  static Map<String, dynamic> updatePatch({
+    required String rank,
+    required Object updatedAt,
+    required String updatedBy,
+    required String reason,
+  }) {
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A rank change reason is required.');
+    }
+    final normalized = normalize(rank);
+    return {
+      'rank': normalized,
+      'riderRank': normalized,
+      'rankUpdatedAt': updatedAt,
+      'rankUpdatedBy': updatedBy,
+      'rankReason': reason.trim(),
+      'updatedAt': updatedAt,
+    };
+  }
+}
+
+class AdminUserAccess {
+  static List<String> activeRolesFromRecord(Map<String, dynamic>? record) {
+    if (record == null || !isActive(record)) return const [];
+    final roles = record['roles'];
+    if (roles is List) return roles.map((role) => '$role').toList();
+    final role = record['role'];
+    return role == null ? const [] : ['$role'];
+  }
+
+  static bool isActive(Map<String, dynamic>? record) {
+    return '${record?['status'] ?? 'inactive'}'.toLowerCase() == 'active';
+  }
+
+  static bool hasInactiveAdminRecord(Iterable<Map<String, dynamic>?> records) {
+    return records
+        .where((record) => record != null)
+        .any((record) => !isActive(record));
+  }
+
+  static String emailDocumentId(String email) => email.trim().toLowerCase();
+
+  static Map<String, dynamic> adminUserPatch({
+    required String email,
+    required String role,
+    required String status,
+    required String invitedBy,
+    Object? createdAt,
+    required Object updatedAt,
+    Object? lastLoginAt,
+  }) {
+    return {
+      'email': email.trim().toLowerCase(),
+      'role': role,
+      'roles': [role],
+      'status': status,
+      'invitedBy': invitedBy,
+      if (createdAt != null) 'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      if (lastLoginAt != null) 'lastLoginAt': lastLoginAt,
+    };
+  }
+}
+
+class AdminMetricSnapshot {
+  final int totalDeliveries;
+  final int activeDeliveries;
+  final int completedDeliveries;
+  final int failedDeliveries;
+  final int cancelledDeliveries;
+  final int totalSenders;
+  final int activeSenders;
+  final int totalDrivers;
+  final int activeDrivers;
+  final int pendingDrivers;
+  final double revenueToday;
+  final double revenueThisWeek;
+  final double revenueThisMonth;
+  final double averageDeliveryValue;
+  final double averageDriverRating;
+  final double customerSatisfactionScore;
+  final int complaintsCount;
+  final int refundRequests;
+  final int unresolvedSupportIssues;
+  final double cancellationRate;
+  final double failedDeliveryRate;
+  final double repeatCustomerRate;
+  final double refundRate;
+  final double healthPlusRecurringRevenue;
+
+  const AdminMetricSnapshot({
+    required this.totalDeliveries,
+    required this.activeDeliveries,
+    required this.completedDeliveries,
+    required this.failedDeliveries,
+    required this.cancelledDeliveries,
+    required this.totalSenders,
+    required this.activeSenders,
+    required this.totalDrivers,
+    required this.activeDrivers,
+    required this.pendingDrivers,
+    required this.revenueToday,
+    required this.revenueThisWeek,
+    required this.revenueThisMonth,
+    required this.averageDeliveryValue,
+    required this.averageDriverRating,
+    required this.customerSatisfactionScore,
+    required this.complaintsCount,
+    required this.refundRequests,
+    required this.unresolvedSupportIssues,
+    required this.cancellationRate,
+    required this.failedDeliveryRate,
+    required this.repeatCustomerRate,
+    required this.refundRate,
+    required this.healthPlusRecurringRevenue,
+  });
+
+  factory AdminMetricSnapshot.fromData({
+    required List<Map<String, dynamic>> deliveries,
+    required List<Map<String, dynamic>> senders,
+    required List<Map<String, dynamic>> drivers,
+    required List<Map<String, dynamic>> payments,
+    required List<Map<String, dynamic>> ratings,
+    required List<Map<String, dynamic>> supportTickets,
+    required List<Map<String, dynamic>> healthPlusPayments,
+    DateTime? now,
+  }) {
+    final today = _dayStart(now ?? DateTime.now());
+    final weekStart = today.subtract(Duration(days: today.weekday - 1));
+    final monthStart = DateTime(today.year, today.month);
+    final completed = deliveries.where(_isCompleted).toList();
+    final failed = deliveries.where(_isFailed).toList();
+    final cancelled = deliveries.where(_isCancelled).toList();
+    final active = deliveries
+        .where((item) =>
+            !_isCompleted(item) && !_isFailed(item) && !_isCancelled(item))
+        .toList();
+    final revenueToday = _sumSince(payments, today);
+    final revenueThisWeek = _sumSince(payments, weekStart);
+    final revenueThisMonth = _sumSince(payments, monthStart);
+    final totalRevenue = payments.fold<double>(
+      0,
+      (total, item) => total + _moneyValue(item),
+    );
+    final averageRating = ratings.isEmpty
+        ? 0.0
+        : ratings.fold<double>(
+              0,
+              (total, rating) => total + _number(rating['starRating']),
+            ) /
+            ratings.length;
+    final uniqueSenders = <String>{};
+    final repeatSenders = <String>{};
+    for (final delivery in deliveries) {
+      final senderId = '${delivery['senderId'] ?? delivery['userId'] ?? ''}';
+      if (senderId.trim().isEmpty) continue;
+      if (!uniqueSenders.add(senderId)) repeatSenders.add(senderId);
+    }
+
+    return AdminMetricSnapshot(
+      totalDeliveries: deliveries.length,
+      activeDeliveries: active.length,
+      completedDeliveries: completed.length,
+      failedDeliveries: failed.length,
+      cancelledDeliveries: cancelled.length,
+      totalSenders: senders.length,
+      activeSenders: senders.where((item) => !_isInactive(item)).length,
+      totalDrivers: drivers.length,
+      activeDrivers: drivers.where((item) => _isActiveDriver(item)).length,
+      pendingDrivers: drivers.where((item) => _isPendingDriver(item)).length,
+      revenueToday: _round2(revenueToday),
+      revenueThisWeek: _round2(revenueThisWeek),
+      revenueThisMonth: _round2(revenueThisMonth),
+      averageDeliveryValue:
+          completed.isEmpty ? 0 : _round2(totalRevenue / completed.length),
+      averageDriverRating: _round2(averageRating),
+      customerSatisfactionScore: _round2((averageRating / 5) * 100),
+      complaintsCount: ratings
+          .where((rating) =>
+              '${rating['feedbackTags']}'.contains('issue') ||
+              '${rating['feedbackTags']}'.contains('damaged'))
+          .length,
+      refundRequests: supportTickets
+          .where((ticket) => '${ticket['type']}'.contains('refund'))
+          .length,
+      unresolvedSupportIssues:
+          supportTickets.where((ticket) => !_isResolved(ticket)).length,
+      cancellationRate: _rate(cancelled.length, deliveries.length),
+      failedDeliveryRate: _rate(failed.length, deliveries.length),
+      repeatCustomerRate: _rate(repeatSenders.length, uniqueSenders.length),
+      refundRate: _rate(
+        supportTickets
+            .where((ticket) => '${ticket['type']}'.contains('refund'))
+            .length,
+        deliveries.length,
+      ),
+      healthPlusRecurringRevenue: _round2(
+        healthPlusPayments
+            .where((item) =>
+                '${item['frequency']}'.contains('monthly') ||
+                item['recurring'] == true ||
+                item['savedPaymentMethod'] == true)
+            .fold<double>(0, (total, item) => total + _moneyValue(item)),
+      ),
+    );
+  }
+
+  static AdminMetricSnapshot empty() => const AdminMetricSnapshot(
+        totalDeliveries: 0,
+        activeDeliveries: 0,
+        completedDeliveries: 0,
+        failedDeliveries: 0,
+        cancelledDeliveries: 0,
+        totalSenders: 0,
+        activeSenders: 0,
+        totalDrivers: 0,
+        activeDrivers: 0,
+        pendingDrivers: 0,
+        revenueToday: 0,
+        revenueThisWeek: 0,
+        revenueThisMonth: 0,
+        averageDeliveryValue: 0,
+        averageDriverRating: 0,
+        customerSatisfactionScore: 0,
+        complaintsCount: 0,
+        refundRequests: 0,
+        unresolvedSupportIssues: 0,
+        cancellationRate: 0,
+        failedDeliveryRate: 0,
+        repeatCustomerRate: 0,
+        refundRate: 0,
+        healthPlusRecurringRevenue: 0,
+      );
+}
+
+class AdminAuditEntry {
+  final String adminUserId;
+  final String actionType;
+  final String recordType;
+  final String recordId;
+  final Map<String, dynamic> oldValue;
+  final Map<String, dynamic> newValue;
+  final String reason;
+
+  const AdminAuditEntry({
+    required this.adminUserId,
+    required this.actionType,
+    required this.recordType,
+    required this.recordId,
+    this.oldValue = const {},
+    this.newValue = const {},
+    this.reason = '',
+  });
+
+  Map<String, dynamic> toJson() => {
+        'adminUserId': adminUserId,
+        'actionType': actionType,
+        'recordType': recordType,
+        'recordId': recordId,
+        'oldValue': oldValue,
+        'newValue': newValue,
+        'reason': reason,
+      };
+}
+
+class AdminDeliveryTools {
+  static List<String> staleDeliveryReasons(Map<String, dynamic> delivery) {
+    final reasons = <String>[];
+    reasons.addAll(SenderWebBookingRecovery.missingCanonicalFields(delivery));
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final matchingStatus =
+        '${delivery['matchingStatus'] ?? ''}'.toLowerCase().trim();
+    final dispatchStatus =
+        '${delivery['dispatchStatus'] ?? ''}'.toLowerCase().trim();
+    final paymentStatus =
+        '${delivery['paymentStatus'] ?? ''}'.toLowerCase().trim();
+    final flowStatus = SenderWebBookingRecovery.visibleStatus(delivery);
+    final activeLike = {
+      'requested',
+      'pending',
+      'finding_rider',
+      'broadcasting',
+      'available',
+      'accepted',
+      'rider_assigned',
+      'en_route_to_pickup',
+    };
+    if (activeLike.contains(status) ||
+        activeLike.contains(matchingStatus) ||
+        activeLike.contains(dispatchStatus)) {
+      if (paymentStatus.isEmpty && delivery['paid'] != true) {
+        reasons.add('payment status');
+      }
+    }
+    if (flowStatus == SenderWebBookingRecovery.recoverableIncomplete) {
+      reasons.add('recoverable incomplete status');
+    }
+    if (delivery['broadcastBlocked'] == true) {
+      reasons.add('broadcast blocked');
+    }
+    if (status == 'stale_blocked' || status == 'admin_review_required') {
+      reasons.add(status.replaceAll('_', ' '));
+    }
+    return reasons.toSet().toList(growable: false);
+  }
+
+  static bool canRemoveAsStale(Map<String, dynamic> delivery) {
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final matchingStatus =
+        '${delivery['matchingStatus'] ?? ''}'.toLowerCase().trim();
+    final dispatchStatus =
+        '${delivery['dispatchStatus'] ?? ''}'.toLowerCase().trim();
+    const terminalStatuses = {
+      'completed',
+      'delivered',
+      'cancelled',
+      'cancelled_admin',
+      'admin_removed_stale',
+      'archived_stale',
+      'deleted',
+      'resolved',
+    };
+    if (terminalStatuses.contains(status) ||
+        terminalStatuses.contains(matchingStatus) ||
+        terminalStatuses.contains(dispatchStatus)) {
+      return false;
+    }
+    return staleDeliveryReasons(delivery).isNotEmpty ||
+        delivery['stale'] == true ||
+        delivery['manuallyMarkedStale'] == true;
+  }
+
+  static bool isArchiveRecord(Map<String, dynamic> delivery) {
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final deliveryStatus =
+        '${delivery['deliveryStatus'] ?? ''}'.toLowerCase().trim();
+    final flowStatus = '${delivery['flowStatus'] ?? ''}'.toLowerCase().trim();
+    const archiveStatuses = {
+      'archived_stale',
+      'archived_expired',
+      'admin_removed_stale',
+      'cancelled_admin',
+      'recoverable_incomplete',
+      'stale_blocked',
+    };
+    return delivery['archived'] == true ||
+        delivery['adminRemovedStale'] == true ||
+        archiveStatuses.contains(status) ||
+        archiveStatuses.contains(deliveryStatus) ||
+        archiveStatuses.contains(flowStatus);
+  }
+
+  static bool canAutoArchiveExpired(
+    Map<String, dynamic> delivery, {
+    required DateTime now,
+  }) {
+    if (isArchiveRecord(delivery)) return false;
+    final status = '${delivery['status'] ?? ''}'.toLowerCase().trim();
+    final deliveryStatus =
+        '${delivery['deliveryStatus'] ?? ''}'.toLowerCase().trim();
+    final flowStatus = '${delivery['flowStatus'] ?? ''}'.toLowerCase().trim();
+    final paymentStatus =
+        '${delivery['paymentStatus'] ?? ''}'.toLowerCase().trim();
+    const protectedStatuses = {
+      'accepted',
+      'rider_assigned',
+      'en_route_to_pickup',
+      'arrived_at_pickup',
+      'rider_arrived_pickup',
+      'collected',
+      'picked_up',
+      'in_transit',
+      'arriving',
+      'delivered',
+      'completed',
+      'under_review',
+      'disputed',
+      'dispute',
+      'payment_complete',
+      'paid',
+    };
+    final statuses = {status, deliveryStatus, flowStatus, paymentStatus};
+    if (statuses.any(protectedStatuses.contains)) return false;
+    if (delivery['disputeOpen'] == true ||
+        delivery['underReview'] == true ||
+        delivery['paymentInvestigation'] == true) {
+      return false;
+    }
+    if (paymentStatus == 'paid' || delivery['paid'] == true) return false;
+    final createdAt = _readDate(delivery['createdAt']) ??
+        _readDate(delivery['requestedAt']) ??
+        _readDate(delivery['updatedAt']);
+    if (createdAt == null) return false;
+    if (now.difference(createdAt).inHours < 24) return false;
+    return staleDeliveryReasons(delivery).isNotEmpty ||
+        status == 'requested' ||
+        status == 'pending' ||
+        status == 'finding_rider' ||
+        flowStatus == SenderWebBookingRecovery.recoverableIncomplete;
+  }
+
+  static Map<String, dynamic> autoArchiveExpiredPatch({
+    required Map<String, dynamic> delivery,
+    required Object archivedAt,
+    String reason =
+        'Automatic cleanup archived stale or incomplete booking older than 24 hours.',
+  }) {
+    return {
+      ...removeStaleOrderPatch(
+        delivery: delivery,
+        adminUserId: 'system',
+        adminEmail: 'system@circum',
+        reason: reason,
+        removedAt: archivedAt,
+      ),
+      'status': 'archived_expired',
+      'deliveryStatus': 'archived_expired',
+      'flowStatus': 'archived_expired',
+      'staleState': 'archived_expired',
+      'broadcastBlockReason': 'archived_expired',
+      'systemArchived': true,
+    };
+  }
+
+  static DateTime? _readDate(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  static Map<String, dynamic> removeStaleOrderPatch({
+    required Map<String, dynamic> delivery,
+    required String adminUserId,
+    String? adminEmail,
+    required String reason,
+    required Object removedAt,
+  }) {
+    final previousStatus = '${delivery['status'] ?? ''}';
+    final staleReasons = staleDeliveryReasons(delivery);
+    return {
+      'status': 'admin_removed_stale',
+      'deliveryStatus': 'admin_removed_stale',
+      'flowStatus': 'admin_removed_stale',
+      'matchingStatus': 'blocked',
+      'dispatchStatus': 'blocked',
+      'broadcastBlocked': true,
+      'broadcastBlockReason': 'admin_removed_stale',
+      'active': false,
+      'archived': true,
+      'staleArchived': true,
+      'staleState': 'admin_removed_stale',
+      'staleReasons': staleReasons,
+      'removedFromActiveQueues': true,
+      'adminRemovedStale': true,
+      'adminRemovalReason': reason,
+      'staleCleanupReason': reason,
+      'adminRemovedAt': removedAt,
+      'archivedAt': removedAt,
+      'archivedByAdminId': adminUserId,
+      'archivedByAdminEmail': adminEmail,
+      'updatedAt': removedAt,
+      'adminRemoval': {
+        'adminUserId': adminUserId,
+        'adminEmail': adminEmail,
+        'reason': reason,
+        'previousStatus': previousStatus,
+        'newStatus': 'admin_removed_stale',
+        'removedAt': removedAt,
+        'staleReasons': staleReasons,
+      },
+    };
+  }
+
+  static Map<String, dynamic> vanguardProtocolSummary(
+    Map<String, dynamic> delivery,
+  ) {
+    final protocol =
+        (delivery['vanguardProtocol'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final evidence =
+        (delivery['vanguardEvidence'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    return {
+      'protocolEnabled': delivery['vanguardProtocolEnabled'] == true ||
+          delivery['vanguardEnabled'] == true ||
+          protocol['enabled'] == true,
+      'reasonEnabled':
+          delivery['vanguardRequiredReason'] ?? protocol['reason'] ?? '',
+      'protocolState':
+          delivery['vanguardStatus'] ?? protocol['status'] ?? 'not_required',
+      'auditTrail': delivery['vanguardAuditTrail'] ?? const [],
+      'evidence': evidence,
+      'verificationTimeline': delivery['vanguardVerificationState'] ?? const {},
+      'issueHistory': delivery['vanguardIssueHistory'] ?? const [],
+    };
+  }
+
+  static Map<String, dynamic> duplicateDelivery(
+    Map<String, dynamic> source, {
+    required String newId,
+    required Object createdAt,
+  }) {
+    final copy = Map<String, dynamic>.from(source);
+    copy
+      ..remove('_docId')
+      ..remove('id')
+      ..remove('historyId')
+      ..remove('driverRatingId')
+      ..remove('ratedAt')
+      ..remove('proofOfDelivery')
+      ..remove('deletedAt')
+      ..remove('deletedBy')
+      ..remove('archived')
+      ..remove('archivedAt')
+      ..remove('archivedByAdminId')
+      ..remove('staleArchived')
+      ..remove('staleCleanupReason')
+      ..remove('resolvedAt')
+      ..remove('resolvedBy')
+      ..remove('active')
+      ..['id'] = newId
+      ..['requestId'] = newId
+      ..['status'] = 'requested'
+      ..['dispatchStatus'] = 'requested'
+      ..['matchingStatus'] = 'available'
+      ..['createdAt'] = createdAt
+      ..['updatedAt'] = createdAt
+      ..['source'] = '${source['source'] ?? 'circum'}-admin-duplicate'
+      ..['originalRequestId'] = source['requestId'] ?? source['id']
+      ..['adminDuplicatedFrom'] = source['requestId'] ?? source['id'];
+    return copy;
+  }
+
+  static Map<String, dynamic> safeDeliveryPatch({
+    String? pickupAddress,
+    String? dropoffAddress,
+    String? parcelNotes,
+    String? pickupTime,
+    String? senderPhone,
+    String? recipientPhone,
+  }) {
+    final normalizedPickup = pickupAddress == null
+        ? null
+        : AddressEngine.normalize(manualAddress: pickupAddress);
+    final normalizedDropoff = dropoffAddress == null
+        ? null
+        : AddressEngine.normalize(manualAddress: dropoffAddress);
+    return {
+      if (pickupAddress != null)
+        'pickupAddress':
+            AddressEngine.display(normalizedPickup, fallback: pickupAddress),
+      if (pickupAddress != null) 'pickupAddressData': normalizedPickup,
+      if (dropoffAddress != null)
+        'dropoffAddress':
+            AddressEngine.display(normalizedDropoff, fallback: dropoffAddress),
+      if (dropoffAddress != null) 'dropoffAddressData': normalizedDropoff,
+      if (parcelNotes != null) 'packageDescription': parcelNotes,
+      if (pickupTime != null) 'pickupTime': pickupTime,
+      if (senderPhone != null) 'senderPhone': senderPhone,
+      if (recipientPhone != null) 'recipientPhone': recipientPhone,
+    };
+  }
+}
+
+class AdminSupportTools {
+  static bool isResolved(Object? status) =>
+      '${status ?? ''}'.trim().toLowerCase() == 'resolved';
+
+  static List<String> actionsForStatus(Object? status) => isResolved(status)
+      ? const ['Reopen', 'View Chat']
+      : const ['Assign', 'Resolve', 'Open Chat'];
+
+  static Map<String, dynamic> statusPatch({
+    required String status,
+    String? assignedTo,
+    String? resolutionNote,
+    required Object updatedAt,
+  }) {
+    return {
+      'status': status,
+      if (assignedTo != null && assignedTo.trim().isNotEmpty)
+        'assignedTo': assignedTo.trim(),
+      if (resolutionNote != null && resolutionNote.trim().isNotEmpty)
+        'resolutionNote': resolutionNote.trim(),
+      'updatedAt': updatedAt,
+    };
+  }
+}
+
+class AdminHealthPlusTools {
+  static Map<String, dynamic> statusPatch({
+    required String status,
+    String? assignedDriverId,
+    required Object updatedAt,
+  }) {
+    return {
+      'status': status,
+      if (assignedDriverId != null && assignedDriverId.trim().isNotEmpty)
+        'assignedDriverId': assignedDriverId.trim(),
+      'adminUpdatedAt': updatedAt,
+      'updatedAt': updatedAt,
+    };
+  }
+}
+
+class AdminGiftsOperations {
+  static const filters = GiftSystemPolicy.filters;
+
+  static List<Map<String, dynamic>> filter(
+    Iterable<Map<String, dynamic>> records,
+    String filter,
+  ) =>
+      GiftSystemPolicy.filterGifts(records, filter);
+
+  static String statusBucket(Map<String, dynamic> record) =>
+      GiftSystemPolicy.statusBucket(record);
+
+  static GiftLifecycleState resolve(Map<String, dynamic> record) =>
+      GiftSystemPolicy.resolve(record);
+
+  static Map<String, Object?> approveRequestPatch({
+    required String adminUserId,
+    String? adminEmail,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'approved',
+        'status': 'approved',
+        'adminReviewStatus': 'approved',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          adminEmail: adminEmail,
+          actionType: 'gift_request_approved',
+          previousStatus: previousStatus,
+          newStatus: 'approved',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> rejectRequestPatch({
+    required String adminUserId,
+    String? adminEmail,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'rejected',
+        'status': 'rejected',
+        'adminReviewStatus': 'rejected',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          adminEmail: adminEmail,
+          actionType: 'gift_request_rejected',
+          previousStatus: previousStatus,
+          newStatus: 'rejected',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> approveCampaignMatchPatch({
+    required String adminUserId,
+    String? adminEmail,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'match_found',
+        'campaignStatus': 'match_found',
+        'matchStatus': 'approved',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          adminEmail: adminEmail,
+          actionType: 'campaign_match_approved',
+          previousStatus: previousStatus,
+          newStatus: 'match_found',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> rejectCampaignMatchPatch({
+    required String adminUserId,
+    String? adminEmail,
+    required String previousStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': 'admin_review_required',
+        'campaignStatus': 'admin_review_required',
+        'matchStatus': 'rejected',
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          adminEmail: adminEmail,
+          actionType: 'campaign_match_rejected',
+          previousStatus: previousStatus,
+          newStatus: 'admin_review_required',
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> assignGiftsTeamStatusPatch({
+    required String adminUserId,
+    String? adminEmail,
+    required String previousStatus,
+    required String newStatus,
+    required String reason,
+    required Object actionAt,
+  }) =>
+      {
+        'flowStatus': newStatus,
+        'giftsTeamStatus': newStatus,
+        ...GiftSystemPolicy.adminActionPatch(
+          adminUserId: adminUserId,
+          adminEmail: adminEmail,
+          actionType: 'gifts_team_status_changed',
+          previousStatus: previousStatus,
+          newStatus: newStatus,
+          reason: reason,
+          actionAt: actionAt,
+        ),
+      };
+
+  static Map<String, Object?> linkCampaignDeliveryPatch({
+    required String campaignParticipantId,
+    required String giftRequestId,
+    required String giftDeliveryId,
+    required Object updatedAt,
+  }) =>
+      GiftSystemPolicy.deliveryHandoffPatch(
+        campaignParticipantId: campaignParticipantId,
+        giftRequestId: giftRequestId,
+        giftDeliveryId: giftDeliveryId,
+        updatedAt: updatedAt,
+      );
+
+  static Map<String, Object?> storyOverridePatch({
+    required String adminUserId,
+    String? adminEmail,
+    required String previousStoryStatus,
+    required String reason,
+    required Object actionAt,
+    required bool unlock,
+  }) =>
+      GiftSystemPolicy.storyOverridePatch(
+        adminUserId: adminUserId,
+        adminEmail: adminEmail,
+        previousStoryStatus: previousStoryStatus,
+        overrideReason: reason,
+        overrideAt: actionAt,
+        unlock: unlock,
+      );
+
+  static Map<String, Object?> storyStudioPatch({
+    required String giftId,
+    required String skin,
+    required Iterable<GiftStorySlide> slides,
+    bool silentVersion = true,
+    bool soundVersion = false,
+    String? silentVersionUrl,
+    String? soundVersionUrl,
+    String? musicVideoStatus,
+    String? musicVideoPath,
+    required Object updatedAt,
+    required String adminUserId,
+    String? adminEmail,
+    String reason = 'Gift Story Studio updated',
+  }) {
+    return {
+      ...GiftStoryStudioPolicy.studioPatch(
+        giftId: giftId,
+        skin: GiftStorySkin.fromValue(skin),
+        slides: slides,
+        silentVersion: silentVersion,
+        soundVersion: soundVersion,
+        silentVersionUrl: silentVersionUrl,
+        soundVersionUrl: soundVersionUrl,
+        musicVideoStatus: musicVideoStatus,
+        musicVideoPath: musicVideoPath,
+        updatedAt: updatedAt,
+      ),
+      ...GiftSystemPolicy.adminActionPatch(
+        adminUserId: adminUserId,
+        adminEmail: adminEmail,
+        actionType: 'gift_story_studio_updated',
+        previousStatus: 'story_draft',
+        newStatus: 'story_ready',
+        reason: reason,
+        actionAt: updatedAt,
+      ),
+    };
+  }
+
+  static Map<String, Object?> storyNotificationAdminPatch({
+    required String action,
+    required String adminUserId,
+    String? adminEmail,
+    required String reason,
+    required Object actionAt,
+  }) {
+    final normalized = switch (action.trim().toLowerCase()) {
+      'resend_email' => 'resend_email',
+      'resend_whatsapp' => 'resend_whatsapp',
+      'send_both' => 'send_both',
+      'cancel_pending' => 'cancel_pending',
+      _ => throw ArgumentError('Unknown Gift Story notification action.'),
+    };
+    return {
+      'storyNotificationAction': normalized,
+      'storyNotificationStatus':
+          normalized == 'cancel_pending' ? 'cancelled' : 'queued',
+      'storyNotificationUpdatedAt': actionAt,
+      ...GiftSystemPolicy.adminActionPatch(
+        adminUserId: adminUserId,
+        adminEmail: adminEmail,
+        actionType: 'gift_story_notification_$normalized',
+        previousStatus: 'pending',
+        newStatus: normalized == 'cancel_pending' ? 'cancelled' : 'queued',
+        reason: reason,
+        actionAt: actionAt,
+      ),
+    };
+  }
+
+  static Map<String, Object?> notificationPayload({
+    required String event,
+    required String userId,
+    String? email,
+    required String giftId,
+    String giftType = GiftSystemPolicy.sendToSomeoneGiftType,
+    required String title,
+    required String body,
+    Object? createdAt,
+  }) =>
+      GiftSystemPolicy.notificationPayload(
+        event: event,
+        userId: userId,
+        email: email,
+        giftId: giftId,
+        giftType: giftType,
+        title: title,
+        body: body,
+        createdAt: createdAt,
+      );
+
+  static Map<String, Object?>? statusChangeNotificationPayload({
+    required String previousStatus,
+    required String newStatus,
+    required String userId,
+    String? email,
+    required String giftId,
+    String giftType = GiftSystemPolicy.sendToSomeoneGiftType,
+    Object? createdAt,
+  }) =>
+      GiftSystemPolicy.statusChangeNotificationPayload(
+        previousStatus: previousStatus,
+        newStatus: newStatus,
+        userId: userId,
+        email: email,
+        giftId: giftId,
+        giftType: giftType,
+        createdAt: createdAt,
+      );
+}
+
+class AdminRothOperations {
+  static Map<String, Object?> walletCreatePatch({
+    required String walletId,
+    required String userId,
+    required String email,
+    required Object createdAt,
+  }) =>
+      {
+        'walletId': walletId,
+        'userId': userId,
+        'email': email.trim().toLowerCase(),
+        'walletType': 'sender',
+        'balance': 0,
+        'currencyEquivalent': 'GBP',
+        'createdAt': createdAt,
+        'updatedAt': createdAt,
+      };
+
+  static Map<String, Object?> issueRothPatch({
+    required String walletId,
+    required String userId,
+    required String email,
+    required num balanceBefore,
+    required num amount,
+    required String adminUserId,
+    required String adminEmail,
+    required String reason,
+    required Object createdAt,
+  }) {
+    if (amount <= 0) {
+      throw ArgumentError('Roth issue amount must be greater than zero.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('Roth issue requires an audit reason.');
+    }
+    final after = _round2(balanceBefore.toDouble() + amount.toDouble());
+    return {
+      'wallet': {
+        'walletId': walletId,
+        'userId': userId,
+        'email': email.trim().toLowerCase(),
+        'walletType': 'sender',
+        'balance': after,
+        'currencyEquivalent': 'GBP',
+        'updatedAt': createdAt,
+      },
+      'ledger': ledgerTransaction(
+        transactionId: 'roth_admin_issue_$walletId',
+        walletId: walletId,
+        userId: userId,
+        email: email,
+        type: 'admin_issue',
+        direction: 'credit',
+        amount: amount,
+        balanceBefore: balanceBefore,
+        balanceAfter: after,
+        source: 'admin',
+        referenceType: 'admin_roth_issue',
+        referenceId: walletId,
+        reason: reason,
+        createdBy: adminUserId,
+        createdAt: createdAt,
+      ),
+      'audit': {
+        'adminUserId': adminUserId,
+        'adminEmail': adminEmail.trim().toLowerCase(),
+        'targetUserId': userId,
+        'amount': amount,
+        'reason': reason.trim(),
+        'createdAt': createdAt,
+      },
+    };
+  }
+
+  static Map<String, Object?> ledgerTransaction({
+    required String transactionId,
+    required String walletId,
+    required String userId,
+    required String email,
+    required String type,
+    required String direction,
+    required num amount,
+    required num balanceBefore,
+    required num balanceAfter,
+    required String source,
+    required String referenceType,
+    required String referenceId,
+    required String reason,
+    required String createdBy,
+    required Object createdAt,
+  }) =>
+      {
+        'transactionId': transactionId,
+        'walletId': walletId,
+        'userId': userId,
+        'email': email.trim().toLowerCase(),
+        'type': type,
+        'direction': direction,
+        'amount': _round2(amount.toDouble()),
+        'balanceBefore': _round2(balanceBefore.toDouble()),
+        'balanceAfter': _round2(balanceAfter.toDouble()),
+        'source': source,
+        'referenceType': referenceType,
+        'referenceId': referenceId,
+        'reason': reason.trim(),
+        'createdBy': createdBy,
+        'createdAt': createdAt,
+      };
+}
+
+List<Map<String, dynamic>> adminSearch(
+  List<Map<String, dynamic>> records,
+  String query,
+  List<String> fields,
+) {
+  final normalized = query.trim().toLowerCase();
+  if (normalized.isEmpty) return records;
+  return records.where((record) {
+    return fields.any(
+        (field) => '${record[field] ?? ''}'.toLowerCase().contains(normalized));
+  }).toList();
+}
+
+bool _isCompleted(Map<String, dynamic> item) {
+  final status = '${item['status'] ?? ''}'.toLowerCase();
+  return status.contains('complete') || status.contains('delivered');
+}
+
+bool _isFailed(Map<String, dynamic> item) {
+  return '${item['status'] ?? ''}'.toLowerCase().contains('failed');
+}
+
+bool _isCancelled(Map<String, dynamic> item) {
+  return '${item['status'] ?? ''}'.toLowerCase().contains('cancel');
+}
+
+bool _isResolved(Map<String, dynamic> item) {
+  final status = '${item['status'] ?? ''}'.toLowerCase();
+  return status.contains('resolved') || status.contains('closed');
+}
+
+bool _isInactive(Map<String, dynamic> item) {
+  final status =
+      '${item['status'] ?? item['accountStatus'] ?? ''}'.toLowerCase();
+  return status.contains('inactive') || status.contains('deactivated');
+}
+
+bool _isActiveDriver(Map<String, dynamic> item) {
+  final status =
+      '${item['status'] ?? item['driverStatus'] ?? ''}'.toLowerCase();
+  return status.contains('active') ||
+      status.contains('online') ||
+      status.contains('excellent') ||
+      status.contains('good');
+}
+
+bool _isPendingDriver(Map<String, dynamic> item) {
+  final status =
+      '${item['verificationStatus'] ?? item['driverStatus'] ?? item['status'] ?? ''}'
+          .toLowerCase();
+  return status.contains('pending') || status.contains('review');
+}
+
+double _sumSince(List<Map<String, dynamic>> records, DateTime since) {
+  return records.where((record) {
+    final date = _dateValue(record['createdAt'] ?? record['timestamp']);
+    return date == null || !date.isBefore(since);
+  }).fold<double>(0, (total, item) => total + _moneyValue(item));
+}
+
+double _moneyValue(Map<String, dynamic> item) {
+  return _number(
+      item['amount'] ?? item['price'] ?? item['quote'] ?? item['total']);
+}
+
+double _number(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value') ?? 0;
+}
+
+DateTime? _dateValue(dynamic value) {
+  if (value is DateTime) return value;
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+DateTime _dayStart(DateTime date) => DateTime(date.year, date.month, date.day);
+
+double _rate(int count, int total) =>
+    total == 0 ? 0 : _round2((count / total) * 100);
+
+double _round2(double value) => (value * 100).roundToDouble() / 100;

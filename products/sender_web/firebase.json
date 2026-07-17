@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "target": "sender",
+    "public": "build/web_sender",
+    "predeploy": ["node scripts/sender/validate_sender.js"],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [{
+      "source": "**",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    }],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}
