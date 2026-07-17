@@ -297,6 +297,87 @@ test("parser handles conversational and multi-item descriptions", () => {
   }
 });
 
+test("multi-item reasoning extracts each item and combines logistics requirements", () => {
+  const cases = [
+    ["Laptop, monitor and keyboard", 4.8, "Electronics", "any", ["Fragile"], "laptop", 3],
+    ["TV + Xbox + games", 34.2, "Electronics", "van", ["Fragile", "Van Required"], "tv", 3],
+    ["Flowers, cake and champagne", 5.5, "Food & Consumables", "any", ["Perishable", "Keep Upright", "Fragile"], "cake", 3],
+    ["Mirror, wardrobe and mattress", 68, "Furniture & Home", "van", ["Fragile", "Van Required", "Two Person Lift"], "mattress", 3],
+    ["Three laptops, two monitors and a printer", 25, "Business & Commercial", "van", ["Fragile", "Bulky"], "printer", 3],
+    ["Dining table with four chairs", 44, "Furniture & Home", "van", ["Bulky", "Van Required"], "dining_chair", 2],
+    ["Laptop + flowers", 3, "Electronics", "any", ["Fragile", "Perishable", "Keep Upright"], "laptop", 2],
+    ["TV + cake", 35, "Electronics", "van", ["Fragile", "Perishable", "Van Required"], "tv", 2],
+    ["Mirror + chair", 14, "Fragile & Valuable", "van", ["Fragile", "Bulky"], "mirror", 2],
+    ["Medicine + food", 3.5, "Food & Consumables", "any", ["Temperature Sensitive", "Perishable"], "food", 2],
+    ["Artwork + bicycle", 19, "Personal Items & Luggage", "van", ["Fragile", "High Value", "Van Required"], "bicycle", 2],
+    ["Printer + monitor", 17, "Business & Commercial", "van", ["Fragile", "Bulky"], "printer", 2],
+    ["Engine block + tyres", 85, "Tools & Machinery", "van", ["Bulky", "Van Required", "Two Person Lift"], "construction_materials", 2],
+  ];
+  for (const [description, expectedKg, expectedCategory, expectedVehicle, expectedFlags, expectedDominant, expectedItemCount] of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.estimatedWeightKg, expectedKg, description);
+    assert.equal(result.recommendation.category, expectedCategory, description);
+    assert.equal(result.internal.riderMatching.vehicleRequired, expectedVehicle, description);
+    assert.equal(result.internal.shipmentSummary.itemCount, expectedItemCount, description);
+    assert.equal(result.recommendation.dominantItem.id, expectedDominant, description);
+    for (const flag of expectedFlags) {
+      assert.ok(result.recommendation.handlingFlags.includes(flag), `${description} missing ${flag}`);
+    }
+  }
+});
+
+test("multi-item reasoning understands containers by their contents", () => {
+  const cases = [
+    ["Suitcase containing books", "Personal Items & Luggage", 12, "books"],
+    ["Box of clothes", "Clothing & Fashion", 0.5, "clothes"],
+    ["Crate of drinks", "Food & Consumables", 1, "drinks"],
+    ["Bag of tools", "Tools & Machinery", 15, "tools"],
+    ["Envelope containing passports", "Documents", 0.3, "passport_documents"],
+    ["Toolbox", "Tools & Machinery", 15, "tools"],
+    ["Backpack with a laptop and two books", "Personal Items & Luggage", 26, "books"],
+  ];
+  for (const [description, expectedCategory, expectedKg, expectedDominant] of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.category, expectedCategory, description);
+    assert.equal(result.recommendation.estimatedWeightKg, expectedKg, description);
+    if (result.recommendation.dominantItem) {
+      assert.equal(result.recommendation.dominantItem.id, expectedDominant, description);
+    } else {
+      assert.equal(result.recommendation.detectedItems[0].id, expectedDominant, description);
+    }
+  }
+});
+
+test("multi-item reasoning keeps policy blockers dominant over allowed items", () => {
+  const prohibited = classifyIris({description: "Laptop, cake and explosive"});
+  assert.equal(prohibited.compliance.status, "prohibited");
+  assert.equal(prohibited.serviceability.status, "manual_review");
+
+  const referral = classifyIris({description: "Flowers and dog"});
+  assert.equal(referral.compliance.status, "referral_required");
+  assert.equal(referral.serviceability.status, "manual_review");
+});
+
+test("multi-item stress corpus remains deterministic and practical", () => {
+  const objects = ["laptop", "monitor", "keyboard", "TV", "cake", "flowers", "champagne", "mirror", "chair", "printer", "bicycle", "artwork"];
+  const connectors = [", ", " and ", " + "];
+  let scenarios = 0;
+  for (let first = 0; first < objects.length; first += 1) {
+    for (let second = 0; second < objects.length; second += 1) {
+      if (first === second) continue;
+      const description = `two ${objects[first]}${connectors[(first + second) % connectors.length]}three ${objects[second]}`;
+      const result = classifyIris({description});
+      const repeat = classifyIris({description});
+      assert.deepEqual(result, repeat, description);
+      assert.ok(result.recommendation.estimatedWeightKg > 0, description);
+      assert.ok(["any", "van"].includes(result.internal.riderMatching.vehicleRequired), description);
+      assert.ok(result.recommendation.detectedItems.length >= 2, description);
+      scenarios += 1;
+    }
+  }
+  assert.equal(scenarios, 132);
+});
+
 test("ambiguous animals and prohibited prompt attacks do not bypass policy", () => {
   const dog = classifyIris({description: "Dog"});
   assert.equal(dog.compliance.status, "referral_required");

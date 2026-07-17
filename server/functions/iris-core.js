@@ -77,6 +77,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "passport_documents",
+    patterns: [/\bpassports?\b/, /\bdocuments?\b/, /\benvelopes?\b/, /\bletters?\b/],
+    category: "Documents",
+    weightKg: 0.3,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
     id: "dresser_cabinet",
     patterns: [/\bdresser cabinet\b/, /\bdresser\b/, /\bdrawer cabinet\b/],
     category: "Furniture & Home",
@@ -189,6 +197,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "games",
+    patterns: [/\bgames?\b/, /\bvideo games?\b/],
+    category: "Electronics",
+    weightKg: 0.2,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
     id: "dining_chair",
     patterns: [/\bdining chairs?\b/, /\bchairs?\b/],
     category: "Furniture & Home",
@@ -277,6 +293,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "food",
+    patterns: [/\bfoods?\b/, /\bgroceries\b/, /\bmeals?\b/],
+    category: "Food & Consumables",
+    weightKg: 3,
+    handlingFlags: ["Perishable"],
+    vehicleRequired: "any",
+  },
+  {
     id: "batteries",
     patterns: [/\bbatteries\b/, /\bbattery pack\b/],
     category: "Electronics",
@@ -293,8 +317,16 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "mirror",
+    patterns: [/\bmirrors?\b/],
+    category: "Fragile & Valuable",
+    weightKg: 8,
+    handlingFlags: ["Fragile", "Awkward Shape", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
     id: "car_tyre",
-    patterns: [/\bcar tyre\b/, /\bcar tire\b/, /\btyre\b/, /\btire\b/],
+    patterns: [/\bcar tyres?\b/, /\bcar tires?\b/, /\btyres?\b/, /\btires?\b/],
     category: "Tools & Machinery",
     weightKg: 10,
     handlingFlags: ["Bulky", "Awkward Shape"],
@@ -317,8 +349,16 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "printer",
+    patterns: [/\bprinters?\b/],
+    category: "Business & Commercial",
+    weightKg: 15,
+    handlingFlags: ["Bulky", "Fragile"],
+    vehicleRequired: "any",
+  },
+  {
     id: "furniture",
-    patterns: [/\bfurniture\b/, /\bwardrobe\b/, /\bcabinet\b/, /\bbed\b/, /\bhouse move\b/, /\bbedroom\b/, /\bgarage contents\b/],
+    patterns: [/\bfurniture\b/, /\bwardrobe\b/, /\bcabinet\b/, /\bbed\b/, /\bhouse move\b/, /\boffice move\b/, /\bstudent move\b/, /\bbedroom\b/, /\bbedroom contents\b/, /\bgarage contents\b/],
     category: "Furniture & Home",
     weightKg: 30,
     handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
@@ -346,6 +386,22 @@ const OBJECT_MAPPINGS = Object.freeze([
     category: "Food & Consumables",
     weightKg: 1,
     handlingFlags: ["Perishable", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "cake",
+    patterns: [/\bcakes?\b/],
+    category: "Food & Consumables",
+    weightKg: 3,
+    handlingFlags: ["Perishable", "Fragile", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "champagne",
+    patterns: [/\bchampagne\b/, /\bwine\b/],
+    category: "Food & Consumables",
+    weightKg: 1.5,
+    handlingFlags: ["Fragile", "Keep Upright"],
     vehicleRequired: "any",
   },
   {
@@ -390,11 +446,27 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "construction_materials",
-    patterns: [/\bconcrete\b/, /\btimber\b/, /\bconcrete mixer\b/],
+    patterns: [/\bconcrete\b/, /\btimber\b/, /\bconcrete mixer\b/, /\bengine blocks?\b/],
     category: "Tools & Machinery",
     weightKg: 75,
     handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
     vehicleRequired: "van",
+  },
+  {
+    id: "tools",
+    patterns: [/\btools?\b/, /\btoolbox\b/],
+    category: "Tools & Machinery",
+    weightKg: 15,
+    handlingFlags: ["Bulky"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "artwork",
+    patterns: [/\bartwork\b/, /\bpaintings?\b/, /\bframed art\b/],
+    category: "Fragile & Valuable",
+    weightKg: 5,
+    handlingFlags: ["Fragile", "High Value", "Keep Upright"],
+    vehicleRequired: "any",
   },
 ]);
 
@@ -718,25 +790,61 @@ function parseWeightKg(...values) {
 function splitItemClauses(rawText) {
   return `${rawText || ""}`
       .replace(/\n+/g, ",")
+      .replace(/[+&]/g, ",")
+      .replace(/\bcontaining\b/gi, ",")
+      .replace(/\bfull of\b/gi, ",")
+      .replace(/\bfilled with\b/gi, ",")
+      .replace(/\bwith\b/gi, ",")
       .split(/\s*,\s*|\s+and\s+/i)
       .map((part) => part.trim())
       .filter(Boolean);
 }
 
-function estimateCombinedWeightKg(rawText) {
+function extractShipmentItems(rawText) {
   const clauses = splitItemClauses(rawText);
-  if (clauses.length < 2) return null;
-  let total = 0;
-  let matched = 0;
+  const items = [];
   for (const clause of clauses) {
     const text = normalize(clause);
+    if (clauses.length > 1 && /^(suitcase|box|crate|bag|envelope|backpack)$/i.test(text)) continue;
     const object = detectObject(text);
     if (!object) continue;
-    total += object.weightKg * parseQuantity(clause);
-    matched += 1;
+    const quantity = parseQuantity(clause);
+    items.push({
+      id: object.id,
+      description: clause,
+      category: object.category,
+      quantity,
+      unitWeightKg: object.weightKg,
+      totalWeightKg: Math.round(object.weightKg * quantity * 100) / 100,
+      handlingFlags: object.handlingFlags,
+      vehicleRequired: object.vehicleRequired,
+    });
   }
-  if (matched < 2) return null;
-  return Math.round(total * 100) / 100;
+  return items;
+}
+
+function summarizeShipmentItems(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const combinedWeightKg = Math.round(items.reduce((sum, item) => sum + item.totalWeightKg, 0) * 100) / 100;
+  const dominantItem = items.slice().sort((a, b) => {
+    if (b.totalWeightKg !== a.totalWeightKg) return b.totalWeightKg - a.totalWeightKg;
+    return b.handlingFlags.length - a.handlingFlags.length;
+  })[0];
+  const handlingFlags = Array.from(new Set(items.flatMap((item) => item.handlingFlags)));
+  return {
+    itemCount: items.length,
+    totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+    combinedWeightKg,
+    dominantItem,
+    handlingFlags,
+    vehicleRequired: items.some((item) => item.vehicleRequired === "van") || combinedWeightKg > 25 ? "van" : "any",
+  };
+}
+
+function estimateCombinedWeightKg(rawText) {
+  const items = extractShipmentItems(rawText);
+  if (items.length < 2) return null;
+  return summarizeShipmentItems(items).combinedWeightKg;
 }
 
 function weightBandFor(weightKg) {
@@ -768,7 +876,8 @@ function estimateWeightKg(rawText, declaredWeightText) {
   return 2;
 }
 
-function classifyCategory(text) {
+function classifyCategory(text, shipmentSummary = null) {
+  if (shipmentSummary && shipmentSummary.dominantItem) return shipmentSummary.dominantItem.category;
   const object = detectObject(text);
   if (object) return object.category;
   if (includesAny(text, ["passport", "contract", "document", "letter", "paperwork", "certificate"])) return "Documents";
@@ -784,9 +893,9 @@ function classifyCategory(text) {
   return "Other";
 }
 
-function handlingFlagsFor(text, category, weightKg) {
+function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
   const object = detectObject(text);
-  const flags = new Set(object ? object.handlingFlags : []);
+  const flags = new Set(shipmentSummary ? shipmentSummary.handlingFlags : object ? object.handlingFlags : []);
   if (category === "Electronics" || category === "Fragile & Valuable" || includesAny(text, ["glass", "mirror", "ceramic", "tv", "monitor", "fragile"])) flags.add("Fragile");
   if (category === "Food & Consumables" || includesAny(text, ["food", "meal", "cake", "groceries"])) flags.add("Perishable");
   if (includesAny(text, ["upright", "keep upright", "tv", "fridge"])) flags.add("Keep Upright");
@@ -956,10 +1065,12 @@ function classifyIris(input = {}) {
   const speed = `${input.speed || ""}`;
   const express = normalize(speed) === "express" || input.express === true || input.urgent === true;
   const compliance = complianceFor(text);
+  const shipmentItems = extractShipmentItems(description);
+  const shipmentSummary = shipmentItems.length >= 2 ? summarizeShipmentItems(shipmentItems) : null;
   const estimatedWeightKg = estimateWeightKg(description, declaredWeightText);
-  const baseCategory = classifyCategory(text);
+  const baseCategory = classifyCategory(text, shipmentSummary);
   const baseWeightBand = weightBandFor(estimatedWeightKg);
-  const handlingFlags = handlingFlagsFor(text, baseCategory, estimatedWeightKg);
+  const handlingFlags = handlingFlagsFor(text, baseCategory, estimatedWeightKg, shipmentSummary);
   const internalContext = internalContextFor(text, baseCategory, estimatedWeightKg);
   const price = calculatePrice({
     distanceMiles: input.distanceMiles || 0,
@@ -970,6 +1081,20 @@ function classifyIris(input = {}) {
   });
   const baseRecommendation = {
     detectedItem: description.trim() || baseCategory,
+    detectedItems: shipmentItems.length ? shipmentItems.map((item) => ({
+      id: item.id,
+      description: item.description,
+      category: item.category,
+      quantity: item.quantity,
+      estimatedWeightKg: item.totalWeightKg,
+      handlingFlags: item.handlingFlags,
+    })) : undefined,
+    dominantItem: shipmentSummary && shipmentSummary.dominantItem ? {
+      id: shipmentSummary.dominantItem.id,
+      description: shipmentSummary.dominantItem.description,
+      category: shipmentSummary.dominantItem.category,
+      estimatedWeightKg: shipmentSummary.dominantItem.totalWeightKg,
+    } : undefined,
     category: baseCategory,
     weightBand: baseWeightBand,
     estimatedWeightKg,
@@ -1006,6 +1131,13 @@ function classifyIris(input = {}) {
       logisticsScore: recommendation.handlingFlags.length / HANDLING_FLAGS.length,
       pricingModifiers: price,
       riderMatching: matching,
+      shipmentSummary: shipmentSummary ? {
+        itemCount: shipmentSummary.itemCount,
+        totalQuantity: shipmentSummary.totalQuantity,
+        combinedWeightKg: shipmentSummary.combinedWeightKg,
+        dominantItemId: shipmentSummary.dominantItem.id,
+        vehicleRequired: shipmentSummary.vehicleRequired,
+      } : null,
       learningMatchedExamples: recommendation.learningMatchedExamples || 0,
     },
     compliance: {
