@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const {initializeApp} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getAuth} = require("firebase-admin/auth");
 const {getMessaging} = require("firebase-admin/messaging");
 const functions = require("firebase-functions/v1");
 const {defineSecret} = require("firebase-functions/params");
@@ -60,6 +61,121 @@ function allowCors(req, res) {
     return true;
   }
   return false;
+}
+
+function asText(value) {
+  return `${value || ""}`.trim();
+}
+
+function asMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.round(number * 100) / 100;
+}
+
+function asPence(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.round(number);
+}
+
+function terminalPaymentStatus(status) {
+  return ["succeeded", "paid", "completed", "checkout_completed"].includes(
+      asText(status).toLowerCase(),
+  );
+}
+
+function blockedDeliveryStatus(delivery = {}) {
+  const statuses = [
+    delivery.status,
+    delivery.deliveryStatus,
+    delivery.deliveryStage,
+    delivery.flowStatus,
+  ].map((status) => asText(status).toLowerCase());
+  return statuses.some((status) => [
+    "cancelled",
+    "canceled",
+    "expired",
+    "completed",
+    "delivered",
+    "archived",
+    "archived_stale",
+    "failed",
+  ].includes(status));
+}
+
+async function requireHttpSender(req) {
+  const header = asText(req.headers.authorization || req.headers.Authorization);
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    const error = new Error("Sender authentication is required.");
+    error.status = 401;
+    throw error;
+  }
+  const decoded = await getAuth().verifyIdToken(match[1]);
+  return {
+    uid: decoded.uid,
+    email: decoded.email || "",
+    name: decoded.name || decoded.displayName || "",
+  };
+}
+
+function legacyPricingInput(body = {}, delivery = null) {
+  if (delivery) {
+    return {
+      quoteId: delivery.quoteId,
+      distanceMiles: delivery.distanceMiles ||
+        delivery.pricingInputs && delivery.pricingInputs.distanceMiles ||
+        delivery.pricingBreakdown && delivery.pricingBreakdown.distanceMiles,
+      weightKg: delivery.weightKg ||
+        delivery.parcelWeightKg ||
+        delivery.parcel && delivery.parcel.weightKg ||
+        delivery.pricingInputs && delivery.pricingInputs.weightKg,
+      selectedSpeed: delivery.selectedSpeed ||
+        delivery.selectedServiceLevel ||
+        delivery.serviceLevel ||
+        delivery.selectedTier,
+      vanguardProtocolEnabled: delivery.vanguardProtocolEnabled === true ||
+        delivery.vanguard === true,
+      iris: delivery.iris || delivery.irisDeliveryEstimate || {},
+    };
+  }
+  const pricing = body.pricingInput || body.pricingInputs || {};
+  return {
+    quoteId: asText(body.quoteId) || undefined,
+    distanceMiles: pricing.distanceMiles,
+    weightKg: pricing.weightKg,
+    selectedSpeed: pricing.selectedSpeed || body.selectedSpeed,
+    vanguardProtocolEnabled: pricing.vanguardProtocolEnabled === true ||
+      body.vanguardProtocolEnabled === true,
+    iris: pricing.iris || body.iris || {},
+  };
+}
+
+function validateLegacyPricingInput(input = {}) {
+  const distanceMiles = asMoney(input.distanceMiles);
+  const weightKg = asMoney(input.weightKg);
+  if (distanceMiles == null || distanceMiles <= 0) {
+    const error = new Error("Authoritative delivery distance is unavailable.");
+    error.status = 412;
+    error.code = "missing-authoritative-pricing";
+    throw error;
+  }
+  if (weightKg == null || weightKg <= 0) {
+    const error = new Error("Authoritative parcel weight is unavailable.");
+    error.status = 412;
+    error.code = "missing-authoritative-pricing";
+    throw error;
+  }
+  return input;
+}
+
+function sendPaymentError(res, error) {
+  const status = Number(error.status || 400);
+  return res.status(status).send({
+    error: error.message || "Payment request failed.",
+    code: error.code || "payment-request-failed",
+  });
 }
 
 exports.sendPackage = sendPackage;
@@ -243,48 +359,129 @@ const generateResponse = function(intent) {
 const createPaymentIntentHandler = async (req, res) => {
   if (allowCors(req, res)) return;
   const {
-    // paymentMethodId,
     amount,
     currency,
-    // useStripeSdk,
     pushToken,
     name,
-    // phone,
     email,
-    userId,
     deliveryId,
     saveCard,
+    paymentRequestId,
   } = req.body;
 
-  //   const orderAmount = calculateOrderAmount(items);
-  const orderAmount = amount;
-
   try {
+    const sender = await requireHttpSender(req);
+    const db = getFirestore();
+    const requestedCurrency = asText(currency || "gbp").toLowerCase();
+    if (requestedCurrency !== "gbp") {
+      const error = new Error("Circum delivery payments are charged in GBP.");
+      error.status = 400;
+      error.code = "unsupported-currency";
+      throw error;
+    }
+
+    const submittedAmountPence = asPence(amount);
+    if (submittedAmountPence == null || submittedAmountPence <= 0) {
+      const error = new Error("A valid displayed payment amount is required.");
+      error.status = 400;
+      error.code = "invalid-client-amount";
+      throw error;
+    }
+
+    const deliveryRef = asText(deliveryId) ?
+      db.collection("deliveryRequests").doc(asText(deliveryId)) :
+      null;
+    const deliverySnap = deliveryRef ? await deliveryRef.get() : null;
+    const delivery = deliverySnap && deliverySnap.exists ? deliverySnap.data() : null;
+    if (delivery) {
+      const owner = asText(delivery.senderId || delivery.userId);
+      if (owner !== sender.uid) {
+        const error = new Error("Delivery payment is not available for this Sender.");
+        error.status = 403;
+        error.code = "permission-denied";
+        throw error;
+      }
+      if (blockedDeliveryStatus(delivery)) {
+        const error = new Error("This delivery can no longer be paid.");
+        error.status = 412;
+        error.code = "delivery-not-payable";
+        throw error;
+      }
+      if (terminalPaymentStatus(delivery.paymentStatus || delivery.stripePaymentStatus)) {
+        const error = new Error("This delivery has already been paid.");
+        error.status = 409;
+        error.code = "already-paid";
+        throw error;
+      }
+    }
+
+    const pricingInput = legacyPricingInput(req.body, delivery);
+    const quote = delivery && asMoney(delivery.price || delivery.paidAmount) != null ?
+      {
+        quoteId: asText(delivery.quoteId) || `legacy_delivery_${deliverySnap.id}`,
+        total: asMoney(delivery.price || delivery.paidAmount),
+        finalAmount: asMoney(delivery.price || delivery.paidAmount),
+        amountDue: asMoney(delivery.price || delivery.paidAmount),
+        currency: "GBP",
+        pricingSource: "stored_delivery_price",
+        lineItems: delivery.pricingBreakdown && delivery.pricingBreakdown.lineItems ||
+          delivery.pricingBreakdown && delivery.pricingBreakdown.items ||
+          [],
+      } :
+      senderBooking._private.quotePayload(validateLegacyPricingInput(pricingInput), sender.uid);
+    const authoritativeAmountPence = asPence(Number(quote.total) * 100);
+    if (authoritativeAmountPence == null || authoritativeAmountPence <= 0) {
+      const error = new Error("Authoritative delivery pricing is unavailable.");
+      error.status = 412;
+      error.code = "missing-authoritative-pricing";
+      throw error;
+    }
+
+    const idempotencyKey = asText(paymentRequestId) ||
+      asText(deliveryId) ||
+      `${sender.uid}_${quote.quoteId}`;
+    const sessionRef = db.collection("legacyCorePaymentSessions")
+        .doc(`core_${idempotencyKey}`);
+    const existingSession = await sessionRef.get();
+    if (existingSession.exists) {
+      const existing = existingSession.data() || {};
+      if (existing.clientSecret && existing.paymentIntentId) {
+        return res.send({
+          clientSecret: existing.clientSecret,
+          status: existing.status,
+          paymentIntentId: existing.paymentIntentId,
+          customerId: existing.customerId,
+          ephemeralKey: existing.ephemeralKey,
+          amount: existing.authoritativeAmountPence,
+          currency: "gbp",
+          idempotent: true,
+          authoritativePricing: existing.authoritativePricing,
+        });
+      }
+    }
+
     let customerId;
 
-    const userRef = await getFirestore().collection("users").doc(userId).get();
+    const userRef = await db.collection("users").doc(sender.uid).get();
 
     if (userRef.exists) {
       const userData = userRef.data();
-      customerId = userData.customerId || undefined;
+      customerId = userData.stripeCustomerId || userData.customerId || undefined;
     }
 
     const params = {
-      amount: orderAmount,
-      // confirm: true,
-      currency,
-      // automatic_payment_methods: {
-      //   enabled: true,
-      //   allow_redirects: "never",
-      // },
-      // payment_method: paymentMethodId,
-      // use_stripe_sdk: useStripeSdk,
+      amount: authoritativeAmountPence,
+      currency: "gbp",
       metadata: {
-        name: name,
-        email: email,
+        name: name || sender.name,
+        email: email || sender.email,
         pushToken: pushToken,
-        userId: userId || "",
+        userId: sender.uid,
         deliveryId: deliveryId || "",
+        paymentRequestId: idempotencyKey,
+        submittedAmountPence: `${submittedAmountPence}`,
+        authoritativeAmountPence: `${authoritativeAmountPence}`,
+        pricingSource: quote.pricingSource || "sender_backend_quote_v1",
       },
       payment_method_types: ["card"],
       setup_future_usage: saveCard ? "off_session" : undefined,
@@ -298,8 +495,8 @@ const createPaymentIntentHandler = async (req, res) => {
     // create customerId if it doesnt exist
     if (!customerId) {
       const customer = await stripe.customers.create({
-        name: name,
-        email: email,
+        name: name || sender.name,
+        email: email || sender.email,
       });
         // phone: phone,
 
@@ -309,9 +506,11 @@ const createPaymentIntentHandler = async (req, res) => {
         params.customer = customerId;
       }
 
-      await getFirestore().collection("users").doc(userId).update({
+      await db.collection("users").doc(sender.uid).set({
         customerId: customer.id,
-      });
+        stripeCustomerId: customer.id,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
     }
 
     const ephemeralKey = await stripe.ephemeralKeys.create(
@@ -320,29 +519,62 @@ const createPaymentIntentHandler = async (req, res) => {
     );
 
 
-    const intent = await stripe.paymentIntents.create(params);
+    const intent = await stripe.paymentIntents.create(params, {
+      idempotencyKey: `core_delivery_${idempotencyKey}`,
+    });
 
-    if (deliveryId) {
-      await getFirestore().collection("deliveryRequests").doc(deliveryId).set({
+    const paymentRecord = {
+      paymentRequestId: idempotencyKey,
+      paymentIntentId: intent.id,
+      userId: sender.uid,
+      userEmail: sender.email || email || "",
+      deliveryId: deliveryId || null,
+      quoteId: quote.quoteId || null,
+      customerId,
+      clientSecret: intent.client_secret,
+      ephemeralKey: ephemeralKey.secret,
+      status: intent.status,
+      paymentStatus: intent.status,
+      submittedAmountPence,
+      authoritativeAmountPence,
+      pricingDiscrepancyPence: submittedAmountPence - authoritativeAmountPence,
+      currency: "GBP",
+      authoritativePricing: quote,
+      pricingSource: quote.pricingSource || "sender_backend_quote_v1",
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    await sessionRef.set(paymentRecord, {merge: true});
+    await db.collection("senderPaymentRecords").doc(intent.id).set({
+      ...paymentRecord,
+      amount: authoritativeAmountPence / 100,
+      provider: "stripe",
+    }, {merge: true});
+
+    if (deliveryRef) {
+      await deliveryRef.set({
         stripePaymentIntentId: intent.id,
         paymentStatus: intent.status,
         stripePaymentStatus: intent.status,
-        paymentUpdatedAt: Date.now(),
+        paymentUpdatedAt: FieldValue.serverTimestamp(),
+        authoritativePricing: quote,
+        pricingDiscrepancyPence: submittedAmountPence - authoritativeAmountPence,
       }, {merge: true});
     }
 
     const response = generateResponse(intent);
     response.paymentIntentId = intent.id;
     response.customerId = customerId;
-    response.ephemeralKey = ephemeralKey.secret,
+    response.ephemeralKey = ephemeralKey.secret;
+    response.amount = authoritativeAmountPence;
+    response.currency = "gbp";
+    response.authoritativePricing = quote;
 
     console.log(`Intent: ${intent}`);
     return res.send(response);
   } catch (e) {
     console.log(e);
-    // Handle "hard declines" e.g. insufficient funds, expired card, etc
-    // See https://stripe.com/docs/declines/codes for more.
-    return res.send({error: e.message});
+    return sendPaymentError(res, e);
   }
 };
 

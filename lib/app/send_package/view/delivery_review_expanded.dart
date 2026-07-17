@@ -1,4 +1,3 @@
-import 'package:bot_toast/bot_toast.dart';
 import 'package:circum/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/contact_info.dart';
@@ -6,11 +5,10 @@ import 'package:circum/helper/toast_helper.dart';
 import 'package:circum/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_keyboard_size/flutter_keyboard_size.dart';
-import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:intl_phone_field/countries.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../account/bloc/account_bloc.dart';
@@ -491,12 +489,19 @@ class _DeliveryReviewExpandedViewState
                 return ShowToast()
                     .errorToast(title: 'Please add a pick up phone number');
               }
+              final requestId = const Uuid().v4();
               final payForDelivery = await showPaymentBottomSheet(context,
-                  amount: state.price!, phone: phoneNumber);
+                  amount: state.price!,
+                  phone: phoneNumber,
+                  distanceKm: state.distance,
+                  weightKg: state.parcelWeightKg,
+                  selectedSpeed: 'standard',
+                  paymentRequestId: requestId);
 
               if (payForDelivery == 'success') {
                 // ignore: use_build_context_synchronously
                 context.read<SendPackageBloc>().add(SendDeliveryRequest(
+                    requestId: requestId,
                     pickupDetails: ContactInfo.fromJson(
                         fullname: username,
                         address: state.pickupCoordinate!,

@@ -305,7 +305,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     const uuid = Uuid();
     final uuid2 = uuid.v4();
     final uuid3 = uuid.v4();
-    final uuidStrong = "$uuid2-$uuid3";
+    final uuidStrong = event.requestId ?? "$uuid2-$uuid3";
 
     // print(uuidStrong);
 

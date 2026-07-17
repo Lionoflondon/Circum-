@@ -60,10 +60,15 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           // paymentMethodId: paymentMethod.id,
           currency: 'gbp',
           amount: event.amount,
+          distanceMiles: event.distanceMiles,
+          weightKg: event.weightKg,
+          selectedSpeed: event.selectedSpeed,
+          paymentRequestId: event.paymentRequestId,
+          deliveryId: event.deliveryId,
           userId: user!.uid,
           name: user.displayName,
           email: event.email,
-          pushToken: pushToken!,
+          pushToken: pushToken ?? '',
           phone: user.phoneNumber,
           saveCard: event.saveCard);
 
@@ -84,7 +89,8 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
         emit(state.copyWith(
             status: PaymentStatus.success,
-            paymentIntentId: paymentIntentResult['paymentIntentId'] as String?));
+            paymentIntentId:
+                paymentIntentResult['paymentIntentId'] as String?));
       }
 
       if (paymentIntentResult['clientSecret'] != null &&
@@ -153,10 +159,16 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     String? phone,
     String? email,
     int? amount,
+    double? distanceMiles,
+    double? weightKg,
+    String? selectedSpeed,
+    String? paymentRequestId,
+    String? deliveryId,
   }) async {
     final url = Uri.parse(
       'https://us-central1-circum-2797c.cloudfunctions.net/createPaymentIntent',
     );
+    final token = await auth.currentUser?.getIdToken();
 
     final data = {
       // 'useStripeSdk': useStripeSdk,
@@ -167,7 +179,14 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       'email': email,
       'name': name,
       'phone': phone,
-      'userId': userId
+      'userId': userId,
+      'deliveryId': deliveryId,
+      'paymentRequestId': paymentRequestId,
+      'pricingInput': {
+        'distanceMiles': distanceMiles,
+        'weightKg': weightKg,
+        'selectedSpeed': selectedSpeed ?? 'standard',
+      }
     };
 
     if (saveCard == true) {
@@ -176,7 +195,10 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
       body: json.encode(data),
     );
     return json.decode(response.body);

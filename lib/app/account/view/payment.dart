@@ -1,14 +1,22 @@
-import 'package:bot_toast/bot_toast.dart';
 import 'package:circum/helper/toast_helper.dart';
+import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../../authentication/bloc/auth_bloc.dart';
 import '../bloc/account_bloc.dart';
 
-showPaymentBottomSheet(context, {required double amount, String? phone}) {
+showPaymentBottomSheet(
+  context, {
+  required double amount,
+  String? phone,
+  double? distanceKm,
+  double? weightKg,
+  String? selectedSpeed,
+  String? paymentRequestId,
+  String? deliveryId,
+}) {
   return showModalBottomSheet(
       context: context,
       isDismissible: false,
@@ -23,6 +31,11 @@ showPaymentBottomSheet(context, {required double amount, String? phone}) {
         return PaymentScreen(
           amount: amount,
           phone: phone,
+          distanceKm: distanceKm,
+          weightKg: weightKg,
+          selectedSpeed: selectedSpeed,
+          paymentRequestId: paymentRequestId,
+          deliveryId: deliveryId,
         );
       });
 }
@@ -30,8 +43,21 @@ showPaymentBottomSheet(context, {required double amount, String? phone}) {
 class PaymentScreen extends StatefulWidget {
   final double amount;
   final String? phone;
-  const PaymentScreen({Key? key, required this.amount, this.phone})
-      : super(key: key);
+  final double? distanceKm;
+  final double? weightKg;
+  final String? selectedSpeed;
+  final String? paymentRequestId;
+  final String? deliveryId;
+  const PaymentScreen({
+    Key? key,
+    required this.amount,
+    this.phone,
+    this.distanceKm,
+    this.weightKg,
+    this.selectedSpeed,
+    this.paymentRequestId,
+    this.deliveryId,
+  }) : super(key: key);
 
   @override
   PaymentScreenState createState() => PaymentScreenState();
@@ -71,9 +97,6 @@ class PaymentScreenState extends State<PaymentScreen> {
           }),
           child: BlocBuilder<AccountBloc, AccountState>(
             builder: (context, state) {
-              CardEditController controller = CardEditController(
-                initialDetails: state.cardFieldInputDetails,
-              );
               if (state.status == PaymentStatus.initial) {
                 return SingleChildScrollView(
                   padding: const EdgeInsets.all(20).copyWith(top: 16),
@@ -159,6 +182,14 @@ class PaymentScreenState extends State<PaymentScreen> {
                                     //   phone: widget.phone,
                                     // ),
                                     amount: (widget.amount * 100).round(),
+                                    distanceMiles:
+                                        DeliveryPricing.kilometresToMiles(
+                                            widget.distanceKm ?? 0),
+                                    weightKg: widget.weightKg,
+                                    selectedSpeed:
+                                        widget.selectedSpeed ?? 'standard',
+                                    paymentRequestId: widget.paymentRequestId,
+                                    deliveryId: widget.deliveryId,
                                     email: email!,
                                     saveCard: state.saveCard,
                                   ),
@@ -252,6 +283,16 @@ class PaymentScreenState extends State<PaymentScreen> {
                                           PaymentCreateIntent(
                                             amount:
                                                 (widget.amount * 100).round(),
+                                            distanceMiles: DeliveryPricing
+                                                .kilometresToMiles(
+                                                    widget.distanceKm ?? 0),
+                                            weightKg: widget.weightKg,
+                                            selectedSpeed:
+                                                widget.selectedSpeed ??
+                                                    'standard',
+                                            paymentRequestId:
+                                                widget.paymentRequestId,
+                                            deliveryId: widget.deliveryId,
                                             email: email!,
                                             saveCard: state.saveCard,
                                           ),

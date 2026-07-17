@@ -879,5 +879,6 @@ exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;
 exports._private = {
   sanitizeSenderDraftPayload,
   stableId,
+  quotePayload,
   DRAFT_RETENTION_DAYS,
 };

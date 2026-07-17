@@ -12,16 +12,34 @@ class PaymentStart extends AccountEvent {}
 class PaymentCreateIntent extends AccountEvent {
   final BillingDetails? billingDetails;
   final int amount;
+  final double? distanceMiles;
+  final double? weightKg;
+  final String? selectedSpeed;
+  final String? paymentRequestId;
+  final String? deliveryId;
   final bool saveCard;
   final String email;
   const PaymentCreateIntent(
       {this.billingDetails,
       required this.amount,
       required this.email,
+      this.distanceMiles,
+      this.weightKg,
+      this.selectedSpeed,
+      this.paymentRequestId,
+      this.deliveryId,
       this.saveCard = false});
 
   @override
-  List<Object?> get props => [billingDetails, amount];
+  List<Object?> get props => [
+        billingDetails,
+        amount,
+        distanceMiles,
+        weightKg,
+        selectedSpeed,
+        paymentRequestId,
+        deliveryId,
+      ];
 }
 
 class UpdatePaymentStatus extends AccountEvent {
