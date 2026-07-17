@@ -15613,55 +15613,89 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
     try {
       await _ensureFirebaseReady();
-      final db = FirebaseFirestore.instance;
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final quoteResult =
+          await functions.httpsCallable('createSenderBookingQuote').call({
+        'quoteId': id,
+        'distanceMiles': _confirmedRouteDistanceMiles,
+        'weightKg': _deliveryClassification.finalWeightKg,
+        'selectedSpeed': _selectedSpeed,
+        'vanguard': _webVanguardRequired,
+        'iris': _webCanonicalIrisPayload(),
+        'clientDisplayQuote': {
+          'amount': _quoteTotal,
+          'amountPence': (_quoteTotal * 100).round(),
+          'currency': 'GBP',
+        },
+      });
+      final quote = Map<String, dynamic>.from(quoteResult.data as Map);
+      final authoritativeTotal =
+          (quote['amountDue'] as num? ?? quote['total'] as num? ?? 0)
+              .toDouble();
+      final difference = (authoritativeTotal - _quoteTotal).abs();
+      if (difference >= 0.01) {
+        final confirmed = await _confirmAuthoritativeWebQuote(
+          authoritativeTotal,
+        );
+        if (confirmed != true) {
+          if (!mounted) return;
+          setState(() {
+            _checkoutState = _CheckoutState.awaitingPayment;
+            _firebaseError = 'Payment cancelled before charge.';
+          });
+          return;
+        }
+      }
+      final sessionResult =
+          await functions.httpsCallable('createSenderPaymentSession').call({
+        'quoteId': quote['quoteId'],
+        'fallbackMethod': 'card',
+        'rothEnabled': false,
+      });
+      final session = Map<String, dynamic>.from(sessionResult.data as Map);
+      final clientSecret = '${session['clientSecret'] ?? ''}';
+      if (clientSecret.isNotEmpty) {
+        Stripe.publishableKey = Env.publishableLiveKey;
+        await Stripe.instance.applySettings();
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            customerId: '${session['customerId'] ?? ''}',
+            customerEphemeralKeySecret:
+                '${session['ephemeralKeySecret'] ?? ''}',
+            merchantDisplayName: 'Circum',
+            style: ThemeMode.dark,
+          ),
+        );
+        await Stripe.instance.presentPaymentSheet();
+      }
       final parcelPhotoData = await _uploadParcelPhoto(id);
       final request = _requestPayload(id, parcelPhotoData);
+      final paidDeliveryResult =
+          await functions.httpsCallable('createSenderPaidDelivery').call({
+        'requestId': id,
+        'quoteId': quote['quoteId'],
+        'paymentSessionId': session['paymentSessionId'],
+        'idempotencyKey': id,
+        'pickup': _webCanonicalPickupPayload(request),
+        'dropoff': _webCanonicalDropoffPayload(request),
+        'recipient': _webCanonicalRecipientPayload(request),
+        'parcel': _webCanonicalParcelPayload(request),
+        'iris': _webCanonicalIrisPayload(),
+        'deliveryTime': _webCanonicalDeliveryTimePayload(),
+      });
+      final paidDelivery =
+          Map<String, dynamic>.from(paidDeliveryResult.data as Map);
+      final requestId = '${paidDelivery['requestId'] ?? id}';
       _activeVanguardData = request['vanguardEnabled'] == true
           ? Map<String, dynamic>.from(request)
           : null;
-      final senderId = '${request['senderId']}';
-      final batch = db.batch();
-      batch.set(db.collection('webSenderRequests').doc(id), request);
-      batch.set(db.collection('deliveryRequests').doc(id), request);
-      batch.set(
-          db.collection('chats').doc(id),
-          {
-            'threadId': id,
-            'bookingId': id,
-            'requestId': id,
-            'participants': [senderId, 'circum-support'],
-            'participantRoles': {senderId: 'sender', 'circum-support': 'admin'},
-            'lastMessage':
-                'Your request is live. Iris is checking nearby riders now.',
-            'lastMessageTimestamp': FieldValue.serverTimestamp(),
-            'unreadBy': ['admin'],
-            'updatedAt': FieldValue.serverTimestamp(),
-            'source': 'circum-web',
-          },
-          SetOptions(merge: true));
-      batch.set(db.collection('chats').doc(id).collection('messages').doc(), {
-        'threadId': id,
-        'bookingId': id,
-        'requestId': id,
-        'senderId': senderId,
-        'senderRole': 'system',
-        'senderType': 'support',
-        'recipientId': senderId,
-        'recipientType': 'sender',
-        'messageText':
-            'Your request is live. Iris is checking nearby riders now.',
-        'message': 'Your request is live. Iris is checking nearby riders now.',
-        'readBy': [senderId],
-        'system': true,
-        'status': 'sent',
-        'createdAt': FieldValue.serverTimestamp(),
-        'timeStamp': DateTime.now().toIso8601String(),
-      });
-      await batch.commit();
-      _listenToRequest(id);
-      _listenToChat(id);
+      _listenToRequest(requestId);
+      _listenToChat(requestId);
       if (!mounted) return;
       setState(() {
+        _activeOrderId = requestId;
+        _activeRequestDocId = requestId;
         _checkoutState = _CheckoutState.matchingRiders;
         _broadcasting = true;
         _firebaseOnline = true;
@@ -15674,9 +15708,130 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _broadcasting = false;
         _firebaseOnline = false;
         _firebaseError =
-            'We could not save this delivery just now. Please try again.';
+            'Payment was not completed. Your delivery was not created.';
       });
     }
+  }
+
+  Future<bool?> _confirmAuthoritativeWebQuote(double authoritativeTotal) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirm updated total'),
+        content: Text(
+          'The secure checkout total is £${authoritativeTotal.toStringAsFixed(2)}. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Map<String, dynamic> _webCanonicalPickupPayload(
+    Map<String, dynamic> request,
+  ) {
+    final pickup = Map<String, dynamic>.from(request['pickupDetails'] as Map);
+    final coordinates = Map<String, dynamic>.from(
+      pickup['coordinates'] as Map? ?? const {},
+    );
+    return {
+      'fullname': pickup['fullname'],
+      'phone': pickup['phone'],
+      'coordinates': coordinates,
+      'instructions': pickup['moreInformation'],
+      'locality': pickup['locality'],
+      'address': pickup['address'],
+      'subAddress': pickup['subAddress'],
+    };
+  }
+
+  Map<String, dynamic> _webCanonicalDropoffPayload(
+    Map<String, dynamic> request,
+  ) {
+    final dropoff = Map<String, dynamic>.from(request['dropoffDetails'] as Map);
+    final coordinates = Map<String, dynamic>.from(
+      dropoff['coordinates'] as Map? ?? const {},
+    );
+    return {
+      'fullname': dropoff['fullname'],
+      'phone': dropoff['phone'],
+      'coordinates': coordinates,
+      'instructions': dropoff['moreInformation'],
+      'locality': dropoff['locality'],
+      'address': dropoff['address'],
+      'subAddress': dropoff['subAddress'],
+    };
+  }
+
+  Map<String, dynamic> _webCanonicalRecipientPayload(
+    Map<String, dynamic> request,
+  ) {
+    final receiver = Map<String, dynamic>.from(
+      request['receiverDetails'] as Map? ?? const {},
+    );
+    return {
+      'name': receiver['name'] ?? request['receiverName'],
+      'phone': receiver['phone'] ?? request['receiverPhone'],
+      'deliveryNotes':
+          (request['dropoffDetails'] as Map?)?['moreInformation'] ?? '',
+    };
+  }
+
+  Map<String, dynamic> _webCanonicalParcelPayload(
+    Map<String, dynamic> request,
+  ) {
+    return {
+      'itemName': request['normalizedItemName'] ?? request['packageType'],
+      'description': request['packageDescription'],
+      'weightKg': request['finalWeightKg'] ?? request['weightKg'],
+      'category': request['packageType'],
+      'quantity': request['quantity'],
+      'photoUrl': request['photoUrl'],
+      'photoStoragePath': request['photoStoragePath'],
+    };
+  }
+
+  Map<String, dynamic> _webCanonicalIrisPayload() {
+    return {
+      'itemName': _irisMatchedItemName,
+      'category': _inferPackageType(),
+      'irisWeightKg': _irisEstimatedWeightKg,
+      'finalBillableWeightKg': _deliveryClassification.finalWeightKg,
+      'weightBand': _deliveryClassification.finalWeightBand,
+      'confidence': _irisWeightConfidence,
+      'source': _irisWeightSource,
+      'vanguardRequired': _webVanguardRequired,
+      'vanguardRequiredReason': _webVanguardRequired
+          ? 'Vanguard protection selected by item value policy.'
+          : '',
+    };
+  }
+
+  bool get _webVanguardRequired {
+    return VanguardProtection.initialFields(
+          description: _description.text.trim(),
+          packageType: _inferPackageType(),
+          declaredValueGbp: null,
+        )['vanguardEnabled'] ==
+        true;
+  }
+
+  Map<String, dynamic> _webCanonicalDeliveryTimePayload() {
+    return {
+      'type': _deliveryTimingType,
+      'scheduledDate': _scheduledPickupDate.text.trim(),
+      'scheduledWindow': _scheduledPickupWindow.text.trim(),
+      'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
+      'scheduledDropoffWindow': _scheduledDropoffWindow.text.trim(),
+    };
   }
 
   Future<void> _bookHealthPlus() async {

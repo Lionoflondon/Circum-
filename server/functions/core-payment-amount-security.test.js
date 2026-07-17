@@ -36,6 +36,13 @@ const reviewSource = fs.readFileSync(path.join(
     "view",
     "delivery_review_expanded.dart",
 ), "utf8");
+const webSenderSource = fs.readFileSync(path.join(
+    __dirname,
+    "..",
+    "..",
+    "lib",
+    "web_sender_app.dart",
+), "utf8");
 
 test("legacy standard delivery payment HTTP endpoints are retired", () => {
   assert.doesNotMatch(indexSource, /exports\.StripePayEndpointMethodId/);
@@ -80,4 +87,18 @@ test("canonical paid delivery finalization requires succeeded payment and is ide
   assert.match(senderBookingSource, /senderDeliveryIdempotency/);
   assert.match(senderBookingSource, /paymentStatus: "paid"/);
   assert.match(senderBookingSource, /pricingBreakdown: quote/);
+});
+
+test("Sender Web checkout uses canonical payment callables and never writes paid deliveries directly", () => {
+  const confirmPaymentMatch = webSenderSource.match(/Future<void> _confirmPayment\(\) async \{[\s\S]*?\n {2}Future<bool\?> _confirmAuthoritativeWebQuote/);
+  assert.ok(confirmPaymentMatch, "web _confirmPayment implementation not found");
+  const confirmPaymentSource = confirmPaymentMatch[0];
+  assert.match(confirmPaymentSource, /httpsCallable\('createSenderBookingQuote'\)/);
+  assert.match(confirmPaymentSource, /httpsCallable\('createSenderPaymentSession'\)/);
+  assert.match(confirmPaymentSource, /Stripe\.instance\.presentPaymentSheet/);
+  assert.match(confirmPaymentSource, /httpsCallable\('createSenderPaidDelivery'\)/);
+  assert.doesNotMatch(confirmPaymentSource, /collection\('webSenderRequests'\)/);
+  assert.doesNotMatch(confirmPaymentSource, /collection\('deliveryRequests'\)\.doc\(id\)/);
+  assert.doesNotMatch(confirmPaymentSource, /collection\('chats'\)/);
+  assert.doesNotMatch(confirmPaymentSource, /batch\.commit\(\)/);
 });
