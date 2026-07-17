@@ -7,12 +7,11 @@ import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../../account/view/account.dart';
+import '../../account/view/wallet.dart';
 import '../../authentication/bloc/auth_bloc.dart';
-import '../../health_plus/view/index.dart';
 import '../../history/view/index.dart';
 import '../../send_package/view/index.dart';
 import '../../send_package/view/maps_view.dart';
-import '../../support/view/index.dart';
 import '../bloc/navbar_bloc.dart';
 
 class AppNavView extends StatefulWidget {
@@ -109,10 +108,25 @@ class AppNavState extends State<AppNavView> {
                   height: 22,
                 )),
             BottomNavigationBarItem(
-                label: 'History',
+                label: 'Send',
+                activeIcon: SvgPicture.asset(
+                  'assets/svg/send.svg',
+                  colorFilter: const ColorFilter.mode(
+                      AppColors.primary, BlendMode.srcIn),
+                  height: 22,
+                ),
+                icon: SvgPicture.asset(
+                  'assets/svg/send.svg',
+                  colorFilter:
+                      const ColorFilter.mode(AppColors.grey, BlendMode.srcIn),
+                  height: 22,
+                )),
+            BottomNavigationBarItem(
+                label: 'Activity',
                 activeIcon: SvgPicture.asset(
                   'assets/svg/history.svg',
-                  color: AppColors.primary,
+                  colorFilter: const ColorFilter.mode(
+                      AppColors.primary, BlendMode.srcIn),
                   height: 22,
                 ),
                 icon: SvgPicture.asset(
@@ -120,30 +134,21 @@ class AppNavState extends State<AppNavView> {
                   height: 22,
                 )),
             BottomNavigationBarItem(
-                label: 'Live Chat',
+                label: 'Wallet',
                 activeIcon: SvgPicture.asset(
-                  'assets/svg/chat.svg',
-                  color: AppColors.primary,
+                  'assets/svg/wallet.svg',
+                  colorFilter: const ColorFilter.mode(
+                      AppColors.primary, BlendMode.srcIn),
                   height: 22,
                 ),
                 icon: SvgPicture.asset(
-                  'assets/svg/chat.svg',
+                  'assets/svg/wallet.svg',
+                  colorFilter:
+                      const ColorFilter.mode(AppColors.grey, BlendMode.srcIn),
                   height: 22,
                 )),
             BottomNavigationBarItem(
-                label: 'Health+',
-                activeIcon: Icon(
-                  Icons.health_and_safety,
-                  color: AppColors.primary,
-                  size: 23,
-                ),
-                icon: Icon(
-                  Icons.health_and_safety_outlined,
-                  color: AppColors.grey,
-                  size: 23,
-                )),
-            BottomNavigationBarItem(
-              label: 'Account',
+              label: 'Profile',
               icon: Container(
                 height: 22,
                 width: 22,
@@ -184,9 +189,9 @@ class AppNavState extends State<AppNavView> {
   Widget userScreens(context, index) {
     List<Widget> children = [
       const HomeView(),
+      const HomeView(),
       const HistoryView(),
-      const SupportView(),
-      const HealthPlusView(),
+      const WalletView(),
       const AccountView(),
     ];
     return children[index];
