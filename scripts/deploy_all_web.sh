@@ -5,32 +5,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/firebase_tools.sh"
 
-rm -rf build/web build/web_main build/web_admin
+rm -rf build/web build/public_web build/sender_app_web build/web_admin
 
-"$FLUTTER_BIN" build web --release --no-wasm-dry-run
-mv build/web build/web_main
-printf "sender\n" > build/web_main/circum-build-target.txt
+"$ROOT_DIR/scripts/build_public_web.sh"
+"$ROOT_DIR/scripts/build_sender_app_web.sh"
 
 "$FLUTTER_BIN" build web \
   --release \
   --no-wasm-dry-run \
+  --target=lib/main.dart \
   --dart-define=CIRCUM_ADMIN_HOSTING=true
 mv build/web build/web_admin
-printf "admin\n" > build/web_admin/circum-build-target.txt
-
-if cmp -s build/web_main/main.dart.js build/web_admin/main.dart.js; then
-  echo "Refusing to deploy: sender and admin web builds are identical." >&2
-  exit 1
-fi
-
-if [ "$(cat build/web_main/circum-build-target.txt)" != "sender" ]; then
-  echo "Refusing to deploy: build/web_main is not marked as sender." >&2
-  exit 1
-fi
-
-if [ "$(cat build/web_admin/circum-build-target.txt)" != "admin" ]; then
-  echo "Refusing to deploy: build/web_admin is not marked as admin." >&2
-  exit 1
-fi
+node "$ROOT_DIR/scripts/finalize_web_artifact.js" admin "$ROOT_DIR/build/web_admin"
+node "$ROOT_DIR/scripts/validate_web_artifacts.js" --surface=admin
 
 "$FIREBASE_BIN" deploy --only hosting:public,hosting:app,hosting:admin --project circum-2797c

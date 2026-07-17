@@ -2,13 +2,16 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "functions": {
     "source": "server/functions"
   },
   "hosting": [
     {
       "target": "public",
-      "public": "build/web_main",
+      "public": "build/public_web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -52,18 +55,7 @@
           ]
         }
       ],
-      "redirects": [
-        {
-          "source": "/rider",
-          "destination": "https://circum-rider-2797c.web.app",
-          "type": 302
-        }
-      ],
       "rewrites": [
-        {
-          "source": "/story/**",
-          "function": "giftStoryLanding"
-        },
         {
           "source": "**",
           "destination": "/index.html"
@@ -72,7 +64,7 @@
     },
     {
       "target": "app",
-      "public": "build/web_main",
+      "public": "build/sender_app_web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -116,18 +108,7 @@
           ]
         }
       ],
-      "redirects": [
-        {
-          "source": "/rider",
-          "destination": "https://circum-rider-2797c.web.app",
-          "type": 302
-        }
-      ],
       "rewrites": [
-        {
-          "source": "/story/**",
-          "function": "giftStoryLanding"
-        },
         {
           "source": "**",
           "destination": "/index.html"

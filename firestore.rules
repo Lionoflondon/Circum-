@@ -173,14 +173,131 @@ service cloud.firestore {
       );
     }
 
+    function protectedDeliveryFields() {
+      return [
+        'status',
+        'deliveryStatus',
+        'deliveryStage',
+        'paymentStatus',
+        'paidAmount',
+        'amountPaid',
+        'pricePaid',
+        'paymentIntentId',
+        'stripePaymentIntentId',
+        'stripeCheckoutSessionId',
+        'stripeSessionId',
+        'paymentSessionId',
+        'paymentCompletedAt',
+        'paidAt',
+        'finalAmount',
+        'finalChargeAmount',
+        'finalChargeableAmount',
+        'quotedAmount',
+        'quotedPrice',
+        'authoritativeQuote',
+        'pricingSnapshot',
+        'priceBreakdown',
+        'refundStatus',
+        'refundAmount',
+        'refundReviewStatus',
+        'cancellationFee',
+        'cancellationCharge',
+        'cancellationChargeStatus',
+        'riderEarnings',
+        'driverPayout',
+        'payoutStatus',
+        'ledgerRef',
+        'ledgerReferences',
+        'trustScore',
+        'trustAwards',
+        'trustPointsAwarded',
+        'rank',
+        'riderRank',
+        'completionState',
+        'completedAt',
+        'pinVerified',
+        'collectionPinVerified',
+        'deliveryPinVerified',
+        'arrivalState',
+        'noShowState',
+        'adminInvestigation',
+        'adminReview',
+        'serverAudit',
+        'auditTrail'
+      ];
+    }
+
+    function protectedFinancialCreateFields() {
+      return [
+        'status',
+        'deliveryStatus',
+        'deliveryStage',
+        'paymentStatus',
+        'paidAmount',
+        'amountPaid',
+        'pricePaid',
+        'paymentIntentId',
+        'stripePaymentIntentId',
+        'stripeCheckoutSessionId',
+        'stripeSessionId',
+        'paymentSessionId',
+        'paymentCompletedAt',
+        'paidAt',
+        'refundStatus',
+        'refundAmount',
+        'refundReviewStatus',
+        'cancellationFee',
+        'cancellationCharge',
+        'cancellationChargeStatus',
+        'riderEarnings',
+        'driverPayout',
+        'payoutStatus',
+        'ledgerRef',
+        'ledgerReferences',
+        'trustScore',
+        'trustAwards',
+        'rank',
+        'riderRank',
+        'completionState',
+        'completedAt',
+        'pinVerified',
+        'collectionPinVerified',
+        'deliveryPinVerified',
+        'arrivalState',
+        'noShowState',
+        'adminInvestigation',
+        'adminReview',
+        'serverAudit',
+        'auditTrail',
+        'quotedPrice',
+        'authoritativeQuote',
+        'pricingSnapshot',
+        'priceBreakdown',
+        'paymentRecordId',
+        'stripeCustomerId'
+      ];
+    }
+
+    function isSafeDeliveryCreate() {
+      return isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(protectedFinancialCreateFields());
+    }
+
     function isOwnDeliveryUpdate() {
       return isOwnDelivery('') &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['iris']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedDeliveryFields());
     }
 
     function isAssignedRiderUpdate() {
       return isAssignedRider() &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'rejectedByRiders',
+          'ignoredByRiders',
+          'rejectedAt',
+          'ignoredAt',
+          'updatedAt'
+        ]);
     }
 
     function deliveryFor(deliveryId) {
@@ -198,24 +315,159 @@ service cloud.firestore {
       );
     }
 
-    function canWriteOwnLiveLocation(deliveryId) {
-      return signedIn() &&
-        request.resource.data.riderId == request.auth.uid &&
-        (
-          deliveryFor(deliveryId).riderId == request.auth.uid ||
-          deliveryFor(deliveryId).driverId == request.auth.uid ||
-          deliveryFor(deliveryId).assignedDriverId == request.auth.uid
-        ) &&
-        request.resource.data.keys().hasOnly([
-          'riderId',
+    function assignedRiderForDelivery(deliveryId) {
+      return signedIn() && (
+        deliveryFor(deliveryId).riderId == request.auth.uid ||
+        deliveryFor(deliveryId).driverId == request.auth.uid ||
+        deliveryFor(deliveryId).assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isTrackableDelivery(deliveryId) {
+      return !([
+        'completed',
+        'delivered',
+        'cancelled',
+        'canceled',
+        'expired',
+        'archived',
+        'archived_stale'
+      ].hasAny([
+        deliveryFor(deliveryId).status,
+        deliveryFor(deliveryId).deliveryStatus,
+        deliveryFor(deliveryId).deliveryStage
+      ]));
+    }
+
+    function validRiderLiveLocationMap() {
+      return request.resource.data.riderLiveLocation is map &&
+        request.resource.data.riderLiveLocation.keys().hasOnly([
+          'geopoint',
           'latitude',
           'longitude',
+          'accuracy',
           'heading',
           'speed',
+          'freshness',
+          'deliveryState',
+          'updatedAt'
+        ]) &&
+        request.resource.data.riderLiveLocation.geopoint is latlng &&
+        request.resource.data.riderLiveLocation.latitude is number &&
+        request.resource.data.riderLiveLocation.longitude is number &&
+        request.resource.data.riderLiveLocation.accuracy is number &&
+        request.resource.data.riderLiveLocation.heading is number &&
+        request.resource.data.riderLiveLocation.speed is number &&
+        request.resource.data.riderLiveLocation.freshness is string &&
+        request.resource.data.riderLiveLocation.deliveryState is string &&
+        request.resource.data.riderLiveLocation.updatedAt is timestamp;
+    }
+
+    function validLiveTrackingPayload(deliveryId) {
+      return request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.activeDeliveryId == deliveryId &&
+        request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.latitude is number &&
+        request.resource.data.longitude is number &&
+        request.resource.data.accuracy is number &&
+        request.resource.data.heading is number &&
+        request.resource.data.speed is number &&
+        request.resource.data.status is string &&
+        request.resource.data.trackingStatus == 'live' &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.freshness == 'fresh' &&
+        request.resource.data.clientRecordedAt is timestamp &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        validRiderLiveLocationMap() &&
+        request.resource.data.keys().hasOnly([
+          'riderId',
+          'activeDeliveryId',
+          'deliveryId',
+          'latitude',
+          'longitude',
           'accuracy',
+          'heading',
+          'speed',
+          'status',
+          'trackingStatus',
+          'deliveryState',
+          'freshness',
+          'clientRecordedAt',
           'updatedAt',
-          'status'
+          'freshnessUpdatedAt',
+          'riderLiveLocation'
         ]);
+    }
+
+    function validStoppedTrackingPayload(deliveryId) {
+      return request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.activeDeliveryId == deliveryId &&
+        request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.trackingStatus == 'stopped' &&
+        request.resource.data.status is string &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.freshness == 'stopped' &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        request.resource.data.keys().hasOnly([
+          'riderId',
+          'activeDeliveryId',
+          'deliveryId',
+          'trackingStatus',
+          'status',
+          'deliveryState',
+          'freshness',
+          'updatedAt',
+          'freshnessUpdatedAt'
+        ]);
+    }
+
+    function validActiveDeliveryLivePayload(deliveryId) {
+      return request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.status is string &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.trackingStatus == 'live' &&
+        request.resource.data.freshness == 'fresh' &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        validRiderLiveLocationMap() &&
+        request.resource.data.keys().hasOnly([
+          'deliveryId',
+          'riderId',
+          'status',
+          'deliveryState',
+          'trackingStatus',
+          'freshness',
+          'riderLiveLocation',
+          'updatedAt',
+          'freshnessUpdatedAt'
+        ]);
+    }
+
+    function validActiveDeliveryStoppedPayload(deliveryId) {
+      return validStoppedTrackingPayload(deliveryId);
+    }
+
+    function canWriteOwnLiveLocation(deliveryId) {
+      return signedIn() &&
+        assignedRiderForDelivery(deliveryId) &&
+        isTrackableDelivery(deliveryId) &&
+        (
+          validLiveTrackingPayload(deliveryId) ||
+          validStoppedTrackingPayload(deliveryId)
+        );
+    }
+
+    function canWriteActiveDelivery(deliveryId) {
+      return signedIn() &&
+        assignedRiderForDelivery(deliveryId) &&
+        isTrackableDelivery(deliveryId) &&
+        (
+          validActiveDeliveryLivePayload(deliveryId) ||
+          validActiveDeliveryStoppedPayload(deliveryId)
+        );
     }
 
     function isAssignedRiderPrivateCreate() {
@@ -584,7 +836,7 @@ service cloud.firestore {
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
         isAvailableRiderJob();
-      allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow create: if isAdmin() || isSafeDeliveryCreate();
       allow update: if isAdmin() ||
         isOwnDeliveryUpdate() ||
         isAssignedRiderUpdate();
@@ -596,6 +848,12 @@ service cloud.firestore {
           canWriteOwnLiveLocation(deliveryId);
         allow delete: if isAdmin();
       }
+    }
+
+    match /activeDeliveries/{deliveryId} {
+      allow read: if canReadDeliveryTracking(deliveryId);
+      allow create, update: if canWriteActiveDelivery(deliveryId);
+      allow delete: if isAdmin();
     }
 
     match /webSenderRequests/{requestId} {
@@ -780,15 +1038,14 @@ service cloud.firestore {
 
     match /riderEarnings/{riderId} {
       allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
-      allow create, update: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /riderWalletTransactions/{transactionId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
@@ -796,17 +1053,13 @@ service cloud.firestore {
     match /payoutRequests/{requestId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() &&
-          request.resource.data.riderId == request.auth.uid &&
-          payoutRawBankFieldsAbsent(request.resource.data) &&
-          request.resource.data.payoutFeePayer == 'rider');
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /riderBankAccounts/{riderId} {
-      allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow read: if isAdmin();
       allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
