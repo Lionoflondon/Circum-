@@ -12,5 +12,10 @@ resolve_tool() {
   printf '%s\n' "$name"
 }
 
-FLUTTER_BIN="$(resolve_tool flutter)/bin/flutter"
+FLUTTER_ROOT="$(resolve_tool flutter)"
+if [[ -d "$FLUTTER_ROOT" && -x "$FLUTTER_ROOT/bin/flutter" ]]; then
+  FLUTTER_BIN="$FLUTTER_ROOT/bin/flutter"
+else
+  FLUTTER_BIN="$FLUTTER_ROOT"
+fi
 FIREBASE_BIN="$(resolve_tool firebase)"

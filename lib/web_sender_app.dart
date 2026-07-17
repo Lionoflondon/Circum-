@@ -39,6 +39,10 @@ const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
 const _adminHostingTarget = bool.fromEnvironment('CIRCUM_ADMIN_HOSTING');
+const _compiledWebSurface = String.fromEnvironment('CIRCUM_WEB_SURFACE');
+const _publicWebUrl = 'https://circumuk.com/';
+const _senderAppWebUrl = 'https://circum-app-2797c.web.app/';
+const _riderAppWebUrl = 'https://circum-rider-2797c.web.app/';
 const _googlePlacesApiKey = String.fromEnvironment(
   'GOOGLE_PLACES_API_KEY',
   defaultValue: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
@@ -62,6 +66,52 @@ bool _isPublicHostingHost() {
       host == 'circum-app-2797c.web.app';
 }
 
+CircumWebRouteResolution _fixedSurfaceRoute(
+  CircumWebSurface surface,
+  Uri uri,
+) {
+  final route = resolveCircumWebRoute(
+    uri,
+    adminHostingTarget: surface == CircumWebSurface.admin,
+    publicHostingHost: surface != CircumWebSurface.admin,
+  );
+  if (surface == CircumWebSurface.sender) {
+    return CircumWebRouteResolution(
+      surface: CircumWebSurface.sender,
+      canonicalPath: route.canonicalPath,
+      senderEntry: route.senderEntry,
+    );
+  }
+  return CircumWebRouteResolution(
+    surface: surface,
+    canonicalPath: switch (surface) {
+      CircumWebSurface.rider => '/rider',
+      CircumWebSurface.gifts => '/gifts',
+      CircumWebSurface.sender => '/send',
+      _ => '/',
+    },
+  );
+}
+
+String? _fixedSurfaceTarget(
+  _WebAppMode mode, {
+  required _SenderStep senderStep,
+}) {
+  final senderPath = switch (senderStep) {
+    _SenderStep.healthPlus => 'send/health',
+    _SenderStep.business => 'send/business',
+    _SenderStep.profile => 'send/profile',
+    _ => '',
+  };
+  return switch (mode) {
+    _WebAppMode.landing => _publicWebUrl,
+    _WebAppMode.sender => '$_senderAppWebUrl$senderPath',
+    _WebAppMode.rider => _riderAppWebUrl,
+    _WebAppMode.gifts => '${_publicWebUrl}gifts',
+    _WebAppMode.admin => null,
+  };
+}
+
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
@@ -69,7 +119,12 @@ Future<void> _ensureCircumFirebaseReady() async {
 }
 
 class WebSenderApp extends StatefulWidget {
-  const WebSenderApp({super.key});
+  const WebSenderApp({
+    super.key,
+    this.initialSurface,
+  });
+
+  final CircumWebSurface? initialSurface;
 
   @override
   State<WebSenderApp> createState() => _WebSenderAppState();
@@ -78,11 +133,13 @@ class WebSenderApp extends StatefulWidget {
 class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
   late final CircumWebRouteResolution _initialRoute =
-      resolveCircumWebRoute(
-    Uri.base,
-    adminHostingTarget: _adminHostingTarget,
-    publicHostingHost: _isPublicHostingHost(),
-  );
+      widget.initialSurface == null
+          ? resolveCircumWebRoute(
+              Uri.base,
+              adminHostingTarget: _adminHostingTarget,
+              publicHostingHost: _isPublicHostingHost(),
+            )
+          : _fixedSurfaceRoute(widget.initialSurface!, Uri.base);
   late _WebAppMode _mode = _modeFromRoute(_initialRoute);
   late _SenderStep _senderInitialStep =
       _senderStepFromRoute(_initialRoute.senderEntry);
@@ -131,6 +188,13 @@ class _WebSenderAppState extends State<WebSenderApp> {
     _WebAppMode mode, {
     _SenderStep senderStep = _SenderStep.dashboard,
   }) async {
+    if (kIsWeb && widget.initialSurface != null) {
+      final fixedTarget = _fixedSurfaceTarget(mode, senderStep: senderStep);
+      if (fixedTarget != null) {
+        await _openAbsoluteUrl(fixedTarget);
+        return;
+      }
+    }
     final path = switch (mode) {
       _WebAppMode.landing => '/',
       _WebAppMode.sender => switch (senderStep) {
@@ -151,6 +215,14 @@ class _WebSenderAppState extends State<WebSenderApp> {
       _senderInitialStep = senderStep;
       _mode = mode;
     });
+  }
+
+  Future<void> _openAbsoluteUrl(String value) async {
+    final opened =
+        await launchUrl(Uri.parse(value), webOnlyWindowName: '_self');
+    if (!opened) {
+      debugPrint('Could not navigate to $value');
+    }
   }
 
   Future<void> _logWebsiteVisit() async {
@@ -194,61 +266,7 @@ class _WebSenderAppState extends State<WebSenderApp> {
           children: [
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
-              child: switch (_mode) {
-                _WebAppMode.sender => _PhoneStage(
-                    key: const ValueKey(circumSenderWebIdentity),
-                    colors: colors,
-                    child: _CustomerPortal(
-                      darkMode: _darkMode,
-                      colors: colors,
-                      initialStep: _senderInitialStep,
-                      onBack: () => _openSurface(_WebAppMode.landing),
-                      onRoleSelected: _openRole,
-                      onGifts: () => _openSurface(_WebAppMode.gifts),
-                      onToggleTheme: () =>
-                          setState(() => _darkMode = !_darkMode),
-                    ),
-                  ),
-                _WebAppMode.rider => _PhoneStage(
-                    key: const ValueKey(circumRiderWebIdentity),
-                    colors: colors,
-                    child: _RiderEnrollmentPortal(
-                      darkMode: _darkMode,
-                      colors: colors,
-                      onBack: () => _openSurface(_WebAppMode.landing),
-                      onRoleSelected: _openRole,
-                      onToggleTheme: () =>
-                          setState(() => _darkMode = !_darkMode),
-                    ),
-                  ),
-                _WebAppMode.admin => _AdminOperationsPanel(
-                    key: const ValueKey('admin-ops'),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onBack: _adminHostingTarget
-                        ? () {}
-                        : () => setState(() => _mode = _WebAppMode.landing),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
-                _WebAppMode.gifts => _GiftsRequestPage(
-                    key: const ValueKey('gifts-request'),
-                    colors: colors,
-                    onBack: () => _openSurface(_WebAppMode.landing),
-                  ),
-                _WebAppMode.landing => _LandingPage(
-                    key: const ValueKey(circumPublicWebIdentity),
-                    colors: colors,
-                    darkMode: _darkMode,
-                    onStart: () => _openSurface(_WebAppMode.sender),
-                    onRider: () => _openSurface(_WebAppMode.rider),
-                    onHealthPlus: () => _openSurface(
-                      _WebAppMode.sender,
-                      senderStep: _SenderStep.healthPlus,
-                    ),
-                    onGifts: () => _openSurface(_WebAppMode.gifts),
-                    onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-                  ),
-              },
+              child: _surfaceStage(colors),
             ),
             _PlatformNotificationCenter(colors: colors, mode: _mode),
             _CompanyLiveChatButton(colors: colors),
@@ -256,6 +274,92 @@ class _WebSenderAppState extends State<WebSenderApp> {
         ),
       ),
     );
+  }
+
+  Widget _surfaceStage(_CircumColors colors) {
+    if (_compiledWebSurface == 'public') {
+      return _LandingPage(
+        key: const ValueKey(circumPublicWebIdentity),
+        colors: colors,
+        darkMode: _darkMode,
+        onStart: () => _openSurface(_WebAppMode.sender),
+        onRider: () => _openSurface(_WebAppMode.rider),
+        onHealthPlus: () => _openSurface(
+          _WebAppMode.sender,
+          senderStep: _SenderStep.healthPlus,
+        ),
+        onGifts: () => _openSurface(_WebAppMode.gifts),
+        onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+      );
+    }
+    if (_compiledWebSurface == 'sender') {
+      return _PhoneStage(
+        key: const ValueKey(circumSenderWebIdentity),
+        colors: colors,
+        child: _CustomerPortal(
+          darkMode: _darkMode,
+          colors: colors,
+          initialStep: _senderInitialStep,
+          onBack: () => _openSurface(_WebAppMode.landing),
+          onRoleSelected: _openRole,
+          onGifts: () => _openSurface(_WebAppMode.gifts),
+          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+        ),
+      );
+    }
+    return switch (_mode) {
+      _WebAppMode.sender => _PhoneStage(
+          key: const ValueKey(circumSenderWebIdentity),
+          colors: colors,
+          child: _CustomerPortal(
+            darkMode: _darkMode,
+            colors: colors,
+            initialStep: _senderInitialStep,
+            onBack: () => _openSurface(_WebAppMode.landing),
+            onRoleSelected: _openRole,
+            onGifts: () => _openSurface(_WebAppMode.gifts),
+            onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+          ),
+        ),
+      _WebAppMode.rider => _PhoneStage(
+          key: const ValueKey(circumRiderWebIdentity),
+          colors: colors,
+          child: _RiderEnrollmentPortal(
+            darkMode: _darkMode,
+            colors: colors,
+            onBack: () => _openSurface(_WebAppMode.landing),
+            onRoleSelected: _openRole,
+            onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+          ),
+        ),
+      _WebAppMode.admin => _AdminOperationsPanel(
+          key: const ValueKey('admin-ops'),
+          colors: colors,
+          darkMode: _darkMode,
+          onBack: _adminHostingTarget
+              ? () {}
+              : () => setState(() => _mode = _WebAppMode.landing),
+          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+        ),
+      _WebAppMode.gifts => _GiftsRequestPage(
+          key: const ValueKey('gifts-request'),
+          colors: colors,
+          onBack: () => _openSurface(_WebAppMode.landing),
+        ),
+      _WebAppMode.landing => _LandingPage(
+          key: const ValueKey(circumPublicWebIdentity),
+          colors: colors,
+          darkMode: _darkMode,
+          onStart: () => _openSurface(_WebAppMode.sender),
+          onRider: () => _openSurface(_WebAppMode.rider),
+          onHealthPlus: () => _openSurface(
+            _WebAppMode.sender,
+            senderStep: _SenderStep.healthPlus,
+          ),
+          onGifts: () => _openSurface(_WebAppMode.gifts),
+          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+        ),
+    };
   }
 
   void _openRole(CircumRole role) {

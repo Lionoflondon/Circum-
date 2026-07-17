@@ -107,11 +107,10 @@ void main() {
       },
     );
 
-    test('Rider Web does not mount the standalone Rider App host', () {
+    test('Rider Web does not mount the standalone Rider App shell', () {
       final source = File('lib/web_sender_app.dart').readAsStringSync();
 
       expect(source, contains('_RiderEnrollmentPortal'));
-      expect(source, isNot(contains('circum-rider-2797c.web.app')));
       expect(source, isNot(contains('CircumRiderApp')));
     });
 
