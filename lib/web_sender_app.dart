@@ -18,6 +18,7 @@ import 'package:circum/app/sender_profile/sender_profile.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
 import 'package:circum/pricing/special_handling_engine.dart';
 import 'package:circum/env/env.dart';
+import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -76,31 +77,80 @@ class WebSenderApp extends StatefulWidget {
 
 class _WebSenderAppState extends State<WebSenderApp> {
   bool _darkMode = true;
-  late _WebAppMode _mode = _initialMode();
+  late final CircumWebRouteResolution _initialRoute =
+      resolveCircumWebRoute(
+    Uri.base,
+    adminHostingTarget: _adminHostingTarget,
+    publicHostingHost: _isPublicHostingHost(),
+  );
+  late _WebAppMode _mode = _modeFromRoute(_initialRoute);
   late _SenderStep _senderInitialStep =
-      switch (Uri.base.queryParameters['app']) {
-    'health' => _SenderStep.healthPlus,
-    'business' => _SenderStep.business,
-    'profile' => _SenderStep.profile,
-    _ => _SenderStep.dashboard,
-  };
+      _senderStepFromRoute(_initialRoute.senderEntry);
 
   @override
   void initState() {
     super.initState();
+    _redirectLegacyQueryIfNeeded();
     _logWebsiteVisit();
   }
 
-  _WebAppMode _initialMode() {
-    if (_adminHostingTarget && !_isPublicHostingHost()) {
-      return _WebAppMode.admin;
-    }
-    return switch (Uri.base.queryParameters['app']) {
-      'sender' || 'health' || 'business' || 'profile' => _WebAppMode.sender,
-      'rider' || 'driver' || 'earn' || 'circum-order' => _WebAppMode.rider,
-      'gifts' => _WebAppMode.gifts,
-      _ => _WebAppMode.landing,
+  _WebAppMode _modeFromRoute(CircumWebRouteResolution route) {
+    return switch (route.surface) {
+      CircumWebSurface.public => _WebAppMode.landing,
+      CircumWebSurface.sender => _WebAppMode.sender,
+      CircumWebSurface.rider => _WebAppMode.rider,
+      CircumWebSurface.gifts => _WebAppMode.gifts,
+      CircumWebSurface.admin => _WebAppMode.admin,
     };
+  }
+
+  _SenderStep _senderStepFromRoute(CircumSenderEntry entry) {
+    return switch (entry) {
+      CircumSenderEntry.dashboard => _SenderStep.dashboard,
+      CircumSenderEntry.healthPlus => _SenderStep.healthPlus,
+      CircumSenderEntry.business => _SenderStep.business,
+      CircumSenderEntry.profile => _SenderStep.profile,
+    };
+  }
+
+  Future<void> _redirectLegacyQueryIfNeeded() async {
+    final path = _initialRoute.legacyRedirectPath;
+    if (path == null || !kIsWeb) return;
+    await _openCanonicalPath(path);
+  }
+
+  Future<void> _openCanonicalPath(String path) async {
+    final target = Uri.base.replace(path: path, queryParameters: {});
+    final opened = await launchUrl(target, webOnlyWindowName: '_self');
+    if (!opened) {
+      debugPrint('Could not navigate to ${target.path}');
+    }
+  }
+
+  Future<void> _openSurface(
+    _WebAppMode mode, {
+    _SenderStep senderStep = _SenderStep.dashboard,
+  }) async {
+    final path = switch (mode) {
+      _WebAppMode.landing => '/',
+      _WebAppMode.sender => switch (senderStep) {
+          _SenderStep.healthPlus => '/send/health',
+          _SenderStep.business => '/send/business',
+          _SenderStep.profile => '/send/profile',
+          _ => '/send',
+        },
+      _WebAppMode.rider => '/rider',
+      _WebAppMode.gifts => '/gifts',
+      _WebAppMode.admin => '/',
+    };
+    if (kIsWeb && mode != _WebAppMode.admin) {
+      await _openCanonicalPath(path);
+      return;
+    }
+    setState(() {
+      _senderInitialStep = senderStep;
+      _mode = mode;
+    });
   }
 
   Future<void> _logWebsiteVisit() async {
@@ -146,26 +196,26 @@ class _WebSenderAppState extends State<WebSenderApp> {
               duration: const Duration(milliseconds: 260),
               child: switch (_mode) {
                 _WebAppMode.sender => _PhoneStage(
-                    key: const ValueKey('sender-app'),
+                    key: const ValueKey(circumSenderWebIdentity),
                     colors: colors,
                     child: _CustomerPortal(
                       darkMode: _darkMode,
                       colors: colors,
                       initialStep: _senderInitialStep,
-                      onBack: () => setState(() => _mode = _WebAppMode.landing),
+                      onBack: () => _openSurface(_WebAppMode.landing),
                       onRoleSelected: _openRole,
-                      onGifts: () => setState(() => _mode = _WebAppMode.gifts),
+                      onGifts: () => _openSurface(_WebAppMode.gifts),
                       onToggleTheme: () =>
                           setState(() => _darkMode = !_darkMode),
                     ),
                   ),
                 _WebAppMode.rider => _PhoneStage(
-                    key: const ValueKey('rider-app'),
+                    key: const ValueKey(circumRiderWebIdentity),
                     colors: colors,
                     child: _RiderEnrollmentPortal(
                       darkMode: _darkMode,
                       colors: colors,
-                      onBack: () => setState(() => _mode = _WebAppMode.landing),
+                      onBack: () => _openSurface(_WebAppMode.landing),
                       onRoleSelected: _openRole,
                       onToggleTheme: () =>
                           setState(() => _darkMode = !_darkMode),
@@ -183,22 +233,19 @@ class _WebSenderAppState extends State<WebSenderApp> {
                 _WebAppMode.gifts => _GiftsRequestPage(
                     key: const ValueKey('gifts-request'),
                     colors: colors,
-                    onBack: () => setState(() => _mode = _WebAppMode.landing),
+                    onBack: () => _openSurface(_WebAppMode.landing),
                   ),
                 _WebAppMode.landing => _LandingPage(
-                    key: const ValueKey('landing'),
+                    key: const ValueKey(circumPublicWebIdentity),
                     colors: colors,
                     darkMode: _darkMode,
-                    onStart: () => setState(() {
-                      _senderInitialStep = _SenderStep.dashboard;
-                      _mode = _WebAppMode.sender;
-                    }),
-                    onRider: () => setState(() => _mode = _WebAppMode.rider),
-                    onHealthPlus: () => setState(() {
-                      _senderInitialStep = _SenderStep.healthPlus;
-                      _mode = _WebAppMode.sender;
-                    }),
-                    onGifts: () => setState(() => _mode = _WebAppMode.gifts),
+                    onStart: () => _openSurface(_WebAppMode.sender),
+                    onRider: () => _openSurface(_WebAppMode.rider),
+                    onHealthPlus: () => _openSurface(
+                      _WebAppMode.sender,
+                      senderStep: _SenderStep.healthPlus,
+                    ),
+                    onGifts: () => _openSurface(_WebAppMode.gifts),
                     onToggleTheme: () => setState(() => _darkMode = !_darkMode),
                   ),
               },
@@ -212,14 +259,16 @@ class _WebSenderAppState extends State<WebSenderApp> {
   }
 
   void _openRole(CircumRole role) {
-    setState(() {
-      _mode = switch (role) {
-        CircumRole.sender => _WebAppMode.sender,
-        CircumRole.rider => _WebAppMode.rider,
-        CircumRole.admin => _WebAppMode.admin,
-        CircumRole.unknown => _WebAppMode.landing,
-      };
-    });
+    switch (role) {
+      case CircumRole.sender:
+        _openSurface(_WebAppMode.sender);
+      case CircumRole.rider:
+        _openSurface(_WebAppMode.rider);
+      case CircumRole.admin:
+        setState(() => _mode = _WebAppMode.admin);
+      case CircumRole.unknown:
+        _openSurface(_WebAppMode.landing);
+    }
   }
 }
 
