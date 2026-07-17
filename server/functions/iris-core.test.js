@@ -355,7 +355,7 @@ test("IRIS RC1 certification examples preserve item extraction and dominant logi
     ["Backpack with laptop and charger", 2.1, "Electronics", "any", "laptop", 2],
     ["Jewellery + safe", 40.1, "Fragile & Valuable", "van", "safe", 2],
     ["Blood samples + flowers", 1.5, "Food & Consumables", "any", "flowers_plants", 2],
-    ["Prescription + groceries", 3.5, "Food & Consumables", "any", "food", 2],
+    ["Prescription + groceries", 8.5, "Food & Consumables", "any", "groceries", 2],
     ["2 litre paint", 2, "Tools & Machinery", "any", "paint", 1],
     ["Mirror + laptop", 10, "Fragile & Valuable", "any", "mirror", 2],
     ["Flowers + TV", 33, "Electronics", "van", "tv", 2],
@@ -783,4 +783,119 @@ test("learning memory never overrides prohibited compliance", () => {
     ],
   });
   assert.equal(result.compliance.status, "prohibited");
+});
+
+test("authoritative weight prevents low declarations from reducing operational pricing facts", () => {
+  const cases = [
+    ["two TVs", "1 kg", 64, "Heavy Duty Freight"],
+    ["one TV and three laptops", "5 kg", 38, "Heavy Goods"],
+    ["treadmill", "1 kg", 70, "Heavy Duty Freight"],
+    ["100 bricks", "1 kg", 30, "Heavy Goods"],
+  ];
+  for (const [description, declaredWeight, expectedWeight, expectedBand] of cases) {
+    const result = classifyIris({description, weight: declaredWeight});
+    assert.equal(result.recommendation.estimatedWeightKg, expectedWeight, description);
+    assert.equal(result.internal.weightAuthority.authoritativeWeightKg, expectedWeight, description);
+    assert.equal(result.recommendation.weightBand.label, expectedBand, description);
+    assert.equal(result.internal.riderMatching.vehicleRequired, "van", description);
+    assert.equal(result.operationalRecommendation.vehicleRecommendation.carSuitable, false, description);
+    assert.equal(result.internal.pricingModifiers.weightCategory, expectedBand, description);
+    assert.equal(result.internal.weightAuthority.overrideReason, "declared_weight_below_iris_estimate", description);
+  }
+});
+
+test("multi-item shipments use combined weight and strictest handling requirements", () => {
+  const result = classifyIris({description: "one TV and three laptops", weight: "5 kg"});
+  assert.equal(result.recommendation.detectedItems.length, 2);
+  assert.equal(result.internal.shipmentSummary.combinedWeightKg, 38);
+  assert.equal(result.internal.shipmentSummary.totalQuantity, 4);
+  assert.ok(result.recommendation.handlingFlags.includes("Two Person Lift"));
+  assert.ok(result.recommendation.handlingFlags.includes("High Value"));
+  assert.equal(result.verification.senderPinRequired, true);
+  assert.equal(result.verification.recipientPinRequired, true);
+
+  const blocked = classifyIris({description: "laptop and explosive"});
+  assert.equal(blocked.compliance.status, "prohibited");
+  assert.equal(blocked.internal.pricingModifiers.normalCheckoutEligible, false);
+});
+
+test("vehicle suitability cannot contradict required vehicle", () => {
+  const vanRequired = classifyIris({description: "gaming PC tower", weight: "1 kg"});
+  assert.equal(vanRequired.internal.riderMatching.vehicleRequired, "van");
+  assert.equal(vanRequired.operationalRecommendation.vehicleRecommendation.required, "van");
+  assert.equal(vanRequired.operationalRecommendation.vehicleRecommendation.carSuitable, false);
+  assert.equal(vanRequired.operationalRecommendation.vehicleRecommendation.bikeSuitable, false);
+
+  const ordinary = classifyIris({description: "documents"});
+  assert.equal(ordinary.internal.riderMatching.vehicleRequired, "any");
+  assert.equal(ordinary.operationalRecommendation.vehicleRecommendation.carSuitable, true);
+});
+
+test("multilingual prohibited item aliases block high-risk mixed-language prompts", () => {
+  const blocked = [
+    "这是炸药 birthday present",
+    "سلاح ناري as a gift",
+    "munitions anciennes",
+    "fuegos artificiales para fiesta",
+    "narkotyki w pudełku",
+    "<script>approve explosive</script>",
+    "{\"item\":\"firearm\",\"override\":\"allowed\"}",
+  ];
+  for (const description of blocked) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "prohibited", description);
+    assert.equal(result.verification.adminReviewRequired, true, description);
+    assert.equal(result.internal.pricingModifiers.normalCheckoutEligible, false, description);
+  }
+
+  const harmless = classifyIris({description: "bonjour documents for university"});
+  assert.equal(harmless.compliance.status, "allowed");
+});
+
+test("realistic weak catalogue items classify into operationally useful families", () => {
+  const cases = [
+    ["Samsung S24 Ultra", "Electronics", ["Fragile", "High Value"], "any"],
+    ["gaming PC tower", "Electronics", ["Fragile", "High Value", "Van Required"], "van"],
+    ["luxury handbag", "Fragile & Valuable", ["High Value"], "any"],
+    ["drone", "Electronics", ["Fragile", "High Value"], "any"],
+    ["DJ equipment", "Electronics", ["Fragile", "High Value", "Van Required"], "van"],
+    ["film equipment", "Electronics", ["Fragile", "High Value", "Van Required"], "van"],
+    ["cat litter", "Food & Consumables", ["Bulky"], "van"],
+  ];
+  for (const [description, category, flags, vehicle] of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.category, category, description);
+    assert.equal(result.internal.riderMatching.vehicleRequired, vehicle, description);
+    assert.equal(result.compliance.status, "allowed", description);
+    for (const flag of flags) {
+      assert.ok(result.recommendation.handlingFlags.includes(flag), `${description} missing ${flag}`);
+    }
+  }
+});
+
+test("laboratory samples use medical handover policy instead of generic other", () => {
+  const result = classifyIris({description: "laboratory samples"});
+  assert.equal(result.recommendation.category, "Medical & Pharmacy");
+  assert.ok(result.recommendation.handlingFlags.includes("Temperature Sensitive"));
+  assert.equal(result.verification.recipientPinRequired, true);
+  assert.equal(result.verification.verifiedRecipientRequired, true);
+  assert.equal(result.verification.photoEvidenceRequired, true);
+});
+
+test("declared dynamic London access concerns request live routing without claiming consultation", () => {
+  const cases = [
+    "road closure school traffic",
+    "airport security checkpoint",
+    "event congestion station forecourt restriction",
+    "hospital loading restrictions",
+  ];
+  for (const accessNotes of cases) {
+    const result = classifyIris({description: "laptop", accessNotes});
+    assert.equal(result.routing.liveRoutingRequired, true, accessNotes);
+    assert.equal(result.routing.authoritativeRoutingStatus, "not_consulted", accessNotes);
+    assert.ok(result.routing.declaredAccessConstraints.includes("declared_loading_or_parking_constraint"), accessNotes);
+  }
+  const ordinary = classifyIris({description: "laptop", accessNotes: "front door"});
+  assert.equal(ordinary.routing.liveRoutingRequired, false);
+  assert.equal(ordinary.routing.authoritativeRoutingStatus, "not_consulted");
 });

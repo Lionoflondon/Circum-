@@ -69,6 +69,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "flagship_smartphone",
+    patterns: [/\bsamsung s\d{2}(?: ultra| plus| pro)?\b/, /\bgalaxy s\d{2}(?: ultra| plus| pro)?\b/, /\bpixel \d+(?: pro)?\b/],
+    category: "Electronics",
+    weightKg: 0.3,
+    handlingFlags: ["Fragile", "High Value"],
+    vehicleRequired: "any",
+  },
+  {
     id: "jewellery",
     patterns: [/\bwedding ring\b/, /\bring\b/, /\bjewellery\b/, /\bjewelry\b/, /\bluxury watches?\b/, /\bhigh[- ]value watch(?:es)?\b/],
     category: "Fragile & Valuable",
@@ -125,11 +133,27 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "van",
   },
   {
+    id: "groceries",
+    patterns: [/\bbags of groceries\b/, /\bgroceries\b/],
+    category: "Food & Consumables",
+    weightKg: 8,
+    handlingFlags: ["Perishable"],
+    vehicleRequired: "any",
+  },
+  {
     id: "suitcase",
     patterns: [/\bsuitcases?\b/, /\bluggage\b/, /\bbackpacks?\b/, /\bbags?\b/],
     category: "Personal Items & Luggage",
     weightKg: 8,
     handlingFlags: ["Bulky"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "luxury_handbag",
+    patterns: [/\bluxury handbags?\b/, /\bdesigner handbags?\b/],
+    category: "Fragile & Valuable",
+    weightKg: 1,
+    handlingFlags: ["High Value"],
     vehicleRequired: "any",
   },
   {
@@ -261,6 +285,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "van",
   },
   {
+    id: "office_desk",
+    patterns: [/\boffice desks?\b/, /\bdesks?\b/],
+    category: "Furniture & Home",
+    weightKg: 30,
+    handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
+    vehicleRequired: "van",
+  },
+  {
     id: "roses",
     patterns: [/\broses?\b/],
     category: "Food & Consumables",
@@ -282,6 +314,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     category: "Clothing & Fashion",
     weightKg: 0.5,
     handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "designer_clothing",
+    patterns: [/\bdesigner clothing\b/, /\bluxury clothing\b/],
+    category: "Clothing & Fashion",
+    weightKg: 2,
+    handlingFlags: ["High Value"],
     vehicleRequired: "any",
   },
   {
@@ -390,7 +430,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "electronics",
-    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\bdisplay\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bserver rack\b/, /\bplaystation\b/, /\bxbox\b/, /\bnintendo switch\b/],
+    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\bdisplay\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bplaystation\b/, /\bxbox\b/, /\bnintendo switch\b/],
     category: "Electronics",
     weightKg: 2,
     handlingFlags: ["Fragile", "High Value"],
@@ -406,11 +446,19 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "musical_instrument",
-    patterns: [/\bdrum kits?\b/, /\bcellos?\b/, /\bguitars?\b/, /\bmusical instruments?\b/],
+    patterns: [/\bcellos?\b/, /\bguitars?\b/, /\bmusical instruments?\b/],
     category: "Fragile & Valuable",
     weightKg: 8,
     handlingFlags: ["Fragile", "Awkward Shape", "Keep Upright"],
     vehicleRequired: "any",
+  },
+  {
+    id: "drum_kit",
+    patterns: [/\bdrum kits?\b/],
+    category: "Fragile & Valuable",
+    weightKg: 25,
+    handlingFlags: ["Fragile", "Awkward Shape", "Bulky", "Van Required"],
+    vehicleRequired: "van",
   },
   {
     id: "toner",
@@ -485,6 +533,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "coffee_machine",
+    patterns: [/\bcoffee machines?\b/, /\bespresso machines?\b/],
+    category: "Furniture & Home",
+    weightKg: 6,
+    handlingFlags: ["Fragile"],
+    vehicleRequired: "any",
+  },
+  {
     id: "chainsaw",
     patterns: [/\bchainsaws?\b/],
     category: "Tools & Machinery",
@@ -518,11 +574,99 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "blood_samples",
-    patterns: [/\bblood samples?\b/, /\bmedical samples?\b/, /\blab samples?\b/],
+    patterns: [/\bblood samples?\b/, /\bmedical samples?\b/, /\blab samples?\b/, /\blaboratory samples?\b/],
     category: "Medical & Pharmacy",
     weightKg: 0.5,
     handlingFlags: ["Temperature Sensitive", "Keep Upright"],
     vehicleRequired: "any",
+  },
+  {
+    id: "cat_litter",
+    patterns: [/\bcat litter\b/],
+    category: "Food & Consumables",
+    weightKg: 10,
+    handlingFlags: ["Bulky"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "server_equipment",
+    patterns: [/\bserver equipment\b/, /\bserver racks?\b/, /\bnetwork servers?\b/],
+    category: "Electronics",
+    weightKg: 25,
+    handlingFlags: ["Fragile", "High Value", "Bulky", "Van Required"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "motorbike_parts",
+    patterns: [/\bmotorbike parts?\b/, /\bmotorcycle parts?\b/],
+    category: "Tools & Machinery",
+    weightKg: 30,
+    handlingFlags: ["Bulky", "Awkward Shape", "Van Required", "Two Person Lift"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "aquarium",
+    patterns: [/\baquariums?\b/, /\bglass aquarium\b/],
+    category: "Fragile & Valuable",
+    weightKg: 25,
+    handlingFlags: ["Fragile", "Bulky", "Van Required"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "household_small_appliance",
+    patterns: [/\bvacuum cleaners?\b/, /\bfans?\b/],
+    category: "Furniture & Home",
+    weightKg: 7,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "motorbike_helmet",
+    patterns: [/\bmotorbike helmets?\b/, /\bmotorcycle helmets?\b/],
+    category: "Personal Items & Luggage",
+    weightKg: 2,
+    handlingFlags: ["Fragile"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "wedding_gifts",
+    patterns: [/\bwedding gifts?\b/],
+    category: "Fragile & Valuable",
+    weightKg: 10,
+    handlingFlags: ["Fragile", "High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "gaming_pc",
+    patterns: [/\bgaming pc(?: tower)?\b/, /\bpc tower\b/, /\bcomputer tower\b/],
+    category: "Electronics",
+    weightKg: 14,
+    handlingFlags: ["Fragile", "High Value", "Bulky"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "drone",
+    patterns: [/\bdrones?\b/],
+    category: "Electronics",
+    weightKg: 4,
+    handlingFlags: ["Fragile", "High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "dj_equipment",
+    patterns: [/\bdj equipment\b/, /\bdj mixers?\b/, /\baudio mixers?\b/, /\bturntables?\b/],
+    category: "Electronics",
+    weightKg: 20,
+    handlingFlags: ["Fragile", "High Value", "Bulky"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "film_equipment",
+    patterns: [/\bfilm equipment\b/, /\blighting rigs?\b/, /\bcamera rigs?\b/],
+    category: "Electronics",
+    weightKg: 18,
+    handlingFlags: ["Fragile", "High Value", "Bulky"],
+    vehicleRequired: "van",
   },
   {
     id: "graphics_card",
@@ -979,24 +1123,54 @@ function weightBandFor(weightKg) {
   }) || WEIGHT_BANDS[WEIGHT_BANDS.length - 1];
 }
 
-function estimateWeightKg(rawText, declaredWeightText) {
-  const text = normalize(rawText);
-  const explicit = parseWeightKg(rawText, declaredWeightText);
-  if (explicit != null) return explicit;
+function estimateIrisWeightKg(rawText, normalizedText = normalize(rawText)) {
   const combined = estimateCombinedWeightKg(rawText);
   if (combined != null) return combined;
-  const object = detectObject(text);
+  const object = detectObject(normalizedText);
   if (object) return Math.round(object.weightKg * parseQuantity(rawText) * 100) / 100;
-  if (includesAny(text, ["iphone", "phone", "smartphone", "passport", "document", "letter"])) return 0.3;
-  if (includesAny(text, ["laptop", "tablet", "camera", "console"])) return 2;
-  if (includesAny(text, ["65 inch tv", "65-inch tv", "65in tv", "large tv"])) return 32;
-  if (includesAny(text, ["tv", "monitor"])) return 12;
-  if (includesAny(text, ["microwave", "printer", "toolbox"])) return 15;
-  if (includesAny(text, ["sofa", "wardrobe", "mattress", "washing machine", "fridge"])) return 45;
-  if (includesAny(text, ["pallet", "engine", "industrial machine"])) return 75;
-  if (includesAny(text, ["suitcase", "luggage", "bag"])) return 8;
-  if (includesAny(text, ["food", "groceries", "meal", "cake"])) return 3;
+  if (includesAny(normalizedText, ["iphone", "phone", "smartphone", "passport", "document", "letter"])) return 0.3;
+  if (includesAny(normalizedText, ["laptop", "tablet", "camera", "console"])) return 2;
+  if (includesAny(normalizedText, ["65 inch tv", "65-inch tv", "65in tv", "large tv"])) return 32;
+  if (includesAny(normalizedText, ["tv", "monitor"])) return 12;
+  if (includesAny(normalizedText, ["microwave", "printer", "toolbox"])) return 15;
+  if (includesAny(normalizedText, ["sofa", "wardrobe", "mattress", "washing machine", "fridge"])) return 45;
+  if (includesAny(normalizedText, ["pallet", "engine", "industrial machine"])) return 75;
+  if (includesAny(normalizedText, ["suitcase", "luggage", "bag"])) return 8;
+  if (includesAny(normalizedText, ["food", "groceries", "meal", "cake"])) return 3;
   return 2;
+}
+
+function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipmentSummary, shipmentItems}) {
+  const declaredWeightKg = parseWeightKg(rawText, declaredWeightText);
+  const itemWeightKg = Array.isArray(shipmentItems) && shipmentItems.length ?
+    Math.round(shipmentItems.reduce((sum, item) => sum + item.totalWeightKg, 0) * 100) / 100 :
+    null;
+  const fallbackIrisWeightKg = estimateIrisWeightKg(rawText);
+  const irisEstimatedWeightKg = itemWeightKg != null ? itemWeightKg : fallbackIrisWeightKg;
+  const candidates = [
+    {source: "iris_estimate", value: irisEstimatedWeightKg, confidence: itemWeightKg != null ? "high" : "medium"},
+  ];
+  if (shipmentSummary && Number.isFinite(shipmentSummary.combinedWeightKg)) {
+    candidates.push({source: "combined_items", value: shipmentSummary.combinedWeightKg, confidence: "high"});
+  }
+  if (declaredWeightKg != null && declaredWeightKg >= 0) {
+    candidates.push({source: "declared_weight", value: declaredWeightKg, confidence: "sender_declared"});
+  }
+  const best = candidates
+      .filter((candidate) => Number.isFinite(candidate.value) && candidate.value >= 0)
+      .sort((a, b) => b.value - a.value)[0] || {source: "iris_estimate", value: 2, confidence: "low"};
+  const lowerDeclaration = declaredWeightKg != null && declaredWeightKg < irisEstimatedWeightKg;
+  const higherDeclaration = declaredWeightKg != null && declaredWeightKg > irisEstimatedWeightKg;
+  return {
+    declaredWeightKg,
+    irisEstimatedWeightKg,
+    combinedWeightKg: shipmentSummary ? shipmentSummary.combinedWeightKg : itemWeightKg,
+    authoritativeWeightKg: Math.round(best.value * 100) / 100,
+    authoritySource: best.source,
+    confidence: best.confidence,
+    overrideReason: lowerDeclaration ? "declared_weight_below_iris_estimate" :
+      higherDeclaration ? "declared_weight_above_iris_estimate" : "declared_and_iris_aligned",
+  };
 }
 
 function classifyCategory(text, shipmentSummary = null) {
@@ -1022,7 +1196,7 @@ function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
   if (category === "Electronics" || category === "Fragile & Valuable" || includesAny(text, ["glass", "mirror", "ceramic", "tv", "monitor", "fragile"])) flags.add("Fragile");
   if (category === "Food & Consumables" || includesAny(text, ["food", "meal", "cake", "groceries"])) flags.add("Perishable");
   if (includesAny(text, ["upright", "keep upright", "tv", "fridge"])) flags.add("Keep Upright");
-  if (category === "Fragile & Valuable" || includesAny(text, ["iphone", "laptop", "jewellery", "jewelry", "valuable", "expensive"])) flags.add("High Value");
+  if (category === "Fragile & Valuable" || includesAny(text, ["iphone", "laptop", "jewellery", "jewelry", "valuable", "expensive", "designer", "luxury"])) flags.add("High Value");
   if (includesAny(text, ["cold", "frozen", "temperature", "medicine", "insulin"])) flags.add("Temperature Sensitive");
   if (weightKg > 10 || includesAny(text, ["large", "65 inch", "65-inch", "sofa", "wardrobe", "mattress", "pallet"])) flags.add("Bulky");
   if (includesAny(text, ["awkward", "odd shape", "long", "ladder"])) flags.add("Awkward Shape");
@@ -1031,12 +1205,28 @@ function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
   return Array.from(flags);
 }
 
-function complianceFor(text) {
+function multilingualProhibitedMatch(rawText) {
+  const source = `${rawText || ""}`.toLowerCase().normalize("NFKC");
+  const compact = source.replace(/[\s\u200b-\u200d\uFEFF._-]+/g, "");
+  const highRiskPatterns = [
+    /炸药|爆炸物|爆竹|枪|枪支|弹药|汽油|毒品/,
+    /سلاح|مسدس|ذخيرة|متفجرات|بنزين|مخدرات|ألعابنارية|العابنارية/,
+    /arme\s*(?:à|a)\s*feu|munitions?|explosifs?|feux\s*d[’']?artifice|essence|drogues?\s*ill[eé]gales?/,
+    /arma\s*de\s*fuego|munici[oó]n|explosiv[oa]s?|fuegos\s*artificiales|gasolina|drogas?\s*ilegales?/,
+    /bro[nń]|amunicj[aeę]|materia[łl]ywybuchowe|fajerwerki|benzyn[aeę]|narkotyki/,
+  ];
+  return highRiskPatterns.some((pattern) => pattern.test(source) || pattern.test(compact));
+}
+
+function complianceFor(text, rawText = text) {
   if (includesAny(text, ["illegal drugs", "cocaine", "heroin", "weapon", "gun", "firearm", "ammunition", "ammo", "knife", "explosive", "bomb", "fireworks", "petrol", "gasoline", "hazardous chemical", "hazmat", "hazardous materials"])) {
     return {status: "prohibited", reasonCodes: ["prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
+  if (multilingualProhibitedMatch(rawText)) {
+    return {status: "prohibited", reasonCodes: ["multilingual_prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
+  }
   if (includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
-    /\b(dog|cat)\b/.test(text) && !includesAny(text, ["dog food", "cat food", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy"])) {
+    /\b(dog|cat)\b/.test(text) && !includesAny(text, ["dog food", "cat food", "cat litter", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy"])) {
     let referralType = "specialist_freight";
     if (includesAny(text, ["pet", "dog", "cat", "live animal", "livestock"])) referralType = "pet_transport";
     if (includesAny(text, ["funeral", "deceased", "body transport"])) referralType = "funeral_transport";
@@ -1219,7 +1409,7 @@ function accessIntelligenceFor(input = {}) {
   if (liftUnavailable && (collectionFloor > 1 || deliveryFloor > 1)) constraints.push("stairs_without_lift");
   if (includesAny(values, ["tower block", "estate", "gated"])) constraints.push("managed_or_gated_access");
   if (includesAny(values, ["hospital", "airport", "station", "stadium", "hotel", "university", "warehouse", "construction"])) constraints.push("controlled_site_access");
-  if (includesAny(values, ["red route", "loading restriction", "restricted parking", "pedestrian", "market", "forecourt", "bus gate", "ltn"])) constraints.push("declared_loading_or_parking_constraint");
+  if (includesAny(values, ["red route", "loading restriction", "restricted parking", "pedestrian", "market", "forecourt", "bus gate", "ltn", "ulez", "congestion charge", "road closure", "school traffic", "school street", "airport", "airport security", "airport drop off", "security checkpoint", "event congestion", "event traffic", "football match", "match day", "concert congestion", "station", "station forecourt", "stadium", "temporary access restriction", "hospital access", "hospital loading", "construction zone", "construction site", "roadworks", "bridge restriction"])) constraints.push("declared_loading_or_parking_constraint");
   if (constraints.includes("stairs_without_lift")) instructions.push("Confirm stair access and safe carry before dispatch.");
   if (constraints.includes("managed_or_gated_access")) instructions.push("Request gate, estate, concierge or block access details.");
   if (constraints.includes("controlled_site_access")) instructions.push("Confirm reception, security or loading point before arrival.");
@@ -1313,11 +1503,17 @@ function classifyIris(input = {}) {
   const declaredWeightText = input.declaredWeightText || input.weight || "";
   const speed = `${input.speed || ""}`;
   const express = normalize(speed) === "express" || input.express === true || input.urgent === true;
-  const compliance = complianceFor(text);
+  const compliance = complianceFor(text, description);
   const shipmentItems = extractShipmentItems(description);
   const shipmentSummary = splitItemClauses(description).length >= 2 && shipmentItems.length >= 1 ?
     summarizeShipmentItems(shipmentItems) : null;
-  const estimatedWeightKg = estimateWeightKg(description, declaredWeightText);
+  const weightAuthority = resolveAuthoritativeShipmentWeight({
+    rawText: description,
+    declaredWeightText,
+    shipmentSummary,
+    shipmentItems,
+  });
+  const estimatedWeightKg = weightAuthority.authoritativeWeightKg;
   const baseCategory = classifyCategory(text, shipmentSummary);
   const baseWeightBand = weightBandFor(estimatedWeightKg);
   const handlingFlags = handlingFlagsFor(text, baseCategory, estimatedWeightKg, shipmentSummary);
@@ -1329,6 +1525,10 @@ function classifyIris(input = {}) {
     express,
     vehicleType: handlingFlags.includes("Van Required") ? "van" : input.vehicleType,
   });
+  price.normalCheckoutEligible = compliance.status === "allowed";
+  if (!price.normalCheckoutEligible) {
+    price.checkoutBlockReason = "not_allowed_for_normal_dispatch";
+  }
   const baseRecommendation = {
     detectedItem: description.trim() || baseCategory,
     detectedItems: shipmentItems.length ? shipmentItems.map((item) => ({
@@ -1355,34 +1555,41 @@ function classifyIris(input = {}) {
   const recommendation = compliance.status === "allowed" ?
     applyLearningMemory(baseRecommendation, description, input.completedExamples || []) :
     baseRecommendation;
+  const authoritativeRecommendation = {
+    ...recommendation,
+    estimatedWeightKg,
+    weightBand: weightBandFor(estimatedWeightKg),
+    handlingFlags,
+    estimatedPrice: price.total,
+  };
   const serviceability = serviceabilityFor({
     complianceStatus: compliance.status,
-    weightKg: recommendation.estimatedWeightKg,
-    handlingFlags: recommendation.handlingFlags,
+    weightKg: authoritativeRecommendation.estimatedWeightKg,
+    handlingFlags: authoritativeRecommendation.handlingFlags,
   });
   const dimensionalBand = dimensionalBandFor({
     text,
-    weightKg: recommendation.estimatedWeightKg,
-    handlingFlags: recommendation.handlingFlags,
+    weightKg: authoritativeRecommendation.estimatedWeightKg,
+    handlingFlags: authoritativeRecommendation.handlingFlags,
     shipmentSummary,
   });
   const matching = matchingRequirementsFor({
-    handlingFlags: recommendation.handlingFlags,
-    weightKg: recommendation.estimatedWeightKg,
+    handlingFlags: authoritativeRecommendation.handlingFlags,
+    weightKg: authoritativeRecommendation.estimatedWeightKg,
     express,
   });
   const access = accessIntelligenceFor(input);
   const verificationPolicy = verificationPolicyFor({
     text,
-    category: recommendation.category,
-    handlingFlags: recommendation.handlingFlags,
+    category: authoritativeRecommendation.category,
+    handlingFlags: authoritativeRecommendation.handlingFlags,
     complianceStatus: compliance.status,
     serviceability,
   });
   const valueProtection = valueProtectionFor({
     text,
-    category: recommendation.category,
-    handlingFlags: recommendation.handlingFlags,
+    category: authoritativeRecommendation.category,
+    handlingFlags: authoritativeRecommendation.handlingFlags,
     complianceStatus: compliance.status,
   });
   const operationalWarnings = [];
@@ -1398,28 +1605,29 @@ function classifyIris(input = {}) {
       declaredCategory: input.declaredCategory || null,
       confidence: "low",
     },
-    recommendation,
+    recommendation: authoritativeRecommendation,
     operationalRecommendation: {
       dimensionalBand,
       vehicleRecommendation: {
         required: matching.vehicleRequired,
-        bikeSuitable: matching.vehicleRequired === "any" && !recommendation.handlingFlags.includes("Bulky"),
-        motorbikeSuitable: matching.vehicleRequired === "any" && recommendation.estimatedWeightKg <= 10,
-        carSuitable: matching.vehicleRequired === "any" || recommendation.estimatedWeightKg <= 25,
+        bikeSuitable: matching.vehicleRequired === "any" && !authoritativeRecommendation.handlingFlags.includes("Bulky"),
+        motorbikeSuitable: matching.vehicleRequired === "any" && authoritativeRecommendation.estimatedWeightKg <= 10,
+        carSuitable: matching.vehicleRequired === "any" && authoritativeRecommendation.estimatedWeightKg <= 25,
         vanSuitable: true,
-        heavyDutySuitable: recommendation.estimatedWeightKg > 50 || recommendation.handlingFlags.includes("Two Person Lift"),
+        heavyDutySuitable: authoritativeRecommendation.estimatedWeightKg > 50 || authoritativeRecommendation.handlingFlags.includes("Two Person Lift"),
       },
       accessComplexity: access.difficulty,
       valueProtectionRecommendation: valueProtection,
       operationalWarnings,
-      confidence: recommendation.confidencePercent,
+      confidence: authoritativeRecommendation.confidencePercent,
     },
     internal: {
       context: internalContext,
       riskScore: compliance.status === "prohibited" ? 0.95 : compliance.status === "unsupported" ? 0.55 : 0.12,
-      logisticsScore: recommendation.handlingFlags.length / HANDLING_FLAGS.length,
+      logisticsScore: authoritativeRecommendation.handlingFlags.length / HANDLING_FLAGS.length,
       pricingModifiers: price,
       riderMatching: matching,
+      weightAuthority,
       shipmentSummary: shipmentSummary ? {
         itemCount: shipmentSummary.itemCount,
         totalQuantity: shipmentSummary.totalQuantity,
@@ -1428,7 +1636,7 @@ function classifyIris(input = {}) {
         vehicleRequired: shipmentSummary.vehicleRequired,
       } : null,
       accessIntelligence: access,
-      learningMatchedExamples: recommendation.learningMatchedExamples || 0,
+      learningMatchedExamples: authoritativeRecommendation.learningMatchedExamples || 0,
     },
     compliance: {
       status: compliance.status,
