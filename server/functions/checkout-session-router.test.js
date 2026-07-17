@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
@@ -60,6 +61,27 @@ test("wallet top-up checkout uses Roth ledger finalizer", async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].session.id, "cs_wallet");
   assert.equal(calls[0].eventId, "evt_3");
+});
+
+test("gift checkout uses the Gifts finalizer for lost redirect recovery", async () => {
+  const calls = [];
+  const result = await routeCheckoutSessionCompleted(
+      {id: "cs_gift", metadata: {type: "gift_experience", giftDraftId: "gift-1"}},
+      "evt_gift",
+      {
+        giftsPayment: {
+          finalizeGiftPaymentFromCheckoutSession: async (payload) => {
+            calls.push(payload);
+          },
+        },
+      },
+  );
+
+  assert.deepEqual(result, {handled: true, type: "gift_experience"});
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].giftDraftId, "gift-1");
+  assert.equal(calls[0].session.id, "cs_gift");
+  assert.equal(calls[0].eventId, "evt_gift");
 });
 
 test("unknown checkout session metadata is ignored safely", async () => {

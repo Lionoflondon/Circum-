@@ -6,7 +6,12 @@ const functions = require("firebase-functions/v1");
 const {defineSecret} = require("firebase-functions/params");
 const stripeConfig = functions.config().stripe || {};
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
-const stripe = require("stripe")(stripeConfig.livekey);
+const {
+  assertStripeEventMode,
+  resolveStripeRuntimeConfig,
+} = require("./stripe-config");
+const stripeRuntimeConfig = resolveStripeRuntimeConfig({config: stripeConfig});
+const stripe = require("stripe")(stripeRuntimeConfig.secretKey);
 const stripeConnectClient = () => stripe;
 const {v4: uuidv4} = require("uuid");
 
@@ -152,6 +157,7 @@ exports.createStripeOnboardingLink = riderConnect.createStripeOnboardingLink(str
 exports.refreshStripeOnboardingLink = riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
 exports.syncStripeConnectStatus = riderConnect.syncStripeConnectStatus(stripeConnectClient);
 exports.createRiderTransferOrPayout = riderConnect.createRiderTransferOrPayout(stripeConnectClient);
+exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
 exports.cancelRiderWithdrawal = riderConnect.cancelRiderWithdrawal();
 exports.resetRiderTestStripeAccount = riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(stripeConnectClient);
@@ -218,14 +224,26 @@ exports.StripeWebhook = functions.runWith({secrets: [stripeWebhookSecret]}).http
   const sig = req.headers["stripe-signature"];
   // console.log(sig);
 
-  const stripeWebhookSigningSecret = stripeWebhookSecret.value() || stripeConfig.webhooksecret;
-  if (!stripeWebhookSigningSecret) {
+  let webhookRuntimeConfig;
+  try {
+    webhookRuntimeConfig = resolveStripeRuntimeConfig({
+      config: stripeConfig,
+      webhookSecret: stripeWebhookSecret.value(),
+      requireWebhookSecret: true,
+    });
+  } catch (error) {
+    console.error("Stripe webhook configuration failed closed", {
+      mode: stripeRuntimeConfig.mode,
+      firebaseProject: stripeRuntimeConfig.firebaseProject,
+      reason: error && error.message ? error.message : "invalid_configuration",
+    });
     return res.status(500).send({error: "Stripe webhook secret is not configured"});
   }
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, stripeWebhookSigningSecret);
+    event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookRuntimeConfig.webhookSecret);
+    assertStripeEventMode(event, webhookRuntimeConfig);
   } catch (err) {
     console.error("Stripe webhook signature verification failed:", err.message);
     return res.status(400).send({error: "Invalid Stripe webhook signature"});
@@ -298,6 +316,7 @@ exports.StripeWebhook = functions.runWith({secrets: [stripeWebhookSecret]}).http
     try {
       await routeCheckoutSessionCompleted(sessionData, event.id, {
         businessPayments,
+        giftsPayment,
         rothLedger,
         logger: console,
       });

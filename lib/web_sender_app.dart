@@ -9714,12 +9714,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return;
     }
     final amount = double.tryParse(_withdrawAmount.text.trim()) ?? 0;
-    if (amount <= 0 ||
-        _bankName.text.trim().isEmpty ||
-        _sortCode.text.trim().isEmpty ||
-        _accountNumber.text.trim().isEmpty) {
+    if (amount <= 0) {
       setState(
-        () => _withdrawMessage = 'Enter the amount and bank details first.',
+        () => _withdrawMessage = 'Enter the amount first.',
       );
       return;
     }
@@ -9738,82 +9735,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final pending = await db
-          .collection('payoutRequests')
-          .where('riderId', isEqualTo: user.uid)
-          .where('status', whereIn: ['requested', 'approved', 'pending'])
-          .limit(1)
-          .get();
-      if (pending.docs.isNotEmpty) {
-        if (!mounted) return;
-        setState(
-          () => _withdrawMessage =
-              'You already have a withdrawal being processed.',
-        );
-        return;
-      }
-      final requestRef = db.collection('payoutRequests').doc();
-      final batch = db.batch();
-      batch.set(requestRef, {
-        'requestId': requestRef.id,
-        'riderId': user.uid,
-        'riderEmail': user.email,
-        'amount': amount,
-        'bankName': _bankName.text.trim(),
-        'sortCode': _sortCode.text.trim(),
-        'accountNumber': _accountNumber.text.trim(),
-        'saveAccountDetails': _saveBank,
-        'status': 'requested',
-        'notes': '',
-        'auditTrail': [
-          {
-            'type': 'withdrawal_requested',
-            'riderId': user.uid,
-            'amount': amount,
-            'status': 'requested',
-            'source': 'circum-web',
-            'createdAt': Timestamp.now(),
-          },
-        ],
-        'source': 'circum-web',
-        'requestedAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(
-          db.collection('riderEarnings').doc(user.uid),
-          {
-            'pendingWithdrawal': FieldValue.increment(amount),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-      if (_saveBank) {
-        batch.set(
-          db.collection('riderBankAccounts').doc(user.uid),
-          {
-            'riderId': user.uid,
-            'bankName': _bankName.text.trim(),
-            'sortCodeLast2': _sortCode.text.trim().length >= 2
-                ? _sortCode.text.trim().substring(
-                      _sortCode.text.trim().length - 2,
-                    )
-                : _sortCode.text.trim(),
-            'accountLast4': _accountNumber.text.trim().length >= 4
-                ? _accountNumber.text.trim().substring(
-                      _accountNumber.text.trim().length - 4,
-                    )
-                : _accountNumber.text.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      }
-      await batch.commit();
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('requestRiderWithdrawal')
+          .call({'amount': amount});
       if (!mounted) return;
       setState(
         () => _withdrawMessage =
-            'Withdrawal request sent. Circum will process it to your bank.',
+            'Withdrawal request sent. Circum will process it through Stripe Connect.',
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _withdrawMessage =
+            error.message ?? 'We could not send the request. Try again.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -11198,9 +11132,6 @@ class _RiderWorkspace extends StatelessWidget {
                             _canRequestWithdrawal(
                               amountText: withdrawAmount.text,
                               availableBalance: earnings.availableBalance,
-                              bankName: bankName.text,
-                              sortCode: sortCode.text,
-                              accountNumber: accountNumber.text,
                             )
                         ? onWithdraw
                         : null,
@@ -11337,16 +11268,9 @@ class _RiderWorkspace extends StatelessWidget {
   static bool _canRequestWithdrawal({
     required String amountText,
     required double availableBalance,
-    required String bankName,
-    required String sortCode,
-    required String accountNumber,
   }) {
     final amount = double.tryParse(amountText.trim()) ?? 0;
-    return amount > 0 &&
-        amount <= availableBalance &&
-        bankName.trim().isNotEmpty &&
-        sortCode.trim().isNotEmpty &&
-        accountNumber.trim().isNotEmpty;
+    return amount > 0 && amount <= availableBalance;
   }
 }
 
@@ -13995,7 +13919,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                         error = null;
                       });
                       try {
-                        Stripe.publishableKey = Env.publishableLiveKey;
+                        Stripe.publishableKey = Env.publishableTestKey;
                         await Stripe.instance.applySettings();
                         final payment = await FirebaseFunctions.instance
                             .httpsCallable('createDeliveryAdjustmentPayment')
@@ -15808,7 +15732,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final session = Map<String, dynamic>.from(sessionResult.data as Map);
       final clientSecret = '${session['clientSecret'] ?? ''}';
       if (clientSecret.isNotEmpty) {
-        Stripe.publishableKey = Env.publishableLiveKey;
+        Stripe.publishableKey = Env.publishableTestKey;
         await Stripe.instance.applySettings();
         await Stripe.instance.initPaymentSheet(
           paymentSheetParameters: SetupPaymentSheetParameters(

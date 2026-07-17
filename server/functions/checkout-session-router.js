@@ -38,6 +38,20 @@ async function routeCheckoutSessionCompleted(
     return {handled: true, type};
   }
 
+  if (type === "gift_experience") {
+    if (!deps.giftsPayment ||
+        typeof deps.giftsPayment.finalizeGiftPaymentFromCheckoutSession !==
+        "function") {
+      throw new Error("gift checkout finalizer unavailable");
+    }
+    await deps.giftsPayment.finalizeGiftPaymentFromCheckoutSession({
+      giftDraftId: metadata.giftDraftId,
+      session: sessionData,
+      eventId,
+    });
+    return {handled: true, type};
+  }
+
   logger.info(
       "Stripe checkout session completed with no registered finalizer",
       {

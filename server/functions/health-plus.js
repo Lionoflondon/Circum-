@@ -4,7 +4,8 @@ const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const stripeConfig = functions.config().stripe || {};
-const stripe = require("stripe")(stripeConfig.livekey);
+const {resolveStripeRuntimeConfig} = require("./stripe-config");
+const stripe = require("stripe")(resolveStripeRuntimeConfig({config: stripeConfig}).secretKey);
 const {
   calculateAuthoritativeHealthPlusPricing,
   healthPlusPricingInputFromBooking,

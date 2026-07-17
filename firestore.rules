@@ -82,14 +82,122 @@ service cloud.firestore {
       );
     }
 
+    function protectedDeliveryFields() {
+      return [
+        'status',
+        'deliveryStatus',
+        'deliveryStage',
+        'paymentStatus',
+        'paidAmount',
+        'amountPaid',
+        'pricePaid',
+        'paymentIntentId',
+        'stripePaymentIntentId',
+        'stripeCheckoutSessionId',
+        'stripeSessionId',
+        'paymentSessionId',
+        'paymentCompletedAt',
+        'paidAt',
+        'refundStatus',
+        'refundAmount',
+        'refundReviewStatus',
+        'cancellationFee',
+        'cancellationCharge',
+        'cancellationChargeStatus',
+        'riderEarnings',
+        'driverPayout',
+        'payoutStatus',
+        'ledgerRef',
+        'ledgerReferences',
+        'trustScore',
+        'trustAwards',
+        'rank',
+        'riderRank',
+        'completionState',
+        'completedAt',
+        'pinVerified',
+        'collectionPinVerified',
+        'deliveryPinVerified',
+        'arrivalState',
+        'noShowState',
+        'adminInvestigation',
+        'adminReview',
+        'serverAudit',
+        'auditTrail'
+      ];
+    }
+
+    function protectedFinancialCreateFields() {
+      return [
+        'status',
+        'deliveryStatus',
+        'deliveryStage',
+        'paymentStatus',
+        'paidAmount',
+        'amountPaid',
+        'pricePaid',
+        'paymentIntentId',
+        'stripePaymentIntentId',
+        'stripeCheckoutSessionId',
+        'stripeSessionId',
+        'paymentSessionId',
+        'paymentCompletedAt',
+        'paidAt',
+        'refundStatus',
+        'refundAmount',
+        'refundReviewStatus',
+        'cancellationFee',
+        'cancellationCharge',
+        'cancellationChargeStatus',
+        'riderEarnings',
+        'driverPayout',
+        'payoutStatus',
+        'ledgerRef',
+        'ledgerReferences',
+        'trustScore',
+        'trustAwards',
+        'rank',
+        'riderRank',
+        'completionState',
+        'completedAt',
+        'pinVerified',
+        'collectionPinVerified',
+        'deliveryPinVerified',
+        'arrivalState',
+        'noShowState',
+        'adminInvestigation',
+        'adminReview',
+        'serverAudit',
+        'auditTrail',
+        'quotedPrice',
+        'authoritativeQuote',
+        'pricingSnapshot',
+        'priceBreakdown',
+        'paymentRecordId',
+        'stripeCustomerId'
+      ];
+    }
+
+    function isSafeDeliveryCreate() {
+      return isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(protectedFinancialCreateFields());
+    }
+
     function isOwnDeliveryUpdate() {
       return isOwnDelivery('') &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']) &&
+        !request.resource.data.diff(resource.data).changedKeys().hasAny(protectedDeliveryFields());
     }
 
     function isAssignedRiderUpdate() {
       return isAssignedRider() &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris']);
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'rejectedByRiders',
+          'ignoredByRiders',
+          'rejectedAt',
+          'ignoredAt',
+          'updatedAt'
+        ]);
     }
 
     function deliveryFor(deliveryId) {
@@ -370,7 +478,7 @@ service cloud.firestore {
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
         isAvailableRiderJob();
-      allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow create: if isAdmin() || isSafeDeliveryCreate();
       allow update: if isAdmin() ||
         isOwnDeliveryUpdate() ||
         isAssignedRiderUpdate();
@@ -523,15 +631,14 @@ service cloud.firestore {
 
     match /riderEarnings/{riderId} {
       allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
-      allow create, update: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /riderWalletTransactions/{transactionId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
@@ -539,15 +646,14 @@ service cloud.firestore {
     match /payoutRequests/{requestId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /riderBankAccounts/{riderId} {
-      allow read, create, update: if isAdmin() ||
-        (signedIn() && riderId == request.auth.uid);
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
