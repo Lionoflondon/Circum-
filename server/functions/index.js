@@ -48,6 +48,7 @@ const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
 const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
 const adminIrisReferenceImages = require("./admin-iris-reference-images");
+const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 
 initializeApp();
 
@@ -292,7 +293,25 @@ exports.StripeWebhook = functions.runWith({secrets: [stripeWebhookSecret]}).http
   if (event.type == "checkout.session.completed") {
     console.log("💰 Payment completed!");
     const sessionData = event.data.object;
-    const metadata = sessionData.metadata;
+    const metadata = sessionData.metadata || {};
+
+    try {
+      await routeCheckoutSessionCompleted(sessionData, event.id, {
+        businessPayments,
+        rothLedger,
+        logger: console,
+      });
+    } catch (error) {
+      console.error("Stripe checkout session finalization failed", {
+        eventId: event.id,
+        sessionId: sessionData && sessionData.id ? sessionData.id : null,
+        metadataType: metadata.type || null,
+        purchaseRequestId: metadata.purchaseRequestId || null,
+        paymentIntentId: sessionData && sessionData.payment_intent ? sessionData.payment_intent : null,
+        error: error && error.message ? error.message : error,
+      });
+      return res.status(500).send({success: false, error: "checkout_finalization_failed"});
+    }
 
     const messageObj = JSON.stringify({
       // sessionData,
@@ -300,6 +319,9 @@ exports.StripeWebhook = functions.runWith({secrets: [stripeWebhookSecret]}).http
       success: true,
     });
 
+    if (!metadata.pushToken) {
+      return res.send({success: true});
+    }
 
     const message = {
       apns: {
