@@ -89,7 +89,7 @@ test("semantic stress cases avoid absurd vehicle and weight recommendations", ()
     ["USB cable", "Electronics", "Small Parcel", "any"],
     ["passport", "Documents", "Small Parcel", "any"],
     ["concrete mixer", "Tools & Machinery", "Heavy Duty Freight", "van"],
-    ["bricks", "Tools & Machinery", "Heavy Duty Freight", "van"],
+    ["bricks", "Tools & Machinery", "Small Parcel", "any"],
     ["blood samples", "Medical & Pharmacy", "Small Parcel", "any"],
     ["perfume", "Fragile & Valuable", "Small Parcel", "any"],
     ["flowers", "Food & Consumables", "Small Parcel", "any"],
@@ -129,6 +129,73 @@ test("plurality scales weight vehicle and dispatch requirements sensibly", () =>
   assert.equal(dresses.recommendation.category, "Clothing & Fashion");
   assert.equal(dresses.recommendation.weightBand.label, "Heavy Duty Freight");
   assert.equal(dresses.internal.riderMatching.vehicleRequired, "van");
+});
+
+test("parser distinguishes quantities from model numbers screen sizes capacities and dimensions", () => {
+  const singleItemCases = [
+    "65 inch TV",
+    "75\" OLED TV",
+    "85-inch Samsung TV",
+    "55in LG television",
+    "27 inch monitor",
+    "32\" display",
+    "49 inch ultrawide monitor",
+    "iPhone 13",
+    "iPhone 14 Pro",
+    "iPhone 15 Pro Max",
+    "Galaxy S24 Ultra",
+    "Pixel 9 Pro",
+    "MacBook Pro 14",
+    "MacBook Air M3",
+    "PlayStation 5",
+    "Xbox Series X",
+    "Nintendo Switch 2",
+    "RTX 5090",
+    "RTX 4090",
+    "Ryzen 9",
+    "Intel i7-14700K",
+    "Surface Pro 11",
+    "500 ml perfume",
+    "2 litre drink",
+    "50 cm mirror",
+    "2 metres timber",
+  ];
+  for (const description of singleItemCases) {
+    const result = classifyIris({description});
+    assert.ok(result.recommendation.estimatedWeightKg < 100, description);
+    if (/iphone|galaxy|pixel|macbook|playstation|xbox|switch|rtx|ryzen|intel|surface/i.test(description)) {
+      assert.ok(result.recommendation.estimatedWeightKg <= 3, description);
+    }
+  }
+
+  const quantityCases = [
+    ["2 TVs", 64, "van"],
+    ["5 laptops", 10, "any"],
+    ["12 chairs", 360, "van"],
+    ["100 bricks", 30, "van"],
+    ["20 phones", 6, "any"],
+    ["3 iPhone 13s", 0.9, "any"],
+    ["5 PlayStation 5 consoles", 10, "any"],
+    ["2 x 65 inch TVs", 64, "van"],
+    ["2 × 65 inch TVs", 64, "van"],
+    ["3 Samsung S24 phones", 0.9, "any"],
+    ["5 iPhone 13 Pro Max devices", 1.5, "any"],
+    ["10 Dell 27\" monitors", 20, "van"],
+    ["2 RTX 5090 graphics cards", 3, "any"],
+  ];
+  for (const [description, expectedKg, expectedVehicle] of quantityCases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.estimatedWeightKg, expectedKg, description);
+    assert.equal(result.internal.riderMatching.vehicleRequired, expectedVehicle, description);
+  }
+
+  const explicitWeights = [
+    ["15 kg parcel", 15],
+    ["3.5 kg box", 3.5],
+  ];
+  for (const [description, expectedKg] of explicitWeights) {
+    assert.equal(classifyIris({description}).recommendation.estimatedWeightKg, expectedKg, description);
+  }
 });
 
 test("ambiguous animals and prohibited prompt attacks do not bypass policy", () => {

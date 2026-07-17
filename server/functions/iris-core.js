@@ -102,7 +102,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "tv",
-    patterns: [/\b(65[- ]?inch|65in|large|massive|big screen)\s+(tv|television|telly)\b/, /\btelly\b/, /\bbig screen\b/, /\btv\b/, /\btelevision\b/],
+    patterns: [/\b(65[- ]?inch|65in|large|massive|big screen)\s+(tv|television|telly)\b/, /\btelly\b/, /\bbig screen\b/, /\btvs?\b/, /\btelevisions?\b/],
     category: "Electronics",
     weightKg: 32,
     handlingFlags: ["Fragile", "Keep Upright", "Bulky", "Van Required", "Two Person Lift"],
@@ -118,7 +118,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "iphone",
-    patterns: [/\biphones?\b/, /\bsmartphones?\b/, /\bmobile phones?\b/],
+    patterns: [/\biphones?\b/, /\bphones?\b/, /\bsmartphones?\b/, /\bmobile phones?\b/],
     category: "Electronics",
     weightKg: 0.3,
     handlingFlags: ["Fragile", "High Value"],
@@ -182,7 +182,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "electronics",
-    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsole\b/, /\bmonitor\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bserver rack\b/],
+    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\bdisplay\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bserver rack\b/, /\bplaystation\b/, /\bxbox\b/, /\bnintendo switch\b/],
     category: "Electronics",
     weightKg: 2,
     handlingFlags: ["Fragile", "High Value"],
@@ -229,8 +229,32 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "graphics_card",
+    patterns: [/\bgraphics cards?\b/, /\brtx\b/, /\bgpu\b/],
+    category: "Electronics",
+    weightKg: 1.5,
+    handlingFlags: ["Fragile", "High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "bricks",
+    patterns: [/\bbricks?\b/],
+    category: "Tools & Machinery",
+    weightKg: 0.3,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "tiles",
+    patterns: [/\btiles?\b/],
+    category: "Tools & Machinery",
+    weightKg: 1,
+    handlingFlags: ["Fragile", "Bulky"],
+    vehicleRequired: "any",
+  },
+  {
     id: "construction_materials",
-    patterns: [/\bbricks?\b/, /\btiles?\b/, /\bconcrete\b/, /\btimber\b/, /\bconcrete mixer\b/],
+    patterns: [/\bconcrete\b/, /\btimber\b/, /\bconcrete mixer\b/],
     category: "Tools & Machinery",
     weightKg: 75,
     handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
@@ -273,10 +297,119 @@ function detectObject(text) {
 }
 
 function parseQuantity(text) {
-  const normalized = normalize(text);
-  const quantityNouns = "(laptops?|macbooks?|phones?|smartphones?|dresses|chairs?|books?|monitors?|tablets?|cameras?|boxes|parcels|items|suitcases?|bags?)";
-  const numeric = normalized.match(new RegExp(`\\b(\\d{1,4})\\s+(?:[a-z]+\\s+){0,2}${quantityNouns}\\b`));
-  if (numeric) return Math.max(1, Number(numeric[1]));
+  const normalized = normalize(`${text || ""}`.replace(/[×*]/g, " x ").replace(/"/g, " inch "));
+  const quantityNouns = new Set([
+    "laptop",
+    "laptops",
+    "macbook",
+    "macbooks",
+    "phone",
+    "phones",
+    "smartphone",
+    "smartphones",
+    "iphone",
+    "iphones",
+    "dress",
+    "dresses",
+    "chair",
+    "chairs",
+    "book",
+    "books",
+    "monitor",
+    "monitors",
+    "tablet",
+    "tablets",
+    "camera",
+    "cameras",
+    "box",
+    "boxes",
+    "parcel",
+    "parcels",
+    "item",
+    "items",
+    "suitcase",
+    "suitcases",
+    "bag",
+    "bags",
+    "tv",
+    "tvs",
+    "television",
+    "televisions",
+    "console",
+    "consoles",
+    "device",
+    "devices",
+    "card",
+    "cards",
+    "brick",
+    "bricks",
+  ]);
+  const measurementUnits = new Set([
+    "inch",
+    "inches",
+    "in",
+    "cm",
+    "centimetre",
+    "centimetres",
+    "centimeter",
+    "centimeters",
+    "m",
+    "metre",
+    "metres",
+    "meter",
+    "meters",
+    "ml",
+    "millilitre",
+    "millilitres",
+    "milliliter",
+    "milliliters",
+    "l",
+    "litre",
+    "litres",
+    "liter",
+    "liters",
+    "kg",
+    "kilogram",
+    "kilograms",
+    "kilo",
+    "kilos",
+    "g",
+    "gram",
+    "grams",
+    "gb",
+    "tb",
+  ]);
+  const tokens = normalized.split(" ").filter(Boolean);
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const value = Number(tokens[index]);
+    if (!Number.isInteger(value) || value <= 0) continue;
+    const next = tokens[index + 1] || "";
+    if (measurementUnits.has(next)) continue;
+    if (next === "x" && Number.isInteger(Number(tokens[index + 2])) &&
+      measurementUnits.has(tokens[index + 3] || "")) {
+      for (let cursor = index + 4; cursor < Math.min(tokens.length, index + 10); cursor += 1) {
+        if (quantityNouns.has(tokens[cursor])) return value;
+      }
+      continue;
+    }
+    if (Number.isInteger(Number(next)) && measurementUnits.has(tokens[index + 2] || "")) {
+      for (let cursor = index + 3; cursor < Math.min(tokens.length, index + 9); cursor += 1) {
+        if (quantityNouns.has(tokens[cursor])) return value;
+      }
+      continue;
+    }
+    const start = next === "x" ? index + 2 : index + 1;
+    for (let cursor = start; cursor < Math.min(tokens.length, start + 8); cursor += 1) {
+      if (Number.isInteger(Number(tokens[cursor])) && measurementUnits.has(tokens[cursor + 1] || "")) {
+        cursor += 1;
+        continue;
+      }
+      if (measurementUnits.has(tokens[cursor])) break;
+      if (quantityNouns.has(tokens[cursor])) return value;
+    }
+  }
+
   const words = {
     one: 1,
     two: 2,
@@ -292,8 +425,15 @@ function parseQuantity(text) {
     fifty: 50,
     hundred: 100,
   };
-  for (const [word, value] of Object.entries(words)) {
-    if (new RegExp(`\\b${word}\\s+(?:[a-z]+\\s+){0,2}${quantityNouns}\\b`).test(normalized)) return value;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const value = words[tokens[index]];
+    if (!value) continue;
+    const next = tokens[index + 1] || "";
+    if (measurementUnits.has(next)) continue;
+    for (let cursor = index + 1; cursor < Math.min(tokens.length, index + 8); cursor += 1) {
+      if (measurementUnits.has(tokens[cursor])) break;
+      if (quantityNouns.has(tokens[cursor])) return value;
+    }
   }
   return 1;
 }
@@ -320,11 +460,12 @@ function weightBandFor(weightKg) {
   }) || WEIGHT_BANDS[WEIGHT_BANDS.length - 1];
 }
 
-function estimateWeightKg(text, declaredWeightText) {
-  const explicit = parseWeightKg(text, declaredWeightText);
+function estimateWeightKg(rawText, declaredWeightText) {
+  const text = normalize(rawText);
+  const explicit = parseWeightKg(rawText, declaredWeightText);
   if (explicit != null) return explicit;
   const object = detectObject(text);
-  if (object) return object.weightKg * parseQuantity(text);
+  if (object) return Math.round(object.weightKg * parseQuantity(rawText) * 100) / 100;
   if (includesAny(text, ["iphone", "phone", "smartphone", "passport", "document", "letter"])) return 0.3;
   if (includesAny(text, ["laptop", "tablet", "camera", "console"])) return 2;
   if (includesAny(text, ["65 inch tv", "65-inch tv", "65in tv", "large tv"])) return 32;
@@ -355,8 +496,7 @@ function classifyCategory(text) {
 
 function handlingFlagsFor(text, category, weightKg) {
   const object = detectObject(text);
-  if (object) return object.handlingFlags;
-  const flags = new Set();
+  const flags = new Set(object ? object.handlingFlags : []);
   if (category === "Electronics" || category === "Fragile & Valuable" || includesAny(text, ["glass", "mirror", "ceramic", "tv", "monitor", "fragile"])) flags.add("Fragile");
   if (category === "Food & Consumables" || includesAny(text, ["food", "meal", "cake", "groceries"])) flags.add("Perishable");
   if (includesAny(text, ["upright", "keep upright", "tv", "fridge"])) flags.add("Keep Upright");
@@ -526,7 +666,7 @@ function classifyIris(input = {}) {
   const speed = `${input.speed || ""}`;
   const express = normalize(speed) === "express" || input.express === true || input.urgent === true;
   const compliance = complianceFor(text);
-  const estimatedWeightKg = estimateWeightKg(text, declaredWeightText);
+  const estimatedWeightKg = estimateWeightKg(description, declaredWeightText);
   const baseCategory = classifyCategory(text);
   const baseWeightBand = weightBandFor(estimatedWeightKg);
   const handlingFlags = handlingFlagsFor(text, baseCategory, estimatedWeightKg);
