@@ -1,0 +1,127 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn() && (
+        request.auth.token.adminRole == role ||
+        request.auth.token.role == role ||
+        (request.auth.token.roles is list && role in request.auth.token.roles)
+      );
+    }
+
+    function isAdmin() {
+      return hasRole('super_admin') ||
+        hasRole('operations_admin') ||
+        hasRole('support_agent') ||
+        hasRole('finance_admin') ||
+        hasRole('driver_manager') ||
+        hasRole('gifts_admin');
+    }
+
+    function isSuperAdmin() {
+      return hasRole('super_admin');
+    }
+
+    function isIrisAdmin() {
+      return hasRole('super_admin') || hasRole('operations_admin');
+    }
+
+    function isSafeUpload() {
+      return request.resource != null &&
+        request.resource.size <= 15 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
+    function isGiftVoiceNoteOwner(requestId) {
+      return signedIn() && requestId.matches('^' + request.auth.uid + '_[0-9]+$');
+    }
+
+    function isSafeGiftVoiceNoteUpload() {
+      return request.resource != null &&
+        request.resource.size <= 60 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('audio/webm|audio/mpeg|audio/mp4|audio/aac|audio/ogg');
+    }
+
+    match /riderDocuments/{riderId}/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /riders/{riderId}/documents/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /vehicleDocuments/{riderId}/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /profilePhotos/{userId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == userId)) &&
+        request.resource != null &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/.*');
+      allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == userId);
+    }
+
+    match /rider-profiles/{riderId}/{fileName} {
+      allow read: if signedIn() || isAdmin();
+      allow create, update: if signedIn() &&
+        request.auth.uid == riderId &&
+        fileName.matches('profile\\.jpg|thumbnail\\.jpg') &&
+        request.resource != null &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/jpeg|image/jpg|image/png|image/heic');
+      allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == riderId);
+    }
+
+    match /businessUploads/{businessId}/{allPaths=**} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /giftAssets/{giftId}/{allPaths=**} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /giftStories/{giftId}/{allPaths=**} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /irisReferenceImages/{itemId}/{fileName} {
+      allow read: if isIrisAdmin();
+      allow create, update: if isIrisAdmin() &&
+        request.resource != null &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/jpeg|image/png|image/webp');
+      allow delete: if false;
+    }
+
+    match /gift_requests/{requestId}/voice/{fileName} {
+      allow read: if isAdmin() || isGiftVoiceNoteOwner(requestId);
+      allow create, update: if isGiftVoiceNoteOwner(requestId) && isSafeGiftVoiceNoteUpload();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
