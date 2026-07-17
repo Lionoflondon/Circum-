@@ -88,7 +88,7 @@ class _SenderDashboard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _SenderHeader(auth: auth),
+                _SenderHeader(auth: auth, onNotifications: onActivity),
                 const SizedBox(height: 24),
                 _HeroPanel(greeting: greeting, onSend: onSend),
                 const SizedBox(height: 18),
@@ -130,9 +130,13 @@ class _SenderDashboard extends StatelessWidget {
 }
 
 class _SenderHeader extends StatelessWidget {
-  const _SenderHeader({required this.auth});
+  const _SenderHeader({
+    required this.auth,
+    required this.onNotifications,
+  });
 
   final AuthState auth;
+  final VoidCallback onNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +144,10 @@ class _SenderHeader extends StatelessWidget {
       children: [
         SvgPicture.asset('assets/svg/logo.svg', width: 106),
         const Spacer(),
-        _RoundIconButton(icon: Icons.notifications_none_rounded, onTap: () {}),
+        _RoundIconButton(
+          icon: Icons.notifications_none_rounded,
+          onTap: onNotifications,
+        ),
         const SizedBox(width: 10),
         CircleAvatar(
           radius: 18,
