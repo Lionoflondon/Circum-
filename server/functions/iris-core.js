@@ -70,7 +70,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "jewellery",
-    patterns: [/\bwedding ring\b/, /\bring\b/, /\bjewellery\b/, /\bjewelry\b/, /\bluxury watch\b/],
+    patterns: [/\bwedding ring\b/, /\bring\b/, /\bjewellery\b/, /\bjewelry\b/, /\bluxury watches?\b/, /\bhigh[- ]value watch(?:es)?\b/],
     category: "Fragile & Valuable",
     weightKg: 0.1,
     handlingFlags: ["High Value"],
@@ -78,7 +78,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "safe",
-    patterns: [/\bsafes?\b/, /\bsecurity safe\b/],
+    patterns: [/\bsafe\b(?!\s+packaging)/, /\bsafes\b/, /\bsecurity safe\b/],
     category: "Fragile & Valuable",
     weightKg: 40,
     handlingFlags: ["High Value", "Bulky", "Van Required", "Two Person Lift"],
@@ -86,7 +86,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "passport_documents",
-    patterns: [/\bpassports?\b/, /\bdocuments?\b/, /\benvelopes?\b/, /\bletters?\b/],
+    patterns: [/\bpassports?\b/, /\bdocuments?\b/, /\benvelopes?\b/, /\bletters?\b/, /\bexam papers?\b/, /\blegal files?\b/, /\bgovernment paperwork\b/, /\bconfidential documents?\b/],
     category: "Documents",
     weightKg: 0.3,
     handlingFlags: [],
@@ -114,6 +114,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     category: "Personal Items & Luggage",
     weightKg: 14,
     handlingFlags: ["Bulky", "Awkward Shape", "Van Required"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "electric_scooter",
+    patterns: [/\belectric scooters?\b/, /\be[- ]?scooters?\b/],
+    category: "Personal Items & Luggage",
+    weightKg: 14,
+    handlingFlags: ["Bulky", "Awkward Shape", "High Value"],
     vehicleRequired: "van",
   },
   {
@@ -154,6 +162,22 @@ const OBJECT_MAPPINGS = Object.freeze([
     category: "Medical & Pharmacy",
     weightKg: 0.5,
     handlingFlags: ["Temperature Sensitive"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "mobility_aid",
+    patterns: [/\bwalking frames?\b/, /\bcrutches\b/, /\bwheelchairs?\b/],
+    category: "Medical & Pharmacy",
+    weightKg: 8,
+    handlingFlags: ["Bulky", "Awkward Shape"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "baby_stroller",
+    patterns: [/\bbaby strollers?\b/, /\bpushchairs?\b/, /\bprams?\b/],
+    category: "Personal Items & Luggage",
+    weightKg: 10,
+    handlingFlags: ["Bulky", "Awkward Shape"],
     vehicleRequired: "any",
   },
   {
@@ -317,8 +341,16 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "car_battery",
+    patterns: [/\bcar batter(?:y|ies)\b/],
+    category: "Tools & Machinery",
+    weightKg: 15,
+    handlingFlags: ["Keep Upright", "Awkward Shape"],
+    vehicleRequired: "any",
+  },
+  {
     id: "batteries",
-    patterns: [/\bbatteries\b/, /\bbattery pack\b/],
+    patterns: [/\bbatter(?:y|ies)\b/, /\bbattery pack\b/],
     category: "Electronics",
     weightKg: 0.1,
     handlingFlags: ["Fragile"],
@@ -370,6 +402,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     category: "Business & Commercial",
     weightKg: 15,
     handlingFlags: ["Bulky", "Fragile"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "musical_instrument",
+    patterns: [/\bdrum kits?\b/, /\bcellos?\b/, /\bguitars?\b/, /\bmusical instruments?\b/],
+    category: "Fragile & Valuable",
+    weightKg: 8,
+    handlingFlags: ["Fragile", "Awkward Shape", "Keep Upright"],
     vehicleRequired: "any",
   },
   {
@@ -442,6 +482,38 @@ const OBJECT_MAPPINGS = Object.freeze([
     category: "Tools & Machinery",
     weightKg: 2,
     handlingFlags: ["Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "chainsaw",
+    patterns: [/\bchainsaws?\b/],
+    category: "Tools & Machinery",
+    weightKg: 6,
+    handlingFlags: ["Awkward Shape"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "generator",
+    patterns: [/\bgenerators?\b/],
+    category: "Tools & Machinery",
+    weightKg: 28,
+    handlingFlags: ["Bulky", "Van Required"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "treadmill",
+    patterns: [/\btreadmills?\b/],
+    category: "Tools & Machinery",
+    weightKg: 70,
+    handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "sensitive_evidence",
+    patterns: [/\bsensitive evidence\b/, /\bevidence package\b/],
+    category: "Documents",
+    weightKg: 1,
+    handlingFlags: ["High Value"],
     vehicleRequired: "any",
   },
   {
@@ -1037,6 +1109,132 @@ function matchingRequirementsFor({handlingFlags, weightKg, express}) {
   };
 }
 
+function dimensionalBandFor({text, weightKg, handlingFlags, shipmentSummary}) {
+  const screen = text.match(/\b(\d{2,3})\s*(inch|in)\b/);
+  if (screen && Number(screen[1]) >= 65) {
+    return {id: "oversized", label: "Oversized", confidence: "high", reasons: ["large_screen_size"]};
+  }
+  const dimension = text.match(/\b(\d+(?:\.\d+)?)\s*(cm|metre|metres|meter|meters|m)\b/);
+  if (dimension) {
+    const value = Number(dimension[1]);
+    const unit = dimension[2];
+    const cm = unit === "m" || unit.startsWith("met") ? value * 100 : value;
+    if (cm >= 180) return {id: "long", label: "Long", confidence: "high", reasons: ["declared_long_measurement"]};
+    if (cm >= 100) return {id: "bulky", label: "Bulky", confidence: "medium", reasons: ["declared_large_measurement"]};
+  }
+  if (handlingFlags.includes("Two Person Lift")) {
+    return {id: "two_person_candidate", label: "Two-person lift candidate", confidence: "medium", reasons: ["two_person_handling"]};
+  }
+  if (handlingFlags.includes("Van Required") || handlingFlags.includes("Bulky") || weightKg > 25) {
+    return {id: "bulky", label: "Bulky", confidence: "medium", reasons: ["bulky_or_heavy_item"]};
+  }
+  if (handlingFlags.includes("Awkward Shape")) {
+    return {id: "awkward", label: "Awkward", confidence: "medium", reasons: ["awkward_shape"]};
+  }
+  if (shipmentSummary && shipmentSummary.itemCount >= 4) {
+    return {id: "standard", label: "Standard", confidence: "medium", reasons: ["multi_item_standard_load"]};
+  }
+  if (weightKg <= 2) return {id: "compact", label: "Compact", confidence: "medium", reasons: ["small_weight_band"]};
+  return {id: "standard", label: "Standard", confidence: "medium", reasons: ["default_standard_parcel"]};
+}
+
+function valueProtectionFor({text, category, handlingFlags, complianceStatus}) {
+  if (complianceStatus !== "allowed") {
+    return {level: "admin_referral_required", reasons: ["not_allowed_for_normal_dispatch"]};
+  }
+  if (includesAny(text, ["sensitive evidence", "confidential", "exam papers", "government paperwork"])) {
+    return {level: "declared_value_review_required", reasons: ["sensitive_or_confidential_material"]};
+  }
+  if (handlingFlags.includes("High Value") || category === "Fragile & Valuable") {
+    return {level: "enhanced_verification_recommended", reasons: ["high_value_or_fragile_item"]};
+  }
+  return {level: "standard_protection", reasons: ["normal_delivery_risk"]};
+}
+
+function verificationPolicyFor({text, category, handlingFlags, complianceStatus, serviceability}) {
+  const reasons = [];
+  const policy = {
+    senderPinRequired: false,
+    recipientPinRequired: false,
+    verifiedRecipientRequired: false,
+    identityCheckRequired: false,
+    ageVerificationRequired: false,
+    photoEvidenceRequired: false,
+    adminReviewRequired: false,
+    handoverEvidenceLevel: "standard_digital_lifecycle",
+    reasons,
+  };
+  if (complianceStatus !== "allowed" || serviceability.status === "manual_review") {
+    policy.adminReviewRequired = true;
+    policy.handoverEvidenceLevel = "admin_review_before_dispatch";
+    reasons.push("not_allowed_for_normal_dispatch");
+    return policy;
+  }
+  if (category === "Documents" || includesAny(text, ["passport", "confidential", "exam papers", "sensitive evidence", "government paperwork"])) {
+    policy.recipientPinRequired = true;
+    policy.verifiedRecipientRequired = true;
+    policy.identityCheckRequired = true;
+    policy.handoverEvidenceLevel = "identity_confirmed_recipient_pin";
+    reasons.push("sensitive_document_handover");
+  }
+  if (category === "Medical & Pharmacy" || handlingFlags.includes("Temperature Sensitive")) {
+    policy.recipientPinRequired = true;
+    policy.verifiedRecipientRequired = true;
+    policy.photoEvidenceRequired = true;
+    policy.handoverEvidenceLevel = "authorised_recipient_with_condition_evidence";
+    reasons.push("medical_or_temperature_sensitive_delivery");
+  }
+  if (handlingFlags.includes("High Value") || category === "Fragile & Valuable") {
+    policy.senderPinRequired = true;
+    policy.recipientPinRequired = true;
+    policy.photoEvidenceRequired = true;
+    policy.handoverEvidenceLevel = "dual_pin_with_photo_evidence";
+    reasons.push("high_value_or_fragile_delivery");
+  }
+  if (includesAny(text, ["wine", "champagne"])) {
+    policy.ageVerificationRequired = true;
+    policy.verifiedRecipientRequired = true;
+    reasons.push("permitted_age_restricted_item");
+  }
+  return policy;
+}
+
+function accessIntelligenceFor(input = {}) {
+  const values = [
+    input.pickupPropertyType,
+    input.deliveryPropertyType,
+    input.pickupLocationType,
+    input.deliveryLocationType,
+    input.buildingType,
+    input.accessNotes,
+    input.parkingRestriction,
+    input.londonContext,
+  ].map(normalize).join(" ");
+  const collectionFloor = Number(input.collectionFloor || input.pickupFloor || 0) || 0;
+  const deliveryFloor = Number(input.deliveryFloor || input.dropoffFloor || 0) || 0;
+  const liftUnavailable = input.liftAvailable === false || input.hasLift === false || includesAny(values, ["no lift", "stairs only"]);
+  const constraints = [];
+  const instructions = [];
+  if (collectionFloor > 2 || deliveryFloor > 2) constraints.push("upper_floor_access");
+  if (liftUnavailable && (collectionFloor > 1 || deliveryFloor > 1)) constraints.push("stairs_without_lift");
+  if (includesAny(values, ["tower block", "estate", "gated"])) constraints.push("managed_or_gated_access");
+  if (includesAny(values, ["hospital", "airport", "station", "stadium", "hotel", "university", "warehouse", "construction"])) constraints.push("controlled_site_access");
+  if (includesAny(values, ["red route", "loading restriction", "restricted parking", "pedestrian", "market", "forecourt", "bus gate", "ltn"])) constraints.push("declared_loading_or_parking_constraint");
+  if (constraints.includes("stairs_without_lift")) instructions.push("Confirm stair access and safe carry before dispatch.");
+  if (constraints.includes("managed_or_gated_access")) instructions.push("Request gate, estate, concierge or block access details.");
+  if (constraints.includes("controlled_site_access")) instructions.push("Confirm reception, security or loading point before arrival.");
+  if (constraints.includes("declared_loading_or_parking_constraint")) instructions.push("Rider should plan lawful loading access from supplied notes.");
+  const difficulty = constraints.includes("stairs_without_lift") || constraints.length >= 3 ? "high" : constraints.length ? "moderate" : "low";
+  return {
+    difficulty,
+    constraints,
+    additionalPersonRecommended: difficulty === "high",
+    vehicleAccessWarning: constraints.includes("declared_loading_or_parking_constraint"),
+    loadingTimeWarning: difficulty !== "low",
+    riderInstructions: instructions,
+  };
+}
+
 function customerSafeIris(iris) {
   const recommendation = iris.recommendation || {};
   return {
@@ -1162,11 +1360,35 @@ function classifyIris(input = {}) {
     weightKg: recommendation.estimatedWeightKg,
     handlingFlags: recommendation.handlingFlags,
   });
+  const dimensionalBand = dimensionalBandFor({
+    text,
+    weightKg: recommendation.estimatedWeightKg,
+    handlingFlags: recommendation.handlingFlags,
+    shipmentSummary,
+  });
   const matching = matchingRequirementsFor({
     handlingFlags: recommendation.handlingFlags,
     weightKg: recommendation.estimatedWeightKg,
     express,
   });
+  const access = accessIntelligenceFor(input);
+  const verificationPolicy = verificationPolicyFor({
+    text,
+    category: recommendation.category,
+    handlingFlags: recommendation.handlingFlags,
+    complianceStatus: compliance.status,
+    serviceability,
+  });
+  const valueProtection = valueProtectionFor({
+    text,
+    category: recommendation.category,
+    handlingFlags: recommendation.handlingFlags,
+    complianceStatus: compliance.status,
+  });
+  const operationalWarnings = [];
+  if (access.vehicleAccessWarning) operationalWarnings.push("Declared access or loading constraints may affect rider approach.");
+  if (access.loadingTimeWarning) operationalWarnings.push("Access conditions may require additional handover time.");
+  if (dimensionalBand.id === "oversized" || dimensionalBand.id === "long") operationalWarnings.push("Item dimensions may constrain vehicle choice.");
   const iris = {
     version: "v1",
     status: compliance.status,
@@ -1177,6 +1399,21 @@ function classifyIris(input = {}) {
       confidence: "low",
     },
     recommendation,
+    operationalRecommendation: {
+      dimensionalBand,
+      vehicleRecommendation: {
+        required: matching.vehicleRequired,
+        bikeSuitable: matching.vehicleRequired === "any" && !recommendation.handlingFlags.includes("Bulky"),
+        motorbikeSuitable: matching.vehicleRequired === "any" && recommendation.estimatedWeightKg <= 10,
+        carSuitable: matching.vehicleRequired === "any" || recommendation.estimatedWeightKg <= 25,
+        vanSuitable: true,
+        heavyDutySuitable: recommendation.estimatedWeightKg > 50 || recommendation.handlingFlags.includes("Two Person Lift"),
+      },
+      accessComplexity: access.difficulty,
+      valueProtectionRecommendation: valueProtection,
+      operationalWarnings,
+      confidence: recommendation.confidencePercent,
+    },
     internal: {
       context: internalContext,
       riskScore: compliance.status === "prohibited" ? 0.95 : compliance.status === "unsupported" ? 0.55 : 0.12,
@@ -1190,6 +1427,7 @@ function classifyIris(input = {}) {
         dominantItemId: shipmentSummary.dominantItem.id,
         vehicleRequired: shipmentSummary.vehicleRequired,
       } : null,
+      accessIntelligence: access,
       learningMatchedExamples: recommendation.learningMatchedExamples || 0,
     },
     compliance: {
@@ -1200,8 +1438,15 @@ function classifyIris(input = {}) {
     },
     serviceability,
     verification: {
+      ...verificationPolicy,
       rider: null,
       adjudication: null,
+    },
+    routing: {
+      declaredAccessConstraints: access.constraints,
+      liveRoutingRequired: access.vehicleAccessWarning || Boolean(input.requiresLiveRouting),
+      authoritativeRoutingStatus: "not_consulted",
+      riderInstructions: access.riderInstructions,
     },
   };
   if (input.publicOnly === true) return customerSafeIris(iris);

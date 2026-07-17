@@ -400,6 +400,102 @@ test("IRIS RC1 prohibited certification examples cannot bypass policy", () => {
   }
 });
 
+test("London intelligence uses supplied access facts without fabricating live routing", () => {
+  const normal = classifyIris({
+    description: "laptop",
+    distanceMiles: 5,
+    pickupPropertyType: "house",
+    deliveryPropertyType: "office",
+  });
+  const constrained = classifyIris({
+    description: "laptop",
+    distanceMiles: 5,
+    pickupPropertyType: "tower block",
+    deliveryPropertyType: "office",
+    collectionFloor: 12,
+    deliveryFloor: 18,
+    liftAvailable: false,
+    parkingRestriction: "red route loading restriction declared by customer",
+    accessNotes: "concierge desk and gated estate access",
+  });
+  assert.equal(normal.operationalRecommendation.accessComplexity, "low");
+  assert.equal(normal.routing.authoritativeRoutingStatus, "not_consulted");
+  assert.equal(constrained.operationalRecommendation.accessComplexity, "high");
+  assert.equal(constrained.internal.accessIntelligence.additionalPersonRecommended, true);
+  assert.equal(constrained.routing.liveRoutingRequired, true);
+  assert.ok(constrained.routing.declaredAccessConstraints.includes("stairs_without_lift"));
+  assert.ok(constrained.routing.declaredAccessConstraints.includes("declared_loading_or_parking_constraint"));
+  assert.equal(constrained.routing.authoritativeRoutingStatus, "not_consulted");
+});
+
+test("digital verification replaces generic signature requirements with stronger evidence policy", () => {
+  const ordinary = classifyIris({description: "ordinary parcel"});
+  assert.equal(ordinary.verification.recipientPinRequired, false);
+  assert.equal(ordinary.verification.senderPinRequired, false);
+  assert.equal(ordinary.verification.handoverEvidenceLevel, "standard_digital_lifecycle");
+  assert.equal(Object.prototype.hasOwnProperty.call(ordinary.verification, "signatureRequired"), false);
+
+  const watch = classifyIris({description: "high-value watch"});
+  assert.equal(watch.verification.senderPinRequired, true);
+  assert.equal(watch.verification.recipientPinRequired, true);
+  assert.equal(watch.verification.photoEvidenceRequired, true);
+  assert.equal(watch.operationalRecommendation.valueProtectionRecommendation.level, "enhanced_verification_recommended");
+
+  const examPapers = classifyIris({description: "confidential university exam papers"});
+  assert.equal(examPapers.recommendation.category, "Documents");
+  assert.equal(examPapers.verification.recipientPinRequired, true);
+  assert.equal(examPapers.verification.verifiedRecipientRequired, true);
+  assert.equal(examPapers.verification.identityCheckRequired, true);
+  assert.equal(examPapers.operationalRecommendation.valueProtectionRecommendation.level, "declared_value_review_required");
+});
+
+test("dimensional intelligence affects operational vehicle recommendations", () => {
+  const tv = classifyIris({
+    description: "65 inch TV",
+    deliveryPropertyType: "high-rise flat",
+    deliveryFloor: 10,
+    liftAvailable: false,
+  });
+  assert.equal(tv.operationalRecommendation.dimensionalBand.id, "oversized");
+  assert.equal(tv.operationalRecommendation.vehicleRecommendation.required, "van");
+  assert.equal(tv.operationalRecommendation.vehicleRecommendation.bikeSuitable, false);
+  assert.ok(tv.operationalRecommendation.operationalWarnings.length > 0);
+
+  const cello = classifyIris({description: "cello to a performance venue"});
+  assert.equal(cello.recommendation.category, "Fragile & Valuable");
+  assert.equal(cello.operationalRecommendation.dimensionalBand.id, "awkward");
+  assert.equal(cello.verification.photoEvidenceRequired, true);
+
+  const treadmill = classifyIris({
+    description: "treadmill",
+    deliveryPropertyType: "third-floor flat",
+    deliveryFloor: 3,
+    liftAvailable: false,
+  });
+  assert.equal(treadmill.recommendation.weightBand.label, "Heavy Duty Freight");
+  assert.equal(treadmill.operationalRecommendation.vehicleRecommendation.heavyDutySuitable, true);
+  assert.equal(treadmill.internal.accessIntelligence.additionalPersonRecommended, true);
+});
+
+test("realistic weak items now classify with operationally useful recommendations", () => {
+  const cases = [
+    ["walking frame", "Medical & Pharmacy", "bulky"],
+    ["crutches", "Medical & Pharmacy", "bulky"],
+    ["baby stroller", "Personal Items & Luggage", "bulky"],
+    ["electric scooter", "Personal Items & Luggage", "bulky"],
+    ["chainsaw", "Tools & Machinery", "awkward"],
+    ["generator with unknown fuel state", "Tools & Machinery", "two_person_candidate"],
+    ["car battery with safe packaging declaration", "Tools & Machinery", "bulky"],
+    ["sensitive evidence", "Documents", "compact"],
+  ];
+  for (const [description, expectedCategory, expectedDimension] of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.category, expectedCategory, description);
+    assert.equal(result.operationalRecommendation.dimensionalBand.id, expectedDimension, description);
+    assert.ok(result.recommendation.estimatedWeightKg > 0, description);
+  }
+});
+
 test("multi-item stress corpus remains deterministic and practical", () => {
   const objects = ["laptop", "monitor", "keyboard", "TV", "cake", "flowers", "champagne", "mirror", "chair", "printer", "bicycle", "artwork"];
   const connectors = [", ", " and ", " + "];
