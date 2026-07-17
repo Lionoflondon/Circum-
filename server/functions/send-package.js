@@ -1,8 +1,13 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {dispatchPriority, isDispatchable, riderMatchesIris} = require("./iris-core");
+const {hasAdminClaim} = require("./admin-auth");
+
+function senderOwnsRequest(delivery, uid) {
+  return delivery.senderId === uid || delivery.userId === uid;
+}
 
 const sendPackage = functions.https.onCall(async (data, context) => {
   try {
@@ -29,6 +34,13 @@ const sendPackage = functions.https.onCall(async (data, context) => {
 
     if (deliveryRequest.length === 0) {
       return {message: "Delivery request not found"};
+    }
+    if (!senderOwnsRequest(deliveryRequest[0], uid) &&
+      !hasAdminClaim(context.auth.token || {})) {
+      throw new functions.https.HttpsError(
+          "permission-denied",
+          "Only the Sender or an administrator can dispatch this delivery.",
+      );
     }
 
     if (!isDispatchable(deliveryRequest[0])) {
@@ -164,6 +176,9 @@ const sendPackage = functions.https.onCall(async (data, context) => {
       // Return your actual response data
     };
   } catch (e) {
+    if (e instanceof functions.https.HttpsError) {
+      throw e;
+    }
     return {
       error: e,
     };
