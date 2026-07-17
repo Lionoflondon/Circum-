@@ -3,11 +3,12 @@ const assert = require("node:assert/strict");
 
 const {
   estimateStripeFee,
+  riderWithdrawalFailure,
   resolveRiderPayoutBreakdown,
   stripeStatusFromAccount,
 } = require("./rider-connect");
 
-test("deducts Stripe payout fees from rider share, not Circum commission", () => {
+test("deducts Stripe payout fees from rider share", () => {
   const breakdown = resolveRiderPayoutBreakdown({
     totalCustomerPaid: 20,
     circumPlatformCommission: 7,
@@ -33,7 +34,7 @@ test("derives Circum commission without reducing it for Stripe fees", () => {
   assert.equal(breakdown.riderNetPayout, 17.53);
 });
 
-test("blocks payout for admin review when estimated fees exceed rider share", () => {
+test("blocks payout when estimated fees exceed rider share", () => {
   const breakdown = resolveRiderPayoutBreakdown({
     totalCustomerPaid: 0.3,
     circumPlatformCommission: 0,
@@ -88,4 +89,44 @@ test("maps requirements to action_required", () => {
   });
 
   assert.equal(status, "action_required");
+});
+
+test("rider withdrawal policy is backend-authoritative", () => {
+  const base = {
+    amount: 25,
+    available: 100,
+    minimum: 1,
+    existingStatus: "",
+    approvedRider: true,
+    stripeReady: true,
+    payoutPaused: false,
+  };
+
+  assert.equal(riderWithdrawalFailure(base), null);
+  assert.equal(
+      riderWithdrawalFailure({...base, approvedRider: false}),
+      "approval_required",
+  );
+  assert.equal(
+      riderWithdrawalFailure({...base, stripeReady: false}),
+      "stripe_not_ready",
+  );
+  assert.equal(
+      riderWithdrawalFailure({...base, payoutPaused: true}),
+      "stripe_not_ready",
+  );
+  assert.equal(
+      riderWithdrawalFailure({...base, existingStatus: "requested"}),
+      "duplicate_pending",
+  );
+  assert.equal(
+      riderWithdrawalFailure({...base, existingStatus: "processing"}),
+      "duplicate_pending",
+  );
+  assert.equal(riderWithdrawalFailure({...base, amount: 0}), "invalid_amount");
+  assert.equal(riderWithdrawalFailure({...base, amount: 0.5}), "below_minimum");
+  assert.equal(
+      riderWithdrawalFailure({...base, amount: 101}),
+      "exceeds_available",
+  );
 });

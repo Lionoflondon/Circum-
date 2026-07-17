@@ -21447,64 +21447,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final pending = await db
-          .collection('payoutRequests')
-          .where('riderId', isEqualTo: user.uid)
-          .where('status', whereIn: ['requested', 'approved', 'pending'])
-          .limit(1)
-          .get();
-      if (pending.docs.isNotEmpty) {
-        if (!mounted) return;
-        setState(
-          () => _withdrawMessage = 'Payout already pending.',
-        );
-        return;
-      }
-      final requestRef = db.collection('payoutRequests').doc();
-      final batch = db.batch();
-      batch.set(requestRef, {
-        'requestId': requestRef.id,
-        'riderId': user.uid,
-        'riderEmail': user.email,
-        'amount': amount,
-        'stripeAccountId': _riderProfile?['stripeAccountId'] ??
-            _riderProfile?['stripeConnectAccountId'],
-        'paymentProvider': 'stripe_connect_express',
-        'feePayer': 'rider',
-        'payoutFeePayer': 'rider',
-        'status': 'requested',
-        'notes': '',
-        'auditTrail': [
-          {
-            'type': 'withdrawal_requested',
-            'riderId': user.uid,
-            'amount': amount,
-            'status': 'requested',
-            'source': 'circum-web',
-            'paymentProvider': 'stripe_connect_express',
-            'payoutFeePayer': 'rider',
-            'createdAt': Timestamp.now(),
-          },
-        ],
-        'source': 'circum-web',
-        'requestedAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(
-          db.collection('riderEarnings').doc(user.uid),
-          {
-            'pendingWithdrawal': FieldValue.increment(amount),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-      await batch.commit();
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('requestRiderWithdrawal')
+          .call({'amount': amount});
       if (!mounted) return;
+      _withdrawAmount.clear();
       setState(
         () => _withdrawMessage =
-            'Payout request sent. Circum will release it through Stripe Connect.',
+            'Withdrawal request sent. Circum will process it through Stripe Connect.',
       );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _withdrawMessage = _withdrawalErrorMessage(error));
     } catch (_) {
       if (!mounted) return;
       setState(
@@ -21512,6 +21466,31 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       );
     } finally {
       if (mounted) setState(() => _withdrawSubmitting = false);
+    }
+  }
+
+  String _withdrawalErrorMessage(FirebaseFunctionsException error) {
+    final message = error.message;
+    switch (error.code) {
+      case 'unauthenticated':
+        return 'Sign in again before requesting a payout.';
+      case 'already-exists':
+        return 'A withdrawal is already pending.';
+      case 'failed-precondition':
+        if (message != null && message.trim().isNotEmpty) return message;
+        return 'Finish payout setup before requesting a withdrawal.';
+      case 'invalid-argument':
+        return message ?? 'Enter a valid withdrawal amount.';
+      case 'permission-denied':
+        return 'This account cannot request a withdrawal. Contact support.';
+      case 'resource-exhausted':
+        return 'Withdrawal requests are temporarily limited. Try again later.';
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'internal':
+        return 'We could not send the request. Try again.';
+      default:
+        return message ?? 'We could not send the request. Try again.';
     }
   }
 

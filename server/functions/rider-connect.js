@@ -119,6 +119,27 @@ function hasRawBankFields(data) {
   });
 }
 
+function riderWithdrawalFailure({
+  amount,
+  available,
+  minimum = 1,
+  existingStatus = "",
+  approvedRider = false,
+  stripeReady = false,
+  payoutPaused = false,
+} = {}) {
+  if (!approvedRider) return "approval_required";
+  if (!stripeReady || payoutPaused) return "stripe_not_ready";
+  if (["requested", "pending", "approved", "processing"]
+      .includes(text(existingStatus).toLowerCase())) {
+    return "duplicate_pending";
+  }
+  if (roundMoney(amount) <= 0) return "invalid_amount";
+  if (roundMoney(amount) < roundMoney(minimum)) return "below_minimum";
+  if (roundMoney(amount) > roundMoney(available)) return "exceeds_available";
+  return null;
+}
+
 async function isAdmin(uid) {
   if (!uid) return false;
   const db = getFirestore();
@@ -718,6 +739,97 @@ function createRiderTransferOrPayout(stripeOrFactory) {
   });
 }
 
+function requestRiderWithdrawal() {
+  return functions.https.onCall(async (data, context) => {
+    const riderId = text(context.auth && context.auth.uid);
+    await assertActor(context, riderId);
+    if (hasRawBankFields(data)) {
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Bank details must be managed through Stripe Connect.",
+      );
+    }
+    const amount = roundMoney(data && data.amount);
+    if (amount <= 0) {
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Enter a valid withdrawal amount.",
+      );
+    }
+    const db = getFirestore();
+    const {profile} = await loadRider(riderId);
+    const stripeAccountId = text(
+        profile.stripeConnectAccountId || profile.stripeAccountId,
+    );
+    const payoutsReady = profile.stripePayoutsEnabled === true ||
+      text(profile.stripeStatus).toLowerCase() === "payouts_enabled";
+    const requestRef = db.collection("payoutRequests").doc(`active_${riderId}`);
+    const walletRef = db.collection("riderEarnings").doc(riderId);
+    await db.runTransaction(async (transaction) => {
+      const [requestDoc, walletDoc] = await Promise.all([
+        transaction.get(requestRef),
+        transaction.get(walletRef),
+      ]);
+      const existing = requestDoc.data() || {};
+      const existingStatus = text(
+          existing.status || existing.payoutStatus,
+      ).toLowerCase();
+      const wallet = walletDoc.data() || {};
+      const available = roundMoney(
+          wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance,
+      );
+      const minimum = roundMoney(profile.minimumWithdrawalAmount || 1);
+      const failure = riderWithdrawalFailure({
+        amount,
+        available,
+        minimum,
+        existingStatus,
+        approvedRider: approved(profile),
+        stripeReady: Boolean(stripeAccountId && payoutsReady),
+        payoutPaused: profile.payoutPaused === true,
+      });
+      const failures = {
+        approval_required: ["failed-precondition", "Rider approval is required before withdrawal."],
+        stripe_not_ready: ["failed-precondition", "Complete Stripe payout setup before requesting withdrawal."],
+        duplicate_pending: ["already-exists", "A withdrawal is already pending."],
+        invalid_amount: ["invalid-argument", "Enter a valid withdrawal amount."],
+        below_minimum: ["failed-precondition", `Minimum withdrawal is £${minimum.toFixed(2)}.`],
+        exceeds_available: ["failed-precondition", "Withdrawal exceeds available cash earnings."],
+      };
+      if (failure) {
+        const [code, message] = failures[failure];
+        throw new functions.https.HttpsError(code, message);
+      }
+      transaction.set(requestRef, {
+        requestId: requestRef.id,
+        riderId,
+        riderEmail: profile.email || null,
+        amount,
+        status: "requested",
+        payoutStatus: "requested",
+        paymentProvider: "stripe_connect_express",
+        stripeAccountId,
+        payoutFeePayer: "rider",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: false});
+    });
+    await db.collection("riderPayoutAudit").add({
+      riderId,
+      payoutRequestId: requestRef.id,
+      action: "withdrawal_requested",
+      amount,
+      actorId: riderId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      requestId: requestRef.id,
+      amount,
+      status: "requested",
+    };
+  });
+}
+
 function handleStripeConnectWebhook(stripeOrFactory) {
   return stripeWebhookRuntime.https.onRequest(async (req, res) => {
     const stripe = stripeFrom(stripeOrFactory);
@@ -889,6 +1001,7 @@ module.exports = {
   refreshStripeOnboardingLink,
   syncStripeConnectStatus,
   createRiderTransferOrPayout,
+  requestRiderWithdrawal,
   resetRiderTestStripeAccount,
   handleStripeConnectWebhook,
   scheduledRiderStripeStatusSync,
@@ -896,5 +1009,6 @@ module.exports = {
   adminBaseUrl,
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
+  riderWithdrawalFailure,
   stripeStatusFromAccount,
 };
