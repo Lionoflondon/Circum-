@@ -94,7 +94,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "bicycle",
-    patterns: [/\bbicycle\b/, /\bbike\b/, /\bcycle\b/],
+    patterns: [/\bbicycles?\b/, /\bbikes?\b/, /\bcycles?\b/],
     category: "Personal Items & Luggage",
     weightKg: 14,
     handlingFlags: ["Bulky", "Awkward Shape", "Van Required"],
@@ -165,6 +165,134 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "parcel",
+    patterns: [/\bparcels?\b/, /\bpackages?\b/],
+    category: "Other",
+    weightKg: 2,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "box",
+    patterns: [/\bboxes\b/],
+    category: "Other",
+    weightKg: 2,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "keyboard",
+    patterns: [/\bkeyboards?\b/],
+    category: "Electronics",
+    weightKg: 0.8,
+    handlingFlags: ["Fragile"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "dining_chair",
+    patterns: [/\bdining chairs?\b/, /\bchairs?\b/],
+    category: "Furniture & Home",
+    weightKg: 6,
+    handlingFlags: ["Bulky"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "table",
+    patterns: [/\btables?\b/],
+    category: "Furniture & Home",
+    weightKg: 20,
+    handlingFlags: ["Bulky", "Van Required"],
+    vehicleRequired: "van",
+  },
+  {
+    id: "roses",
+    patterns: [/\broses?\b/],
+    category: "Food & Consumables",
+    weightKg: 0.08,
+    handlingFlags: ["Perishable", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "bottle",
+    patterns: [/\bbottles?\b/],
+    category: "Food & Consumables",
+    weightKg: 1,
+    handlingFlags: ["Fragile", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "clothes",
+    patterns: [/\bclothes\b/, /\bclothing\b/, /\bshirts?\b/, /\bjackets?\b/],
+    category: "Clothing & Fashion",
+    weightKg: 0.5,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "flyers_leaflets",
+    patterns: [/\bflyers?\b/, /\bleaflets?\b/],
+    category: "Business & Commercial",
+    weightKg: 0.01,
+    handlingFlags: [],
+    vehicleRequired: "any",
+  },
+  {
+    id: "earrings",
+    patterns: [/\bearrings?\b/],
+    category: "Fragile & Valuable",
+    weightKg: 0.05,
+    handlingFlags: ["High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "skis",
+    patterns: [/\bskis?\b/],
+    category: "Personal Items & Luggage",
+    weightKg: 5,
+    handlingFlags: ["Awkward Shape", "Bulky"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "golf_clubs",
+    patterns: [/\bgolf clubs?\b/],
+    category: "Personal Items & Luggage",
+    weightKg: 8,
+    handlingFlags: ["Awkward Shape", "Bulky"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "chocolates",
+    patterns: [/\bchocolates?\b/],
+    category: "Food & Consumables",
+    weightKg: 0.5,
+    handlingFlags: ["Perishable"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "drinks",
+    patterns: [/\bdrinks?\b/],
+    category: "Food & Consumables",
+    weightKg: 1,
+    handlingFlags: ["Fragile", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "batteries",
+    patterns: [/\bbatteries\b/, /\bbattery pack\b/],
+    category: "Electronics",
+    weightKg: 0.1,
+    handlingFlags: ["Fragile"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "glass_sheet",
+    patterns: [/\bsheet of glass\b/, /\bglass sheet\b/],
+    category: "Fragile & Valuable",
+    weightKg: 8,
+    handlingFlags: ["Fragile", "Awkward Shape"],
+    vehicleRequired: "any",
+  },
+  {
     id: "car_tyre",
     patterns: [/\bcar tyre\b/, /\bcar tire\b/, /\btyre\b/, /\btire\b/],
     category: "Tools & Machinery",
@@ -190,7 +318,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "furniture",
-    patterns: [/\bfurniture\b/, /\bwardrobe\b/, /\bcabinet\b/, /\btable\b/, /\bdining chairs?\b/, /\bchairs?\b/, /\bbed\b/, /\bhouse move\b/, /\bbedroom\b/, /\bgarage contents\b/],
+    patterns: [/\bfurniture\b/, /\bwardrobe\b/, /\bcabinet\b/, /\bbed\b/, /\bhouse move\b/, /\bbedroom\b/, /\bgarage contents\b/],
     category: "Furniture & Home",
     weightKg: 30,
     handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
@@ -202,6 +330,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     category: "Clothing & Fashion",
     weightKg: 2,
     handlingFlags: ["High Value"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "shoes",
+    patterns: [/\bshoes?\b/, /\btrainers?\b/, /\bsneakers?\b/],
+    category: "Clothing & Fashion",
+    weightKg: 0.8,
+    handlingFlags: [],
     vehicleRequired: "any",
   },
   {
@@ -297,7 +433,7 @@ function detectObject(text) {
 }
 
 function parseQuantity(text) {
-  const normalized = normalize(`${text || ""}`.replace(/[×*]/g, " x ").replace(/"/g, " inch "));
+  const normalized = normalize(`${text || ""}`.replace(/[×*]/g, " x ").replace(/"/g, " inch ").replace(/-/g, " "));
   const quantityNouns = new Set([
     "laptop",
     "laptops",
@@ -343,6 +479,40 @@ function parseQuantity(text) {
     "cards",
     "brick",
     "bricks",
+    "bicycle",
+    "bicycles",
+    "flower",
+    "flowers",
+    "rose",
+    "roses",
+    "bottle",
+    "bottles",
+    "earring",
+    "earrings",
+    "ski",
+    "skis",
+    "club",
+    "clubs",
+    "chocolate",
+    "chocolates",
+    "drink",
+    "drinks",
+    "battery",
+    "batteries",
+    "timber",
+    "carpet",
+    "glass",
+    "clothes",
+    "flyer",
+    "flyers",
+    "leaflet",
+    "leaflets",
+    "keyboard",
+    "keyboards",
+    "table",
+    "tables",
+    "shoe",
+    "shoes",
   ]);
   const measurementUnits = new Set([
     "inch",
@@ -379,7 +549,20 @@ function parseQuantity(text) {
     "gb",
     "tb",
   ]);
-  const tokens = normalized.split(" ").filter(Boolean);
+  const tokens = normalized.split(" ")
+      .map((token) => token.replace(/^\.+|\.+$/g, ""))
+      .filter(Boolean);
+  const findQuantityNoun = (start, end) => {
+    for (let cursor = start; cursor < Math.min(tokens.length, end); cursor += 1) {
+      if (Number.isInteger(Number(tokens[cursor])) && measurementUnits.has(tokens[cursor + 1] || "")) {
+        cursor += 1;
+        continue;
+      }
+      if (measurementUnits.has(tokens[cursor])) break;
+      if (quantityNouns.has(tokens[cursor])) return true;
+    }
+    return false;
+  };
 
   for (let index = 0; index < tokens.length; index += 1) {
     const value = Number(tokens[index]);
@@ -400,17 +583,43 @@ function parseQuantity(text) {
       continue;
     }
     const start = next === "x" ? index + 2 : index + 1;
-    for (let cursor = start; cursor < Math.min(tokens.length, start + 8); cursor += 1) {
-      if (Number.isInteger(Number(tokens[cursor])) && measurementUnits.has(tokens[cursor + 1] || "")) {
-        cursor += 1;
-        continue;
+    if (findQuantityNoun(start, start + 8)) return value;
+  }
+
+  const specialQuantifiers = [
+    {patterns: [/^a dozen\b/, /^dozen\b/], value: 12},
+    {patterns: [/^half a dozen\b/, /^half dozen\b/], value: 6},
+    {patterns: [/^a couple of\b/, /^couple of\b/], value: 2},
+    {patterns: [/^a few\b/, /^few\b/], value: 3},
+    {patterns: [/^several\b/], value: 4},
+    {patterns: [/^many\b/, /^lots of\b/, /^loads of\b/], value: 10},
+    {patterns: [/^hundreds of\b/], value: 200},
+    {patterns: [/^thousands of\b/], value: 2000},
+    {patterns: [/^pair of\b/, /^a pair of\b/], value: 2},
+    {patterns: [/^set of\b/, /^a set of\b/], value: 1},
+    {patterns: [/^box of\b/, /^a box of\b/], value: 1},
+    {patterns: [/^crate of\b/, /^a crate of\b/], value: 1},
+    {patterns: [/^pack of\b/, /^a pack of\b/], value: 1},
+    {patterns: [/^bundle of\b/, /^a bundle of\b/], value: 1},
+    {patterns: [/^roll of\b/, /^a roll of\b/], value: 1},
+    {patterns: [/^sheet of\b/, /^a sheet of\b/], value: 1},
+    {patterns: [/^stack of\b/, /^a stack of\b/], value: 1},
+  ];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const phrase = tokens.slice(index, Math.min(tokens.length, index + 5)).join(" ");
+    for (const quantifier of specialQuantifiers) {
+      if (quantifier.patterns.some((pattern) => pattern.test(phrase)) &&
+        findQuantityNoun(index + 1, index + 9)) {
+        return quantifier.value;
       }
-      if (measurementUnits.has(tokens[cursor])) break;
-      if (quantityNouns.has(tokens[cursor])) return value;
     }
   }
 
-  const words = {
+  const article = tokens.findIndex((token) => token === "a" || token === "an");
+  if (article >= 0 && findQuantityNoun(article + 1, article + 6)) return 1;
+
+  const smallNumbers = {
+    zero: 0,
     one: 1,
     two: 2,
     three: 3,
@@ -421,19 +630,74 @@ function parseQuantity(text) {
     eight: 8,
     nine: 9,
     ten: 10,
-    twenty: 20,
-    fifty: 50,
-    hundred: 100,
+    eleven: 11,
+    twelve: 12,
+    thirteen: 13,
+    fourteen: 14,
+    fifteen: 15,
+    sixteen: 16,
+    seventeen: 17,
+    eighteen: 18,
+    nineteen: 19,
   };
-  for (let index = 0; index < tokens.length; index += 1) {
-    const value = words[tokens[index]];
-    if (!value) continue;
-    const next = tokens[index + 1] || "";
-    if (measurementUnits.has(next)) continue;
-    for (let cursor = index + 1; cursor < Math.min(tokens.length, index + 8); cursor += 1) {
-      if (measurementUnits.has(tokens[cursor])) break;
-      if (quantityNouns.has(tokens[cursor])) return value;
+  const tens = {
+    twenty: 20,
+    thirty: 30,
+    forty: 40,
+    fourty: 40,
+    fifty: 50,
+    sixty: 60,
+    seventy: 70,
+    eighty: 80,
+    ninety: 90,
+  };
+  function parseNumberWordsAt(start) {
+    let total = 0;
+    let current = 0;
+    let consumed = 0;
+    let matched = false;
+    for (let cursor = start; cursor < tokens.length; cursor += 1) {
+      const token = tokens[cursor];
+      if (token === "and" || token === "x" || token === "of") {
+        consumed += 1;
+        continue;
+      }
+      if (smallNumbers[token] != null) {
+        current += smallNumbers[token];
+        consumed += 1;
+        matched = true;
+        continue;
+      }
+      if (tens[token] != null) {
+        current += tens[token];
+        consumed += 1;
+        matched = true;
+        continue;
+      }
+      if (token === "hundred") {
+        current = Math.max(1, current) * 100;
+        consumed += 1;
+        matched = true;
+        continue;
+      }
+      if (token === "thousand") {
+        total += Math.max(1, current) * 1000;
+        current = 0;
+        consumed += 1;
+        matched = true;
+        continue;
+      }
+      break;
     }
+    if (!matched) return null;
+    return {value: total + current, consumed};
+  }
+  for (let index = 0; index < tokens.length; index += 1) {
+    const parsed = parseNumberWordsAt(index);
+    if (!parsed || parsed.value <= 0) continue;
+    const next = tokens[index + parsed.consumed] || "";
+    if (measurementUnits.has(next)) continue;
+    if (findQuantityNoun(index + parsed.consumed, index + parsed.consumed + 8)) return parsed.value;
   }
   return 1;
 }
@@ -451,6 +715,30 @@ function parseWeightKg(...values) {
   return null;
 }
 
+function splitItemClauses(rawText) {
+  return `${rawText || ""}`
+      .replace(/\n+/g, ",")
+      .split(/\s*,\s*|\s+and\s+/i)
+      .map((part) => part.trim())
+      .filter(Boolean);
+}
+
+function estimateCombinedWeightKg(rawText) {
+  const clauses = splitItemClauses(rawText);
+  if (clauses.length < 2) return null;
+  let total = 0;
+  let matched = 0;
+  for (const clause of clauses) {
+    const text = normalize(clause);
+    const object = detectObject(text);
+    if (!object) continue;
+    total += object.weightKg * parseQuantity(clause);
+    matched += 1;
+  }
+  if (matched < 2) return null;
+  return Math.round(total * 100) / 100;
+}
+
 function weightBandFor(weightKg) {
   const normalizedWeight = Math.max(0, Number(weightKg) || 0);
   return WEIGHT_BANDS.find((band) => {
@@ -464,6 +752,8 @@ function estimateWeightKg(rawText, declaredWeightText) {
   const text = normalize(rawText);
   const explicit = parseWeightKg(rawText, declaredWeightText);
   if (explicit != null) return explicit;
+  const combined = estimateCombinedWeightKg(rawText);
+  if (combined != null) return combined;
   const object = detectObject(text);
   if (object) return Math.round(object.weightKg * parseQuantity(rawText) * 100) / 100;
   if (includesAny(text, ["iphone", "phone", "smartphone", "passport", "document", "letter"])) return 0.3;

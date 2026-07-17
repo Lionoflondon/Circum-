@@ -171,7 +171,7 @@ test("parser distinguishes quantities from model numbers screen sizes capacities
   const quantityCases = [
     ["2 TVs", 64, "van"],
     ["5 laptops", 10, "any"],
-    ["12 chairs", 360, "van"],
+    ["12 chairs", 72, "van"],
     ["100 bricks", 30, "van"],
     ["20 phones", 6, "any"],
     ["3 iPhone 13s", 0.9, "any"],
@@ -195,6 +195,105 @@ test("parser distinguishes quantities from model numbers screen sizes capacities
   ];
   for (const [description, expectedKg] of explicitWeights) {
     assert.equal(classifyIris({description}).recommendation.estimatedWeightKg, expectedKg, description);
+  }
+});
+
+test("parser understands natural language quantities and compound number words", () => {
+  const cases = [
+    ["one TV", 32],
+    ["two TVs", 64],
+    ["three laptops", 6],
+    ["four phones", 1.2],
+    ["five chairs", 30],
+    ["six monitors", 12],
+    ["seven bicycles", 98],
+    ["eight parcels", 16],
+    ["nine tablets", 18],
+    ["ten books", 120],
+    ["eleven flowers", 11],
+    ["twelve bottles", 12],
+    ["twenty-one laptops", 42],
+    ["thirty two phones", 9.6],
+    ["forty-five chairs", 270],
+    ["ninety nine tablets", 198],
+    ["one hundred bricks", 30],
+    ["one hundred and twenty phones", 36],
+    ["two hundred flyers", 2],
+    ["one thousand leaflets", 10],
+    ["two thousand five hundred leaflets", 25],
+  ];
+  for (const [description, expectedKg] of cases) {
+    assert.equal(classifyIris({description}).recommendation.estimatedWeightKg, expectedKg, description);
+  }
+});
+
+test("parser understands conversational quantifiers without confusing model numbers", () => {
+  const cases = [
+    ["a TV", 32],
+    ["an iPhone", 0.3],
+    ["a laptop", 2],
+    ["a chair", 6],
+    ["a dozen roses", 0.96],
+    ["half a dozen roses", 0.48],
+    ["a couple of laptops", 4],
+    ["a few books", 36],
+    ["several parcels", 8],
+    ["many boxes", 20],
+    ["lots of clothes", 5],
+    ["loads of bricks", 3],
+    ["hundreds of flyers", 2],
+    ["thousands of leaflets", 20],
+    ["pair of shoes", 1.6],
+    ["pair of earrings", 0.1],
+    ["pair of skis", 10],
+    ["set of golf clubs", 8],
+    ["box of chocolates", 0.5],
+    ["crate of drinks", 1],
+    ["pack of batteries", 0.1],
+    ["bundle of timber", 75],
+    ["roll of carpet", 18],
+    ["sheet of glass", 8],
+    ["stack of books", 12],
+  ];
+  for (const [description, expectedKg] of cases) {
+    assert.equal(classifyIris({description}).recommendation.estimatedWeightKg, expectedKg, description);
+  }
+
+  const negativeCases = [
+    "iPhone 13",
+    "RTX 5090",
+    "75 inch TV",
+    "27\" monitor",
+    "500 ml bottle",
+    "15 kg dumbbell",
+    "Surface Pro 11",
+    "MacBook Pro 14",
+    "PlayStation 5",
+    "Samsung S24",
+  ];
+  for (const description of negativeCases) {
+    const result = classifyIris({description});
+    assert.ok(result.recommendation.estimatedWeightKg < 100, description);
+  }
+});
+
+test("parser handles conversational and multi-item descriptions", () => {
+  const cases = [
+    ["I'm sending my mum two laptops.", 4, "any"],
+    ["I've got a couple of TVs.", 64, "van"],
+    ["Need to move a dozen chairs.", 72, "van"],
+    ["Sending half a dozen bottles.", 6, "any"],
+    ["I've got one monitor and three keyboards.", 4.4, "any"],
+    ["There are four dining chairs and a table.", 44, "van"],
+    ["My garage has loads of boxes.", 20, "van"],
+    ["two x TVs", 64, "van"],
+    ["2 x TVs", 64, "van"],
+    ["2× TVs", 64, "van"],
+  ];
+  for (const [description, expectedKg, expectedVehicle] of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.estimatedWeightKg, expectedKg, description);
+    assert.equal(result.internal.riderMatching.vehicleRequired, expectedVehicle, description);
   }
 });
 
