@@ -112,8 +112,17 @@ class AdminHome extends StatelessWidget {
   }
 }
 
-class _DeliveryAdjustmentReviewQueue extends StatelessWidget {
+class _DeliveryAdjustmentReviewQueue extends StatefulWidget {
   const _DeliveryAdjustmentReviewQueue();
+
+  @override
+  State<_DeliveryAdjustmentReviewQueue> createState() =>
+      _DeliveryAdjustmentReviewQueueState();
+}
+
+class _DeliveryAdjustmentReviewQueueState
+    extends State<_DeliveryAdjustmentReviewQueue> {
+  String _filter = 'awaiting_admin_review';
 
   @override
   Widget build(BuildContext context) {
@@ -138,10 +147,27 @@ class _DeliveryAdjustmentReviewQueue extends StatelessWidget {
               style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
             ),
             const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final status in const [
+                  ('awaiting_admin_review', 'Queue'),
+                  ('more_evidence_requested', 'Evidence Requested'),
+                  ('awaiting_sender_payment', 'Approved'),
+                  ('rejected_by_admin', 'Rejected'),
+                ])
+                  ChoiceChip(
+                    label: Text(status.$2),
+                    selected: _filter == status.$1,
+                    onSelected: (_) => setState(() => _filter = status.$1),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('deliveryAdjustments')
-                  .where('status', isEqualTo: 'awaiting_admin_review')
+                  .where('status', isEqualTo: _filter)
                   .limit(50)
                   .snapshots(),
               builder: (context, snapshot) {
@@ -193,6 +219,13 @@ class _DeliveryAdjustmentCard extends StatefulWidget {
 class _DeliveryAdjustmentCardState extends State<_DeliveryAdjustmentCard> {
   bool _busy = false;
   String? _message;
+  final TextEditingController _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
 
   Future<void> _review(String decision) async {
     setState(() {
@@ -205,7 +238,8 @@ class _DeliveryAdjustmentCardState extends State<_DeliveryAdjustmentCard> {
           .call({
         'adjustmentId': widget.id,
         'decision': decision,
-        'note': 'Reviewed in Circum Admin',
+        'note':
+            _note.text.trim().isEmpty ? 'Reviewed in Circum Admin' : _note.text,
       });
       if (mounted) setState(() => _message = 'Decision recorded.');
     } on FirebaseFunctionsException catch (error) {
@@ -252,10 +286,15 @@ class _DeliveryAdjustmentCardState extends State<_DeliveryAdjustmentCard> {
                   _fact('Booking', data['bookingId']),
                   _fact('Sender', data['senderId']),
                   _fact('Rider', data['riderId']),
+                  _fact('Status', data['status']),
                   _fact('Reason', data['riderReason']),
                   _fact('Original', '£${data['originalQuote']}'),
                   _fact('Revised', '£${data['revisedQuote']}'),
                   _fact('Additional', '£${data['additionalAmount']}'),
+                  _fact('Submitted', data['createdAt']),
+                  _fact('Decision', data['adminDecision']),
+                  _fact('Decision time', data['adminReviewedAt']),
+                  _fact('Operator', data['adminReviewedBy']),
                   _fact('Observed weight', observations['observedWeightKg']),
                   _fact('Vehicle', observations['observedVehicleType']),
                   _fact(
@@ -269,9 +308,56 @@ class _DeliveryAdjustmentCardState extends State<_DeliveryAdjustmentCard> {
                 const SizedBox(height: 12),
                 Text('Rider statement: ${data['riderNotes']}'),
               ],
+              if ('${data['senderNotes'] ?? data['senderStatement'] ?? ''}'
+                  .trim()
+                  .isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                    'Sender statement: ${data['senderNotes'] ?? data['senderStatement']}'),
+              ],
               if (photos.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Text('Evidence: ${photos.length} photo(s) attached'),
+                Text('Evidence preview: ${photos.length} photo(s) attached'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final photo in photos.take(4))
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.network(
+                          '$photo',
+                          width: 92,
+                          height: 72,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 92,
+                            height: 72,
+                            alignment: Alignment.center,
+                            color: Colors.white.withValues(alpha: 0.08),
+                            child:
+                                const Icon(Icons.image_not_supported_rounded),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: _note,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Decision notes',
+                  hintText: 'Reason, requested evidence, or operator note',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if ('${data['adminReviewNote'] ?? ''}'.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('Audit note: ${data['adminReviewNote']}'),
               ],
               if (_message != null) ...[
                 const SizedBox(height: 10),

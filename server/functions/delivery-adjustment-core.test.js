@@ -44,3 +44,23 @@ test("delivery adjustment callable requires Admin review before sender payment",
   assert.match(source, /adminDecision !== "approve"/);
   assert.match(source, /request_more_evidence/);
 });
+
+test("Admin review UX exposes production review controls and audit fields", () => {
+  const adminSource = fs.readFileSync(
+      path.join(__dirname, "..", "..", "lib", "app", "admin", "admin_root.dart"),
+      "utf8",
+  );
+  for (const marker of [
+    "ChoiceChip",
+    "Evidence preview",
+    "Decision notes",
+    "adminReviewedBy",
+    "adminReviewedAt",
+    "Sender statement",
+    "Rider statement",
+    "reviewDeliveryAdjustment",
+    "request_more_evidence",
+  ]) {
+    assert.match(adminSource, new RegExp(marker));
+  }
+});
