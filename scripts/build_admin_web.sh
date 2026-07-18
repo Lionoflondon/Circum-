@@ -15,7 +15,7 @@ fi
 
 echo "Project: circum-2797c"
 echo "Surface: Admin Web"
-echo "Entrypoint: lib/main.dart"
+echo "Entrypoint: lib/main_admin_web.dart"
 echo "Output: $OUTPUT_DIR"
 echo "Identity: circum-admin-web"
 
@@ -23,8 +23,7 @@ rm -rf "$ROOT_DIR/build/web" "$OUTPUT_DIR"
 "$FLUTTER_BIN" build web \
   --release \
   --no-wasm-dry-run \
-  --target=lib/main.dart \
-  --dart-define=CIRCUM_ADMIN_HOSTING=true \
+  --target=lib/main_admin_web.dart \
   --dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY"
 mv "$ROOT_DIR/build/web" "$OUTPUT_DIR"
 node "$ROOT_DIR/scripts/finalize_web_artifact.js" admin "$OUTPUT_DIR"

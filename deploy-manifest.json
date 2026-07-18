@@ -95,6 +95,7 @@
         "lib/main.dart"
       ],
       "ownedPrefixes": [
+        "lib/main_admin_web.dart",
         "lib/app/admin/",
         "test/admin_",
         "scripts/build_admin_web.sh",
