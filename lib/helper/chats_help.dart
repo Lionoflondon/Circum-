@@ -5,8 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ChatsHelper {
   Future<bool> storeChat(message) async {
     try {
-      print('In chats Helper');
-
       final prefs = await SharedPreferences.getInstance();
       final key = _chatKey(message['requestId']);
       final contents = prefs.getString(key);
@@ -17,12 +15,8 @@ class ChatsHelper {
 
       await prefs.setString(key, jsonString);
 
-      print('New message');
-      print(message);
-
       return true;
-    } catch (e) {
-      print(e);
+    } catch (_) {
       return false;
     }
   }
