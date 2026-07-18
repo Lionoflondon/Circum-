@@ -79,8 +79,10 @@ case "$SURFACE" in
     EXPECTED_IDENTITY="circum-sender-web"
     ALLOWED_PREFIXES=(
       "lib/main_sender_web.dart"
+      "lib/app/security/"
       "lib/app/sender_mobile/"
       "lib/app/sender_profile/"
+      "test/security/"
       "test/sender_mobile/"
       "test/sender_profile_test.dart"
       "scripts/"
@@ -99,8 +101,10 @@ case "$SURFACE" in
     EXPECTED_IDENTITY="circum-public-web"
     ALLOWED_PREFIXES=(
       "lib/main_public_web.dart"
+      "lib/app/security/"
       "lib/web_platform_routing.dart"
       "lib/web_sender_app.dart"
+      "test/security/"
       "test/web_platform_routing_test.dart"
       "scripts/"
       "docs/"
@@ -118,7 +122,9 @@ case "$SURFACE" in
     EXPECTED_IDENTITY="circum-admin-web"
     ALLOWED_PREFIXES=(
       "lib/main.dart"
+      "lib/app/security/"
       "lib/web_sender_app.dart"
+      "test/security/"
       "test/web_platform_routing_test.dart"
       "scripts/"
       "docs/"

@@ -25,6 +25,21 @@ void main() {
   });
 
   test('Circum web App Check requires an explicit Enterprise site key', () {
+    final appCheckSource =
+        File('lib/app/security/circum_app_check.dart').readAsStringSync();
+
+    expect(
+      appCheckSource,
+      contains('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'),
+    );
+    expect(
+      appCheckSource,
+      isNot(contains('CIRCUM_RECAPTCHA_ENTERPRISE_SITE_KEY')),
+    );
+    expect(
+      appCheckSource,
+      isNot(contains('RIDER_RECAPTCHA_ENTERPRISE_SITE_KEY')),
+    );
     expect(
       circumWebAppCheckProvider(isWeb: true, siteKey: ''),
       isNull,
@@ -70,6 +85,36 @@ void main() {
     expect(executableLines, isNot(contains('getToken(')));
     expect(
         executableLines, isNot(contains('setTokenAutoRefreshEnabled(false)')));
+  });
+
+  test('Circum web build scripts pass the shared App Check site key', () {
+    for (final path in [
+      'scripts/build_sender_app_web.sh',
+      'scripts/build_public_web.sh',
+      'scripts/build_admin_web.sh',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(
+        source,
+        contains('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'),
+        reason: path,
+      );
+      expect(
+        source,
+        contains('--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY='),
+        reason: path,
+      );
+      expect(
+        source,
+        isNot(contains('CIRCUM_RECAPTCHA_ENTERPRISE_SITE_KEY')),
+        reason: path,
+      );
+      expect(
+        source,
+        isNot(contains('RIDER_RECAPTCHA_ENTERPRISE_SITE_KEY')),
+        reason: path,
+      );
+    }
   });
 
   test(

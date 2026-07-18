@@ -1,8 +1,8 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
-const circumRecaptchaEnterpriseSiteKey =
-    String.fromEnvironment('CIRCUM_RECAPTCHA_ENTERPRISE_SITE_KEY');
+const circumWebRecaptchaEnterpriseSiteKey =
+    String.fromEnvironment('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
 
 class CircumAppCheckStartup {
   const CircumAppCheckStartup._({
@@ -54,7 +54,7 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
   FirebaseAppCheck? appCheck,
   bool isWeb = kIsWeb,
   bool debug = kDebugMode,
-  String webSiteKey = circumRecaptchaEnterpriseSiteKey,
+  String webSiteKey = circumWebRecaptchaEnterpriseSiteKey,
 }) async {
   final webProvider = circumWebAppCheckProvider(
     isWeb: isWeb,

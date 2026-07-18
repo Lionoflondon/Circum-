@@ -35,6 +35,24 @@ scripts/deploy_admin_web.sh --branch origin/main
 | Public Web | `lib/main_public_web.dart` | `build/public_web` | `hosting:public` |
 | Admin Web | `lib/main.dart` with `CIRCUM_ADMIN_HOSTING=true` | `build/web_admin` | `hosting:admin` |
 
+## Shared Web App Check
+
+All Circum web surfaces use one Firebase App Check reCAPTCHA Enterprise site
+key. Provide it at build time only:
+
+```bash
+CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/deploy_isolated.sh <sender|public|admin> --branch origin/main
+```
+
+The build scripts pass it through Flutter as:
+
+```bash
+--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key>
+```
+
+Do not hardcode the key, log it, or reintroduce per-surface web App Check
+environment variables.
+
 ## Failure Conditions
 
 Deployment fails if the temporary workspace:
