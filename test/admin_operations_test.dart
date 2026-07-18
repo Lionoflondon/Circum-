@@ -1,4 +1,5 @@
 import 'package:circum/app/admin/admin_operations.dart';
+import 'package:circum/app/admin/admin_phase1_shell.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -276,6 +277,39 @@ void main() {
       expect(patch['roles'], ['operations_admin']);
       expect(patch['status'], 'active');
       expect(patch.containsKey('password'), isFalse);
+    });
+
+    test('restored Admin shell exposes every required operations module', () {
+      expect(
+        AdminModule.values.map((module) => module.label),
+        containsAll(const [
+          'Dashboard',
+          'Users',
+          'Riders',
+          'Verification',
+          'Deliveries',
+          'Support',
+          'Finance',
+          'Health+',
+          'Business',
+          'Gifts',
+          'Audit',
+          'Chat',
+          'Settings',
+        ]),
+      );
+      expect(AdminModule.values, contains(AdminModule.discrepancyReview));
+    });
+
+    test('Admin data bundle starts empty before live loaders resolve', () {
+      final data = AdminDataBundle.empty();
+
+      expect(data.deliveries, isEmpty);
+      expect(data.users, isEmpty);
+      expect(data.riders, isEmpty);
+      expect(data.payments, isEmpty);
+      expect(data.supportTickets, isEmpty);
+      expect(data.auditLogs, isEmpty);
     });
   });
 }

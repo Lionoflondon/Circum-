@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import 'admin_phase1_shell.dart';
+
 class AdminRoot extends StatelessWidget {
   const AdminRoot({super.key});
 
@@ -19,7 +21,7 @@ class AdminRoot extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AdminHome(),
+      home: const AdminPhaseOneShell(),
     );
   }
 }
@@ -98,7 +100,7 @@ class AdminHome extends StatelessWidget {
                           },
                         ),
                         const SizedBox(height: 24),
-                        const _DeliveryAdjustmentReviewQueue(),
+                        const AdminDeliveryAdjustmentReviewQueue(),
                       ],
                     ),
                   ),
@@ -112,16 +114,16 @@ class AdminHome extends StatelessWidget {
   }
 }
 
-class _DeliveryAdjustmentReviewQueue extends StatefulWidget {
-  const _DeliveryAdjustmentReviewQueue();
+class AdminDeliveryAdjustmentReviewQueue extends StatefulWidget {
+  const AdminDeliveryAdjustmentReviewQueue({super.key});
 
   @override
-  State<_DeliveryAdjustmentReviewQueue> createState() =>
+  State<AdminDeliveryAdjustmentReviewQueue> createState() =>
       _DeliveryAdjustmentReviewQueueState();
 }
 
 class _DeliveryAdjustmentReviewQueueState
-    extends State<_DeliveryAdjustmentReviewQueue> {
+    extends State<AdminDeliveryAdjustmentReviewQueue> {
   String _filter = 'awaiting_admin_review';
 
   @override
