@@ -22,6 +22,7 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+      - run: node scripts/absolute_product_ownership.js
       - run: node scripts/deploy_guard.self_test.js
       - run: node scripts/deploy_guard.js --target=sender-app --base HEAD
       - run: node scripts/deploy_guard.js --target=website --base HEAD

@@ -25,8 +25,8 @@ const sharedFiles = manifest.sharedFiles || [];
 const blockedPrefixes = manifest.blockedPrefixes || [];
 const ignoredPrefixes = manifest.ignoredPrefixes || [];
 
-if (sharedFiles.length > 3) {
-  fail(`sharedFiles has ${sharedFiles.length} entries; maximum is 3`, sharedFiles);
+if (sharedFiles.length !== 0) {
+  fail(`sharedFiles has ${sharedFiles.length} entries; absolute product ownership requires 0`, sharedFiles);
 }
 
 const productNames = Object.keys(products);
@@ -84,10 +84,6 @@ for (const file of repositoryFiles) {
   if (sharedFiles.includes(file)) continue;
   if (startsWithAny(file, blockedPrefixes)) continue;
   if (startsWithAny(file, ignoredPrefixes)) continue;
-  if (file === 'deploy-manifest.json') continue;
-  if (file === 'scripts/deploy_guard.js') continue;
-  if (file === 'scripts/deploy_guard.self_test.js') continue;
-  if (file.startsWith('.github/')) continue;
 
   const owners = productNames.filter((name) =>
     startsWithAny(file, products[name].ownedPrefixes || []),

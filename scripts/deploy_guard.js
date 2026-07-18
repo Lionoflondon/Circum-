@@ -17,7 +17,7 @@ function fail(message, details = []) {
 }
 
 function usage() {
-  console.error('Usage: node scripts/deploy_guard.js --product|--target <website|sender-app|admin|backend> [--base <ref>]');
+  console.error('Usage: node scripts/deploy_guard.js --product|--target <website|sender-app|rider-app|admin|backend> [--base <ref>]');
   process.exit(64);
 }
 
@@ -70,13 +70,9 @@ if (blocked.length > 0) {
 
 const offenders = changed.filter((file) => {
   if (startsWithAny(file, manifest.ignoredPrefixes || [])) return false;
-  if (file.startsWith('.github/')) return false;
-  if (file === 'deploy_guard.js') return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;
   return !startsWithAny(file, product.ownedPrefixes) &&
-    !manifest.sharedFiles.includes(file) &&
-    !file.startsWith('scripts/deploy_guard') &&
-    !['README.md', 'deploy-manifest.json'].includes(file);
+    !manifest.sharedFiles.includes(file);
 });
 
 if (offenders.length > 0) {

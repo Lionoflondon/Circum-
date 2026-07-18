@@ -6,12 +6,15 @@
         "lib/main_public_web.dart"
       ],
       "ownedPrefixes": [
+        ".github/workflows/deploy_website.yml",
         "lib/main_public_web.dart",
         "lib/website/",
         "lib/web_platform_routing.dart",
         "test/web_",
         "test/website_",
         "test/security/circum_app_check_contract_test.dart",
+        "test/web_artifact_isolation_test.dart",
+        "test/web_platform_routing_test.dart",
         "scripts/build_public_web.sh",
         "scripts/deploy_public_web.sh",
         "scripts/validate_web_artifacts.js",
@@ -36,6 +39,17 @@
         "lib/main.dart"
       ],
       "ownedPrefixes": [
+        ".github/workflows/deploy_sender_web.yml",
+        ".gitignore",
+        ".metadata",
+        "analysis_options.yaml",
+        "assets/",
+        "linux/",
+        "macos/",
+        "pubspec.lock",
+        "pubspec.yaml",
+        "web/",
+        "windows/",
         "lib/main.dart",
         "lib/app.dart",
         "lib/messaging.dart",
@@ -56,6 +70,7 @@
         "lib/app/iris/",
         "lib/app/onboarding/",
         "lib/app/platform/",
+        "lib/app/security/",
         "lib/app/send_package/",
         "lib/app/sender_mobile/",
         "lib/app/sender_profile/",
@@ -93,9 +108,10 @@
     "admin": {
       "description": "Independent Circum Admin application.",
       "entrypoints": [
-        "lib/main.dart"
+        "lib/main_admin_web.dart"
       ],
       "ownedPrefixes": [
+        ".github/workflows/deploy_admin.yml",
         "lib/main_admin_web.dart",
         "lib/app/admin/",
         "test/admin_",
@@ -112,22 +128,61 @@
       "hostingTarget": "admin",
       "output": "build/web_admin"
     },
+    "rider-app": {
+      "description": "Independent Circum Rider application. The deployable Rider app lives in the Circum-Rider repository; Rider-facing compatibility files in this repository must be owned only by Rider.",
+      "entrypoints": [],
+      "ownedPrefixes": [
+        "lib/app/rider_marketplace/",
+        "lib/app/rider_profiles/",
+        "test/rider_",
+        "test/driver_performance_test.dart"
+      ],
+      "forbiddenPrefixes": [
+        "lib/website/",
+        "lib/app/sender_mobile/",
+        "lib/app/admin/",
+        "server/functions/",
+        "firestore.rules",
+        "storage.rules",
+        "android/",
+        "ios/"
+      ],
+      "hostingTarget": null,
+      "output": null
+    },
     "backend": {
       "description": "Independent Firebase backend.",
       "entrypoints": [
         "server/functions/index.js"
       ],
       "ownedPrefixes": [
+        ".firebaserc",
+        ".github/CODEOWNERS",
+        ".github/PULL_REQUEST_TEMPLATE/",
+        ".github/workflows/architecture_review_gate.yml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/deploy_functions.yml",
+        "BREAK_GLASS_DEPLOY.md",
+        "README.md",
+        "ROOT_CAUSE_AUDIT.md",
+        "codex_prompt_product_isolation_architecture.md",
+        "data/",
+        "deploy-manifest.json",
+        "docs/",
+        "firebase.json",
         "server/",
         "firestore.rules",
         "storage.rules",
         "test/firestore_",
         "test/storage_",
-        "test/driver_performance_test.dart",
-        "test/rider_",
         "test/payments_",
-        "lib/app/rider_marketplace/",
-        "lib/app/rider_profiles/"
+        "test/backend_",
+        "tools/",
+        "scripts/absolute_product_ownership.js",
+        "scripts/deploy_guard.js",
+        "scripts/deploy_guard.self_test.js",
+        "scripts/deploy_isolated.sh",
+        "scripts/firebase_tools.sh"
       ],
       "forbiddenPrefixes": [
         "lib/website/",
@@ -139,36 +194,12 @@
       "output": null
     }
   },
-  "sharedFiles": [
-    "lib/app/security/circum_app_check.dart",
-    "scripts/deploy_isolated.sh",
-    "scripts/firebase_tools.sh"
-  ],
+  "sharedFiles": [],
   "blockedPrefixes": [
     "lib/main_sender_web.dart",
     "scripts/build_sender_app_web.sh",
     "scripts/deploy_sender_app_web.sh",
     "scripts/deploy_main_web.sh"
   ],
-  "ignoredPrefixes": [
-    ".gitignore",
-    ".metadata",
-    ".firebaserc",
-    "README.md",
-    "docs/",
-    "data/",
-    "tools/",
-    "linux/",
-    "macos/",
-    "windows/",
-    "web/",
-    "assets/",
-    "firebase.json",
-    "pubspec.yaml",
-    "pubspec.lock",
-    "analysis_options.yaml",
-    "BREAK_GLASS_DEPLOY.md",
-    "ROOT_CAUSE_AUDIT.md",
-    "codex_prompt_product_isolation_architecture.md"
-  ]
+  "ignoredPrefixes": []
 }

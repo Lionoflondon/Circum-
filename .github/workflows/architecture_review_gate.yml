@@ -1,0 +1,72 @@
+name: Architecture Review Gate
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - review_requested
+      - review_request_removed
+      - labeled
+      - unlabeled
+
+jobs:
+  architecture-review:
+    name: Protected architecture review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const protectedFiles = [
+              'docs/PERMANENT_ARCHITECTURE_CHARTER.md',
+              'deploy-manifest.json',
+              'scripts/deploy_guard.js',
+              'scripts/deploy_guard.self_test.js',
+              'scripts/absolute_product_ownership.js',
+            ];
+
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            const author = context.payload.pull_request.user.login;
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const touched = files
+              .map((file) => file.filename)
+              .filter((filename) => protectedFiles.includes(filename));
+
+            if (touched.length === 0) {
+              core.info('No protected architecture files changed.');
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const latest = new Map();
+            for (const review of reviews) latest.set(review.user.login, review.state);
+            const approvals = [...latest.entries()]
+              .filter(([login, state]) => state === 'APPROVED' && login !== author)
+              .map(([login]) => login);
+
+            if (approvals.length < 2) {
+              core.setFailed(
+                `Protected architecture files changed: ${touched.join(', ')}. ` +
+                `Two non-author approvals are required; found ${approvals.length}.`,
+              );
+            }

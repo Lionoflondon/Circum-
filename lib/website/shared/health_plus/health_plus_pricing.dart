@@ -1,4 +1,4 @@
-import 'package:circum/pricing/delivery_pricing.dart';
+import '../pricing/website_delivery_pricing.dart';
 
 class HealthPlusPricing {
   static const double serviceFeeGbp = 1.2;

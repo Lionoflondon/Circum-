@@ -15,8 +15,6 @@ import 'package:circum/website/shared/policies/rider_onboarding_policy.dart';
 import 'package:circum/website/shared/policies/role_access.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
-import 'package:circum/pricing/delivery_pricing.dart';
-import 'package:circum/pricing/special_handling_engine.dart';
 import 'package:circum/env/env.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -31,7 +29,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../firebase_options.dart';
+import 'firebase/website_firebase_options.dart';
+import 'pricing/website_delivery_pricing.dart';
+import 'pricing/website_special_handling_engine.dart';
 
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;

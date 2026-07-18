@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:circum/website/shared/iris/iris_item_repository.dart';
-import 'package:circum/pricing/delivery_pricing.dart';
+import '../pricing/website_delivery_pricing.dart';
 
 class IrisWeightLookupResult {
   final String matchedItemName;

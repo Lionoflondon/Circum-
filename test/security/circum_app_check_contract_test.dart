@@ -1,25 +1,28 @@
 import 'dart:io';
 
-import 'package:circum/app/security/circum_app_check.dart';
+import 'package:circum/app/admin/security/admin_app_check.dart' as admin;
+import 'package:circum/app/security/circum_app_check.dart' as sender;
+import 'package:circum/website/shared/security/circum_website_app_check.dart'
+    as website;
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('Circum App Check provider policy is release-safe', () {
     expect(
-      circumAndroidAppCheckProvider(debug: true),
+      sender.circumAndroidAppCheckProvider(debug: true),
       AndroidProvider.debug,
     );
     expect(
-      circumAndroidAppCheckProvider(debug: false),
+      sender.circumAndroidAppCheckProvider(debug: false),
       AndroidProvider.playIntegrity,
     );
     expect(
-      circumAppleAppCheckProvider(debug: true),
+      sender.circumAppleAppCheckProvider(debug: true),
       AppleProvider.debug,
     );
     expect(
-      circumAppleAppCheckProvider(debug: false),
+      sender.circumAppleAppCheckProvider(debug: false),
       AppleProvider.appAttestWithDeviceCheckFallback,
     );
   });
@@ -27,29 +30,31 @@ void main() {
   test('Circum web App Check requires an explicit Enterprise site key', () {
     final appCheckSource =
         File('lib/app/security/circum_app_check.dart').readAsStringSync();
+    final websiteAppCheckSource =
+        File('lib/website/shared/security/circum_website_app_check.dart')
+            .readAsStringSync();
+    final adminAppCheckSource =
+        File('lib/app/admin/security/admin_app_check.dart').readAsStringSync();
 
-    expect(
+    for (final source in [
       appCheckSource,
-      contains('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'),
-    );
+      websiteAppCheckSource,
+      adminAppCheckSource,
+    ]) {
+      expect(source, contains('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'));
+      expect(source, isNot(contains('CIRCUM_RECAPTCHA_ENTERPRISE_SITE_KEY')));
+      expect(source, isNot(contains('RIDER_RECAPTCHA_ENTERPRISE_SITE_KEY')));
+    }
     expect(
-      appCheckSource,
-      isNot(contains('CIRCUM_RECAPTCHA_ENTERPRISE_SITE_KEY')),
-    );
-    expect(
-      appCheckSource,
-      isNot(contains('RIDER_RECAPTCHA_ENTERPRISE_SITE_KEY')),
-    );
-    expect(
-      circumWebAppCheckProvider(isWeb: true, siteKey: ''),
+      sender.circumWebAppCheckProvider(isWeb: true, siteKey: ''),
       isNull,
     );
     expect(
-      circumWebAppCheckProvider(isWeb: false, siteKey: ''),
+      website.circumWebAppCheckProvider(isWeb: false, siteKey: ''),
       isNull,
     );
     expect(
-      circumWebAppCheckProvider(isWeb: true, siteKey: 'site-key'),
+      admin.circumWebAppCheckProvider(isWeb: true, siteKey: 'site-key'),
       isA<ReCaptchaEnterpriseProvider>(),
     );
   });
@@ -57,8 +62,8 @@ void main() {
   test('Circum production entrypoints initialize App Check after Firebase', () {
     for (final path in [
       'lib/main.dart',
-      'lib/main_sender_web.dart',
       'lib/main_public_web.dart',
+      'lib/main_admin_web.dart',
     ]) {
       final source = File(path).readAsStringSync();
       final firebaseInit = source.indexOf('Firebase.initializeApp');
@@ -72,8 +77,11 @@ void main() {
 
   test('Circum App Check source never logs or stores App Check token values',
       () {
-    final source =
-        File('lib/app/security/circum_app_check.dart').readAsStringSync();
+    final source = [
+      'lib/app/security/circum_app_check.dart',
+      'lib/website/shared/security/circum_website_app_check.dart',
+      'lib/app/admin/security/admin_app_check.dart',
+    ].map((path) => File(path).readAsStringSync()).join('\n');
     final executableLines = source
         .split('\n')
         .map((line) => line.trimLeft())
@@ -89,7 +97,6 @@ void main() {
 
   test('Circum web build scripts pass the shared App Check site key', () {
     for (final path in [
-      'scripts/build_sender_app_web.sh',
       'scripts/build_public_web.sh',
       'scripts/build_admin_web.sh',
     ]) {
