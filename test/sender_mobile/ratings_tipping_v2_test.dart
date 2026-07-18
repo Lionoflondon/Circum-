@@ -53,7 +53,8 @@ void main() {
   });
 
   test('Sender Web rating submission uses backend callables', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
     final submitStart = source.indexOf('Future<void> _submitDriverRating()');
     final submitEnd = source.indexOf('void _listenToChat', submitStart);
     expect(submitStart, isNonNegative);
@@ -72,7 +73,8 @@ void main() {
   });
 
   test('legacy web Rider acceptance uses the canonical callable', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
     final acceptStart = source.indexOf('Future<void> _acceptDeliveryJob');
     final acceptEnd =
         source.indexOf('void _syncRiderLiveLocationPublishing', acceptStart);
@@ -87,7 +89,8 @@ void main() {
   });
 
   test('legacy web Rider lifecycle uses canonical delivery callables', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
     final statusStart = source.indexOf('Future<void> _updateAcceptedJobStatus');
     final statusEnd = source.indexOf(
       'Future<Map<String, dynamic>?> _collectVanguardPinVerification',
@@ -111,7 +114,8 @@ void main() {
   });
 
   test('legacy web tracking and chat use canonical callables', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
 
     expect(source, contains("httpsCallable('updateDeliveryLiveLocation')"));
     expect(source, contains("httpsCallable('sendCircumMessage')"));

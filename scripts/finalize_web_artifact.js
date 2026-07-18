@@ -5,10 +5,10 @@ const path = require('node:path');
 
 const surfaces = {
   public: {
-    identity: 'circum-public-web',
-    name: 'Circum Public Web',
+    identity: 'circum-website',
+    name: 'Circum Website',
     shortName: 'Circum',
-    description: 'Circum public website.',
+    description: 'Circum website, including Sender Web and Rider Web.',
     startUrl: '/',
     themeColor: '#0f172a',
     title: 'Circum',

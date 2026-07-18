@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app/security/circum_app_check.dart';
 import 'firebase_options.dart';
-import 'web_platform_routing.dart';
-import 'web_sender_app.dart';
+import 'website/shared/circum_website_app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,7 +13,7 @@ Future<void> main() async {
     runApp(_PublicWebStartupBlocked(message: appCheckStartup.message));
     return;
   }
-  runApp(const WebSenderApp(initialSurface: CircumWebSurface.public));
+  runApp(const CircumWebsiteApp());
 }
 
 class _PublicWebStartupBlocked extends StatelessWidget {

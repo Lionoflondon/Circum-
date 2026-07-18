@@ -26,7 +26,8 @@ void main() {
   });
 
   test('Sender Web reads canonical delivery lifecycle fields', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
 
     expect(source, contains('String _backendStatusFromDelivery'));
     expect(source, contains("data['deliveryStage']"));
@@ -36,7 +37,8 @@ void main() {
   });
 
   test('Sender Web represents the backend tracking phases', () {
-    final source = File('lib/web_sender_app.dart').readAsStringSync();
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
     const labels = [
       'Finding a rider',
       'Rider assigned',

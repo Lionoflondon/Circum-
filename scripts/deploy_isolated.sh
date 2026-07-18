@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/deploy_isolated.sh <sender|public|admin> [--branch <ref>] [--commit <sha>]... [--patch <file>]...
+  scripts/deploy_isolated.sh <website|public|admin> [--branch <ref>] [--commit <sha>]... [--patch <file>]...
 
 Production deployments must never run from the active working tree. This script:
   1. creates a fresh temporary git worktree from the requested branch/ref;
@@ -15,8 +15,8 @@ Production deployments must never run from the active working tree. This script:
   6. removes the temporary worktree.
 
 Examples:
-  scripts/deploy_isolated.sh sender --branch origin/main
-  scripts/deploy_isolated.sh sender --branch origin/main --commit abc1234
+  scripts/deploy_isolated.sh website --branch origin/main
+  scripts/deploy_isolated.sh website --branch origin/main --commit abc1234
   scripts/deploy_isolated.sh public --branch main --patch /tmp/approved.diff
 USAGE
 }
@@ -71,39 +71,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$SURFACE" in
-  sender)
-    BUILD_SCRIPT="scripts/build_sender_app_web.sh"
-    HOSTING_TARGET="hosting:app"
-    OUTPUT_DIR="build/sender_app_web"
-    ENTRYPOINT="lib/main_sender_web.dart"
-    EXPECTED_IDENTITY="circum-sender-web"
-    ALLOWED_PREFIXES=(
-      "lib/main_sender_web.dart"
-      "lib/app/security/"
-      "lib/app/sender_mobile/"
-      "lib/app/sender_profile/"
-      "test/security/"
-      "test/sender_mobile/"
-      "test/sender_profile_test.dart"
-      "scripts/"
-      "docs/"
-      "README.md"
-      "pubspec.yaml"
-      "pubspec.lock"
-    )
-    FORBIDDEN_IMPORT_REGEX="app/(rider|admin)|web_sender_app|web_platform_routing|CircumWebSurface|WebSenderApp"
-    ;;
-  public)
+  website|public)
     BUILD_SCRIPT="scripts/build_public_web.sh"
     HOSTING_TARGET="hosting:public"
     OUTPUT_DIR="build/public_web"
     ENTRYPOINT="lib/main_public_web.dart"
-    EXPECTED_IDENTITY="circum-public-web"
+    EXPECTED_IDENTITY="circum-website"
     ALLOWED_PREFIXES=(
       "lib/main_public_web.dart"
       "lib/app/security/"
       "lib/web_platform_routing.dart"
-      "lib/web_sender_app.dart"
+      "lib/website/"
       "test/security/"
       "test/web_platform_routing_test.dart"
       "scripts/"
@@ -112,7 +90,7 @@ case "$SURFACE" in
       "pubspec.yaml"
       "pubspec.lock"
     )
-    FORBIDDEN_IMPORT_REGEX="main_sender_web|main_rider_web|main_admin_web"
+    FORBIDDEN_IMPORT_REGEX="main_sender_web|main_rider_web|main_admin_web|app/sender_mobile|app/admin"
     ;;
   admin)
     BUILD_SCRIPT="scripts/build_admin_web.sh"
@@ -123,7 +101,7 @@ case "$SURFACE" in
     ALLOWED_PREFIXES=(
       "lib/main.dart"
       "lib/app/security/"
-      "lib/web_sender_app.dart"
+      "lib/website/shared/circum_website_app.dart"
       "test/security/"
       "test/web_platform_routing_test.dart"
       "scripts/"
@@ -135,7 +113,7 @@ case "$SURFACE" in
     FORBIDDEN_IMPORT_REGEX="main_sender_web|main_public_web|main_rider_web"
     ;;
   *)
-    fail "unknown surface '$SURFACE'. Expected sender, public, or admin."
+    fail "unknown surface '$SURFACE'. Expected website, public, or admin."
     ;;
 esac
 

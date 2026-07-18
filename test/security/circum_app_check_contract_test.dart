@@ -142,7 +142,7 @@ void main() {
   test('Circum runtime Maps keys are provided by configuration', () {
     final hardcodedMapsKey = RegExp(r'AIza[0-9A-Za-z_-]+');
     for (final path in [
-      'lib/web_sender_app.dart',
+      'lib/website/shared/circum_website_app.dart',
       'lib/app/send_package/bloc/send_package_bloc.dart',
       'android/app/src/main/AndroidManifest.xml',
       'ios/Runner/AppDelegate.swift',
@@ -153,7 +153,7 @@ void main() {
     }
 
     expect(
-      File('lib/web_sender_app.dart').readAsStringSync(),
+      File('lib/website/shared/circum_website_app.dart').readAsStringSync(),
       contains("String.fromEnvironment(\n  'GOOGLE_PLACES_API_KEY'"),
     );
     expect(

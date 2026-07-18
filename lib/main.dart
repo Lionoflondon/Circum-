@@ -10,10 +10,8 @@ import 'app.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/security/circum_app_check.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
-import 'firebase_options.dart';
 import 'helper/chats_help.dart';
 import 'helper/notifications_helper.dart';
-import 'web_sender_app.dart';
 
 part 'messaging.dart';
 
@@ -26,17 +24,6 @@ final NotificationService _notificationService = NotificationService();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kIsWeb) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
-    final appCheckStartup = await initializeCircumAppCheck();
-    if (appCheckStartup.blockStartup) {
-      runApp(CircumStartupBlocked(message: appCheckStartup.message));
-      return;
-    }
-    runApp(const WebSenderApp());
-    return;
-  }
-
   await Firebase.initializeApp();
   final appCheckStartup = await initializeCircumAppCheck();
   if (appCheckStartup.blockStartup) {

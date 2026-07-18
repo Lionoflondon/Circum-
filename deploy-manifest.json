@@ -1,0 +1,98 @@
+{
+  "products": {
+    "website": {
+      "description": "Circum Website, including Sender Web and Rider Web.",
+      "entrypoints": [
+        "lib/main_public_web.dart"
+      ],
+      "ownedPrefixes": [
+        "lib/main_public_web.dart",
+        "lib/website/",
+        "lib/web_platform_routing.dart",
+        "test/web_",
+        "test/website_",
+        "scripts/build_public_web.sh",
+        "scripts/deploy_public_web.sh",
+        "scripts/validate_web_artifacts.js",
+        "scripts/finalize_web_artifact.js"
+      ],
+      "forbiddenPrefixes": [
+        "lib/app/sender_mobile/",
+        "lib/app/rider/",
+        "server/functions/",
+        "firestore.rules",
+        "storage.rules"
+      ],
+      "hostingTarget": "public",
+      "output": "build/public_web"
+    },
+    "sender-app": {
+      "description": "Independent Circum Sender mobile application.",
+      "entrypoints": [
+        "lib/main.dart"
+      ],
+      "ownedPrefixes": [
+        "lib/main.dart",
+        "lib/app/sender_mobile/",
+        "lib/app/send_package/",
+        "lib/app/account/",
+        "lib/app/sender_profile/",
+        "test/sender_mobile/",
+        "test/sender_profile_test.dart",
+        "android/",
+        "ios/"
+      ],
+      "forbiddenPrefixes": [
+        "lib/website/",
+        "lib/main_public_web.dart",
+        "lib/main_sender_web.dart",
+        "lib/main_rider_web.dart",
+        "server/functions/",
+        "firestore.rules",
+        "storage.rules"
+      ],
+      "hostingTarget": null,
+      "output": null
+    },
+    "admin": {
+      "description": "Independent Circum Admin application.",
+      "entrypoints": [
+        "lib/main.dart"
+      ],
+      "ownedPrefixes": [
+        "lib/app/admin/",
+        "test/admin_",
+        "scripts/build_admin_web.sh",
+        "scripts/deploy_admin_web.sh"
+      ],
+      "forbiddenPrefixes": [
+        "lib/website/",
+        "lib/app/sender_mobile/",
+        "server/functions/"
+      ],
+      "hostingTarget": "admin",
+      "output": "build/web_admin"
+    },
+    "backend": {
+      "description": "Independent Firebase backend.",
+      "entrypoints": [
+        "server/functions/index.js"
+      ],
+      "ownedPrefixes": [
+        "server/functions/",
+        "firestore.rules",
+        "storage.rules",
+        "test/firestore_",
+        "test/storage_"
+      ],
+      "forbiddenPrefixes": [
+        "lib/website/",
+        "lib/app/sender_mobile/",
+        "android/",
+        "ios/"
+      ],
+      "hostingTarget": null,
+      "output": null
+    }
+  }
+}

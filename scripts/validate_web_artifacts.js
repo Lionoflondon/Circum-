@@ -9,14 +9,19 @@ const surfaces = {
   public: {
     target: 'public',
     output: 'build/public_web',
-    identity: 'circum-public-web',
-    manifestName: 'Circum Public Web',
-    must: ['circum-public-web', 'Earn as a Rider'],
-    forbidden: [
+    identity: 'circum-website',
+    manifestName: 'Circum Website',
+    must: [
+      'circum-website',
       'circum-sender-web',
       'circum-rider-web',
+      'Earn as a Rider',
+      'Send a Parcel',
+    ],
+    forbidden: [
       'Rider Application Centre',
       'Admin surface',
+      'SenderMobileHome',
     ],
   },
   sender: {
@@ -95,8 +100,8 @@ function assertScriptIsolation() {
   if (!deployPublic.includes('hosting:public') || deployPublic.includes('hosting:app')) {
     fail('Public deploy script must target only hosting:public');
   }
-  if (!deploySender.includes('hosting:app') || deploySender.includes('hosting:public')) {
-    fail('Sender deploy script must target only hosting:app');
+  if (!deploySender.includes('DEPLOYMENT BLOCKED')) {
+    fail('Sender App Web deploy script must be blocked; Sender Web belongs to Website');
   }
 }
 
