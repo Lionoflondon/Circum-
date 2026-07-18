@@ -10,6 +10,7 @@ import 'admin_root.dart';
 
 enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
+  visitorAnalytics('Visitor analytics', Icons.query_stats_rounded),
   deliveries('Deliveries', Icons.local_shipping_rounded),
   discrepancyReview('Discrepancy review', Icons.fact_check_rounded),
   users('Users', Icons.people_alt_rounded),
@@ -632,6 +633,7 @@ class AdminDataBundle {
     required this.auditLogs,
     required this.chats,
     required this.riderDocuments,
+    required this.websiteVisitors,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -648,6 +650,7 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> chats;
   final List<Map<String, dynamic>> riderDocuments;
+  final List<Map<String, dynamic>> websiteVisitors;
 
   static AdminDataBundle empty() => const AdminDataBundle(
         deliveries: [],
@@ -664,6 +667,7 @@ class AdminDataBundle {
         auditLogs: [],
         chats: [],
         riderDocuments: [],
+        websiteVisitors: [],
       );
 }
 
@@ -709,6 +713,10 @@ class AdminRepository {
           .orderBy('updatedAt', descending: true)
           .limit(50)),
       _read(_db.collection('riderDocuments').limit(150)),
+      _read(_db
+          .collection('websiteVisitors')
+          .orderBy('createdAt', descending: true)
+          .limit(150)),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -725,6 +733,7 @@ class AdminRepository {
       auditLogs: results[11],
       chats: results[12],
       riderDocuments: results[13],
+      websiteVisitors: results[14],
     );
   }
 
@@ -1067,6 +1076,8 @@ class _AdminModuleBody extends StatelessWidget {
       children: [
         switch (module) {
           AdminModule.dashboard => _Dashboard(metrics: metrics, data: data),
+          AdminModule.visitorAnalytics =>
+            _VisitorAnalyticsModule(records: data.websiteVisitors),
           AdminModule.discrepancyReview =>
             const AdminDeliveryAdjustmentReviewQueue(),
           AdminModule.deliveries => _RecordModule(
@@ -1489,6 +1500,65 @@ class _ChatModule extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VisitorAnalyticsModule extends StatelessWidget {
+  const _VisitorAnalyticsModule({required this.records});
+
+  final List<Map<String, dynamic>> records;
+
+  @override
+  Widget build(BuildContext context) {
+    final modes = <String, int>{};
+    var signedIn = 0;
+    final uniqueUsers = <String>{};
+    for (final record in records) {
+      final mode = '${record['appMode'] ?? 'unknown'}';
+      modes[mode] = (modes[mode] ?? 0) + 1;
+      if (record['signedIn'] == true) signedIn += 1;
+      final userId = '${record['userId'] ?? ''}'.trim();
+      if (userId.isNotEmpty) uniqueUsers.add(userId);
+    }
+    final topMode = modes.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Visits', records.length.toString(), 'latest records'),
+            _MetricCard('Signed in', signedIn.toString(), 'known sessions'),
+            _MetricCard('Known users', uniqueUsers.length.toString(),
+                'unique user ids'),
+            _MetricCard(
+              'Top surface',
+              topMode.isEmpty ? 'None' : topMode.first.key,
+              topMode.isEmpty ? 'no visits' : '${topMode.first.value} visits',
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Visitor analytics',
+          subtitle: 'Website visit records captured by the public Website.',
+          records: records,
+          query: '',
+          fields: const ['path', 'appMode', 'email', 'url'],
+          columns: const ['Path', 'Surface', 'Signed in', 'Created'],
+          row: (record) => [
+            '${record['path'] ?? '/'}',
+            '${record['appMode'] ?? 'unknown'}',
+            record['signedIn'] == true
+                ? '${record['email'] ?? record['userId'] ?? 'yes'}'
+                : 'No',
+            _date(record['createdAt']),
+          ],
         ),
       ],
     );

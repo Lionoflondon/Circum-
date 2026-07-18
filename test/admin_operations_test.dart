@@ -317,6 +317,7 @@ void main() {
         AdminModule.values.map((module) => module.label),
         containsAll(const [
           'Dashboard',
+          'Visitor analytics',
           'Users',
           'Riders',
           'Verification',
@@ -343,6 +344,7 @@ void main() {
       expect(data.payments, isEmpty);
       expect(data.supportTickets, isEmpty);
       expect(data.auditLogs, isEmpty);
+      expect(data.websiteVisitors, isEmpty);
     });
   });
 }
