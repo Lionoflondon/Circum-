@@ -40,6 +40,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _search = TextEditingController();
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
 
@@ -48,6 +49,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   List<String> _roles = const [];
   AdminMetricSnapshot _metrics = AdminMetricSnapshot.empty();
   AdminDataBundle _data = AdminDataBundle.empty();
+  Map<String, dynamic>? _selectedRider;
   bool _loading = true;
   bool _signingIn = false;
   bool _loadingData = false;
@@ -351,6 +353,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  void _openRiderProfile(Map<String, dynamic> rider) {
+    setState(() => _selectedRider = rider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scaffoldKey.currentState?.openEndDrawer();
+    });
+  }
+
   bool _can(AdminPermission permission) {
     return AdminAccessPolicy.can(_roles, permission);
   }
@@ -383,6 +392,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final mobile = MediaQuery.sizeOf(context).width < 900;
     return Scaffold(
+      key: _scaffoldKey,
       body: SafeArea(
         child: Row(
           children: [
@@ -429,6 +439,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onSetRiderStatus: _setRiderStatus,
                       onUpdateSupportTicket: _updateSupportTicket,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
+                      onOpenRiderProfile: _openRiderProfile,
                     ),
                   ),
                 ],
@@ -437,6 +448,15 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
           ],
         ),
       ),
+      endDrawer: _selectedRider == null
+          ? null
+          : _RiderProfileDrawer(
+              rider: _selectedRider!,
+              deliveries: _data.deliveries,
+              documents: _data.riderDocuments,
+              onClose: () => setState(() => _selectedRider = null),
+              onSetStatus: (status) => _setRiderStatus(_selectedRider!, status),
+            ),
     );
   }
 }
@@ -456,6 +476,7 @@ class AdminDataBundle {
     required this.giftOrders,
     required this.auditLogs,
     required this.chats,
+    required this.riderDocuments,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -471,6 +492,7 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> giftOrders;
   final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> chats;
+  final List<Map<String, dynamic>> riderDocuments;
 
   static AdminDataBundle empty() => const AdminDataBundle(
         deliveries: [],
@@ -486,6 +508,7 @@ class AdminDataBundle {
         giftOrders: [],
         auditLogs: [],
         chats: [],
+        riderDocuments: [],
       );
 }
 
@@ -530,6 +553,7 @@ class AdminRepository {
           .collection('chats')
           .orderBy('updatedAt', descending: true)
           .limit(50)),
+      _read(_db.collection('riderDocuments').limit(150)),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -545,6 +569,7 @@ class AdminRepository {
       giftOrders: results[10],
       auditLogs: results[11],
       chats: results[12],
+      riderDocuments: results[13],
     );
   }
 
@@ -836,6 +861,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onSetRiderStatus,
     required this.onUpdateSupportTicket,
     required this.onUpdateHealthPlusPickup,
+    required this.onOpenRiderProfile,
   });
 
   final AdminModule module;
@@ -853,6 +879,7 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusPickup;
+  final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -932,7 +959,11 @@ class _AdminModuleBody extends StatelessWidget {
                 RiderRankPolicy.fromProfile(record),
               ],
               actions: canManageRiders
-                  ? (record) => _riderActions(record, onSetRiderStatus)
+                  ? (record) => _riderActions(
+                        record,
+                        onSetRiderStatus,
+                        onOpenRiderProfile,
+                      )
                   : null,
             ),
           AdminModule.verification => _RecordModule(
@@ -954,7 +985,11 @@ class _AdminModuleBody extends StatelessWidget {
                 _date(record['updatedAt'] ?? record['createdAt']),
               ],
               actions: canManageRiders
-                  ? (record) => _riderActions(record, onSetRiderStatus)
+                  ? (record) => _riderActions(
+                        record,
+                        onSetRiderStatus,
+                        onOpenRiderProfile,
+                      )
                   : null,
             ),
           AdminModule.support => _RecordModule(
@@ -1353,12 +1388,20 @@ class _MiniAction extends StatelessWidget {
 List<Widget> _riderActions(
   Map<String, dynamic> record,
   Future<void> Function(Map<String, dynamic>, String) onSetStatus,
+  ValueChanged<Map<String, dynamic>> onOpenProfile,
 ) {
   final status =
       '${record['approvalStatus'] ?? record['driverStatus'] ?? record['status'] ?? ''}'
           .toLowerCase();
+  final actions = <Widget>[
+    _MiniAction(
+      label: 'Profile',
+      onPressed: () => onOpenProfile(record),
+    ),
+  ];
   if (status.contains('suspend')) {
     return [
+      ...actions,
       _MiniAction(
         label: 'Reactivate',
         onPressed: () => unawaited(onSetStatus(record, 'approved')),
@@ -1367,6 +1410,7 @@ List<Widget> _riderActions(
   }
   if (status.contains('reject')) {
     return [
+      ...actions,
       _MiniAction(
         label: 'Reactivate',
         onPressed: () => unawaited(onSetStatus(record, 'approved')),
@@ -1377,6 +1421,7 @@ List<Widget> _riderActions(
       status.contains('approve') ||
       status.contains('verified')) {
     return [
+      ...actions,
       _MiniAction(
         label: 'Suspend',
         onPressed: () => unawaited(onSetStatus(record, 'suspended')),
@@ -1384,6 +1429,7 @@ List<Widget> _riderActions(
     ];
   }
   return [
+    ...actions,
     _MiniAction(
       label: 'Approve',
       onPressed: () => unawaited(onSetStatus(record, 'approved')),
@@ -1393,6 +1439,297 @@ List<Widget> _riderActions(
       onPressed: () => unawaited(onSetStatus(record, 'rejected')),
     ),
   ];
+}
+
+class _RiderProfileDrawer extends StatelessWidget {
+  const _RiderProfileDrawer({
+    required this.rider,
+    required this.deliveries,
+    required this.documents,
+    required this.onClose,
+    required this.onSetStatus,
+  });
+
+  final Map<String, dynamic> rider;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> documents;
+  final VoidCallback onClose;
+  final Future<void> Function(String) onSetStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final riderId = _riderId(rider);
+    final riderDeliveries = deliveries
+        .where((delivery) => _deliveryBelongsToRider(delivery, riderId))
+        .toList(growable: false);
+    final riderDocs = documents
+        .where((document) => _documentBelongsToRider(document, riderId))
+        .toList(growable: false);
+    final completed = riderDeliveries
+        .where((delivery) =>
+            '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+                .toLowerCase()
+                .contains('complete') ||
+            '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+                .toLowerCase()
+                .contains('delivered'))
+        .length;
+    final active = riderDeliveries.length - completed;
+    final earnings = riderDeliveries.fold<double>(0, (total, delivery) {
+      final value = delivery['riderPayout'] ??
+          delivery['driverPayout'] ??
+          delivery['estimatedDriverPayout'];
+      if (value is num) return total + value.toDouble();
+      return total + (double.tryParse('$value') ?? 0);
+    });
+    return Drawer(
+      width: 420,
+      backgroundColor: const Color(0xFF07090F),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Rider profile',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            DecoratedBox(
+              decoration: _panelDecoration(),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _RiderAvatar(rider: rider),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${rider['fullName'] ?? rider['name'] ?? 'Rider'}',
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                '${rider['email'] ?? 'No email recorded'}',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .66),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _InfoPill('Rank', RiderRankPolicy.fromProfile(rider)),
+                        _InfoPill(
+                          'Approval',
+                          '${rider['approvalStatus'] ?? rider['driverStatus'] ?? 'pending'}',
+                        ),
+                        _InfoPill(
+                          'Verification',
+                          '${rider['verificationStatus'] ?? 'pending'}',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'Personal details',
+              rows: [
+                ('Phone', rider['phoneNumber'] ?? rider['phone']),
+                ('Vehicle', rider['vehicleType'] ?? rider['vehicle']),
+                ('Plate', rider['plateNumber'] ?? rider['vehicleRegistration']),
+                ('Joined', _date(rider['createdAt'])),
+                ('Last updated', _date(rider['updatedAt'])),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'Performance',
+              rows: [
+                ('Completed jobs', completed),
+                ('Active jobs', active < 0 ? 0 : active),
+                ('Known deliveries', riderDeliveries.length),
+                ('Estimated earnings', _money(earnings)),
+                ('Rating', rider['rating'] ?? rider['averageRating']),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'Documents',
+              rows: riderDocs.isEmpty
+                  ? const [('Documents', 'No documents found')]
+                  : [
+                      for (final doc in riderDocs.take(8))
+                        (
+                          '${doc['type'] ?? doc['documentType'] ?? 'Document'}',
+                          doc['status'] ??
+                              doc['verificationStatus'] ??
+                              'pending'
+                        ),
+                    ],
+            ),
+            const SizedBox(height: 14),
+            DecoratedBox(
+              decoration: _panelDecoration(),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Status actions',
+                      style:
+                          TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _MiniAction(
+                          label: 'Approve',
+                          onPressed: () => unawaited(onSetStatus('approved')),
+                        ),
+                        _MiniAction(
+                          label: 'Suspend',
+                          onPressed: () => unawaited(onSetStatus('suspended')),
+                        ),
+                        _MiniAction(
+                          label: 'Reject',
+                          onPressed: () => unawaited(onSetStatus('rejected')),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderAvatar extends StatelessWidget {
+  const _RiderAvatar({required this.rider});
+
+  final Map<String, dynamic> rider;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = '${rider['profilePhotoUrl'] ?? rider['photoUrl'] ?? ''}'.trim();
+    return CircleAvatar(
+      radius: 34,
+      backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: .18),
+      foregroundImage: url.isEmpty ? null : NetworkImage(url),
+      child: url.isEmpty
+          ? const Icon(Icons.person_rounded, size: 34, color: Color(0xFF7DD3FC))
+          : null,
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill(this.label, this.value);
+
+  final String label;
+  final Object? value;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: .10)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text('$label: ${value ?? 'Not recorded'}'),
+      ),
+    );
+  }
+}
+
+class _DrawerSection extends StatelessWidget {
+  const _DrawerSection({required this.title, required this.rows});
+
+  final String title;
+  final List<(String, Object?)> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            for (final row in rows)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 128,
+                      child: Text(
+                        row.$1,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .62),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '${row.$2 ?? 'Not recorded'}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ModuleButton extends StatelessWidget {
@@ -1454,6 +1791,30 @@ BoxDecoration _panelDecoration() {
 
 String _recordId(Map<String, dynamic> record) {
   return '${record['requestId'] ?? record['threadId'] ?? record['id'] ?? ''}';
+}
+
+String _riderId(Map<String, dynamic> rider) {
+  return '${rider['id'] ?? rider['uid'] ?? rider['riderId'] ?? rider['driverId'] ?? ''}'
+      .trim();
+}
+
+bool _deliveryBelongsToRider(Map<String, dynamic> delivery, String riderId) {
+  if (riderId.isEmpty) return false;
+  return [
+    delivery['riderId'],
+    delivery['driverId'],
+    delivery['assignedRiderId'],
+    delivery['assignedDriverId'],
+  ].map((value) => '$value').contains(riderId);
+}
+
+bool _documentBelongsToRider(Map<String, dynamic> document, String riderId) {
+  if (riderId.isEmpty) return false;
+  return [
+    document['riderId'],
+    document['driverId'],
+    document['uid'],
+  ].map((value) => '$value').contains(riderId);
 }
 
 String _money(Object? value) {
