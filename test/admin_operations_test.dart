@@ -367,6 +367,47 @@ void main() {
       );
     });
 
+    test('rider operation patches require reasons and avoid wallet changes',
+        () {
+      final patch = AdminRiderOperationsTools.statusPatch(
+        status: 'under_investigation',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 6, 1),
+        reason: 'Insurance discrepancy.',
+      );
+
+      expect(patch['adminOperationStatus'], 'under_investigation');
+      expect(patch['driverStatus'], 'under_investigation');
+      expect(patch['investigationStatus'], 'open');
+      expect(patch.containsKey('walletBalance'), isFalse);
+      expect(patch.containsKey('earnings'), isFalse);
+      expect(
+        () => AdminRiderOperationsTools.statusPatch(
+          status: 'suspended',
+          updatedBy: 'ops@circumuk.com',
+          updatedAt: DateTime(2026, 6, 1),
+          reason: '',
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('delivery operation patches preserve backend lifecycle authority', () {
+      final patch = AdminDeliveryOperationsTools.operationPatch(
+        status: 'waiting_review',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 6, 1),
+        reason: 'Rider waiting evidence submitted.',
+      );
+
+      expect(patch['adminOperationStatus'], 'waiting_review');
+      expect(patch['waitingReviewStatus'], 'open');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('deliveryStatus'), isFalse);
+      expect(patch.containsKey('finalAmount'), isFalse);
+      expect(patch.containsKey('paymentStatus'), isFalse);
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',

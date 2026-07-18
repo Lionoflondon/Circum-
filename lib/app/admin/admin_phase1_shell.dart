@@ -56,6 +56,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   AdminMetricSnapshot _metrics = AdminMetricSnapshot.empty();
   AdminDataBundle _data = AdminDataBundle.empty();
   Map<String, dynamic>? _selectedRider;
+  Map<String, dynamic>? _selectedDelivery;
   Map<String, dynamic>? _selectedAccount;
   String _selectedAccountType = 'sender';
   Map<String, dynamic>? _selectedChat;
@@ -265,18 +266,16 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(rider);
     if (id.isEmpty) return;
-    final driverStatus = switch (status) {
-      'approved' => 'active',
-      'rejected' => 'rejected',
-      'suspended' => 'suspended',
-      _ => status,
-    };
-    await _db.collection('riderProfiles').doc(id).set({
-      'approvalStatus': status,
-      'driverStatus': driverStatus,
-      'verificationStatus': status == 'approved' ? 'approved' : status,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    final patch = AdminRiderOperationsTools.statusPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+      reason: 'Updated from Circum Admin Rider Operations',
+    );
+    await _db
+        .collection('riderProfiles')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
     await _writeAudit(AdminAuditEntry(
       adminUserId: _user?.uid ?? 'unknown-admin',
       actionType: 'rider_status_$status',
@@ -286,10 +285,47 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         'approvalStatus': rider['approvalStatus'],
         'driverStatus': rider['driverStatus'],
       },
-      newValue: {'approvalStatus': status, 'driverStatus': driverStatus},
+      newValue: patch,
       reason: 'Rider status updated from Admin',
     ));
     setState(() => _message = 'Rider $id updated to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _setDeliveryOperationStatus(
+    Map<String, dynamic> delivery,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot manage deliveries.');
+      return;
+    }
+    final id = _idFor(delivery);
+    if (id.isEmpty) return;
+    final patch = AdminDeliveryOperationsTools.operationPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+      reason: 'Updated from Circum Admin Delivery Operations',
+    );
+    await _db
+        .collection('deliveryRequests')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'delivery_operation_$status',
+      recordType: 'deliveryRequests',
+      recordId: id,
+      oldValue: {
+        'status': delivery['status'],
+        'deliveryStatus': delivery['deliveryStatus'],
+        'adminOperationStatus': delivery['adminOperationStatus'],
+      },
+      newValue: patch,
+      reason: 'Delivery operation status updated from Admin',
+    ));
+    setState(() => _message = 'Delivery $id queued for $status.');
     await _loadAdminData();
   }
 
@@ -625,6 +661,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   void _openRiderProfile(Map<String, dynamic> rider) {
     setState(() {
       _selectedRider = rider;
+      _selectedDelivery = null;
       _selectedAccount = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -637,6 +674,18 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       _selectedAccount = account;
       _selectedAccountType = type;
       _selectedRider = null;
+      _selectedDelivery = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scaffoldKey.currentState?.openEndDrawer();
+    });
+  }
+
+  void _openDeliveryProfile(Map<String, dynamic> delivery) {
+    setState(() {
+      _selectedDelivery = delivery;
+      _selectedRider = null;
+      _selectedAccount = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scaffoldKey.currentState?.openEndDrawer();
@@ -726,16 +775,19 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       canDuplicateDeliveries:
                           _can(AdminPermission.duplicateDeliveries),
                       canManageRiders: _can(AdminPermission.approveDrivers),
+                      canEditDeliveries: _can(AdminPermission.editDeliveries),
                       canManageIssues: _can(AdminPermission.manageIssues),
                       canManageHealthPlus:
                           _can(AdminPermission.manageHealthPlus),
                       canManageFinance: _can(AdminPermission.manageFinance),
                       onDuplicateDelivery: _duplicateDelivery,
                       onSetRiderStatus: _setRiderStatus,
+                      onSetDeliveryOperationStatus: _setDeliveryOperationStatus,
                       onUpdateSupportTicket: _updateSupportTicket,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
                       onOpenRiderProfile: _openRiderProfile,
+                      onOpenDeliveryProfile: _openDeliveryProfile,
                       onOpenAccountProfile: _openAccountProfile,
                       onSetSenderAccountStatus: _setSenderAccountStatus,
                       onSetBusinessAccountStatus: _setBusinessAccountStatus,
@@ -765,29 +817,44 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         ),
       ),
       endDrawer: _selectedRider == null
-          ? _selectedAccount == null
-              ? null
-              : _AccountProfileDrawer(
-                  account: _selectedAccount!,
-                  accountType: _selectedAccountType,
-                  deliveries: _data.deliveries,
+          ? _selectedDelivery == null
+              ? _selectedAccount == null
+                  ? null
+                  : _AccountProfileDrawer(
+                      account: _selectedAccount!,
+                      accountType: _selectedAccountType,
+                      deliveries: _data.deliveries,
+                      payments: _data.payments,
+                      supportTickets: _data.supportTickets,
+                      giftOrders: _data.giftOrders,
+                      businessAccounts: _data.businessAccounts,
+                      users: _data.users,
+                      onClose: () => setState(() => _selectedAccount = null),
+                      onSetSenderStatus: (status) =>
+                          _setSenderAccountStatus(_selectedAccount!, status),
+                      onSetBusinessStatus: (status) =>
+                          _setBusinessAccountStatus(_selectedAccount!, status),
+                      onRequestDuplicateMerge: (duplicate) =>
+                          _requestDuplicateMerge(_selectedAccount!, duplicate),
+                    )
+              : _DeliveryOperationsDrawer(
+                  delivery: _selectedDelivery!,
+                  riders: _data.riders,
                   payments: _data.payments,
                   supportTickets: _data.supportTickets,
-                  giftOrders: _data.giftOrders,
-                  businessAccounts: _data.businessAccounts,
-                  users: _data.users,
-                  onClose: () => setState(() => _selectedAccount = null),
-                  onSetSenderStatus: (status) =>
-                      _setSenderAccountStatus(_selectedAccount!, status),
-                  onSetBusinessStatus: (status) =>
-                      _setBusinessAccountStatus(_selectedAccount!, status),
-                  onRequestDuplicateMerge: (duplicate) =>
-                      _requestDuplicateMerge(_selectedAccount!, duplicate),
+                  chats: _data.chats,
+                  auditLogs: _data.auditLogs,
+                  onClose: () => setState(() => _selectedDelivery = null),
+                  onSetStatus: (status) =>
+                      _setDeliveryOperationStatus(_selectedDelivery!, status),
                 )
           : _RiderProfileDrawer(
               rider: _selectedRider!,
               deliveries: _data.deliveries,
               documents: _data.riderDocuments,
+              ratings: _data.ratings,
+              supportTickets: _data.supportTickets,
+              auditLogs: _data.auditLogs,
               onClose: () => setState(() => _selectedRider = null),
               onSetStatus: (status) => _setRiderStatus(_selectedRider!, status),
             ),
@@ -1197,15 +1264,18 @@ class _AdminModuleBody extends StatelessWidget {
     required this.canManageAdmins,
     required this.canDuplicateDeliveries,
     required this.canManageRiders,
+    required this.canEditDeliveries,
     required this.canManageIssues,
     required this.canManageHealthPlus,
     required this.canManageFinance,
     required this.onDuplicateDelivery,
     required this.onSetRiderStatus,
+    required this.onSetDeliveryOperationStatus,
     required this.onUpdateSupportTicket,
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
     required this.onOpenRiderProfile,
+    required this.onOpenDeliveryProfile,
     required this.onOpenAccountProfile,
     required this.onSetSenderAccountStatus,
     required this.onSetBusinessAccountStatus,
@@ -1230,11 +1300,14 @@ class _AdminModuleBody extends StatelessWidget {
   final bool canManageAdmins;
   final bool canDuplicateDeliveries;
   final bool canManageRiders;
+  final bool canEditDeliveries;
   final bool canManageIssues;
   final bool canManageHealthPlus;
   final bool canManageFinance;
   final ValueChanged<Map<String, dynamic>> onDuplicateDelivery;
   final Future<void> Function(Map<String, dynamic>, String) onSetRiderStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetDeliveryOperationStatus;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -1242,6 +1315,7 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
+  final ValueChanged<Map<String, dynamic>> onOpenDeliveryProfile;
   final void Function(Map<String, dynamic>, String) onOpenAccountProfile;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetSenderAccountStatus;
@@ -1274,37 +1348,15 @@ class _AdminModuleBody extends StatelessWidget {
             _VisitorAnalyticsModule(records: data.websiteVisitors),
           AdminModule.discrepancyReview =>
             const AdminDeliveryAdjustmentReviewQueue(),
-          AdminModule.deliveries => _RecordModule(
-              title: 'Deliveries',
-              subtitle:
-                  'Live delivery requests, lifecycle state, route and value.',
-              records: data.deliveries,
+          AdminModule.deliveries => _DeliveryOperationsModule(
+              deliveries: data.deliveries,
+              riders: data.riders,
               query: query,
-              fields: const [
-                'id',
-                'requestId',
-                'status',
-                'senderName',
-                'pickupAddress',
-                'dropoffAddress'
-              ],
-              columns: const ['ID', 'Route', 'Status', 'Value'],
-              row: (record) => [
-                _recordId(record),
-                '${record['pickupAddress'] ?? 'Pickup'} -> ${record['dropoffAddress'] ?? 'Dropoff'}',
-                '${record['status'] ?? record['deliveryStatus'] ?? 'unknown'}',
-                _money(record['finalAmount'] ??
-                    record['quote'] ??
-                    record['price']),
-              ],
-              actions: canDuplicateDeliveries
-                  ? (record) => [
-                        _MiniAction(
-                          label: 'Duplicate',
-                          onPressed: () => onDuplicateDelivery(record),
-                        ),
-                      ]
-                  : null,
+              canDuplicateDeliveries: canDuplicateDeliveries,
+              canEditDeliveries: canEditDeliveries,
+              onOpenDelivery: onOpenDeliveryProfile,
+              onDuplicateDelivery: onDuplicateDelivery,
+              onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
             ),
           AdminModule.users => _RecordModule(
               title: 'Users',
@@ -1337,35 +1389,16 @@ class _AdminModuleBody extends StatelessWidget {
                 onRequestDuplicateMerge: onRequestDuplicateMerge,
               ),
             ),
-          AdminModule.riders => _RecordModule(
-              title: 'Riders',
-              subtitle:
-                  'Rider profiles, verification status, vehicle and rank.',
-              records: data.riders,
+          AdminModule.riders => _RiderOperationsModule(
+              riders: data.riders,
+              deliveries: data.deliveries,
+              documents: data.riderDocuments,
+              ratings: data.ratings,
+              payments: data.payments,
               query: query,
-              fields: const [
-                'id',
-                'fullName',
-                'name',
-                'email',
-                'vehicleType',
-                'driverStatus',
-                'approvalStatus'
-              ],
-              columns: const ['Rider', 'Vehicle', 'Status', 'Rank'],
-              row: (record) => [
-                '${record['fullName'] ?? record['name'] ?? record['id']}',
-                '${record['vehicleType'] ?? record['vehicle'] ?? 'Not recorded'}',
-                '${record['approvalStatus'] ?? record['driverStatus'] ?? record['status'] ?? 'pending'}',
-                RiderRankPolicy.fromProfile(record),
-              ],
-              actions: canManageRiders
-                  ? (record) => _riderActions(
-                        record,
-                        onSetRiderStatus,
-                        onOpenRiderProfile,
-                      )
-                  : null,
+              canManageRiders: canManageRiders,
+              onOpenRiderProfile: onOpenRiderProfile,
+              onSetRiderStatus: onSetRiderStatus,
             ),
           AdminModule.verification => _RecordModule(
               title: 'Verification',
@@ -1592,6 +1625,299 @@ class _AdminModuleBody extends StatelessWidget {
             ),
         },
       ],
+    );
+  }
+}
+
+class _RiderOperationsModule extends StatelessWidget {
+  const _RiderOperationsModule({
+    required this.riders,
+    required this.deliveries,
+    required this.documents,
+    required this.ratings,
+    required this.payments,
+    required this.query,
+    required this.canManageRiders,
+    required this.onOpenRiderProfile,
+    required this.onSetRiderStatus,
+  });
+
+  final List<Map<String, dynamic>> riders;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> documents;
+  final List<Map<String, dynamic>> ratings;
+  final List<Map<String, dynamic>> payments;
+  final String query;
+  final bool canManageRiders;
+  final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
+  final Future<void> Function(Map<String, dynamic>, String) onSetRiderStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final online = riders.where(_isOnlineRider).length;
+    final suspended = riders.where(_isSuspendedRider).length;
+    final pending = riders.where(_isPendingRiderRecord).length;
+    final busy = riders.where((rider) {
+      final id = _riderId(rider);
+      return deliveries.any((delivery) =>
+          _deliveryBelongsToRider(delivery, id) && _isActiveDelivery(delivery));
+    }).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Riders', riders.length.toString(), 'loaded profiles'),
+            _MetricCard('Online', online.toString(), 'available now'),
+            _MetricCard('Busy', busy.toString(), 'active delivery'),
+            _MetricCard('Offline', (riders.length - online).toString(),
+                'not currently online'),
+            _MetricCard('Suspended', suspended.toString(), 'restricted'),
+            _MetricCard('Pending', pending.toString(), 'verification review'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Rider Operations',
+          subtitle:
+              'Search riders by identity, contact, vehicle, registration, city, verification and trust.',
+          records: riders,
+          query: query,
+          fields: const [
+            'id',
+            'uid',
+            'riderId',
+            'driverId',
+            'fullName',
+            'name',
+            'email',
+            'phone',
+            'phoneNumber',
+            'vehicleType',
+            'vehicle',
+            'plateNumber',
+            'vehicleRegistration',
+            'city',
+            'status',
+            'driverStatus',
+            'approvalStatus',
+            'verificationStatus',
+            'trustTier',
+            'rank',
+            'riderRank'
+          ],
+          columns: const ['Rider', 'State', 'Vehicle', 'Monitoring'],
+          row: (record) => [
+            '${record['fullName'] ?? record['name'] ?? _riderId(record)}\n${record['email'] ?? record['phoneNumber'] ?? ''}',
+            '${record['approvalStatus'] ?? record['driverStatus'] ?? record['status'] ?? 'pending'} / ${record['verificationStatus'] ?? 'pending'}',
+            '${record['vehicleType'] ?? record['vehicle'] ?? 'Vehicle'} ${record['plateNumber'] ?? record['vehicleRegistration'] ?? ''}',
+            _riderMonitoringSummary(record, deliveries, payments),
+          ],
+          actions: canManageRiders
+              ? (record) => _riderActions(
+                    record,
+                    onSetRiderStatus,
+                    onOpenRiderProfile,
+                  )
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Rider document review',
+          subtitle:
+              'Insurance, MOT, V5C and identity document signals from loaded Rider records.',
+          records: documents,
+          query: query,
+          fields: const [
+            'id',
+            'riderId',
+            'driverId',
+            'uid',
+            'type',
+            'documentType',
+            'status',
+            'verificationStatus',
+            'vehicleRegistration'
+          ],
+          columns: const ['Document', 'Rider', 'Status', 'Updated'],
+          row: (record) => [
+            '${record['type'] ?? record['documentType'] ?? 'Document'}',
+            '${record['riderId'] ?? record['driverId'] ?? record['uid'] ?? 'unknown'}',
+            '${record['status'] ?? record['verificationStatus'] ?? 'pending'}',
+            _date(record['updatedAt'] ?? record['createdAt']),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DeliveryOperationsModule extends StatelessWidget {
+  const _DeliveryOperationsModule({
+    required this.deliveries,
+    required this.riders,
+    required this.query,
+    required this.canDuplicateDeliveries,
+    required this.canEditDeliveries,
+    required this.onOpenDelivery,
+    required this.onDuplicateDelivery,
+    required this.onSetDeliveryOperationStatus,
+  });
+
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> riders;
+  final String query;
+  final bool canDuplicateDeliveries;
+  final bool canEditDeliveries;
+  final ValueChanged<Map<String, dynamic>> onOpenDelivery;
+  final ValueChanged<Map<String, dynamic>> onDuplicateDelivery;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetDeliveryOperationStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final active = deliveries.where(_isActiveDelivery).length;
+    final waiting = deliveries.where(_isWaitingDelivery).length;
+    final noShow = deliveries.where(_isNoShowDelivery).length;
+    final completedToday = deliveries
+        .where((item) => _isCompletedDelivery(item) && _isSameDay(item, today))
+        .length;
+    final cancelledToday = deliveries
+        .where((item) => _isCancelledDelivery(item) && _isSameDay(item, today))
+        .length;
+    final delayed = deliveries.where(_isDelayedDelivery).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Active', active.toString(), 'live deliveries'),
+            _MetricCard('Waiting', waiting.toString(), 'pickup/dropoff'),
+            _MetricCard('No-show', noShow.toString(), 'review required'),
+            _MetricCard(
+                'Completed today', completedToday.toString(), 'successful'),
+            _MetricCard(
+                'Cancelled today', cancelledToday.toString(), 'cancelled'),
+            _MetricCard('Delayed', delayed.toString(), 'late or escalated'),
+            _MetricCard('Health+', _countFlag(deliveries, 'health').toString(),
+                'medical'),
+            _MetricCard('Business',
+                _countFlag(deliveries, 'business').toString(), 'business'),
+            _MetricCard('Gift', _countFlag(deliveries, 'gift').toString(),
+                'gift orders'),
+            _MetricCard(
+                'Vanguard',
+                deliveries.where(_hasVanguardProtection).length.toString(),
+                'protected'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _LiveDeliveryMapPanel(deliveries: deliveries, riders: riders),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Delivery Operations',
+          subtitle:
+              'Search by tracking id, sender, recipient, rider, business, phone, status, service, payment and review flags.',
+          records: deliveries,
+          query: query,
+          fields: const [
+            'id',
+            'requestId',
+            'trackingId',
+            'status',
+            'deliveryStatus',
+            'service',
+            'serviceType',
+            'senderName',
+            'senderEmail',
+            'recipientName',
+            'recipientPhone',
+            'riderId',
+            'assignedRiderId',
+            'businessName',
+            'businessId',
+            'paymentStatus',
+            'irisReviewStatus',
+            'waitingReviewStatus',
+            'noShowReviewStatus'
+          ],
+          columns: const ['ID', 'Route', 'Status', 'Flags'],
+          row: (record) => [
+            _recordId(record),
+            '${record['pickupAddress'] ?? record['pickup'] ?? 'Pickup'} -> ${record['dropoffAddress'] ?? record['dropoff'] ?? 'Dropoff'}',
+            '${record['status'] ?? record['deliveryStatus'] ?? 'unknown'} / ${record['paymentStatus'] ?? 'payment unknown'}',
+            _deliveryFlagSummary(record),
+          ],
+          actions: (record) => _deliveryActions(
+            record,
+            canDuplicateDeliveries: canDuplicateDeliveries,
+            canEditDeliveries: canEditDeliveries,
+            onOpen: onOpenDelivery,
+            onDuplicate: onDuplicateDelivery,
+            onSetStatus: onSetDeliveryOperationStatus,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LiveDeliveryMapPanel extends StatelessWidget {
+  const _LiveDeliveryMapPanel({required this.deliveries, required this.riders});
+
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> riders;
+
+  @override
+  Widget build(BuildContext context) {
+    final live = deliveries.where(_isActiveDelivery).take(8).toList();
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Live delivery map',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(
+              'Operational route view using loaded pickup, dropoff and rider location metadata.',
+              style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+            ),
+            const SizedBox(height: 16),
+            if (live.isEmpty)
+              Text('No active delivery locations loaded.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: .62)))
+            else
+              for (final delivery in live)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.route_rounded, color: Color(0xFF7DD3FC)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${_recordId(delivery)}: ${delivery['pickupAddress'] ?? 'Pickup'} -> ${delivery['dropoffAddress'] ?? 'Dropoff'}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      _StatusPill(
+                        label:
+                            '${delivery['status'] ?? delivery['deliveryStatus'] ?? 'active'}',
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2486,6 +2812,45 @@ List<Widget> _riderActions(
   ];
 }
 
+List<Widget> _deliveryActions(
+  Map<String, dynamic> record, {
+  required bool canDuplicateDeliveries,
+  required bool canEditDeliveries,
+  required ValueChanged<Map<String, dynamic>> onOpen,
+  required ValueChanged<Map<String, dynamic>> onDuplicate,
+  required Future<void> Function(Map<String, dynamic>, String) onSetStatus,
+}) {
+  return [
+    _MiniAction(
+      label: 'Details',
+      onPressed: () => onOpen(record),
+    ),
+    if (canDuplicateDeliveries)
+      _MiniAction(
+        label: 'Duplicate',
+        onPressed: () => onDuplicate(record),
+      ),
+    if (canEditDeliveries) ...[
+      _MiniAction(
+        label: 'Escalate',
+        onPressed: () => unawaited(onSetStatus(record, 'escalated')),
+      ),
+      _MiniAction(
+        label: 'Waiting',
+        onPressed: () => unawaited(onSetStatus(record, 'waiting_review')),
+      ),
+      _MiniAction(
+        label: 'No-show',
+        onPressed: () => unawaited(onSetStatus(record, 'no_show_review')),
+      ),
+      _MiniAction(
+        label: 'Fraud',
+        onPressed: () => unawaited(onSetStatus(record, 'fraud_flagged')),
+      ),
+    ],
+  ];
+}
+
 class _AccountProfileDrawer extends StatelessWidget {
   const _AccountProfileDrawer({
     required this.account,
@@ -2694,6 +3059,9 @@ class _RiderProfileDrawer extends StatelessWidget {
     required this.rider,
     required this.deliveries,
     required this.documents,
+    required this.ratings,
+    required this.supportTickets,
+    required this.auditLogs,
     required this.onClose,
     required this.onSetStatus,
   });
@@ -2701,6 +3069,9 @@ class _RiderProfileDrawer extends StatelessWidget {
   final Map<String, dynamic> rider;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> documents;
+  final List<Map<String, dynamic>> ratings;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> auditLogs;
   final VoidCallback onClose;
   final Future<void> Function(String) onSetStatus;
 
@@ -2712,6 +3083,17 @@ class _RiderProfileDrawer extends StatelessWidget {
         .toList(growable: false);
     final riderDocs = documents
         .where((document) => _documentBelongsToRider(document, riderId))
+        .toList(growable: false);
+    final riderRatings = ratings
+        .where((rating) => _recordReferencesRider(rating, riderId))
+        .toList(growable: false);
+    final riderTickets = supportTickets
+        .where((ticket) => _recordReferencesRider(ticket, riderId))
+        .toList(growable: false);
+    final riderAudit = auditLogs
+        .where((audit) =>
+            '${audit['recordId'] ?? ''}'.trim() == riderId ||
+            '${audit['recordType'] ?? ''}'.contains('rider'))
         .toList(growable: false);
     final completed = riderDeliveries
         .where((delivery) =>
@@ -2813,11 +3195,18 @@ class _RiderProfileDrawer extends StatelessWidget {
             _DrawerSection(
               title: 'Personal details',
               rows: [
+                ('Rider ID', riderId),
                 ('Phone', rider['phoneNumber'] ?? rider['phone']),
+                ('Address', _addressSummary(rider)),
+                ('City', rider['city']),
                 ('Vehicle', rider['vehicleType'] ?? rider['vehicle']),
                 ('Plate', rider['plateNumber'] ?? rider['vehicleRegistration']),
                 ('Joined', _date(rider['createdAt'])),
                 ('Last updated', _date(rider['updatedAt'])),
+                (
+                  'Stripe',
+                  rider['stripeStatus'] ?? rider['stripeAccountStatus']
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -2829,6 +3218,35 @@ class _RiderProfileDrawer extends StatelessWidget {
                 ('Known deliveries', riderDeliveries.length),
                 ('Estimated earnings', _money(earnings)),
                 ('Rating', rider['rating'] ?? rider['averageRating']),
+                ('Trust tier', rider['trustTier'] ?? rider['trustLevel']),
+                (
+                  'Trust progress',
+                  rider['trustProgress'] ?? rider['trustScore']
+                ),
+                (
+                  'Online duration',
+                  rider['onlineDuration'] ?? rider['onlineSince']
+                ),
+                ('Battery', rider['batteryLevel']),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'GPS health',
+              rows: [
+                (
+                  'Current state',
+                  rider['currentState'] ?? rider['availability']
+                ),
+                ('Current delivery', rider['currentDeliveryId']),
+                ('Last location', _locationSummary(rider)),
+                ('GPS freshness', _date(rider['lastLocationAt'])),
+                ('Jobs today', _jobsSince(riderDeliveries, DateTime.now())),
+                (
+                  'Earnings today',
+                  _money(_earningsSince(riderDeliveries, DateTime.now()))
+                ),
+                ('Weekly earnings', _money(_earningsThisWeek(riderDeliveries))),
               ],
             ),
             const SizedBox(height: 14),
@@ -2845,6 +3263,53 @@ class _RiderProfileDrawer extends StatelessWidget {
                               'pending'
                         ),
                     ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'Insurance, MOT and V5C',
+              rows: [
+                ('Insurance', _documentStatus(riderDocs, 'insurance')),
+                ('MOT', _documentStatus(riderDocs, 'mot')),
+                ('V5C', _documentStatus(riderDocs, 'v5c')),
+                ('Vehicle review', rider['vehicleVerificationStatus']),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'Recent operations',
+              rows: [
+                for (final delivery in riderDeliveries.take(4))
+                  (
+                    _recordId(delivery),
+                    '${delivery['status'] ?? delivery['deliveryStatus'] ?? 'unknown'}'
+                  ),
+                for (final rating in riderRatings.take(3))
+                  (
+                    'Rating',
+                    '${rating['starRating'] ?? rating['rating'] ?? 'unknown'} ${rating['feedback'] ?? ''}'
+                  ),
+                for (final ticket in riderTickets.take(3))
+                  (
+                    _recordId(ticket),
+                    '${ticket['status'] ?? 'open'} ${ticket['type'] ?? 'support'}'
+                  ),
+                if (riderDeliveries.isEmpty &&
+                    riderRatings.isEmpty &&
+                    riderTickets.isEmpty)
+                  ('None', 'No recent rider operations loaded'),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'Audit history',
+              rows: [
+                for (final audit in riderAudit.take(6))
+                  (
+                    '${audit['actionType'] ?? 'action'}',
+                    _date(audit['createdAt'])
+                  ),
+                if (riderAudit.isEmpty) ('None', 'No audit records loaded'),
+              ],
             ),
             const SizedBox(height: 14),
             DecoratedBox(
@@ -2876,6 +3341,262 @@ class _RiderProfileDrawer extends StatelessWidget {
                           label: 'Reject',
                           onPressed: () => unawaited(onSetStatus('rejected')),
                         ),
+                        _MiniAction(
+                          label: 'Request docs',
+                          onPressed: () =>
+                              unawaited(onSetStatus('documents_requested')),
+                        ),
+                        _MiniAction(
+                          label: 'Approve docs',
+                          onPressed: () =>
+                              unawaited(onSetStatus('documents_approved')),
+                        ),
+                        _MiniAction(
+                          label: 'Reject docs',
+                          onPressed: () =>
+                              unawaited(onSetStatus('documents_rejected')),
+                        ),
+                        _MiniAction(
+                          label: 'Investigate',
+                          onPressed: () =>
+                              unawaited(onSetStatus('under_investigation')),
+                        ),
+                        _MiniAction(
+                          label: 'Clear investigation',
+                          onPressed: () =>
+                              unawaited(onSetStatus('investigation_cleared')),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryOperationsDrawer extends StatelessWidget {
+  const _DeliveryOperationsDrawer({
+    required this.delivery,
+    required this.riders,
+    required this.payments,
+    required this.supportTickets,
+    required this.chats,
+    required this.auditLogs,
+    required this.onClose,
+    required this.onSetStatus,
+  });
+
+  final Map<String, dynamic> delivery;
+  final List<Map<String, dynamic>> riders;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> chats;
+  final List<Map<String, dynamic>> auditLogs;
+  final VoidCallback onClose;
+  final Future<void> Function(String) onSetStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final deliveryId = _recordId(delivery);
+    final rider = _assignedRiderForDelivery(delivery, riders);
+    final relatedPayments = payments
+        .where((item) => _recordReferencesDelivery(item, deliveryId))
+        .toList();
+    final relatedTickets = supportTickets
+        .where((item) => _recordReferencesDelivery(item, deliveryId))
+        .toList();
+    final relatedChats = chats
+        .where((item) => _recordReferencesDelivery(item, deliveryId))
+        .toList();
+    final relatedAudit = auditLogs
+        .where((item) => '${item['recordId'] ?? ''}'.trim() == deliveryId)
+        .toList();
+    return Drawer(
+      width: 500,
+      backgroundColor: const Color(0xFF07090F),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Delivery $deliveryId',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              '${delivery['status'] ?? delivery['deliveryStatus'] ?? 'unknown'}',
+              style: TextStyle(color: Colors.white.withValues(alpha: .62)),
+            ),
+            const SizedBox(height: 18),
+            _DrawerSection(
+              title: 'Timeline',
+              rows: [
+                ('Created', _date(delivery['createdAt'])),
+                ('Accepted', _date(delivery['acceptedAt'])),
+                ('Collected', _date(delivery['collectedAt'])),
+                ('Completed', _date(delivery['completedAt'])),
+                ('Admin status', delivery['adminOperationStatus']),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Sender and recipient',
+              rows: [
+                ('Sender', delivery['senderName'] ?? delivery['senderEmail']),
+                ('Sender ID', delivery['senderId'] ?? delivery['userId']),
+                ('Recipient', delivery['recipientName']),
+                ('Recipient phone', delivery['recipientPhone']),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Rider and vehicle',
+              rows: [
+                (
+                  'Rider',
+                  rider?['fullName'] ??
+                      delivery['riderId'] ??
+                      delivery['assignedRiderId']
+                ),
+                ('Vehicle', rider?['vehicleType'] ?? delivery['vehicleType']),
+                (
+                  'Registration',
+                  rider?['plateNumber'] ?? rider?['vehicleRegistration']
+                ),
+                (
+                  'Rider state',
+                  rider?['driverStatus'] ?? rider?['availability']
+                ),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Route and live map',
+              rows: [
+                ('Pickup', delivery['pickupAddress'] ?? delivery['pickup']),
+                ('Dropoff', delivery['dropoffAddress'] ?? delivery['dropoff']),
+                ('Stops', delivery['stops'] ?? delivery['stopCount']),
+                ('ETA', delivery['eta'] ?? delivery['estimatedArrival']),
+                ('Last location', _locationSummary(delivery)),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Pricing, wallet and Stripe',
+              rows: [
+                (
+                  'Final amount',
+                  _money(delivery['finalAmount'] ?? delivery['price'])
+                ),
+                (
+                  'Quote',
+                  _money(delivery['quote'] ?? delivery['estimatedPrice'])
+                ),
+                ('Payment', delivery['paymentStatus'] ?? delivery['paidState']),
+                (
+                  'Stripe',
+                  delivery['stripePaymentIntentId'] ?? delivery['paymentIntent']
+                ),
+                ('Wallet records', relatedPayments.length),
+              ],
+            ),
+            _DrawerSection(
+              title: 'IRIS and Vanguard',
+              rows: [
+                ('IRIS estimate', delivery['iris'] ?? delivery['irisEstimate']),
+                (
+                  'Verified weight',
+                  delivery['verifiedWeight'] ?? delivery['riderVerifiedWeight']
+                ),
+                (
+                  'Confidence',
+                  delivery['confidence'] ?? delivery['irisConfidence']
+                ),
+                (
+                  'IRIS review',
+                  delivery['irisReviewStatus'] ?? delivery['reviewType']
+                ),
+                ('Vanguard enabled', _hasVanguardProtection(delivery)),
+                (
+                  'PIN state',
+                  delivery['pinVerificationStatus'] ??
+                      delivery['vanguardStatus']
+                ),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Evidence, messages and support',
+              rows: [
+                (
+                  'Evidence',
+                  _historyCount(
+                      delivery, const ['evidence', 'photos', 'images'])
+                ),
+                (
+                  'PIN history',
+                  _historyCount(
+                      delivery, const ['pinHistory', 'verificationAttempts'])
+                ),
+                ('Messages', relatedChats.length),
+                ('Support cases', relatedTickets.length),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Audit history',
+              rows: [
+                for (final audit in relatedAudit.take(6))
+                  (
+                    '${audit['actionType'] ?? 'action'}',
+                    _date(audit['createdAt'])
+                  ),
+                if (relatedAudit.isEmpty) ('None', 'No audit records loaded'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            DecoratedBox(
+              decoration: _panelDecoration(),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Delivery actions',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final action in const [
+                          ('Pause', 'paused'),
+                          ('Resume', 'resumed'),
+                          ('Escalate', 'escalated'),
+                          ('Cancel review', 'cancel_review'),
+                          ('Force complete review', 'force_complete_review'),
+                          ('Archive review', 'archive_review'),
+                          ('Waiting review', 'waiting_review'),
+                          ('No-show review', 'no_show_review'),
+                          ('IRIS override review', 'iris_review_override'),
+                          ('Flag fraud', 'fraud_flagged'),
+                        ])
+                          _MiniAction(
+                            label: action.$1,
+                            onPressed: () => unawaited(onSetStatus(action.$2)),
+                          ),
                       ],
                     ),
                   ],
@@ -3065,6 +3786,38 @@ bool _documentBelongsToRider(Map<String, dynamic> document, String riderId) {
   ].map((value) => '$value').contains(riderId);
 }
 
+Map<String, dynamic>? _assignedRiderForDelivery(
+  Map<String, dynamic> delivery,
+  List<Map<String, dynamic>> riders,
+) {
+  for (final rider in riders) {
+    if (_deliveryBelongsToRider(delivery, _riderId(rider))) return rider;
+  }
+  return null;
+}
+
+bool _recordReferencesRider(Map<String, dynamic> record, String riderId) {
+  if (riderId.isEmpty) return false;
+  return [
+    record['riderId'],
+    record['driverId'],
+    record['assignedRiderId'],
+    record['assignedDriverId'],
+    record['uid'],
+  ].map((value) => '$value'.trim()).contains(riderId);
+}
+
+bool _recordReferencesDelivery(Map<String, dynamic> record, String deliveryId) {
+  if (deliveryId.isEmpty) return false;
+  return [
+    record['deliveryId'],
+    record['requestId'],
+    record['trackingId'],
+    record['bookingId'],
+    record['id'],
+  ].map((value) => '$value'.trim()).contains(deliveryId);
+}
+
 bool _recordReferencesAccount(
   Map<String, dynamic> record,
   String accountId,
@@ -3085,6 +3838,214 @@ bool _recordReferencesAccount(
   ].map((value) => '$value'.trim().toLowerCase());
   return values.contains(accountId.toLowerCase()) ||
       (email.isNotEmpty && values.contains(email));
+}
+
+bool _isOnlineRider(Map<String, dynamic> rider) {
+  final state =
+      '${rider['availability'] ?? rider['onlineStatus'] ?? rider['status'] ?? rider['driverStatus'] ?? ''}'
+          .toLowerCase();
+  return state.contains('online') || state.contains('available');
+}
+
+bool _isSuspendedRider(Map<String, dynamic> rider) {
+  final state =
+      '${rider['approvalStatus'] ?? rider['driverStatus'] ?? rider['status'] ?? ''}'
+          .toLowerCase();
+  return state.contains('suspend');
+}
+
+bool _isPendingRiderRecord(Map<String, dynamic> rider) {
+  final state =
+      '${rider['verificationStatus'] ?? rider['approvalStatus'] ?? rider['driverStatus'] ?? ''}'
+          .toLowerCase();
+  return state.contains('pending') || state.contains('review');
+}
+
+bool _isActiveDelivery(Map<String, dynamic> delivery) {
+  final state =
+      '${delivery['status'] ?? delivery['deliveryStatus'] ?? delivery['deliveryStage'] ?? ''}'
+          .toLowerCase();
+  return state.isNotEmpty &&
+      !state.contains('complete') &&
+      !state.contains('deliver') &&
+      !state.contains('cancel') &&
+      !state.contains('archive') &&
+      !state.contains('failed');
+}
+
+bool _isCompletedDelivery(Map<String, dynamic> delivery) {
+  final state =
+      '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'.toLowerCase();
+  return state.contains('complete') || state.contains('delivered');
+}
+
+bool _isCancelledDelivery(Map<String, dynamic> delivery) {
+  final state =
+      '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'.toLowerCase();
+  return state.contains('cancel');
+}
+
+bool _isWaitingDelivery(Map<String, dynamic> delivery) {
+  final state =
+      '${delivery['status'] ?? delivery['deliveryStatus'] ?? delivery['waitingReviewStatus'] ?? ''}'
+          .toLowerCase();
+  return state.contains('waiting') || state.contains('wait');
+}
+
+bool _isNoShowDelivery(Map<String, dynamic> delivery) {
+  final state =
+      '${delivery['status'] ?? delivery['deliveryStatus'] ?? delivery['noShowReviewStatus'] ?? ''}'
+          .toLowerCase();
+  return state.contains('no_show') || state.contains('no-show');
+}
+
+bool _isDelayedDelivery(Map<String, dynamic> delivery) {
+  final state =
+      '${delivery['status'] ?? delivery['deliveryStatus'] ?? delivery['escalationStatus'] ?? ''}'
+          .toLowerCase();
+  return state.contains('delay') ||
+      state.contains('late') ||
+      state.contains('escalat');
+}
+
+bool _hasVanguardProtection(Map<String, dynamic> delivery) {
+  final value = delivery['vanguardProtection'] ?? delivery['vanguard'];
+  if (value is bool) return value;
+  if (value is Map) {
+    return value['enabled'] == true ||
+        '${value['status'] ?? ''}'.toLowerCase().contains('enabled');
+  }
+  return '$value'.toLowerCase().contains('true') ||
+      '$value'.toLowerCase().contains('enabled');
+}
+
+bool _isSameDay(Map<String, dynamic> record, DateTime day) {
+  DateTime? date;
+  final value = record['completedAt'] ??
+      record['cancelledAt'] ??
+      record['updatedAt'] ??
+      record['createdAt'];
+  if (value is Timestamp) date = value.toDate();
+  if (value is DateTime) date = value;
+  if (value is String) date = DateTime.tryParse(value);
+  if (value is int) date = DateTime.fromMillisecondsSinceEpoch(value);
+  return date != null &&
+      date.year == day.year &&
+      date.month == day.month &&
+      date.day == day.day;
+}
+
+int _countFlag(List<Map<String, dynamic>> records, String flag) {
+  return records.where((record) {
+    final text = record.values.join(' ').toLowerCase();
+    return text.contains(flag);
+  }).length;
+}
+
+String _deliveryFlagSummary(Map<String, dynamic> delivery) {
+  final flags = <String>[];
+  if (_hasVanguardProtection(delivery)) flags.add('Vanguard');
+  if (_isWaitingDelivery(delivery)) flags.add('Waiting');
+  if (_isNoShowDelivery(delivery)) flags.add('No-show');
+  if ('${delivery['irisReviewStatus'] ?? delivery['reviewType'] ?? ''}'
+      .toLowerCase()
+      .contains('iris')) {
+    flags.add('IRIS');
+  }
+  if ('${delivery['paymentStatus'] ?? ''}'.toLowerCase().contains('paid')) {
+    flags.add('Paid');
+  }
+  return flags.isEmpty ? 'No flags' : flags.join(', ');
+}
+
+String _riderMonitoringSummary(
+  Map<String, dynamic> rider,
+  List<Map<String, dynamic>> deliveries,
+  List<Map<String, dynamic>> payments,
+) {
+  final riderId = _riderId(rider);
+  final riderDeliveries =
+      deliveries.where((item) => _deliveryBelongsToRider(item, riderId));
+  final active = riderDeliveries.where(_isActiveDelivery).length;
+  final jobsToday = _jobsSince(riderDeliveries, DateTime.now());
+  final earningsToday = _earningsSince(riderDeliveries, DateTime.now());
+  return '$active active / $jobsToday today / ${_money(earningsToday)} today';
+}
+
+String _addressSummary(Map<String, dynamic> record) {
+  final address = record['address'];
+  if (address is Map) {
+    return [
+      address['line1'],
+      address['city'],
+      address['postcode'],
+    ].where((part) => '$part'.trim().isNotEmpty).join(', ');
+  }
+  return '${record['address'] ?? record['homeAddress'] ?? 'Not recorded'}';
+}
+
+String _locationSummary(Map<String, dynamic> record) {
+  final location = record['lastLocation'] ?? record['location'];
+  if (location is GeoPoint) {
+    return '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}';
+  }
+  if (location is Map) {
+    final lat = location['latitude'] ?? location['lat'];
+    final lng = location['longitude'] ?? location['lng'];
+    if (lat != null && lng != null) return '$lat, $lng';
+  }
+  final lat = record['latitude'] ?? record['lat'];
+  final lng = record['longitude'] ?? record['lng'];
+  if (lat != null && lng != null) return '$lat, $lng';
+  return 'Not recorded';
+}
+
+String _documentStatus(List<Map<String, dynamic>> docs, String type) {
+  for (final doc in docs) {
+    final docType = '${doc['type'] ?? doc['documentType'] ?? ''}'.toLowerCase();
+    if (docType.contains(type)) {
+      return '${doc['status'] ?? doc['verificationStatus'] ?? 'pending'}';
+    }
+  }
+  return 'Not loaded';
+}
+
+int _jobsSince(Iterable<Map<String, dynamic>> deliveries, DateTime day) {
+  return deliveries.where((item) => _isSameDay(item, day)).length;
+}
+
+double _earningsSince(Iterable<Map<String, dynamic>> deliveries, DateTime day) {
+  return deliveries.where((item) => _isSameDay(item, day)).fold<double>(
+        0,
+        (total, delivery) =>
+            total +
+            (double.tryParse(
+                  '${delivery['riderPayout'] ?? delivery['driverPayout'] ?? delivery['estimatedDriverPayout'] ?? 0}',
+                ) ??
+                0),
+      );
+}
+
+double _earningsThisWeek(Iterable<Map<String, dynamic>> deliveries) {
+  final now = DateTime.now();
+  final weekStart = now.subtract(Duration(days: now.weekday - 1));
+  return deliveries.where((item) {
+    DateTime? date;
+    final value = item['completedAt'] ?? item['updatedAt'] ?? item['createdAt'];
+    if (value is Timestamp) date = value.toDate();
+    if (value is DateTime) date = value;
+    if (value is String) date = DateTime.tryParse(value);
+    if (value is int) date = DateTime.fromMillisecondsSinceEpoch(value);
+    return date != null && !date.isBefore(weekStart);
+  }).fold<double>(
+    0,
+    (total, delivery) =>
+        total +
+        (double.tryParse(
+              '${delivery['riderPayout'] ?? delivery['driverPayout'] ?? delivery['estimatedDriverPayout'] ?? 0}',
+            ) ??
+            0),
+  );
 }
 
 String _historyCount(Map<String, dynamic> account, List<String> fields) {

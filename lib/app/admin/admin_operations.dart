@@ -199,6 +199,99 @@ class AdminAccountTools {
   }
 }
 
+class AdminRiderOperationsTools {
+  static const riderStatuses = [
+    'approved',
+    'rejected',
+    'suspended',
+    'reactivated',
+    'documents_requested',
+    'documents_approved',
+    'documents_rejected',
+    'under_investigation',
+    'investigation_cleared',
+  ];
+
+  static Map<String, dynamic> statusPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    required String reason,
+  }) {
+    if (!riderStatuses.contains(status)) {
+      throw ArgumentError('Unsupported rider operation status.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A rider operation reason is required.');
+    }
+    final driverStatus = switch (status) {
+      'approved' || 'reactivated' || 'investigation_cleared' => 'active',
+      'rejected' => 'rejected',
+      'suspended' => 'suspended',
+      'under_investigation' => 'under_investigation',
+      _ => null,
+    };
+    return {
+      'adminOperationStatus': status,
+      'adminOperationReason': reason.trim(),
+      'adminOperationUpdatedBy': updatedBy,
+      'adminOperationUpdatedAt': updatedAt,
+      if (driverStatus != null) 'driverStatus': driverStatus,
+      if (status == 'approved' || status == 'reactivated')
+        'approvalStatus': 'approved',
+      if (status == 'rejected') 'approvalStatus': 'rejected',
+      if (status == 'documents_requested') 'documentReviewStatus': 'requested',
+      if (status == 'documents_approved') 'documentReviewStatus': 'approved',
+      if (status == 'documents_rejected') 'documentReviewStatus': 'rejected',
+      if (status == 'under_investigation') 'investigationStatus': 'open',
+      if (status == 'investigation_cleared') 'investigationStatus': 'cleared',
+      'updatedAt': updatedAt,
+    };
+  }
+}
+
+class AdminDeliveryOperationsTools {
+  static const operationStatuses = [
+    'paused',
+    'resumed',
+    'escalated',
+    'cancel_review',
+    'force_complete_review',
+    'archive_review',
+    'waiting_review',
+    'no_show_review',
+    'iris_review_override',
+    'fraud_flagged',
+  ];
+
+  static Map<String, dynamic> operationPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    required String reason,
+  }) {
+    if (!operationStatuses.contains(status)) {
+      throw ArgumentError('Unsupported delivery operation status.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A delivery operation reason is required.');
+    }
+    return {
+      'adminOperationStatus': status,
+      'adminOperationReason': reason.trim(),
+      'adminOperationUpdatedBy': updatedBy,
+      'adminOperationUpdatedAt': updatedAt,
+      if (status == 'paused') 'adminPaused': true,
+      if (status == 'resumed') 'adminPaused': false,
+      if (status == 'escalated') 'escalationStatus': 'open',
+      if (status == 'waiting_review') 'waitingReviewStatus': 'open',
+      if (status == 'no_show_review') 'noShowReviewStatus': 'open',
+      if (status == 'iris_review_override') 'irisReviewStatus': 'admin_review',
+      if (status == 'fraud_flagged') 'fraudReviewStatus': 'flagged',
+    };
+  }
+}
+
 class RiderRankPolicy {
   static const ranks = ['agent', 'sentinel', 'warden', 'knight', 'veteran'];
 
