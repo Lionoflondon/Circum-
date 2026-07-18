@@ -40,6 +40,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _search = TextEditingController();
+  final _adminInviteEmail = TextEditingController();
+  final _adminInviteNote = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
@@ -50,6 +52,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   AdminMetricSnapshot _metrics = AdminMetricSnapshot.empty();
   AdminDataBundle _data = AdminDataBundle.empty();
   Map<String, dynamic>? _selectedRider;
+  AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   bool _loading = true;
   bool _signingIn = false;
   bool _loadingData = false;
@@ -70,6 +73,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     _email.dispose();
     _password.dispose();
     _search.dispose();
+    _adminInviteEmail.dispose();
+    _adminInviteNote.dispose();
     super.dispose();
   }
 
@@ -353,6 +358,85 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _saveAdminUser({
+    Map<String, dynamic>? existing,
+    String? email,
+    AdminRole? role,
+    String status = 'active',
+  }) async {
+    if (!_can(AdminPermission.manageAdmins)) {
+      setState(() => _message = 'Your role cannot manage Admin users.');
+      return;
+    }
+    final normalizedEmail =
+        AdminUserAccess.emailDocumentId(email ?? '${existing?['email'] ?? ''}');
+    if (normalizedEmail.isEmpty || !normalizedEmail.contains('@')) {
+      setState(() => _message = 'Enter a valid Admin email address.');
+      return;
+    }
+    final selectedRole = role ??
+        AdminRole.fromString('${existing?['role'] ?? ''}') ??
+        AdminRole.operationsAdmin;
+    final documentId = '${existing?['id'] ?? normalizedEmail}'.trim();
+    final createdAt = existing == null ? FieldValue.serverTimestamp() : null;
+    final patch = AdminUserAccess.adminUserPatch(
+      email: normalizedEmail,
+      role: selectedRole.value,
+      status: status,
+      invitedBy: _user?.email ?? _user?.uid ?? 'admin',
+      createdAt: createdAt,
+      updatedAt: FieldValue.serverTimestamp(),
+      lastLoginAt: existing?['lastLoginAt'],
+    );
+    final note = _adminInviteNote.text.trim();
+    await _db.collection('adminUsers').doc(documentId).set({
+      ...patch,
+      if (note.isNotEmpty) 'adminNote': note,
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: existing == null ? 'admin_user_invite' : 'admin_user_edit',
+      recordType: 'adminUsers',
+      recordId: documentId,
+      oldValue: existing == null
+          ? const {}
+          : {
+              'email': existing['email'],
+              'role': existing['role'],
+              'status': existing['status'],
+            },
+      newValue: {
+        'email': normalizedEmail,
+        'role': selectedRole.value,
+        'status': status,
+      },
+      reason: existing == null
+          ? 'Admin access invitation created'
+          : 'Admin access record updated',
+    ));
+    if (existing == null) {
+      _adminInviteEmail.clear();
+      _adminInviteNote.clear();
+      setState(() => _adminInviteRole = AdminRole.operationsAdmin);
+    }
+    setState(() => _message = 'Admin access saved for $normalizedEmail.');
+    await _loadAdminData();
+  }
+
+  Future<void> _setAdminUserStatus(
+    Map<String, dynamic> adminUser,
+    String status,
+  ) async {
+    await _saveAdminUser(existing: adminUser, status: status);
+  }
+
+  Future<void> _setAdminUserRole(
+    Map<String, dynamic> adminUser,
+    AdminRole role,
+  ) async {
+    await _saveAdminUser(existing: adminUser, role: role);
+  }
+
   void _openRiderProfile(Map<String, dynamic> rider) {
     setState(() => _selectedRider = rider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -440,6 +524,17 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateSupportTicket: _updateSupportTicket,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onOpenRiderProfile: _openRiderProfile,
+                      adminInviteEmail: _adminInviteEmail,
+                      adminInviteNote: _adminInviteNote,
+                      adminInviteRole: _adminInviteRole,
+                      onAdminInviteRoleChanged: (role) =>
+                          setState(() => _adminInviteRole = role),
+                      onCreateAdminUser: () => _saveAdminUser(
+                        email: _adminInviteEmail.text,
+                        role: _adminInviteRole,
+                      ),
+                      onSetAdminUserStatus: _setAdminUserStatus,
+                      onSetAdminUserRole: _setAdminUserRole,
                     ),
                   ),
                 ],
@@ -862,6 +957,13 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateSupportTicket,
     required this.onUpdateHealthPlusPickup,
     required this.onOpenRiderProfile,
+    required this.adminInviteEmail,
+    required this.adminInviteNote,
+    required this.adminInviteRole,
+    required this.onAdminInviteRoleChanged,
+    required this.onCreateAdminUser,
+    required this.onSetAdminUserStatus,
+    required this.onSetAdminUserRole,
   });
 
   final AdminModule module;
@@ -880,6 +982,15 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusPickup;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
+  final TextEditingController adminInviteEmail;
+  final TextEditingController adminInviteNote;
+  final AdminRole adminInviteRole;
+  final ValueChanged<AdminRole> onAdminInviteRoleChanged;
+  final VoidCallback onCreateAdminUser;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetAdminUserStatus;
+  final Future<void> Function(Map<String, dynamic>, AdminRole)
+      onSetAdminUserRole;
 
   @override
   Widget build(BuildContext context) {
@@ -1146,6 +1257,13 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.settings => _SettingsModule(
               canManageAdmins: canManageAdmins,
               adminUsers: data.adminUsers,
+              inviteEmail: adminInviteEmail,
+              inviteNote: adminInviteNote,
+              inviteRole: adminInviteRole,
+              onInviteRoleChanged: onAdminInviteRoleChanged,
+              onCreateAdminUser: onCreateAdminUser,
+              onSetAdminUserStatus: onSetAdminUserStatus,
+              onSetAdminUserRole: onSetAdminUserRole,
             ),
         },
       ],
@@ -1209,27 +1327,133 @@ class _SettingsModule extends StatelessWidget {
   const _SettingsModule({
     required this.canManageAdmins,
     required this.adminUsers,
+    required this.inviteEmail,
+    required this.inviteNote,
+    required this.inviteRole,
+    required this.onInviteRoleChanged,
+    required this.onCreateAdminUser,
+    required this.onSetAdminUserStatus,
+    required this.onSetAdminUserRole,
   });
 
   final bool canManageAdmins;
   final List<Map<String, dynamic>> adminUsers;
+  final TextEditingController inviteEmail;
+  final TextEditingController inviteNote;
+  final AdminRole inviteRole;
+  final ValueChanged<AdminRole> onInviteRoleChanged;
+  final VoidCallback onCreateAdminUser;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetAdminUserStatus;
+  final Future<void> Function(Map<String, dynamic>, AdminRole)
+      onSetAdminUserRole;
 
   @override
   Widget build(BuildContext context) {
-    return _RecordModule(
-      title: 'Settings',
-      subtitle: canManageAdmins
-          ? 'Admin users and role access records.'
-          : 'Your role can view Admin settings but cannot manage access.',
-      records: adminUsers,
-      query: '',
-      fields: const ['email', 'role', 'status'],
-      columns: const ['Admin', 'Role', 'Status', 'Last login'],
-      row: (record) => [
-        '${record['email'] ?? record['id']}',
-        '${record['role'] ?? record['roles'] ?? 'Not recorded'}',
-        '${record['status'] ?? 'inactive'}',
-        _date(record['lastLoginAt']),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (canManageAdmins) ...[
+          DecoratedBox(
+            decoration: _panelDecoration(),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Invite Admin user',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Create role-based access records. Passwords and employee credentials stay in Firebase Auth.',
+                    style:
+                        TextStyle(color: Colors.white.withValues(alpha: .66)),
+                  ),
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 300,
+                        child: TextField(
+                          controller: inviteEmail,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'Admin email',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 230,
+                        child: DropdownButtonFormField<AdminRole>(
+                          initialValue: inviteRole,
+                          decoration: const InputDecoration(
+                            labelText: 'Role',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final role in AdminRole.values)
+                              DropdownMenuItem(
+                                value: role,
+                                child: Text(_adminRoleLabel(role.value)),
+                              ),
+                          ],
+                          onChanged: (role) {
+                            if (role != null) onInviteRoleChanged(role);
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 320,
+                        child: TextField(
+                          controller: inviteNote,
+                          decoration: const InputDecoration(
+                            labelText: 'Internal note',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: onCreateAdminUser,
+                        icon: const Icon(Icons.person_add_alt_1_rounded),
+                        label: const Text('Create access'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+        _RecordModule(
+          title: 'Settings',
+          subtitle: canManageAdmins
+              ? 'Admin users and role access records.'
+              : 'Your role can view Admin settings but cannot manage access.',
+          records: adminUsers,
+          query: '',
+          fields: const ['email', 'role', 'status'],
+          columns: const ['Admin', 'Role', 'Status', 'Last login'],
+          row: (record) => [
+            '${record['email'] ?? record['id']}',
+            _adminRoleLabel('${record['role'] ?? ''}'),
+            '${record['status'] ?? 'inactive'}',
+            _date(record['lastLoginAt']),
+          ],
+          actions: canManageAdmins
+              ? (record) => _adminUserActions(
+                    record,
+                    onSetAdminUserStatus,
+                    onSetAdminUserRole,
+                  )
+              : null,
+        ),
       ],
     );
   }
@@ -1377,6 +1601,63 @@ class _MiniAction extends StatelessWidget {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+String _adminRoleLabel(String value) {
+  return switch (value) {
+    'super_admin' => 'Super Admin',
+    'operations_admin' => 'Operations Admin',
+    'support_agent' => 'Support Agent',
+    'finance_admin' => 'Finance Admin',
+    'driver_manager' => 'Driver Manager',
+    _ => 'Not recorded',
+  };
+}
+
+List<Widget> _adminUserActions(
+  Map<String, dynamic> record,
+  Future<void> Function(Map<String, dynamic>, String) onSetStatus,
+  Future<void> Function(Map<String, dynamic>, AdminRole) onSetRole,
+) {
+  final active = '${record['status'] ?? ''}'.toLowerCase() == 'active';
+  return [
+    PopupMenuButton<AdminRole>(
+      tooltip: 'Change role',
+      onSelected: (role) => unawaited(onSetRole(record, role)),
+      itemBuilder: (_) => [
+        for (final role in AdminRole.values)
+          PopupMenuItem(
+            value: role,
+            child: Text(_adminRoleLabel(role.value)),
+          ),
+      ],
+      child: const _MiniActionButton(label: 'Role'),
+    ),
+    _MiniAction(
+      label: active ? 'Deactivate' : 'Activate',
+      onPressed: () =>
+          unawaited(onSetStatus(record, active ? 'inactive' : 'active')),
+    ),
+  ];
+}
+
+class _MiniActionButton extends StatelessWidget {
+  const _MiniActionButton({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: null,
+      style: OutlinedButton.styleFrom(
+        disabledForegroundColor: Colors.white.withValues(alpha: .9),
         visualDensity: VisualDensity.compact,
         padding: const EdgeInsets.symmetric(horizontal: 10),
       ),

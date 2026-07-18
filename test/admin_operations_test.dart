@@ -279,6 +279,23 @@ void main() {
       expect(patch.containsKey('password'), isFalse);
     });
 
+    test('updates admin user access records with one active role', () {
+      final patch = AdminUserAccess.adminUserPatch(
+        email: 'finance@circumuk.com',
+        role: AdminRole.financeAdmin.value,
+        status: 'inactive',
+        invitedBy: 'owner@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+        lastLoginAt: DateTime(2026, 5, 30),
+      );
+
+      expect(patch['role'], 'finance_admin');
+      expect(patch['roles'], ['finance_admin']);
+      expect(patch['status'], 'inactive');
+      expect(patch['lastLoginAt'], DateTime(2026, 5, 30));
+      expect(patch.containsKey('createdAt'), isFalse);
+    });
+
     test('restored Admin shell exposes every required operations module', () {
       expect(
         AdminModule.values.map((module) => module.label),
