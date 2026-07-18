@@ -230,6 +230,74 @@ test("Rider earnings remain readable by owner but never client writable", async 
   }));
 });
 
+test("Rider profile self-writes are explicitly allowlisted", async () => {
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
+    uid: "rider-1",
+    name: "Rider One",
+    email: "rider@example.com",
+    phone: "+447700900000",
+    status: "offline",
+    profileCompletionStatus: "complete",
+    onboardingStatus: "profile_complete",
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
+    photoURL: "https://example.com/rider.jpg",
+    username: "riderone",
+    vehicleType: "bike",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+});
+
+test("Rider profile self-writes cannot alter admin payment or trust authority", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riders", "rider-1"), {
+      uid: "rider-1",
+      name: "Rider One",
+      approvalStatus: "pending",
+    });
+  });
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  for (const field of [
+    "approvalStatus",
+    "verificationStatus",
+    "role",
+    "roles",
+    "driverStatus",
+    "riderRank",
+    "rating",
+    "availableBalance",
+    "stripeConnectAccountId",
+    "admin",
+  ]) {
+    await assertFails(setDoc(doc(riderDb, "riders", "rider-1"), {
+      [field]: field === "roles" ? ["driver_manager"] : "forged",
+      updatedAt: serverTimestamp(),
+    }, {merge: true}));
+  }
+});
+
+test("Driver manager can update Rider admin fields", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riders", "rider-1"), {
+      uid: "rider-1",
+      name: "Rider One",
+      approvalStatus: "pending",
+    });
+  });
+  const adminDb = testEnv.authenticatedContext("admin-1", {
+    roles: ["driver_manager"],
+  }).firestore();
+  await assertSucceeds(setDoc(doc(adminDb, "riders", "rider-1"), {
+    approvalStatus: "approved",
+    verificationStatus: "approved",
+    driverStatus: "active",
+    riderRank: "sentinel",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+});
+
 test("Sender and Rider cannot directly mutate authoritative delivery fields", async () => {
   const deliveryId = "delivery-authority";
   await seedDelivery(deliveryId);
