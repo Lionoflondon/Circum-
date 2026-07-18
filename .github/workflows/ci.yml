@@ -1,0 +1,44 @@
+name: Circum CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  flutter:
+    name: Flutter analyze and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: node scripts/deploy_guard.self_test.js
+      - run: node scripts/deploy_guard.js --target=sender-app --base HEAD
+      - run: node scripts/deploy_guard.js --target=website --base HEAD
+      - run: node scripts/deploy_guard.js --target=admin --base HEAD
+      - run: node scripts/deploy_guard.js --target=backend --base HEAD
+      - run: node scripts/validate_sender_mobile_artifacts.js
+
+  functions:
+    name: Functions lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm --prefix server/functions ci
+      - run: npm --prefix server/functions run lint
+      - run: npm --prefix server/functions test
+      - run: npm install -g firebase-tools
+      - run: npm --prefix server/functions run test:rules

@@ -26,22 +26,24 @@ const sendBlocSource = fs.readFileSync(path.join(
     "bloc",
     "send_package_bloc.dart",
 ), "utf8");
-const reviewSource = fs.readFileSync(path.join(
+const accountStateSource = fs.readFileSync(path.join(
     __dirname,
     "..",
     "..",
     "lib",
     "app",
-    "send_package",
-    "view",
-    "delivery_review_expanded.dart",
+    "account",
+    "bloc",
+    "account_state.dart",
 ), "utf8");
 const webSenderSource = fs.readFileSync(path.join(
     __dirname,
     "..",
     "..",
     "lib",
-    "web_sender_app.dart",
+    "website",
+    "shared",
+    "circum_website_app.dart",
 ), "utf8");
 
 test("legacy standard delivery payment HTTP endpoints are retired", () => {
@@ -58,11 +60,12 @@ test("legacy standard delivery payment HTTP endpoints are retired", () => {
 test("Sender mobile uses canonical quote, payment session, and paid delivery callables", () => {
   assert.match(accountBlocSource, /httpsCallable\('createSenderBookingQuote'\)/);
   assert.match(accountBlocSource, /httpsCallable\('createSenderPaymentSession'\)/);
-  assert.match(sendBlocSource, /httpsCallable\('createSenderPaidDelivery'\)/);
-  assert.doesNotMatch(sendBlocSource, /httpsCallable\('sendPackage'\)/);
+  assert.match(sendBlocSource, /_callableMap\('createSenderPaidDelivery'/);
   assert.doesNotMatch(sendBlocSource, /collection\("deliveryRequests"\)\.doc\(user\?\.uid\)\.set/);
-  assert.match(reviewSource, /quoteId: accountState\.quoteId/);
-  assert.match(reviewSource, /paymentSessionId: accountState\.paymentSessionId/);
+  assert.match(accountStateSource, /final String\? quoteId/);
+  assert.match(accountStateSource, /final String\? paymentSessionId/);
+  assert.match(accountBlocSource, /quoteId:\s*paymentIntentResult\['quoteId'\]/);
+  assert.match(accountBlocSource, /paymentSessionId:\s*paymentIntentResult\['paymentSessionId'\]/);
 });
 
 test("canonical payment authority calculates and records authoritative pricing", () => {

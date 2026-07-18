@@ -72,6 +72,7 @@
         "test/role_access_test.dart",
         "test/special_handling_engine_test.dart",
         "test/vanguard_protection_test.dart",
+        "scripts/validate_sender_mobile_artifacts.js",
         "android/",
         "ios/",
         "lib/extension/"

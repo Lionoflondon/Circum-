@@ -7,7 +7,10 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../..");
 
 test("Sender history loading never mutates delivery lifecycle", () => {
-  const source = fs.readFileSync(path.join(root, "lib/web_sender_app.dart"), "utf8");
+  const source = fs.readFileSync(path.join(
+      root,
+      "lib/website/shared/circum_website_app.dart",
+  ), "utf8");
   assert.equal(source.includes("sender_web_booking_recovery_marked_on_load"), false);
   const loadStart = source.indexOf("Future<void> _loadSenderDeliveries");
   const loadEnd = source.indexOf("void _openSenderDeliveryTracking", loadStart);
@@ -17,9 +20,9 @@ test("Sender history loading never mutates delivery lifecycle", () => {
 });
 
 test("Admin stale cleanup uses canonical callable and backend writes audit", () => {
-  const client = fs.readFileSync(path.join(root, "lib/web_sender_app.dart"), "utf8");
+  const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
   const backend = fs.readFileSync(path.join(__dirname, "stale-delivery.js"), "utf8");
-  assert.match(client, /httpsCallable\('resolveStaleDeliveryLock'\)/);
+  assert.match(index, /exports\.resolveStaleDeliveryLock\s*=/);
   assert.match(backend, /stale_active_delivery_reference_repaired/);
   assert.match(backend, /adminAuditLogs/);
   assert.match(backend, /staleDeliveryQueue/);

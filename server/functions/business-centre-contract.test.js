@@ -12,7 +12,9 @@ const senderWebSource = fs.readFileSync(path.join(
     "..",
     "..",
     "lib",
-    "web_sender_app.dart",
+    "website",
+    "shared",
+    "circum_website_app.dart",
 ), "utf8");
 
 test("Business backend exports the canonical workspace, team, and payment callables", () => {
