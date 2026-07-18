@@ -26,5 +26,5 @@ rm -rf "$OUTPUT_DIR"
   --dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" \
   --target=lib/main_public_web.dart \
   --output="$OUTPUT_DIR"
-node "$ROOT_DIR/scripts/finalize_web_artifact.js" public "$OUTPUT_DIR"
-node "$ROOT_DIR/scripts/validate_web_artifacts.js" --surface=public
+node "$ROOT_DIR/scripts/finalize_web_artifact.js" website "$OUTPUT_DIR"
+node "$ROOT_DIR/scripts/validate_web_artifacts.js" --surface=website

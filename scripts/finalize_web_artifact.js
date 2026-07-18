@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const surfaces = {
-  public: {
+  website: {
     identity: 'circum-website',
     name: 'Circum Website',
     shortName: 'Circum',
@@ -13,7 +13,7 @@ const surfaces = {
     themeColor: '#0f172a',
     title: 'Circum',
   },
-  sender: {
+  'sender-app': {
     identity: 'circum-sender-web',
     name: 'Circum Sender App',
     shortName: 'Circum Sender',
@@ -42,7 +42,7 @@ const surfaceName = process.argv[2];
 const outDir = process.argv[3];
 const surface = surfaces[surfaceName];
 if (!surface || !outDir) {
-  fail('Usage: finalize_web_artifact.js <public|sender|admin> <output-dir>');
+  fail('Usage: finalize_web_artifact.js <website|sender-app|admin> <output-dir>');
 }
 
 const absoluteOut = path.resolve(outDir);

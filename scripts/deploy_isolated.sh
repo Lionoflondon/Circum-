@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/deploy_isolated.sh <website|public|admin> [--branch <ref>] [--commit <sha>]... [--patch <file>]...
+  scripts/deploy_isolated.sh <website|admin> [--branch <ref>] [--commit <sha>]... [--patch <file>]...
 
 Production deployments must never run from the active working tree. This script:
   1. creates a fresh temporary git worktree from the requested branch/ref;
@@ -17,7 +17,7 @@ Production deployments must never run from the active working tree. This script:
 Examples:
   scripts/deploy_isolated.sh website --branch origin/main
   scripts/deploy_isolated.sh website --branch origin/main --commit abc1234
-  scripts/deploy_isolated.sh public --branch main --patch /tmp/approved.diff
+  scripts/deploy_isolated.sh website --branch main --patch /tmp/approved.diff
 USAGE
 }
 
@@ -71,7 +71,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$SURFACE" in
-  website|public)
+  website)
     GUARD_PRODUCT="website"
     BUILD_SCRIPT="scripts/build_public_web.sh"
     HOSTING_TARGET="hosting:public"
@@ -115,7 +115,7 @@ case "$SURFACE" in
     FORBIDDEN_IMPORT_REGEX="main_sender_web|main_public_web|main_rider_web"
     ;;
   *)
-    fail "unknown surface '$SURFACE'. Expected website, public, or admin."
+    fail "unknown surface '$SURFACE'. Expected website or admin."
     ;;
 esac
 

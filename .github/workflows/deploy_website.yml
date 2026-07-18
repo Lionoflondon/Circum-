@@ -22,5 +22,5 @@ jobs:
       - run: node scripts/deploy_guard.js --target=website --base HEAD
       - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
       - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_public_web.sh
-      - run: node scripts/validate_web_artifacts.js --surface=public
+      - run: node scripts/validate_web_artifacts.js --surface=website
       - run: firebase deploy --only hosting:public --project circum-2797c

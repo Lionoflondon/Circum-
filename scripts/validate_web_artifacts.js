@@ -6,7 +6,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 
 const surfaces = {
-  public: {
+  website: {
     target: 'public',
     output: 'build/public_web',
     identity: 'circum-website',
@@ -24,7 +24,7 @@ const surfaces = {
       'SenderMobileHome',
     ],
   },
-  sender: {
+  'sender-app': {
     target: 'app',
     output: 'build/sender_app_web',
     identity: 'circum-sender-web',
