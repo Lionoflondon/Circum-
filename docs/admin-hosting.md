@@ -26,23 +26,27 @@ Then connect `admin.circumuk.com` to the `circum-admin-2797c` site in Firebase H
 
 ## Deploy commands
 
-Deploy customer app only:
+Deploy Sender App Web only:
 
 ```bash
-scripts/deploy_main_web.sh
+scripts/deploy_sender_app_web.sh --branch origin/main
+```
+
+Deploy Public Web only:
+
+```bash
+scripts/deploy_public_web.sh --branch origin/main
 ```
 
 Deploy admin app only:
 
 ```bash
-scripts/deploy_admin_web.sh
+scripts/deploy_admin_web.sh --branch origin/main
 ```
 
-Deploy both:
-
-```bash
-scripts/deploy_all_web.sh
-```
+Broad multi-target web deployment is intentionally unavailable. Production
+hosting deployments must run through the isolated deployment pipeline described
+in `docs/isolated-deployment-pipeline.md`.
 
 ## Admin access
 

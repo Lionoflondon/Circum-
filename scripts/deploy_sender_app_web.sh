@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/firebase_tools.sh"
 
 echo "Project: circum-2797c"
 echo "Surface: Sender App Web"
@@ -12,5 +11,4 @@ echo "Output: build/sender_app_web"
 echo "Hosting target: hosting:app"
 echo "Expected identity: circum-sender-web"
 
-"$ROOT_DIR/scripts/build_sender_app_web.sh"
-"$FIREBASE_BIN" deploy --only hosting:app --project circum-2797c
+"$ROOT_DIR/scripts/deploy_isolated.sh" sender "$@"

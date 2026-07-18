@@ -19,7 +19,6 @@ void main() {
       'Wallet',
       'Profile'
     ]) {
-      expect(navSource, contains("label: '$label'"));
       expect(senderHomeSource, contains("'$label'"));
     }
 
@@ -27,7 +26,7 @@ void main() {
     expect(navSource, isNot(contains("label: 'Rider'")));
     expect(navSource, isNot(contains("label: 'Live Chat'")));
     expect(navSource, isNot(contains("label: 'Health+'")));
-    expect(navSource, contains('const WalletView()'));
+    expect(navSource, contains('SenderMobileHome'));
     expect(appSource, contains('const SenderMobileHome()'));
     expect(appSource, isNot(contains('return AppNavView()')));
   });

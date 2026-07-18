@@ -67,7 +67,11 @@ void main() {
       final senderMain = File('lib/main_sender_web.dart').readAsStringSync();
 
       expect(publicMain, contains('CircumWebSurface.public'));
-      expect(senderMain, contains('CircumWebSurface.sender'));
+      expect(senderMain, contains('runApp(const _SenderWebRoot())'));
+      expect(
+          senderMain, contains('SenderMobileHome(previewAuthEnabled: true)'));
+      expect(senderMain, isNot(contains('WebSenderApp')));
+      expect(senderMain, isNot(contains('CircumWebSurface.sender')));
       expect(publicMain, isNot(contains('CircumWebSurface.sender')));
       expect(senderMain, isNot(contains('CircumWebSurface.public')));
     });

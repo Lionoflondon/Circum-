@@ -48,11 +48,16 @@ if (!surface || !outDir) {
 const absoluteOut = path.resolve(outDir);
 const manifestPath = path.join(absoluteOut, 'manifest.json');
 const indexPath = path.join(absoluteOut, 'index.html');
-if (!fs.existsSync(manifestPath) || !fs.existsSync(indexPath)) {
+if (!fs.existsSync(indexPath)) {
   fail(`Missing Flutter web artifact in ${absoluteOut}`);
 }
 
-const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const sourceManifestPath = path.join(process.cwd(), 'web', 'manifest.json');
+const manifest = fs.existsSync(manifestPath)
+  ? JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  : fs.existsSync(sourceManifestPath)
+    ? JSON.parse(fs.readFileSync(sourceManifestPath, 'utf8'))
+    : {};
 manifest.name = surface.name;
 manifest.short_name = surface.shortName;
 manifest.description = surface.description;

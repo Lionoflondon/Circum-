@@ -10,7 +10,6 @@ import 'app/onboarding/view/onboarding.dart';
 import 'app/sender_mobile/sender_mobile_home.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
-import 'main.dart';
 import 'utils/app_state/app_state.dart';
 import 'utils/theme/theme.dart';
 
@@ -23,6 +22,8 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   late final AuthBloc _authBloc;
+  late final SendPackageBloc _sendPackageBloc;
+  late final AccountBloc _accountBloc;
   late final HistoryBloc _historyBloc;
   late final SupportBloc _supportBloc;
 
@@ -30,6 +31,8 @@ class _AppState extends State<App> {
   void initState() {
     super.initState();
     _authBloc = AuthBloc()..add(SortSessionState());
+    _sendPackageBloc = SendPackageBloc();
+    _accountBloc = AccountBloc();
     _historyBloc = HistoryBloc();
     _supportBloc = SupportBloc();
   }
@@ -39,8 +42,8 @@ class _AppState extends State<App> {
     _authBloc.close();
     _historyBloc.close();
     _supportBloc.close();
-    sendPackageBloc.close();
-    accountBloc.close();
+    _sendPackageBloc.close();
+    _accountBloc.close();
     super.dispose();
   }
 
@@ -49,8 +52,8 @@ class _AppState extends State<App> {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>.value(value: _authBloc),
-        BlocProvider<SendPackageBloc>.value(value: sendPackageBloc),
-        BlocProvider<AccountBloc>.value(value: accountBloc),
+        BlocProvider<SendPackageBloc>.value(value: _sendPackageBloc),
+        BlocProvider<AccountBloc>.value(value: _accountBloc),
         BlocProvider<HistoryBloc>.value(value: _historyBloc),
         BlocProvider<SupportBloc>.value(value: _supportBloc),
       ],
@@ -72,6 +75,9 @@ class _AppState extends State<App> {
               useMaterial3: false,
             ),
             home: const _SessionGate(),
+            routes: {
+              '/sender/mobile': (_) => const SenderMobileHome(),
+            },
           );
         },
       ),
@@ -88,7 +94,7 @@ class _SessionGate extends StatelessWidget {
       builder: (context, state) {
         switch (state.currentState) {
           case AppState.authenticated:
-            return const SenderMobileHome();
+            return const SenderMobileHome(initialAuthenticated: true);
           case AppState.unauthenticated:
             return const OnboardingView();
           case AppState.unknownSessionState:

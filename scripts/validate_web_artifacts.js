@@ -16,7 +16,7 @@ const surfaces = {
       'circum-sender-web',
       'circum-rider-web',
       'Rider Application Centre',
-      'Admin Portal',
+      'Admin surface',
     ],
   },
   sender: {
@@ -24,13 +24,13 @@ const surfaces = {
     output: 'build/sender_app_web',
     identity: 'circum-sender-web',
     manifestName: 'Circum Sender App',
-    must: ['circum-sender-web', 'Book a parcel'],
+    must: ['circum-sender-web', 'Send a Parcel', 'Home', 'Wallet', 'Profile'],
     forbidden: [
       'circum-public-web',
       'circum-rider-web',
       'Earn as a Rider',
       'Rider Application Centre',
-      'Admin Portal',
+      'Admin surface',
     ],
   },
   admin: {
@@ -38,7 +38,7 @@ const surfaces = {
     output: 'build/web_admin',
     identity: 'circum-admin-web',
     manifestName: 'Circum Admin',
-    must: ['Admin Portal'],
+    must: ['Admin surface'],
     forbidden: ['circum-public-web', 'circum-sender-web', 'circum-rider-web'],
   },
 };
@@ -136,17 +136,20 @@ function assertArtifact(surfaceName) {
 
 function parseArgs() {
   const surfaceArg = process.argv.find((arg) => arg.startsWith('--surface='));
-  if (!surfaceArg) return null;
+  const configOnly = process.argv.includes('--config-only');
+  if (!surfaceArg) return { surface: null, configOnly };
   const value = surfaceArg.split('=').slice(1).join('=');
   if (!surfaces[value]) fail(`unknown surface ${value}`);
-  return value;
+  return { surface: value, configOnly };
 }
 
-const surface = parseArgs();
+const { surface, configOnly } = parseArgs();
 assertUniqueHostingOutputs();
 assertFirebaseMapping(surface);
 assertScriptIsolation();
-if (surface) {
+if (configOnly) {
+  // Configuration-only mode intentionally skips generated build outputs.
+} else if (surface) {
   assertArtifact(surface);
 } else {
   for (const surfaceName of Object.keys(surfaces)) {
