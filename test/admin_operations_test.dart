@@ -34,6 +34,10 @@ void main() {
         isTrue,
       );
       expect(
+        AdminAccessPolicy.can(['finance_admin'], AdminPermission.manageFinance),
+        isTrue,
+      );
+      expect(
         AdminAccessPolicy.can(
             ['operations_admin'], AdminPermission.manageHealthPlus),
         isTrue,
@@ -262,6 +266,35 @@ void main() {
       expect(patch['status'], 'collected');
       expect(patch['assignedDriverId'], 'rider-1');
       expect(patch['adminUpdatedAt'], isA<DateTime>());
+    });
+
+    test('finance workflow patches do not alter payment authority fields', () {
+      final patch = AdminFinanceTools.workflowPatch(
+        status: 'reconciled',
+        updatedBy: 'finance@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+        note: 'Stripe dashboard checked.',
+      );
+
+      expect(patch['financeReviewStatus'], 'reconciled');
+      expect(patch['financeReviewedBy'], 'finance@circumuk.com');
+      expect(patch['financeEscalated'], isFalse);
+      expect(patch['financeNote'], 'Stripe dashboard checked.');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('amount'), isFalse);
+      expect(patch.containsKey('paymentIntent'), isFalse);
+      expect(patch.containsKey('stripePaymentIntentId'), isFalse);
+    });
+
+    test('finance workflow patches reject unsupported statuses', () {
+      expect(
+        () => AdminFinanceTools.workflowPatch(
+          status: 'paid',
+          updatedBy: 'finance@circumuk.com',
+          updatedAt: DateTime(2026, 5, 31),
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('creates admin user access patches without passwords', () {

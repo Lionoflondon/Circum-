@@ -30,6 +30,7 @@ enum AdminPermission {
   editDeliveries,
   duplicateDeliveries,
   viewFinance,
+  manageFinance,
   viewHealthPlus,
   manageHealthPlus,
   viewSupport,
@@ -70,6 +71,7 @@ class AdminAccessPolicy {
       AdminPermission.viewDrivers,
       AdminPermission.viewDeliveries,
       AdminPermission.viewFinance,
+      AdminPermission.manageFinance,
       AdminPermission.viewHealthPlus,
       AdminPermission.viewAudit,
     ],
@@ -100,6 +102,32 @@ class AdminAccessPolicy {
       }
     }
     return false;
+  }
+}
+
+class AdminFinanceTools {
+  static const workflowStatuses = [
+    'review_assigned',
+    'reconciled',
+    'escalated',
+  ];
+
+  static Map<String, dynamic> workflowPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    String? note,
+  }) {
+    if (!workflowStatuses.contains(status)) {
+      throw ArgumentError('Unsupported finance workflow status.');
+    }
+    return {
+      'financeReviewStatus': status,
+      'financeReviewedBy': updatedBy,
+      'financeReviewedAt': updatedAt,
+      'financeEscalated': status == 'escalated',
+      if (note?.trim().isNotEmpty == true) 'financeNote': note!.trim(),
+    };
   }
 }
 

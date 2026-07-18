@@ -364,6 +364,41 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _updateFinanceWorkflow(
+    Map<String, dynamic> financeRecord,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageFinance)) {
+      setState(() => _message = 'Your role cannot manage finance workflows.');
+      return;
+    }
+    final id = _idFor(financeRecord);
+    if (id.isEmpty) return;
+    final patch = AdminFinanceTools.workflowPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await _db
+        .collection('payments')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'finance_workflow_$status',
+      recordType: 'payments',
+      recordId: id,
+      oldValue: {
+        'financeReviewStatus': financeRecord['financeReviewStatus'],
+        'status': financeRecord['status'],
+      },
+      newValue: patch,
+      reason: 'Finance workflow updated from Admin',
+    ));
+    setState(() => _message = 'Finance record $id marked $status.');
+    await _loadAdminData();
+  }
+
   Future<void> _saveAdminUser({
     Map<String, dynamic>? existing,
     String? email,
@@ -575,10 +610,12 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       canManageIssues: _can(AdminPermission.manageIssues),
                       canManageHealthPlus:
                           _can(AdminPermission.manageHealthPlus),
+                      canManageFinance: _can(AdminPermission.manageFinance),
                       onDuplicateDelivery: _duplicateDelivery,
                       onSetRiderStatus: _setRiderStatus,
                       onUpdateSupportTicket: _updateSupportTicket,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
+                      onUpdateFinanceWorkflow: _updateFinanceWorkflow,
                       onOpenRiderProfile: _openRiderProfile,
                       adminInviteEmail: _adminInviteEmail,
                       adminInviteNote: _adminInviteNote,
@@ -1021,10 +1058,12 @@ class _AdminModuleBody extends StatelessWidget {
     required this.canManageRiders,
     required this.canManageIssues,
     required this.canManageHealthPlus,
+    required this.canManageFinance,
     required this.onDuplicateDelivery,
     required this.onSetRiderStatus,
     required this.onUpdateSupportTicket,
     required this.onUpdateHealthPlusPickup,
+    required this.onUpdateFinanceWorkflow,
     required this.onOpenRiderProfile,
     required this.adminInviteEmail,
     required this.adminInviteNote,
@@ -1048,12 +1087,15 @@ class _AdminModuleBody extends StatelessWidget {
   final bool canManageRiders;
   final bool canManageIssues;
   final bool canManageHealthPlus;
+  final bool canManageFinance;
   final ValueChanged<Map<String, dynamic>> onDuplicateDelivery;
   final Future<void> Function(Map<String, dynamic>, String) onSetRiderStatus;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusPickup;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateFinanceWorkflow;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
   final TextEditingController adminInviteEmail;
   final TextEditingController adminInviteNote;
@@ -1225,17 +1267,43 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.finance => _RecordModule(
               title: 'Finance',
               subtitle:
-                  'Payments, payouts and wallet-relevant finance records.',
+                  'Payments, payouts, wallet records and finance review workflow.',
               records: data.payments,
               query: query,
-              fields: const ['id', 'status', 'senderId', 'riderId', 'type'],
-              columns: const ['Record', 'Status', 'Amount', 'Created'],
+              fields: const [
+                'id',
+                'status',
+                'senderId',
+                'riderId',
+                'type',
+                'financeReviewStatus'
+              ],
+              columns: const ['Record', 'Payment', 'Amount', 'Review'],
               row: (record) => [
                 _recordId(record),
                 '${record['status'] ?? 'unknown'}',
                 _money(record['amount'] ?? record['total'] ?? record['price']),
-                _date(record['createdAt'] ?? record['timestamp']),
+                '${record['financeReviewStatus'] ?? 'unreviewed'}',
               ],
+              actions: canManageFinance
+                  ? (record) => [
+                        _MiniAction(
+                          label: 'Assign',
+                          onPressed: () => onUpdateFinanceWorkflow(
+                              record, 'review_assigned'),
+                        ),
+                        _MiniAction(
+                          label: 'Reconcile',
+                          onPressed: () =>
+                              onUpdateFinanceWorkflow(record, 'reconciled'),
+                        ),
+                        _MiniAction(
+                          label: 'Escalate',
+                          onPressed: () =>
+                              onUpdateFinanceWorkflow(record, 'escalated'),
+                        ),
+                      ]
+                  : null,
             ),
           AdminModule.healthPlus => _RecordModule(
               title: 'Health+',
