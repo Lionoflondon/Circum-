@@ -203,6 +203,154 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
   }
 
+  Future<void> _writeAudit(AdminAuditEntry entry) async {
+    await _db.collection('adminAuditLogs').add({
+      ...entry.toJson(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  String _idFor(Map<String, dynamic> record) {
+    return '${record['id'] ?? record['requestId'] ?? record['uid'] ?? ''}'
+        .trim();
+  }
+
+  Future<void> _duplicateDelivery(Map<String, dynamic> delivery) async {
+    if (!_can(AdminPermission.duplicateDeliveries)) {
+      setState(() => _message = 'Your role cannot duplicate deliveries.');
+      return;
+    }
+    final newId = 'CIR-ADM-${DateTime.now().millisecondsSinceEpoch}';
+    final duplicate = AdminDeliveryTools.duplicateDelivery(
+      delivery,
+      newId: newId,
+      createdAt: FieldValue.serverTimestamp(),
+    );
+    await _db.collection('deliveryRequests').doc(newId).set(duplicate);
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'delivery_duplicate',
+      recordType: 'deliveryRequests',
+      recordId: newId,
+      oldValue: {'requestId': delivery['requestId'] ?? delivery['id']},
+      newValue: {'requestId': newId},
+      reason: 'Admin duplicated delivery from operations console',
+    ));
+    setState(() => _message = 'Duplicated delivery as $newId.');
+    await _loadAdminData();
+  }
+
+  Future<void> _setRiderStatus(
+    Map<String, dynamic> rider,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot manage rider status.');
+      return;
+    }
+    final id = _idFor(rider);
+    if (id.isEmpty) return;
+    final driverStatus = switch (status) {
+      'approved' => 'active',
+      'rejected' => 'rejected',
+      'suspended' => 'suspended',
+      _ => status,
+    };
+    await _db.collection('riderProfiles').doc(id).set({
+      'approvalStatus': status,
+      'driverStatus': driverStatus,
+      'verificationStatus': status == 'approved' ? 'approved' : status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'rider_status_$status',
+      recordType: 'riderProfiles',
+      recordId: id,
+      oldValue: {
+        'approvalStatus': rider['approvalStatus'],
+        'driverStatus': rider['driverStatus'],
+      },
+      newValue: {'approvalStatus': status, 'driverStatus': driverStatus},
+      reason: 'Rider status updated from Admin',
+    ));
+    setState(() => _message = 'Rider $id updated to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _updateSupportTicket(
+    Map<String, dynamic> ticket,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage support tickets.');
+      return;
+    }
+    final id = _idFor(ticket);
+    if (id.isEmpty) return;
+    final patch = AdminSupportTools.statusPatch(
+      status: status,
+      assignedTo: status == 'assigned' ? _user?.email : null,
+      resolutionNote:
+          status == 'resolved' ? 'Resolved from Circum Admin' : null,
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await _db
+        .collection('supportTickets')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'support_ticket_$status',
+      recordType: 'supportTickets',
+      recordId: id,
+      oldValue: {'status': ticket['status']},
+      newValue: {'status': status},
+      reason: 'Support ticket updated from Admin',
+    ));
+    setState(() => _message = 'Support ticket $id updated to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _updateHealthPlusPickup(
+    Map<String, dynamic> pickup,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageHealthPlus)) {
+      setState(() => _message = 'Your role cannot manage Health+ pickups.');
+      return;
+    }
+    final id = _idFor(pickup);
+    if (id.isEmpty) return;
+    final patch = AdminHealthPlusTools.statusPatch(
+      status: status,
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await _db
+        .collection('prescriptionPickups')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _db.collection('healthPlusUsageEvents').add({
+      'type': 'admin_status_updated',
+      'pickupId': id,
+      'status': status,
+      'source': 'circum-admin',
+      'adminUserId': _user?.uid,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'health_plus_status_update',
+      recordType: 'prescriptionPickups',
+      recordId: id,
+      oldValue: {'status': pickup['status']},
+      newValue: {'status': status},
+      reason: 'Health+ pickup updated from Admin',
+    ));
+    setState(() => _message = 'Health+ pickup $id updated to $status.');
+    await _loadAdminData();
+  }
+
   bool _can(AdminPermission permission) {
     return AdminAccessPolicy.can(_roles, permission);
   }
@@ -271,6 +419,16 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       data: _data,
                       metrics: _metrics,
                       canManageAdmins: _can(AdminPermission.manageAdmins),
+                      canDuplicateDeliveries:
+                          _can(AdminPermission.duplicateDeliveries),
+                      canManageRiders: _can(AdminPermission.approveDrivers),
+                      canManageIssues: _can(AdminPermission.manageIssues),
+                      canManageHealthPlus:
+                          _can(AdminPermission.manageHealthPlus),
+                      onDuplicateDelivery: _duplicateDelivery,
+                      onSetRiderStatus: _setRiderStatus,
+                      onUpdateSupportTicket: _updateSupportTicket,
+                      onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                     ),
                   ),
                 ],
@@ -670,6 +828,14 @@ class _AdminModuleBody extends StatelessWidget {
     required this.data,
     required this.metrics,
     required this.canManageAdmins,
+    required this.canDuplicateDeliveries,
+    required this.canManageRiders,
+    required this.canManageIssues,
+    required this.canManageHealthPlus,
+    required this.onDuplicateDelivery,
+    required this.onSetRiderStatus,
+    required this.onUpdateSupportTicket,
+    required this.onUpdateHealthPlusPickup,
   });
 
   final AdminModule module;
@@ -677,6 +843,16 @@ class _AdminModuleBody extends StatelessWidget {
   final AdminDataBundle data;
   final AdminMetricSnapshot metrics;
   final bool canManageAdmins;
+  final bool canDuplicateDeliveries;
+  final bool canManageRiders;
+  final bool canManageIssues;
+  final bool canManageHealthPlus;
+  final ValueChanged<Map<String, dynamic>> onDuplicateDelivery;
+  final Future<void> Function(Map<String, dynamic>, String) onSetRiderStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateSupportTicket;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateHealthPlusPickup;
 
   @override
   Widget build(BuildContext context) {
@@ -710,6 +886,14 @@ class _AdminModuleBody extends StatelessWidget {
                     record['quote'] ??
                     record['price']),
               ],
+              actions: canDuplicateDeliveries
+                  ? (record) => [
+                        _MiniAction(
+                          label: 'Duplicate',
+                          onPressed: () => onDuplicateDelivery(record),
+                        ),
+                      ]
+                  : null,
             ),
           AdminModule.users => _RecordModule(
               title: 'Users',
@@ -747,6 +931,9 @@ class _AdminModuleBody extends StatelessWidget {
                 '${record['approvalStatus'] ?? record['driverStatus'] ?? record['status'] ?? 'pending'}',
                 RiderRankPolicy.fromProfile(record),
               ],
+              actions: canManageRiders
+                  ? (record) => _riderActions(record, onSetRiderStatus)
+                  : null,
             ),
           AdminModule.verification => _RecordModule(
               title: 'Verification',
@@ -766,6 +953,9 @@ class _AdminModuleBody extends StatelessWidget {
                 '${record['approvalStatus'] ?? 'pending'}',
                 _date(record['updatedAt'] ?? record['createdAt']),
               ],
+              actions: canManageRiders
+                  ? (record) => _riderActions(record, onSetRiderStatus)
+                  : null,
             ),
           AdminModule.support => _RecordModule(
               title: 'Support',
@@ -787,6 +977,25 @@ class _AdminModuleBody extends StatelessWidget {
                 '${record['status'] ?? 'open'}',
                 '${record['message'] ?? record['type'] ?? ''}',
               ],
+              actions: canManageIssues
+                  ? (record) => [
+                        _MiniAction(
+                          label: 'Assign',
+                          onPressed: () =>
+                              onUpdateSupportTicket(record, 'assigned'),
+                        ),
+                        _MiniAction(
+                          label: 'Resolve',
+                          onPressed: () =>
+                              onUpdateSupportTicket(record, 'resolved'),
+                        ),
+                        _MiniAction(
+                          label: 'Reopen',
+                          onPressed: () =>
+                              onUpdateSupportTicket(record, 'open'),
+                        ),
+                      ]
+                  : null,
             ),
           AdminModule.finance => _RecordModule(
               title: 'Finance',
@@ -822,6 +1031,25 @@ class _AdminModuleBody extends StatelessWidget {
                 '${record['status'] ?? 'pending'}',
                 '${record['frequency'] ?? record['pickupTime'] ?? 'Not recorded'}',
               ],
+              actions: canManageHealthPlus
+                  ? (record) => [
+                        _MiniAction(
+                          label: 'Assign',
+                          onPressed: () =>
+                              onUpdateHealthPlusPickup(record, 'assigned'),
+                        ),
+                        _MiniAction(
+                          label: 'Collected',
+                          onPressed: () =>
+                              onUpdateHealthPlusPickup(record, 'collected'),
+                        ),
+                        _MiniAction(
+                          label: 'Complete',
+                          onPressed: () =>
+                              onUpdateHealthPlusPickup(record, 'completed'),
+                        ),
+                      ]
+                  : null,
             ),
           AdminModule.business => _RecordModule(
               title: 'Business',
@@ -981,6 +1209,7 @@ class _RecordModule extends StatelessWidget {
     required this.fields,
     required this.columns,
     required this.row,
+    this.actions,
   });
 
   final String title;
@@ -990,6 +1219,7 @@ class _RecordModule extends StatelessWidget {
   final List<String> fields;
   final List<String> columns;
   final List<String> Function(Map<String, dynamic>) row;
+  final List<Widget> Function(Map<String, dynamic>)? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -1023,6 +1253,8 @@ class _RecordModule extends StatelessWidget {
                   columns: [
                     for (final column in columns)
                       DataColumn(label: Text(column)),
+                    if (actions != null)
+                      const DataColumn(label: Text('Actions')),
                   ],
                   rows: [
                     for (final record in filtered.take(80))
@@ -1037,6 +1269,14 @@ class _RecordModule extends StatelessWidget {
                                   value,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              ),
+                            ),
+                          if (actions != null)
+                            DataCell(
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: actions!(record),
                               ),
                             ),
                         ],
@@ -1086,6 +1326,73 @@ class _MetricCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MiniAction extends StatelessWidget {
+  const _MiniAction({
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+List<Widget> _riderActions(
+  Map<String, dynamic> record,
+  Future<void> Function(Map<String, dynamic>, String) onSetStatus,
+) {
+  final status =
+      '${record['approvalStatus'] ?? record['driverStatus'] ?? record['status'] ?? ''}'
+          .toLowerCase();
+  if (status.contains('suspend')) {
+    return [
+      _MiniAction(
+        label: 'Reactivate',
+        onPressed: () => unawaited(onSetStatus(record, 'approved')),
+      ),
+    ];
+  }
+  if (status.contains('reject')) {
+    return [
+      _MiniAction(
+        label: 'Reactivate',
+        onPressed: () => unawaited(onSetStatus(record, 'approved')),
+      ),
+    ];
+  }
+  if (status.contains('active') ||
+      status.contains('approve') ||
+      status.contains('verified')) {
+    return [
+      _MiniAction(
+        label: 'Suspend',
+        onPressed: () => unawaited(onSetStatus(record, 'suspended')),
+      ),
+    ];
+  }
+  return [
+    _MiniAction(
+      label: 'Approve',
+      onPressed: () => unawaited(onSetStatus(record, 'approved')),
+    ),
+    _MiniAction(
+      label: 'Reject',
+      onPressed: () => unawaited(onSetStatus(record, 'rejected')),
+    ),
+  ];
 }
 
 class _ModuleButton extends StatelessWidget {
