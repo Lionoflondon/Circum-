@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -42,9 +43,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   final _search = TextEditingController();
   final _adminInviteEmail = TextEditingController();
   final _adminInviteNote = TextEditingController();
+  final _chatMessage = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
+  final _functions = FirebaseFunctions.instance;
 
   AdminModule _module = AdminModule.dashboard;
   User? _user;
@@ -52,6 +55,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   AdminMetricSnapshot _metrics = AdminMetricSnapshot.empty();
   AdminDataBundle _data = AdminDataBundle.empty();
   Map<String, dynamic>? _selectedRider;
+  Map<String, dynamic>? _selectedChat;
   AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   bool _loading = true;
   bool _signingIn = false;
@@ -75,6 +79,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     _search.dispose();
     _adminInviteEmail.dispose();
     _adminInviteNote.dispose();
+    _chatMessage.dispose();
     super.dispose();
   }
 
@@ -437,6 +442,45 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _saveAdminUser(existing: adminUser, role: role);
   }
 
+  Future<void> _sendChatMessage() async {
+    final chat = _selectedChat;
+    final chatId = chat == null ? '' : _recordId(chat).trim();
+    final message = _chatMessage.text.trim();
+    if (chatId.isEmpty) {
+      setState(() => _message = 'Select a chat thread first.');
+      return;
+    }
+    if (message.isEmpty) {
+      setState(() => _message = 'Enter a message before sending.');
+      return;
+    }
+    try {
+      await _functions.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': message,
+        'messageType': 'text',
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'admin_chat_message',
+        recordType: 'chats',
+        recordId: chatId,
+        newValue: {
+          'chatId': chatId,
+          'messageLength': message.length,
+        },
+        reason: 'Admin replied to chat thread',
+      ));
+      _chatMessage.clear();
+      setState(() => _message = 'Message sent to $chatId.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    } catch (_) {
+      setState(() => _message = 'Could not send this message.');
+    }
+  }
+
   void _openRiderProfile(Map<String, dynamic> rider) {
     setState(() => _selectedRider = rider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -455,6 +499,17 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'invalid-credential' =>
         'Those sign-in details are not right.',
       _ => 'Admin sign in failed. Please check the details.',
+    };
+  }
+
+  String _functionsMessage(FirebaseFunctionsException error) {
+    return switch (error.code) {
+      'unauthenticated' => 'Sign in again before sending messages.',
+      'permission-denied' => 'Your Admin role cannot send to this chat.',
+      'not-found' => 'This chat thread is no longer available.',
+      'failed-precondition' => 'This chat thread is not available for replies.',
+      'invalid-argument' => error.message ?? 'Check the message and try again.',
+      _ => 'Could not send this message.',
     };
   }
 
@@ -535,6 +590,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       ),
                       onSetAdminUserStatus: _setAdminUserStatus,
                       onSetAdminUserRole: _setAdminUserRole,
+                      chatMessage: _chatMessage,
+                      selectedChat: _selectedChat,
+                      onSelectChat: (chat) =>
+                          setState(() => _selectedChat = chat),
+                      onSendChatMessage: _sendChatMessage,
                     ),
                   ),
                 ],
@@ -964,6 +1024,10 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onCreateAdminUser,
     required this.onSetAdminUserStatus,
     required this.onSetAdminUserRole,
+    required this.chatMessage,
+    required this.selectedChat,
+    required this.onSelectChat,
+    required this.onSendChatMessage,
   });
 
   final AdminModule module;
@@ -991,6 +1055,10 @@ class _AdminModuleBody extends StatelessWidget {
       onSetAdminUserStatus;
   final Future<void> Function(Map<String, dynamic>, AdminRole)
       onSetAdminUserRole;
+  final TextEditingController chatMessage;
+  final Map<String, dynamic>? selectedChat;
+  final ValueChanged<Map<String, dynamic>> onSelectChat;
+  final VoidCallback onSendChatMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -1240,19 +1308,13 @@ class _AdminModuleBody extends StatelessWidget {
                 '${record['reason'] ?? ''}',
               ],
             ),
-          AdminModule.chat => _RecordModule(
-              title: 'Chat',
-              subtitle: 'Admin-visible booking and support chat threads.',
+          AdminModule.chat => _ChatModule(
               records: data.chats,
               query: query,
-              fields: const ['id', 'threadId', 'lastMessage', 'type'],
-              columns: const ['Thread', 'Type', 'Last message', 'Updated'],
-              row: (record) => [
-                '${record['threadId'] ?? record['id']}',
-                '${record['type'] ?? 'chat'}',
-                '${record['lastMessage'] ?? ''}',
-                _date(record['updatedAt'] ?? record['lastMessageTimestamp']),
-              ],
+              message: chatMessage,
+              selectedChat: selectedChat,
+              onSelectChat: onSelectChat,
+              onSendChatMessage: onSendChatMessage,
             ),
           AdminModule.settings => _SettingsModule(
               canManageAdmins: canManageAdmins,
@@ -1317,6 +1379,116 @@ class _Dashboard extends StatelessWidget {
             '${record['status'] ?? record['deliveryStatus'] ?? 'open'}',
             _date(record['updatedAt'] ?? record['createdAt']),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ChatModule extends StatelessWidget {
+  const _ChatModule({
+    required this.records,
+    required this.query,
+    required this.message,
+    required this.selectedChat,
+    required this.onSelectChat,
+    required this.onSendChatMessage,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final String query;
+  final TextEditingController message;
+  final Map<String, dynamic>? selectedChat;
+  final ValueChanged<Map<String, dynamic>> onSelectChat;
+  final VoidCallback onSendChatMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedId = selectedChat == null ? '' : _recordId(selectedChat!);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RecordModule(
+          title: 'Chat',
+          subtitle: 'Admin-visible booking and support chat threads.',
+          records: records,
+          query: query,
+          fields: const ['id', 'threadId', 'lastMessage', 'type'],
+          columns: const ['Thread', 'Type', 'Last message', 'Updated'],
+          row: (record) => [
+            '${record['threadId'] ?? record['id']}',
+            '${record['type'] ?? record['conversationType'] ?? 'chat'}',
+            '${record['lastMessage'] ?? ''}',
+            _date(record['updatedAt'] ??
+                record['lastMessageAt'] ??
+                record['lastMessageTimestamp']),
+          ],
+          actions: (record) => [
+            _MiniAction(
+              label: selectedId == _recordId(record) ? 'Selected' : 'Reply',
+              onPressed: () => onSelectChat(record),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        DecoratedBox(
+          decoration: _panelDecoration(),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.reply_rounded, color: Color(0xFF7DD3FC)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Composer',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            selectedChat == null
+                                ? 'Select a chat thread to reply.'
+                                : 'Replying to ${_recordId(selectedChat!)}',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .66),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: message,
+                  enabled: selectedChat != null,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    hintText: 'Write an Admin reply...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: selectedChat == null ? null : onSendChatMessage,
+                    icon: const Icon(Icons.send_rounded),
+                    label: const Text('Send reply'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );

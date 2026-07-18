@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/admin/admin_operations.dart';
 import 'package:circum/app/admin/admin_phase1_shell.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
@@ -294,6 +296,20 @@ void main() {
       expect(patch['status'], 'inactive');
       expect(patch['lastLoginAt'], DateTime(2026, 5, 30));
       expect(patch.containsKey('createdAt'), isFalse);
+    });
+
+    test('Admin chat composer uses the backend message callable', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final sendStart = source.indexOf('Future<void> _sendChatMessage()');
+      final sendEnd = source.indexOf('String _authMessage', sendStart);
+      expect(sendStart, isNonNegative);
+      expect(sendEnd, greaterThan(sendStart));
+      final sendSource = source.substring(sendStart, sendEnd);
+
+      expect(sendSource, contains("httpsCallable('sendCircumMessage')"));
+      expect(sendSource, isNot(contains(".collection('messages')")));
+      expect(sendSource, isNot(contains('.collection("messages")')));
     });
 
     test('restored Admin shell exposes every required operations module', () {
