@@ -87,6 +87,22 @@ void main() {
       SenderTrackingState.issue,
     );
     expect(
+      senderTrackingStateForBackendStatus('awaiting_adjustment_review'),
+      SenderTrackingState.adjustmentUnderReview,
+    );
+    expect(
+      senderTrackingStateForBackendStatus('more_evidence_requested'),
+      SenderTrackingState.adjustmentMoreEvidence,
+    );
+    expect(
+      senderTrackingStateForBackendStatus('awaiting_sender_payment'),
+      SenderTrackingState.adjustmentApproved,
+    );
+    expect(
+      senderTrackingStateForBackendStatus('rejected_by_admin'),
+      SenderTrackingState.adjustmentRejected,
+    );
+    expect(
       senderTrackingStateForBackendStatus('unknown_future_status'),
       SenderTrackingState.inTransit,
     );
@@ -104,6 +120,32 @@ void main() {
           .title,
       'Your rider is almost there',
     );
+    expect(
+      senderTrackingContentFor(SenderTrackingState.adjustmentUnderReview).body,
+      contains('Delivery and payment are paused'),
+    );
+    expect(
+      senderTrackingContentFor(SenderTrackingState.adjustmentApproved).body,
+      contains('additional payment'),
+    );
+  });
+
+  test('Sender Web exposes every delivery adjustment review state', () {
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+
+    for (final marker in [
+      'awaiting_admin_review',
+      'more_evidence_requested',
+      'awaiting_sender_payment',
+      'rejected_by_admin',
+      'Adjustment under review',
+      'More evidence requested',
+      'Adjustment approved',
+      'Adjustment rejected',
+    ]) {
+      expect(source, contains(marker));
+    }
   });
 
   test('Sender mobile exposes receiver PIN only in active delivery stages', () {

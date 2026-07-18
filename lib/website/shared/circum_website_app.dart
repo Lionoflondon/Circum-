@@ -8387,7 +8387,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (!mounted) return;
       final pending = snapshot.docs.where((doc) {
         final status = '${doc.data()['status'] ?? ''}';
-        return status == 'awaiting_sender_payment';
+        return {
+          'awaiting_admin_review',
+          'more_evidence_requested',
+          'awaiting_sender_payment',
+          'rejected_by_admin',
+        }.contains(status);
       }).toList();
       if (pending.isEmpty) return;
       pending.sort((a, b) => _timestampMillis(b.data()['createdAt'])
@@ -8419,21 +8424,39 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   ) async {
     var busy = false;
     String? error;
+    final status = '${adjustment['status'] ?? ''}';
+    final approvedForPayment = status == 'awaiting_sender_payment';
+    final moreEvidence = status == 'more_evidence_requested';
+    final rejected = status == 'rejected_by_admin';
+    final title = rejected
+        ? 'Adjustment rejected'
+        : approvedForPayment
+            ? 'Adjustment approved'
+            : moreEvidence
+                ? 'More evidence requested'
+                : 'Adjustment under review';
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: !approvedForPayment,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Booking update required'),
+          title: Text(title),
           content: SizedBox(
             width: 430,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(_senderAdjustmentStateCopy(
+                  status: status,
+                  note: '${adjustment['adminReviewNote'] ?? ''}',
+                )),
+                const SizedBox(height: 16),
+                _adjustmentTimeline(status),
+                const SizedBox(height: 16),
                 Text(_discrepancyReasonLabel(
                     '${adjustment['riderReason'] ?? ''}')),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 _adjustmentPriceRow(
                     'Original quote', adjustment['originalQuote']),
                 _adjustmentPriceRow(
@@ -8441,6 +8464,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                 _adjustmentPriceRow(
                     'Additional amount', adjustment['additionalAmount'],
                     emphasized: true),
+                if ('${adjustment['observations'] ?? ''}'
+                    .trim()
+                    .isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                      'Updated delivery evidence is attached for Admin review.'),
+                ],
                 if (error != null) ...[
                   const SizedBox(height: 12),
                   Text(error!, style: const TextStyle(color: Colors.redAccent)),
@@ -8449,70 +8479,130 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      setDialogState(() => busy = true);
-                      try {
-                        await FirebaseFunctions.instance
-                            .httpsCallable('cancelAdjustedCollection')
-                            .call({'adjustmentId': adjustmentId});
-                        if (!dialogContext.mounted) return;
-                        Navigator.of(dialogContext).pop();
-                      } on FirebaseFunctionsException catch (exception) {
+            if (!approvedForPayment)
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            if (approvedForPayment)
+              TextButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        setDialogState(() => busy = true);
+                        try {
+                          await FirebaseFunctions.instance
+                              .httpsCallable('cancelAdjustedCollection')
+                              .call({'adjustmentId': adjustmentId});
+                          if (!dialogContext.mounted) return;
+                          Navigator.of(dialogContext).pop();
+                        } on FirebaseFunctionsException catch (exception) {
+                          setDialogState(() {
+                            busy = false;
+                            error = exception.message ??
+                                'Could not cancel this collection.';
+                          });
+                        }
+                      },
+                child: const Text('Cancel Collection'),
+              ),
+            if (approvedForPayment)
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
                         setDialogState(() {
-                          busy = false;
-                          error = exception.message ??
-                              'Could not cancel this collection.';
+                          busy = true;
+                          error = null;
                         });
-                      }
-                    },
-              child: const Text('Cancel Collection'),
+                        try {
+                          Stripe.publishableKey = Env.publishableTestKey;
+                          await Stripe.instance.applySettings();
+                          final payment = await FirebaseFunctions.instance
+                              .httpsCallable('createDeliveryAdjustmentPayment')
+                              .call({'adjustmentId': adjustmentId});
+                          final data =
+                              Map<String, dynamic>.from(payment.data as Map);
+                          await Stripe.instance.initPaymentSheet(
+                            paymentSheetParameters: SetupPaymentSheetParameters(
+                              paymentIntentClientSecret:
+                                  '${data['clientSecret']}',
+                              merchantDisplayName: 'Circum',
+                              style: ThemeMode.dark,
+                            ),
+                          );
+                          await Stripe.instance.presentPaymentSheet();
+                          await FirebaseFunctions.instance
+                              .httpsCallable(
+                                  'finalizeDeliveryAdjustmentPayment')
+                              .call({'adjustmentId': adjustmentId});
+                          if (!dialogContext.mounted) return;
+                          Navigator.of(dialogContext).pop();
+                          final uid = _senderUser?.uid;
+                          if (uid != null) await _loadSenderDeliveries(uid);
+                        } catch (exception) {
+                          setDialogState(() {
+                            busy = false;
+                            error = exception is FirebaseFunctionsException
+                                ? exception.message
+                                : 'Payment was not completed. Please try again.';
+                          });
+                        }
+                      },
+                child: Text(busy ? 'Please wait...' : 'Pay & Continue'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _senderAdjustmentStateCopy({
+    required String status,
+    required String note,
+  }) {
+    final cleanNote = note.trim();
+    switch (status) {
+      case 'more_evidence_requested':
+        return cleanNote.isEmpty
+            ? 'Admin has requested additional information before making a decision.'
+            : 'Admin has requested additional information: $cleanNote';
+      case 'awaiting_sender_payment':
+        return 'Adjustment approved. Review the updated delivery summary and complete the additional payment to continue.';
+      case 'rejected_by_admin':
+        return cleanNote.isEmpty
+            ? 'Adjustment rejected. The original booking remains authoritative and the delivery can continue.'
+            : 'Adjustment rejected: $cleanNote';
+      default:
+        return 'Rider has reported a discrepancy. Delivery and payment are temporarily paused while Admin reviews the evidence.';
+    }
+  }
+
+  Widget _adjustmentTimeline(String status) {
+    final second = switch (status) {
+      'more_evidence_requested' => 'More Evidence Requested',
+      'awaiting_sender_payment' => 'Approved',
+      'rejected_by_admin' => 'Rejected',
+      _ => 'Awaiting Review',
+    };
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, size: 18),
+            const SizedBox(width: 8),
+            const Text('Submitted'),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Icon(Icons.arrow_forward_rounded, size: 16),
             ),
-            FilledButton(
-              onPressed: busy
-                  ? null
-                  : () async {
-                      setDialogState(() {
-                        busy = true;
-                        error = null;
-                      });
-                      try {
-                        Stripe.publishableKey = Env.publishableTestKey;
-                        await Stripe.instance.applySettings();
-                        final payment = await FirebaseFunctions.instance
-                            .httpsCallable('createDeliveryAdjustmentPayment')
-                            .call({'adjustmentId': adjustmentId});
-                        final data =
-                            Map<String, dynamic>.from(payment.data as Map);
-                        await Stripe.instance.initPaymentSheet(
-                          paymentSheetParameters: SetupPaymentSheetParameters(
-                            paymentIntentClientSecret:
-                                '${data['clientSecret']}',
-                            merchantDisplayName: 'Circum',
-                            style: ThemeMode.dark,
-                          ),
-                        );
-                        await Stripe.instance.presentPaymentSheet();
-                        await FirebaseFunctions.instance
-                            .httpsCallable('finalizeDeliveryAdjustmentPayment')
-                            .call({'adjustmentId': adjustmentId});
-                        if (!dialogContext.mounted) return;
-                        Navigator.of(dialogContext).pop();
-                        final uid = _senderUser?.uid;
-                        if (uid != null) await _loadSenderDeliveries(uid);
-                      } catch (exception) {
-                        setDialogState(() {
-                          busy = false;
-                          error = exception is FirebaseFunctionsException
-                              ? exception.message
-                              : 'Payment was not completed. Please try again.';
-                        });
-                      }
-                    },
-              child: Text(busy ? 'Please wait...' : 'Pay & Continue'),
-            ),
+            Flexible(child: Text(second)),
           ],
         ),
       ),

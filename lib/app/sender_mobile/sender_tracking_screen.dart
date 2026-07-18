@@ -21,6 +21,10 @@ enum SenderTrackingState {
   pickupComplete,
   inTransit,
   riderArrivingAtDropoff,
+  adjustmentUnderReview,
+  adjustmentMoreEvidence,
+  adjustmentApproved,
+  adjustmentRejected,
   delivered,
   cancelled,
   issue,
@@ -207,6 +211,18 @@ SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
     'pin_required' ||
     'handover_pending' =>
       SenderTrackingState.riderArrivingAtDropoff,
+    'awaiting_adjustment_review' ||
+    'awaiting_admin_review' =>
+      SenderTrackingState.adjustmentUnderReview,
+    'more_evidence_requested' ||
+    'adjustment_more_evidence_requested' =>
+      SenderTrackingState.adjustmentMoreEvidence,
+    'awaiting_sender_adjustment' ||
+    'awaiting_sender_payment' =>
+      SenderTrackingState.adjustmentApproved,
+    'rejected_by_admin' ||
+    'adjustment_rejected' =>
+      SenderTrackingState.adjustmentRejected,
     'delivered' ||
     'completed' ||
     'delivery_completed' =>
@@ -364,6 +380,67 @@ SenderTrackingContent senderTrackingContentFor(
         showVanguard: true,
         riderPosition: Offset(.68, .62),
         eta: '< 3 min',
+      );
+    case SenderTrackingState.adjustmentUnderReview:
+      return const SenderTrackingContent(
+        title: 'Adjustment under review',
+        body:
+            'Rider has reported a discrepancy. Delivery and payment are paused while Admin reviews the evidence.',
+        pill: 'Awaiting review',
+        progress: 1,
+        showRoute: true,
+        showPickupPin: true,
+        showDropoffPin: true,
+        showRiderCard: true,
+        showVanguard: true,
+        riderPosition: Offset(.22, .34),
+        eta: 'Paused',
+      );
+    case SenderTrackingState.adjustmentMoreEvidence:
+      return const SenderTrackingContent(
+        title: 'More evidence requested',
+        body:
+            'Admin has requested more information before deciding this delivery adjustment.',
+        pill: 'Evidence needed',
+        progress: 1,
+        showRoute: true,
+        showPickupPin: true,
+        showDropoffPin: true,
+        showRiderCard: true,
+        showVanguard: true,
+        issueVanguard: true,
+        riderPosition: Offset(.22, .34),
+        eta: 'Review pending',
+      );
+    case SenderTrackingState.adjustmentApproved:
+      return const SenderTrackingContent(
+        title: 'Adjustment approved',
+        body:
+            'Admin approved the updated delivery summary. Complete the additional payment to continue.',
+        pill: 'Payment needed',
+        progress: 1,
+        showRoute: true,
+        showPickupPin: true,
+        showDropoffPin: true,
+        showRiderCard: true,
+        showVanguard: true,
+        riderPosition: Offset(.22, .34),
+        eta: 'Paused',
+      );
+    case SenderTrackingState.adjustmentRejected:
+      return const SenderTrackingContent(
+        title: 'Adjustment rejected',
+        body:
+            'The original booking remains authoritative. Your delivery can continue on the original details.',
+        pill: 'Original booking',
+        progress: 1,
+        showRoute: true,
+        showPickupPin: true,
+        showDropoffPin: true,
+        showRiderCard: true,
+        showVanguard: true,
+        riderPosition: Offset(.32, .40),
+        eta: 'Resuming',
       );
     case SenderTrackingState.delivered:
       return SenderTrackingContent(
@@ -711,6 +788,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       case SenderTrackingState.riderEnRouteToPickup:
       case SenderTrackingState.inTransit:
       case SenderTrackingState.riderArrivingAtDropoff:
+      case SenderTrackingState.adjustmentUnderReview:
+      case SenderTrackingState.adjustmentMoreEvidence:
+      case SenderTrackingState.adjustmentApproved:
+      case SenderTrackingState.adjustmentRejected:
       case SenderTrackingState.cancelled:
         break;
     }
