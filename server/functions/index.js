@@ -82,6 +82,7 @@ exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 exports.analyseIris = iris.analyseIris;
 exports.adjudicateIris = iris.adjudicateIris;
 exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;
+exports.reviewDeliveryAdjustment = deliveryAdjustments.reviewDeliveryAdjustment;
 exports.cancelAdjustedCollection = deliveryAdjustments.cancelAdjustedCollection;
 exports.createDeliveryAdjustmentPayment = deliveryAdjustments.createDeliveryAdjustmentPayment;
 exports.finalizeDeliveryAdjustmentPayment = deliveryAdjustments.finalizeDeliveryAdjustmentPayment;

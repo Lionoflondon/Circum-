@@ -90,9 +90,10 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
 
   await db.runTransaction(async (transaction) => {
     const latest = await transaction.get(requestRef);
-    if (latest.data().status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "A pending adjustment already exists.");
+    const latestStatus = latest.data().status;
+    if (latestStatus === "awaiting_sender_adjustment" || latestStatus === "awaiting_adjustment_review") throw new functions.https.HttpsError("failed-precondition", "A pending adjustment already exists.");
     if (adjustment.additionalAmount <= 0) {
-      transaction.set(adjustmentRef, {...adjustment, status: "closed_no_charge", senderDecision: "not_required"});
+      transaction.set(adjustmentRef, {...adjustment, status: "closed_no_charge", adminDecision: "not_required", senderDecision: "not_required"});
       transaction.update(requestRef, {lastAdjustmentId: adjustmentRef.id, updatedAt: Date.now()});
       return;
     }
@@ -103,21 +104,97 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
       additionalAmount: adjustment.additionalAmount,
       riderReason: reason,
       evidencePhotos,
+      adminDecision: "pending",
       senderDecision: "pending",
       reportedAt: Date.now(),
     };
-    transaction.set(adjustmentRef, adjustment);
+    transaction.set(adjustmentRef, {
+      ...adjustment,
+      status: "awaiting_admin_review",
+      adminDecision: "pending",
+      adminReviewStatus: "pending",
+    });
     transaction.update(requestRef, {
-      status: "awaiting_sender_adjustment",
+      status: "awaiting_adjustment_review",
       adjustmentId: adjustmentRef.id,
       adjustmentAdditionalAmount: adjustment.additionalAmount,
       preAdjustmentStatus: latest.data().status,
       loadDiscrepancy: discrepancySummary,
+      requiresAdminReview: true,
       updatedAt: Date.now(),
     });
   });
-  if (adjustment.additionalAmount > 0) await notifyUser(senderId, "Booking Update Required", `Additional payment required: £${adjustment.additionalAmount.toFixed(2)}`, {type: "delivery_adjustment", requestId, adjustmentId: adjustmentRef.id});
-  return {success: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: adjustment.additionalAmount > 0 ? "awaiting_sender_adjustment" : "closed_no_charge"};
+  if (adjustment.additionalAmount > 0) await notifyUser(senderId, "Booking adjustment under review", "A rider has reported a parcel difference. Circum is reviewing the evidence.", {type: "delivery_adjustment_review", requestId, adjustmentId: adjustmentRef.id});
+  return {success: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: adjustment.additionalAmount > 0 ? "awaiting_admin_review" : "closed_no_charge"};
+});
+
+exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  const token = context.auth.token || {};
+  const role = `${token.role || token.adminRole || ""}`.toLowerCase();
+  const roles = Array.isArray(token.roles) ? token.roles.map((item) => `${item}`.toLowerCase()) : [];
+  const admin = token.admin === true || token.superAdmin === true || ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(role) || roles.some((item) => ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(item));
+  if (!admin) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
+  const adjustmentId = `${data.adjustmentId || ""}`.trim();
+  const decision = `${data.decision || ""}`.trim();
+  const note = `${data.note || ""}`.trim();
+  if (!adjustmentId || !["approve", "reject", "request_more_evidence"].includes(decision)) throw new functions.https.HttpsError("invalid-argument", "A supported review decision is required.");
+  const db = getFirestore();
+  const adjustmentRef = db.collection("deliveryAdjustments").doc(adjustmentId);
+  let notify = null;
+  await db.runTransaction(async (transaction) => {
+    const adjustmentSnapshot = await transaction.get(adjustmentRef);
+    if (!adjustmentSnapshot.exists) throw new functions.https.HttpsError("not-found", "Adjustment not found.");
+    const adjustment = adjustmentSnapshot.data();
+    if (adjustment.status !== "awaiting_admin_review") throw new functions.https.HttpsError("failed-precondition", "This adjustment is not awaiting Admin review.");
+    const bookingRef = db.collection("deliveryRequests").doc(adjustment.bookingId);
+    const bookingSnapshot = await transaction.get(bookingRef);
+    if (!bookingSnapshot.exists) throw new functions.https.HttpsError("not-found", "Booking not found.");
+    const previousStatus = bookingSnapshot.data().preAdjustmentStatus || "accepted";
+    const reviewedAt = Date.now();
+    const review = {
+      adminDecision: decision,
+      adminReviewStatus: decision,
+      adminReviewedBy: context.auth.uid,
+      adminReviewNote: note,
+      adminReviewedAt: reviewedAt,
+      updatedAt: reviewedAt,
+    };
+    if (decision === "approve") {
+      transaction.update(adjustmentRef, {...review, status: "awaiting_sender_payment", senderDecision: "pending"});
+      transaction.update(bookingRef, {
+        "status": "awaiting_sender_adjustment",
+        "loadDiscrepancy.adminDecision": "approved",
+        "loadDiscrepancy.adminReviewNote": note,
+        "loadDiscrepancy.adminReviewedAt": reviewedAt,
+        "updatedAt": reviewedAt,
+      });
+      notify = {userId: adjustment.senderId, title: "Booking update approved", body: `Additional payment required: £${Number(adjustment.additionalAmount || 0).toFixed(2)}`, type: "delivery_adjustment"};
+      return;
+    }
+    if (decision === "reject") {
+      transaction.update(adjustmentRef, {...review, status: "rejected_by_admin", senderDecision: "not_required"});
+      transaction.update(bookingRef, {
+        "status": previousStatus,
+        "adjustmentRejectedAt": reviewedAt,
+        "loadDiscrepancy.adminDecision": "rejected",
+        "loadDiscrepancy.adminReviewNote": note,
+        "requiresAdminReview": false,
+        "updatedAt": reviewedAt,
+      });
+      notify = {userId: adjustment.riderId, title: "Parcel report reviewed", body: "Circum rejected the parcel adjustment after review.", type: "delivery_adjustment_rejected"};
+      return;
+    }
+    transaction.update(adjustmentRef, {...review, status: "more_evidence_requested"});
+    transaction.update(bookingRef, {
+      "loadDiscrepancy.adminDecision": "more_evidence_requested",
+      "loadDiscrepancy.adminReviewNote": note,
+      "updatedAt": reviewedAt,
+    });
+    notify = {userId: adjustment.riderId, title: "More evidence needed", body: "Circum needs more evidence for the parcel report.", type: "delivery_adjustment_more_evidence"};
+  });
+  if (notify) await notifyUser(notify.userId, notify.title, notify.body, {type: notify.type, adjustmentId});
+  return {success: true, adjustmentId, decision};
 });
 
 exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) => {
@@ -141,7 +218,7 @@ exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, co
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
   const adjustment = await adjustmentRef.get();
   if (!adjustment.exists || adjustment.data().senderId !== context.auth.uid) throw new functions.https.HttpsError("permission-denied", "Only the sender can pay this adjustment.");
-  if (adjustment.data().status !== "awaiting_sender_payment") throw new functions.https.HttpsError("failed-precondition", "This adjustment is not awaiting payment.");
+  if (adjustment.data().status !== "awaiting_sender_payment" || adjustment.data().adminDecision !== "approve") throw new functions.https.HttpsError("failed-precondition", "This adjustment is not approved for payment.");
   const amount = Math.round(Number(adjustment.data().additionalAmount) * 100);
   if (amount <= 0) throw new functions.https.HttpsError("failed-precondition", "No additional payment is due.");
   const intent = await stripe.paymentIntents.create({
