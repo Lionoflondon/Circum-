@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_operations.dart';
-import 'admin_root.dart';
 
 enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
@@ -326,6 +325,42 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       reason: 'Delivery operation status updated from Admin',
     ));
     setState(() => _message = 'Delivery $id queued for $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _setIrisReviewStatus(
+    Map<String, dynamic> delivery,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot manage IRIS reviews.');
+      return;
+    }
+    final id = _idFor(delivery);
+    if (id.isEmpty) return;
+    final patch = AdminIrisOperationsTools.reviewPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+      reason: 'Updated from Circum Admin IRIS Operations',
+    );
+    await _db
+        .collection('deliveryRequests')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'iris_review_$status',
+      recordType: 'deliveryRequests',
+      recordId: id,
+      oldValue: {
+        'irisReviewStatus': delivery['irisReviewStatus'],
+        'reviewType': delivery['reviewType'],
+      },
+      newValue: patch,
+      reason: 'IRIS review updated from Admin',
+    ));
+    setState(() => _message = 'IRIS review for $id marked $status.');
     await _loadAdminData();
   }
 
@@ -783,6 +818,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onDuplicateDelivery: _duplicateDelivery,
                       onSetRiderStatus: _setRiderStatus,
                       onSetDeliveryOperationStatus: _setDeliveryOperationStatus,
+                      onSetIrisReviewStatus: _setIrisReviewStatus,
                       onUpdateSupportTicket: _updateSupportTicket,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
@@ -1271,6 +1307,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onDuplicateDelivery,
     required this.onSetRiderStatus,
     required this.onSetDeliveryOperationStatus,
+    required this.onSetIrisReviewStatus,
     required this.onUpdateSupportTicket,
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
@@ -1309,6 +1346,8 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onSetDeliveryOperationStatus;
   final Future<void> Function(Map<String, dynamic>, String)
+      onSetIrisReviewStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
       onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusPickup;
@@ -1346,8 +1385,14 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.dashboard => _Dashboard(metrics: metrics, data: data),
           AdminModule.visitorAnalytics =>
             _VisitorAnalyticsModule(records: data.websiteVisitors),
-          AdminModule.discrepancyReview =>
-            const AdminDeliveryAdjustmentReviewQueue(),
+          AdminModule.discrepancyReview => _IrisOperationsModule(
+              deliveries: data.deliveries,
+              auditLogs: data.auditLogs,
+              query: query,
+              canManageIris: canEditDeliveries,
+              onOpenDelivery: onOpenDeliveryProfile,
+              onSetIrisReviewStatus: onSetIrisReviewStatus,
+            ),
           AdminModule.deliveries => _DeliveryOperationsModule(
               deliveries: data.deliveries,
               riders: data.riders,
@@ -1466,46 +1511,14 @@ class _AdminModuleBody extends StatelessWidget {
                       ]
                   : null,
             ),
-          AdminModule.finance => _RecordModule(
-              title: 'Finance',
-              subtitle:
-                  'Payments, payouts, wallet records and finance review workflow.',
-              records: data.payments,
+          AdminModule.finance => _FinanceOperationsModule(
+              payments: data.payments,
+              deliveries: data.deliveries,
+              supportTickets: data.supportTickets,
+              auditLogs: data.auditLogs,
               query: query,
-              fields: const [
-                'id',
-                'status',
-                'senderId',
-                'riderId',
-                'type',
-                'financeReviewStatus'
-              ],
-              columns: const ['Record', 'Payment', 'Amount', 'Review'],
-              row: (record) => [
-                _recordId(record),
-                '${record['status'] ?? 'unknown'}',
-                _money(record['amount'] ?? record['total'] ?? record['price']),
-                '${record['financeReviewStatus'] ?? 'unreviewed'}',
-              ],
-              actions: canManageFinance
-                  ? (record) => [
-                        _MiniAction(
-                          label: 'Assign',
-                          onPressed: () => onUpdateFinanceWorkflow(
-                              record, 'review_assigned'),
-                        ),
-                        _MiniAction(
-                          label: 'Reconcile',
-                          onPressed: () =>
-                              onUpdateFinanceWorkflow(record, 'reconciled'),
-                        ),
-                        _MiniAction(
-                          label: 'Escalate',
-                          onPressed: () =>
-                              onUpdateFinanceWorkflow(record, 'escalated'),
-                        ),
-                      ]
-                  : null,
+              canManageFinance: canManageFinance,
+              onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
             ),
           AdminModule.healthPlus => _RecordModule(
               title: 'Health+',
@@ -1625,6 +1638,320 @@ class _AdminModuleBody extends StatelessWidget {
             ),
         },
       ],
+    );
+  }
+}
+
+class _IrisOperationsModule extends StatelessWidget {
+  const _IrisOperationsModule({
+    required this.deliveries,
+    required this.auditLogs,
+    required this.query,
+    required this.canManageIris,
+    required this.onOpenDelivery,
+    required this.onSetIrisReviewStatus,
+  });
+
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> auditLogs;
+  final String query;
+  final bool canManageIris;
+  final ValueChanged<Map<String, dynamic>> onOpenDelivery;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetIrisReviewStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final irisRecords = deliveries.where(_hasIrisSignal).toList();
+    final pending = irisRecords.where(_isIrisPending).length;
+    final lowConfidence = irisRecords.where(_isLowConfidenceIris).length;
+    final highConfidence = irisRecords.where(_isHighConfidenceIris).length;
+    final disputed = irisRecords.where(_hasWeightDispute).length;
+    final learning = irisRecords.where(_isLearningCandidate).length;
+    final averageConfidence = _averageIrisConfidence(irisRecords);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Pending reviews', pending.toString(), 'IRIS queue'),
+            _MetricCard('High confidence', highConfidence.toString(), '>= 85%'),
+            _MetricCard('Low confidence', lowConfidence.toString(), '< 60%'),
+            _MetricCard('Weight disputes', disputed.toString(),
+                'sender, rider or IRIS mismatch'),
+            _MetricCard('Admin overrides',
+                _countIrisOverrides(auditLogs).toString(), 'audit records'),
+            _MetricCard('Learning queue', learning.toString(), 'candidates'),
+            _MetricCard('Avg confidence',
+                '${averageConfidence.toStringAsFixed(0)}%', 'loaded records'),
+            _MetricCard(
+                'Categories',
+                _categoryDistribution(irisRecords).length.toString(),
+                'observed'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _IrisAnalyticsPanel(records: irisRecords),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'IRIS Review Queue',
+          subtitle:
+              'Review delivery estimates, evidence, confidence, category, vehicle and learning flags.',
+          records: irisRecords,
+          query: query,
+          fields: const [
+            'id',
+            'requestId',
+            'trackingId',
+            'senderName',
+            'recipientName',
+            'riderId',
+            'businessName',
+            'category',
+            'irisCategory',
+            'irisReviewStatus',
+            'reviewType',
+            'serviceType',
+            'vehicleType'
+          ],
+          columns: const ['Delivery', 'Estimate', 'Confidence', 'Review'],
+          row: (record) => [
+            _recordId(record),
+            _irisEstimateSummary(record),
+            '${_irisConfidence(record).toStringAsFixed(0)}%',
+            '${record['irisReviewStatus'] ?? record['reviewType'] ?? 'pending'}',
+          ],
+          actions: (record) => [
+            _MiniAction(
+              label: 'Details',
+              onPressed: () => onOpenDelivery(record),
+            ),
+            if (canManageIris) ...[
+              for (final action in const [
+                ('Approve', 'approved'),
+                ('Reject', 'rejected'),
+                ('Weight review', 'weight_override_review'),
+                ('Category review', 'category_override_review'),
+                ('Vehicle review', 'vehicle_override_review'),
+                ('More evidence', 'more_evidence_requested'),
+                ('Engineering', 'engineering_review'),
+                ('Learning', 'learning_flagged'),
+                ('Close', 'closed'),
+              ])
+                _MiniAction(
+                  label: action.$1,
+                  onPressed: () =>
+                      unawaited(onSetIrisReviewStatus(record, action.$2)),
+                ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _IrisAnalyticsPanel extends StatelessWidget {
+  const _IrisAnalyticsPanel({required this.records});
+
+  final List<Map<String, dynamic>> records;
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = _categoryDistribution(records);
+    final vehicles = _vehicleDistribution(records);
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('IRIS learning and recommendation analytics',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final entry in categories.entries.take(8))
+                  _HealthChip(entry.key, entry.value),
+                for (final entry in vehicles.entries.take(8))
+                  _HealthChip('Vehicle ${entry.key}', entry.value),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FinanceOperationsModule extends StatelessWidget {
+  const _FinanceOperationsModule({
+    required this.payments,
+    required this.deliveries,
+    required this.supportTickets,
+    required this.auditLogs,
+    required this.query,
+    required this.canManageFinance,
+    required this.onUpdateFinanceWorkflow,
+  });
+
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> auditLogs;
+  final String query;
+  final bool canManageFinance;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateFinanceWorkflow;
+
+  @override
+  Widget build(BuildContext context) {
+    final todayRevenue = _financeTotalToday(payments);
+    final outstandingSettlements =
+        payments.where(_isOutstandingSettlement).length;
+    final pendingRefunds = payments.where(_isPendingRefund).length;
+    final failedPayments = payments.where(_isFailedPayment).length;
+    final investigations = payments.where(_isFinanceInvestigation).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard("Today's revenue", _money(todayRevenue), 'payments'),
+            _MetricCard('Settlements', outstandingSettlements.toString(),
+                'outstanding'),
+            _MetricCard('Wallet liabilities',
+                _money(_walletLiability(payments)), 'loaded ledger'),
+            _MetricCard('Roth circulation', _money(_rothTotal(payments)),
+                'loaded records'),
+            _MetricCard('Pending refunds', pendingRefunds.toString(), 'review'),
+            _MetricCard('Failed payments', failedPayments.toString(), 'failed'),
+            _MetricCard('Investigations', investigations.toString(), 'open'),
+            _MetricCard('Stripe reconciliation',
+                _stripeReconciliationStatus(payments), 'status'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _FinanceAnalyticsPanel(
+          payments: payments,
+          deliveries: deliveries,
+          supportTickets: supportTickets,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Wallet Centre and Payment Investigations',
+          subtitle:
+              'Search sender, rider, business, wallet id, transaction id, Stripe reference, delivery and status.',
+          records: payments,
+          query: query,
+          fields: const [
+            'id',
+            'walletId',
+            'transactionId',
+            'senderId',
+            'riderId',
+            'businessId',
+            'deliveryId',
+            'requestId',
+            'paymentIntent',
+            'stripePaymentIntentId',
+            'status',
+            'type',
+            'financeReviewStatus'
+          ],
+          columns: const ['Record', 'Wallet/Stripe', 'Amount', 'Review'],
+          row: (record) => [
+            _recordId(record),
+            '${record['walletId'] ?? record['stripePaymentIntentId'] ?? record['paymentIntent'] ?? record['transactionId'] ?? 'Not recorded'}',
+            _money(record['amount'] ?? record['total'] ?? record['price']),
+            '${record['financeReviewStatus'] ?? record['refundReviewStatus'] ?? record['investigationStatus'] ?? 'unreviewed'}',
+          ],
+          actions: canManageFinance
+              ? (record) => [
+                    for (final action in const [
+                      ('Assign', 'review_assigned'),
+                      ('Reconcile', 'reconciled'),
+                      ('Escalate', 'escalated'),
+                      ('Credit review', 'wallet_credit_review'),
+                      ('Debit review', 'wallet_debit_review'),
+                      ('Issue Roth', 'roth_issue_review'),
+                      ('Remove Roth', 'roth_remove_review'),
+                      ('Approve refund', 'refund_approved'),
+                      ('Reject refund', 'refund_rejected'),
+                      ('Investigate', 'investigation_flagged'),
+                      ('Resolve', 'investigation_resolved'),
+                    ])
+                      _MiniAction(
+                        label: action.$1,
+                        onPressed: () => unawaited(
+                            onUpdateFinanceWorkflow(record, action.$2)),
+                      ),
+                  ]
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _FinanceAnalyticsPanel extends StatelessWidget {
+  const _FinanceAnalyticsPanel({
+    required this.payments,
+    required this.deliveries,
+    required this.supportTickets,
+  });
+
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> supportTickets;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Revenue, Roth and settlement analytics',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _HealthChip('Orders', deliveries.length),
+                _HealthChip('Fees', _countFinanceType(payments, 'fee')),
+                _HealthChip('Refunds', _countFinanceType(payments, 'refund')),
+                _HealthChip('Tips', _countFinanceType(payments, 'tip')),
+                _HealthChip(
+                    'Wallet usage', _countFinanceType(payments, 'wallet')),
+                _HealthChip('Roth usage', _countFinanceType(payments, 'roth')),
+                _HealthChip('Business revenue',
+                    _countRecordsContaining(deliveries, 'business')),
+                _HealthChip('Health+ revenue',
+                    _countRecordsContaining(deliveries, 'health')),
+                _HealthChip('Gift revenue',
+                    _countRecordsContaining(deliveries, 'gift')),
+                _HealthChip(
+                    'Refund tickets',
+                    supportTickets
+                        .where(
+                            (ticket) => '${ticket['type']}'.contains('refund'))
+                        .length),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3840,6 +4167,188 @@ bool _recordReferencesAccount(
       (email.isNotEmpty && values.contains(email));
 }
 
+bool _hasIrisSignal(Map<String, dynamic> record) {
+  return record.containsKey('iris') ||
+      record.containsKey('irisEstimate') ||
+      record.containsKey('irisCalculationMetadata') ||
+      record.containsKey('irisReviewStatus') ||
+      record.containsKey('irisConfidence') ||
+      '${record['reviewType'] ?? ''}'.toLowerCase().contains('iris');
+}
+
+bool _isIrisPending(Map<String, dynamic> record) {
+  final state =
+      '${record['irisReviewStatus'] ?? record['reviewType'] ?? 'pending'}'
+          .toLowerCase();
+  return state.contains('pending') ||
+      state.contains('review') ||
+      state.contains('disputed');
+}
+
+bool _isLowConfidenceIris(Map<String, dynamic> record) =>
+    _irisConfidence(record) > 0 && _irisConfidence(record) < 60;
+
+bool _isHighConfidenceIris(Map<String, dynamic> record) =>
+    _irisConfidence(record) >= 85;
+
+bool _hasWeightDispute(Map<String, dynamic> record) {
+  final estimated = _numberFrom(record['irisEstimatedWeight'] ??
+      record['estimatedWeight'] ??
+      record['weight']);
+  final verified = _numberFrom(record['verifiedWeight'] ??
+      record['riderVerifiedWeight'] ??
+      record['actualWeight']);
+  if (estimated > 0 && verified > 0) return (estimated - verified).abs() >= 2;
+  final state = '${record['irisReviewStatus'] ?? record['reviewType'] ?? ''}'
+      .toLowerCase();
+  return state.contains('dispute') || state.contains('weight');
+}
+
+bool _isLearningCandidate(Map<String, dynamic> record) {
+  final state =
+      '${record['irisLearningQueueStatus'] ?? record['irisReviewStatus'] ?? record['reviewType'] ?? ''}'
+          .toLowerCase();
+  return state.contains('learning') ||
+      state.contains('misclassification') ||
+      state.contains('category');
+}
+
+double _irisConfidence(Map<String, dynamic> record) {
+  final raw = record['irisConfidence'] ??
+      record['confidence'] ??
+      record['confidenceScore'] ??
+      _mapValue(record['iris'], 'confidence') ??
+      _mapValue(record['irisEstimate'], 'confidence') ??
+      _mapValue(record['irisCalculationMetadata'], 'confidence');
+  final value = _numberFrom(raw);
+  return value <= 1 && value > 0 ? value * 100 : value;
+}
+
+double _averageIrisConfidence(List<Map<String, dynamic>> records) {
+  final values = records.map(_irisConfidence).where((value) => value > 0);
+  if (values.isEmpty) return 0;
+  return values.reduce((a, b) => a + b) / values.length;
+}
+
+int _countIrisOverrides(List<Map<String, dynamic>> auditLogs) {
+  return auditLogs
+      .where((log) => '${log['actionType'] ?? ''}'.contains('iris_review'))
+      .length;
+}
+
+Map<String, int> _categoryDistribution(List<Map<String, dynamic>> records) {
+  final result = <String, int>{};
+  for (final record in records) {
+    final category =
+        '${record['category'] ?? record['irisCategory'] ?? _mapValue(record['iris'], 'category') ?? 'Uncategorised'}';
+    result[category] = (result[category] ?? 0) + 1;
+  }
+  return result;
+}
+
+Map<String, int> _vehicleDistribution(List<Map<String, dynamic>> records) {
+  final result = <String, int>{};
+  for (final record in records) {
+    final vehicle =
+        '${record['recommendedVehicle'] ?? record['vehicleRecommendation'] ?? record['vehicleType'] ?? _mapValue(record['iris'], 'vehicleType') ?? 'Unknown'}';
+    result[vehicle] = (result[vehicle] ?? 0) + 1;
+  }
+  return result;
+}
+
+String _irisEstimateSummary(Map<String, dynamic> record) {
+  final weight = record['irisEstimatedWeight'] ??
+      record['estimatedWeight'] ??
+      _mapValue(record['iris'], 'weight') ??
+      _mapValue(record['irisEstimate'], 'weight');
+  final verified = record['verifiedWeight'] ?? record['riderVerifiedWeight'];
+  final category = record['category'] ??
+      record['irisCategory'] ??
+      _mapValue(record['iris'], 'category');
+  final vehicle = record['recommendedVehicle'] ??
+      record['vehicleRecommendation'] ??
+      _mapValue(record['iris'], 'vehicleType');
+  return '${category ?? 'Object'} / ${weight ?? 'unknown'}kg / verified ${verified ?? 'n/a'} / ${vehicle ?? 'vehicle n/a'}';
+}
+
+Object? _mapValue(Object? value, String key) {
+  if (value is Map) return value[key];
+  return null;
+}
+
+double _financeTotalToday(List<Map<String, dynamic>> payments) {
+  final now = DateTime.now();
+  return payments.where((payment) => _isSameDay(payment, now)).fold<double>(
+        0,
+        (total, payment) =>
+            total + _numberFrom(payment['amount'] ?? payment['total']),
+      );
+}
+
+bool _isOutstandingSettlement(Map<String, dynamic> payment) {
+  final text = payment.values.join(' ').toLowerCase();
+  return text.contains('settlement') &&
+      !text.contains('complete') &&
+      !text.contains('paid');
+}
+
+bool _isPendingRefund(Map<String, dynamic> payment) {
+  final text = payment.values.join(' ').toLowerCase();
+  return text.contains('refund') &&
+      (text.contains('pending') || text.contains('review'));
+}
+
+bool _isFailedPayment(Map<String, dynamic> payment) {
+  final text =
+      '${payment['status'] ?? payment['paymentStatus'] ?? ''}'.toLowerCase();
+  return text.contains('fail') || text.contains('declin');
+}
+
+bool _isFinanceInvestigation(Map<String, dynamic> payment) {
+  final text = payment.values.join(' ').toLowerCase();
+  return text.contains('investigation') || text.contains('dispute');
+}
+
+double _walletLiability(List<Map<String, dynamic>> payments) {
+  return payments
+      .where((payment) =>
+          payment.values.join(' ').toLowerCase().contains('wallet'))
+      .fold<double>(
+        0,
+        (total, payment) =>
+            total + _numberFrom(payment['balance'] ?? payment['amount']),
+      );
+}
+
+double _rothTotal(List<Map<String, dynamic>> payments) {
+  return payments
+      .where(
+          (payment) => payment.values.join(' ').toLowerCase().contains('roth'))
+      .fold<double>(
+        0,
+        (total, payment) =>
+            total + _numberFrom(payment['roth'] ?? payment['amount']),
+      );
+}
+
+String _stripeReconciliationStatus(List<Map<String, dynamic>> payments) {
+  if (payments.any(_isFailedPayment)) return 'Action';
+  if (payments.any(_isFinanceInvestigation)) return 'Review';
+  return 'OK';
+}
+
+int _countFinanceType(List<Map<String, dynamic>> payments, String type) {
+  return payments
+      .where((payment) => payment.values.join(' ').toLowerCase().contains(type))
+      .length;
+}
+
+int _countRecordsContaining(List<Map<String, dynamic>> records, String text) {
+  return records
+      .where((record) => record.values.join(' ').toLowerCase().contains(text))
+      .length;
+}
+
 bool _isOnlineRider(Map<String, dynamic> rider) {
   final state =
       '${rider['availability'] ?? rider['onlineStatus'] ?? rider['status'] ?? rider['driverStatus'] ?? ''}'
@@ -4064,6 +4573,11 @@ String _money(Object? value) {
   final parsed = double.tryParse('$value');
   if (parsed == null) return '£0.00';
   return '£${parsed.toStringAsFixed(2)}';
+}
+
+double _numberFrom(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value') ?? 0;
 }
 
 String _date(Object? value) {

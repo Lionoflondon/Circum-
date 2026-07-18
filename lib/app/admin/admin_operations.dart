@@ -110,6 +110,14 @@ class AdminFinanceTools {
     'review_assigned',
     'reconciled',
     'escalated',
+    'wallet_credit_review',
+    'wallet_debit_review',
+    'roth_issue_review',
+    'roth_remove_review',
+    'refund_approved',
+    'refund_rejected',
+    'investigation_flagged',
+    'investigation_resolved',
   ];
 
   static Map<String, dynamic> workflowPatch({
@@ -126,7 +134,50 @@ class AdminFinanceTools {
       'financeReviewedBy': updatedBy,
       'financeReviewedAt': updatedAt,
       'financeEscalated': status == 'escalated',
+      if (status.contains('refund')) 'refundReviewStatus': status,
+      if (status.contains('investigation')) 'investigationStatus': status,
+      if (status.contains('wallet')) 'walletReviewStatus': status,
+      if (status.contains('roth')) 'rothReviewStatus': status,
       if (note?.trim().isNotEmpty == true) 'financeNote': note!.trim(),
+    };
+  }
+}
+
+class AdminIrisOperationsTools {
+  static const reviewStatuses = [
+    'approved',
+    'rejected',
+    'weight_override_review',
+    'category_override_review',
+    'vehicle_override_review',
+    'more_evidence_requested',
+    'engineering_review',
+    'learning_flagged',
+    'closed',
+  ];
+
+  static Map<String, dynamic> reviewPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    required String reason,
+  }) {
+    if (!reviewStatuses.contains(status)) {
+      throw ArgumentError('Unsupported IRIS review status.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('An IRIS review reason is required.');
+    }
+    return {
+      'irisReviewStatus': status,
+      'irisReviewedBy': updatedBy,
+      'irisReviewedAt': updatedAt,
+      'irisReviewReason': reason.trim(),
+      if (status == 'learning_flagged') 'irisLearningQueueStatus': 'pending',
+      if (status == 'engineering_review') 'engineeringReviewStatus': 'open',
+      if (status == 'more_evidence_requested')
+        'evidenceRequestStatus': 'requested',
+      if (status == 'closed') 'irisReviewClosed': true,
     };
   }
 }

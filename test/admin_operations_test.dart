@@ -408,6 +408,22 @@ void main() {
       expect(patch.containsKey('paymentStatus'), isFalse);
     });
 
+    test('IRIS review patches preserve pricing and lifecycle authority', () {
+      final patch = AdminIrisOperationsTools.reviewPatch(
+        status: 'learning_flagged',
+        updatedBy: 'iris@circumuk.com',
+        updatedAt: DateTime(2026, 6, 2),
+        reason: 'Recurring category mismatch.',
+      );
+
+      expect(patch['irisReviewStatus'], 'learning_flagged');
+      expect(patch['irisLearningQueueStatus'], 'pending');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('deliveryStatus'), isFalse);
+      expect(patch.containsKey('finalAmount'), isFalse);
+      expect(patch.containsKey('price'), isFalse);
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',
@@ -424,6 +440,22 @@ void main() {
       expect(patch.containsKey('amount'), isFalse);
       expect(patch.containsKey('paymentIntent'), isFalse);
       expect(patch.containsKey('stripePaymentIntentId'), isFalse);
+    });
+
+    test('finance operation review patches preserve payment authority', () {
+      final patch = AdminFinanceTools.workflowPatch(
+        status: 'refund_approved',
+        updatedBy: 'finance@circumuk.com',
+        updatedAt: DateTime(2026, 6, 2),
+        note: 'Eligible goodwill refund.',
+      );
+
+      expect(patch['financeReviewStatus'], 'refund_approved');
+      expect(patch['refundReviewStatus'], 'refund_approved');
+      expect(patch['financeNote'], 'Eligible goodwill refund.');
+      expect(patch.containsKey('amount'), isFalse);
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('paymentIntent'), isFalse);
     });
 
     test('finance workflow patches reject unsupported statuses', () {
