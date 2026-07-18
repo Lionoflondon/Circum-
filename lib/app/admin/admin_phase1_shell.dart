@@ -1420,6 +1420,14 @@ class _Dashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final health = AdminPlatformHealthSnapshot.fromData(
+      deliveries: data.deliveries,
+      payments: data.payments,
+      supportTickets: data.supportTickets,
+      healthPlusPickups: data.healthPlusPickups,
+      businessAccounts: data.businessAccounts,
+      giftOrders: data.giftOrders,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1439,29 +1447,221 @@ class _Dashboard extends StatelessWidget {
                 '${_money(metrics.revenueThisMonth)} month'),
             _MetricCard('Support', metrics.unresolvedSupportIssues.toString(),
                 'unresolved'),
+            _MetricCard('Wallet review', health.walletReviewItems.toString(),
+                'payments and payouts'),
+            _MetricCard('Platform health', health.status,
+                '${health.alerts.length} active alerts'),
           ],
         ),
         const SizedBox(height: 18),
+        _PlatformHealthPanel(health: health),
+        const SizedBox(height: 18),
         _RecordModule(
-          title: 'Operational pulse',
-          subtitle: 'Recent live records loaded from production collections.',
-          records: [
-            ...data.deliveries.take(6),
-            ...data.supportTickets.take(4),
-          ],
+          title: 'Realtime monitoring',
+          subtitle:
+              'Live delivery, support, finance, Health+, Business and Gifts signals.',
+          records: _platformPulseRecords(data),
           query: '',
           fields: const [],
-          columns: const ['Record', 'Type', 'Status', 'Updated'],
+          columns: const ['Signal', 'Domain', 'Status', 'Updated'],
           row: (record) => [
-            _recordId(record),
-            record.containsKey('pickupAddress') ? 'Delivery' : 'Support',
-            '${record['status'] ?? record['deliveryStatus'] ?? 'open'}',
+            '${record['label'] ?? _recordId(record)}',
+            '${record['domain'] ?? 'Platform'}',
+            '${record['status'] ?? 'open'}',
             _date(record['updatedAt'] ?? record['createdAt']),
           ],
         ),
       ],
     );
   }
+}
+
+class _PlatformHealthPanel extends StatelessWidget {
+  const _PlatformHealthPanel({required this.health});
+
+  final AdminPlatformHealthSnapshot health;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.monitor_heart_rounded,
+                    color: Color(0xFF7DD3FC)),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Live platform health',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                _StatusPill(label: health.status),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _HealthChip('Jobs', health.activeJobs),
+                _HealthChip('Waiting', health.waitingJobs),
+                _HealthChip('Vanguard', health.vanguardJobs),
+                _HealthChip('IRIS reviews', health.discrepancyReviews),
+                _HealthChip('Support', health.supportOpen),
+                _HealthChip('Health+', health.healthPlusOpen),
+                _HealthChip('Business', health.businessPending),
+                _HealthChip('Gifts', health.giftsPending),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (health.alerts.isEmpty)
+              Text(
+                'No platform alerts from the currently loaded records.',
+                style: TextStyle(color: Colors.white.withValues(alpha: .68)),
+              )
+            else
+              Column(
+                children: [
+                  for (final alert in health.alerts)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _PlatformAlertRow(alert: alert),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthChip extends StatelessWidget {
+  const _HealthChip(this.label, this.value);
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      label: Text('$label: $value'),
+      backgroundColor: Colors.white.withValues(alpha: .08),
+      side: BorderSide(color: Colors.white.withValues(alpha: .12)),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (label) {
+      'Critical' => const Color(0xFFF87171),
+      'Watch' => const Color(0xFFFBBF24),
+      _ => const Color(0xFF34D399),
+    };
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: .45)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Text(
+          label,
+          style: TextStyle(color: color, fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlatformAlertRow extends StatelessWidget {
+  const _PlatformAlertRow({required this.alert});
+
+  final AdminPlatformAlert alert;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (alert.severity) {
+      'critical' => Icons.error_rounded,
+      'warning' => Icons.warning_amber_rounded,
+      _ => Icons.info_rounded,
+    };
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFF7DD3FC)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(alert.title,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(
+                alert.detail,
+                style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+List<Map<String, dynamic>> _platformPulseRecords(AdminDataBundle data) {
+  return [
+    for (final delivery in data.deliveries.take(5))
+      {
+        ...delivery,
+        'label': _recordId(delivery),
+        'domain': 'Delivery',
+      },
+    for (final ticket in data.supportTickets.take(4))
+      {
+        ...ticket,
+        'label': _recordId(ticket),
+        'domain': 'Support',
+      },
+    for (final payment in data.payments.take(4))
+      {
+        ...payment,
+        'label': _recordId(payment),
+        'domain': 'Finance',
+      },
+    for (final pickup in data.healthPlusPickups.take(3))
+      {
+        ...pickup,
+        'label': _recordId(pickup),
+        'domain': 'Health+',
+      },
+    for (final business in data.businessAccounts.take(3))
+      {
+        ...business,
+        'label': business['businessName'] ??
+            business['companyName'] ??
+            _recordId(business),
+        'domain': 'Business',
+      },
+    for (final gift in data.giftOrders.take(3))
+      {
+        ...gift,
+        'label': gift['giftName'] ?? gift['title'] ?? _recordId(gift),
+        'domain': 'Gifts',
+      },
+  ];
 }
 
 class _ChatModule extends StatelessWidget {

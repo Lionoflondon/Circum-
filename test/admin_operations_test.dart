@@ -150,6 +150,56 @@ void main() {
       expect(metrics.healthPlusRecurringRevenue, 11);
     });
 
+    test('derives platform health and alerts from live records', () {
+      final health = AdminPlatformHealthSnapshot.fromData(
+        deliveries: [
+          {
+            'requestId': 'active-1',
+            'status': 'in_transit',
+            'vanguardProtection': true,
+          },
+          {
+            'requestId': 'wait-1',
+            'status': 'waiting',
+          },
+          {
+            'requestId': 'iris-1',
+            'status': 'awaiting_review',
+            'reviewType': 'iris_discrepancy',
+          },
+          {
+            'requestId': 'done-1',
+            'status': 'completed',
+          },
+        ],
+        payments: [
+          {'id': 'pay-1', 'financeReviewStatus': 'escalated'},
+        ],
+        supportTickets: [
+          {'id': 'ticket-1', 'status': 'open'},
+        ],
+        healthPlusPickups: [
+          {'id': 'health-1', 'status': 'assigned'},
+        ],
+        businessAccounts: [
+          {'id': 'business-1', 'status': 'pending'},
+        ],
+        giftOrders: [
+          {'id': 'gift-1', 'status': 'review'},
+        ],
+      );
+
+      expect(health.activeJobs, 3);
+      expect(health.waitingJobs, 1);
+      expect(health.vanguardJobs, 1);
+      expect(health.discrepancyReviews, 1);
+      expect(health.walletReviewItems, 1);
+      expect(health.supportOpen, 1);
+      expect(health.status, 'Watch');
+      expect(health.alerts.map((alert) => alert.title),
+          containsAll(['Support queue', 'Finance review']));
+    });
+
     test('searches customers and drivers', () {
       final customers = [
         {'fullName': 'Jane Smith', 'email': 'jane@circum.app'},

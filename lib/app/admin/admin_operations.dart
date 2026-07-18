@@ -383,6 +383,147 @@ class AdminMetricSnapshot {
       );
 }
 
+class AdminPlatformAlert {
+  const AdminPlatformAlert({
+    required this.severity,
+    required this.title,
+    required this.detail,
+  });
+
+  final String severity;
+  final String title;
+  final String detail;
+}
+
+class AdminPlatformHealthSnapshot {
+  const AdminPlatformHealthSnapshot({
+    required this.activeJobs,
+    required this.waitingJobs,
+    required this.vanguardJobs,
+    required this.discrepancyReviews,
+    required this.walletReviewItems,
+    required this.supportOpen,
+    required this.healthPlusOpen,
+    required this.businessPending,
+    required this.giftsPending,
+    required this.alerts,
+  });
+
+  final int activeJobs;
+  final int waitingJobs;
+  final int vanguardJobs;
+  final int discrepancyReviews;
+  final int walletReviewItems;
+  final int supportOpen;
+  final int healthPlusOpen;
+  final int businessPending;
+  final int giftsPending;
+  final List<AdminPlatformAlert> alerts;
+
+  String get status {
+    if (alerts.any((alert) => alert.severity == 'critical')) return 'Critical';
+    if (alerts.any((alert) => alert.severity == 'warning')) return 'Watch';
+    return 'Healthy';
+  }
+
+  factory AdminPlatformHealthSnapshot.fromData({
+    required List<Map<String, dynamic>> deliveries,
+    required List<Map<String, dynamic>> payments,
+    required List<Map<String, dynamic>> supportTickets,
+    required List<Map<String, dynamic>> healthPlusPickups,
+    required List<Map<String, dynamic>> businessAccounts,
+    required List<Map<String, dynamic>> giftOrders,
+  }) {
+    final activeDeliveries = deliveries
+        .where((item) =>
+            !_isCompleted(item) && !_isFailed(item) && !_isCancelled(item))
+        .toList();
+    final waiting = activeDeliveries
+        .where((item) => _hasStatus(item, const [
+              'waiting',
+              'no_show',
+              'no-show',
+            ]))
+        .length;
+    final vanguard = activeDeliveries
+        .where((item) => _containsAny(item, const ['vanguard']))
+        .length;
+    final discrepancies = deliveries
+        .where((item) => _containsAny(item, const [
+              'discrepancy',
+              'adjustment_pending',
+              'awaiting_review',
+              'iris_review'
+            ]))
+        .length;
+    final financeReview = payments
+        .where((item) => _containsAny(item, const [
+              'review',
+              'refund',
+              'dispute',
+              'escalated',
+              'pending_verification'
+            ]))
+        .length;
+    final supportOpen =
+        supportTickets.where((ticket) => !_isResolved(ticket)).length;
+    final healthOpen = healthPlusPickups
+        .where((item) =>
+            !_containsAny(item, const ['completed', 'cancelled', 'closed']))
+        .length;
+    final businessPending = businessAccounts
+        .where((item) => _containsAny(item, const ['pending', 'review']))
+        .length;
+    final giftsPending = giftOrders
+        .where((item) => _containsAny(item, const ['pending', 'review']))
+        .length;
+    final alerts = <AdminPlatformAlert>[
+      if (supportOpen > 0)
+        AdminPlatformAlert(
+          severity: supportOpen > 5 ? 'critical' : 'warning',
+          title: 'Support queue',
+          detail: '$supportOpen unresolved support tickets',
+        ),
+      if (discrepancies > 0)
+        AdminPlatformAlert(
+          severity: 'warning',
+          title: 'IRIS and parcel review',
+          detail: '$discrepancies discrepancy reviews need attention',
+        ),
+      if (financeReview > 0)
+        AdminPlatformAlert(
+          severity: 'warning',
+          title: 'Finance review',
+          detail: '$financeReview payment or wallet items need review',
+        ),
+      if (waiting > 0)
+        AdminPlatformAlert(
+          severity: 'warning',
+          title: 'Waiting/no-show jobs',
+          detail: '$waiting active deliveries may need operator action',
+        ),
+      if (healthOpen > 0)
+        AdminPlatformAlert(
+          severity: 'info',
+          title: 'Health+ operations',
+          detail: '$healthOpen active prescription pickups',
+        ),
+    ];
+    return AdminPlatformHealthSnapshot(
+      activeJobs: activeDeliveries.length,
+      waitingJobs: waiting,
+      vanguardJobs: vanguard,
+      discrepancyReviews: discrepancies,
+      walletReviewItems: financeReview,
+      supportOpen: supportOpen,
+      healthPlusOpen: healthOpen,
+      businessPending: businessPending,
+      giftsPending: giftsPending,
+      alerts: alerts,
+    );
+  }
+}
+
 class AdminAuditEntry {
   final String adminUserId;
   final String actionType;
@@ -411,6 +552,24 @@ class AdminAuditEntry {
         'newValue': newValue,
         'reason': reason,
       };
+}
+
+bool _containsAny(Map<String, dynamic> record, List<String> needles) {
+  final value = record.entries
+      .where((entry) => entry.value is! Map && entry.value is! List)
+      .map((entry) => '${entry.key}:${entry.value}'.toLowerCase())
+      .join(' ');
+  return needles.any(value.contains);
+}
+
+bool _hasStatus(Map<String, dynamic> record, List<String> statuses) {
+  final values = [
+    record['status'],
+    record['deliveryStatus'],
+    record['deliveryStage'],
+    record['trackingStatus'],
+  ].map((value) => '$value'.trim().toLowerCase());
+  return values.any(statuses.contains);
 }
 
 class AdminDeliveryTools {
