@@ -318,6 +318,21 @@ void main() {
       expect(patch['adminUpdatedAt'], isA<DateTime>());
     });
 
+    test('Health+ operation patches preserve medical authority fields', () {
+      final patch = AdminHealthPlusTools.statusPatch(
+        status: 'review_approved',
+        updatedBy: 'health@circumuk.com',
+        reason: 'Prescription evidence checked.',
+        updatedAt: DateTime(2026, 6, 3),
+      );
+
+      expect(patch['clinicalReviewStatus'], 'approved');
+      expect(patch['adminReason'], 'Prescription evidence checked.');
+      expect(patch.containsKey('medication'), isFalse);
+      expect(patch.containsKey('prescription'), isFalse);
+      expect(patch.containsKey('finalAmount'), isFalse);
+    });
+
     test('account status patches avoid destructive closure or deletion', () {
       final patch = AdminAccountTools.accountStatusPatch(
         status: 'closure_review',
@@ -344,6 +359,21 @@ void main() {
       expect(patch['verificationStatus'], 'approved');
       expect(patch.containsKey('businessId'), isFalse);
       expect(patch.containsKey('ownerId'), isFalse);
+    });
+
+    test('Business operation patches preserve billing authority', () {
+      final patch = AdminBusinessOperationsTools.operationPatch(
+        status: 'invoice_issue_review',
+        updatedBy: 'business@circumuk.com',
+        updatedAt: DateTime(2026, 6, 3),
+        reason: 'Monthly invoice requested.',
+      );
+
+      expect(patch['businessOperationStatus'], 'invoice_issue_review');
+      expect(patch['invoiceReviewStatus'], 'invoice_issue_review');
+      expect(patch.containsKey('amount'), isFalse);
+      expect(patch.containsKey('stripeSubscriptionId'), isFalse);
+      expect(patch.containsKey('subscriptionPrice'), isFalse);
     });
 
     test('merge review records require two distinct accounts', () {

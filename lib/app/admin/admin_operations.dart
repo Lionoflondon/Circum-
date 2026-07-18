@@ -852,17 +852,88 @@ class AdminSupportTools {
 }
 
 class AdminHealthPlusTools {
+  static const operationStatuses = [
+    'assigned',
+    'collected',
+    'completed',
+    'pharmacy_assigned',
+    'pharmacy_reassigned',
+    'rider_assigned',
+    'escalated',
+    'review_approved',
+    'review_rejected',
+    'evidence_requested',
+    'paused',
+    'resumed',
+    'closed',
+  ];
+
   static Map<String, dynamic> statusPatch({
     required String status,
     String? assignedDriverId,
+    String? updatedBy,
+    String? reason,
     required Object updatedAt,
   }) {
+    if (!operationStatuses.contains(status)) {
+      throw ArgumentError('Unsupported Health+ operation status.');
+    }
     return {
       'status': status,
       if (assignedDriverId != null && assignedDriverId.trim().isNotEmpty)
         'assignedDriverId': assignedDriverId.trim(),
+      if (updatedBy != null) 'adminUpdatedBy': updatedBy,
+      if (reason?.trim().isNotEmpty == true) 'adminReason': reason!.trim(),
+      if (status == 'pharmacy_assigned' || status == 'pharmacy_reassigned')
+        'pharmacyReviewStatus': status,
+      if (status == 'rider_assigned') 'riderAssignmentStatus': 'assigned',
+      if (status == 'escalated') 'escalationStatus': 'open',
+      if (status == 'review_approved') 'clinicalReviewStatus': 'approved',
+      if (status == 'review_rejected') 'clinicalReviewStatus': 'rejected',
+      if (status == 'evidence_requested') 'clinicalEvidenceStatus': 'requested',
+      if (status == 'paused') 'adminPaused': true,
+      if (status == 'resumed') 'adminPaused': false,
+      if (status == 'closed') 'caseStatus': 'closed',
       'adminUpdatedAt': updatedAt,
       'updatedAt': updatedAt,
+    };
+  }
+}
+
+class AdminBusinessOperationsTools {
+  static const operationStatuses = [
+    'verified',
+    'manager_assigned',
+    'invoice_issue_review',
+    'invoice_cancel_review',
+    'subscription_adjust_review',
+    'subscription_upgrade_review',
+    'subscription_downgrade_review',
+    'business_close_review',
+  ];
+
+  static Map<String, dynamic> operationPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    required String reason,
+  }) {
+    if (!operationStatuses.contains(status)) {
+      throw ArgumentError('Unsupported Business operation status.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A Business operation reason is required.');
+    }
+    return {
+      'businessOperationStatus': status,
+      'businessOperationReason': reason.trim(),
+      'businessOperationUpdatedBy': updatedBy,
+      'businessOperationUpdatedAt': updatedAt,
+      if (status == 'verified') 'verificationStatus': 'approved',
+      if (status == 'manager_assigned') 'accountManagerStatus': 'assigned',
+      if (status.contains('invoice')) 'invoiceReviewStatus': status,
+      if (status.contains('subscription')) 'subscriptionReviewStatus': status,
+      if (status == 'business_close_review') 'closureReviewStatus': 'requested',
     };
   }
 }

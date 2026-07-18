@@ -56,6 +56,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   AdminDataBundle _data = AdminDataBundle.empty();
   Map<String, dynamic>? _selectedRider;
   Map<String, dynamic>? _selectedDelivery;
+  Map<String, dynamic>? _selectedHealthPlus;
   Map<String, dynamic>? _selectedAccount;
   String _selectedAccountType = 'sender';
   Map<String, dynamic>? _selectedChat;
@@ -432,6 +433,42 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _setBusinessOperationStatus(
+    Map<String, dynamic> account,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.editCustomers)) {
+      setState(() => _message = 'Your role cannot manage Business operations.');
+      return;
+    }
+    final id = _idFor(account);
+    if (id.isEmpty) return;
+    final patch = AdminBusinessOperationsTools.operationPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+      reason: 'Updated from Circum Admin Business Operations',
+    );
+    await _db
+        .collection('businessAccounts')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'business_operation_$status',
+      recordType: 'businessAccounts',
+      recordId: id,
+      oldValue: {
+        'status': account['status'],
+        'businessOperationStatus': account['businessOperationStatus'],
+      },
+      newValue: patch,
+      reason: 'Business operation updated from Admin',
+    ));
+    setState(() => _message = 'Business operation $id marked $status.');
+    await _loadAdminData();
+  }
+
   Future<void> _requestDuplicateMerge(
     Map<String, dynamic> account,
     Map<String, dynamic> duplicate,
@@ -513,6 +550,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     if (id.isEmpty) return;
     final patch = AdminHealthPlusTools.statusPatch(
       status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      reason: 'Updated from Circum Admin Health+ Operations',
       updatedAt: FieldValue.serverTimestamp(),
     );
     await _db
@@ -697,6 +736,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     setState(() {
       _selectedRider = rider;
       _selectedDelivery = null;
+      _selectedHealthPlus = null;
       _selectedAccount = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -710,6 +750,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       _selectedAccountType = type;
       _selectedRider = null;
       _selectedDelivery = null;
+      _selectedHealthPlus = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scaffoldKey.currentState?.openEndDrawer();
@@ -719,6 +760,19 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   void _openDeliveryProfile(Map<String, dynamic> delivery) {
     setState(() {
       _selectedDelivery = delivery;
+      _selectedRider = null;
+      _selectedHealthPlus = null;
+      _selectedAccount = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scaffoldKey.currentState?.openEndDrawer();
+    });
+  }
+
+  void _openHealthPlusProfile(Map<String, dynamic> record) {
+    setState(() {
+      _selectedHealthPlus = record;
+      _selectedDelivery = null;
       _selectedRider = null;
       _selectedAccount = null;
     });
@@ -822,8 +876,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateSupportTicket: _updateSupportTicket,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
+                      onSetBusinessOperationStatus: _setBusinessOperationStatus,
                       onOpenRiderProfile: _openRiderProfile,
                       onOpenDeliveryProfile: _openDeliveryProfile,
+                      onOpenHealthPlusProfile: _openHealthPlusProfile,
                       onOpenAccountProfile: _openAccountProfile,
                       onSetSenderAccountStatus: _setSenderAccountStatus,
                       onSetBusinessAccountStatus: _setBusinessAccountStatus,
@@ -854,24 +910,38 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       ),
       endDrawer: _selectedRider == null
           ? _selectedDelivery == null
-              ? _selectedAccount == null
-                  ? null
-                  : _AccountProfileDrawer(
-                      account: _selectedAccount!,
-                      accountType: _selectedAccountType,
+              ? _selectedHealthPlus == null
+                  ? _selectedAccount == null
+                      ? null
+                      : _AccountProfileDrawer(
+                          account: _selectedAccount!,
+                          accountType: _selectedAccountType,
+                          deliveries: _data.deliveries,
+                          payments: _data.payments,
+                          supportTickets: _data.supportTickets,
+                          giftOrders: _data.giftOrders,
+                          businessAccounts: _data.businessAccounts,
+                          users: _data.users,
+                          onClose: () =>
+                              setState(() => _selectedAccount = null),
+                          onSetSenderStatus: (status) =>
+                              _setSenderAccountStatus(
+                                  _selectedAccount!, status),
+                          onSetBusinessStatus: (status) =>
+                              _setBusinessAccountStatus(
+                                  _selectedAccount!, status),
+                          onRequestDuplicateMerge: (duplicate) =>
+                              _requestDuplicateMerge(
+                                  _selectedAccount!, duplicate),
+                        )
+                  : _HealthPlusOperationsDrawer(
+                      record: _selectedHealthPlus!,
                       deliveries: _data.deliveries,
-                      payments: _data.payments,
                       supportTickets: _data.supportTickets,
-                      giftOrders: _data.giftOrders,
-                      businessAccounts: _data.businessAccounts,
-                      users: _data.users,
-                      onClose: () => setState(() => _selectedAccount = null),
-                      onSetSenderStatus: (status) =>
-                          _setSenderAccountStatus(_selectedAccount!, status),
-                      onSetBusinessStatus: (status) =>
-                          _setBusinessAccountStatus(_selectedAccount!, status),
-                      onRequestDuplicateMerge: (duplicate) =>
-                          _requestDuplicateMerge(_selectedAccount!, duplicate),
+                      auditLogs: _data.auditLogs,
+                      onClose: () => setState(() => _selectedHealthPlus = null),
+                      onSetStatus: (status) =>
+                          _updateHealthPlusPickup(_selectedHealthPlus!, status),
                     )
               : _DeliveryOperationsDrawer(
                   delivery: _selectedDelivery!,
@@ -1311,8 +1381,10 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateSupportTicket,
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
+    required this.onSetBusinessOperationStatus,
     required this.onOpenRiderProfile,
     required this.onOpenDeliveryProfile,
+    required this.onOpenHealthPlusProfile,
     required this.onOpenAccountProfile,
     required this.onSetSenderAccountStatus,
     required this.onSetBusinessAccountStatus,
@@ -1353,8 +1425,11 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateHealthPlusPickup;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetBusinessOperationStatus;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
   final ValueChanged<Map<String, dynamic>> onOpenDeliveryProfile;
+  final ValueChanged<Map<String, dynamic>> onOpenHealthPlusProfile;
   final void Function(Map<String, dynamic>, String) onOpenAccountProfile;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetSenderAccountStatus;
@@ -1520,74 +1595,26 @@ class _AdminModuleBody extends StatelessWidget {
               canManageFinance: canManageFinance,
               onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
             ),
-          AdminModule.healthPlus => _RecordModule(
-              title: 'Health+',
-              subtitle: 'Prescription pickup and Health+ payment operations.',
-              records: [...data.healthPlusPickups, ...data.healthPlusPayments],
+          AdminModule.healthPlus => _HealthPlusOperationsModule(
+              pickups: data.healthPlusPickups,
+              payments: data.healthPlusPayments,
+              deliveries: data.deliveries,
+              supportTickets: data.supportTickets,
               query: query,
-              fields: const [
-                'id',
-                'fullName',
-                'pharmacyAddress',
-                'deliveryAddress',
-                'status'
-              ],
-              columns: const ['Record', 'Customer', 'Status', 'Schedule'],
-              row: (record) => [
-                _recordId(record),
-                '${record['fullName'] ?? record['customerName'] ?? 'Customer'}',
-                '${record['status'] ?? 'pending'}',
-                '${record['frequency'] ?? record['pickupTime'] ?? 'Not recorded'}',
-              ],
-              actions: canManageHealthPlus
-                  ? (record) => [
-                        _MiniAction(
-                          label: 'Assign',
-                          onPressed: () =>
-                              onUpdateHealthPlusPickup(record, 'assigned'),
-                        ),
-                        _MiniAction(
-                          label: 'Collected',
-                          onPressed: () =>
-                              onUpdateHealthPlusPickup(record, 'collected'),
-                        ),
-                        _MiniAction(
-                          label: 'Complete',
-                          onPressed: () =>
-                              onUpdateHealthPlusPickup(record, 'completed'),
-                        ),
-                      ]
-                  : null,
+              canManageHealthPlus: canManageHealthPlus,
+              onOpen: onOpenHealthPlusProfile,
+              onUpdateHealthPlusPickup: onUpdateHealthPlusPickup,
             ),
-          AdminModule.business => _RecordModule(
-              title: 'Business',
-              subtitle:
-                  'Business account applications and operational records.',
-              records: data.businessAccounts,
+          AdminModule.business => _BusinessOperationsModule(
+              accounts: data.businessAccounts,
+              deliveries: data.deliveries,
+              payments: data.payments,
+              supportTickets: data.supportTickets,
               query: query,
-              fields: const [
-                'id',
-                'businessName',
-                'companyName',
-                'email',
-                'status',
-                'verificationStatus'
-              ],
-              columns: const ['Business', 'Email', 'Status', 'Verification'],
-              row: (record) => [
-                '${record['businessName'] ?? record['companyName'] ?? record['id']}',
-                '${record['email'] ?? 'Not recorded'}',
-                '${record['status'] ?? 'pending'}',
-                '${record['verificationStatus'] ?? 'pending'}',
-              ],
-              actions: (record) => _accountActions(
-                account: record,
-                accountType: 'business',
-                allAccounts: data.businessAccounts,
-                onOpen: onOpenAccountProfile,
-                onSetStatus: onSetBusinessAccountStatus,
-                onRequestDuplicateMerge: onRequestDuplicateMerge,
-              ),
+              onOpenAccountProfile: onOpenAccountProfile,
+              onSetBusinessAccountStatus: onSetBusinessAccountStatus,
+              onSetBusinessOperationStatus: onSetBusinessOperationStatus,
+              onRequestDuplicateMerge: onRequestDuplicateMerge,
             ),
           AdminModule.gifts => _RecordModule(
               title: 'Gifts',
@@ -1638,6 +1665,457 @@ class _AdminModuleBody extends StatelessWidget {
             ),
         },
       ],
+    );
+  }
+}
+
+class _HealthPlusOperationsModule extends StatelessWidget {
+  const _HealthPlusOperationsModule({
+    required this.pickups,
+    required this.payments,
+    required this.deliveries,
+    required this.supportTickets,
+    required this.query,
+    required this.canManageHealthPlus,
+    required this.onOpen,
+    required this.onUpdateHealthPlusPickup,
+  });
+
+  final List<Map<String, dynamic>> pickups;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> supportTickets;
+  final String query;
+  final bool canManageHealthPlus;
+  final ValueChanged<Map<String, dynamic>> onOpen;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateHealthPlusPickup;
+
+  @override
+  Widget build(BuildContext context) {
+    final records = [...pickups, ...payments];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Active prescriptions',
+                records.where(_isActiveHealthPlus).length.toString(), 'active'),
+            _MetricCard(
+                'Pending',
+                records
+                    .where((item) => _healthStatus(item).contains('pending'))
+                    .length
+                    .toString(),
+                'review'),
+            _MetricCard(
+                'Awaiting pharmacy',
+                records
+                    .where((item) => _healthStatus(item).contains('pharmacy'))
+                    .length
+                    .toString(),
+                'pharmacy'),
+            _MetricCard(
+                'Ready',
+                records
+                    .where((item) => _healthStatus(item).contains('ready'))
+                    .length
+                    .toString(),
+                'collection'),
+            _MetricCard(
+                'Collected',
+                records
+                    .where((item) => _healthStatus(item).contains('collected'))
+                    .length
+                    .toString(),
+                'picked up'),
+            _MetricCard(
+                'In transit',
+                records
+                    .where((item) => _healthStatus(item).contains('transit'))
+                    .length
+                    .toString(),
+                'delivery'),
+            _MetricCard(
+                'Delivered',
+                records
+                    .where((item) =>
+                        _healthStatus(item).contains('delivered') ||
+                        _healthStatus(item).contains('completed'))
+                    .length
+                    .toString(),
+                'complete'),
+            _MetricCard(
+                'Failed',
+                records
+                    .where((item) => _healthStatus(item).contains('failed'))
+                    .length
+                    .toString(),
+                'delivery'),
+            _MetricCard(
+                'Escalations',
+                records
+                    .where((item) => _healthStatus(item).contains('escalat'))
+                    .length
+                    .toString(),
+                'open'),
+            _MetricCard('Clinical reviews',
+                records.where(_needsClinicalReview).length.toString(), 'queue'),
+            _MetricCard('Health+ revenue', _money(_healthRevenue(payments)),
+                'loaded payments'),
+            _MetricCard('Pharmacies',
+                _activePharmacies(records).length.toString(), 'active'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Prescription Queue',
+          subtitle:
+              'Search patient, sender, pharmacy, booking, prescription, medication and urgency.',
+          records: records,
+          query: query,
+          fields: const [
+            'id',
+            'bookingId',
+            'prescriptionId',
+            'patientName',
+            'fullName',
+            'senderName',
+            'pharmacyName',
+            'pharmacyAddress',
+            'medication',
+            'medicationName',
+            'status',
+            'clinicalReviewStatus'
+          ],
+          columns: const ['Prescription', 'Patient', 'Pharmacy', 'Status'],
+          row: (record) => [
+            _recordId(record),
+            '${record['patientName'] ?? record['fullName'] ?? record['customerName'] ?? 'Patient'}',
+            '${record['pharmacyName'] ?? record['pharmacyAddress'] ?? 'Pharmacy'}',
+            '${record['status'] ?? record['clinicalReviewStatus'] ?? 'pending'}',
+          ],
+          actions: (record) => [
+            _MiniAction(label: 'Details', onPressed: () => onOpen(record)),
+            if (canManageHealthPlus)
+              for (final action in const [
+                ('Assign pharmacy', 'pharmacy_assigned'),
+                ('Reassign', 'pharmacy_reassigned'),
+                ('Assign rider', 'rider_assigned'),
+                ('Escalate', 'escalated'),
+                ('Approve review', 'review_approved'),
+                ('Reject review', 'review_rejected'),
+                ('Evidence', 'evidence_requested'),
+                ('Pause', 'paused'),
+                ('Resume', 'resumed'),
+                ('Close', 'closed'),
+              ])
+                _MiniAction(
+                  label: action.$1,
+                  onPressed: () =>
+                      unawaited(onUpdateHealthPlusPickup(record, action.$2)),
+                ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _HealthPlusAnalyticsPanel(records: records),
+      ],
+    );
+  }
+}
+
+class _BusinessOperationsModule extends StatelessWidget {
+  const _BusinessOperationsModule({
+    required this.accounts,
+    required this.deliveries,
+    required this.payments,
+    required this.supportTickets,
+    required this.query,
+    required this.onOpenAccountProfile,
+    required this.onSetBusinessAccountStatus,
+    required this.onSetBusinessOperationStatus,
+    required this.onRequestDuplicateMerge,
+  });
+
+  final List<Map<String, dynamic>> accounts;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> supportTickets;
+  final String query;
+  final void Function(Map<String, dynamic>, String) onOpenAccountProfile;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetBusinessAccountStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetBusinessOperationStatus;
+  final Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
+      onRequestDuplicateMerge;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = accounts
+        .where((item) => _businessStatus(item).contains('approved'))
+        .length;
+    final pending = accounts
+        .where((item) => _businessStatus(item).contains('pending'))
+        .length;
+    final suspended = accounts
+        .where((item) => _businessStatus(item).contains('suspend'))
+        .length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Active businesses', active.toString(), 'approved'),
+            _MetricCard('Pending approvals', pending.toString(), 'review'),
+            _MetricCard('Suspended', suspended.toString(), 'restricted'),
+            _MetricCard('Monthly revenue', _money(_businessRevenue(payments)),
+                'loaded payments'),
+            _MetricCard('Invoices due',
+                accounts.where(_hasInvoiceDue).length.toString(), 'due'),
+            _MetricCard(
+                'Outstanding invoices',
+                accounts.where(_hasOutstandingInvoice).length.toString(),
+                'open'),
+            _MetricCard(
+                'Subscriptions',
+                accounts
+                    .where((item) =>
+                        '${item['subscriptionStatus'] ?? item['plan'] ?? ''}'
+                            .trim()
+                            .isNotEmpty)
+                    .length
+                    .toString(),
+                'active data'),
+            _MetricCard(
+                'Deliveries',
+                _countRecordsContaining(deliveries, 'business').toString(),
+                'business'),
+            _MetricCard(
+                'Health+',
+                accounts
+                    .where((item) =>
+                        '${item['healthPlusEnabled'] ?? item['services'] ?? ''}'
+                            .toLowerCase()
+                            .contains('health'))
+                    .length
+                    .toString(),
+                'enabled'),
+            _MetricCard(
+                'Gifts',
+                accounts
+                    .where((item) =>
+                        '${item['giftEnabled'] ?? item['services'] ?? ''}'
+                            .toLowerCase()
+                            .contains('gift'))
+                    .length
+                    .toString(),
+                'enabled'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Business Operations',
+          subtitle:
+              'Search business name, owner, email, business id, invoices, subscriptions and enablement flags.',
+          records: accounts,
+          query: query,
+          fields: const [
+            'id',
+            'businessId',
+            'businessName',
+            'companyName',
+            'ownerName',
+            'ownerEmail',
+            'email',
+            'invoiceId',
+            'subscriptionId',
+            'subscriptionStatus',
+            'status',
+            'verificationStatus'
+          ],
+          columns: const ['Business', 'Owner', 'Status', 'Billing'],
+          row: (record) => [
+            '${record['businessName'] ?? record['companyName'] ?? _recordId(record)}',
+            '${record['ownerName'] ?? record['ownerEmail'] ?? record['email'] ?? 'Owner'}',
+            '${record['status'] ?? 'pending'} / ${record['verificationStatus'] ?? 'pending'}',
+            '${record['subscriptionStatus'] ?? record['plan'] ?? 'No subscription'} / ${record['invoiceStatus'] ?? 'invoice n/a'}',
+          ],
+          actions: (record) => [
+            ..._accountActions(
+              account: record,
+              accountType: 'business',
+              allAccounts: accounts,
+              onOpen: onOpenAccountProfile,
+              onSetStatus: onSetBusinessAccountStatus,
+              onRequestDuplicateMerge: onRequestDuplicateMerge,
+            ),
+            for (final action in const [
+              ('Verify', 'verified'),
+              ('Manager', 'manager_assigned'),
+              ('Issue invoice', 'invoice_issue_review'),
+              ('Cancel invoice', 'invoice_cancel_review'),
+              ('Adjust sub', 'subscription_adjust_review'),
+              ('Upgrade', 'subscription_upgrade_review'),
+              ('Downgrade', 'subscription_downgrade_review'),
+              ('Close review', 'business_close_review'),
+            ])
+              _MiniAction(
+                label: action.$1,
+                onPressed: () =>
+                    unawaited(onSetBusinessOperationStatus(record, action.$2)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _BusinessAnalyticsPanel(
+          accounts: accounts,
+          deliveries: deliveries,
+          payments: payments,
+          supportTickets: supportTickets,
+        ),
+      ],
+    );
+  }
+}
+
+class _HealthPlusAnalyticsPanel extends StatelessWidget {
+  const _HealthPlusAnalyticsPanel({required this.records});
+
+  final List<Map<String, dynamic>> records;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Health+ analytics',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _HealthChip('Orders', records.length),
+                _HealthChip(
+                    'Success',
+                    records
+                        .where((item) =>
+                            _healthStatus(item).contains('complete') ||
+                            _healthStatus(item).contains('delivered'))
+                        .length),
+                _HealthChip(
+                    'Turnaround',
+                    records
+                        .where((item) => item['completedAt'] != null)
+                        .length),
+                _HealthChip(
+                    'Escalations',
+                    records
+                        .where(
+                            (item) => _healthStatus(item).contains('escalat'))
+                        .length),
+                for (final pharmacy in _activePharmacies(records).take(6))
+                  _HealthChip(
+                      pharmacy,
+                      records
+                          .where((item) =>
+                              '${item['pharmacyName'] ?? item['pharmacyAddress'] ?? ''}' ==
+                              pharmacy)
+                          .length),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessAnalyticsPanel extends StatelessWidget {
+  const _BusinessAnalyticsPanel({
+    required this.accounts,
+    required this.deliveries,
+    required this.payments,
+    required this.supportTickets,
+  });
+
+  final List<Map<String, dynamic>> accounts;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> supportTickets;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Business analytics',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _HealthChip(
+                    'Growth',
+                    accounts
+                        .where((item) =>
+                            _businessStatus(item).contains('approved'))
+                        .length),
+                _HealthChip(
+                    'Retention',
+                    accounts
+                        .where((item) => '${item['subscriptionStatus'] ?? ''}'
+                            .toLowerCase()
+                            .contains('active'))
+                        .length),
+                _HealthChip('Order volume',
+                    _countRecordsContaining(deliveries, 'business')),
+                _HealthChip(
+                    'Invoice performance',
+                    accounts
+                        .where((item) => '${item['invoiceStatus'] ?? ''}'
+                            .toLowerCase()
+                            .contains('paid'))
+                        .length),
+                _HealthChip(
+                    'Subscriptions',
+                    accounts
+                        .where((item) =>
+                            '${item['subscriptionId'] ?? item['plan'] ?? ''}'
+                                .trim()
+                                .isNotEmpty)
+                        .length),
+                _HealthChip('Health+ usage',
+                    _countRecordsContaining(deliveries, 'health')),
+                _HealthChip(
+                    'Gift usage', _countRecordsContaining(deliveries, 'gift')),
+                _HealthChip(
+                    'Support',
+                    supportTickets
+                        .where((item) =>
+                            '${item['businessId'] ?? item['businessName'] ?? ''}'
+                                .trim()
+                                .isNotEmpty)
+                        .length),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3381,6 +3859,169 @@ class _AccountProfileDrawer extends StatelessWidget {
   }
 }
 
+class _HealthPlusOperationsDrawer extends StatelessWidget {
+  const _HealthPlusOperationsDrawer({
+    required this.record,
+    required this.deliveries,
+    required this.supportTickets,
+    required this.auditLogs,
+    required this.onClose,
+    required this.onSetStatus,
+  });
+
+  final Map<String, dynamic> record;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> auditLogs;
+  final VoidCallback onClose;
+  final Future<void> Function(String) onSetStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = _recordId(record);
+    final relatedDeliveries = deliveries
+        .where((item) => _recordReferencesDelivery(item, id))
+        .toList();
+    final relatedTickets = supportTickets
+        .where((item) =>
+            _recordReferencesDelivery(item, id) ||
+            '${item['email'] ?? ''}' ==
+                '${record['email'] ?? record['senderEmail'] ?? ''}')
+        .toList();
+    final relatedAudit = auditLogs
+        .where((item) => '${item['recordId'] ?? ''}'.trim() == id)
+        .toList();
+    return Drawer(
+      width: 500,
+      backgroundColor: const Color(0xFF07090F),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Health+ $id',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              '${record['status'] ?? record['clinicalReviewStatus'] ?? 'pending'}',
+              style: TextStyle(color: Colors.white.withValues(alpha: .62)),
+            ),
+            const SizedBox(height: 18),
+            _DrawerSection(
+              title: 'Patient and sender',
+              rows: [
+                ('Patient', record['patientName'] ?? record['fullName']),
+                ('Sender', record['senderName'] ?? record['senderEmail']),
+                ('Recipient', record['recipientName']),
+                ('Booking ID', record['bookingId']),
+                ('Prescription ID', record['prescriptionId']),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Pharmacy and medication',
+              rows: [
+                (
+                  'Pharmacy',
+                  record['pharmacyName'] ?? record['pharmacyAddress']
+                ),
+                (
+                  'Medication',
+                  record['medication'] ?? record['medicationName']
+                ),
+                ('Verification', record['verificationStatus']),
+                ('Clinical review', record['clinicalReviewStatus']),
+                ('Controlled medication', record['controlledMedication']),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Collection and delivery',
+              rows: [
+                (
+                  'Assigned rider',
+                  record['assignedDriverId'] ?? record['riderId']
+                ),
+                (
+                  'Collection status',
+                  record['collectionStatus'] ?? record['status']
+                ),
+                ('Pickup time', record['pickupTime']),
+                ('Collected', _date(record['collectedAt'])),
+                (
+                  'Delivered',
+                  _date(record['completedAt'] ?? record['deliveredAt'])
+                ),
+                (
+                  'Evidence',
+                  _historyCount(record, const ['evidence', 'photos', 'images'])
+                ),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Handling',
+              rows: [
+                ('Temperature', record['temperatureRequirement']),
+                ('Special handling', record['specialHandling']),
+                ('Urgent', record['urgent']),
+                ('Escalation', record['escalationStatus']),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Support and audit',
+              rows: [
+                ('Related deliveries', relatedDeliveries.length),
+                ('Support cases', relatedTickets.length),
+                for (final audit in relatedAudit.take(4))
+                  (
+                    '${audit['actionType'] ?? 'action'}',
+                    _date(audit['createdAt'])
+                  ),
+                if (relatedAudit.isEmpty) ('Audit', 'No audit records loaded'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final action in const [
+                  ('Assign pharmacy', 'pharmacy_assigned'),
+                  ('Reassign pharmacy', 'pharmacy_reassigned'),
+                  ('Assign rider', 'rider_assigned'),
+                  ('Escalate', 'escalated'),
+                  ('Approve review', 'review_approved'),
+                  ('Reject review', 'review_rejected'),
+                  ('Request evidence', 'evidence_requested'),
+                  ('Pause', 'paused'),
+                  ('Resume', 'resumed'),
+                  ('Close case', 'closed'),
+                ])
+                  _MiniAction(
+                    label: action.$1,
+                    onPressed: () => unawaited(onSetStatus(action.$2)),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RiderProfileDrawer extends StatelessWidget {
   const _RiderProfileDrawer({
     required this.rider,
@@ -4143,6 +4784,78 @@ bool _recordReferencesDelivery(Map<String, dynamic> record, String deliveryId) {
     record['bookingId'],
     record['id'],
   ].map((value) => '$value'.trim()).contains(deliveryId);
+}
+
+String _healthStatus(Map<String, dynamic> record) {
+  return '${record['status'] ?? record['clinicalReviewStatus'] ?? record['collectionStatus'] ?? ''}'
+      .toLowerCase();
+}
+
+bool _isActiveHealthPlus(Map<String, dynamic> record) {
+  final status = _healthStatus(record);
+  return status.isNotEmpty &&
+      !status.contains('complete') &&
+      !status.contains('deliver') &&
+      !status.contains('cancel') &&
+      !status.contains('failed') &&
+      !status.contains('closed');
+}
+
+bool _needsClinicalReview(Map<String, dynamic> record) {
+  final text = record.values.join(' ').toLowerCase();
+  return text.contains('clinical') ||
+      text.contains('controlled') ||
+      text.contains('missing evidence') ||
+      text.contains('rejected') ||
+      text.contains('escalat');
+}
+
+double _healthRevenue(List<Map<String, dynamic>> payments) {
+  return payments.fold<double>(
+    0,
+    (total, payment) =>
+        total + _numberFrom(payment['amount'] ?? payment['total']),
+  );
+}
+
+Set<String> _activePharmacies(List<Map<String, dynamic>> records) {
+  return records
+      .map((record) =>
+          '${record['pharmacyName'] ?? record['pharmacyAddress'] ?? ''}'.trim())
+      .where((value) => value.isNotEmpty)
+      .toSet();
+}
+
+String _businessStatus(Map<String, dynamic> record) {
+  return '${record['status'] ?? record['verificationStatus'] ?? ''}'
+      .toLowerCase();
+}
+
+bool _hasInvoiceDue(Map<String, dynamic> record) {
+  final text = '${record['invoiceStatus'] ?? record['billingStatus'] ?? ''}'
+      .toLowerCase();
+  return text.contains('due') || text.contains('overdue');
+}
+
+bool _hasOutstandingInvoice(Map<String, dynamic> record) {
+  final text = '${record['invoiceStatus'] ?? record['billingStatus'] ?? ''}'
+      .toLowerCase();
+  return text.contains('outstanding') ||
+      text.contains('due') ||
+      text.contains('open');
+}
+
+double _businessRevenue(List<Map<String, dynamic>> payments) {
+  return payments
+      .where((payment) =>
+          '${payment['businessId'] ?? payment['businessName'] ?? payment['type'] ?? ''}'
+              .toLowerCase()
+              .contains('business'))
+      .fold<double>(
+        0,
+        (total, payment) =>
+            total + _numberFrom(payment['amount'] ?? payment['total']),
+      );
 }
 
 bool _recordReferencesAccount(
