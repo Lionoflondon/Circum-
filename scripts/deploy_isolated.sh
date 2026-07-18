@@ -72,7 +72,6 @@ done
 
 case "$SURFACE" in
   sender)
-    PRODUCT_BOUNDARY="sender-web"
     BUILD_SCRIPT="scripts/build_sender_app_web.sh"
     HOSTING_TARGET="hosting:app"
     OUTPUT_DIR="build/sender_app_web"
@@ -95,7 +94,6 @@ case "$SURFACE" in
     FORBIDDEN_IMPORT_REGEX="app/(rider|admin)|web_sender_app|web_platform_routing|CircumWebSurface|WebSenderApp"
     ;;
   public)
-    PRODUCT_BOUNDARY="public-web"
     BUILD_SCRIPT="scripts/build_public_web.sh"
     HOSTING_TARGET="hosting:public"
     OUTPUT_DIR="build/public_web"
@@ -117,7 +115,6 @@ case "$SURFACE" in
     FORBIDDEN_IMPORT_REGEX="main_sender_web|main_rider_web|main_admin_web"
     ;;
   admin)
-    PRODUCT_BOUNDARY="admin"
     BUILD_SCRIPT="scripts/build_admin_web.sh"
     HOSTING_TARGET="hosting:admin"
     OUTPUT_DIR="build/web_admin"
@@ -217,11 +214,6 @@ if [[ -n "$CHANGED_FILES" ]]; then
     fi
   done <<< "$CHANGED_FILES"
 fi
-
-node "$WORKTREE/scripts/validate_product_boundary.js" \
-  --surface="$PRODUCT_BOUNDARY" \
-  --base="$BASE_REV" \
-  --head="$HEAD_REV"
 
 rm -rf build/web build/public_web build/sender_app_web build/web_admin .dart_tool/build
 

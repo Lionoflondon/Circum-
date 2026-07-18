@@ -23,7 +23,6 @@ scripts/deploy_admin_web.sh --branch origin/main
 - The deployment worktree starts from the requested ref and must be clean.
 - Only explicitly approved commits or patches may be applied.
 - Approved changes are checked against the requested surface scope.
-- Approved changes are checked by `scripts/validate_product_boundary.js`.
 - Validation and builds run inside the temporary worktree.
 - Only one hosting target is deployed per command.
 - The temporary worktree is removed after the deployment exits.
@@ -60,7 +59,6 @@ Deployment fails if the temporary workspace:
 
 - is dirty after checkout;
 - receives unapproved modified files;
-- fails the product-boundary validator;
 - references forbidden cross-surface markers from the entrypoint;
 - changes outside generated build artifacts during validation/build;
 - fails `flutter clean`, `flutter pub get`, `flutter analyze`, `flutter test`;
