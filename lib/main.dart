@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'app.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/security/circum_app_check.dart';
+import 'app/sender_mobile/sender_notification_routing.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
 import 'helper/chats_help.dart';
 import 'helper/notifications_helper.dart';
@@ -34,6 +35,7 @@ Future<void> main() async {
     await _configureNotifications();
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     foregoundMessage();
+    configureNotificationOpenRouting();
   }
 
   runApp(const App());

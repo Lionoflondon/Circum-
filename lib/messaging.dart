@@ -76,6 +76,21 @@ foregoundMessage() {
   });
 }
 
+Future<void> configureNotificationOpenRouting() async {
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    _openSenderNotification(initialMessage);
+  }
+
+  FirebaseMessaging.onMessageOpenedApp.listen(_openSenderNotification);
+}
+
+void _openSenderNotification(RemoteMessage message) {
+  SenderNotificationOpenBridge.instance.enqueue(
+    SenderNotificationOpenRequest.fromPushData(message.data),
+  );
+}
+
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();

@@ -20,6 +20,7 @@ import 'sender_activity.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
 import 'sender_mobile_profile.dart';
+import 'sender_notification_routing.dart';
 import 'sender_notifications.dart';
 import 'sender_wallet.dart';
 
@@ -90,11 +91,13 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         ? _SenderEntryScreen.app
         : _SenderEntryScreen.landing;
     _standaloneSendPackageBloc = SendPackageBloc();
+    SenderNotificationOpenBridge.instance.register(_handleNotificationOpen);
     _restoreAuthenticatedSenderSession();
   }
 
   @override
   void dispose() {
+    SenderNotificationOpenBridge.instance.unregister(_handleNotificationOpen);
     _authSubscription?.cancel();
     _standaloneSendPackageBloc.close();
     super.dispose();
@@ -208,6 +211,30 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
     setState(() => _index = index);
     widget.onTabChanged?.call(index);
   }
+
+  bool _handleNotificationOpen(SenderNotificationOpenRequest request) {
+    if (!mounted || _entry != _SenderEntryScreen.app) return false;
+    return openSenderNotificationDestination(
+      context,
+      request.destination,
+      onOpenWallet: () => _selectTab(3),
+      onOpenNotifications: _openNotificationCentre,
+    );
+  }
+
+  Future<void> _openNotificationCentre() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SenderNotificationsView(
+            onOpenNotification: (notification) {
+              openSenderNotificationDestination(
+                context,
+                notification.destination,
+                onOpenWallet: () => _selectTab(3),
+              );
+            },
+          ),
+        ),
+      );
 
   Future<void> _restoreAuthenticatedSenderSession() async {
     if (!widget.previewAuthEnabled) return;
@@ -1968,37 +1995,14 @@ class _SenderDashboardState extends State<_SenderDashboard> {
       );
 
   void _openNotificationDestination(CircumNotification notification) {
-    final route = '${notification.destination['route'] ?? ''}'.trim();
-    switch (route) {
-      case 'wallet':
+    openSenderNotificationDestination(
+      context,
+      notification.destination,
+      onOpenWallet: () {
         Navigator.of(context).pop();
         widget.onOpenWallet();
-      case 'gift':
-        Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => const GiftModeView(),
-          settings: const RouteSettings(name: GiftModeView.routeName),
-        ));
-      case 'health':
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
-        );
-      case 'business':
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const BusinessAccessView()),
-        );
-      case 'conversation':
-        final chatId = '${notification.destination['chatId'] ?? ''}'.trim();
-        Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) =>
-              RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
-        ));
-      case 'tracking':
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const SenderBookingCanvas()),
-        );
-      default:
-        break;
-    }
+      },
+    );
   }
 
   @override
